@@ -2,6 +2,7 @@ import { useApiQuery } from "@/lib/api";
 import { PageShell } from "@/components/page-shell";
 import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { Target, Star, TrendingUp, CheckCircle2, Clock, BarChart3 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -31,7 +32,7 @@ export default function MyPerformance() {
   const { data, isLoading, isError } = useApiQuery<any>(["my-performance"], "/my-space/performance");
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const reviews: any[] = data?.data ?? [];
   const latestReview = reviews[0];
@@ -60,9 +61,7 @@ export default function MyPerformance() {
                       <span className="text-sm font-semibold text-primary">{Number(latestReview.overallRating ?? 0).toFixed(1)} / 5</span>
                     </div>
                   </div>
-                  <div className={cn("px-3 py-1 rounded-full text-xs font-medium", statusLabels[latestReview.status]?.color ?? "text-gray-600 bg-gray-50")}>
-                    {statusLabels[latestReview.status]?.label ?? latestReview.status}
-                  </div>
+                  <PageStatusBadge status={latestReview.status} />
                 </div>
               </CardContent>
             </Card>
@@ -70,7 +69,6 @@ export default function MyPerformance() {
 
           <div className="grid gap-3">
             {reviews.map((review: any) => {
-              const cfg = statusLabels[review.status] ?? { label: review.status, color: "text-gray-600 bg-gray-50" };
               return (
                 <Card key={review.id} className="hover:shadow-md transition-shadow">
                   <CardContent className="p-4">
@@ -86,7 +84,7 @@ export default function MyPerformance() {
                       </div>
                       <div className="text-left flex flex-col items-end gap-1">
                         <RatingStars rating={Number(review.overallRating ?? 0)} />
-                        <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", cfg.color)}>{cfg.label}</span>
+                        <PageStatusBadge status={review.status} />
                       </div>
                     </div>
                     {review.notes && (

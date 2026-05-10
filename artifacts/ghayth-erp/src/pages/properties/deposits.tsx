@@ -60,7 +60,7 @@ export default function DepositsPage() {
   };
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   return (
     <PageShell
@@ -116,7 +116,7 @@ export default function DepositsPage() {
               <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
             </div>
             <div className="col-span-2 flex gap-2">
-              <Button onClick={handleSave}>حفظ</Button>
+              <Button onClick={handleSave} rateLimitAware>حفظ</Button>
               <Button variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>
             </div>
           </CardContent>

@@ -1,11 +1,10 @@
 import { useApiQuery, asList } from "@/lib/api";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { Badge } from "@/components/ui/badge";
 import { Mail } from "lucide-react";
 import { useLocation } from "wouter";
 import { PageShell } from "@/components/page-shell";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { LegalTabsNav } from "@/components/shared/legal-tabs-nav";
+import { PageStatusBadge } from "@/components/page-status-badge";
+import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 
 interface LegalCase {
   id: number;
@@ -21,16 +20,18 @@ const columns: DataTableColumn<LegalCase>[] = [
   { key: "title", header: "عنوان القضية", sortable: true, searchable: true },
   { key: "caseType", header: "نوع القضية" },
   { key: "lawyerName", header: "المحامي", searchable: true },
-  { key: "status", header: "الحالة", render: (r) => <Badge variant="outline">{r.status || "-"}</Badge> },
+  { key: "status", header: "الحالة", render: (r) => <PageStatusBadge status={r.status} /> },
 ];
 
 export default function LegalCorrespondence() {
   const { data, isLoading, isError, error } = useApiQuery<any>(["legal-cases-corr"], "/legal/cases");
   const cases = asList(data?.data || data);
   const [, navigate] = useLocation();
-
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  const [filters, setFilters] = useFilters();
+  const filtered = applyFilters(cases, filters, {
+    searchFields: ["title", "lawyerName", "caseNumber"],
+    statusField: "status",
+  });
 
   return (
     <PageShell
@@ -39,10 +40,10 @@ export default function LegalCorrespondence() {
       breadcrumbs={[{ href: "/legal", label: "الشؤون القانونية" }, { label: "المراسلات القانونية" }]}
       loading={isLoading}
     >
-      <LegalTabsNav />
+      <AdvancedFilters config={{ searchPlaceholder: "بحث...", showDateRange: false }} values={filters} onChange={setFilters} resultCount={filtered.length} />
       <DataTable
         columns={columns}
-        data={cases}
+        data={filtered}
         isLoading={isLoading}
         isError={isError}
         error={error}

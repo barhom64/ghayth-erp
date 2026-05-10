@@ -19,6 +19,8 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { LOAN_TYPES, LOAN_STATUS } from "@/lib/hr-type-maps";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PromptDialog } from "@/components/shared/prompt-dialog";
+import { useState } from "react";
 
 const STATUS_OPTIONS = Object.entries(LOAN_STATUS).map(([value, { label }]) => ({ value, label }));
 
@@ -27,6 +29,7 @@ export default function LoansPage() {
   const [filters, setFilters] = useFilters();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [rejectingId, setRejectingId] = useState<number | null>(null);
 
   const { data, isLoading, isError } = useApiQuery<{ data: any[]; stats: any; total: number }>(
     ["hr-loans"],
@@ -36,10 +39,10 @@ export default function LoansPage() {
   const stats = data?.stats || {};
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
 
-  const approveMut = useApiMutation(null as any, "PATCH", [["hr-loans"]], {
+  const approveMut = useApiMutation((body: any) => body.__url, "PATCH", [["hr-loans"]], {
     successMessage: "تم اعتماد السلفة بنجاح",
   });
-  const rejectMut = useApiMutation(null as any, "PATCH", [["hr-loans"]], {
+  const rejectMut = useApiMutation((body: any) => body.__url, "PATCH", [["hr-loans"]], {
     successMessage: "تم رفض السلفة",
   });
 
@@ -47,8 +50,12 @@ export default function LoansPage() {
     await approveMut.mutateAsync({ __url: `/hr/loans/${id}/approve` } as any);
     queryClient.invalidateQueries({ queryKey: ["hr-loans"] });
   };
-  const handleReject = async (id: number) => {
-    const reason = window.prompt("سبب الرفض (اختياري):");
+  const handleReject = (id: number) => setRejectingId(id);
+
+  const submitRejection = async (reason: string) => {
+    if (rejectingId === null) return;
+    const id = rejectingId;
+    setRejectingId(null);
     await rejectMut.mutateAsync({ __url: `/hr/loans/${id}/reject`, reason } as any);
     queryClient.invalidateQueries({ queryKey: ["hr-loans"] });
   };
@@ -307,6 +314,15 @@ export default function LoansPage() {
         emptyMessage="لا توجد سلف — قدّم طلب سلفة جديدة للبدء"
         pageSize={20}
         onRowClick={(item) => navigate(`/hr/loans/${item.id}`)}
+      />
+      <PromptDialog
+        open={rejectingId !== null}
+        title="رفض طلب السلفة"
+        description="يمكنك إضافة سبب الرفض (اختياري)."
+        optional
+        confirmLabel="تأكيد الرفض"
+        onSubmit={submitRejection}
+        onClose={() => setRejectingId(null)}
       />
     </PageShell>
   );

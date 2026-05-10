@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { pool } from "./rawdb.js";
+import { logger } from "./logger.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -66,10 +67,10 @@ async function detectAndApplyBaselineIfNeeded(client: any): Promise<void> {
     return;
   }
 
-  console.log("[migrate] Empty DB detected — loading db/schema.sql baseline");
+  logger.info("Empty DB detected — loading db/schema.sql baseline");
   const sql = readFileSync(baselinePath, "utf-8");
   await client.query(sql);
-  console.log("[migrate] Baseline schema loaded");
+  logger.info("Baseline schema loaded");
 }
 
 export async function runMigrations(): Promise<void> {
@@ -94,7 +95,7 @@ export async function runMigrations(): Promise<void> {
         .filter((f) => f.endsWith(".sql"))
         .sort();
     } catch {
-      console.log("No migrations directory found, skipping migrations.");
+      logger.info("No migrations directory found, skipping migrations");
       return;
     }
 
@@ -107,14 +108,14 @@ export async function runMigrations(): Promise<void> {
 
     for (const file of files) {
       if (appliedSet.has(file)) {
-        console.log(`Migration already applied: ${file}`);
+        logger.debug({ file }, "Migration already applied");
         continue;
       }
 
       const filePath = resolve(migrationsDir, file);
       const sql = readFileSync(filePath, "utf-8");
 
-      console.log(`Applying migration: ${file}`);
+      logger.info({ file }, "Applying migration");
       await client.query("BEGIN");
       try {
         await client.query(sql);
@@ -123,14 +124,13 @@ export async function runMigrations(): Promise<void> {
           [file]
         );
         await client.query("COMMIT");
-        console.log(`Migration applied: ${file}`);
+        logger.info({ file }, "Migration applied");
       } catch (err) {
         await client.query("ROLLBACK");
-        console.error(`Migration failed: ${file}`, err);
+        logger.error(err as Error, `Migration failed: ${file}`);
         if (isDev) {
-          // In dev mode: record the first error but continue remaining migrations
           if (!firstError) firstError = err;
-          console.warn(`Skipping failed migration in dev mode, continuing with remaining migrations`);
+          logger.warn(`Skipping failed migration in dev mode, continuing with remaining migrations`);
         } else {
           throw err;
         }

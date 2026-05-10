@@ -1,8 +1,11 @@
-import { handleRouteError, ValidationError, NotFoundError, ForbiddenError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
+  parseId,
+  zodParse,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import {
   resolveSettings,
   getSettingsByScope,
@@ -14,8 +17,8 @@ import { auditLog } from "../lib/audit.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { reloadCronScheduler } from "../lib/cronScheduler.js";
 import { bootstrapCompany } from "../lib/companyBootstrap.js";
-import { eventBus } from "../lib/eventBus.js";
 import { z } from "zod";
+import { logger } from "../lib/logger.js";
 
 /* ── Zod Schemas ────────────────────────────────────────────── */
 
@@ -23,6 +26,11 @@ const settingUpsertSchema = z.object({
   scopeOverride: z.enum(["system", "company", "branch"]).optional(),
   key: z.string().min(1),
   value: z.unknown(),
+});
+
+const settingDeleteSchema = z.object({
+  scopeOverride: z.enum(["system", "company", "branch"]).optional(),
+  key: z.string().min(1, "key مطلوب"),
 });
 
 const generalSettingsSchema = z.record(z.string().min(1), z.string());
@@ -54,6 +62,7 @@ const updateBranchSchema = z.object({
   email: z.string().optional(),
   website: z.string().optional(),
   footerText: z.string().optional(),
+  companyId: z.coerce.number().optional(),
 });
 
 const createDepartmentSchema = z.object({
@@ -64,7 +73,6 @@ const createDepartmentSchema = z.object({
 
 const updateDepartmentSchema = z.object({
   name: z.string().min(1),
-  nameEn: z.string().optional(),
   manager: z.string().optional(),
 });
 
@@ -108,16 +116,16 @@ publicRouter.get("/display", async (_req, res) => {
     const result: Record<string, string> = {};
     for (const row of rows) result[row.key] = row.value;
     res.json({ data: result });
-  } catch {
+  } catch (e) {
+    logger.warn(e, "failed to load public system settings, using defaults");
     res.json({ data: { currency: "SAR", timezone: "Asia/Riyadh", companyName: "" } });
   }
 });
 
 const router = Router();
 router.use(publicRouter);
-router.use(authMiddleware);
 
-router.get("/resolve", requirePermission("settings:read"), async (req, res) => {
+router.get("/resolve", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { key } = req.query as { key: string };
@@ -131,7 +139,7 @@ router.get("/resolve", requirePermission("settings:read"), async (req, res) => {
   }
 });
 
-router.get("/", requirePermission("settings:read"), async (req, res) => {
+router.get("/", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { scopeOverride } = req.query as { scopeOverride?: SettingScope };
@@ -151,11 +159,9 @@ router.get("/", requirePermission("settings:read"), async (req, res) => {
   }
 });
 
-router.put("/", requirePermission("settings:write"), async (req, res) => {
+router.put("/", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
-    const parsed_settingUpsertSchema = settingUpsertSchema.safeParse(req.body);
-    if (!parsed_settingUpsertSchema.success) throw new ValidationError(parsed_settingUpsertSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_settingUpsertSchema.data;
+    const body = zodParse(settingUpsertSchema.safeParse(req.body));
     const scope = req.scope!;
     const { scopeOverride, key, value } = body;
 
@@ -173,25 +179,19 @@ router.put("/", requirePermission("settings:write"), async (req, res) => {
       companyId: scope.companyId, userId: scope.userId, action: "update_setting",
       entity: "settings", entityId: scopeId ?? 0,
       after: { scope: requestedScope, scopeId, key, value },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: scopeId ?? 0, details: JSON.stringify({ key }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: scopeId ?? 0, details: JSON.stringify({ key }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Upsert setting error:");
   }
 });
 
-router.delete("/", requirePermission("settings:write"), async (req, res) => {
+router.delete("/", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { scopeOverride, key } = req.body as {
-      scopeOverride?: SettingScope;
-      key: string;
-    };
-
-    if (!key) {
-      throw new ValidationError("key مطلوب");
-    }
+    const b = zodParse(settingDeleteSchema.safeParse(req.body ?? {}));
+    const { scopeOverride, key } = b;
 
     const requestedScope: SettingScope = scopeOverride ?? "company";
 
@@ -207,22 +207,22 @@ router.delete("/", requirePermission("settings:write"), async (req, res) => {
       companyId: scope.companyId, userId: scope.userId, action: "delete_setting",
       entity: "settings", entityId: scopeId ?? 0,
       before: { scope: requestedScope, scopeId, key },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: scopeId ?? 0, details: JSON.stringify({ key }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: scopeId ?? 0, details: JSON.stringify({ key }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Delete setting error:");
   }
 });
 
-router.get("/general", requirePermission("settings:read"), async (_req, res) => {
+router.get("/general", authorize({ feature: "settings", action: "view" }), async (_req, res) => {
   try {
-    const rows = await rawQuery(`SELECT * FROM system_settings WHERE "companyId" IS NULL AND "branchId" IS NULL ORDER BY key`);
-    res.json({ data: rows });
+    const rows = await rawQuery(`SELECT * FROM system_settings WHERE "companyId" IS NULL AND "branchId" IS NULL ORDER BY key LIMIT 500`);
+    res.json({ data: maskSecretSettings(rows) });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.get("/resolved", requirePermission("settings:read"), async (req, res) => {
+router.get("/resolved", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const systemRows = await rawQuery<any>(
@@ -254,15 +254,16 @@ router.get("/resolved", requirePermission("settings:read"), async (req, res) => 
       }
     }
 
+    for (const item of resolved) {
+      if (SETTINGS_SECRET_KEYS.has(item.key) && item.value) item.value = "__configured__";
+    }
     res.json({ data: resolved });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.put("/general", requirePermission("settings:write"), async (req, res) => {
+router.put("/general", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
-    const parsed_generalSettings = generalSettingsSchema.safeParse(req.body);
-    if (!parsed_generalSettings.success) throw new ValidationError(parsed_generalSettings.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const entries: Record<string, string> = parsed_generalSettings.data;
+    const entries: Record<string, string> = zodParse(generalSettingsSchema.safeParse(req.body));
     const hasTimezoneChange = "timezone" in entries;
     for (const [key, value] of Object.entries(entries)) {
       if (!key) continue;
@@ -274,20 +275,20 @@ router.put("/general", requirePermission("settings:write"), async (req, res) => 
       }
     }
     if (hasTimezoneChange) {
-      reloadCronScheduler().catch((err) => console.error("[SETTINGS] Failed to reload cron after timezone change:", err));
+      reloadCronScheduler().catch((err) => logger.error(err, "[SETTINGS] Failed to reload cron after timezone change:"));
     }
     const scope = req.scope!;
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_general_settings",
       entity: "system_settings", entityId: 0,
       after: { keys: Object.keys(entries) },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: 0, details: JSON.stringify({ key: "general_settings" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: 0, details: JSON.stringify({ key: "general_settings" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.get("/branches", requirePermission("settings:read"), async (req, res) => {
+router.get("/branches", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(
@@ -298,19 +299,20 @@ router.get("/branches", requirePermission("settings:read"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.get("/branches/:id", requirePermission("settings:read"), async (req, res) => {
+router.get("/branches/:id", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery(
       `SELECT * FROM branches WHERE id = $1 AND "companyId" = ANY($2)`,
-      [Number(req.params.id), scope.allowedCompanies]
+      [id, scope.allowedCompanies]
     );
     if (!row) { throw new NotFoundError("الفرع غير موجود"); }
     res.json(row);
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.get("/departments", requirePermission("settings:read"), async (req, res) => {
+router.get("/departments", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(
@@ -321,7 +323,7 @@ router.get("/departments", requirePermission("settings:read"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.get("/companies", requirePermission("settings:read"), async (req, res) => {
+router.get("/companies", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(
@@ -332,7 +334,7 @@ router.get("/companies", requirePermission("settings:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.get("/audit-log", requirePermission("settings:read"), async (req, res) => {
+router.get("/audit-log", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(
@@ -343,11 +345,9 @@ router.get("/audit-log", requirePermission("settings:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.post("/branches", requirePermission("settings:write"), async (req, res) => {
+router.post("/branches", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
-    const parsed_createBranchSchema = createBranchSchema.safeParse(req.body);
-    if (!parsed_createBranchSchema.success) throw new ValidationError(parsed_createBranchSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createBranchSchema.data;
+    const body = zodParse(createBranchSchema.safeParse(req.body));
     const scope = req.scope!;
     const { name, nameEn, city, phone, logoUrl, address, taxNumber, crNumber, email, website, footerText, companyId } = body;
     const targetCompanyId = companyId && scope.allowedCompanies.includes(Number(companyId)) ? Number(companyId) : scope.companyId;
@@ -359,19 +359,18 @@ router.post("/branches", requirePermission("settings:write"), async (req, res) =
       companyId: scope.companyId, userId: scope.userId, action: "create_branch",
       entity: "branches", entityId: r.insertId,
       after: { name, nameEn, city, phone, companyId: targetCompanyId },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: r.insertId, details: JSON.stringify({ key: "branch" }) }).catch(console.error);
-    res.status(201).json({ id: r.insertId, companyId: targetCompanyId, ...req.body });
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: r.insertId, details: JSON.stringify({ key: "branch" }) }).catch((e) => logger.error(e, "settings background task failed"));
+    const [row] = await rawQuery<any>(`SELECT * FROM branches WHERE id=$1 AND "companyId"=$2`, [r.insertId, targetCompanyId]);
+    res.status(201).json(row || { id: r.insertId });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.put("/branches/:id", requirePermission("settings:write"), async (req, res) => {
+router.put("/branches/:id", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
-    const parsed_updateBranchSchema = updateBranchSchema.safeParse(req.body);
-    if (!parsed_updateBranchSchema.success) throw new ValidationError(parsed_updateBranchSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_updateBranchSchema.data;
+    const body = zodParse(updateBranchSchema.safeParse(req.body));
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery(`SELECT id, "companyId" FROM branches WHERE id=$1 AND "companyId" = ANY($2)`, [id, scope.allowedCompanies]);
     if (!existing) { throw new NotFoundError("الفرع غير موجود"); }
     const { name, nameEn, city, phone, logoUrl, address, taxNumber, crNumber, email, website, footerText } = body;
@@ -390,30 +389,30 @@ router.put("/branches/:id", requirePermission("settings:write"), async (req, res
     if (footerText !== undefined) { params.push(footerText); sets.push(`"footerText"=$${params.length}`); }
     if (sets.length === 0) { res.json({ message: "لا توجد تحديثات" }); return; }
     params.push(id);
-    await rawExecute(`UPDATE branches SET ${sets.join(",")} WHERE id=$${params.length}`, params);
-    const [updated] = await rawQuery(`SELECT * FROM branches WHERE id=$1`, [id]);
+    params.push(existing.companyId);
+    await rawExecute(`UPDATE branches SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    const [updated] = await rawQuery(`SELECT * FROM branches WHERE id=$1 AND "companyId"=$2`, [id, existing.companyId]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_branch",
       entity: "branches", entityId: id,
-      before: existing, after: req.body,
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: id, details: JSON.stringify({ key: "branch" }) }).catch(console.error);
+      before: existing, after: body,
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: id, details: JSON.stringify({ key: "branch" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json(updated);
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.delete("/branches/:id", requirePermission("settings:write"), async (req, res) => {
+router.delete("/branches/:id", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
-    const { id } = req.params;
-    const branchId = Number(id);
+    const branchId = parseId(req.params.id, "id");
     const scope = req.scope!;
 
     const [activeEmployees] = await rawQuery<any>(
-      `SELECT COUNT(*) AS cnt FROM employee_assignments WHERE "branchId" = $1 AND status = 'active'`,
-      [branchId]
+      `SELECT COUNT(*) AS cnt FROM employee_assignments WHERE "branchId" = $1 AND status = 'active' AND "companyId" = $2`,
+      [branchId, scope.companyId]
     );
     const [openOrders] = await rawQuery<any>(
-      `SELECT COUNT(*) AS cnt FROM purchase_orders WHERE "branchId" = $1 AND status NOT IN ('cancelled','received','closed') AND "companyId" = $2`,
+      `SELECT COUNT(*) AS cnt FROM purchase_orders WHERE "branchId" = $1 AND status NOT IN ('cancelled','received','completed') AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [branchId, scope.companyId]
     );
 
@@ -429,85 +428,83 @@ router.delete("/branches/:id", requirePermission("settings:write"), async (req, 
     }
 
     const [beforeBranch] = await rawQuery(`SELECT * FROM branches WHERE id=$1 AND "companyId"=$2`, [branchId, scope.companyId]);
-    await rawExecute(`DELETE FROM branches WHERE id=$1 AND "companyId"=$2 RETURNING id`, [id, scope.companyId]);
+    if (!beforeBranch) throw new NotFoundError("الفرع غير موجود");
+    await rawExecute(`DELETE FROM branches WHERE id=$1 AND "companyId"=$2 RETURNING id`, [branchId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "delete_branch",
       entity: "branches", entityId: branchId,
       before: beforeBranch,
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: branchId, details: JSON.stringify({ key: "branch" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: branchId, details: JSON.stringify({ key: "branch" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.post("/departments", requirePermission("settings:write"), async (req, res) => {
+router.post("/departments", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
-    const parsed_createDepartmentSchema = createDepartmentSchema.safeParse(req.body);
-    if (!parsed_createDepartmentSchema.success) throw new ValidationError(parsed_createDepartmentSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createDepartmentSchema.data;
+    const body = zodParse(createDepartmentSchema.safeParse(req.body));
     const { name, nameEn, manager } = body;
     const scope = req.scope!;
-    const r = await rawExecute(`INSERT INTO departments (name, "nameEn", manager) VALUES ($1,$2,$3)`, [name, nameEn || null, manager || null]);
+    const r = await rawExecute(`INSERT INTO departments (name, "companyId", "managerId") VALUES ($1,$2,$3)`, [name, scope.companyId, manager || null]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "create_department",
       entity: "departments", entityId: r.insertId,
       after: { name, nameEn, manager },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: r.insertId, details: JSON.stringify({ key: "department" }) }).catch(console.error);
-    res.status(201).json({ id: r.insertId, ...req.body });
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: r.insertId, details: JSON.stringify({ key: "department" }) }).catch((e) => logger.error(e, "settings background task failed"));
+    const [row] = await rawQuery<any>(`SELECT * FROM departments WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.put("/departments/:id", requirePermission("settings:write"), async (req, res) => {
+router.put("/departments/:id", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
-    const parsed_updateDepartmentSchema = updateDepartmentSchema.safeParse(req.body);
-    if (!parsed_updateDepartmentSchema.success) throw new ValidationError(parsed_updateDepartmentSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_updateDepartmentSchema.data;
-    const { id } = req.params;
-    const { name, nameEn, manager } = body;
+    const body = zodParse(updateDepartmentSchema.safeParse(req.body));
+    const id = parseId(req.params.id, "id");
+    const { name, manager } = body;
     const scope = req.scope!;
-    await rawExecute(`UPDATE departments SET name=$1, "nameEn"=$2, manager=$3 WHERE id=$4 RETURNING id`, [name, nameEn || null, manager || null, id]);
+    const { affectedRows } = await rawExecute(`UPDATE departments SET name=$1, "managerId"=$2 WHERE id=$3 AND "companyId"=$4 RETURNING id`, [name, manager || null, id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("القسم غير موجود");
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_department",
-      entity: "departments", entityId: Number(id),
-      after: { name, nameEn, manager },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: Number(id), details: JSON.stringify({ key: "department" }) }).catch(console.error);
+      entity: "departments", entityId: id,
+      after: { name, manager },
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: id, details: JSON.stringify({ key: "department" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.delete("/departments/:id", requirePermission("settings:write"), async (req, res) => {
+router.delete("/departments/:id", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
+    const scope = req.scope!;
     const [empCheck] = await rawQuery<any>(
-      `SELECT COUNT(*) AS cnt FROM employee_assignments WHERE "departmentId" = $1 AND status = 'active'`,
-      [id]
+      `SELECT COUNT(*) AS cnt FROM employee_assignments WHERE "departmentId" = $1 AND status = 'active' AND "companyId" = $2`,
+      [id, scope.companyId]
     );
     if (empCheck && Number(empCheck.cnt) > 0) {
       throw new ValidationError("لا يمكن حذف القسم لأن هناك موظفين مرتبطين به");
     }
-    const scope = req.scope!;
-    const [beforeDept] = await rawQuery(`SELECT * FROM departments WHERE id=$1`, [id]);
-    await rawExecute(`DELETE FROM departments WHERE id=$1`, [id]);
+    const [beforeDept] = await rawQuery(`SELECT * FROM departments WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!beforeDept) throw new NotFoundError("القسم غير موجود");
+    await rawExecute(`DELETE FROM departments WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "delete_department",
-      entity: "departments", entityId: Number(id),
+      entity: "departments", entityId: id,
       before: beforeDept,
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: Number(id), details: JSON.stringify({ key: "department" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: id, details: JSON.stringify({ key: "department" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.post("/companies", requirePermission("settings:write"), async (req, res) => {
+router.post("/companies", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
-    const parsed_createCompanySchema = createCompanySchema.safeParse(req.body);
-    if (!parsed_createCompanySchema.success) throw new ValidationError(parsed_createCompanySchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createCompanySchema.data;
+    const body = zodParse(createCompanySchema.safeParse(req.body));
     const scope = req.scope!;
     const { name, nameEn, taxNumber, crNumber } = body;
-    const r = await rawExecute(`INSERT INTO companies (name, "nameEn", "taxNumber", "crNumber") VALUES ($1,$2,$3,$4)`, [name, nameEn || null, taxNumber || null, crNumber || null]);
+    const r = await rawExecute(`INSERT INTO companies (name, "nameEn", "vatNumber", "crNumber") VALUES ($1,$2,$3,$4)`, [name, nameEn || null, taxNumber || null, crNumber || null]);
     const companyId = r.insertId;
 
     let branchId: number | undefined;
@@ -524,12 +521,12 @@ router.post("/companies", requirePermission("settings:write"), async (req, res) 
         entity: "companies",
         entityId: companyId,
         details: JSON.stringify({ name, nameEn, taxNumber, crNumber, branchId }),
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "settings background task failed"));
     } catch (bootstrapErr: any) {
-      console.error("[CompanyBootstrap] Partial failure, cleaning up company:", bootstrapErr);
+      logger.error(bootstrapErr, "[CompanyBootstrap] Partial failure, cleaning up company:");
       try {
         await rawExecute(`DELETE FROM companies WHERE id = $1`, [companyId]);
-      } catch (_cleanupErr) {}
+      } catch (_cleanupErr) { logger.error(_cleanupErr, "cleanup error"); }
       handleRouteError(bootstrapErr, res, "Bootstrap company error");
       return;
     }
@@ -538,8 +535,8 @@ router.post("/companies", requirePermission("settings:write"), async (req, res) 
       companyId: scope.companyId, userId: scope.userId, action: "create_company",
       entity: "companies", entityId: companyId,
       after: { name, nameEn, taxNumber, crNumber, branchId },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: companyId, details: JSON.stringify({ key: "company" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: companyId, details: JSON.stringify({ key: "company" }) }).catch((e) => logger.error(e, "settings background task failed"));
 
     res.status(201).json({
       id: companyId,
@@ -558,90 +555,100 @@ router.post("/companies", requirePermission("settings:write"), async (req, res) 
         "سلم عقوبات تدريجي (9 مستويات)",
         "120+ إعداد افتراضي",
       ],
-      ...req.body,
+      ...body,
     });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.put("/companies/:id", requirePermission("settings:write"), async (req, res) => {
+router.put("/companies/:id", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
-    const parsed_updateCompanySchema = updateCompanySchema.safeParse(req.body);
-    if (!parsed_updateCompanySchema.success) throw new ValidationError(parsed_updateCompanySchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_updateCompanySchema.data;
-    const { id } = req.params;
+    const body = zodParse(updateCompanySchema.safeParse(req.body));
+    const id = parseId(req.params.id, "id");
     const { name, nameEn, taxNumber, crNumber } = body;
     const scope = req.scope!;
-    await rawExecute(`UPDATE companies SET name=$1, "nameEn"=$2, "taxNumber"=$3, "crNumber"=$4 WHERE id=$5 RETURNING id`, [name, nameEn || null, taxNumber || null, crNumber || null, id]);
+    if (!scope.allowedCompanies?.includes(id) && scope.companyId !== id) {
+      throw new ForbiddenError("لا يمكنك تعديل شركة لا تملك صلاحية عليها");
+    }
+    const { affectedRows } = await rawExecute(`UPDATE companies SET name=$1, "nameEn"=$2, "vatNumber"=$3, "crNumber"=$4 WHERE id=$5 RETURNING id`, [name, nameEn || null, taxNumber || null, crNumber || null, id]);
+    if (!affectedRows) throw new NotFoundError("الشركة غير موجودة");
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_company",
-      entity: "companies", entityId: Number(id),
+      entity: "companies", entityId: id,
       after: { name, nameEn, taxNumber, crNumber },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: Number(id), details: JSON.stringify({ key: "company" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: id, details: JSON.stringify({ key: "company" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.delete("/companies/:id", requirePermission("settings:write"), async (req, res) => {
+router.delete("/companies/:id", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     const scope = req.scope!;
+    if (!scope.allowedCompanies?.includes(id) && scope.companyId !== id) {
+      throw new ForbiddenError("لا يمكنك حذف شركة لا تملك صلاحية عليها");
+    }
+    if (id === scope.companyId) {
+      throw new ValidationError("لا يمكنك حذف الشركة الحالية");
+    }
     const [beforeCompany] = await rawQuery(`SELECT * FROM companies WHERE id=$1`, [id]);
+    if (!beforeCompany) throw new NotFoundError("الشركة غير موجودة");
     await rawExecute(`DELETE FROM companies WHERE id=$1 RETURNING id`, [id]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "delete_company",
-      entity: "companies", entityId: Number(id),
+      entity: "companies", entityId: id,
       before: beforeCompany,
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: Number(id), details: JSON.stringify({ key: "company" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: id, details: JSON.stringify({ key: "company" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.get("/timezone", requirePermission("settings:read"), async (_req, res) => {
+router.get("/timezone", authorize({ feature: "settings", action: "view" }), async (_req, res) => {
   try {
     const rows = await rawQuery(`SELECT value FROM system_settings WHERE key='timezone' AND "companyId" IS NULL AND "branchId" IS NULL`);
     const timezone = rows.length > 0 ? rows[0].value : "Asia/Riyadh";
     res.json({ timezone });
-  } catch {
+  } catch (e) {
+    logger.warn(e, "failed to load timezone setting, using default");
     res.json({ timezone: "Asia/Riyadh" });
   }
 });
 
-router.get("/system-controls", requirePermission("settings:read"), async (_req, res) => {
+router.get("/system-controls", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
+    const scope = req.scope!;
     const rows = await rawQuery(
-      `SELECT key, value FROM settings WHERE scope='system' AND "scopeId"=0 ORDER BY key`
+      `SELECT key, value FROM settings WHERE scope='company' AND "scopeId"=$1 ORDER BY key`,
+      [scope.companyId]
     );
     const controls: Record<string, any> = {};
     for (const r of rows) {
-      try { controls[r.key] = JSON.parse(r.value as string); } catch { controls[r.key] = r.value; }
+      try { controls[r.key] = JSON.parse(r.value as string); } catch (e) { logger.warn(e, `failed to parse system control JSON for key ${r.key}`); controls[r.key] = r.value; }
     }
     res.json({ data: controls });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.put("/system-controls", requirePermission("settings:write"), async (req, res) => {
+router.put("/system-controls", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
-    const parsed_systemControls = systemControlsSchema.safeParse(req.body);
-    if (!parsed_systemControls.success) throw new ValidationError(parsed_systemControls.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const entries: Record<string, unknown> = parsed_systemControls.data;
+    const scope = req.scope!;
+    const entries: Record<string, unknown> = zodParse(systemControlsSchema.safeParse(req.body));
     for (const [key, value] of Object.entries(entries)) {
       const jsonVal = JSON.stringify(value);
-      const existing = await rawQuery(`SELECT id FROM settings WHERE scope='system' AND "scopeId"=0 AND key=$1`, [key]);
+      const existing = await rawQuery(`SELECT id FROM settings WHERE scope='company' AND "scopeId"=$1 AND key=$2`, [scope.companyId, key]);
       if (existing.length > 0) {
-        await rawExecute(`UPDATE settings SET value=$1 WHERE scope='system' AND "scopeId"=0 AND key=$2`, [jsonVal, key]);
+        await rawExecute(`UPDATE settings SET value=$1 WHERE scope='company' AND "scopeId"=$2 AND key=$3`, [jsonVal, scope.companyId, key]);
       } else {
-        await rawExecute(`INSERT INTO settings (scope, "scopeId", key, value) VALUES ('system', 0, $1, $2)`, [key, jsonVal]);
+        await rawExecute(`INSERT INTO settings (scope, "scopeId", key, value) VALUES ('company', $1, $2, $3)`, [scope.companyId, key, jsonVal]);
       }
     }
-    const scope = req.scope!;
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_system_controls",
       entity: "settings", entityId: 0,
       after: { keys: Object.keys(entries) },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: 0, details: JSON.stringify({ key: "system_controls" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: 0, details: JSON.stringify({ key: "system_controls" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -658,7 +665,7 @@ router.put("/system-controls", requirePermission("settings:write"), async (req, 
 // user_roles for exactly this reason; the rest of the codebase
 // (admin.ts:95, :167, :363, :195) already scopes inserts/deletes
 // the same way. These two routes were the last hold-outs.
-router.get("/role-modules", requirePermission("settings:read"), async (req, res) => {
+router.get("/role-modules", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const roles = await rawQuery(
@@ -669,11 +676,9 @@ router.get("/role-modules", requirePermission("settings:read"), async (req, res)
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.put("/role-modules/:roleKey", requirePermission("settings:write"), async (req, res) => {
+router.put("/role-modules/:roleKey", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
-    const parsed_roleModulesSchema = roleModulesSchema.safeParse(req.body);
-    if (!parsed_roleModulesSchema.success) throw new ValidationError(parsed_roleModulesSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_roleModulesSchema.data;
+    const body = zodParse(roleModulesSchema.safeParse(req.body));
     const scope = req.scope!;
     const { roleKey } = req.params;
     const { modules } = body;
@@ -685,28 +690,26 @@ router.put("/role-modules/:roleKey", requirePermission("settings:write"), async 
       companyId: scope.companyId, userId: scope.userId, action: "update_role_modules",
       entity: "user_roles", entityId: 0,
       after: { roleKey, modules },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: 0, details: JSON.stringify({ key: "role_modules" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: 0, details: JSON.stringify({ key: "role_modules" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.get("/approval-config", requirePermission("settings:read"), async (req, res) => {
+router.get("/approval-config", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const chains = await rawQuery(
-      `SELECT * FROM approval_chains WHERE "companyId"=$1 ORDER BY "chainType", "name"`,
+      `SELECT * FROM approval_chains WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "chainType", "name"`,
       [scope.companyId]
     );
     res.json({ data: chains });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.post("/approval-config", requirePermission("settings:write"), async (req, res) => {
+router.post("/approval-config", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
-    const parsed_approvalConfigSchema = approvalConfigSchema.safeParse(req.body);
-    if (!parsed_approvalConfigSchema.success) throw new ValidationError(parsed_approvalConfigSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_approvalConfigSchema.data;
+    const body = zodParse(approvalConfigSchema.safeParse(req.body));
     const scope = req.scope!;
     const { chainType, name, minAmount, maxAmount, isActive } = body;
     const r = await rawExecute(
@@ -717,26 +720,35 @@ router.post("/approval-config", requirePermission("settings:write"), async (req,
       companyId: scope.companyId, userId: scope.userId, action: "create_approval_config",
       entity: "approval_chains", entityId: r.insertId,
       after: { chainType, name, minAmount, maxAmount, isActive },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: r.insertId, details: JSON.stringify({ key: "approval_config" }) }).catch(console.error);
-    res.status(201).json({ id: r.insertId });
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: r.insertId, details: JSON.stringify({ key: "approval_config" }) }).catch((e) => logger.error(e, "settings background task failed"));
+    const [row] = await rawQuery<any>(`SELECT * FROM approval_chains WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.delete("/approval-config/:id", requirePermission("settings:write"), async (req, res) => {
+router.delete("/approval-config/:id", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [beforeChain] = await rawQuery(`SELECT * FROM approval_chains WHERE id=$1`, [Number(req.params.id)]);
-    await rawExecute(`DELETE FROM approval_chains WHERE id=$1`, [Number(req.params.id)]);
+    const id = parseId(req.params.id, "id");
+    const [beforeChain] = await rawQuery(`SELECT * FROM approval_chains WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!beforeChain) throw new NotFoundError("سلسلة الاعتماد غير موجودة");
+    await rawExecute(`UPDATE approval_chains SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "delete_approval_config",
-      entity: "approval_chains", entityId: Number(req.params.id),
+      entity: "approval_chains", entityId: id,
       before: beforeChain,
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: Number(req.params.id), details: JSON.stringify({ key: "approval_config" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: id, details: JSON.stringify({ key: "approval_config" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
+
+const SETTINGS_SECRET_KEYS = new Set(["sms_auth_token", "whatsapp_access_token", "whatsapp_verify_token"]);
+
+function maskSecretSettings(rows: any[]): any[] {
+  return rows.map((r: any) => SETTINGS_SECRET_KEYS.has(r.key) && r.value ? { ...r, value: "__configured__" } : r);
+}
 
 const CHANNEL_SETTING_KEYS = [
   "sms_account_sid",
@@ -750,7 +762,7 @@ const CHANNEL_SETTING_KEYS = [
   "push_enabled",
 ];
 
-router.get("/channels", requirePermission("settings:read"), async (req, res) => {
+router.get("/channels", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<{ key: string; value: string }>(
@@ -760,7 +772,7 @@ router.get("/channels", requirePermission("settings:read"), async (req, res) => 
     const settings: Record<string, string> = {};
     for (const r of rows) settings[r.key] = r.value;
 
-    const SECRET_KEYS = ["sms_auth_token", "whatsapp_access_token"];
+    const SECRET_KEYS = ["sms_auth_token", "whatsapp_access_token", "whatsapp_verify_token"];
     const result: Record<string, string> = { ...settings };
     for (const key of SECRET_KEYS) {
       if (result[key]) {
@@ -772,49 +784,49 @@ router.get("/channels", requirePermission("settings:read"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.put("/channels", requirePermission("settings:write"), async (req, res) => {
+router.put("/channels", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
-    const parsed_channels = channelsSchema.safeParse(req.body);
-    if (!parsed_channels.success) throw new ValidationError(parsed_channels.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const entries: Record<string, string | null> = parsed_channels.data;
+    const entries: Record<string, string | null> = zodParse(channelsSchema.safeParse(req.body));
     const scope = req.scope!;
 
     const SECRET_KEYS_PUT = new Set(["sms_auth_token", "whatsapp_access_token"]);
     const allowedKeys = new Set(CHANNEL_SETTING_KEYS);
-    for (const [key, value] of Object.entries(entries)) {
-      if (!allowedKeys.has(key)) continue;
-      if (SECRET_KEYS_PUT.has(key) && value === "__configured__") continue;
+    await withTransaction(async (client) => {
+      for (const [key, value] of Object.entries(entries)) {
+        if (!allowedKeys.has(key)) continue;
+        if (SECRET_KEYS_PUT.has(key) && value === "__configured__") continue;
 
-      if (value === null || value === undefined || value === "") {
-        await rawExecute(
-          `DELETE FROM system_settings WHERE key=$1 AND "companyId"=$2`,
-          [key, scope.companyId]
-        );
-      } else {
-        const existing = await rawQuery(
-          `SELECT id FROM system_settings WHERE key=$1 AND "companyId"=$2`,
-          [key, scope.companyId]
-        );
-        if (existing.length > 0) {
-          await rawExecute(
-            `UPDATE system_settings SET value=$1, "updatedAt"=NOW() WHERE key=$2 AND "companyId"=$3`,
-            [value, key, scope.companyId]
+        if (value === null || value === undefined || value === "") {
+          await client.query(
+            `DELETE FROM system_settings WHERE key=$1 AND "companyId"=$2`,
+            [key, scope.companyId]
           );
         } else {
-          await rawExecute(
-            `INSERT INTO system_settings (key, value, "companyId") VALUES ($1, $2, $3)`,
-            [key, value, scope.companyId]
+          const existing = await client.query(
+            `SELECT id FROM system_settings WHERE key=$1 AND "companyId"=$2`,
+            [key, scope.companyId]
           );
+          if (existing.rows.length > 0) {
+            await client.query(
+              `UPDATE system_settings SET value=$1, "updatedAt"=NOW() WHERE key=$2 AND "companyId"=$3`,
+              [value, key, scope.companyId]
+            );
+          } else {
+            await client.query(
+              `INSERT INTO system_settings (key, value, "companyId") VALUES ($1, $2, $3)`,
+              [key, value, scope.companyId]
+            );
+          }
         }
       }
-    }
+    });
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_channels",
       entity: "settings", entityId: 0,
       after: { keys: Object.keys(entries) },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: 0, details: JSON.stringify({ key: "channels" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: 0, details: JSON.stringify({ key: "channels" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });

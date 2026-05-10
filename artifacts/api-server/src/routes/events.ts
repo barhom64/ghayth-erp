@@ -19,22 +19,26 @@ eventsRouter.use(authMiddleware);
 // ─────────────────────────────────────────────────────────────────────────────
 
 eventsRouter.get("/catalog", (req, res) => {
-  const { domain, critical } = req.query as { domain?: string; critical?: string };
-  let result = EVENT_CATALOG;
-  if (domain) result = listEventsByDomain(domain as EventDomain);
-  if (critical === "true") result = result.filter((e) => e.critical === true);
-  res.json({
-    total: result.length,
-    countByDomain: countEventsByDomain(),
-    criticalCount: listCriticalEvents().length,
-    events: result,
-  });
+  try {
+    const { domain, critical } = req.query as { domain?: string; critical?: string };
+    let result = EVENT_CATALOG;
+    if (domain) result = listEventsByDomain(domain as EventDomain);
+    if (critical === "true") result = result.filter((e) => e.critical === true);
+    res.json({
+      total: result.length,
+      countByDomain: countEventsByDomain(),
+      criticalCount: listCriticalEvents().length,
+      events: result,
+    });
+  } catch (err) { handleRouteError(err, res, "Event catalog error:"); }
 });
 
 eventsRouter.get("/catalog/:name", (req, res) => {
-  const def = getEventDefinition(req.params.name);
-  if (!def) throw new NotFoundError("الحدث غير موجود في الفهرس");
-  res.json({ data: def });
+  try {
+    const def = getEventDefinition(req.params.name);
+    if (!def) throw new NotFoundError("الحدث غير موجود في الفهرس");
+    res.json({ data: def });
+  } catch (err) { handleRouteError(err, res, "Event catalog detail error:"); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -50,17 +54,18 @@ eventsRouter.get("/log", async (req, res) => {
     let where = `"companyId" = $1`;
     if (action) { params.push(action); where += ` AND action = $${params.length}`; }
     if (entity) { params.push(entity); where += ` AND entity = $${params.length}`; }
-    if (entityId) { params.push(Number(entityId)); where += ` AND "entityId" = $${params.length}`; }
+    if (entityId) { params.push(Number(entityId) || 0); where += ` AND "entityId" = $${params.length}`; }
     if (from) { params.push(from); where += ` AND "createdAt" >= $${params.length}::timestamp`; }
     if (to) { params.push(to); where += ` AND "createdAt" <= $${params.length}::timestamp`; }
 
     const lim = Math.min(500, Math.max(1, Number(limit) || 100));
+    params.push(lim);
     const rows = await rawQuery<any>(
       `SELECT id, action, entity, "entityId", details, "userId", "createdAt"
        FROM event_logs
        WHERE ${where}
        ORDER BY "createdAt" DESC
-       LIMIT ${lim}`,
+       LIMIT $${params.length}`,
       params
     );
 
@@ -84,7 +89,7 @@ eventsRouter.get("/log", async (req, res) => {
 eventsRouter.get("/log/stats", async (req, res) => {
   try {
     const scope = req.scope!;
-    const days = Number(req.query.days ?? 7);
+    const days = Number(req.query.days) || 7;
     const rows = await rawQuery<any>(
       `SELECT action, COUNT(*)::int AS count
        FROM event_logs

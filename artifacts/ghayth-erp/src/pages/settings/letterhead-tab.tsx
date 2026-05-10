@@ -3,7 +3,6 @@ import { useApiQuery, apiFetch } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Printer, Save, Eye } from "lucide-react";
@@ -13,7 +12,7 @@ import { LetterheadHeader } from "@/components/print-layout";
 import type { BranchLetterhead } from "@/components/print-layout";
 
 export function LetterheadSettings() {
-  const { data, isLoading, isError, refetch } = useApiQuery<any>(["settings-branches"], "/settings/branches");
+  const { data, refetch, isLoading, isError, error } = useApiQuery<any>(["settings-branches"], "/settings/branches");
   const branches = data?.data || [];
   const [selectedBranchId, setSelectedBranchId] = useState<number | null>(null);
   const [form, setForm] = useState({
@@ -82,7 +81,7 @@ export function LetterheadSettings() {
   };
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState onRetry={() => refetch()} error={error} />;
 
   return (
     <div className="space-y-4">
@@ -125,10 +124,10 @@ export function LetterheadSettings() {
                   <div><Label>رقم السجل التجاري</Label><Input value={form.crNumber} onChange={(e) => setForm({ ...form, crNumber: e.target.value })} /></div>
                   <div className="md:col-span-2"><Label>رابط الشعار</Label><Input value={form.logoUrl} onChange={(e) => setForm({ ...form, logoUrl: e.target.value })} placeholder="https://example.com/logo.png" /></div>
                   <div className="md:col-span-2"><Label>العنوان التفصيلي</Label><Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></div>
-                  <div className="md:col-span-2"><Label>نص التذييل</Label><Textarea className="h-16" value={form.footerText} onChange={(e) => setForm({ ...form, footerText: e.target.value })} placeholder="يظهر في أسفل كل مطبوعة..." /></div>
+                  <div className="md:col-span-2"><Label>نص التذييل</Label><textarea className="w-full border rounded-md p-2 h-16" value={form.footerText} onChange={(e) => setForm({ ...form, footerText: e.target.value })} placeholder="يظهر في أسفل كل مطبوعة..." /></div>
                 </div>
                 <div className="flex gap-2 pt-2">
-                  <Button onClick={handleSave} disabled={saving}>
+                  <Button onClick={handleSave} disabled={saving} rateLimitAware>
                     <Save className="h-4 w-4 me-1" />{saving ? "جاري الحفظ..." : "حفظ الكليشة"}
                   </Button>
                   <Button variant="outline" onClick={() => setShowPreview(!showPreview)}>

@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { useApiQuery, apiFetch } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { useApiQuery, apiFetch, isRateLimitedError } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +15,7 @@ import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { roleKeyColors } from "@/contexts/app-context";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const ROLE_OPTIONS = [
   { value: "owner", label: "مالك النظام" },
@@ -52,9 +52,6 @@ export default function AdminUsersPage() {
   const [editForm, setEditForm] = useState({ email: "", role: "", employeeId: "" });
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
-
   const items: any[] = data?.data || [];
   const employees: any[] = employeesData?.data || [];
 
@@ -67,6 +64,90 @@ export default function AdminUsersPage() {
     if (filterStatus === "inactive" && u.isActive) return false;
     return true;
   });
+
+  const userColumns: DataTableColumn<any>[] = [
+    {
+      key: "email",
+      header: "المستخدم",
+      sortable: true,
+      searchable: true,
+      render: (r: any) => (
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
+            style={{ backgroundColor: roleKeyColors[r.role] || "#95A5A6" }}>
+            {r.email?.charAt(0)?.toUpperCase()}
+          </div>
+          <span className="font-mono text-xs">{r.email}</span>
+        </div>
+      ),
+    },
+    {
+      key: "employeeName",
+      header: "الموظف المرتبط",
+      sortable: true,
+      render: (r: any) => r.employeeName ? (
+        <div>
+          <p className="text-sm font-medium">{r.employeeName}</p>
+          <p className="text-xs text-gray-400">{r.empNumber}</p>
+        </div>
+      ) : <span className="text-gray-400 text-xs">—</span>,
+    },
+    {
+      key: "role",
+      header: "الدور",
+      sortable: true,
+      render: (r: any) => (
+        <Badge variant="outline" className="text-xs" style={{ borderColor: roleKeyColors[r.role] + "60", color: roleKeyColors[r.role] }}>
+          {roleLabel(r.role)}
+        </Badge>
+      ),
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      sortable: true,
+      render: (r: any) => <PageStatusBadge status={r.status || (r.isActive ? "active" : "inactive")} />,
+    },
+    {
+      key: "lastLoginAt",
+      header: "آخر دخول",
+      sortable: true,
+      render: (r: any) => <span className="text-xs text-gray-400">{r.lastLoginAt ? formatDateAr(r.lastLoginAt) : "لم يسجل بعد"}</span>,
+    },
+    {
+      key: "failedAttempts7d",
+      header: "محاولات فاشلة (7 أيام)",
+      render: (r: any) => {
+        const failedCount = Number(r.failedAttempts7d) || 0;
+        return failedCount > 0 ? (
+          <div className="flex items-center gap-1">
+            <ShieldAlert className={cn("h-4 w-4", failedCount > 3 ? "text-red-500" : "text-amber-500")} />
+            <span className={cn("text-xs font-medium", failedCount > 3 ? "text-red-600" : "text-amber-600")}>{failedCount}</span>
+          </div>
+        ) : <span className="text-xs text-gray-300">—</span>;
+      },
+    },
+    {
+      key: "actions",
+      header: "إجراءات",
+      render: (r: any) => (
+        <div className="flex gap-1">
+          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" title={r.isActive ? "تعليق الحساب" : "تفعيل الحساب"} onClick={() => toggleActive(r)}>
+            {r.isActive ? <ToggleRight className="h-4 w-4 text-green-500" /> : <ToggleLeft className="h-4 w-4 text-gray-400" />}
+          </Button>
+          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-blue-600" title="تعديل" onClick={() => startEditUser(r)}>
+            <Edit2 className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-orange-600" title="إعادة تعيين كلمة المرور" onClick={() => { setResetUserId(r.id); setResetPassword(""); setCreatedUser(null); setShowForm(false); setEditUser(null); setDeleteConfirmId(null); }}>
+            <KeySquare className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-red-600" title="حذف المستخدم" onClick={() => { setDeleteConfirmId(r.id); setEditUser(null); setResetUserId(null); setShowForm(false); }}>
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      ),
+    },
+  ];
 
   const createUser = async () => {
     if (!form.email) { toast({ variant: "destructive", title: "البريد الإلكتروني مطلوب" }); return; }
@@ -114,7 +195,10 @@ export default function AdminUsersPage() {
       });
       toast({ title: "تم إعادة تعيين كلمة المرور بنجاح" });
       setResetUserId(null); setResetPassword("");
-    } catch {
+    } catch (err) {
+      // The shared apiFetch already shows a debounced rate-limit toast on
+      // 429, so swallow it here to avoid a duplicate generic error toast.
+      if (isRateLimitedError(err)) return;
       toast({ variant: "destructive", title: "فشل في إعادة تعيين كلمة المرور" });
     }
   };
@@ -321,13 +405,17 @@ export default function AdminUsersPage() {
         </Card>
       )}
 
-      <Card>
-        <CardContent className="p-4 space-y-3">
-          <div className="flex gap-3 flex-wrap">
-            <div className="relative flex-1 min-w-[180px]">
-              <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input placeholder="بحث بالبريد أو الاسم..." className="ps-9" value={search} onChange={(e) => setSearch(e.target.value)} />
-            </div>
+      <DataTable
+        columns={userColumns}
+        data={filtered}
+        isLoading={isLoading}
+        isError={isError}
+       
+        emptyMessage="لا يوجد مستخدمين"
+        pageSize={0}
+        searchPlaceholder="بحث بالبريد أو الاسم..."
+        toolbarEnd={
+          <div className="flex gap-2">
             <Select value={filterRole || "_none"} onValueChange={(v) => setFilterRole(v === "_none" ? "" : v)}>
               <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -344,84 +432,8 @@ export default function AdminUsersPage() {
               </SelectContent>
             </Select>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card><CardContent className="p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-gray-50">
-                <th className="p-3 text-start">المستخدم</th>
-                <th className="p-3 text-start">الموظف المرتبط</th>
-                <th className="p-3 text-start">الدور</th>
-                <th className="p-3 text-start">الحالة</th>
-                <th className="p-3 text-start">آخر دخول</th>
-                <th className="p-3 text-start">محاولات فاشلة (7 أيام)</th>
-                <th className="p-3 text-start">إجراءات</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((u: any) => {
-                const failedCount = Number(u.failedAttempts7d) || 0;
-                return (
-                  <tr key={u.id} className="border-b hover:bg-gray-50">
-                    <td className="p-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                          style={{ backgroundColor: roleKeyColors[u.role] || "#95A5A6" }}>
-                          {u.email?.charAt(0)?.toUpperCase()}
-                        </div>
-                        <span className="font-mono text-xs">{u.email}</span>
-                      </div>
-                    </td>
-                    <td className="p-3">
-                      {u.employeeName ? (
-                        <div>
-                          <p className="text-sm font-medium">{u.employeeName}</p>
-                          <p className="text-xs text-gray-400">{u.empNumber}</p>
-                        </div>
-                      ) : <span className="text-gray-400 text-xs">—</span>}
-                    </td>
-                    <td className="p-3">
-                      <Badge variant="outline" className="text-xs" style={{ borderColor: roleKeyColors[u.role] + "60", color: roleKeyColors[u.role] }}>
-                        {roleLabel(u.role)}
-                      </Badge>
-                    </td>
-                    <td className="p-3"><PageStatusBadge status={u.status || (u.isActive ? "active" : "inactive")} /></td>
-                    <td className="p-3 text-xs text-gray-400">{u.lastLoginAt ? formatDateAr(u.lastLoginAt) : "لم يسجل بعد"}</td>
-                    <td className="p-3">
-                      {failedCount > 0 ? (
-                        <div className="flex items-center gap-1">
-                          <ShieldAlert className={cn("h-4 w-4", failedCount > 3 ? "text-red-500" : "text-amber-500")} />
-                          <span className={cn("text-xs font-medium", failedCount > 3 ? "text-red-600" : "text-amber-600")}>{failedCount}</span>
-                        </div>
-                      ) : <span className="text-xs text-gray-300">—</span>}
-                    </td>
-                    <td className="p-3">
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" title={u.isActive ? "تعليق الحساب" : "تفعيل الحساب"} onClick={() => toggleActive(u)}>
-                          {u.isActive ? <ToggleRight className="h-4 w-4 text-green-500" /> : <ToggleLeft className="h-4 w-4 text-gray-400" />}
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-blue-600" title="تعديل" onClick={() => startEditUser(u)}>
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-orange-600" title="إعادة تعيين كلمة المرور" onClick={() => { setResetUserId(u.id); setResetPassword(""); setCreatedUser(null); setShowForm(false); setEditUser(null); setDeleteConfirmId(null); }}>
-                          <KeySquare className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-red-600" title="حذف المستخدم" onClick={() => { setDeleteConfirmId(u.id); setEditUser(null); setResetUserId(null); setShowForm(false); }}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {filtered.length === 0 && <tr><td colSpan={7} className="p-8 text-center text-gray-400">لا يوجد مستخدمين</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </CardContent></Card>
+        }
+      />
 
       <Card>
         <CardContent className="p-4">

@@ -28,7 +28,7 @@ export default function LegalCasesCreate() {
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const handleSubmit = async () => {
     const firstError = validate({
@@ -130,7 +130,7 @@ export default function LegalCasesCreate() {
         <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات القضية" />
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/legal")}>إلغاء</Button>
-          <Button onClick={handleSubmit} disabled={addCase.isPending}>{addCase.isPending ? "جاري الإضافة..." : "إضافة"}</Button>
+          <Button onClick={handleSubmit} disabled={addCase.isPending} rateLimitAware>{addCase.isPending ? "جاري الإضافة..." : "إضافة"}</Button>
         </div>
       </div>
     </CreatePageLayout>

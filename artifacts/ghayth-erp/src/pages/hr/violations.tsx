@@ -118,7 +118,7 @@ export default function ViolationsPage() {
         title="المخالفات والجزاءات"
         breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "المخالفات والجزاءات" }]}
       >
-        <ErrorState onRetry={() => window.location.reload()} />
+        <ErrorState />
       </PageShell>
     );
   }
@@ -427,7 +427,7 @@ function MemosTab({ memos }: { memos: any[] }) {
       />
 
       <BulkActionsBar
-        entityType="discipline_memo"
+        entityType="discipline-memo"
         items={filtered}
         selectedIds={selectedIds}
         onToggle={toggleSelect}

@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
+import { formatCurrency } from "@/lib/formatters";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -9,13 +11,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Receipt, DollarSign, FileText } from "lucide-react";
 import { AdvancedFilters, useFilters } from "@/components/shared/advanced-filters";
-import { formatCurrency } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { PageShell } from "@/components/page-shell";
-import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 
 export default function UmrahInvoices() {
+  const [, navigate] = useLocation();
   const { data: resp, refetch, isLoading, isError, error } = useApiQuery<any>(["umrah-agent-invoices"], "/umrah/agent-invoices");
   const { data: agents } = useApiQuery<any>(["umrah-agents"], "/umrah/agents");
   const { data: seasons } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
@@ -27,7 +27,7 @@ export default function UmrahInvoices() {
   const { toast } = useToast();
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const generate = async () => {
     try {
@@ -51,13 +51,15 @@ export default function UmrahInvoices() {
 
   const kpiCards = [
     { label: "إجمالي الفواتير", value: items.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
-    { label: "الإجمالي", value: formatCurrency(totalAmount), icon: DollarSign, color: "text-purple-600 bg-purple-50" },
-    { label: "المدفوع", value: formatCurrency(paidAmount), icon: Receipt, color: "text-green-600 bg-green-50" },
+    { label: "الإجمالي (ريال)", value: formatCurrency(totalAmount), icon: DollarSign, color: "text-purple-600 bg-purple-50" },
+    { label: "المدفوع (ريال)", value: formatCurrency(paidAmount), icon: Receipt, color: "text-green-600 bg-green-50" },
   ];
 
   return (
-    <PageShell title="فواتير العمرة" breadcrumbs={[{ label: "العمرة" }, { label: "الفواتير" }]}>
-      <UmrahTabsNav />
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold tracking-tight">فواتير الوكلاء</h1>
+      </div>
 
       <div className="grid gap-4 grid-cols-3">
         {kpiCards.map((c) => (
@@ -122,9 +124,9 @@ export default function UmrahInvoices() {
           { key: "agentName", header: "الوكيل" },
           { key: "seasonTitle", header: "الموسم" },
           { key: "pilgrimCount", header: "عدد المعتمرين" },
-          { key: "servicesTotal", header: "الخدمات", render: (inv) => formatCurrency(Number(inv.servicesTotal)) },
-          { key: "penaltiesTotal", header: "الغرامات", render: (inv) => <span className="text-red-600">{formatCurrency(Number(inv.penaltiesTotal))}</span> },
-          { key: "total", header: "الإجمالي", render: (inv) => <span className="font-bold">{formatCurrency(Number(inv.total))}</span> },
+          { key: "servicesTotal", header: "الخدمات (ريال)", render: (inv) => formatCurrency(Number(inv.servicesTotal)) },
+          { key: "penaltiesTotal", header: "الغرامات (ريال)", render: (inv) => <span className="text-red-600">{formatCurrency(Number(inv.penaltiesTotal))}</span> },
+          { key: "total", header: "الإجمالي (ريال)", render: (inv) => <span className="font-bold">{formatCurrency(Number(inv.total))}</span> },
           { key: "status", header: "الحالة", render: (inv) => <PageStatusBadge status={inv.status} /> },
         ] as DataTableColumn<any>[]}
         data={filteredItems}
@@ -136,7 +138,8 @@ export default function UmrahInvoices() {
         emptyIcon={<Receipt className="h-6 w-6 text-slate-400" />}
         noToolbar
         pageSize={pageSize}
+        onRowClick={(row) => navigate(`/umrah/invoices/${row.id}`)}
       />
-    </PageShell>
+    </div>
   );
 }

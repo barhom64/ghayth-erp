@@ -156,7 +156,7 @@ export default function InvoicesPage() {
   ];
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   return (
     <PageShell
@@ -183,7 +183,7 @@ export default function InvoicesPage() {
           searchPlaceholder: "بحث برقم الفاتورة أو العميل...",
           statuses: [
             { value: "draft", label: "مسودة" },
-            { value: "pending", label: "معلق" },
+            { value: "pending_approval", label: "بانتظار الاعتماد" },
             { value: "partial", label: "جزئي" },
             { value: "paid", label: "مدفوعة" },
             { value: "overdue", label: "متأخرة" },
@@ -238,12 +238,13 @@ export default function InvoicesPage() {
           return undefined;
         }}
         noToolbar
+        onRowClick={(row) => navigate(`/finance/invoices/${row.id}`)}
         renderRowExtras={(inv) => {
           if (expandedId !== inv.id) return null;
           return (
             <div className="bg-gray-50/50 p-3">
               <div className="space-y-3">
-                {inv.status === "pending" && (
+                {inv.status === "pending_approval" && (
                   <ApprovalActions
                     entityType="invoice"
                     entityId={inv.id}

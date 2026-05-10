@@ -1,13 +1,15 @@
-import { ValidationError, NotFoundError, ForbiddenError, isTypedError, handleRouteError } from "../lib/errorHandler.js";
+import { ValidationError, NotFoundError, ForbiddenError, isTypedError, handleRouteError , zodParse } from "../lib/errorHandler.js";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { Readable } from "stream";
 import { z } from "zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { rawQuery } from "../lib/rawdb.js";
-import rateLimit from "express-rate-limit";
+import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
+import { logger } from "../lib/logger.js";
 
 const ALLOWED_CONTENT_TYPES = new Set([
   "image/jpeg",
@@ -45,21 +47,18 @@ const RequestUploadUrlResponse = z.object({
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
 
-const uploadLimiter = rateLimit({
+// Per-user upload limiter — runs after authMiddleware (re-ordered below) so
+// req.scope is set. Owner/admin roles are exempt; everyone else gets 30/min.
+const uploadLimiter = createPerUserLimiter({
+  prefix: "storage:upload",
   windowMs: 60 * 1000,
   max: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "تم تجاوز الحد الأقصى لطلبات الرفع. يرجى المحاولة بعد دقيقة" },
-  validate: { ip: false, trustProxy: false },
+  message: "تم تجاوز الحد الأقصى لطلبات الرفع. يرجى المحاولة بعد دقيقة",
 });
 
-router.post("/storage/uploads/request-url", uploadLimiter, authMiddleware, requirePermission("documents:write"), async (req: Request, res: Response) => {
+router.post("/storage/uploads/request-url", authMiddleware, uploadLimiter, authorize({ feature: "documents", action: "create" }), async (req: Request, res: Response) => {
   try {
-    const parsed = RequestUploadUrlBody.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message || "Missing or invalid required fields");
-
-    const { name, size, contentType } = parsed.data;
+    const { name, size, contentType } = zodParse(RequestUploadUrlBody.safeParse(req.body));
 
     if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
       throw new ValidationError(`نوع الملف غير مسموح به: ${contentType}. الأنواع المسموحة: PDF، Word، Excel، الصور، النصوص`);
@@ -74,8 +73,8 @@ router.post("/storage/uploads/request-url", uploadLimiter, authMiddleware, requi
         companyId: scope.companyId, userId: scope.userId, action: "request_upload_url",
         entity: "storage", entityId: 0,
         after: { name, size, contentType, objectPath },
-      }).catch(console.error);
-      emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "storage.upload_requested", entity: "storage", entityId: 0, details: JSON.stringify({ name, size, contentType, objectPath }) }).catch(console.error);
+      }).catch((e) => logger.error(e, "storage background task failed"));
+      emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "storage.upload_requested", entity: "storage", entityId: 0, details: JSON.stringify({ name, size, contentType, objectPath }) }).catch((e) => logger.error(e, "storage background task failed"));
     }
 
     res.json(
@@ -124,7 +123,7 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
   }
 });
 
-router.get("/storage/objects/*path", authMiddleware, requirePermission("documents:download"), async (req: Request, res: Response) => {
+router.get("/storage/objects/*path", authMiddleware, authorize({ feature: "documents", action: "export" }), async (req: Request, res: Response) => {
   try {
     const raw = req.params.path;
     const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;
@@ -133,13 +132,13 @@ router.get("/storage/objects/*path", authMiddleware, requirePermission("document
     const scope = req.scope;
     if (scope) {
       const docs = await rawQuery(
-        `SELECT id FROM documents WHERE "storageKey"=$1 AND "companyId"=$2 LIMIT 1`,
+        `SELECT id FROM documents WHERE "storageKey"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
         [objectPath, scope.companyId]
       );
       const versions = docs.length > 0 ? docs : await rawQuery(
         `SELECT dv.id FROM document_versions dv
          JOIN documents d ON d.id = dv."documentId"
-         WHERE dv."storageKey"=$1 AND d."companyId"=$2 LIMIT 1`,
+         WHERE dv."storageKey"=$1 AND d."companyId"=$2 AND d."deletedAt" IS NULL LIMIT 1`,
         [objectPath, scope.companyId]
       );
       if (docs.length === 0 && versions.length === 0) {

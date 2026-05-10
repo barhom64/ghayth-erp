@@ -14,8 +14,9 @@
 
 import { rawQuery, rawExecute } from "./rawdb.js";
 import { ensureInquiryMemoForViolation, type IncidentType } from "./disciplineEngine.js";
-import { createNotification, getManagerAssignmentId, emitEvent } from "./businessHelpers.js";
+import { createNotification, getManagerAssignmentId, emitEvent, todayISO } from "./businessHelpers.js";
 import { eventBus } from "./eventBus.js";
+import { logger } from "./logger.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // الأنواع
@@ -91,7 +92,8 @@ export async function getAutoDetectionSettings(companyId: number): Promise<AutoD
     try {
       const parsed = typeof row.value === "string" ? JSON.parse(row.value) : row.value;
       return { ...DEFAULT_SETTINGS, ...parsed };
-    } catch {
+    } catch (e) {
+      logger.warn(e, "failed to parse auto-detection settings JSON");
       return DEFAULT_SETTINGS;
     }
   }
@@ -105,9 +107,9 @@ export async function saveAutoDetectionSettings(
   const current = await getAutoDetectionSettings(companyId);
   const merged = { ...current, ...settings };
   await rawExecute(
-    `INSERT INTO system_settings ("companyId", key, value, "updatedAt")
-     VALUES ($1, 'auto_violation_detection', $2::jsonb, NOW())
-     ON CONFLICT ("companyId", key) DO UPDATE
+    `INSERT INTO system_settings ("companyId", "branchId", key, value, "updatedAt")
+     VALUES ($1, NULL, 'auto_violation_detection', $2::jsonb, NOW())
+     ON CONFLICT ("companyId", "branchId", key) DO UPDATE
        SET value = $2::jsonb, "updatedAt" = NOW()`,
     [companyId, JSON.stringify(merged)]
   );
@@ -137,7 +139,7 @@ export async function runAutoDetection(
   companyId: number,
   targetDate?: string
 ): Promise<AutoDetectionResult> {
-  const date = targetDate ?? new Date().toISOString().split("T")[0]!;
+  const date = targetDate ?? todayISO();
   const period = date.slice(0, 7); // YYYY-MM
   const settings = await getAutoDetectionSettings(companyId);
 
@@ -155,7 +157,8 @@ export async function runAutoDetection(
   // ── فحص: هل اليوم عطلة رسمية؟ ──
   const [holiday] = await rawQuery<any>(
     `SELECT id FROM public_holidays
-     WHERE "companyId" = $1 AND $2::date BETWEEN "startDate"::date AND "endDate"::date`,
+     WHERE "companyId" = $1 AND $2::date BETWEEN "startDate"::date AND "endDate"::date
+       AND "deletedAt" IS NULL`,
     [companyId, date]
   );
   if (holiday) {
@@ -178,6 +181,7 @@ export async function runAutoDetection(
        WHERE ea."companyId" = $1
          AND a.date = $2::date
          AND a."lateMinutes" > $3
+         AND a."deletedAt" IS NULL
          AND a.status NOT IN ('present_holiday','present_off_day','remote','on_leave')
          AND NOT EXISTS (
            SELECT 1 FROM employee_violations ev
@@ -217,9 +221,11 @@ export async function runAutoDetection(
                  JOIN shifts s ON s.id = esa."shiftId"
                  WHERE esa."assignmentId" = a."assignmentId"
                    AND (esa."endDate" IS NULL OR esa."endDate" >= $2::date)
+                   AND s."deletedAt" IS NULL
                  ORDER BY esa.id DESC LIMIT 1),
                 (SELECT s."endTime" FROM shifts s
                  WHERE s."companyId" = $1 AND s.status = 'active'
+                   AND s."deletedAt" IS NULL
                  ORDER BY s."isDefault" DESC LIMIT 1),
                 '17:00'
               ) AS "shiftEndTime"
@@ -229,6 +235,7 @@ export async function runAutoDetection(
        WHERE ea."companyId" = $1
          AND a.date = $2::date
          AND a."checkOut" IS NOT NULL
+         AND a."deletedAt" IS NULL
          AND a.status NOT IN ('present_holiday','present_off_day','remote','on_leave')
          AND NOT EXISTS (
            SELECT 1 FROM employee_violations ev
@@ -277,9 +284,11 @@ export async function runAutoDetection(
        WHERE ea."companyId" = $1
          AND a.date = $2::date
          AND a.status = 'absent'
+         AND a."deletedAt" IS NULL
          AND NOT EXISTS (
            SELECT 1 FROM hr_leave_requests lr
            WHERE lr."employeeId" = ea."employeeId" AND lr.status = 'approved'
+             AND lr."deletedAt" IS NULL
              AND $2::date BETWEEN lr."startDate" AND lr."endDate"
          )
          AND NOT EXISTS (
@@ -402,7 +411,7 @@ export async function runAutoDetection(
               priority: incident.severity === "high" ? "high" : "normal",
               refType: "hr_inquiry_memo",
               refId: memoResult.memoId,
-            }).catch(console.error);
+            }).catch((e) => logger.error(e, "[autoViolationEngine] background task failed"));
           }
 
           // ── إشعار المدير ──
@@ -419,10 +428,10 @@ export async function runAutoDetection(
                     priority: incident.severity === "high" ? "high" : "normal",
                     refType: "hr_inquiry_memo",
                     refId: memoResult.memoId,
-                  }).catch(console.error);
+                  }).catch((e) => logger.error(e, "[autoViolationEngine] background task failed"));
                 }
               })
-              .catch(console.error);
+              .catch((e) => logger.error(e, "[autoViolationEngine] background task failed"));
           }
         }
 
@@ -444,7 +453,7 @@ export async function runAutoDetection(
       }
     } catch (err) {
       result.errors++;
-      console.error(`[الرصد التلقائي] خطأ في معالجة واقعة ${incident.type} للموظف ${incident.employeeName}:`, err);
+      logger.error(err, `[الرصد التلقائي] خطأ في معالجة واقعة ${incident.type} للموظف ${incident.employeeName}:`);
     }
   }
 
@@ -457,7 +466,7 @@ export async function runAutoDetection(
       companyId, branchId: 0, userId: null,
       action: "hr.auto_detection.completed", entity: "auto_detection_log", entityId: 0,
       details: JSON.stringify({ date, detected: result.detected, memosCreated: result.memosCreated }),
-    }).catch(() => {});
+    }).catch((e) => logger.error(e, "auto violation event emit failed"));
   }
 
   return result;
@@ -480,7 +489,7 @@ export async function runAutoDetectionAllCompanies(
       totalDetected += result.detected;
       totalMemos += result.memosCreated;
     } catch (err) {
-      console.error(`[الرصد التلقائي] خطأ في الشركة ${company.id}:`, err);
+      logger.error(err, `[الرصد التلقائي] خطأ في الشركة ${company.id}:`);
     }
   }
 
@@ -538,7 +547,7 @@ async function logDetectionRun(result: AutoDetectionResult): Promise<void> {
         ]
       );
     } catch (innerErr) {
-      console.error("[الرصد التلقائي] فشل تسجيل السجل:", innerErr);
+      logger.error(innerErr, "[الرصد التلقائي] فشل تسجيل السجل:");
     }
   }
 }
@@ -575,17 +584,21 @@ export async function getDetectionLog(
     );
     const total = Number(countRow?.cnt ?? 0);
 
+    const limitParamIdx = paramIdx++;
+    const offsetParamIdx = paramIdx++;
+    params.push(limit, offset);
+
     const data = await rawQuery<any>(
       `SELECT * FROM auto_detection_log
        WHERE "companyId" = $1 ${whereExtra}
        ORDER BY "createdAt" DESC
-       LIMIT ${limit} OFFSET ${offset}`,
+       LIMIT $${limitParamIdx} OFFSET $${offsetParamIdx}`,
       params
     );
 
     return { data, total };
-  } catch {
-    // الجدول قد لا يكون موجوداً
+  } catch (e) {
+    logger.warn(e, "auto_violations table may not exist");
     return { data: [], total: 0 };
   }
 }

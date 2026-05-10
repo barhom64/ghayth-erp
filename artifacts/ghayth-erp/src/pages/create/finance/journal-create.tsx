@@ -51,7 +51,7 @@ export default function JournalCreate() {
   ]);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const updateLine = (idx: number, field: keyof JournalLine, value: string) => {
     const updated = [...lines];
@@ -183,7 +183,7 @@ export default function JournalCreate() {
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/finance/journal")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={!isBalanced || createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={!isBalanced || createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
         </Button>
       </div>

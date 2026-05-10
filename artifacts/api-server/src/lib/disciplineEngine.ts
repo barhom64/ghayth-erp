@@ -10,6 +10,7 @@
 // ============================================================================
 
 import { rawQuery, rawExecute } from "./rawdb.js";
+import { currentYear, roundTo2 } from "./businessHelpers.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -231,12 +232,12 @@ export function parsePenaltyLabel(
   const pctMatch = t.match(/(\d{1,3})\s*%/);
   if (pctMatch) {
     const pct = Math.min(100, Math.max(0, Number(pctMatch[1])));
-    return { amount: Math.round((safeWage * pct) / 100 * 100) / 100, warningOnly: false, termination: null };
+    return { amount: roundTo2((safeWage * pct) / 100), warningOnly: false, termination: null };
   }
   // أيام مذكورة (longest token first — see DAY_TOKENS_SORTED comment)
   for (const [tok, days] of DAY_TOKENS_SORTED) {
     if (t.includes(tok)) {
-      return { amount: Math.round(safeWage * days * 100) / 100, warningOnly: false, termination: null };
+      return { amount: roundTo2(safeWage * days), warningOnly: false, termination: null };
     }
   }
   // unknown — نعتبرها عقوبة إدارية غير مالية لتجنب خصم خاطئ
@@ -274,12 +275,12 @@ export async function resolvePenalty(
   if (reg.extraDeduction && dailyWage > 0) {
     if (input.incidentType === "late" && input.durationMinutes) {
       const minuteRate = dailyWage / 480; // 8 ساعات
-      extraDeductionAmount = Math.round(minuteRate * input.durationMinutes * 100) / 100;
+      extraDeductionAmount = roundTo2(minuteRate * input.durationMinutes);
     } else if (input.incidentType === "early_leave" && input.durationMinutes) {
       const minuteRate = dailyWage / 480;
-      extraDeductionAmount = Math.round(minuteRate * input.durationMinutes * 100) / 100;
+      extraDeductionAmount = roundTo2(minuteRate * input.durationMinutes);
     } else if (input.incidentType === "absence" && input.absenceDays) {
-      extraDeductionAmount = Math.round(dailyWage * input.absenceDays * 100) / 100;
+      extraDeductionAmount = roundTo2(dailyWage * input.absenceDays);
     }
   }
 
@@ -295,7 +296,7 @@ export async function resolvePenalty(
     penaltyLabel: penaltyText ?? "",
     baseDeductionAmount,
     extraDeductionAmount,
-    totalDeductionAmount: Math.round((baseDeductionAmount + extraDeductionAmount) * 100) / 100,
+    totalDeductionAmount: roundTo2(baseDeductionAmount + extraDeductionAmount),
     isTermination,
     terminationType: parsed.termination ?? undefined,
     warningOnly: parsed.warningOnly,
@@ -316,7 +317,7 @@ export async function getDailyWage(assignmentId: number): Promise<number> {
   const monthly = Number(row?.salary ?? 0);
   if (!Number.isFinite(monthly) || monthly <= 0) return 0;
   // الأجر اليومي = الراتب الشهري / 30 (القاعدة المعتمدة في هذا النظام)
-  return Math.round((monthly / 30) * 100) / 100;
+  return roundTo2(monthly / 30);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -324,7 +325,7 @@ export async function getDailyWage(assignmentId: number): Promise<number> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function generateMemoNumber(companyId: number): Promise<string> {
-  const year = new Date().getFullYear();
+  const year = currentYear();
   const [row] = await rawQuery<{ cnt: string }>(
     `SELECT COUNT(*)::int AS cnt
        FROM hr_inquiry_memos

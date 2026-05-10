@@ -1,9 +1,13 @@
 import { Router } from "express";
 import { z } from "zod";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
+import { handleRouteError, NotFoundError,
+  parseId,
+  zodParse,
+} from "../lib/errorHandler.js";
 import { rawQuery } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { emitEvent } from "../lib/businessHelpers.js";
 import {
   ensureObligationsTable,
@@ -16,6 +20,7 @@ import {
   type ObligationStatus,
   type ObligationType,
 } from "../lib/obligationsEngine.js";
+import { logger } from "../lib/logger.js";
 
 export const obligationsRouter = Router();
 obligationsRouter.use(authMiddleware);
@@ -39,7 +44,7 @@ const entityActionSchema = z.object({
 });
 
 // List obligations (filtered)
-obligationsRouter.get("/", requirePermission("operations:read"), async (req, res) => {
+obligationsRouter.get("/", authorize({ feature: "projects", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId, status, assignedTo, dueBefore, dueAfter, limit } = req.query as any;
@@ -49,9 +54,9 @@ obligationsRouter.get("/", requirePermission("operations:read"), async (req, res
     const rows = await queryObligations({
       companyId: scope.companyId,
       entityType,
-      entityId: entityId ? Number(entityId) : undefined,
+      entityId: entityId ? (Number(entityId) || 0) : undefined,
       status: statuses,
-      assignedTo: assignedTo ? Number(assignedTo) : undefined,
+      assignedTo: assignedTo ? (Number(assignedTo) || 0) : undefined,
       dueBefore,
       dueAfter,
       limit: limit ? Number(limit) : undefined,
@@ -62,7 +67,7 @@ obligationsRouter.get("/", requirePermission("operations:read"), async (req, res
   }
 });
 
-obligationsRouter.get("/summary", requirePermission("operations:read"), async (req, res) => {
+obligationsRouter.get("/summary", authorize({ feature: "projects", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const summary = await obligationSummary(scope.companyId);
@@ -73,12 +78,10 @@ obligationsRouter.get("/summary", requirePermission("operations:read"), async (r
 });
 
 // Manually create an obligation (useful for ad-hoc reminders)
-obligationsRouter.post("/", async (req, res) => {
+obligationsRouter.post("/", authorize({ feature: "projects", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createObligationSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { entityType, entityId, obligationType, title, dueAt, assignedTo, escalationSteps, metadata, dedupeKey } = parsed.data;
+    const { entityType, entityId, obligationType, title, dueAt, assignedTo, escalationSteps, metadata, dedupeKey } = zodParse(createObligationSchema.safeParse(req.body));
     const id = await registerObligation({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -92,26 +95,27 @@ obligationsRouter.post("/", async (req, res) => {
       metadata,
       dedupeKey,
     });
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "obligation.created", entity: "obligations", entityId: id, details: JSON.stringify({ entityType, entityId, obligationType, title, dueAt }) }).catch(console.error);
-    res.status(201).json({ id });
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "obligation.created", entity: "obligations", entityId: id, details: JSON.stringify({ entityType, entityId, obligationType, title, dueAt }) }).catch((e) => logger.error(e, "obligations background task failed"));
+    const [row] = await rawQuery<any>(`SELECT * FROM obligations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    res.status(201).json(row || { id });
   } catch (err) {
     handleRouteError(err, res, "Create obligation error:");
   }
 });
 
 // Mark as met (called when underlying event happens)
-obligationsRouter.post("/:id/met", async (req, res) => {
+obligationsRouter.post("/:id/met", authorize({ feature: "projects", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     await ensureObligationsTable();
     const rows = await rawQuery<any>(
       `UPDATE obligations SET status='met', "metAt"=NOW(), "updatedAt"=NOW()
-       WHERE id=$1 AND "companyId"=$2 RETURNING id, status`,
+       WHERE id=$1 AND "companyId"=$2 AND status = 'pending' RETURNING id, status`,
       [id, scope.companyId]
     );
     if (rows.length === 0) throw new NotFoundError("الالتزام غير موجود");
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "obligation.met", entity: "obligations", entityId: id, details: JSON.stringify({ status: "met" }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "obligation.met", entity: "obligations", entityId: id, details: JSON.stringify({ status: "met" }) }).catch((e) => logger.error(e, "obligations background task failed"));
     res.json(rows[0]);
   } catch (err) {
     handleRouteError(err, res, "Mark obligation met error:");
@@ -119,56 +123,52 @@ obligationsRouter.post("/:id/met", async (req, res) => {
 });
 
 // Mark as met by entity (used internally by event handlers)
-obligationsRouter.post("/met-by-entity", async (req, res) => {
+obligationsRouter.post("/met-by-entity", authorize({ feature: "projects", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = entityActionSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { entityType, entityId, obligationType } = parsed.data;
+    const { entityType, entityId, obligationType } = zodParse(entityActionSchema.safeParse(req.body));
     const n = await markObligationMet(
       scope.companyId,
       entityType,
       entityId,
       obligationType as ObligationType | undefined
     );
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "obligation.met_by_entity", entity: "obligations", entityId: entityId, details: JSON.stringify({ entityType, entityId, obligationType, marked: n }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "obligation.met_by_entity", entity: "obligations", entityId: entityId, details: JSON.stringify({ entityType, entityId, obligationType, marked: n }) }).catch((e) => logger.error(e, "obligations background task failed"));
     res.json({ marked: n });
   } catch (err) {
     handleRouteError(err, res, "Mark obligation met by entity error:");
   }
 });
 
-obligationsRouter.post("/:id/cancel", async (req, res) => {
+obligationsRouter.post("/:id/cancel", authorize({ feature: "projects", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     await ensureObligationsTable();
     const rows = await rawQuery<any>(
       `UPDATE obligations SET status='cancelled', "updatedAt"=NOW()
-       WHERE id=$1 AND "companyId"=$2 RETURNING id, status`,
+       WHERE id=$1 AND "companyId"=$2 AND status = 'pending' RETURNING id, status`,
       [id, scope.companyId]
     );
     if (rows.length === 0) throw new NotFoundError("الالتزام غير موجود");
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "obligation.cancelled", entity: "obligations", entityId: id, details: JSON.stringify({ status: "cancelled" }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "obligation.cancelled", entity: "obligations", entityId: id, details: JSON.stringify({ status: "cancelled" }) }).catch((e) => logger.error(e, "obligations background task failed"));
     res.json(rows[0]);
   } catch (err) {
     handleRouteError(err, res, "Cancel obligation error:");
   }
 });
 
-obligationsRouter.post("/cancel-by-entity", async (req, res) => {
+obligationsRouter.post("/cancel-by-entity", authorize({ feature: "projects", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = entityActionSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { entityType, entityId, obligationType } = parsed.data;
+    const { entityType, entityId, obligationType } = zodParse(entityActionSchema.safeParse(req.body));
     const n = await cancelObligation(
       scope.companyId,
       entityType,
       entityId,
       obligationType as ObligationType | undefined
     );
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "obligation.cancelled_by_entity", entity: "obligations", entityId: entityId, details: JSON.stringify({ entityType, entityId, obligationType, cancelled: n }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "obligation.cancelled_by_entity", entity: "obligations", entityId: entityId, details: JSON.stringify({ entityType, entityId, obligationType, cancelled: n }) }).catch((e) => logger.error(e, "obligations background task failed"));
     res.json({ cancelled: n });
   } catch (err) {
     handleRouteError(err, res, "Cancel obligation by entity error:");
@@ -176,10 +176,11 @@ obligationsRouter.post("/cancel-by-entity", async (req, res) => {
 });
 
 // Manual trigger for the scanner (normally runs via cron)
-obligationsRouter.post("/scan", requirePermission("operations:create"), async (_req, res) => {
+obligationsRouter.post("/scan", authorize({ feature: "projects", action: "create" }), async (req, res) => {
   try {
-    const result = await scanObligations();
-    emitEvent({ companyId: 0, userId: null, action: "obligation.scan_triggered", entity: "obligations", entityId: 0, details: JSON.stringify(result) }).catch(console.error);
+    const scope = req.scope!;
+    const result = await scanObligations(scope.companyId);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "obligation.scan_triggered", entity: "obligations", entityId: 0, details: JSON.stringify(result) }).catch((e) => logger.error(e, "obligations background task failed"));
     res.json({ ...result, scannedAt: new Date().toISOString() });
   } catch (err) {
     handleRouteError(err, res, "Obligation scan error:");

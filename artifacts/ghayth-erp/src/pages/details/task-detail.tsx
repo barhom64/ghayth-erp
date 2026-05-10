@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Edit, CheckCircle2, Clock, User, MapPin, FileText } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "معلقة",
@@ -159,6 +161,9 @@ export default function TaskDetail() {
           )}
         </CardContent>
       </Card>
+
+      {id && <EntityComments entityType="task" entityId={id} />}
+      {id && <EntityTags entityType="task" entityId={id} />}
     </div>
   );
 

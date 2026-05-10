@@ -299,17 +299,6 @@ export const EVENT_CATALOG: EventDefinition[] = [
     consumers: ["leadScoreEngine", "followUpScheduler"],
     sideEffects: ["obligation_register", "audit"],
   },
-  {
-    name: "crm.opportunity.won",
-    label: "فوز بصفقة",
-    domain: "crm",
-    description: "تُصدر عند إغلاق فرصة بنجاح",
-    payload: { opportunityId: "number", amount: "number" },
-    consumers: ["invoiceGenerator", "execDashboard"],
-    sideEffects: ["audit", "notification"],
-    critical: true,
-  },
-
   // ─── SUPPORT ─────────────────────────────────────────────────────────────
   {
     name: "support.ticket.created",
@@ -464,10 +453,46 @@ export const EVENT_CATALOG: EventDefinition[] = [
     name: "umrah.transport.created",
     label: "إنشاء رحلة نقل",
     domain: "umrah",
-    description: "تُصدر عند تخصيص نقل لمجموعة معتمرين",
-    payload: { transportId: "number", vehicleType: "string", pilgrimCount: "number" },
+    description: "تُصدر عند تخصيص نقل لمجموعة معتمرين — خدمة داخلية تستهلك fleet_vehicles/fleet_drivers",
+    payload: { transportId: "number", vehicleId: "number", driverId: "number", pilgrimCount: "number", cost: "number" },
     consumers: ["fleetEngine", "financeEngine"],
     sideEffects: ["gl_post", "audit"],
+  },
+  {
+    name: "umrah.transport.status_changed",
+    label: "تغيير حالة رحلة نقل",
+    domain: "umrah",
+    description: "تُصدر عند تغيير حالة النقل (scheduled→in_progress→completed/cancelled)",
+    payload: { transportId: "number", fromStatus: "string", toStatus: "string" },
+    consumers: ["fleetEngine", "execDashboard"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "umrah.transport.deleted",
+    label: "حذف رحلة نقل",
+    domain: "umrah",
+    description: "تُصدر عند حذف رحلة نقل (غير قيد التنفيذ فقط)",
+    payload: { transportId: "number" },
+    consumers: ["fleetEngine"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "umrah.transport.pilgrims_assigned",
+    label: "تخصيص معتمرين لرحلة نقل",
+    domain: "umrah",
+    description: "تُصدر عند ربط معتمرين برحلة نقل",
+    payload: { transportId: "number", pilgrimIds: "number[]", count: "number" },
+    consumers: ["execDashboard"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "umrah.group.created",
+    label: "إنشاء مجموعة عمرة",
+    domain: "umrah",
+    description: "تُصدر عند إنشاء مجموعة معتمرين جديدة",
+    payload: { groupId: "number", nuskGroupNumber: "string", seasonId: "number" },
+    consumers: ["invoicingEngine", "execDashboard"],
+    sideEffects: ["audit"],
   },
   {
     name: "umrah.agent.created",
@@ -891,11 +916,12 @@ export const EVENT_CATALOG: EventDefinition[] = [
   { name: "cost_center.updated", label: "تحديث مركز تكلفة", domain: "finance", description: "تُصدر عند تحديث مركز تكلفة", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
   { name: "daily_close.executed", label: "تنفيذ إقفال يومي", domain: "finance", description: "تُصدر عند تنفيذ إقفال يومي", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["gl_post","audit","notification"], critical: true },
   { name: "deposit.received", label: "استلام وديعة", domain: "finance", description: "تُصدر عند استلام وديعة", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["gl_post","audit","notification"] },
-  { name: "deposit.refunded", label: "استرداد وديعة", domain: "finance", description: "تُصدر عند استرداد وديعة", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["gl_post","audit","notification"] },
   { name: "expense.created", label: "إنشاء مصروف", domain: "finance", description: "تُصدر عند إنشاء مصروف", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"] },
   { name: "finance_project.created", label: "إنشاء مشروع مالي", domain: "finance", description: "تُصدر عند إنشاء مشروع مالي", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"] },
   { name: "fiscal.year_end_closed", label: "year_end_closed سنة مالية", domain: "finance", description: "تُصدر عند year_end_closed سنة مالية", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"], critical: true },
   { name: "fiscal_period.created", label: "إنشاء فترة مالية", domain: "finance", description: "تُصدر عند إنشاء فترة مالية", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"], critical: true },
+  { name: "fiscal_period.closed", label: "إقفال فترة مالية", domain: "finance", description: "تُصدر عند إقفال فترة مالية", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"], critical: true },
+  { name: "fiscal_period.reopened", label: "إعادة فتح فترة مالية", domain: "finance", description: "تُصدر عند إعادة فتح فترة مالية", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"], critical: true },
   { name: "impact.previewed", label: "معاينة أثر مالي", domain: "finance", description: "تُصدر عند معاينة أثر مالي", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
   { name: "intercompany.created", label: "إنشاء عملية بين شركات", domain: "finance", description: "تُصدر عند إنشاء عملية بين شركات", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"] },
   { name: "invoice.approved", label: "اعتماد فاتورة", domain: "finance", description: "تُصدر عند اعتماد فاتورة", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"], critical: true },
@@ -1042,6 +1068,7 @@ export const EVENT_CATALOG: EventDefinition[] = [
   { name: "property.contract.renewed", label: "تجديد contract", domain: "property", description: "تُصدر عند تجديد contract", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
   { name: "property.inspection.created", label: "إنشاء inspection", domain: "property", description: "تُصدر عند إنشاء inspection", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"] },
   { name: "property.installment.paid", label: "دفع installment", domain: "property", description: "تُصدر عند دفع installment", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["gl_post","audit","notification"] },
+  { name: "property.late_rent.escalated", label: "تصعيد إيجار متأخر", domain: "property", description: "تُصدر عند تشغيل آلية تصعيد الإيجارات المتأخرة", payload: {"processed":"number"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"] },
   { name: "property.maintenance.completed", label: "إتمام maintenance", domain: "property", description: "تُصدر عند إتمام maintenance", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"] },
   { name: "property.maintenance.created", label: "إنشاء maintenance", domain: "property", description: "تُصدر عند إنشاء maintenance", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"] },
   { name: "property.maintenance.requested", label: "طلب maintenance", domain: "property", description: "تُصدر عند طلب maintenance", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
@@ -1138,6 +1165,9 @@ export const EVENT_CATALOG: EventDefinition[] = [
   { name: "rules.updated", label: "تحديث قاعدة", domain: "system", description: "تُصدر عند تحديث قاعدة", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
   { name: "system.obligation.escalated", label: "تصعيد التزام", domain: "system", description: "تُصدر عند تصعيد التزام", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"], critical: true },
   { name: "system.obligation.reminder", label: "reminder التزام", domain: "system", description: "تُصدر عند reminder التزام", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"], critical: true },
+  { name: "system.journey.completed", label: "اكتمال رحلة", domain: "system", description: "تُصدر عند اكتمال جميع خطوات رحلة تشغيلية", payload: {"id":"number"}, consumers: ["auditTrail","notifications"], sideEffects: ["audit","notification"] },
+  { name: "system.stop.activated", label: "تفعيل إيقاف نظام", domain: "system", description: "تُصدر عند تفعيل زر الإيقاف الطارئ", payload: {"id":"number"}, consumers: ["auditTrail","notifications"], sideEffects: ["audit","notification"], critical: true },
+  { name: "system.stop.deactivated", label: "إلغاء إيقاف نظام", domain: "system", description: "تُصدر عند إلغاء تفعيل زر الإيقاف", payload: {"id":"number"}, consumers: ["auditTrail","notifications"], sideEffects: ["audit","notification"], critical: true },
   { name: "tenant.created", label: "إنشاء مستأجر نظام", domain: "system", description: "تُصدر عند إنشاء مستأجر نظام", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"] },
   { name: "tenant.deleted", label: "حذف مستأجر نظام", domain: "system", description: "تُصدر عند حذف مستأجر نظام", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
   { name: "tenant.updated", label: "تحديث مستأجر نظام", domain: "system", description: "تُصدر عند تحديث مستأجر نظام", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
@@ -1167,9 +1197,23 @@ export const EVENT_CATALOG: EventDefinition[] = [
   { name: "umrah.sub_agent.deleted", label: "حذف sub_agent", domain: "umrah", description: "تُصدر عند حذف sub_agent", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
   { name: "umrah.sub_agent.linked_by_nusk", label: "linked_by_nusk sub_agent", domain: "umrah", description: "تُصدر عند linked_by_nusk sub_agent", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
   { name: "umrah.sub_agent.updated", label: "تحديث sub_agent", domain: "umrah", description: "تُصدر عند تحديث sub_agent", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
+  { name: "umrah.penalty.created", label: "إنشاء غرامة", domain: "umrah", description: "تُصدر عند إنشاء غرامة يدوياً", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
   { name: "umrah.violation.deleted", label: "حذف مخالفة", domain: "umrah", description: "تُصدر عند حذف مخالفة", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
   { name: "umrah.violation.updated", label: "تحديث مخالفة", domain: "umrah", description: "تُصدر عند تحديث مخالفة", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
   { name: "umrah.vouchers.imported", label: "استيراد vouchers", domain: "umrah", description: "تُصدر عند استيراد vouchers", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
+  { name: "umrah.nusk_invoice.created", label: "إنشاء فاتورة نسك", domain: "umrah", description: "تُصدر عند إنشاء فاتورة نسك يدوياً", payload: {"id":"number"}, consumers: ["auditTrail","finance"], sideEffects: ["audit"] },
+  { name: "umrah.nusk_invoice.updated", label: "تحديث فاتورة نسك", domain: "umrah", description: "تُصدر عند تحديث فاتورة نسك", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
+  { name: "umrah.nusk_invoice.deleted", label: "حذف فاتورة نسك", domain: "umrah", description: "تُصدر عند حذف فاتورة نسك", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
+  { name: "umrah.daily_status.run", label: "تشغيل الفحص اليومي", domain: "umrah", description: "تُصدر عند تشغيل فحص الحالة اليومي للمعتمرين", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
+  { name: "umrah.penalty.waived", label: "إعفاء من غرامة", domain: "umrah", description: "تُصدر عند إعفاء من غرامة عمرة", payload: {"id":"number"}, consumers: ["auditTrail","finance"], sideEffects: ["audit"] },
+  { name: "umrah.penalty_engine.run", label: "تشغيل محرك الغرامات", domain: "umrah", description: "تُصدر عند تشغيل محرك الغرامات التلقائي", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
+  { name: "umrah.pilgrim.arrived", label: "وصول معتمر", domain: "umrah", description: "تُصدر عند تسجيل وصول معتمر", payload: {"id":"number"}, consumers: ["auditTrail","notifications"], sideEffects: ["audit","notification"] },
+  { name: "umrah.pilgrim.departed", label: "مغادرة معتمر", domain: "umrah", description: "تُصدر عند تسجيل مغادرة معتمر", payload: {"id":"number"}, consumers: ["auditTrail","notifications"], sideEffects: ["audit","notification"] },
+  { name: "umrah.pilgrim.overstayed", label: "تجاوز معتمر", domain: "umrah", description: "تُصدر عند رصد تجاوز مدة الإقامة", payload: {"id":"number"}, consumers: ["auditTrail","notifications"], sideEffects: ["audit","notification"], critical: true },
+  { name: "umrah.pilgrim.status_changed", label: "تغيير حالة معتمر", domain: "umrah", description: "تُصدر عند تغيير حالة معتمر", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
+  { name: "umrah.pilgrim.violated", label: "مخالفة معتمر", domain: "umrah", description: "تُصدر عند تسجيل مخالفة على معتمر", payload: {"id":"number"}, consumers: ["auditTrail","notifications"], sideEffects: ["audit","notification"], critical: true },
+  { name: "umrah.transport.updated", label: "تحديث نقل", domain: "umrah", description: "تُصدر عند تحديث بيانات رحلة نقل", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
+  { name: "umrah.invoice.gl_auto_posted", label: "ترحيل تلقائي لقيد فاتورة عمرة", domain: "umrah", description: "تُصدر عند ترحيل تلقائي لفاتورة وكيل إلى دفتر الأستاذ", payload: {"id":"number"}, consumers: ["auditTrail","finance"], sideEffects: ["audit","gl_post"], critical: true },
 
   // ─── AUTH — توسيع (المصادقة) ───
   { name: "auth.password.changed", label: "changed password", domain: "auth", description: "تُصدر عند changed password", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
@@ -1334,7 +1378,6 @@ export const EVENT_CATALOG: EventDefinition[] = [
   { name: "fleet.vehicle.breakdown", label: "عطل مركبة", domain: "fleet", description: "تُصدر عند اكتشاف عطل في مركبة", payload: { vehicleId: "number", reason: "string" }, consumers: ["maintenanceWorkflow", "execDashboard"], sideEffects: ["notification", "audit"], critical: true },
   { name: "hr.auto_detection.completed", label: "اكتمال كشف تلقائي", domain: "hr", description: "تُصدر بعد انتهاء محرك الكشف التلقائي عن المخالفات", payload: { companyId: "number", detected: "number" }, consumers: ["hrNotifier"], sideEffects: ["notification", "audit"] },
   { name: "company.created", label: "إنشاء شركة", domain: "admin", description: "تُصدر عند إنشاء شركة جديدة في النظام", payload: { companyId: "number", name: "string" }, consumers: ["onboardingEngine"], sideEffects: ["audit", "notification"], critical: true },
-  { name: "maintenance.completed", label: "اكتمال صيانة عقارية", domain: "property", description: "تُصدر عند اكتمال طلب صيانة عقارية", payload: { maintenanceId: "number", propertyId: "number" }, consumers: ["propertyManager"], sideEffects: ["notification", "audit"] },
   { name: "journal.entry.created", label: "إنشاء قيد محاسبي", domain: "finance", description: "تُصدر بعد ترحيل قيد يومية جديد", payload: { journalId: "number", sourceKey: "string", total: "number" }, consumers: ["glReconciler", "budgetValidator"], sideEffects: ["audit"], critical: true },
 ];
 
@@ -1345,6 +1388,10 @@ const _eventIndex = new Map<string, EventDefinition>(
 
 export function getEventDefinition(name: string): EventDefinition | undefined {
   return _eventIndex.get(name);
+}
+
+export function isKnownEvent(name: string): boolean {
+  return _eventIndex.has(name);
 }
 
 export function listEventsByDomain(domain: EventDomain): EventDefinition[] {

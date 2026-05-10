@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
-import { formatDateAr, formatTimeAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { formatDateAr } from "@/lib/formatters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Link2,
   AlertTriangle,
@@ -30,7 +29,7 @@ export function GovIntegrationsTab() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Record<string, any>>({});
   const [testingId, setTestingId] = useState<number | null>(null);
-  const { data, isLoading, isError, refetch } = useApiQuery<any>(["gov-integrations"], "/gov-integrations");
+  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["gov-integrations"], "/gov-integrations");
 
   const integrations: any[] = data?.data || [];
 
@@ -98,9 +97,6 @@ export function GovIntegrationsTab() {
     }
   };
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
-
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 mb-2">
@@ -117,7 +113,9 @@ export function GovIntegrationsTab() {
       </div>
 
       {isLoading ? (
-        <div className="space-y-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-32 w-full" />)}</div>
+        <LoadingSpinner />
+      ) : isError ? (
+        <ErrorState onRetry={() => refetch()} error={error} />
       ) : (
         <div className="space-y-4">
           {integrations.map((item: any) => {
@@ -153,7 +151,7 @@ export function GovIntegrationsTab() {
                           </span>
                           {item.lastCheckedAt && (
                             <span className="text-xs text-muted-foreground">
-                              آخر فحص: {formatDateAr(item.lastCheckedAt)} {formatTimeAr(item.lastCheckedAt)}
+                              آخر فحص: {formatDateAr(item.lastCheckedAt)}
                             </span>
                           )}
                         </div>

@@ -1,11 +1,14 @@
 import app from "./app.js";
 import { logger } from "./lib/logger.js";
 import { runMigrations } from "./lib/migrate.js";
-import { startCronScheduler } from "./lib/cronScheduler.js";
+import { startCronScheduler, stopCronScheduler } from "./lib/cronScheduler.js";
 import { registerEventListeners } from "./lib/eventListeners.js";
 import { registerRulesEngineListener } from "./lib/rulesEngine.js";
+import "./lib/engines/hrEngine.js";
 import { seedDemoData } from "./lib/seedDemoData.js";
 import { bootstrapAdminUser } from "./lib/bootstrapAdmin.js";
+import { syncFeatureCatalog } from "./lib/rbac/catalogSync.js";
+import { syncLegacyToV2 } from "./lib/rbac/autoMigrate.js";
 import { pool } from "./lib/rawdb.js";
 import http from "http";
 
@@ -54,6 +57,15 @@ async function start() {
     logger.warn({ err: bootstrapErr }, "Admin bootstrap skipped or failed");
   }
 
+  try {
+    const cat = await syncFeatureCatalog();
+    logger.info({ ...cat }, "RBAC v2: feature catalog synced");
+    const sync = await syncLegacyToV2();
+    logger.info({ ...sync }, "RBAC v2: legacy roles auto-migrated");
+  } catch (rbacErr) {
+    logger.warn({ err: rbacErr }, "RBAC v2 sync skipped or failed (legacy RBAC still active)");
+  }
+
   if (process.env.SEED_DEMO_DATA === "true") {
     try {
       await seedDemoData();
@@ -71,12 +83,16 @@ async function start() {
 
   const server = http.createServer(app);
 
-  server.listen(port, "0.0.0.0", async (err?: Error) => {
-    if (err) {
-      logger.error({ err }, "Error listening on port");
-      process.exit(1);
+  server.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EADDRINUSE") {
+      logger.error({ port }, "Port already in use");
+    } else {
+      logger.error({ err }, "Server error");
     }
+    process.exit(1);
+  });
 
+  server.listen(port, "0.0.0.0", async () => {
     logger.info({ port }, "Server listening");
 
     try {
@@ -89,6 +105,9 @@ async function start() {
 
   async function shutdown(signal: string) {
     logger.info({ signal }, "Received shutdown signal, starting graceful shutdown");
+
+    stopCronScheduler();
+    logger.info("Cron scheduler stopped");
 
     server.close(async (err) => {
       if (err) {

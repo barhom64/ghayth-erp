@@ -5,6 +5,7 @@ import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
@@ -122,6 +123,35 @@ export default function AdminSystemRegistry() {
 
   const isLoading = regLoading;
   const error = regError;
+
+  const entityColumns: DataTableColumn<any>[] = [
+    { key: "table", header: "الجدول", searchable: true, render: (r: any) => <span className="font-mono text-xs">{r.table}</span> },
+    { key: "domainLabel", header: "النطاق", render: (r: any) => <Badge variant="outline" className="text-[10px]">{r.domainLabel}</Badge> },
+    { key: "hasLifecycle", header: "آلة حالة", align: "center", render: (r: any) => r.hasLifecycle ? (
+      <Badge className="bg-green-100 text-green-800 text-[10px]">
+        {r.lifecycle?.states?.length || "?"} حالة
+      </Badge>
+    ) : (
+      <span className="text-gray-400">—</span>
+    )},
+  ];
+
+  const eventColumns: DataTableColumn<any>[] = [
+    { key: "action", header: "الحدث", searchable: true, render: (r: any) => <span className="font-mono text-[11px]">{r.action}</span> },
+    { key: "domain", header: "النطاق", render: (r: any) => <Badge variant="outline" className="text-[10px]">{r.domain}</Badge> },
+    { key: "label", header: "الوصف", searchable: true },
+    { key: "critical", header: "حرج", align: "center", render: (r: any) => r.critical ? (
+      <Badge className="bg-red-100 text-red-800 text-[10px]">حرج</Badge>
+    ) : (
+      <span className="text-gray-400">—</span>
+    )},
+  ];
+
+  const activityColumns: DataTableColumn<any>[] = [
+    { key: "action", header: "الإجراء", searchable: true, render: (r: any) => <span className="font-mono text-xs">{r.action}</span> },
+    { key: "entity", header: "الكيان", render: (r: any) => <span className="font-mono text-xs">{r.entity}</span> },
+    { key: "count", header: "التكرار", align: "center", sortable: true, render: (r: any) => <span className="font-bold">{r.count}</span> },
+  ];
 
   return (
     <PageShell
@@ -431,36 +461,13 @@ export default function AdminSystemRegistry() {
                       </Badge>
                     ))}
                   </div>
-                  <div className="overflow-x-auto max-h-96 overflow-y-auto">
-                    <table className="w-full text-sm">
-                      <thead className="bg-muted/50 sticky top-0">
-                        <tr>
-                          <th className="p-2 text-right">الحدث</th>
-                          <th className="p-2 text-right">النطاق</th>
-                          <th className="p-2 text-right">الوصف</th>
-                          <th className="p-2 text-center">حرج</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {eventList.slice(0, 100).map((e: any) => (
-                          <tr key={e.action} className="border-t">
-                            <td className="p-2 font-mono text-[11px]">{e.action}</td>
-                            <td className="p-2">
-                              <Badge variant="outline" className="text-[10px]">{e.domain}</Badge>
-                            </td>
-                            <td className="p-2 text-xs">{e.label}</td>
-                            <td className="p-2 text-center">
-                              {e.critical ? (
-                                <Badge className="bg-red-100 text-red-800 text-[10px]">حرج</Badge>
-                              ) : (
-                                <span className="text-gray-400">—</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <DataTable
+                    columns={eventColumns}
+                    data={eventList.slice(0, 100)}
+                    noToolbar
+                    pageSize={0}
+                    emptyMessage="لا توجد أحداث"
+                  />
                 </CardContent>
               </Card>
             </TabsContent>
@@ -472,29 +479,13 @@ export default function AdminSystemRegistry() {
                   <CardTitle className="text-sm">أكثر الإجراءات تكراراً</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="bg-muted/50">
-                        <tr>
-                          <th className="p-2 text-right">الإجراء</th>
-                          <th className="p-2 text-right">الكيان</th>
-                          <th className="p-2 text-center">التكرار</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {recentActions.map((a: any, i: number) => (
-                          <tr key={i} className="border-t">
-                            <td className="p-2 font-mono text-xs">{a.action}</td>
-                            <td className="p-2 font-mono text-xs">{a.entity}</td>
-                            <td className="p-2 text-center font-bold">{a.count}</td>
-                          </tr>
-                        ))}
-                        {recentActions.length === 0 && (
-                          <tr><td colSpan={3} className="p-4 text-center text-gray-400">لا توجد بيانات</td></tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                  <DataTable
+                    columns={activityColumns}
+                    data={recentActions}
+                    noToolbar
+                    pageSize={0}
+                    emptyMessage="لا توجد بيانات"
+                  />
                 </CardContent>
               </Card>
             </TabsContent>

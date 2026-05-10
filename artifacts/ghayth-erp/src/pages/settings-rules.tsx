@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatDateAr } from "@/lib/formatters";
-import { PageShell } from "@/components/page-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -15,6 +14,7 @@ import {
   AlertTriangle, CheckCircle, XCircle, Clock, Settings2,
   ChevronDown, ChevronUp,
 } from "lucide-react";
+import { MODULE_LABELS, moduleLabel } from "@/lib/module-labels";
 
 interface BusinessRule {
   id: number;
@@ -96,16 +96,6 @@ const OPERATOR_OPTIONS = [
   { value: "!=", label: "لا يساوي" },
 ];
 
-const MODULE_LABELS: Record<string, string> = {
-  hr: "الموارد البشرية",
-  finance: "المالية",
-  fleet: "النقليات",
-  legal: "القانونية",
-  property: "الأملاك",
-  projects: "المشاريع",
-  support: "الدعم",
-};
-
 function getModuleColor(mod: string) {
   const colors: Record<string, string> = {
     hr: "bg-blue-100 text-blue-800",
@@ -120,6 +110,7 @@ function getModuleColor(mod: string) {
 }
 
 function formatDate(d: string) {
+  if (!d) return "";
   return formatDateAr(d);
 }
 
@@ -135,7 +126,7 @@ function RuleCard({ rule, onToggle, onDelete }: { rule: BusinessRule; onToggle: 
               <h3 className="font-semibold text-sm">{rule.name}</h3>
               {rule.module && (
                 <Badge variant="outline" className={`text-[10px] ${getModuleColor(rule.module)}`}>
-                  {MODULE_LABELS[rule.module] || rule.module}
+                  {moduleLabel(rule.module)}
                 </Badge>
               )}
               <Badge variant={rule.isActive ? "default" : "secondary"} className="text-[10px]">
@@ -276,12 +267,9 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <Label className="text-xs">نوع الحدث *</Label>
-              <Select value={form.triggerEvent} onValueChange={(v) => setForm({ ...form, triggerEvent: v })}>
-                <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {TRIGGER_OPTIONS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <select className="w-full border rounded-md p-2 text-sm bg-white" value={form.triggerEvent} onChange={e => setForm({ ...form, triggerEvent: e.target.value })}>
+                {TRIGGER_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
             </div>
             <div>
               <Label className="text-xs">اسم الحقل (اختياري)</Label>
@@ -290,12 +278,9 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
             <div className="flex gap-2">
               <div className="flex-1">
                 <Label className="text-xs">المعيار</Label>
-                <Select value={form.conditionOperator} onValueChange={(v) => setForm({ ...form, conditionOperator: v })}>
-                  <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {OPERATOR_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <select className="w-full border rounded-md p-2 text-sm bg-white" value={form.conditionOperator} onChange={e => setForm({ ...form, conditionOperator: e.target.value })}>
+                  {OPERATOR_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
               </div>
               <div className="flex-1">
                 <Label className="text-xs">القيمة</Label>
@@ -312,30 +297,21 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <Label className="text-xs">نوع الإجراء *</Label>
-              <Select value={form.actionType} onValueChange={(v) => setForm({ ...form, actionType: v })}>
-                <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {ACTION_OPTIONS.map(a => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <select className="w-full border rounded-md p-2 text-sm bg-white" value={form.actionType} onChange={e => setForm({ ...form, actionType: e.target.value })}>
+                {ACTION_OPTIONS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+              </select>
             </div>
             <div>
               <Label className="text-xs">الهدف</Label>
-              <Select value={form.actionTarget} onValueChange={(v) => setForm({ ...form, actionTarget: v })}>
-                <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {TARGET_OPTIONS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <select className="w-full border rounded-md p-2 text-sm bg-white" value={form.actionTarget} onChange={e => setForm({ ...form, actionTarget: e.target.value })}>
+                {TARGET_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
             </div>
             <div>
               <Label className="text-xs">المسار</Label>
-              <Select value={form.module} onValueChange={(v) => setForm({ ...form, module: v })}>
-                <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(MODULE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <select className="w-full border rounded-md p-2 text-sm bg-white" value={form.module} onChange={e => setForm({ ...form, module: e.target.value })}>
+                {Object.entries(MODULE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -349,19 +325,16 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
             </div>
             <div>
               <Label className="text-xs">أولوية الإشعار</Label>
-              <Select value={form.notifPriority} onValueChange={(v) => setForm({ ...form, notifPriority: v })}>
-                <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="normal">عادية</SelectItem>
-                  <SelectItem value="high">عالية</SelectItem>
-                  <SelectItem value="urgent">عاجلة</SelectItem>
-                </SelectContent>
-              </Select>
+              <select className="w-full border rounded-md p-2 text-sm bg-white" value={form.notifPriority} onChange={e => setForm({ ...form, notifPriority: e.target.value })}>
+                <option value="normal">عادية</option>
+                <option value="high">عالية</option>
+                <option value="urgent">عاجلة</option>
+              </select>
             </div>
           </div>
         </div>
 
-        <Button onClick={handleSubmit} disabled={saving} className="w-full">
+        <Button onClick={handleSubmit} disabled={saving} className="w-full" rateLimitAware>
           {saving ? "جاري الحفظ..." : "إنشاء القاعدة"}
         </Button>
       </CardContent>
@@ -370,12 +343,13 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
 }
 
 function RuleLogsList() {
-  const { data, isLoading } = useApiQuery<{ data: RuleLog[]; total: number }>(
+  const { data, isLoading, isError, error, refetch } = useApiQuery<{ data: RuleLog[]; total: number }>(
     ["rule-logs"], "/rules/logs?limit=50"
   );
   const logs = data?.data || [];
 
-  if (isLoading) return <div className="text-center py-8 text-muted-foreground">جاري التحميل...</div>;
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => refetch()} error={error} />;
 
   if (logs.length === 0) {
     return (
@@ -415,7 +389,7 @@ function RuleLogsList() {
 }
 
 export default function SettingsRulesPage() {
-  const { data, isLoading } = useApiQuery<{ data: BusinessRule[] }>(["business-rules"], "/rules");
+  const { data, isLoading, isError, error, refetch } = useApiQuery<{ data: BusinessRule[] }>(["business-rules"], "/rules");
   const rules = data?.data || [];
 
   const activeRules = rules.filter(r => r.isActive);
@@ -436,20 +410,28 @@ export default function SettingsRulesPage() {
   const handleToggle = (ruleId: number) => toggleMut.mutate({ id: ruleId });
   const handleDelete = (ruleId: number) => deleteMut.mutate({ id: ruleId });
 
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => refetch()} error={error} />;
+
   return (
-    <PageShell
-      title="قواعد النظام"
-      subtitle="إعداد القواعد التلقائية: إذا حدث شيء... فعندها يتم تنفيذ إجراء"
-      breadcrumbs={[{ href: "/settings", label: "الإعدادات" }, { label: "القواعد" }]}
-      actions={
+    <div className="p-4 md:p-6 space-y-6" dir="rtl">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2">
+            <Settings2 className="h-5 w-5" /> محرك قواعد الأعمال
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            إعداد القواعد التلقائية: إذا حدث شيء... فعندها يتم تنفيذ إجراء
+          </p>
+        </div>
         <div className="flex items-center gap-3 text-sm">
           <Badge variant="default" className="gap-1">
             <Zap className="h-3 w-3" /> {activeRules.length} مفعّلة
           </Badge>
           <Badge variant="secondary">{rules.length} إجمالي</Badge>
         </div>
-      }
-    >
+      </div>
+
       <Tabs defaultValue="rules" dir="rtl">
         <TabsList>
           <TabsTrigger value="rules" className="gap-1">
@@ -464,9 +446,7 @@ export default function SettingsRulesPage() {
         </TabsList>
 
         <TabsContent value="rules" className="space-y-3 mt-4">
-          {isLoading ? (
-            <div className="text-center py-8 text-muted-foreground">جاري التحميل...</div>
-          ) : rules.length === 0 ? (
+          {rules.length === 0 ? (
             <div className="text-center py-12">
               <AlertTriangle className="h-12 w-12 mx-auto mb-3 text-muted-foreground opacity-30" />
               <p className="text-muted-foreground">لا توجد قواعد أعمال حالياً</p>
@@ -502,6 +482,6 @@ export default function SettingsRulesPage() {
           </Card>
         </TabsContent>
       </Tabs>
-    </PageShell>
+    </div>
   );
 }

@@ -16,7 +16,7 @@ export function RolePermissionsTab() {
   const [editModules, setEditModules] = useState<string[]>([]);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const allModules = [
     { key: "home", label: "الرئيسية" }, { key: "hr", label: "الموارد البشرية" },
@@ -90,7 +90,7 @@ export function RolePermissionsTab() {
                     </Button>
                   ) : (
                     <div className="flex gap-2">
-                      <Button size="sm" onClick={handleSave}><Save className="h-4 w-4 me-1" />حفظ</Button>
+                      <Button size="sm" onClick={handleSave} rateLimitAware><Save className="h-4 w-4 me-1" />حفظ</Button>
                       <Button size="sm" variant="ghost" onClick={() => setEditingRole(null)}>إلغاء</Button>
                     </div>
                   )}

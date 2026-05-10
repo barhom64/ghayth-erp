@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { logger } from "../lib/logger.js";
 
 interface UserPermissionOverrides {
   granted: Set<string>;
@@ -8,6 +9,19 @@ interface UserPermissionOverrides {
 
 const permissionCache = new Map<string, { perms: Set<string>; expiresAt: number }>();
 const CACHE_TTL_MS = 60_000;
+const PERMISSION_CACHE_MAX_SIZE = 10_000;
+
+function evictPermissionCacheIfNeeded(): void {
+  if (permissionCache.size <= PERMISSION_CACHE_MAX_SIZE) return;
+  // Delete the oldest half (Map iterates in insertion order)
+  const toDelete = Math.floor(permissionCache.size / 2);
+  let deleted = 0;
+  for (const key of permissionCache.keys()) {
+    if (deleted >= toDelete) break;
+    permissionCache.delete(key);
+    deleted++;
+  }
+}
 
 async function loadRolePermissions(role: string, companyId: number): Promise<Set<string>> {
   const cacheKey = `${role}:${companyId}`;
@@ -21,6 +35,7 @@ async function loadRolePermissions(role: string, companyId: number): Promise<Set
   );
 
   const perms = new Set(rows.map((r) => r.permission));
+  evictPermissionCacheIfNeeded();
   permissionCache.set(cacheKey, { perms, expiresAt: Date.now() + CACHE_TTL_MS });
   return perms;
 }
@@ -131,7 +146,7 @@ export function requirePermission(...requiredPerms: string[]) {
           requiredPerms: missingPerms,
           reason: "permission_denied",
           ip,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "[middleware] background task failed"));
 
         // Typed-error shape (P0.3) so the frontend's PageErrorBoundary and
         // useApiMutation toast pipeline can read the code + meta without
@@ -148,7 +163,7 @@ export function requirePermission(...requiredPerms: string[]) {
 
       next();
     } catch (err) {
-      console.error("Permission check error:", err);
+      logger.error(err, "Permission check error:");
       res.status(500).json({
         error: "خطأ في التحقق من الصلاحيات",
         code: "SERVER_ERROR",
@@ -203,7 +218,7 @@ export function requireAnyPermission(...candidatePerms: string[]) {
           requiredPerms: candidatePerms,
           reason: "permission_denied_any",
           ip,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "[middleware] background task failed"));
 
         res.status(403).json({
           error: "لا تملك الصلاحية اللازمة",
@@ -216,13 +231,35 @@ export function requireAnyPermission(...candidatePerms: string[]) {
 
       next();
     } catch (err) {
-      console.error("Permission check error:", err);
+      logger.error(err, "Permission check error:");
       res.status(500).json({
         error: "خطأ في التحقق من الصلاحيات",
         code: "SERVER_ERROR",
       });
     }
   };
+}
+
+/**
+ * Inline permission check for routes that need to combine permission state
+ * with runtime conditions (e.g. "allow if user has hr:read OR is the data
+ * subject"). Use this instead of hardcoded role-name checks.
+ */
+export async function userHasPermission(
+  scope: { userId: number; companyId: number; role: string; isOwner?: boolean },
+  permission: string
+): Promise<boolean> {
+  if (scope.isOwner || scope.role === "owner") return true;
+  const rolePerms = await loadAllUserRolePermissions(scope.userId, scope.role, scope.companyId);
+  const userOverrides = await loadUserPermissions(scope.userId, scope.companyId);
+  const effective = new Set(rolePerms);
+  for (const p of userOverrides.granted) effective.add(p);
+  for (const p of userOverrides.revoked) effective.delete(p);
+  if (effective.has("*")) return true;
+  if (effective.has(permission)) return true;
+  const [module] = permission.split(":");
+  if (effective.has(`${module}:*`)) return true;
+  return false;
 }
 
 export function invalidatePermissionCache(role?: string, companyId?: number): void {

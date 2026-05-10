@@ -10,13 +10,14 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Building2, Plus, TrendingDown, Calculator, CheckCircle, DollarSign, PackageCheck } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 
 export default function FixedAssetsPage() {
+  const [, navigate] = useLocation();
   const [showCreate, setShowCreate] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<any>(null);
   const [showDepreciate, setShowDepreciate] = useState(false);
@@ -143,6 +144,7 @@ export default function FixedAssetsPage() {
         emptyMessage="لا توجد أصول ثابتة مسجلة"
         emptyIcon={<Building2 className="h-6 w-6 text-slate-400" />}
         searchPlaceholder={null}
+        onRowClick={(row) => navigate(`/finance/fixed-assets/${row.id}`)}
       />
 
       {showCreate && (
@@ -199,7 +201,7 @@ export default function FixedAssetsPage() {
                 </div>
                 <div className="flex gap-2 justify-end">
                   <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>إلغاء</Button>
-                  <Button type="submit" disabled={createMutation.isPending}>
+                  <Button type="submit" disabled={createMutation.isPending} rateLimitAware>
                     {createMutation.isPending ? "جارٍ الحفظ..." : "حفظ الأصل"}
                   </Button>
                 </div>
@@ -236,7 +238,7 @@ export default function FixedAssetsPage() {
               )}
               <div className="flex gap-2 justify-end">
                 <Button variant="outline" onClick={() => { setShowDepreciate(false); setDepResult(null); }}>إغلاق</Button>
-                <Button onClick={handleDepreciate} disabled={depreciateMutation.isPending}>
+                <Button onClick={handleDepreciate} disabled={depreciateMutation.isPending} rateLimitAware>
                   {depreciateMutation.isPending ? "جارٍ الإهلاك..." : "تسجيل الإهلاك"}
                 </Button>
               </div>

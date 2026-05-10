@@ -50,6 +50,7 @@ export default function Legal() {
 }
 
 function ContractsTab() {
+  const [, navigate] = useLocation();
   const { data: stats } = useApiQuery<any>(["legal-stats"], "/legal/stats");
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useFilters();
@@ -159,6 +160,7 @@ function ContractsTab() {
             isError={isError}
             error={error as Error | null}
             onRetry={() => refetch()}
+            onRowClick={(c) => navigate(`/legal/contracts/${c.id}`)}
             emptyMessage="لا توجد عقود"
             emptyIcon={<FileText className="h-6 w-6 text-slate-400" />}
             noToolbar
@@ -168,7 +170,7 @@ function ContractsTab() {
             onPageChange={setPage}
             renderRowExtras={(c) => {
               if (editingId === c.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(c.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
-              if (deletingId === c.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(c.id)} onCancel={cancelDelete} isPending={isPending} itemName={c.title} entityType="legal_contract" entityId={c.id} />;
+              if (deletingId === c.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(c.id)} onCancel={cancelDelete} isPending={isPending} itemName={c.title} entityType="legal-contract" entityId={c.id} />;
               return null;
             }}
           />
@@ -280,9 +282,10 @@ function CasesTab() {
             emptyIcon={<Scale className="h-6 w-6 text-slate-400" />}
             noToolbar
             pageSize={20}
+            onRowClick={(row) => setLocation(`/legal/cases/${row.id}`)}
             renderRowExtras={(c) => {
               if (editingId === c.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(c.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
-              if (deletingId === c.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(c.id)} onCancel={cancelDelete} isPending={isPending} itemName={c.title} entityType="legal_case" entityId={c.id} />;
+              if (deletingId === c.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(c.id)} onCancel={cancelDelete} isPending={isPending} itemName={c.title} entityType="legal-case" entityId={c.id} />;
               return null;
             }}
           />

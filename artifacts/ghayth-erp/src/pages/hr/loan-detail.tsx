@@ -41,7 +41,7 @@ function buildLoanSteps(status: string | undefined): StageStep[] {
 
 export default function LoanDetail() {
   const { id } = useParams<{ id: string }>();
-  const { data, isLoading, isError } = useApiQuery<any>(["hr-loan-detail", id], `/hr/loans/${id}`);
+  const { data, isLoading, isError } = useApiQuery<any>(["hr-loan-detail", id], id ? `/hr/loans/${id}` : null);
   const loan = data?.data ?? data;
 
   const st = LOAN_STATUS[loan?.status] ?? { label: loan?.status ?? "—", color: "bg-gray-100 text-gray-600" };
@@ -194,11 +194,11 @@ export default function LoanDetail() {
       refNumber={loan?.loanNumber}
       createdAt={loan?.requestDate ?? loan?.createdAt}
       updatedAt={loan?.updatedAt}
-      entityType="hr_employee_loan"
+      entityType="loan"
       entityId={Number(id)}
       isLoading={isLoading}
       error={isError ? true : undefined}
-      onRetry={() => window.location.reload()}
+     
       overview={overview}
       actions={
         <Badge className={cn("text-sm px-3 py-1", st.color)}>{st.label}</Badge>

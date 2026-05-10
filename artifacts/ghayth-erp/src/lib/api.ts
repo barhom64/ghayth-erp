@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
+import { notifyRateLimited } from "./rate-limit-toast";
 
 /**
  * ApiError — P1.3 of the unification plan (docs/UNIFICATION_PLAN.md).
@@ -86,19 +87,12 @@ function inferCodeFromStatus(status: number): string {
   return "UNKNOWN";
 }
 
-function getToken() {
-  return localStorage.getItem("erp_token");
-}
-
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 let isRefreshing = false;
-let refreshPromise: Promise<string | null> | null = null;
+let refreshPromise: Promise<boolean> | null = null;
 
-async function tryRefreshToken(): Promise<string | null> {
-  const refreshToken = localStorage.getItem("erp_refresh_token");
-  if (!refreshToken) return null;
-
+async function tryRefreshToken(): Promise<boolean> {
   if (isRefreshing && refreshPromise) return refreshPromise;
 
   isRefreshing = true;
@@ -107,17 +101,11 @@ async function tryRefreshToken(): Promise<string | null> {
       const res = await fetch(`${BASE}/api/auth/refresh`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken }),
+        credentials: "include",
       });
-      if (!res.ok) return null;
-      const data = await res.json();
-      if (data.token) {
-        localStorage.setItem("erp_token", data.token);
-        return data.token;
-      }
-      return null;
+      return res.ok;
     } catch {
-      return null;
+      return false;
     } finally {
       isRefreshing = false;
       refreshPromise = null;
@@ -128,16 +116,14 @@ async function tryRefreshToken(): Promise<string | null> {
 }
 
 export async function apiFetch<T = any>(path: string, options?: RequestInit): Promise<T> {
-  const token = getToken();
   const headers: Record<string, string> = {
     ...(options?.headers as Record<string, string> || {}),
   };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
   if (options?.body && typeof options.body === "string") headers["Content-Type"] = "application/json";
 
   let res: Response;
   try {
-    res = await fetch(`${BASE}/api${path}`, { ...options, headers });
+    res = await fetch(`${BASE}/api${path}`, { ...options, headers, credentials: "include" });
   } catch (networkErr) {
     if (networkErr instanceof TypeError) {
       throw new Error("انقطع الاتصال بالخادم، يرجى التحقق من الإنترنت والمحاولة مجدداً");
@@ -146,13 +132,10 @@ export async function apiFetch<T = any>(path: string, options?: RequestInit): Pr
   }
 
   if (res.status === 401 && path !== "/auth/login" && path !== "/auth/refresh") {
-    const newToken = await tryRefreshToken();
-    if (newToken) {
-      headers["Authorization"] = `Bearer ${newToken}`;
-      res = await fetch(`${BASE}/api${path}`, { ...options, headers });
+    const refreshed = await tryRefreshToken();
+    if (refreshed) {
+      res = await fetch(`${BASE}/api${path}`, { ...options, headers, credentials: "include" });
     } else {
-      localStorage.removeItem("erp_token");
-      localStorage.removeItem("erp_refresh_token");
       localStorage.removeItem("erp_assignments");
       window.location.href = `${BASE}/login`;
       throw new Error("انتهت الجلسة، يرجى تسجيل الدخول مجدداً");
@@ -161,6 +144,21 @@ export async function apiFetch<T = any>(path: string, options?: RequestInit): Pr
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: "خطأ في الخادم" }));
+    // 429: surface a clear Arabic toast with retry-after seconds, debounced
+    // so a flurry of failed retries does not spam the user. We tag the
+    // ApiError with code RATE_LIMITED so useApiMutation can suppress its
+    // own generic destructive toast.
+    if (res.status === 429) {
+      const seconds = notifyRateLimited(res);
+      throw new ApiError(
+        body.error || `تم تجاوز الحد المسموح، حاول بعد ${seconds} ثانية`,
+        {
+          status: 429,
+          code: "RATE_LIMITED",
+          meta: { retryAfterSeconds: seconds },
+        },
+      );
+    }
     // Preserve the typed-error shape the server sent (P0.3 / P1.3).
     // The server's typed errors ship { error, code, field?, fix?, meta? }.
     // Older routes still ship { error } — the ApiError constructor fills
@@ -178,6 +176,16 @@ export async function apiFetch<T = any>(path: string, options?: RequestInit): Pr
     return {} as T;
   }
   return res.json();
+}
+
+/**
+ * Returns true when an error is the result of a 429 rate-limit response.
+ * The shared rate-limit toast has already been shown by `apiFetch` /
+ * `notifyRateLimited`, so local catch handlers should branch on this and
+ * skip their own destructive toast/alert to keep messaging one-per-burst.
+ */
+export function isRateLimitedError(err: unknown): boolean {
+  return err instanceof ApiError && (err.status === 429 || err.code === "RATE_LIMITED");
 }
 
 export function getErrorMessage(err: unknown): string {
@@ -217,7 +225,12 @@ export function useApiQuery<T = any>(
     queryKey: key,
     queryFn: () => apiFetch<T>(path!),
     enabled: isEnabled,
-    retry: 1,
+    // Don't retry rate-limited responses — retrying immediately would
+    // just trigger the limiter again and spam the user with toasts.
+    retry: (failureCount, error) => {
+      if (error instanceof ApiError && error.status === 429) return false;
+      return failureCount < 1;
+    },
   });
 }
 
@@ -380,6 +393,13 @@ export function useApiMutation<TData = any, TBody = any>(
     //      legacy generic toast so pre-P1.3 call sites behave identically.
     onError: (error, body) => {
       if (error instanceof ApiError) {
+        // 429 toast is already shown by apiFetch via notifyRateLimited().
+        // Skip the default destructive toast to avoid double notifications,
+        // but still let the caller's onError run for any local cleanup.
+        if (error.code === "RATE_LIMITED") {
+          options?.onError?.(error, body);
+          return;
+        }
         if (
           (error.code === "VALIDATION_ERROR" || error.code === "CONFLICT") &&
           error.field &&
@@ -433,7 +453,7 @@ export function buildErrorToast(err: unknown): { title: string; description?: st
   if (err instanceof ApiError) {
     return {
       title: err.message,
-      description: err.fix ?? err.field ? `الحقل: ${err.field}` : undefined,
+      description: err.fix ?? (err.field ? `الحقل: ${err.field}` : undefined),
       variant: "destructive",
     };
   }

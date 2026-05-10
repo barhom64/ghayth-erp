@@ -18,7 +18,7 @@ export default function IntercompanyConsolidationCreatePage() {
   );
 
   if (loadingConsolidation) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const consolidation = consolidationData;
 

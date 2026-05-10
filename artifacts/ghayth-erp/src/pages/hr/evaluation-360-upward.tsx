@@ -83,7 +83,7 @@ export default function Evaluation360UpwardPage() {
   const avgScore = Math.round(Object.values(scores).reduce((a, b) => a + b, 0) / Object.values(scores).length);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   function handleSubmit() {
     if (!managerId) {
@@ -224,6 +224,7 @@ export default function Evaluation360UpwardPage() {
           onClick={handleSubmit}
           disabled={submitMutation.isPending}
           className="bg-purple-600 hover:bg-purple-700"
+          rateLimitAware
         >
           <Shield className="w-4 h-4 me-1" />
           {submitMutation.isPending ? "جارٍ الإرسال..." : "إرسال بشكل سري"}

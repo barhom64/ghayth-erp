@@ -11,6 +11,10 @@ import { LogsTab } from "./admin/logs-tab";
 import { PermissionsTab } from "./admin/permissions-tab";
 import { SecurityLogTab } from "./admin/security-log-tab";
 import { AuditExplorerTab } from "./admin/audit-explorer-tab";
+import { RbacV2Tab } from "./admin/rbac-v2-tab";
+import { UserRoleAssignmentTab } from "./admin/rbac-v2-users-tab";
+import { SodRulesTab } from "./admin/rbac-v2-sod-tab";
+import { JitRequestsTab } from "./admin/rbac-v2-jit-tab";
 import { useLocation } from "wouter";
 
 export default function AdminPage() {
@@ -68,16 +72,24 @@ export default function AdminPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="users" dir="rtl">
-        <TabsList className="grid w-full grid-cols-7">
+      <Tabs defaultValue="rbac-v2" dir="rtl">
+        <TabsList className="grid w-full grid-cols-11">
+          <TabsTrigger value="rbac-v2">الصلاحيات الطبقية</TabsTrigger>
+          <TabsTrigger value="rbac-users">إسناد v2</TabsTrigger>
+          <TabsTrigger value="rbac-sod">قواعد SoD</TabsTrigger>
+          <TabsTrigger value="rbac-jit">طلبات مؤقتة</TabsTrigger>
           <TabsTrigger value="users">المستخدمين</TabsTrigger>
-          <TabsTrigger value="assign">إسناد الأدوار</TabsTrigger>
+          <TabsTrigger value="assign">إسناد قديم</TabsTrigger>
           <TabsTrigger value="roles">الأدوار</TabsTrigger>
           <TabsTrigger value="logs">السجلات</TabsTrigger>
-          <TabsTrigger value="permissions">الصلاحيات</TabsTrigger>
+          <TabsTrigger value="permissions">صلاحيات قديمة</TabsTrigger>
           <TabsTrigger value="security">سجل الأمن</TabsTrigger>
           <TabsTrigger value="audit">سجل المراجعة</TabsTrigger>
         </TabsList>
+        <TabsContent value="rbac-v2"><RbacV2Tab /></TabsContent>
+        <TabsContent value="rbac-users"><UserRoleAssignmentTab /></TabsContent>
+        <TabsContent value="rbac-sod"><SodRulesTab /></TabsContent>
+        <TabsContent value="rbac-jit"><JitRequestsTab /></TabsContent>
         <TabsContent value="users"><UsersTab /></TabsContent>
         <TabsContent value="assign"><RoleAssignmentTab /></TabsContent>
         <TabsContent value="roles"><RolesTab /></TabsContent>

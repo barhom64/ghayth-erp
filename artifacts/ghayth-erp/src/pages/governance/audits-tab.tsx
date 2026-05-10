@@ -7,12 +7,13 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { ClipboardCheck, Plus, Eye } from "lucide-react";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export function AuditsTab() {
+  const [, navigate] = useLocation();
   const { data: auditsResp, isLoading, isError, error, refetch } = useApiQuery<any>(["gov-audits"], "/governance/audits");
   const audits = asList(auditsResp);
   const [previewAudit, setPreviewAudit] = useState<any>(null);
@@ -62,7 +63,7 @@ export function AuditsTab() {
   ];
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   return (
     <div className="space-y-4">
@@ -105,6 +106,7 @@ export function AuditsTab() {
             isError={isError}
             error={error as Error | null}
             onRetry={() => refetch()}
+            onRowClick={(a) => navigate(`/governance/audits/${a.id}`)}
             emptyMessage="لا يوجد تدقيق"
             emptyIcon={<ClipboardCheck className="h-6 w-6 text-slate-400" />}
             noToolbar

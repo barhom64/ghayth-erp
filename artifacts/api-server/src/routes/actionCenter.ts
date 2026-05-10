@@ -1,26 +1,25 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { handleRouteError, ForbiddenError } from "../lib/errorHandler.js";
+import { todayISO } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
+import { LEAVE_APPROVAL_ROLES, PAYROLL_ROLES, FINANCE_ROLES, PR_APPROVAL_ROLES, LETTER_APPROVAL_ROLES , ACTION_CENTER_ROLES} from "../lib/rbacCatalog.js";
 
 const router = Router();
-router.use(authMiddleware);
 
 router.get("/", async (req, res) => {
   try {
     const scope = req.scope!;
 
-    const allowedRoles = ["owner", "general_manager", "branch_manager", "hr_manager", "finance_manager", "supervisor"];
+    const allowedRoles = ACTION_CENTER_ROLES;
     if (!allowedRoles.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: هذه الصفحة للمدراء فقط");
     }
 
-    const today = new Date().toISOString().split("T")[0];
+    const today = todayISO();
     const filters = parseScopeFilters(req);
     const { where, params } = buildScopedWhere(scope, filters);
-
-    const LEAVE_APPROVAL_ROLES = ["branch_manager", "hr_manager", "owner"];
 
     let pendingLeaves: any[] = [];
     if (LEAVE_APPROVAL_ROLES.includes(scope.role)) {
@@ -32,7 +31,7 @@ router.get("/", async (req, res) => {
            JOIN employees e ON e.id = lr."employeeId"
            JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
            LEFT JOIN leave_approval_stages las ON las."leaveRequestId" = lr.id AND las.status = 'pending'
-           WHERE lr."companyId" = ANY($1::int[]) AND lr.status = 'pending'
+           WHERE lr."companyId" = ANY($1::int[]) AND lr.status = 'pending' AND lr."deletedAt" IS NULL
              AND (
                $2 = 'owner'
                OR las."assignedTo" = $3
@@ -42,14 +41,9 @@ router.get("/", async (req, res) => {
           [scope.allowedCompanies, scope.role, scope.activeAssignmentId]
         );
       } catch (e) {
-        console.error("Action-center pendingLeaves error:", e);
+        logger.error(e, "Action-center pendingLeaves error");
       }
     }
-
-    const PAYROLL_ROLES = ["hr_manager", "finance_manager", "general_manager", "owner"];
-    const FINANCE_ROLES = ["finance_manager", "general_manager", "owner"];
-    const PR_APPROVAL_ROLES = ["branch_manager", "general_manager", "owner"];
-    const LETTER_APPROVAL_ROLES = ["hr_manager", "branch_manager", "general_manager", "owner"];
 
     let pendingAdvances: any[] = [];
     if (PAYROLL_ROLES.includes(scope.role)) {
@@ -69,7 +63,7 @@ router.get("/", async (req, res) => {
           [scope.allowedCompanies]
         );
       } catch (e) {
-        console.error("Action-center pendingAdvances error:", e);
+        logger.error(e, "Action-center pendingAdvances error");
       }
     }
 
@@ -90,7 +84,7 @@ router.get("/", async (req, res) => {
           [scope.allowedCompanies]
         );
       } catch (e) {
-        console.error("Action-center pendingCustodies error:", e);
+        logger.error(e, "Action-center pendingCustodies error");
       }
     }
 
@@ -101,12 +95,12 @@ router.get("/", async (req, res) => {
           `SELECT ol.id, e.name AS "employeeName", ol.type AS "letterType", ol.status, ol."createdAt"
            FROM official_letters ol
            JOIN employees e ON e.id = ol."employeeId"
-           WHERE ol."companyId" = ANY($1::int[]) AND ol.status IN ('pending_approval','pending')
+           WHERE ol."companyId" = ANY($1::int[]) AND ol.status IN ('pending_approval','pending') AND ol."deletedAt" IS NULL
            ORDER BY ol."createdAt" DESC LIMIT 20`,
           [scope.allowedCompanies]
         );
       } catch (e) {
-        console.error("Action-center pendingLetters error:", e);
+        logger.error(e, "Action-center pendingLetters error");
       }
     }
 
@@ -121,7 +115,7 @@ router.get("/", async (req, res) => {
           [scope.allowedCompanies]
         );
       } catch (e) {
-        console.error("Action-center pendingPurchases error:", e);
+        logger.error(e, "Action-center pendingPurchases error");
       }
     }
 
@@ -131,12 +125,12 @@ router.get("/", async (req, res) => {
         pendingExpenses = await rawQuery<any>(
           `SELECT id, ref, title, status, "createdAt"
            FROM expense_claims
-           WHERE "companyId" = ANY($1::int[]) AND status = 'pending'
+           WHERE "companyId" = ANY($1::int[]) AND status = 'pending' AND "deletedAt" IS NULL
            ORDER BY "createdAt" DESC LIMIT 20`,
           [scope.allowedCompanies]
         );
       } catch (e) {
-        console.error("Action-center pendingExpenses error:", e);
+        logger.error(e, "Action-center pendingExpenses error");
       }
     }
 
@@ -145,12 +139,12 @@ router.get("/", async (req, res) => {
       slaBreached = await rawQuery<any>(
         `SELECT id, title, "createdAt", "slaDeadline"
          FROM support_tickets
-         WHERE "companyId" = ANY($1::int[]) AND status = 'open' AND "slaDeadline" < NOW()
+         WHERE "companyId" = ANY($1::int[]) AND "deletedAt" IS NULL AND status = 'open' AND "slaDeadline" < NOW()
          ORDER BY "slaDeadline" ASC LIMIT 10`,
         [scope.allowedCompanies]
       );
     } catch (e) {
-      console.error("Action-center slaBreached error:", e);
+      logger.error(e, "Action-center slaBreached error");
     }
 
     let escalations: any[] = [];
@@ -158,12 +152,12 @@ router.get("/", async (req, res) => {
       escalations = await rawQuery<any>(
         `SELECT n.id, n.title, n.body, n.priority, n."createdAt"
          FROM notifications n
-         WHERE n."assignmentId" = $1 AND n.type IN ('escalation','sla_breach','urgent') AND n."isRead" = false
+         WHERE n."assignmentId" = $1 AND n."companyId" = ANY($2::int[]) AND n.type IN ('escalation','sla_breach','urgent') AND n."isRead" = false
          ORDER BY n."createdAt" DESC LIMIT 10`,
-        [scope.activeAssignmentId]
+        [scope.activeAssignmentId, scope.allowedCompanies]
       );
     } catch (e) {
-      console.error("Action-center escalations error:", e);
+      logger.error(e, "Action-center escalations error");
     }
 
     let todayTasks: any[] = [];
@@ -176,13 +170,14 @@ router.get("/", async (req, res) => {
          LEFT JOIN employee_assignments ea ON ea.id = t."assignedTo"
          LEFT JOIN employees e ON e.id = ea."employeeId"
          WHERE ${tw.replace(/"companyId"/g, 't."companyId"').replace(/"branchId"/g, 't."branchId"')}
+           AND t."deletedAt" IS NULL
            AND t."scheduledDate" = $${nextParamIndex}
          ORDER BY t.priority DESC, t.status ASC
          LIMIT 15`,
         [...tp, today]
       );
     } catch (e) {
-      console.error("Action-center todayTasks error:", e);
+      logger.error(e, "Action-center todayTasks error");
     }
 
     let criticalAlerts: any[] = [];
@@ -190,12 +185,12 @@ router.get("/", async (req, res) => {
       criticalAlerts = await rawQuery<any>(
         `SELECT id, type, title, body, priority, "createdAt"
          FROM notifications
-         WHERE "assignmentId" = $1 AND priority IN ('high','urgent','critical') AND "isRead" = false
+         WHERE "assignmentId" = $1 AND "companyId" = ANY($2::int[]) AND priority IN ('high','urgent','critical') AND "isRead" = false
          ORDER BY "createdAt" DESC LIMIT 10`,
-        [scope.activeAssignmentId]
+        [scope.activeAssignmentId, scope.allowedCompanies]
       );
     } catch (e) {
-      console.error("Action-center criticalAlerts error:", e);
+      logger.error(e, "Action-center criticalAlerts error");
     }
 
     let pendingLoans: any[] = [];
@@ -207,12 +202,12 @@ router.get("/", async (req, res) => {
            FROM hr_employee_loans l
            JOIN employee_assignments ea ON ea.id = l."assignmentId"
            JOIN employees e ON e.id = ea."employeeId"
-           WHERE l."companyId" = ANY($1::int[]) AND l.status = 'pending'
+           WHERE l."companyId" = ANY($1::int[]) AND l.status = 'pending' AND l."deletedAt" IS NULL
            ORDER BY l."createdAt" DESC LIMIT 20`,
           [scope.allowedCompanies]
         );
       } catch (e) {
-        console.error("Action-center pendingLoans error:", e);
+        logger.error(e, "Action-center pendingLoans error");
       }
     }
 
@@ -225,12 +220,12 @@ router.get("/", async (req, res) => {
            FROM hr_overtime_requests o
            JOIN employee_assignments ea ON ea.id = o."assignmentId"
            JOIN employees e ON e.id = ea."employeeId"
-           WHERE o."companyId" = ANY($1::int[]) AND o.status = 'pending'
+           WHERE o."companyId" = ANY($1::int[]) AND o.status = 'pending' AND o."deletedAt" IS NULL
            ORDER BY o."createdAt" DESC LIMIT 20`,
           [scope.allowedCompanies]
         );
       } catch (e) {
-        console.error("Action-center pendingOvertime error:", e);
+        logger.error(e, "Action-center pendingOvertime error");
       }
     }
 
@@ -243,12 +238,12 @@ router.get("/", async (req, res) => {
            FROM hr_exit_requests er
            JOIN employee_assignments ea ON ea.id = er."assignmentId"
            JOIN employees e ON e.id = ea."employeeId"
-           WHERE er."companyId" = ANY($1::int[]) AND er.status = 'pending'
+           WHERE er."companyId" = ANY($1::int[]) AND er.status = 'pending' AND er."deletedAt" IS NULL
            ORDER BY er."createdAt" DESC LIMIT 20`,
           [scope.allowedCompanies]
         );
       } catch (e) {
-        console.error("Action-center pendingExitRequests error:", e);
+        logger.error(e, "Action-center pendingExitRequests error");
       }
     }
 
@@ -263,13 +258,14 @@ router.get("/", async (req, res) => {
          LEFT JOIN employees e ON e.id = ea."employeeId"
          WHERE wi."currentAssignee" = $1
            AND wi.status IN ('pending', 'in_review', 'escalated')
+           AND wi."deletedAt" IS NULL
            AND wi."companyId" = ANY($2::int[])
            AND wi."requestType" NOT IN ('leave','purchase_request','official_letter','expense')
          ORDER BY wi."createdAt" DESC LIMIT 30`,
         [scope.activeAssignmentId, scope.allowedCompanies]
       );
     } catch (e) {
-      console.error("Action-center pendingWorkflows error:", e);
+      logger.error(e, "Action-center pendingWorkflows error");
     }
 
     const totalPending =

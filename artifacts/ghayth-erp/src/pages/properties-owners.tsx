@@ -1,17 +1,16 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
+import { PageShell } from "@/components/page-shell";
 import { Crown, Plus, Pencil, Phone, Building2, Home, Trash2 } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
-import { PageShell } from "@/components/page-shell";
-import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 
 export default function PropertiesOwners() {
+  const [, navigate] = useLocation();
   const { scopeQueryString, permissions, roleLevel } = useAppContext();
   const canManage = permissions.canManageProperty || roleLevel >= 50;
 
@@ -37,9 +36,6 @@ export default function PropertiesOwners() {
     if (!confirm("هل أنت متأكد من حذف هذا المالك؟")) return;
     deleteMut.mutate({ id });
   };
-
-  if (isLoading) return <PageShell title="الملاك" breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "الملاك" }]}><LoadingSpinner /></PageShell>;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const columns: DataTableColumn<any>[] = [
     {
@@ -122,7 +118,7 @@ export default function PropertiesOwners() {
     <PageShell
       title="الملاك"
       subtitle="سجل ملاك العقارات — للعقارات المُدارة لصالح الغير"
-      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "الملاك" }]}
+      breadcrumbs={[{ href: "/properties", label: "إدارة الأملاك" }]}
       actions={canManage && (
         <Link href="/properties/owners/create">
           <Button className="gap-2">
@@ -131,7 +127,7 @@ export default function PropertiesOwners() {
         </Link>
       )}
     >
-      <PropertyTabsNav />
+
       <AdvancedFilters
         config={{ searchPlaceholder: "بحث بالاسم أو الهاتف أو رقم الهوية...", showDateRange: false }}
         values={filters}
@@ -163,6 +159,7 @@ export default function PropertiesOwners() {
             emptyMessage="لا يوجد ملاك مسجلون"
             emptyIcon={<Crown className="h-6 w-6 text-slate-400" />}
             noToolbar
+            onRowClick={(row) => navigate(`/properties/owners/${row.id}`)}
           />
         </CardContent>
       </Card>

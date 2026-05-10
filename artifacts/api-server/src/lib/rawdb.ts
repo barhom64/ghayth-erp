@@ -1,12 +1,32 @@
 import pg from "pg";
+import { logger } from "./logger.js";
 
 const { Pool } = pg;
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL must be set");
+let _pool: pg.Pool | undefined;
+
+function getPool(): pg.Pool {
+  if (!_pool) {
+    if (!process.env.DATABASE_URL) {
+      throw new Error("DATABASE_URL must be set");
+    }
+    _pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      max: Number(process.env.PG_POOL_MAX) || 20,
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 5_000,
+    });
+  }
+  return _pool;
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+export const pool = new Proxy({} as pg.Pool, {
+  get(_target, prop, receiver) {
+    const real = getPool();
+    const val = Reflect.get(real, prop, receiver);
+    return typeof val === "function" ? val.bind(real) : val;
+  },
+});
 
 export async function rawQuery<T = any>(sql: string, params: any[] = []): Promise<T[]> {
   const result = await pool.query(sql, params);
@@ -28,7 +48,8 @@ export async function rawExecute(
 ): Promise<{ insertId: number; affectedRows: number }> {
   const cleanSQL = sql.trimEnd().replace(/;$/, "");
   const hasReturning = /RETURNING/i.test(cleanSQL);
-  const finalSQL = hasReturning ? cleanSQL : `${cleanSQL} RETURNING id`;
+  const isDDL = /^\s*(CREATE|ALTER|DROP|TRUNCATE|COMMENT|GRANT|REVOKE|SET|DO|VACUUM|ANALYZE|REINDEX)\b/i.test(cleanSQL);
+  const finalSQL = hasReturning || isDDL ? cleanSQL : `${cleanSQL} RETURNING id`;
 
   const result = await pool.query(finalSQL, cleanParams(params));
   const insertId = result.rows[0]?.id ?? 0;
@@ -45,7 +66,11 @@ export async function withTransaction<T>(
     await client.query("COMMIT");
     return result;
   } catch (err) {
-    await client.query("ROLLBACK");
+    try {
+      await client.query("ROLLBACK");
+    } catch (rollbackErr) {
+      logger.error(rollbackErr, "[withTransaction] ROLLBACK failed — original error follows");
+    }
     throw err;
   } finally {
     client.release();

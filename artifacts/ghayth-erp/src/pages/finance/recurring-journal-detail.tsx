@@ -2,6 +2,7 @@ import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PageStatusBadge } from "@/components/page-status-badge";
 import { DetailPageLayout, type ExtraTab } from "@/components/shared/detail-page-layout";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -62,7 +63,7 @@ export default function RecurringJournalDetailPage() {
       <CardContent className="p-6">
         <p className="text-sm font-semibold mb-3">قالب بنود القيد</p>
         <div className="rounded-xl border overflow-hidden text-sm">
-          <DataTable<any>
+          <DataTable
             columns={[
               { key: "accountCode", header: "الحساب", render: (r) => <span className="font-mono text-xs">{r.accountCode}</span> },
               { key: "description", header: "البيان", render: (r) => r.description || "—" },
@@ -96,11 +97,11 @@ export default function RecurringJournalDetailPage() {
       <CardContent className="p-6">
         <p className="text-sm font-semibold mb-3">سجل التنفيذات السابقة</p>
         <div className="rounded-xl border overflow-hidden text-sm">
-          <DataTable<any>
+          <DataTable
             columns={[
               { key: "runDate", header: "تاريخ التنفيذ", render: (r) => r.runDate ? formatDateAr(r.runDate) : "—" },
               { key: "journalRef", header: "القيد الناتج", render: (r) => <span className="font-mono text-xs">{r.journalRef || `#${r.journalEntryId}` || "—"}</span> },
-              { key: "status", header: "الحالة", render: (r) => r.status === "success" ? <Badge className="bg-green-100 text-green-700">نجاح</Badge> : <Badge className="bg-red-100 text-red-700">فشل</Badge> },
+              { key: "status", header: "الحالة", render: (r) => <PageStatusBadge status={r.status} domain="recurring" /> },
               { key: "triggeredBy", header: "الطريقة", render: (r) => <span className="text-xs text-gray-500">{r.triggeredBy === "manual" ? "يدوي" : "تلقائي"}</span> },
             ] satisfies DataTableColumn<any>[]}
             data={rj?.history ?? []}
@@ -134,7 +135,7 @@ export default function RecurringJournalDetailPage() {
       }
       createdAt={rj?.createdAt}
       updatedAt={rj?.updatedAt}
-      entityType="recurring_journal"
+      entityType="recurring-journal"
       entityId={id}
       isLoading={isLoading}
       error={isError ? true : undefined}

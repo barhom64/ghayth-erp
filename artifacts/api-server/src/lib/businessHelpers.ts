@@ -3,29 +3,52 @@ import { eventBus } from "./eventBus.js";
 import { ValidationError } from "./errorHandler.js";
 import { sendNotification } from "./notificationService.js";
 import { validateEventPayload, getEventDefinition } from "./eventCatalog.js";
+import { logger } from "./logger.js";
+import { FINANCE_ROLES, OWNER_GM_ROLES } from "./rbacCatalog.js";
+
+export function todayISO(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
+export function currentYear(): number {
+  return new Date().getFullYear();
+}
+
+export function currentPeriod(): string {
+  return new Date().toISOString().slice(0, 7);
+}
+
+export function currentMonthPadded(): string {
+  return String(new Date().getMonth() + 1).padStart(2, "0");
+}
+
+export function toDateISO(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  return d.toISOString().split("T")[0];
+}
+
+export function generateRef(prefix: string, seq: number | string, pad = 4): string {
+  return `${prefix}-${currentYear()}-${String(seq).padStart(pad, "0")}`;
+}
+
+export function generateTimeRef(prefix: string): string {
+  return `${prefix}-${Date.now().toString(36).toUpperCase()}`;
+}
+
+export function roundTo2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+export function roundTo4(value: number): number {
+  return Math.round(value * 10000) / 10000;
+}
 
 export function computeVat(baseAmount: number, vatRatePercent: number): number {
-  return Math.round(baseAmount * (vatRatePercent / 100) * 100) / 100;
+  return roundTo2(baseAmount * (vatRatePercent / 100));
 }
 
 export function extractBaseFromGross(grossAmount: number, vatRatePercent: number): number {
-  return Math.round((grossAmount / (1 + vatRatePercent / 100)) * 100) / 100;
-}
-
-export function haversineDistance(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-): number {
-  const R = 6371000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return roundTo2(grossAmount / (1 + vatRatePercent / 100));
 }
 
 export async function createNotification(params: {
@@ -53,7 +76,7 @@ export async function createNotification(params: {
       actionUrl: params.actionUrl,
     });
   } catch (err) {
-    console.error("createNotification error:", err);
+    logger.error(err, "createNotification error:");
   }
 }
 
@@ -107,13 +130,13 @@ export async function emitEvent(params: {
     if (isCritical) {
       throw new ValidationError(`حدث حرج غير مسجل في الكتالوج: ${params.action}`);
     }
-    console.warn(`[emitEvent] uncataloged event: ${params.action}`);
+    logger.warn(`[emitEvent] uncataloged event: ${params.action}`);
   } else if (!validation.valid && isCritical) {
     throw new ValidationError(
       `حدث حرج بدون بيانات مطلوبة: ${params.action} — ${validation.warnings.join("; ")}`
     );
   } else if (!validation.valid) {
-    console.warn(`[emitEvent] payload warnings for ${params.action}: ${validation.warnings.join("; ")}`);
+    logger.warn(`[emitEvent] payload warnings for ${params.action}: ${validation.warnings.join("; ")}`);
   }
 
   // Critical events: persist to event_logs BEFORE emitting to listeners
@@ -148,9 +171,9 @@ export async function emitEvent(params: {
           [params.companyId, params.userId, params.action, params.entity,
            String(params.entityId), params.details ?? null]
         );
-      } catch { /* DB also failed — last resort */ }
+      } catch (e) { logger.error(e, "event_logs fallback insert also failed"); }
     }
-    console.error("[emitEvent] listener failed, event persisted to event_logs:", err);
+    logger.error(err, "[emitEvent] listener failed, event persisted to event_logs:");
   }
 }
 
@@ -182,7 +205,7 @@ export async function createAuditLog(params: {
       ]
     );
   } catch (err) {
-    console.error("createAuditLog error:", err);
+    logger.error(err, "createAuditLog error:");
   }
 }
 
@@ -269,9 +292,13 @@ export async function createJournalEntry(params: {
     }
   }
 
-  const totalDebit = params.lines.reduce((s, l) => s + Number(l.debit), 0);
-  const totalCredit = params.lines.reduce((s, l) => s + Number(l.credit), 0);
-  const imbalance = Math.round((totalDebit - totalCredit) * 10000) / 10000;
+  for (const line of params.lines) {
+    line.debit = roundTo2(Number(line.debit));
+    line.credit = roundTo2(Number(line.credit));
+  }
+  const totalDebit = roundTo2(params.lines.reduce((s, l) => s + l.debit, 0));
+  const totalCredit = roundTo2(params.lines.reduce((s, l) => s + l.credit, 0));
+  const imbalance = roundTo4(totalDebit - totalCredit);
   if (Math.abs(imbalance) > 0.001 && Math.abs(imbalance) <= 0.05) {
     let [roundingAcc] = await rawQuery<any>(
       `SELECT code FROM chart_of_accounts WHERE "companyId"=$1 AND code='9999' LIMIT 1`,
@@ -302,7 +329,7 @@ export async function createJournalEntry(params: {
         [params.companyId, params.createdBy, JSON.stringify({
           ref: params.ref, imbalance, totalDebit, totalCredit,
         })]
-      ).catch(console.error);
+      ).catch((e) => logger.error(e, "[businessHelpers] background task failed"));
     }
   } else if (Math.abs(imbalance) > 0.05) {
     throw new ValidationError(
@@ -336,14 +363,13 @@ export async function createJournalEntry(params: {
         `INSERT INTO journal_lines (
           "journalId","accountCode","accountId",debit,credit,description,"costCenter",
           "departmentId","projectId","employeeId","vehicleId","propertyId","contractId",
-          "productId","clientId","vendorId","driverId","activityType","templateId"
-         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+          "activityType","templateId"
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
         [
           jId, line.accountCode, accountId, line.debit, line.credit,
           line.description ?? null, line.costCenter ?? null,
           line.departmentId ?? null, line.projectId ?? null, line.employeeId ?? null,
           line.vehicleId ?? null, line.propertyId ?? null, line.contractId ?? null,
-          line.productId ?? null, line.clientId ?? null, line.vendorId ?? null, line.driverId ?? null,
           line.activityType ?? null, line.templateId ?? null,
         ]
       );
@@ -406,7 +432,7 @@ export async function createGuardedJournalEntry(
         `UPDATE "${safeTable}" SET "glStatus" = 'failed', "updatedAt" = NOW() WHERE id = $1`,
         [guard.id]
       );
-    } catch { /* column may not exist — best effort */ }
+    } catch (e) { logger.warn(e, "glStatus column may not exist on source table"); }
 
     await rawExecute(
       `INSERT INTO financial_posting_failures ("companyId","sourceType","sourceId",error,"createdAt")
@@ -416,7 +442,7 @@ export async function createGuardedJournalEntry(
        err instanceof Error ? err.message : String(err)]
     );
 
-    console.error(`[FinancialPostingGuard] GL failed for ${guard.table}#${guard.id}:`, err);
+    logger.error(err, `[FinancialPostingGuard] GL failed for ${guard.table}#${guard.id}:`);
     throw err;
   }
 }
@@ -444,8 +470,8 @@ export async function reverseAccountBalances(
   journalId: number
 ) {
   const lines = await rawQuery<any>(
-    `SELECT "accountCode", debit, credit FROM journal_lines WHERE "journalId" = $1`,
-    [journalId]
+    `SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" WHERE jl."journalId" = $1 AND je."companyId" = $2`,
+    [journalId, companyId]
   );
   const balanceChanges = new Map<string, number>();
   for (const line of lines) {
@@ -461,9 +487,20 @@ export async function reverseAccountBalances(
   }
 }
 
-export type ApprovalChainType = "leaves" | "purchases" | "expenses" | "advances" | "letters" | "procurement" | "loans" | "overtime" | "exit";
+export async function softDeleteJournalEntry(
+  companyId: number,
+  journalId: number
+): Promise<void> {
+  await reverseAccountBalances(companyId, journalId);
+  await rawExecute(
+    `UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2`,
+    [journalId, companyId]
+  );
+}
 
-export interface ApprovalChainResult {
+type ApprovalChainType = "leaves" | "purchases" | "expenses" | "advances" | "letters" | "procurement" | "loans" | "overtime" | "exit";
+
+interface ApprovalChainResult {
   requiresApproval: boolean;
   chainId: number | null;
   approvalRequestId: number | null;
@@ -488,6 +525,7 @@ export async function initiateApprovalChain(params: {
   const chains = await rawQuery<any>(
     `SELECT * FROM approval_chains
      WHERE "companyId" = $1 AND "chainType" = $2 AND "isActive" = true
+     AND "deletedAt" IS NULL
      ${amountFilter}
      ORDER BY "minAmount" DESC LIMIT 1`,
     queryParams
@@ -551,7 +589,7 @@ export async function initiateApprovalChain(params: {
       priority: "high", refType: params.refType, refId: params.refId,
     });
   } else {
-    console.warn(
+    logger.warn(
       `[initiateApprovalChain] No approver found for company=${params.companyId} chainType=${params.chainType} ref=${params.refType}#${params.refId}. Request ${requestId} created with assignedTo=null.`
     );
   }
@@ -587,16 +625,16 @@ export async function processApprovalStep(params: {
   if (!params.approved) {
     await rawExecute(
       `UPDATE approval_requests SET status = 'rejected', "decidedBy" = $1, "decidedAt" = NOW()
-       WHERE id = $2`,
-      [params.decidedBy, request.id]
+       WHERE id = $2 AND "companyId" = $3`,
+      [params.decidedBy, request.id, params.companyId]
     );
     return { status: "rejected", message: "تم الرفض" };
   }
 
   await rawExecute(
     `UPDATE approval_requests SET status = 'approved', "decidedBy" = $1, "decidedAt" = NOW()
-     WHERE id = $2`,
-    [params.decidedBy, request.id]
+     WHERE id = $2 AND "companyId" = $3`,
+    [params.decidedBy, request.id, params.companyId]
   );
 
   const chainId = request.chainId;
@@ -678,7 +716,7 @@ export async function validateBudget(params: {
   requiresApproval: boolean;
   approvalLevel?: string;
 }> {
-  const targetPeriod = params.period ?? new Date().toISOString().slice(0, 7);
+  const targetPeriod = params.period ?? currentPeriod();
   const [budget] = await rawQuery<any>(
     `SELECT amount, used FROM budgets
      WHERE "companyId" = $1 AND "accountCode" = $2 AND period = $3`,
@@ -698,7 +736,7 @@ export async function validateBudget(params: {
   }
   if (utilization <= 99) {
     return {
-      status: "warning_cfo", canProceed: ["finance_manager", "general_manager", "owner"].includes(params.role),
+      status: "warning_cfo", canProceed: FINANCE_ROLES.includes(params.role),
       utilization: Math.round(utilization),
       message: "تحذير: استخدام الميزانية 80-99%. يتطلب موافقة المدير المالي",
       requiresApproval: true, approvalLevel: "cfo",
@@ -706,7 +744,7 @@ export async function validateBudget(params: {
   }
   if (utilization <= 110) {
     return {
-      status: "blocked_gm", canProceed: ["general_manager", "owner"].includes(params.role),
+      status: "blocked_gm", canProceed: OWNER_GM_ROLES.includes(params.role),
       utilization: Math.round(utilization),
       message: "تجاوز الميزانية 100-110%. يتطلب موافقة المدير العام فقط",
       requiresApproval: true, approvalLevel: "general_manager",
@@ -725,12 +763,12 @@ export async function updateBudgetUsed(params: {
   amount: number;
   period?: string;
 }): Promise<void> {
-  const targetPeriod = params.period ?? new Date().toISOString().slice(0, 7);
+  const targetPeriod = params.period ?? currentPeriod();
   await rawExecute(
     `UPDATE budgets SET used = used + $1
      WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4`,
     [Number(params.amount), params.companyId, params.accountCode, targetPeriod]
-  ).catch(() => {});
+  ).catch((e) => logger.error(e, "budget usage update failed"));
 }
 
 export async function getAssignmentIdByRole(companyId: number, branchId: number, role: string): Promise<number | null> {
@@ -759,7 +797,8 @@ export async function getDirectorAssignmentId(companyId: number, branchId: numbe
 export async function getCfoAssignmentId(companyId: number, branchId: number): Promise<number | null> {
   const [row] = await rawQuery<any>(
     `SELECT ea.id FROM employee_assignments ea
-     JOIN user_roles ur ON ur."userId" = (SELECT "employeeId" FROM employee_assignments WHERE id = ea.id)
+     JOIN users u ON u."employeeId" = ea."employeeId"
+     JOIN user_roles ur ON ur."userId" = u.id
      WHERE ea."companyId" = $1 AND ea."branchId" = $2
        AND ur."roleKey" = 'finance_manager' AND ea.status = 'active'
      LIMIT 1`,
@@ -860,6 +899,7 @@ const MAPPING_INTENT: Record<string, { type: string; keywords: string[] }> = {
 };
 
 const _resolvedAccountCache = new Map<string, string>();
+const _RESOLVED_ACCOUNT_CACHE_MAX_SIZE = 5_000;
 
 async function resolveByIntent(companyId: number, operationType: string, fallbackCode: string): Promise<string> {
   const cacheKey = `${companyId}:${operationType}`;
@@ -871,7 +911,11 @@ async function resolveByIntent(companyId: number, operationType: string, fallbac
     `SELECT code FROM chart_of_accounts WHERE "companyId"=$1 AND code=$2 AND "allowPosting"=true AND "deletedAt" IS NULL LIMIT 1`,
     [companyId, fallbackCode]
   );
-  if (fb) { _resolvedAccountCache.set(cacheKey, fb.code); return fb.code; }
+  if (fb) {
+    if (_resolvedAccountCache.size >= _RESOLVED_ACCOUNT_CACHE_MAX_SIZE) _resolvedAccountCache.clear();
+    _resolvedAccountCache.set(cacheKey, fb.code);
+    return fb.code;
+  }
 
   // 2. Otherwise search by intent (type + Arabic name keywords).
   const intent = MAPPING_INTENT[operationType];
@@ -885,7 +929,8 @@ async function resolveByIntent(companyId: number, operationType: string, fallbac
       params
     );
     if (rows.length) {
-      console.warn(`[accounting_mappings] Resolved "${operationType}" → "${rows[0].code}" by intent search (fallback "${fallbackCode}" missing).`);
+      logger.warn(`[accounting_mappings] Resolved "${operationType}" → "${rows[0].code}" by intent search (fallback "${fallbackCode}" missing).`);
+      if (_resolvedAccountCache.size >= _RESOLVED_ACCOUNT_CACHE_MAX_SIZE) _resolvedAccountCache.clear();
       _resolvedAccountCache.set(cacheKey, rows[0].code);
       return rows[0].code;
     }
@@ -915,12 +960,12 @@ export async function getAccountCodeFromMapping(
   if (!mapping) {
     const resolved = await resolveByIntent(companyId, operationType, fallbackCode);
     if (resolved !== fallbackCode) return resolved;
-    console.warn(`[accounting_mappings] No mapping for "${operationType}", company=${companyId}. Fallback: "${fallbackCode}".`);
+    logger.warn(`[accounting_mappings] No mapping for "${operationType}", company=${companyId}. Fallback: "${fallbackCode}".`);
     rawExecute(
       `INSERT INTO audit_logs ("companyId","userId",action,entity,"entityId","after")
        VALUES ($1,0,'mapping_fallback','accounting_mappings',0,$2)`,
       [companyId, JSON.stringify({ operationType, side, fallbackCode })]
-    ).catch(console.error);
+    ).catch((e) => logger.error(e, "[businessHelpers] background task failed"));
     return fallbackCode;
   }
   const explicitCode = side === "debit"

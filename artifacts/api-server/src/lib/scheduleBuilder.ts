@@ -1,5 +1,6 @@
 import { rawQuery } from "./rawdb.js";
 import { haversineDistance } from "./algorithms.js";
+import { logger } from "./logger.js";
 
 export interface ScheduleItem {
   type: "task" | "appointment" | "maintenance" | "ticket";
@@ -34,14 +35,15 @@ export async function buildEmployeeSchedule(
   const employeeName = empRow?.name ?? `Employee ${employeeId}`;
 
   const tasks = await rawQuery<any>(
-    `SELECT t.id, t.title, t."scheduledDate" as "scheduledTime", 
+    `SELECT t.id, t.title, t."scheduledDate" as "scheduledTime",
             t."estimatedDuration", t.priority, t.status
      FROM tasks t
      WHERE t."companyId"=$1
        AND t."scheduledDate"::date=$2::date
        AND t.status NOT IN ('completed','cancelled')
+       AND t."assignedTo" IN (SELECT id FROM employee_assignments WHERE "employeeId"=$3 AND "companyId"=$1)
      ORDER BY t."scheduledDate"`,
-    [companyId, date]
+    [companyId, date, employeeId]
   );
 
   const tickets = await rawQuery<any>(
@@ -50,9 +52,10 @@ export async function buildEmployeeSchedule(
      FROM support_tickets st
      WHERE st."companyId"=$1
        AND st.status='open'
+       AND st."assigneeId" IN (SELECT id FROM employee_assignments WHERE "employeeId"=$2 AND "companyId"=$1)
      ORDER BY st."createdAt"
      LIMIT 5`,
-    [companyId]
+    [companyId, employeeId]
   );
 
   const maintenance = await rawQuery<any>(
@@ -60,8 +63,9 @@ export async function buildEmployeeSchedule(
      FROM maintenance_requests mr
      WHERE mr."companyId"=$1
        AND mr."createdAt"::date=$2::date
-       AND mr.status NOT IN ('completed','cancelled')`,
-    [companyId, date]
+       AND mr.status NOT IN ('completed','cancelled')
+       AND mr."assignedTo" IN (SELECT id FROM employee_assignments WHERE "employeeId"=$3 AND "companyId"=$1)`,
+    [companyId, date, employeeId]
   );
 
   const items: ScheduleItem[] = [];
@@ -141,7 +145,7 @@ export async function buildAllSchedules(companyId: number, date: string): Promis
       const schedule = await buildEmployeeSchedule(companyId, emp.id, date);
       schedules.push(schedule);
     } catch (err) {
-      console.error(`Schedule build error for employee ${emp.id}:`, err);
+      logger.error(err, `Schedule build error for employee ${emp.id}:`);
     }
   }
   return schedules;

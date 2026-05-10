@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -10,11 +10,7 @@ import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { textColumn, statusColumn, actionsColumn } from "@/components/data-table-presets";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Headphones, Plus, Eye, ChevronDown, ChevronUp, AlertTriangle, BookOpen, Star, ThumbsUp, CheckCircle, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
@@ -26,9 +22,10 @@ import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/entity-tags";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { formatDateAr } from "@/lib/formatters";
-import { SupportTabsNav } from "@/components/shared/support-tabs-nav";
+import { PageStateWrapper } from "@/components/shared/page-state";
 
 function Support() {
+  const [, navigate] = useLocation();
   const { roleLevel } = useAppContext();
   const canManage = roleLevel >= 50;
   const { data: stats } = useApiQuery<any>(["support-stats"], "/support/stats");
@@ -58,9 +55,6 @@ function Support() {
     queryKeys: [["support-tickets", String(page)], ["support-stats"]],
     onSuccess: () => refetch(),
   });
-
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
 
   const editFields = [
     { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "open", label: "مفتوح" }, { value: "in_progress", label: "قيد المعالجة" }, { value: "resolved", label: "محلول" }, { value: "closed", label: "مغلق" }] },
@@ -115,6 +109,12 @@ function Support() {
     },
   ];
 
+  if (isError) return (
+    <PageStateWrapper isLoading={false} error={error} onRetry={() => refetch()}>
+      <div />
+    </PageStateWrapper>
+  );
+
   return (
     <PageShell
       title="الدعم الفني"
@@ -129,7 +129,6 @@ function Support() {
         </Link>
       }
     >
-      <SupportTabsNav />
       <KpiGrid items={[
         { label: "إجمالي التذاكر", value: stats?.totalTickets || 0, icon: Headphones, color: "text-blue-600 bg-blue-50" },
         { label: "مفتوحة", value: stats?.openTickets || 0, icon: Clock, color: "text-amber-600 bg-amber-50" },
@@ -193,6 +192,7 @@ function Support() {
             isError={isError}
             error={error as Error | null}
             onRetry={() => refetch()}
+            onRowClick={(t) => navigate(`/support/${t.id}`)}
             emptyMessage="لا توجد تذاكر"
             emptyIcon={<Headphones className="h-6 w-6 text-slate-400" />}
             noToolbar
@@ -236,6 +236,12 @@ function KBManagement() {
     onSuccess: () => refetch(),
   });
 
+  const editFields = [
+    { key: "title", label: "العنوان" },
+    { key: "category", label: "التصنيف" },
+    { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "published", label: "منشور" }, { value: "draft", label: "مسودة" }, { value: "archived", label: "مؤرشف" }] },
+  ];
+
   const kbColumns: DataTableColumn<any>[] = [
     { key: "title", header: "العنوان", sortable: true, searchable: true, render: (item) => <span className="font-medium">{item.title}</span> },
     { key: "category", header: "التصنيف", sortable: true, searchable: true, render: (item) => <span className="text-muted-foreground">{item.category || "-"}</span> },
@@ -259,12 +265,6 @@ function KBManagement() {
     },
   ];
 
-  const editFields = [
-    { key: "title", label: "العنوان" },
-    { key: "category", label: "التصنيف" },
-    { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "published", label: "منشور" }, { value: "draft", label: "مسودة" }, { value: "archived", label: "مؤرشف" }] },
-  ];
-
   const createMut = useApiMutation<any, typeof newForm>(
     "/support/kb",
     "POST",
@@ -282,8 +282,11 @@ function KBManagement() {
     createMut.mutate(newForm);
   };
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return (
+    <PageStateWrapper isLoading={false} error={error} onRetry={() => refetch()}>
+      <div />
+    </PageStateWrapper>
+  );
 
   return (
     <div className="space-y-4">
@@ -297,29 +300,24 @@ function KBManagement() {
           <CardContent className="p-4 grid grid-cols-2 gap-3">
             <div className="col-span-2">
               <label className="text-xs text-gray-500 mb-1 block">العنوان *</label>
-              <Input value={newForm.title} onChange={e => setNewForm(p => ({ ...p, title: e.target.value }))} />
+              <input className="w-full border rounded px-2 py-1 text-sm" value={newForm.title} onChange={e => setNewForm(p => ({ ...p, title: e.target.value }))} />
             </div>
             <div>
               <label className="text-xs text-gray-500 mb-1 block">التصنيف</label>
-              <Input value={newForm.category} onChange={e => setNewForm(p => ({ ...p, category: e.target.value }))} />
+              <input className="w-full border rounded px-2 py-1 text-sm" value={newForm.category} onChange={e => setNewForm(p => ({ ...p, category: e.target.value }))} />
             </div>
             <div>
               <label className="text-xs text-gray-500 mb-1 block">الحالة</label>
-              <Select value={newForm.status} onValueChange={(v) => setNewForm(p => ({ ...p, status: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="published">منشور</SelectItem>
-                  <SelectItem value="draft">مسودة</SelectItem>
-                  <SelectItem value="archived">مؤرشف</SelectItem>
-                </SelectContent>
-              </Select>
+              <select className="w-full border rounded px-2 py-1 text-sm" value={newForm.status} onChange={e => setNewForm(p => ({ ...p, status: e.target.value }))}>
+                <option value="published">منشور</option><option value="draft">مسودة</option><option value="archived">مؤرشف</option>
+              </select>
             </div>
             <div className="col-span-2">
               <label className="text-xs text-gray-500 mb-1 block">المحتوى</label>
-              <Textarea rows={4} value={newForm.content} onChange={e => setNewForm(p => ({ ...p, content: e.target.value }))} />
+              <textarea className="w-full border rounded px-2 py-1 text-sm" rows={4} value={newForm.content} onChange={e => setNewForm(p => ({ ...p, content: e.target.value }))} />
             </div>
             <div className="col-span-2 flex gap-2">
-              <Button size="sm" onClick={handleCreate}>حفظ</Button>
+              <Button size="sm" onClick={handleCreate} rateLimitAware>حفظ</Button>
               <Button size="sm" variant="ghost" onClick={() => setShowNew(false)}>إلغاء</Button>
             </div>
           </CardContent>
@@ -342,7 +340,7 @@ function KBManagement() {
             rowClassName={(item) => editingId === item.id ? "bg-muted/50" : deletingId === item.id ? "bg-destructive/5" : ""}
             renderRowExtras={(item) => {
               if (editingId === item.id) return <div className="p-2 bg-muted/30"><InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(item.id, editForm)} onCancel={cancelEdit} isPending={isPending} /></div>;
-              if (deletingId === item.id) return <div className="p-2 bg-destructive/5"><InlineDeleteConfirm onConfirm={() => handleDelete(item.id)} onCancel={cancelDelete} isPending={isPending} itemName={item.title} entityType="kb_article" entityId={item.id} /></div>;
+              if (deletingId === item.id) return <div className="p-2 bg-destructive/5"><InlineDeleteConfirm onConfirm={() => handleDelete(item.id)} onCancel={cancelDelete} isPending={isPending} itemName={item.title} entityType="kb-article" entityId={item.id} /></div>;
               return null;
             }}
           />
@@ -353,7 +351,7 @@ function KBManagement() {
 }
 
 function CSATStats() {
-  const { data: csatResp, isLoading, isError } = useApiQuery<any>(["support-csat-stats"], "/support/csat");
+  const { data: csatResp, isLoading, isError, error } = useApiQuery<any>(["support-csat-stats"], "/support/csat");
   const stats = csatResp?.agentStats || [];
   const avg = csatResp?.avgScore;
 
@@ -370,8 +368,11 @@ function CSATStats() {
     },
   ];
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return (
+    <PageStateWrapper isLoading={false} error={error}>
+      <div />
+    </PageStateWrapper>
+  );
 
   return (
     <div className="space-y-4">

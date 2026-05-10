@@ -252,7 +252,7 @@ export default function BankGuaranteesPage() {
   );
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const list: BankGuarantee[] = data?.data ?? data ?? [];
   const summary = data?.summary ?? {};
@@ -654,6 +654,7 @@ export default function BankGuaranteesPage() {
               <Button
                 type="submit"
                 disabled={saveMutation.isPending || updateMutation.isPending}
+                rateLimitAware
               >
                 {saveMutation.isPending || updateMutation.isPending
                   ? "جاري الحفظ..."

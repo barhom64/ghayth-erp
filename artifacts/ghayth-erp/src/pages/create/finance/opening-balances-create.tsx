@@ -77,7 +77,7 @@ export default function OpeningBalancesCreatePage() {
   );
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   function updateLine(idx: number, field: keyof OBLine, value: string) {
     setLines((prev) => {
@@ -255,7 +255,7 @@ export default function OpeningBalancesCreatePage() {
         <Button variant="outline" onClick={() => setLocation("/finance/opening-balances")}>
           إلغاء
         </Button>
-        <Button onClick={handleSubmit} disabled={!isBalanced || createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={!isBalanced || createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
         </Button>
       </div>

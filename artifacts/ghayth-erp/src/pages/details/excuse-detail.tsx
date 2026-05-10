@@ -11,6 +11,8 @@ import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { Edit, Clock } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "معلق",
@@ -174,6 +176,14 @@ export default function ExcuseDetail() {
                 approveEndpoint={`/hr/excuse-requests/${id}/approve`}
                 rejectEndpoint={`/hr/excuse-requests/${id}/approve`}
                 returnEndpoint={`/hr/excuse-requests/${id}/approve`}
+                approveMethod="PATCH"
+                rejectMethod="PATCH"
+                returnMethod="PATCH"
+                approveBody={(notes) => ({ approved: true, reason: notes || undefined })}
+                rejectBody={(notes) => ({ approved: false, reason: notes })}
+                returnBody={(notes) => ({ approved: "returned", reason: notes })}
+                pendingStatuses={["pending", "returned"]}
+                invalidateKeys={[["excuse-requests"]]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث طلب الاستئذان" });

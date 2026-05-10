@@ -70,7 +70,7 @@ export function ComplianceActionsTab() {
   ];
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   return (
     <div className="space-y-4">
@@ -103,7 +103,7 @@ export function ComplianceActionsTab() {
               <Textarea className="text-sm" rows={2} value={newForm.description} onChange={e => setNewForm(p => ({ ...p, description: e.target.value }))} />
             </div>
             <div className="col-span-2 flex gap-2">
-              <Button size="sm" onClick={handleCreate}>حفظ</Button>
+              <Button size="sm" onClick={handleCreate} rateLimitAware>حفظ</Button>
               <Button size="sm" variant="ghost" onClick={() => setShowNew(false)}>إلغاء</Button>
             </div>
           </CardContent>

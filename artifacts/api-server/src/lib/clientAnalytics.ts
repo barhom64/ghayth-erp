@@ -1,4 +1,6 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
+import { roundTo2 } from "./businessHelpers.js";
+import { logger } from "./logger.js";
 
 export interface ClientRFM {
   clientId: number;
@@ -95,7 +97,7 @@ export async function calculateClientRFM(companyId: number, clientId: number): P
     recencyDays: recency,
     frequencyCount: freq,
     monetaryValue: monetary,
-    rfmScore: Math.round(rfmScore * 100) / 100,
+    rfmScore: roundTo2(rfmScore),
     segment,
     churnRisk,
     churnScore,
@@ -126,7 +128,7 @@ export async function calculateAllClientsRFM(companyId: number): Promise<number>
       );
       saved++;
     } catch (err) {
-      console.error(`RFM error for client ${c.id}:`, err);
+      logger.error(err, `RFM error for client ${c.id}:`);
     }
   }
   return saved;

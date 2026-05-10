@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { DetailPageLayout, type ExtraTab } from "@/components/shared/detail-page-layout";
 import { formatDateAr } from "@/lib/formatters";
+import { resolveStatus } from "@/components/page-status-badge";
 import {
   Briefcase,
   Building2,
@@ -48,13 +49,13 @@ export default function JobDetailPage() {
 
   const { data: job, isLoading, isError, refetch } = useApiQuery<any>(
     ["recruitment-job", id],
-    id ? `/recruitment/postings/${id}` : null,
+    id ? `/hr/recruitment/postings/${id}` : null,
     !!id
   );
 
   const { data: appsResp } = useApiQuery<any>(
     ["job-applications", id],
-    id ? `/recruitment/applications?postingId=${id}` : null,
+    id ? `/hr/recruitment/applications?postingId=${id}` : null,
     !!id
   );
   const applicants: any[] = appsResp?.data || [];
@@ -100,7 +101,7 @@ export default function JobDetailPage() {
           <InfoRow label="القسم" value={job?.department} />
           <InfoRow label="الموقع" value={job?.location} />
           <InfoRow label="نوع العمل" value={job?.type} />
-          <InfoRow label="الحالة" value={job?.status} />
+          <InfoRow label="الحالة" value={resolveStatus(job?.status ?? "")?.label || job?.status} />
           <InfoRow label="تاريخ النشر" value={job?.createdAt ? formatDateAr(job.createdAt) : undefined} />
           <InfoRow label="تاريخ الإغلاق" value={job?.closingDate ? formatDateAr(job.closingDate) : undefined} />
           <InfoRow
@@ -133,7 +134,7 @@ export default function JobDetailPage() {
           className="gap-1"
           onClick={async () => {
             try {
-              await apiFetch(`/recruitment/postings/${id}/reopen`, {
+              await apiFetch(`/hr/recruitment/postings/${id}/reopen`, {
                 method: "POST",
                 body: JSON.stringify({}),
               });
@@ -159,7 +160,7 @@ export default function JobDetailPage() {
           className="gap-1"
           onClick={async () => {
             try {
-              await apiFetch(`/recruitment/postings/${id}/close`, {
+              await apiFetch(`/hr/recruitment/postings/${id}/close`, {
                 method: "POST",
                 body: JSON.stringify({}),
               });
@@ -215,7 +216,7 @@ export default function JobDetailPage() {
       subtitle={job?.department || undefined}
       backPath="/hr/jobs"
       backLabel="العودة للتوظيف"
-      entityType="hr_job"
+      entityType="hr-job"
       entityId={id}
       isLoading={isLoading}
       error={isError || notFound ? (notFound ? "لم يتم العثور على الوظيفة" : "تعذر تحميل بيانات الوظيفة") : undefined}
@@ -223,7 +224,7 @@ export default function JobDetailPage() {
       overview={overview}
       actions={actions}
       extraTabs={extraTabs}
-      status={job?.status ? { label: job.status, tone: STATUS_TONE_MAP[job.status] ?? "default" } : undefined}
+      status={job?.status ? { label: resolveStatus(job.status)?.label || job.status, tone: STATUS_TONE_MAP[job.status] ?? "default" } : undefined}
       createdAt={job?.createdAt}
       updatedAt={job?.updatedAt}
     />

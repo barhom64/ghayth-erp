@@ -10,7 +10,7 @@ export function ComplianceDashboardTab() {
   const dash = dashResp || {};
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   return (
     <div className="space-y-4">

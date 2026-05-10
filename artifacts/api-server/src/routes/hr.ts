@@ -5,27 +5,35 @@ import {
   ConflictError,
   ForbiddenError,
   IntegrationError,
+  parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission, requireAnyPermission } from "../middlewares/permissionMiddleware.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { requireOwnership } from "../middlewares/contextualRbac.js";
-import rateLimit from "express-rate-limit";
+import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
+import { haversineKm } from "../lib/algorithms.js";
 import {
-  haversineDistance,
   createNotification,
   emitEvent,
   createAuditLog,
   getManagerAssignmentId,
   initiateApprovalChain,
   processApprovalStep,
-  createGuardedJournalEntry,
-  getAccountCodeFromMapping,
   checkFinancialPeriodOpen,
+  todayISO,
+  currentPeriod,
+  currentYear,
+  generateRef,
+  toDateISO,
+  roundTo2,
+  softDeleteJournalEntry,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
+import { applyTransition, LifecycleError } from "../lib/lifecycleEngine.js";
 import {
   computeLeaveImpact,
   computeTerminationImpact,
@@ -34,6 +42,8 @@ import {
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { ensureInquiryMemoForViolation } from "../lib/disciplineEngine.js";
 import { z } from "zod";
+import { logger } from "../lib/logger.js";
+import { HR_ROLES, MGR_ROLES, HR_APPROVAL_ROLES , PR_APPROVAL_ROLES, PAYROLL_ROLES, OPS_CLOSE_ROLES, BRANCH_GM_ROLES} from "../lib/rbacCatalog.js";
 
 // ── Zod request-body schemas ──
 
@@ -51,17 +61,22 @@ const leaveRequestSchema = z.object({
   endDate: z.string().min(1, "تاريخ النهاية مطلوب"),
   reason: z.string().optional(),
   documentUrl: z.string().optional(),
+  reliefOfficer: z.string().optional(),
+  contactDuringLeave: z.string().optional(),
 });
 
 const violationSchema = z.object({
   assignmentId: z.coerce.number({ required_error: "يرجى اختيار الموظف" }),
   type: z.string().min(1, "نوع المخالفة مطلوب"),
   description: z.string().min(1, "وصف المخالفة مطلوب"),
-  severity: z.enum(["minor", "major", "critical"]).optional(),
+  severity: z.enum(["low", "medium", "high", "minor", "major", "critical"]).optional(),
   deduction: z.coerce.number().optional(),
   period: z.string().optional(),
   incidentDate: z.string().optional(),
   regulationId: z.coerce.number().optional(),
+  witness: z.string().optional(),
+  location: z.string().optional(),
+  actionTaken: z.string().optional(),
 });
 
 const shiftSchema = z.object({
@@ -70,12 +85,15 @@ const shiftSchema = z.object({
   endTime: z.string().optional(),
   days: z.any().optional(),
   isDefault: z.boolean().optional(),
+  branchId: z.coerce.number().optional().nullable(),
   shiftType: z.enum(["fixed", "flexible", "remote", "split"]).optional(),
   remoteAllowed: z.boolean().optional(),
   splitBreakStart: z.string().optional(),
   splitBreakEnd: z.string().optional(),
   flexStartEarliest: z.string().optional(),
   flexStartLatest: z.string().optional(),
+  breakMinutes: z.coerce.number().optional(),
+  gracePeriod: z.coerce.number().optional(),
 });
 
 const performanceSchema = z.object({
@@ -87,13 +105,13 @@ const performanceSchema = z.object({
   categories: z.any().optional(),
   comments: z.string().optional(),
   notes: z.string().optional(),
-  status: z.string().optional(),
+  status: z.enum(["pending", "in_progress", "completed", "acknowledged"]).optional(),
 });
 
 const salaryComponentSchema = z.object({
   name: z.string().min(1, "اسم مكوّن الراتب مطلوب"),
-  type: z.enum(["fixed", "percentage"]).optional(),
-  category: z.enum(["allowance", "deduction", "bonus"]).optional(),
+  type: z.enum(["earning", "deduction", "benefit"]).optional(),
+  calculationType: z.enum(["fixed", "percentage", "formula"]).optional(),
   value: z.coerce.number().optional(),
   taxable: z.boolean().optional(),
 });
@@ -138,6 +156,12 @@ const publicHolidaySchema = z.object({
 const transferSchema = z.object({
   employeeId: z.coerce.number({ required_error: "الموظف مطلوب" }),
   toBranchId: z.coerce.number({ required_error: "الفرع المستقبل مطلوب" }),
+  reason: z.string().optional(),
+  effectiveDate: z.string().optional(),
+  notes: z.string().optional(),
+  toDeptId: z.coerce.number().optional().nullable(),
+  toJobTitle: z.string().optional(),
+  toSalary: z.coerce.number().optional().nullable(),
 });
 
 const idpSchema = z.object({
@@ -200,23 +224,201 @@ const delegationSchema = z.object({
   endDate: z.string().optional(),
 });
 
-const router = Router();
-router.use(authMiddleware);
+const checkOutSchema = z.object({
+  notes: z.string().optional(),
+  lat: z.coerce.number().optional(),
+  lon: z.coerce.number().optional(),
+});
 
-const checkInLimiter = rateLimit({
+const approvalDecisionSchema = z.object({
+  approved: z.union([z.boolean(), z.literal("returned")]),
+  reason: z.string().optional(),
+});
+
+const payrollRunSchema = z.object({
+  month: z.string().optional(),
+});
+
+const approvalRequestDecisionSchema = z.object({
+  approved: z.boolean(),
+  reason: z.string().optional(),
+});
+
+const attendancePolicySchema = z.object({
+  lateThresholdMinutes: z.coerce.number().optional(),
+  gpsRadiusMeters: z.coerce.number().optional(),
+  penaltyLevel1: z.coerce.number().optional(),
+  penaltyLevel2: z.coerce.number().optional(),
+  penaltyLevel3: z.coerce.number().optional(),
+  penaltyLevel4: z.coerce.number().optional(),
+  penaltyLevel5: z.coerce.number().optional(),
+  penaltyLevel1Label: z.string().optional(),
+  penaltyLevel2Label: z.string().optional(),
+  penaltyLevel3Label: z.string().optional(),
+  penaltyLevel4Label: z.string().optional(),
+  penaltyLevel5Label: z.string().optional(),
+});
+
+const violationPatchSchema = z.object({
+  type: z.string().optional(),
+  severity: z.string().optional(),
+  deduction: z.coerce.number().optional(),
+  period: z.string().optional(),
+  description: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+const violationApprovalSchema = z.object({
+  notes: z.string().optional(),
+});
+
+const shiftPatchSchema = z.object({
+  name: z.string().optional(),
+  startTime: z.string().optional(),
+  endTime: z.string().optional(),
+  days: z.any().optional(),
+  status: z.string().optional(),
+  isDefault: z.boolean().optional(),
+  branchId: z.coerce.number().optional().nullable(),
+  shiftType: z.enum(["fixed", "flexible", "remote", "split"]).optional(),
+  remoteAllowed: z.boolean().optional(),
+  splitBreakStart: z.string().optional(),
+  splitBreakEnd: z.string().optional(),
+  flexStartEarliest: z.string().optional(),
+  flexStartLatest: z.string().optional(),
+});
+
+const leaveRequestPatchSchema = z.object({
+  status: z.string().optional(),
+  reason: z.string().optional(),
+});
+
+const leaveCancelSchema = z.object({
+  reason: z.string().optional(),
+});
+
+const payrollPatchSchema = z.object({
+  status: z.string().optional(),
+});
+
+const performancePatchSchema = z.object({
+  overallScore: z.coerce.number().optional(),
+  score: z.coerce.number().optional(),
+  comments: z.string().optional(),
+  feedback: z.string().optional(),
+  status: z.enum(["pending", "in_progress", "completed", "acknowledged"]).optional(),
+  strengths: z.any().optional(),
+  improvements: z.any().optional(),
+  goals: z.any().optional(),
+});
+
+const officialLetterPatchSchema = z.object({
+  subject: z.string().optional(),
+  content: z.string().optional(),
+  status: z.string().optional(),
+  type: z.string().optional(),
+});
+
+const letterApprovalSchema = z.object({
+  approved: z.union([z.boolean(), z.literal("returned")]).optional(),
+  notes: z.string().optional(),
+});
+
+const onboardingStepsSchema = z.object({
+  steps: z.array(z.string()),
+});
+
+const impactPreviewLeaveSchema = z.object({
+  employeeId: z.coerce.number({ required_error: "معرف الموظف مطلوب" }),
+  leaveTypeId: z.coerce.number({ required_error: "نوع الإجازة مطلوب" }),
+  startDate: z.string().min(1, "تاريخ البداية مطلوب"),
+  endDate: z.string().min(1, "تاريخ النهاية مطلوب"),
+  days: z.coerce.number().optional(),
+});
+
+const impactPreviewTerminationSchema = z.object({
+  employeeId: z.coerce.number({ required_error: "معرف الموظف مطلوب" }),
+});
+
+const impactPreviewViolationSchema = z.object({
+  employeeId: z.coerce.number({ required_error: "معرف الموظف مطلوب" }),
+  deduction: z.coerce.number().optional().default(0),
+  severity: z.string().optional().default("medium"),
+});
+
+const peerEvaluationSchema = z.object({
+  overallScore: z.coerce.number().optional(),
+  scores: z.any().optional(),
+  comments: z.string().optional(),
+});
+
+const upwardReviewSchema = z.object({
+  managerId: z.coerce.number().optional(),
+  overallScore: z.coerce.number().optional(),
+  scores: z.any().optional(),
+  comments: z.string().optional(),
+});
+
+const publicHolidayPatchSchema = z.object({
+  name: z.string().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  type: z.string().optional(),
+  description: z.string().optional(),
+  isRecurring: z.boolean().optional(),
+});
+
+const transferApprovalSchema = z.object({
+  approved: z.boolean().optional(),
+  notes: z.string().optional(),
+});
+
+const transferConfirmSchema = z.object({
+  confirmed: z.boolean().optional(),
+  notes: z.string().optional(),
+});
+
+const idpPatchSchema = z.object({
+  title: z.string().optional(),
+  goals: z.any().optional(),
+  skills: z.any().optional(),
+  status: z.string().optional(),
+  targetDate: z.string().optional(),
+  notes: z.string().optional(),
+  progress: z.coerce.number().optional(),
+});
+
+const monthlyAccrualsSchema = z.object({
+  period: z.string().optional(),
+});
+
+const excuseApprovalSchema = z.object({
+  approved: z.boolean().optional(),
+  rejectionReason: z.string().optional(),
+});
+
+const router = Router();
+
+// Per-user check-in limiter. The /hr router runs after authMiddleware in
+// routes/index.ts, so req.scope is set. We deliberately do NOT exempt
+// owner/admin: the cap reflects "humans can't physically check in 5 times
+// per minute," and the role of the actor doesn't change that physical fact.
+const checkInLimiter = createPerUserLimiter({
+  prefix: "hr:check-in",
   windowMs: 60 * 1000,
   max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "تم تجاوز الحد الأقصى لمحاولات تسجيل الحضور. يرجى المحاولة بعد دقيقة" },
-  validate: { ip: false, trustProxy: false },
+  message: "تم تجاوز الحد الأقصى لمحاولات تسجيل الحضور. يرجى المحاولة بعد دقيقة",
+  skip: () => false,
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ATTENDANCE – check-in and dedicated check-out endpoints
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:create"), async (req, res) => {
+// RBAC v2: hr.attendance.checkin is self-service in featureCatalog, so the
+// authorize() middleware auto-grants every employee unconditionally.
+// Replaces the legacy hr:self/hr:create permission gate.
+router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.checkin", action: "create" }), async (req, res) => {
   // Step 4 of the HR operational audit — attendance check-in.
   // Converts the two raw res.status(400) bailouts to ConflictError with
   // meta pointing at the blocking row, and guards against a missing
@@ -224,11 +426,9 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
   try {
     const scope = req.scope!;
     const now = new Date();
-    const today = now.toISOString().split("T")[0];
+    const today = toDateISO(now);
     const period = today.slice(0, 7);
-    const parsed = checkInSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { lat, lon, notes, workType } = parsed.data;
+    const { lat, lon, notes, workType } = zodParse(checkInSchema.safeParse(req.body));
 
     // Guard: the caller must have an active assignment. Without this, the
     // INSERT INTO attendance below would hit a 23502 NOT NULL on
@@ -245,6 +445,7 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
     const [activeContract] = await rawQuery<any>(
       `SELECT id, "endDate", status FROM employee_contracts
        WHERE "assignmentId" = $1 AND status = 'active'
+         AND "deletedAt" IS NULL
          AND "startDate" <= $2 AND ("endDate" IS NULL OR "endDate" >= $2)
        LIMIT 1`,
       [scope.activeAssignmentId, today]
@@ -258,10 +459,10 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
 
     // ── Step 1: GPS + timestamp received ──
 
-    // ── Step 2: Prevent duplicate check-in ──
+    // ── Step 2: Prevent duplicate check-in (pre-check for user-friendly error) ──
     const [existing] = await rawQuery<any>(
       `SELECT id, "checkOut" FROM attendance
-       WHERE "assignmentId" = $1 AND date = $2`,
+       WHERE "assignmentId" = $1 AND date = $2 AND "deletedAt" IS NULL`,
       [scope.activeAssignmentId, today]
     );
     if (existing) {
@@ -288,8 +489,8 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
               b.lat AS "branchLat", b.lon AS "branchLon"
        FROM employee_assignments ea
        LEFT JOIN branches b ON b.id = ea."branchId"
-       WHERE ea.id = $1`,
-      [scope.activeAssignmentId]
+       WHERE ea.id = $1 AND ea."companyId" = $2`,
+      [scope.activeAssignmentId, scope.companyId]
     );
 
     // ── Step 4: Check if today is a work day ──
@@ -306,7 +507,7 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
     if (!shift) {
       const [defaultShift] = await rawQuery<any>(
         `SELECT id, "startTime", "endTime", days, "shiftType", "remoteAllowed", "flexStartEarliest", "flexStartLatest" FROM shifts
-         WHERE "companyId" = $1 AND status = 'active'
+         WHERE "companyId" = $1 AND status = 'active' AND "deletedAt" IS NULL
          ORDER BY "isDefault" DESC LIMIT 1`,
         [scope.companyId]
       );
@@ -336,7 +537,7 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
     const [activeLeave] = await rawQuery<any>(
       `SELECT id FROM hr_leave_requests
        WHERE "employeeId" = $1 AND status = 'approved'
-         AND "startDate" <= $2 AND "endDate" >= $2`,
+         AND "startDate" <= $2 AND "endDate" >= $2 AND "deletedAt" IS NULL`,
       [scope.employeeId, today]
     );
     if (activeLeave) {
@@ -364,17 +565,13 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
 
     if (!isRemoteShift && lat !== undefined && lat !== null && lon !== undefined && lon !== null && assignment?.branchLat && assignment?.branchLon) {
       distanceMeters = Math.round(
-        haversineDistance(Number(lat), Number(lon), Number(assignment.branchLat), Number(assignment.branchLon))
+        haversineKm(Number(lat), Number(lon), Number(assignment.branchLat), Number(assignment.branchLon)) * 1000
       );
       isOutOfRange = distanceMeters > gpsRadius;
     }
 
     if (isOutOfRange) {
-      await rawExecute(
-        `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
-         VALUES ($1,$2,'gps_out_of_range',$3,'low',0,$4)`,
-        [scope.companyId, scope.activeAssignmentId, `تسجيل حضور خارج نطاق الفرع بمسافة ${distanceMeters}م`, period]
-      );
+      // GPS violation will be recorded inside the transaction below
     }
 
     // ── Step 7: Late detection ──
@@ -423,37 +620,110 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
     if (exceedsThreshold && assignment?.salary) {
       const dailySalary = Number(assignment.salary) / 30;
       const minuteRate = dailySalary / 480;
-      deductionAmount = Math.round(minuteRate * lateMinutes * 100) / 100;
+      deductionAmount = roundTo2(minuteRate * lateMinutes);
     }
 
-    const { insertId: attendanceId } = await rawExecute(
-      `INSERT INTO attendance ("assignmentId","companyId","branchId",date,"checkIn","lateMinutes",status,notes,"checkInLat","checkInLon","workType","contractId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-      [scope.activeAssignmentId, scope.companyId, assignment?.branchId ?? scope.branchId,
-        today, now.toISOString(), lateMinutes, checkInStatus, notes ?? null,
-        lat !== undefined && lat !== null ? Number(lat) : null, lon !== undefined && lon !== null ? Number(lon) : null,
-        isRemoteShift ? 'remote' : (workType || 'office'), activeContract.id]
-    );
+    // ── Wrap all writes in a single atomic transaction ──
+    const txResult = await withTransaction(async (client) => {
+      // GPS violation
+      if (isOutOfRange) {
+        await client.query(
+          `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
+           VALUES ($1,$2,'gps_out_of_range',$3,'low',0,$4)`,
+          [scope.companyId, scope.activeAssignmentId, `تسجيل حضور خارج نطاق الفرع بمسافة ${distanceMeters}م`, period]
+        );
+      }
 
-    // ── Step 11: Auto violation if late > threshold ──
-    let violationId: number | null = null;
-    if (exceedsThreshold) {
-      const { insertId: vId } = await rawExecute(
-        `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
-         VALUES ($1,$2,'late_arrival',$3,'medium',$4,$5)`,
-        [scope.companyId, scope.activeAssignmentId, `تأخر ${lateMinutes} دقيقة عن وقت البداية (تجاوز الحد ${lateThreshold} دقيقة)`, deductionAmount, period]
+      // Attendance INSERT with idempotency guard
+      const insertRes = await client.query(
+        `INSERT INTO attendance ("assignmentId","companyId","branchId",date,"checkIn","lateMinutes",status,notes,"checkInLat","checkInLon","workType","contractId")
+         SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12
+         WHERE NOT EXISTS (SELECT 1 FROM attendance WHERE "assignmentId"=$1 AND date=$4 AND "deletedAt" IS NULL)
+         RETURNING id`,
+        [scope.activeAssignmentId, scope.companyId, assignment?.branchId ?? scope.branchId,
+          today, now.toISOString(), lateMinutes, checkInStatus, notes ?? null,
+          lat !== undefined && lat !== null ? Number(lat) : null, lon !== undefined && lon !== null ? Number(lon) : null,
+          isRemoteShift ? 'remote' : (workType || 'office'), activeContract.id]
       );
-      violationId = vId;
+      if (!insertRes.rows.length) {
+        throw new ConflictError("لقد سجلت الحضور اليوم. استخدم نقطة الانصراف لتسجيل المغادرة", {
+          field: "attendance",
+          fix: "افتح صفحة الحضور واستخدم زر الانصراف لإكمال الدوام.",
+        });
+      }
+      const attId = insertRes.rows[0].id;
 
-      // ── Step 12: Record pending payroll deduction ──
-      await rawExecute(
-        `INSERT INTO attendance_deductions ("companyId","assignmentId","attendanceId",type,minutes,amount,period,status)
-         VALUES ($1,$2,$3,'late',$4,$5,$6,'pending_payroll')`,
-        [scope.companyId, scope.activeAssignmentId, attendanceId, lateMinutes, deductionAmount, period]
+      // Late violation + deduction + penalty
+      let vId: number | null = null;
+      let pLevel = 0, pLabel = "", pDeduction = 0;
+
+      if (exceedsThreshold) {
+        const violRes = await client.query(
+          `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
+           VALUES ($1,$2,'late_arrival',$3,'medium',$4,$5) RETURNING id`,
+          [scope.companyId, scope.activeAssignmentId, `تأخر ${lateMinutes} دقيقة عن وقت البداية (تجاوز الحد ${lateThreshold} دقيقة)`, deductionAmount, period]
+        );
+        vId = violRes.rows[0]?.id ?? null;
+
+        await client.query(
+          `INSERT INTO attendance_deductions ("companyId","assignmentId","attendanceId",type,minutes,amount,period,status)
+           VALUES ($1,$2,$3,'late',$4,$5,$6,'pending_payroll')`,
+          [scope.companyId, scope.activeAssignmentId, attId, lateMinutes, deductionAmount, period]
+        );
+
+        // Monthly violation count for penalty escalation
+        const monthCountRes = await client.query(
+          `SELECT COUNT(*) AS cnt FROM employee_violations
+           WHERE "assignmentId" = $1 AND period = $2 AND type = 'late_arrival' AND "deletedAt" IS NULL`,
+          [scope.activeAssignmentId, period]
+        );
+        const count = Number(monthCountRes.rows[0]?.cnt ?? 1);
+
+        if (count >= 10) {
+          pLevel = 5; pDeduction = Number(policy?.penaltyLevel5 ?? 500);
+          pLabel = policy?.penaltyLevel5Label ?? "خصم ثلاثة أيام + إنذار نهائي";
+        } else if (count >= 7) {
+          pLevel = 4; pDeduction = Number(policy?.penaltyLevel4 ?? 200);
+          pLabel = policy?.penaltyLevel4Label ?? "خصم يومين";
+        } else if (count >= 5) {
+          pLevel = 3; pDeduction = Number(policy?.penaltyLevel3 ?? 100);
+          pLabel = policy?.penaltyLevel3Label ?? "خصم يوم";
+        } else if (count >= 3) {
+          pLevel = 2; pDeduction = Number(policy?.penaltyLevel2 ?? 50);
+          pLabel = policy?.penaltyLevel2Label ?? "إنذار كتابي";
+        } else {
+          pLevel = 1; pDeduction = Number(policy?.penaltyLevel1 ?? 0);
+          pLabel = policy?.penaltyLevel1Label ?? "إنذار شفهي";
+        }
+
+        if (pDeduction > 0) {
+          await client.query(
+            `INSERT INTO attendance_deductions ("companyId","assignmentId","attendanceId",type,minutes,amount,period,status)
+             VALUES ($1,$2,$3,'penalty',0,$4,$5,'pending_payroll')`,
+            [scope.companyId, scope.activeAssignmentId, attId, pDeduction, period]
+          );
+        }
+      }
+
+      // Monthly stats UPSERT
+      await client.query(
+        `INSERT INTO employee_monthly_attendance ("companyId","assignmentId",period,"presentDays","lateDays","totalLateMinutes","totalDeduction")
+         VALUES ($1,$2,$3,1,$4,$5,$6)
+         ON CONFLICT ("assignmentId",period) DO UPDATE
+         SET "presentDays" = employee_monthly_attendance."presentDays" + 1,
+             "lateDays" = employee_monthly_attendance."lateDays" + $4,
+             "totalLateMinutes" = employee_monthly_attendance."totalLateMinutes" + $5,
+             "totalDeduction" = employee_monthly_attendance."totalDeduction" + $6`,
+        [scope.companyId, scope.activeAssignmentId, period, isLate ? 1 : 0, lateMinutes, deductionAmount + pDeduction]
       );
 
-      // ── Step 12b: Auto-create an inquiry memo (محضر استفسار) for the lateness ──
-      // يخضع لسياسة اللائحة الحية — idempotent، لا يُنشئ محضراً جديداً إن كان موجوداً
+      return { attendanceId: attId, violationId: vId, penaltyLevel: pLevel, penaltyLabel: pLabel, penaltyDeduction: pDeduction };
+    });
+
+    const { attendanceId, violationId, penaltyLevel, penaltyLabel, penaltyDeduction } = txResult;
+
+    // Fire-and-forget: inquiry memo (outside transaction — idempotent)
+    if (exceedsThreshold && violationId) {
       ensureInquiryMemoForViolation({
         companyId: scope.companyId,
         branchId: assignment?.branchId ?? scope.branchId,
@@ -466,64 +736,8 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
         incidentDescription: `تأخر ${lateMinutes} دقيقة عن وقت البداية (تجاوز الحد ${lateThreshold} دقيقة)`,
         source: "auto",
         createdBy: scope.userId,
-      }).catch((err) => console.error("ensureInquiryMemoForViolation (check-in) error:", err));
+      }).catch((err) => logger.error(err, "ensureInquiryMemoForViolation (check-in) error:"));
     }
-
-    // ── Step 13: Count monthly violations for penalty escalation ──
-    let penaltyLevel = 0;
-    let penaltyLabel = "";
-    let penaltyDeduction = 0;
-    if (exceedsThreshold) {
-      const [monthCount] = await rawQuery<any>(
-        `SELECT COUNT(*) AS cnt FROM employee_violations
-         WHERE "assignmentId" = $1 AND period = $2 AND type = 'late_arrival' AND "deletedAt" IS NULL`,
-        [scope.activeAssignmentId, period]
-      );
-      const count = Number(monthCount?.cnt ?? 1);
-
-      // ── Step 14: 5-level penalty escalation ──
-      if (count >= 10) {
-        penaltyLevel = 5;
-        penaltyDeduction = Number(policy?.penaltyLevel5 ?? 500);
-        penaltyLabel = policy?.penaltyLevel5Label ?? "خصم ثلاثة أيام + إنذار نهائي";
-      } else if (count >= 7) {
-        penaltyLevel = 4;
-        penaltyDeduction = Number(policy?.penaltyLevel4 ?? 200);
-        penaltyLabel = policy?.penaltyLevel4Label ?? "خصم يومين";
-      } else if (count >= 5) {
-        penaltyLevel = 3;
-        penaltyDeduction = Number(policy?.penaltyLevel3 ?? 100);
-        penaltyLabel = policy?.penaltyLevel3Label ?? "خصم يوم";
-      } else if (count >= 3) {
-        penaltyLevel = 2;
-        penaltyDeduction = Number(policy?.penaltyLevel2 ?? 50);
-        penaltyLabel = policy?.penaltyLevel2Label ?? "إنذار كتابي";
-      } else {
-        penaltyLevel = 1;
-        penaltyDeduction = Number(policy?.penaltyLevel1 ?? 0);
-        penaltyLabel = policy?.penaltyLevel1Label ?? "إنذار شفهي";
-      }
-
-      if (penaltyDeduction > 0) {
-        await rawExecute(
-          `INSERT INTO attendance_deductions ("companyId","assignmentId","attendanceId",type,minutes,amount,period,status)
-           VALUES ($1,$2,$3,'penalty',0,$4,$5,'pending_payroll')`,
-          [scope.companyId, scope.activeAssignmentId, attendanceId, penaltyDeduction, period]
-        );
-      }
-    }
-
-    // ── Step 15: Update monthly stats ──
-    await rawExecute(
-      `INSERT INTO employee_monthly_attendance ("companyId","assignmentId",period,"presentDays","lateDays","totalLateMinutes","totalDeduction")
-       VALUES ($1,$2,$3,1,$4,$5,$6)
-       ON CONFLICT ("assignmentId",period) DO UPDATE
-       SET "presentDays" = employee_monthly_attendance."presentDays" + 1,
-           "lateDays" = employee_monthly_attendance."lateDays" + $4,
-           "totalLateMinutes" = employee_monthly_attendance."totalLateMinutes" + $5,
-           "totalDeduction" = employee_monthly_attendance."totalDeduction" + $6`,
-      [scope.companyId, scope.activeAssignmentId, period, isLate ? 1 : 0, lateMinutes, deductionAmount + penaltyDeduction]
-    );
 
     // ── Step 16: Notify employee about late ──
     if (exceedsThreshold) {
@@ -532,7 +746,7 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
         type: "late_warning", title: "تنبيه تأخر",
         body: `تم تسجيل تأخرك ${lateMinutes} دقيقة اليوم. ${penaltyLabel ? `العقوبة: ${penaltyLabel}` : ""}`,
         priority: "high", refType: "attendance", refId: attendanceId,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr background task failed"));
     }
 
     // ── Step 17: Notify manager ──
@@ -544,22 +758,22 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
             type: "late_arrival", title: "تأخر موظف",
             body: `تأخر الموظف ${lateMinutes} دقيقة اليوم ${today}${penaltyLevel > 0 ? ` (مستوى العقوبة: ${penaltyLevel})` : ""}`,
             priority: "high", refType: "attendance", refId: attendanceId,
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "hr background task failed"));
         }
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr background task failed"));
     }
 
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "attendance.checkin", entity: "attendance", entityId: attendanceId,
       details: JSON.stringify({ lateMinutes, isLate, distanceMeters, isOutOfRange, penaltyLevel, penaltyLabel, isWorkDay }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "attendance", entityId: attendanceId,
       after: { lateMinutes, isLate, distanceMeters, isOutOfRange, penaltyLevel, penaltyLabel, isWorkDay },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.json({
       message: "تم تسجيل الحضور", lateMinutes, isLate,
@@ -571,7 +785,8 @@ router.post("/check-in", checkInLimiter, requireAnyPermission("hr:self", "hr:cre
   }
 });
 
-router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (req, res) => {
+// RBAC v2: same self-service guarantee as /check-in.
+router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: "create" }), async (req, res) => {
   // Step 4 of the HR operational audit — attendance check-out.
   // Symmetric treatment to check-in: ConflictError when the caller is
   // trying to check out without having checked in, or when they've
@@ -579,9 +794,9 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
   try {
     const scope = req.scope!;
     const now = new Date();
-    const today = now.toISOString().split("T")[0];
+    const today = toDateISO(now);
     const period = today.slice(0, 7);
-    const { notes, lat, lon } = req.body as any;
+    const { notes, lat, lon } = zodParse(checkOutSchema.safeParse(req.body ?? {}));
 
     if (!scope.activeAssignmentId) {
       throw new ConflictError("لا يوجد تعيين نشط لهذا الحساب", {
@@ -592,7 +807,7 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
 
     const [existing] = await rawQuery<any>(
       `SELECT id, "checkIn", "checkOut" FROM attendance
-       WHERE "assignmentId" = $1 AND date = $2`,
+       WHERE "assignmentId" = $1 AND date = $2 AND "deletedAt" IS NULL`,
       [scope.activeAssignmentId, today]
     );
     if (!existing) {
@@ -611,14 +826,15 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
         },
       });
     }
+    // NOTE: The actual UPDATE below uses an atomic "checkOut" IS NULL guard to prevent race conditions.
 
     // ── Fetch assignment for salary ──
     const [assignment] = await rawQuery<any>(
       `SELECT ea.salary, ea."branchId", ea."employeeId", b.lat AS "branchLat", b.lon AS "branchLon"
        FROM employee_assignments ea
        LEFT JOIN branches b ON b.id = ea."branchId"
-       WHERE ea.id = $1`,
-      [scope.activeAssignmentId]
+       WHERE ea.id = $1 AND ea."companyId" = $2`,
+      [scope.activeAssignmentId, scope.companyId]
     );
 
     // ── Fetch shift for end time ──
@@ -637,7 +853,7 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
     } else {
       const [defaultShift] = await rawQuery<any>(
         `SELECT "endTime", "startTime" FROM shifts
-         WHERE "companyId" = $1 AND status = 'active'
+         WHERE "companyId" = $1 AND status = 'active' AND "deletedAt" IS NULL
          ORDER BY "isDefault" DESC LIMIT 1`,
         [scope.companyId]
       );
@@ -654,23 +870,15 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
     let isCheckOutOutOfRange = false;
     if (lat !== undefined && lat !== null && lon !== undefined && lon !== null && assignment?.branchLat && assignment?.branchLon) {
       checkOutDistanceMeters = Math.round(
-        haversineDistance(Number(lat), Number(lon), Number(assignment.branchLat), Number(assignment.branchLon))
+        haversineKm(Number(lat), Number(lon), Number(assignment.branchLat), Number(assignment.branchLon)) * 1000
       );
       isCheckOutOutOfRange = checkOutDistanceMeters > gpsRadius;
-      if (isCheckOutOutOfRange) {
-        await rawExecute(
-          `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
-           VALUES ($1,$2,'gps_out_of_range',$3,'low',0,$4)`,
-          [scope.companyId, scope.activeAssignmentId,
-            `تسجيل انصراف خارج نطاق الفرع بمسافة ${checkOutDistanceMeters}م`, period]
-        );
-      }
     }
 
     // ── Calculate worked time ──
     const checkInTime = new Date(existing.checkIn);
     const workedMs = now.getTime() - checkInTime.getTime();
-    const workedHours = Math.round((workedMs / 3600000) * 100) / 100;
+    const workedHours = roundTo2(workedMs / 3600000);
 
     // ── Calculate overtime: compare actual checkout vs shift end ──
     let overtimeMinutes = 0;
@@ -689,79 +897,110 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
       }
     }
 
-    // ── Update attendance record ──
-    await rawExecute(
-      `UPDATE attendance SET "checkOut" = $1, notes = COALESCE($2, notes), "checkOutLat" = $4, "checkOutLon" = $5, "overtimeMinutes" = $6 WHERE id = $3`,
-      [now.toISOString(), notes ?? null, existing.id,
-        lat !== undefined && lat !== null ? Number(lat) : null,
-        lon !== undefined && lon !== null ? Number(lon) : null,
-        overtimeMinutes]
-    );
-
-    // ── Update monthly stats ──
-    await rawExecute(
-      `INSERT INTO employee_monthly_attendance ("companyId","assignmentId",period,"overtimeMinutes")
-       VALUES ($1,$2,$3,$4)
-       ON CONFLICT ("assignmentId",period) DO UPDATE
-       SET "overtimeMinutes" = COALESCE(employee_monthly_attendance."overtimeMinutes", 0) + $4`,
-      [scope.companyId, scope.activeAssignmentId, period, overtimeMinutes]
-    );
-
-    // ── Check for approved excuse before creating early departure violation ──
+    // ── Check for approved excuse before transaction (read-only) ──
     let excusedEarlyLeave = false;
+    let approvedExcuseId: number | null = null;
     if (earlyDepartureMinutes > 0) {
       const [approvedExcuse] = await rawQuery<any>(
         `SELECT id, "estimatedMinutes" FROM hr_excuse_requests
          WHERE "assignmentId" = $1 AND "excuseDate" = $2 AND status = 'approved' AND "excuseType" IN ('early_leave', 'personal')
          LIMIT 1`,
         [scope.activeAssignmentId, today]
-      ).catch(() => [null]);
+      ).catch((e) => { logger.error(e, "hr query failed"); return [null]; });
       if (approvedExcuse) {
         excusedEarlyLeave = true;
-        await rawExecute(
-          `UPDATE hr_excuse_requests SET "updatedAt" = NOW() WHERE id = $1`,
-          [approvedExcuse.id]
-        );
+        approvedExcuseId = approvedExcuse.id;
       }
     }
 
-    // ── Early departure violation (skipped if excused) ──
-    if (earlyDepartureMinutes > 0 && !excusedEarlyLeave) {
-      const dailySalary = Number(assignment?.salary ?? 0) / 30;
-      const minuteRate = dailySalary / 480;
-      const earlyDeductionAmount = Math.round(minuteRate * earlyDepartureMinutes * 100) / 100;
+    const dailySalary = Number(assignment?.salary ?? 0) / 30;
+    const minuteRate = dailySalary / 480;
+    const earlyDeductionAmount = (earlyDepartureMinutes > 0 && !excusedEarlyLeave) ? roundTo2(minuteRate * earlyDepartureMinutes) : 0;
 
-      const { insertId: earlyViolationId } = await rawExecute(
-        `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
-         VALUES ($1,$2,'early_departure',$3,'medium',$4,$5)
-         RETURNING id`,
-        [scope.companyId, scope.activeAssignmentId,
-          `خروج مبكر بمقدار ${earlyDepartureMinutes} دقيقة عن وقت نهاية الوردية`,
-          earlyDeductionAmount, period]
-      );
-
-      if (earlyDeductionAmount > 0) {
-        await rawExecute(
-          `INSERT INTO attendance_deductions ("companyId","assignmentId","attendanceId",type,minutes,amount,period,status)
-           VALUES ($1,$2,$3,'early_departure',$4,$5,$6,'pending_payroll')`,
-          [scope.companyId, scope.activeAssignmentId, existing.id, earlyDepartureMinutes, earlyDeductionAmount, period]
+    // ── Wrap all writes in a transaction ──
+    const txResult = await withTransaction(async (client) => {
+      // GPS violation
+      if (isCheckOutOutOfRange && checkOutDistanceMeters !== null) {
+        await client.query(
+          `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
+           VALUES ($1,$2,'gps_out_of_range',$3,'low',0,$4)`,
+          [scope.companyId, scope.activeAssignmentId,
+            `تسجيل انصراف خارج نطاق الفرع بمسافة ${checkOutDistanceMeters}م`, period]
         );
       }
 
-      // ── Auto-create inquiry memo for early departure ──
+      // Update attendance record (atomic: only if checkOut IS NULL)
+      const checkOutRes = await client.query(
+        `UPDATE attendance SET "checkOut" = $1, notes = COALESCE($2, notes), "checkOutLat" = $4, "checkOutLon" = $5, "overtimeMinutes" = $6 WHERE id = $3 AND "companyId" = $7 AND "checkOut" IS NULL AND "deletedAt" IS NULL RETURNING id`,
+        [now.toISOString(), notes ?? null, existing.id,
+          lat !== undefined && lat !== null ? Number(lat) : null,
+          lon !== undefined && lon !== null ? Number(lon) : null,
+          overtimeMinutes, scope.companyId]
+      );
+      if (!checkOutRes.rows.length) {
+        throw new ConflictError("لقد سجلت الانصراف مسبقاً اليوم", {
+          field: "attendance",
+          fix: "تم تسجيل انصرافك بالفعل. لا يمكن إعادة الانصراف في نفس اليوم.",
+        });
+      }
+
+      // Update monthly stats
+      await client.query(
+        `INSERT INTO employee_monthly_attendance ("companyId","assignmentId",period,"overtimeMinutes")
+         VALUES ($1,$2,$3,$4)
+         ON CONFLICT ("assignmentId",period) DO UPDATE
+         SET "overtimeMinutes" = COALESCE(employee_monthly_attendance."overtimeMinutes", 0) + $4`,
+        [scope.companyId, scope.activeAssignmentId, period, overtimeMinutes]
+      );
+
+      // Mark excuse as used
+      if (excusedEarlyLeave && approvedExcuseId) {
+        await client.query(
+          `UPDATE hr_excuse_requests SET "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2`,
+          [approvedExcuseId, scope.companyId]
+        );
+      }
+
+      // Early departure violation + deduction
+      let earlyViolationId: number | null = null;
+      if (earlyDepartureMinutes > 0 && !excusedEarlyLeave) {
+        const vRes = await client.query(
+          `INSERT INTO employee_violations ("companyId","assignmentId",type,description,severity,deduction,period)
+           VALUES ($1,$2,'early_departure',$3,'medium',$4,$5)
+           RETURNING id`,
+          [scope.companyId, scope.activeAssignmentId,
+            `خروج مبكر بمقدار ${earlyDepartureMinutes} دقيقة عن وقت نهاية الوردية`,
+            earlyDeductionAmount, period]
+        );
+        earlyViolationId = vRes.rows[0]?.id ?? null;
+
+        if (earlyDeductionAmount > 0) {
+          await client.query(
+            `INSERT INTO attendance_deductions ("companyId","assignmentId","attendanceId",type,minutes,amount,period,status)
+             VALUES ($1,$2,$3,'early_departure',$4,$5,$6,'pending_payroll')`,
+            [scope.companyId, scope.activeAssignmentId, existing.id, earlyDepartureMinutes, earlyDeductionAmount, period]
+          );
+        }
+      }
+
+      return { earlyViolationId };
+    });
+
+    // ── Fire-and-forget side effects outside transaction ──
+    if (earlyDepartureMinutes > 0 && !excusedEarlyLeave && txResult.earlyViolationId) {
       ensureInquiryMemoForViolation({
         companyId: scope.companyId,
         branchId: assignment?.branchId ?? scope.branchId,
         assignmentId: scope.activeAssignmentId,
         employeeId: scope.employeeId ?? assignment?.employeeId ?? 0,
-        violationId: earlyViolationId,
+        violationId: txResult.earlyViolationId,
         incidentType: "early_leave",
         incidentDate: today,
         incidentDurationMinutes: earlyDepartureMinutes,
         incidentDescription: `خروج مبكر بمقدار ${earlyDepartureMinutes} دقيقة عن وقت نهاية الوردية`,
         source: "auto",
         createdBy: scope.userId,
-      }).catch((err) => console.error("ensureInquiryMemoForViolation (check-out) error:", err));
+      }).catch((err) => logger.error(err, "ensureInquiryMemoForViolation (check-out) error:"));
 
       // ── Notify employee about early departure ──
       createNotification({
@@ -769,7 +1008,7 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
         type: "early_departure_warning", title: "تنبيه خروج مبكر",
         body: `تم تسجيل خروجك المبكر بمقدار ${earlyDepartureMinutes} دقيقة اليوم.`,
         priority: "high", refType: "attendance", refId: existing.id,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr background task failed"));
 
       // ── Notify manager ──
       getManagerAssignmentId(scope.companyId, scope.branchId).then((managerAssignmentId) => {
@@ -779,22 +1018,22 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
             type: "early_departure", title: "خروج مبكر لموظف",
             body: `غادر الموظف مبكراً بمقدار ${earlyDepartureMinutes} دقيقة اليوم ${today}`,
             priority: "high", refType: "attendance", refId: existing.id,
-          }).catch(console.error);
+          }).catch((e) => logger.error(e, "hr background task failed"));
         }
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr background task failed"));
     }
 
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "attendance.checkout", entity: "attendance", entityId: existing.id,
       details: JSON.stringify({ workedHours, overtimeMinutes, earlyDepartureMinutes, isCheckOutOutOfRange, checkOutDistanceMeters }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "attendance", entityId: existing.id,
       after: { workedHours, overtimeMinutes, earlyDepartureMinutes, isCheckOutOutOfRange, checkOutDistanceMeters },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.json({ message: "تم تسجيل الانصراف", workedHours, overtimeMinutes, earlyDepartureMinutes, isCheckOutOutOfRange, type: "checkout" });
   } catch (err) {
@@ -802,11 +1041,11 @@ router.post("/check-out", requireAnyPermission("hr:self", "hr:create"), async (r
   }
 });
 
-router.get("/attendance", requirePermission("hr:read"), async (req, res) => {
+router.get("/attendance", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { month } = req.query as { month?: string };
-    const monthStr = month ?? new Date().toISOString().slice(0, 7);
+    const monthStr = month ?? currentPeriod();
 
     const filters = parseScopeFilters(req);
     const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'a."companyId"', branchColumn: 'a."branchId"', enforceBranchScope: true });
@@ -834,7 +1073,8 @@ router.get("/attendance", requirePermission("hr:read"), async (req, res) => {
        ) v ON TRUE
        WHERE ${where}
          AND TO_CHAR(a.date, 'YYYY-MM') = $${nextParamIndex}
-       ORDER BY a.date DESC`,
+       ORDER BY a.date DESC
+       LIMIT 5000`,
       params
     );
 
@@ -844,11 +1084,55 @@ router.get("/attendance", requirePermission("hr:read"), async (req, res) => {
   }
 });
 
+router.get("/attendance/today-summary", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const today = todayISO();
+    const rows = await rawQuery<any>(
+      `SELECT ea.id AS "assignmentId", e.id AS "employeeId", e.name,
+              a.status, a."checkIn", a."checkOut", COALESCE(a."lateMinutes", 0) AS "lateMinutes"
+       FROM employee_assignments ea
+       JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN attendance a ON a."assignmentId" = ea.id AND a.date = $2
+       WHERE ea."companyId" = $1 AND ea.status = 'active'
+       ORDER BY e.name
+       LIMIT 1000`,
+      [scope.companyId, today]
+    );
+    const data = rows.map((r: any) => ({
+      ...r,
+      status: r.status || (r.checkIn ? "present" : "absent"),
+    }));
+    res.json({ data, total: data.length });
+  } catch (err) { handleRouteError(err, res, "Today summary error:"); }
+});
+
+router.get("/attendance/:id", authorize({ feature: "hr", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(
+      `SELECT a.*, e.name AS "employeeName", e."empNumber",
+              CASE WHEN a."checkIn" IS NOT NULL AND a."checkOut" IS NOT NULL
+                THEN ROUND(EXTRACT(EPOCH FROM (a."checkOut" - a."checkIn")) / 3600.0, 2)
+                ELSE NULL
+              END AS "totalHours"
+       FROM attendance a
+       JOIN employee_assignments ea ON ea.id = a."assignmentId"
+       JOIN employees e ON e.id = ea."employeeId"
+       WHERE a.id = $1 AND a."companyId" = $2 AND a."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("سجل الحضور غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Get attendance detail error:"); }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // LEAVE TYPES & BALANCES
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/leave-types", requirePermission("hr:read"), async (req, res) => {
+router.get("/leave-types", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const types = await rawQuery<any>(
@@ -862,16 +1146,18 @@ router.get("/leave-types", requirePermission("hr:read"), async (req, res) => {
   }
 });
 
-router.get("/leave-balance", requirePermission("hr:read"), async (req, res) => {
+router.get("/leave-balance", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const year = new Date().getFullYear();
+    const { employeeId: qEmployeeId } = req.query as { employeeId?: string };
+    const targetEmployeeId = qEmployeeId ? Number(qEmployeeId) : scope.employeeId;
+    const year = currentYear();
     const balancesFromTable = await rawQuery<any>(
       `SELECT lb.*, lt.name
        FROM hr_leave_balances lb
        JOIN hr_leave_types lt ON lt.id = lb."leaveTypeId"
        WHERE lb."companyId" = $1 AND lb."employeeId" = $2 AND lb.year = $3`,
-      [scope.companyId, scope.employeeId, year]
+      [scope.companyId, targetEmployeeId, year]
     );
 
     if (balancesFromTable.length > 0) {
@@ -890,11 +1176,11 @@ router.get("/leave-balance", requirePermission("hr:read"), async (req, res) => {
                 WHERE lr.status = 'approved' AND EXTRACT(YEAR FROM lr."startDate") = $3
               ), 0) AS used
        FROM hr_leave_types lt
-       LEFT JOIN hr_leave_requests lr ON lr."leaveTypeId" = lt.id AND lr."employeeId" = $2
+       LEFT JOIN hr_leave_requests lr ON lr."leaveTypeId" = lt.id AND lr."employeeId" = $2 AND lr."deletedAt" IS NULL
        WHERE lt."companyId" = $1
        GROUP BY lt.id, lt.name, lt."annualDays"
        ORDER BY lt.name`,
-      [scope.companyId, scope.employeeId, year]
+      [scope.companyId, targetEmployeeId, year]
     );
 
     const data = balances.map((b: any) => ({
@@ -911,7 +1197,7 @@ router.get("/leave-balance", requirePermission("hr:read"), async (req, res) => {
 // LEAVE REQUESTS – staged approval pipeline (manager → HR → auto-escalation)
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/leave-requests", requirePermission("hr:read"), async (req, res) => {
+router.get("/leave-requests", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, page = "1", limit: lim = "20" } = req.query as { status?: string; page?: string; limit?: string };
@@ -921,15 +1207,15 @@ router.get("/leave-requests", requirePermission("hr:read"), async (req, res) => 
       companyColumn: 'lr."companyId"',
       disableBranchScope: true,
     });
-    let finalWhere = where;
+    let finalWhere = where + ` AND lr."deletedAt" IS NULL`;
     let paramIdx = nextParamIndex;
     if (status) {
       finalWhere += ` AND lr.status = $${paramIdx++}`;
       params.push(status);
     }
 
-    const pageNum = Math.max(Number(page), 1);
-    const pageSize = Math.min(Math.max(Number(lim), 1), 100);
+    const pageNum = Math.max(Number(page) || 1, 1);
+    const pageSize = Math.min(Math.max(Number(lim) || 20, 1), 100);
     const offset = (pageNum - 1) * pageSize;
 
     params.push(pageSize);
@@ -962,22 +1248,83 @@ router.get("/leave-requests", requirePermission("hr:read"), async (req, res) => 
   }
 });
 
-router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), async (req, res) => {
-  // Step 5 of the HR operational audit — leave request submission.
-  // The handler has 12 different validation branches, every single one
-  // of which used to be `res.status(400).json({ error: "..." })` — which
-  // meant the leave-create form never got `code` or `field` and the user
-  // saw the same generic toast for every kind of rejection (out of
-  // balance, overlapping, gender-restricted, career-limited, minimum-
-  // service, document-required, department-absent-percentage, no manager).
-  // Each branch is now a TypedError with the most specific shape the
-  // frontend can branch on, and carries `meta` fields the UI can use to
-  // explain the rejection precisely.
+// RBAC v2: hr.leaves view with scope check on the record (company,
+// optionally branch/department for managers). The legacy gate only
+// checked permission existence; this also enforces the role's scope.
+router.get("/leaves/:id", authorize({ feature: "hr.leaves", action: "view", resource: { table: "hr_leave_requests", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = leaveRequestSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    let { leaveTypeId, leaveType: leaveTypeName, startDate, endDate, reason, documentUrl } = parsed.data as any;
+    const id = parseId(req.params.id, "id");
+    const [item] = await rawQuery<any>(
+      `SELECT lr.id, lr.status, lr."startDate", lr."endDate", lr.days AS duration,
+              lr.reason, lr."createdAt", lr."rejectedReason",
+              lr."approvedBy", lr."approvedAt",
+              lr."leaveTypeId", lr."employeeId", lr."companyId",
+              e.name AS "employeeName", lt.name AS "leaveTypeName",
+              lt.name AS "leaveType",
+              CONCAT('LV-', lr.id) AS ref,
+              approver.name AS "approvedByName"
+       FROM hr_leave_requests lr
+       JOIN employees e ON e.id = lr."employeeId"
+       JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
+       LEFT JOIN employee_assignments aa ON aa.id = lr."approvedBy"
+       LEFT JOIN employees approver ON approver.id = aa."employeeId"
+       WHERE lr.id = $1 AND lr."companyId" = $2 AND lr."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!item) throw new NotFoundError("طلب الإجازة غير موجود");
+    res.json(maskFields(req, item));
+  } catch (err) { handleRouteError(err, res, "Get leave detail error"); }
+});
+
+let leaveTablesEnsured = false;
+async function ensureLeaveSchema(): Promise<void> {
+  if (leaveTablesEnsured) return;
+  await rawExecute(`
+    CREATE TABLE IF NOT EXISTS leave_approval_stages (
+      id SERIAL PRIMARY KEY,
+      "leaveRequestId" INTEGER NOT NULL,
+      stage INTEGER NOT NULL DEFAULT 1,
+      "requiredRole" VARCHAR(50),
+      "assignedTo" INTEGER,
+      status VARCHAR(20) DEFAULT 'pending',
+      decision TEXT,
+      "decidedBy" INTEGER,
+      "decidedAt" TIMESTAMPTZ,
+      "expiresAt" TIMESTAMPTZ,
+      "reminderSentAt" TIMESTAMPTZ,
+      "warningSentAt" TIMESTAMPTZ,
+      "escalatedAt" TIMESTAMPTZ,
+      "autoApprovedAt" TIMESTAMPTZ,
+      "createdAt" TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch((e) => logger.error(e, "hr background task failed"));
+  await rawExecute(`DO $$ BEGIN
+    ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "genderRestriction" VARCHAR(10);
+    ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "minServiceMonths" INTEGER DEFAULT 0;
+    ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "oncePerCareer" BOOLEAN DEFAULT false;
+    ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "requiresDocument" BOOLEAN DEFAULT false;
+    ALTER TABLE hr_leave_types ADD COLUMN IF NOT EXISTS "maxDeptAbsentPct" NUMERIC DEFAULT 25;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END $$`).catch((e) => logger.error(e, "hr background task failed"));
+  await rawExecute(`DO $$ BEGIN
+    ALTER TABLE hr_leave_balances ADD COLUMN IF NOT EXISTS reserved NUMERIC DEFAULT 0;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END $$`).catch((e) => logger.error(e, "hr background task failed"));
+  leaveTablesEnsured = true;
+}
+
+// RBAC v2: hr.leaves.my is self-service so any employee can create a
+// request for themselves. Managers / HR creating on behalf of others
+// would need hr.leaves with action=create on a non-self scope; that
+// path will be added in a later PR.
+router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "create" }), async (req, res) => {
+  try {
+    await ensureLeaveSchema();
+
+    const scope = req.scope!;
+    const parsed = zodParse(leaveRequestSchema.safeParse(req.body));
+    let { leaveTypeId, leaveType: leaveTypeName, startDate, endDate, reason, documentUrl } = parsed as any;
 
     if (!leaveTypeId && leaveTypeName) {
       const [found] = await rawQuery<any>(
@@ -1004,7 +1351,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
       `SELECT SUM(LEAST("endDate"::date, $2::date) - GREATEST("startDate"::date, $1::date) + 1) AS "holidayDays"
        FROM public_holidays
        WHERE "companyId"=$3
-         AND "startDate" <= $2::date AND "endDate" >= $1::date`,
+         AND "startDate" <= $2::date AND "endDate" >= $1::date AND "deletedAt" IS NULL`,
       [startDate, endDate, scope.companyId]
     );
     const holidayDays = Math.max(0, Number(holidayOverlap[0]?.holidayDays ?? 0));
@@ -1053,7 +1400,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
       const [usedRow] = await rawQuery<any>(
         `SELECT COALESCE(SUM(days), 0) AS used FROM hr_leave_requests
          WHERE "employeeId" = $1 AND "leaveTypeId" = $2 AND status IN ('approved','pending')
-           AND EXTRACT(YEAR FROM "startDate") = $3`,
+           AND EXTRACT(YEAR FROM "startDate") = $3 AND "deletedAt" IS NULL`,
         [scope.employeeId, leaveTypeId, year]
       );
       const entitled = Number(leaveType.annualDays ?? 21);
@@ -1080,7 +1427,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
     const [overlap] = await rawQuery<any>(
       `SELECT id FROM hr_leave_requests
        WHERE "employeeId" = $1 AND status IN ('pending','approved')
-         AND "startDate" <= $2 AND "endDate" >= $3`,
+         AND "startDate" <= $2 AND "endDate" >= $3 AND "deletedAt" IS NULL`,
       [scope.employeeId, endDate, startDate]
     );
     if (overlap) {
@@ -1130,7 +1477,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
       );
       if (ass?.hireDate) {
         const hireDate = new Date(ass.hireDate);
-        const monthsOfService = (new Date().getFullYear() - hireDate.getFullYear()) * 12 + (new Date().getMonth() - hireDate.getMonth());
+        const monthsOfService = (currentYear() - hireDate.getFullYear()) * 12 + (new Date().getMonth() - hireDate.getMonth());
         if (monthsOfService < leaveType.minServiceMonths) {
           throw new ConflictError(
             `يشترط مدة خدمة لا تقل عن ${leaveType.minServiceMonths} شهر. مدة خدمتك: ${monthsOfService} شهر`,
@@ -1151,7 +1498,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
     if (leaveType.oncePerCareer) {
       const [prevHajj] = await rawQuery<any>(
         `SELECT id FROM hr_leave_requests
-         WHERE "employeeId" = $1 AND "leaveTypeId" = $2 AND status = 'approved'`,
+         WHERE "employeeId" = $1 AND "leaveTypeId" = $2 AND status = 'approved' AND "deletedAt" IS NULL`,
         [scope.employeeId, leaveTypeId]
       );
       if (prevHajj) {
@@ -1180,7 +1527,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
         `SELECT COUNT(DISTINCT lr."employeeId") AS cnt FROM hr_leave_requests lr
          JOIN employee_assignments ea ON ea."employeeId" = lr."employeeId" AND ea."departmentId" = $1
          WHERE lr.status = 'approved' AND lr."startDate" <= $2 AND lr."endDate" >= $3
-           AND lr."employeeId" != $4`,
+           AND lr."employeeId" != $4 AND lr."deletedAt" IS NULL`,
         [assignment.departmentId, endDate, startDate, scope.employeeId]
       );
       const totalDept = Number(deptTotal?.cnt ?? 1);
@@ -1216,7 +1563,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
         [scope.activeAssignmentId, scope.companyId]
       );
       managerAssignmentId = directManagerRow?.managerAssignmentId ?? null;
-    } catch (_e) {}
+    } catch (_e) { logger.error(_e, "manager assignment lookup failed"); }
     if (!managerAssignmentId) {
       managerAssignmentId = await getManagerAssignmentId(scope.companyId, scope.branchId);
     }
@@ -1238,7 +1585,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
         "لا يوجد مدير معتمد لاستلام طلبات الإجازة",
         {
           fix: "الرجاء التواصل مع الإدارة لتعيين مدير فرع أو مدير موارد بشرية قبل تقديم الطلبات.",
-          meta: { missingRoles: ["branch_manager", "hr_manager", "general_manager", "owner"] },
+          meta: { missingRoles: HR_APPROVAL_ROLES },
         }
       );
     }
@@ -1250,11 +1597,11 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
         `SELECT acs."stepOrder", acs."requiredRole", acs."timeoutHours", acs."autoApproveOnTimeout"
          FROM approval_chains ac
          JOIN approval_chain_steps acs ON acs."chainId" = ac.id
-         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true
+         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true AND ac."deletedAt" IS NULL
          ORDER BY acs."stepOrder" ASC`,
         [scope.companyId]
       );
-    } catch (_e) {}
+    } catch (_e) { logger.error(_e, "leave approval chain query failed"); }
 
     if (chainSteps.length === 0) {
       chainSteps = [
@@ -1278,6 +1625,19 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
          )`,
         [scope.companyId, scope.employeeId, scope.activeAssignmentId, leaveTypeId, year, entitled]
       );
+      const balLock = await client.query(
+        `SELECT entitled, used, reserved FROM hr_leave_balances
+         WHERE "companyId" = $1 AND "employeeId" = $2 AND "leaveTypeId" = $3 AND year = $4
+         FOR UPDATE`,
+        [scope.companyId, scope.employeeId, leaveTypeId, year]
+      );
+      if (balLock.rows[0]) {
+        const r = balLock.rows[0];
+        const rem = Math.max(0, Number(r.entitled) - Number(r.used) - Number(r.reserved));
+        if (rem < days) {
+          throw new ConflictError(`رصيد الإجازة غير كافٍ. المتبقي: ${rem} يوم، المطلوب: ${days} يوم`, { field: "days" });
+        }
+      }
       await client.query(
         `UPDATE hr_leave_balances
          SET reserved = reserved + $1
@@ -1294,14 +1654,14 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
 
       // Find the appropriate assignee for the first step — never store NULL.
       let firstAssignee: number = managerAssignmentId!;
-      if (!["branch_manager", "general_manager"].includes(firstStep.requiredRole)) {
-        const [roleMatch] = await rawQuery<any>(
+      if (!BRANCH_GM_ROLES.includes(firstStep.requiredRole)) {
+        const roleRes = await client.query(
           `SELECT id FROM employee_assignments
            WHERE "companyId" = $1 AND role = $2 AND status = 'active'
            LIMIT 1`,
           [scope.companyId, firstStep.requiredRole]
         );
-        if (roleMatch) firstAssignee = roleMatch.id;
+        if (roleRes.rows[0]) firstAssignee = roleRes.rows[0].id;
       }
 
       await client.query(
@@ -1318,14 +1678,14 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
         body: `طلب إجازة ${leaveType.name} لمدة ${days} أيام من ${startDate} إلى ${endDate}`,
         priority: "high", refType: "leave_request", refId: insertId,
         actionUrl: `/hr/leave-requests/${insertId}`,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr background task failed"));
     }
 
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "leave.requested", entity: "hr_leave_requests", entityId: insertId,
       details: JSON.stringify({ leaveTypeId, days, startDate, endDate, leaveTypeName: leaveType.name }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     submitWorkflow({
       companyId: scope.companyId,
@@ -1337,7 +1697,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
       submittedBy: scope.activeAssignmentId,
       submittedByName: scope.userName,
       data: { leaveTypeId, days, startDate, endDate, reason },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     const [request] = await rawQuery<any>(
       `SELECT lr.*, lt.name AS "leaveTypeName"
@@ -1350,7 +1710,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "hr_leave_requests", entityId: insertId,
       after: { leaveTypeId, days, startDate, endDate, reason },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.status(201).json(request);
   } catch (err) {
@@ -1359,7 +1719,7 @@ router.post("/leave-requests", requireAnyPermission("hr:self", "hr:create"), asy
 });
 
 // Staged leave approval: manager (stage 1) → HR (stage 2)
-router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requireOwnership({ table: "hr_leave_requests", checks: ["company", "branch"] }), async (req, res) => {
+router.patch("/leave-requests/:id/approve", authorize({ feature: "hr", action: "update" }), requireOwnership({ table: "hr_leave_requests", checks: ["company", "branch"] }), async (req, res) => {
   // Step 6 of the HR operational audit — leave approval workflow.
   // 4 authorization / state branches rewritten to ForbiddenError +
   // ConflictError, each one carrying meta so the frontend can show
@@ -1367,11 +1727,11 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
   // generic 403.
   try {
     const scope = req.scope!;
-    const { id } = req.params;
-    const { approved, reason } = req.body as { approved: boolean | "returned"; reason?: string };
+    const id = parseId(req.params.id, "id");
+    const { approved, reason } = zodParse(approvalDecisionSchema.safeParse(req.body ?? {}));
 
     // Authorization: only branch_manager, hr_manager, or owner roles can approve leave
-    if (!["branch_manager", "hr_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_APPROVAL_ROLES.includes(scope.role)) {
       throw new ForbiddenError(
         "صلاحية الموافقة محصورة بالمدير أو HR أو المالك",
         {
@@ -1385,8 +1745,8 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
       `SELECT lr.*, lt.name AS "leaveTypeName"
        FROM hr_leave_requests lr
        JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-       WHERE lr.id = $1 AND lr."companyId" = $2`,
-      [Number(id), scope.companyId]
+       WHERE lr.id = $1 AND lr."companyId" = $2 AND lr."deletedAt" IS NULL`,
+      [id, scope.companyId]
     );
     if (!request) throw new NotFoundError("الطلب غير موجود");
     if (request.status !== "pending") {
@@ -1402,7 +1762,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
       `SELECT * FROM leave_approval_stages
        WHERE "leaveRequestId" = $1 AND status = 'pending'
        ORDER BY stage ASC LIMIT 1`,
-      [Number(id)]
+      [id]
     );
 
     // Enforce stage-role: approver's role must match the required role for the current stage
@@ -1426,9 +1786,9 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
 
       if (!currentStage.assignedTo) {
         const roleMatchesStage =
-          (stageRequiredRole === "manager" && ["branch_manager", "general_manager"].includes(scope.role)) ||
+          (stageRequiredRole === "manager" && BRANCH_GM_ROLES.includes(scope.role)) ||
           (stageRequiredRole === "hr" && scope.role === "hr_manager") ||
-          (stageRequiredRole === "branch_manager" && ["branch_manager", "general_manager"].includes(scope.role)) ||
+          (stageRequiredRole === "branch_manager" && BRANCH_GM_ROLES.includes(scope.role)) ||
           (stageRequiredRole === "hr_manager" && scope.role === "hr_manager") ||
           (stageRequiredRole === scope.role);
         if (!roleMatchesStage) {
@@ -1450,59 +1810,52 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
     const year = new Date(request.startDate).getFullYear();
 
     if (!approved) {
-      // Rejection: authorized role at current stage can reject
-      await rawExecute(
-        `UPDATE hr_leave_requests
-         SET status = 'rejected', "approvedBy" = $1, "approvedAt" = NOW(), "rejectedReason" = $2
-         WHERE id = $3 AND "companyId" = $4`,
-        [scope.activeAssignmentId, reason ?? null, Number(id), scope.companyId]
-      );
-      if (currentStage) {
-        await rawExecute(
-          `UPDATE leave_approval_stages
-           SET status = 'rejected', decision = $1, "decidedBy" = $2, "decidedAt" = NOW()
-           WHERE id = $3`,
-          [reason ?? "مرفوض", scope.activeAssignmentId, currentStage.id]
-        );
-      }
-
-      // Restore reserved balance
-      await rawExecute(
-        `UPDATE hr_leave_balances
-         SET reserved = reserved - $1
-         WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
-        [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
-      );
-
-      // Notify requester
       const [reqAssignment] = await rawQuery<any>(
         `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
         [request.employeeId, scope.companyId]
       );
-      if (reqAssignment) {
-        createNotification({
-          companyId: scope.companyId, assignmentId: reqAssignment.id,
+
+      await applyTransition({
+        entity: "hr_leave_requests",
+        id,
+        scope,
+        action: "leave.rejected",
+        fromStates: ["pending"],
+        toState: "rejected",
+        reason: reason ?? undefined,
+        setExtras: {
+          approvedBy: scope.activeAssignmentId,
+          approvedAt: { raw: "NOW()" },
+          rejectedReason: reason ?? null,
+        },
+        after: { status: "rejected", reason },
+        notifications: reqAssignment ? [{
+          assignmentId: reqAssignment.id,
           type: "leave_rejected", title: "تم رفض طلب الإجازة",
           body: `تم رفض طلب الإجازة. السبب: ${reason ?? "لم يحدد"}`,
-          priority: "high", refType: "leave_request", refId: Number(id),
-        }).catch(console.error);
-      }
-
-      try {
-        await rawExecute(
-          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('leave',$1,'rejected',$2,$3,$4)`,
-          [Number(id), reason || null, scope.userId, scope.companyId]
-        );
-      } catch (e) { console.error("Failed to log approval action:", e); }
-
-      emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "leave.rejected",
-        entity: "hr_leave_requests", entityId: Number(id) }).catch(console.error);
-
-      createAuditLog({
-        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-        action: "update", entity: "hr_leave_requests", entityId: Number(id),
-        after: { status: "rejected", reason },
-      }).catch(console.error);
+          priority: "high", refType: "leave_request", refId: id,
+        }] : [],
+        onApply: async (_row, client) => {
+          if (currentStage) {
+            await client.query(
+              `UPDATE leave_approval_stages
+               SET status = 'rejected', decision = $1, "decidedBy" = $2, "decidedAt" = NOW()
+               WHERE id = $3`,
+              [reason ?? "مرفوض", scope.activeAssignmentId, currentStage.id]
+            );
+          }
+          await client.query(
+            `UPDATE hr_leave_balances
+             SET reserved = reserved - $1
+             WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+            [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
+          );
+          await client.query(
+            `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('leave',$1,'rejected',$2,$3,$4)`,
+            [id, reason || null, scope.userId, scope.companyId]
+          ).catch((e) => logger.error(e, "hr approval action insert failed"));
+        },
+      });
 
       res.json({ message: "تم الرفض", status: "rejected" });
       return;
@@ -1513,60 +1866,46 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
         throw new ValidationError("يجب ذكر سبب الإرجاع", { field: "reason" });
       }
 
-      await rawExecute(
-        `UPDATE hr_leave_requests SET status = 'returned', "rejectedReason" = $1 WHERE id = $2 AND "companyId" = $3`,
-        [reason, Number(id), scope.companyId]
-      );
-      if (currentStage) {
-        await rawExecute(
-          `UPDATE leave_approval_stages SET status = 'returned', decision = $1, "decidedBy" = $2, "decidedAt" = NOW() WHERE id = $3`,
-          [reason, scope.activeAssignmentId, currentStage.id]
-        );
-      }
-
-      // Returning the request puts it back in the employee's hands for
-      // amendments — release the reserved days so the balance correctly
-      // reflects availability while the request is being reworked. Without
-      // this, the employee can't re-submit because their reserved pool
-      // still counts the previous attempt.
-      await rawExecute(
-        `UPDATE hr_leave_balances
-         SET reserved = GREATEST(reserved - $1, 0)
-         WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
-        [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
-      );
-
       const [reqAssignment] = await rawQuery<any>(
         `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
         [request.employeeId, scope.companyId]
       );
-      if (reqAssignment) {
-        createNotification({
-          companyId: scope.companyId, assignmentId: reqAssignment.id,
+
+      await applyTransition({
+        entity: "hr_leave_requests",
+        id,
+        scope,
+        action: "leave.returned",
+        fromStates: ["pending"],
+        toState: "returned",
+        reason,
+        setExtras: { rejectedReason: reason },
+        after: { status: "returned", reason },
+        notifications: reqAssignment ? [{
+          assignmentId: reqAssignment.id,
           type: "leave_returned", title: "تم إرجاع طلب الإجازة",
           body: `تم إرجاع طلب الإجازة للمراجعة. السبب: ${reason}`,
-          priority: "medium", refType: "leave_request", refId: Number(id),
-        }).catch(console.error);
-      }
-
-      try {
-        await rawExecute(
-          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('leave',$1,'returned',$2,$3,$4)`,
-          [Number(id), reason, scope.userId, scope.companyId]
-        );
-      } catch (e) { console.error("Failed to log approval action:", e); }
-
-      emitEvent({
-        companyId: scope.companyId, userId: scope.userId,
-        action: "leave.returned", entity: "hr_leave_requests", entityId: Number(id),
-        details: `طلب إجازة ${id} — إرجاع: ${reason}`,
-      }).catch(console.error);
-
-      createAuditLog({
-        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-        action: "update", entity: "hr_leave_requests", entityId: Number(id),
-        after: { status: "returned", reason },
-      }).catch(console.error);
+          priority: "medium", refType: "leave_request", refId: id,
+        }] : [],
+        onApply: async (_row, client) => {
+          if (currentStage) {
+            await client.query(
+              `UPDATE leave_approval_stages SET status = 'returned', decision = $1, "decidedBy" = $2, "decidedAt" = NOW() WHERE id = $3 AND status = 'pending'`,
+              [reason, scope.activeAssignmentId, currentStage.id]
+            );
+          }
+          await client.query(
+            `UPDATE hr_leave_balances
+             SET reserved = GREATEST(reserved - $1, 0)
+             WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+            [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
+          );
+          await client.query(
+            `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('leave',$1,'returned',$2,$3,$4)`,
+            [id, reason, scope.userId, scope.companyId]
+          ).catch((e) => logger.error(e, "hr approval action insert failed"));
+        },
+      });
 
       res.json({ message: "تم الإرجاع", status: "returned" });
       return;
@@ -1575,28 +1914,18 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
     // Approval path – dynamic chain from approval_chains table
     const currentStageNum = currentStage?.stage ?? 1;
 
-    // Mark current stage as approved
-    if (currentStage) {
-      await rawExecute(
-        `UPDATE leave_approval_stages
-         SET status = 'approved', decision = 'approved', "decidedBy" = $1, "decidedAt" = NOW()
-         WHERE id = $2`,
-        [scope.activeAssignmentId, currentStage.id]
-      );
-    }
-
-    // Read approval chain to determine next step
+    // Read approval chain to determine next step (read-only, before transaction)
     let chainSteps: any[] = [];
     try {
       chainSteps = await rawQuery<any>(
         `SELECT acs."stepOrder", acs."requiredRole", acs."timeoutHours", acs."autoApproveOnTimeout"
          FROM approval_chains ac
          JOIN approval_chain_steps acs ON acs."chainId" = ac.id
-         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true
+         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true AND ac."deletedAt" IS NULL
          ORDER BY acs."stepOrder" ASC`,
         [scope.companyId]
       );
-    } catch (_e) {}
+    } catch (_e) { logger.error(_e, "leave approval chain query failed"); }
 
     if (chainSteps.length === 0) {
       chainSteps = [
@@ -1608,62 +1937,63 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
     // Find the next step after the current one
     const nextStep = chainSteps.find((s: any) => s.stepOrder > currentStageNum);
 
+    // Find the appropriate assignee for next step (read-only)
+    let nextAssignee: any = null;
     if (nextStep) {
-      // Find the appropriate assignee for next step
-      const [nextAssignee] = await rawQuery<any>(
+      [nextAssignee] = await rawQuery<any>(
         `SELECT id FROM employee_assignments
          WHERE "companyId" = $1 AND role IN ($2, 'owner') AND status = 'active'
          ORDER BY CASE role WHEN $2 THEN 1 ELSE 2 END LIMIT 1`,
         [scope.companyId, nextStep.requiredRole]
       );
+    }
 
-      if (nextAssignee && nextAssignee.id !== scope.activeAssignmentId) {
+    // Mark current stage + create next stage atomically
+    await withTransaction(async (client) => {
+      if (currentStage) {
+        await client.query(
+          `UPDATE leave_approval_stages
+           SET status = 'approved', decision = 'approved', "decidedBy" = $1, "decidedAt" = NOW()
+           WHERE id = $2`,
+          [scope.activeAssignmentId, currentStage.id]
+        );
+      }
+
+      if (nextStep && nextAssignee && nextAssignee.id !== scope.activeAssignmentId) {
         const nextExpiresAt = new Date();
         nextExpiresAt.setHours(nextExpiresAt.getHours() + (nextStep.timeoutHours ?? 48));
-        await rawExecute(
+        await client.query(
           `INSERT INTO leave_approval_stages ("leaveRequestId",stage,"requiredRole","assignedTo","expiresAt")
            VALUES ($1,$2,$3,$4,$5)`,
-          [Number(id), nextStep.stepOrder, nextStep.requiredRole, nextAssignee.id, nextExpiresAt.toISOString()]
+          [id, nextStep.stepOrder, nextStep.requiredRole, nextAssignee.id, nextExpiresAt.toISOString()]
         );
+      }
+    });
+
+    if (nextStep && nextAssignee && nextAssignee.id !== scope.activeAssignmentId) {
 
         createNotification({
           companyId: scope.companyId, assignmentId: nextAssignee.id,
           type: "leave_request", title: `طلب إجازة يتطلب مراجعة ${nextStep.requiredRole}`,
           body: `أقر المرحلة ${currentStageNum} على طلب إجازة لمدة ${request.days} أيام`,
-          priority: "high", refType: "leave_request", refId: Number(id),
-        }).catch(console.error);
+          priority: "high", refType: "leave_request", refId: id,
+        }).catch((e) => logger.error(e, "hr background task failed"));
 
         emitEvent({ companyId: scope.companyId, userId: scope.userId, action: `leave.stage${currentStageNum}_approved`,
-          entity: "hr_leave_requests", entityId: Number(id) }).catch(console.error);
+          entity: "hr_leave_requests", entityId: id }).catch((e) => logger.error(e, "hr background task failed"));
 
         createAuditLog({
           companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-          action: "update", entity: "hr_leave_requests", entityId: Number(id),
+          action: "update", entity: "hr_leave_requests", entityId: id,
           after: { status: "pending", stage: currentStageNum, nextStage: nextStep.stepOrder },
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "hr background task failed"));
 
         res.json({ message: `تمت الموافقة من المرحلة ${currentStageNum}. الطلب الآن في مرحلة ${nextStep.requiredRole}`, status: "pending", nextStage: nextStep.stepOrder });
         return;
-      }
     }
 
     // Final approval (stage 2 HR or owner approving directly)
-    await rawExecute(
-      `UPDATE hr_leave_requests
-       SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW()
-       WHERE id = $2 AND "companyId" = $3`,
-      [scope.activeAssignmentId, Number(id), scope.companyId]
-    );
-    if (currentStage) {
-      await rawExecute(
-        `UPDATE leave_approval_stages
-         SET status = 'approved', decision = 'approved', "decidedBy" = $1, "decidedAt" = NOW()
-         WHERE id = $2`,
-        [scope.activeAssignmentId, currentStage.id]
-      );
-    }
-
-    // ── Fetch ALL assignments first (needed for balance + attendance + tasks) ──
+    // Pre-fetch assignments needed for balance + attendance + tasks + notifications
     const allAssignments = await rawQuery<any>(
       `SELECT ea.id, ea."companyId", ea."branchId"
        FROM employee_assignments ea
@@ -1671,119 +2001,117 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
       [request.employeeId]
     );
 
-    // Confirm balance deduction: move from reserved to used across ALL companies
-    // Leave follows the person (not the assignment), so deduct from all companies
-    const allCompanyIds = [...new Set(allAssignments.map((a: any) => a.companyId))];
-    for (const cId of allCompanyIds) {
-      await rawExecute(
-        `UPDATE hr_leave_balances
-         SET used = used + $1, reserved = GREATEST(reserved - $1, 0)
-         WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
-        [request.days, cId, request.employeeId, request.leaveTypeId, year]
-      );
-    }
-
-    // Update approval_requests table
-    await rawExecute(
-      `UPDATE approval_requests SET status = 'approved', "decidedBy" = $1, "decidedAt" = NOW()
-       WHERE "refType" = 'leave_request' AND "refId" = $2`,
-      [scope.activeAssignmentId, Number(id)]
-    );
     const leaveStart = new Date(request.startDate);
     const leaveEnd = new Date(request.endDate);
-    // Retroactive leave approval: if the employee was marked 'absent' on any
-    // day covered by the leave, remove those absence rows FIRST so the
-    // ON CONFLICT DO NOTHING insert can turn them into 'on_leave' and the
-    // next payroll run won't double-deduct (absence deduction + leave-used).
-    for (const asn of allAssignments) {
-      await rawExecute(
-        `DELETE FROM attendance
-         WHERE "assignmentId" = $1 AND date BETWEEN $2 AND $3 AND status = 'absent'`,
-        [asn.id, request.startDate, request.endDate]
-      ).catch((e) => console.error("Failed to clear absent days for leave approval:", e));
-      // Also drop any stale absence-based payroll_deductions queued for those
-      // days so an already-generated deduction row doesn't still withhold pay.
-      await rawExecute(
-        `DELETE FROM payroll_deductions
-         WHERE "companyId" = $1 AND "employeeId" = $2 AND type = 'absence'
-           AND date BETWEEN $3 AND $4
-           AND (status IS NULL OR status <> 'deducted_in_payroll')`,
-        [asn.companyId, request.employeeId, request.startDate, request.endDate]
-      ).catch((e) => console.error("Failed to clear pending absence deductions:", e));
-      for (let d = new Date(leaveStart); d <= leaveEnd; d.setDate(d.getDate() + 1)) {
-        const dateStr = d.toISOString().split("T")[0];
-        await rawExecute(
-          `INSERT INTO attendance ("assignmentId","companyId","branchId",date,status,notes)
-           VALUES ($1,$2,$3,$4,'on_leave',$5)
-           ON CONFLICT DO NOTHING`,
-          [asn.id, asn.companyId, asn.branchId, dateStr, `إجازة معتمدة - طلب رقم ${id}`]
-        ).catch(() => {});
-      }
-    }
 
-    // ── Reassign tasks during leave period (per assignment's own company) ──
-    if (allAssignments.length > 0) {
-      const assignmentIds = allAssignments.map((a: any) => a.id);
-      for (const asn of allAssignments) {
-        const aId = asn.id;
-        const [managerAId] = await rawQuery<any>(
-          `SELECT ea.id FROM employee_assignments ea
-           WHERE ea."companyId" = $1 AND ea."branchId" = $2
-             AND ea.role IN ('branch_manager','hr_manager','general_manager','owner') AND ea.status = 'active' AND ea.id != $3
-           ORDER BY CASE ea.role WHEN 'branch_manager' THEN 1 WHEN 'hr_manager' THEN 2 WHEN 'general_manager' THEN 3 ELSE 4 END LIMIT 1`,
-          [asn.companyId, asn.branchId, aId]
-        );
-        if (managerAId) {
-          await rawExecute(
-            `UPDATE project_tasks SET "assigneeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $1)
-             WHERE "assigneeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $2)
-               AND status NOT IN ('completed','cancelled')
-               AND ("dueDate" IS NULL OR "dueDate" BETWEEN $3 AND $4)`,
-            [managerAId.id, aId, request.startDate, request.endDate]
-          ).catch(() => {});
+    await applyTransition({
+      entity: "hr_leave_requests",
+      id,
+      scope,
+      action: "leave.approved",
+      fromStates: ["pending"],
+      toState: "approved",
+      reason: reason ?? undefined,
+      setExtras: {
+        approvedBy: scope.activeAssignmentId,
+        approvedAt: { raw: "NOW()" },
+      },
+      after: { status: "approved", affectedAssignments: allAssignments.length },
+      onApply: async (_row, client) => {
+        if (currentStage) {
+          await client.query(
+            `UPDATE leave_approval_stages
+             SET status = 'approved', decision = 'approved', "decidedBy" = $1, "decidedAt" = NOW()
+             WHERE id = $2`,
+            [scope.activeAssignmentId, currentStage.id]
+          );
         }
-      }
-    }
 
-    // ── Notify requester and all managers ──
+        // Balance deduction across ALL companies
+        const allCompanyIds = [...new Set(allAssignments.map((a: any) => a.companyId))];
+        for (const cId of allCompanyIds) {
+          await client.query(
+            `UPDATE hr_leave_balances
+             SET used = used + $1, reserved = GREATEST(reserved - $1, 0)
+             WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+            [request.days, cId, request.employeeId, request.leaveTypeId, year]
+          );
+        }
+
+        await client.query(
+          `UPDATE approval_requests SET status = 'approved', "decidedBy" = $1, "decidedAt" = NOW()
+           WHERE "refType" = 'leave_request' AND "refId" = $2 AND status = 'pending'`,
+          [scope.activeAssignmentId, id]
+        );
+
+        // Retroactive attendance: clear absences, insert on_leave records
+        for (const asn of allAssignments) {
+          await client.query(
+            `DELETE FROM attendance
+             WHERE "assignmentId" = $1 AND date BETWEEN $2 AND $3 AND status = 'absent' AND "companyId" = $4 AND "deletedAt" IS NULL`,
+            [asn.id, request.startDate, request.endDate, asn.companyId]
+          );
+          await client.query(
+            `DELETE FROM payroll_deductions
+             WHERE "companyId" = $1 AND "employeeId" = $2 AND type = 'absence'
+               AND "effectiveDate" BETWEEN $3 AND $4
+               AND (status IS NULL OR status <> 'deducted_in_payroll')`,
+            [asn.companyId, request.employeeId, request.startDate, request.endDate]
+          );
+          for (let d = new Date(leaveStart); d <= leaveEnd; d.setDate(d.getDate() + 1)) {
+            const dateStr = toDateISO(d);
+            await client.query(
+              `INSERT INTO attendance ("assignmentId","companyId","branchId",date,status,notes)
+               VALUES ($1,$2,$3,$4,'on_leave',$5)
+               ON CONFLICT DO NOTHING`,
+              [asn.id, asn.companyId, asn.branchId, dateStr, `إجازة معتمدة [leave_request:${id}]`]
+            );
+          }
+        }
+
+        await client.query(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('leave',$1,'approved',$2,$3,$4)`,
+          [id, reason || null, scope.userId, scope.companyId]
+        ).catch((e) => logger.error(e, "hr approval action insert failed"));
+      },
+    });
+
+    // Post-commit: notifications + task reassignment + obligation (non-transactional)
     for (const asn of allAssignments) {
       createNotification({
         companyId: asn.companyId, assignmentId: asn.id,
         type: "leave_approved", title: "تمت الموافقة على طلب الإجازة",
         body: `تمت الموافقة على إجازة ${request.leaveTypeName} من ${request.startDate} إلى ${request.endDate}`,
-        priority: "high", refType: "leave_request", refId: Number(id),
-      }).catch(console.error);
-
-      getManagerAssignmentId(asn.companyId, asn.branchId).then((mgr) => {
-        if (mgr && mgr !== scope.activeAssignmentId) {
+        priority: "high", refType: "leave_request", refId: id,
+      }).catch((e) => logger.error(e, "hr background task failed"));
+    }
+    for (const asn of allAssignments) {
+      const aId = asn.id;
+      rawQuery<any>(
+        `SELECT ea.id FROM employee_assignments ea
+         WHERE ea."companyId" = $1 AND ea."branchId" = $2
+           AND ea.role IN ('branch_manager','hr_manager','general_manager','owner') AND ea.status = 'active' AND ea.id != $3
+         ORDER BY CASE ea.role WHEN 'branch_manager' THEN 1 WHEN 'hr_manager' THEN 2 WHEN 'general_manager' THEN 3 ELSE 4 END LIMIT 1`,
+        [asn.companyId, asn.branchId, aId]
+      ).then(async ([managerAId]) => {
+        if (managerAId) {
+          const { projectsEngine } = await import("../lib/engines/index.js");
+          await projectsEngine.reassignTasks({
+            fromEmployeeQuery: { table: "employee_assignments", idColumn: "id", id: aId },
+            toEmployeeQuery: { table: "employee_assignments", idColumn: "id", id: managerAId.id },
+            startDate: request.startDate,
+            endDate: request.endDate,
+          });
           createNotification({
-            companyId: asn.companyId, assignmentId: mgr,
+            companyId: asn.companyId, assignmentId: managerAId.id,
             type: "leave_approved", title: "موظف في إجازة معتمدة",
             body: `تمت الموافقة على إجازة موظف من ${request.startDate} إلى ${request.endDate}. تم إعادة توزيع المهام.`,
-            priority: "normal", refType: "leave_request", refId: Number(id),
-          }).catch(console.error);
+            priority: "normal", refType: "leave_request", refId: id,
+          }).catch((e) => logger.error(e, "hr background task failed"));
         }
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr background task failed"));
     }
 
-    try {
-      await rawExecute(
-        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('leave',$1,'approved',$2,$3,$4)`,
-        [Number(id), reason || null, scope.userId, scope.companyId]
-      );
-    } catch (e) { console.error("Failed to log approval action:", e); }
-
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "leave.approved",
-      entity: "hr_leave_requests", entityId: Number(id),
-      details: JSON.stringify({ affectedAssignments: allAssignments.length }) }).catch(console.error);
-
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "hr_leave_requests", entityId: Number(id),
-      after: { status: "approved", affectedAssignments: allAssignments.length },
-    }).catch(console.error);
-
-    // Register return-to-work obligation (fires the day after the leave ends)
     try {
       const returnDate = new Date(leaveEnd);
       returnDate.setDate(returnDate.getDate() + 1);
@@ -1791,7 +2119,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
         companyId: scope.companyId,
         branchId: scope.branchId ?? null,
         entityType: "hr_leave_request",
-        entityId: Number(id),
+        entityId: id,
         obligationType: "follow_up",
         title: `عودة للعمل — ${request.employeeName || `موظف #${request.employeeId}`} (${request.leaveTypeName || ""})`,
         dueAt: returnDate.toISOString(),
@@ -1803,7 +2131,7 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
           { hoursAfterDue: 24, notifyRole: "general_manager" },
         ],
       });
-    } catch (obErr) { console.error("Return-to-work obligation failed:", obErr); }
+    } catch (obErr) { logger.error(obErr, "Return-to-work obligation failed:"); }
 
     res.json({ message: "تمت الموافقة النهائية", status: "approved", affectedAssignments: allAssignments.length });
   } catch (err) {
@@ -1812,25 +2140,25 @@ router.patch("/leave-requests/:id/approve", requirePermission("hr:update"), requ
 });
 
 // Get leave request approval stages with timeline
-router.get("/leave-requests/:id/stages", requirePermission("hr:read"), async (req, res) => {
+router.get("/leave-requests/:id/stages", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
 
     const [leaveReq] = await rawQuery<any>(
       `SELECT id FROM hr_leave_requests WHERE id = $1 AND "companyId" = $2`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!leaveReq) throw new NotFoundError("الطلب غير موجود");
 
     const stages = await rawQuery<any>(
       `SELECT las.*, e.name AS "decidedByName"
        FROM leave_approval_stages las
-       LEFT JOIN employee_assignments ea ON ea.id = las."decidedBy"
+       LEFT JOIN employee_assignments ea ON ea.id = las."decidedBy" AND ea."companyId" = $2
        LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE las."leaveRequestId" = $1
        ORDER BY las.stage ASC`,
-      [Number(id)]
+      [id, scope.companyId]
     );
 
     // Also get the configured chain steps for context
@@ -1840,11 +2168,11 @@ router.get("/leave-requests/:id/stages", requirePermission("hr:read"), async (re
         `SELECT acs."stepOrder", acs."requiredRole", acs."timeoutHours", acs."autoApproveOnTimeout"
          FROM approval_chains ac
          JOIN approval_chain_steps acs ON acs."chainId" = ac.id
-         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true
+         WHERE ac."companyId" = $1 AND ac."chainType" = 'leaves' AND ac."isActive" = true AND ac."deletedAt" IS NULL
          ORDER BY acs."stepOrder" ASC`,
         [scope.companyId]
       );
-    } catch (_e) {}
+    } catch (_e) { logger.error(_e, "leave approval chain query failed"); }
 
     if (chainSteps.length === 0) {
       chainSteps = [
@@ -1860,18 +2188,18 @@ router.get("/leave-requests/:id/stages", requirePermission("hr:read"), async (re
 });
 
 // Escalate – auto-escalation after 48h (HR/owner only)
-router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), async (req, res) => {
+router.patch("/leave-requests/:id/escalate", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
 
-    if (!["branch_manager", "hr_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_APPROVAL_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: التصعيد متاح فقط للمدير أو HR أو المالك");
     }
 
     const [request] = await rawQuery<any>(
-      `SELECT * FROM hr_leave_requests WHERE id = $1 AND "companyId" = $2 AND status = 'pending'`,
-      [Number(id), scope.companyId]
+      `SELECT * FROM hr_leave_requests WHERE id = $1 AND "companyId" = $2 AND status = 'pending' AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
     );
     if (!request) {
       throw new NotFoundError("الطلب غير موجود أو ليس معلقاً");
@@ -1883,7 +2211,7 @@ router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), asy
        FROM leave_approval_stages
        WHERE "leaveRequestId" = $1 AND status = 'pending'
        ORDER BY stage ASC LIMIT 1`,
-      [Number(id)]
+      [id]
     );
 
     if (!currentPendingStage) {
@@ -1905,14 +2233,6 @@ router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), asy
       );
     }
 
-    // Stage has expired – mark it and escalate
-    await rawExecute(
-      `UPDATE leave_approval_stages
-       SET status = 'escalated'
-       WHERE "leaveRequestId" = $1 AND status = 'pending' AND "expiresAt" < NOW()`,
-      [Number(id)]
-    );
-
     const [hrAssignment] = await rawQuery<any>(
       `SELECT id FROM employee_assignments
        WHERE "companyId" = $1 AND role IN ('hr_manager','general_manager','owner') AND status = 'active'
@@ -1922,28 +2242,35 @@ router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), asy
     if (hrAssignment) {
       const escalateExpiresAt = new Date();
       escalateExpiresAt.setHours(escalateExpiresAt.getHours() + 24);
-      await rawExecute(
-        `INSERT INTO leave_approval_stages ("leaveRequestId",stage,"requiredRole","assignedTo","expiresAt")
-         VALUES ($1,99,'hr_manager',$2,$3)`,
-        [Number(id), hrAssignment.id, escalateExpiresAt.toISOString()]
-      );
+      await withTransaction(async (client) => {
+        await client.query(
+          `UPDATE leave_approval_stages SET status = 'escalated'
+           WHERE "leaveRequestId" = $1 AND status = 'pending' AND "expiresAt" < NOW()`,
+          [id]
+        );
+        await client.query(
+          `INSERT INTO leave_approval_stages ("leaveRequestId",stage,"requiredRole","assignedTo","expiresAt")
+           VALUES ($1,99,'hr_manager',$2,$3)`,
+          [id, hrAssignment.id, escalateExpiresAt.toISOString()]
+        );
+      });
 
       createNotification({
         companyId: scope.companyId, assignmentId: hrAssignment.id,
         type: "leave_escalated", title: "تصعيد طلب إجازة",
         body: `تم تصعيد طلب إجازة (${id}) لعدم البت فيه خلال المهلة المحددة`,
-        priority: "urgent", refType: "leave_request", refId: Number(id),
-      }).catch(console.error);
+        priority: "urgent", refType: "leave_request", refId: id,
+      }).catch((e) => logger.error(e, "hr background task failed"));
     }
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "leave.escalated",
-      entity: "hr_leave_requests", entityId: Number(id) }).catch(console.error);
+      entity: "hr_leave_requests", entityId: id }).catch((e) => logger.error(e, "hr background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "hr_leave_requests", entityId: Number(id),
+      action: "update", entity: "hr_leave_requests", entityId: id,
       after: { status: "escalated" },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.json({ message: "تم تصعيد الطلب لـ HR" });
   } catch (err) {
@@ -1955,7 +2282,7 @@ router.patch("/leave-requests/:id/escalate", requirePermission("hr:update"), asy
 // PAYROLL – employee-level aggregation with multi-assignment, GOSI, absences, loans
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/payroll", requirePermission("hr:read"), async (req, res) => {
+router.get("/payroll", authorize({ feature: "hr.payroll.runs", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const runs = await rawQuery<any>(
@@ -1967,7 +2294,7 @@ router.get("/payroll", requirePermission("hr:read"), async (req, res) => {
        LEFT JOIN employees e ON e.id = ea."employeeId"
        LEFT JOIN payroll_lines pl ON pl."runId" = pr.id AND pl."deletedAt" IS NULL
        WHERE pr."companyId" = $1 AND pr."deletedAt" IS NULL
-       GROUP BY pr.id, e.name ORDER BY pr."createdAt" DESC`,
+       GROUP BY pr.id, e.name ORDER BY pr."createdAt" DESC LIMIT 500`,
       [scope.companyId]
     );
     const data = runs.map((r: any) => ({
@@ -1980,7 +2307,49 @@ router.get("/payroll", requirePermission("hr:read"), async (req, res) => {
   }
 });
 
-router.get("/payroll/:id/lines", requirePermission("hr:read"), async (req, res) => {
+router.get("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "view" }), async (req, res): Promise<any> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    if (req.path.endsWith("/lines")) return; // let next handler handle it
+    const [row] = await rawQuery<any>(
+      `SELECT pr.*, e.name AS "runByName",
+              (SELECT COUNT(*) FROM payroll_lines pl WHERE pl."runId" = pr.id AND pl."deletedAt" IS NULL)::int AS "employeeCount"
+       FROM payroll_runs pr
+       LEFT JOIN employee_assignments ea ON ea.id = pr."runBy"
+       LEFT JOIN employees e ON e.id = ea."employeeId"
+       WHERE pr.id = $1 AND pr."companyId" = $2 AND pr."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("مسير الرواتب غير موجود");
+    const canSeeSalary = PAYROLL_ROLES.includes(scope.role);
+    const lines = await rawQuery<any>(
+      `SELECT pl.*, e.name AS "employeeName"
+       FROM payroll_lines pl
+       LEFT JOIN employee_assignments ea ON ea.id = pl."assignmentId" AND ea."companyId" = $2
+       LEFT JOIN employees e ON e.id = ea."employeeId"
+       WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL ORDER BY pl.id LIMIT 1000`,
+      [id, scope.companyId]
+    );
+    const totalBasic = lines.reduce((s: number, l: any) => s + Number(l.basicSalary || 0), 0);
+    const totalAllowances = lines.reduce((s: number, l: any) => s + Number(l.allowances || 0), 0);
+    const totalDeductions = lines.reduce((s: number, l: any) => s + Number(l.deductions || 0), 0);
+    const sanitizedLines = canSeeSalary ? lines : lines.map((l: any) => ({
+      id: l.id, runId: l.runId, assignmentId: l.assignmentId, employeeName: l.employeeName,
+    }));
+    res.json({
+      ...row, month: row.period, totalAmount: canSeeSalary ? Number(row.totalNet) : undefined,
+      basicSalary: canSeeSalary ? totalBasic : undefined,
+      allowances: canSeeSalary ? totalAllowances : undefined,
+      deductions: canSeeSalary ? totalDeductions : undefined,
+      netSalary: canSeeSalary ? Number(row.totalNet) : undefined,
+      employeeCount: lines.length,
+      lines: sanitizedLines,
+    });
+  } catch (err) { handleRouteError(err, res, "Get payroll detail error:"); }
+});
+
+router.get("/payroll/:id/lines", authorize({ feature: "hr.payroll.runs", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { id } = req.params;
@@ -1995,10 +2364,10 @@ router.get("/payroll/:id/lines", requirePermission("hr:read"), async (req, res) 
     const lines = await rawQuery<any>(
       `SELECT pl.*, e.name AS "employeeName", e."empNumber"
        FROM payroll_lines pl
-       JOIN employee_assignments ea ON ea.id = pl."assignmentId"
+       JOIN employee_assignments ea ON ea.id = pl."assignmentId" AND ea."companyId" = $2
        JOIN employees e ON e.id = ea."employeeId"
-       WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL ORDER BY e.name`,
-      [Number(id)]
+       WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL ORDER BY e.name LIMIT 1000`,
+      [Number(id), scope.companyId]
     );
     const data = lines.map((l: any) => ({
       ...l, basic: Number(l.basic), grossSalary: Number(l.grossSalary),
@@ -2010,20 +2379,22 @@ router.get("/payroll/:id/lines", requirePermission("hr:read"), async (req, res) 
   }
 });
 
-router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
+// RBAC v2: payroll runs are SoD-critical via the seeded
+// hr_payroll_calculate_approve rule.
+router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     // Payroll execution requires HR, Finance, Director or Owner role
-    if (!["hr_manager", "finance_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!PAYROLL_ROLES.includes(scope.role)) {
       throw new ForbiddenError("ليس لديك الصلاحية لتشغيل مسير الرواتب", {
         meta: {
-          requiredRoles: ["hr_manager", "finance_manager", "general_manager", "owner"],
+          requiredRoles: PAYROLL_ROLES,
           yourRole: scope.role,
         },
       });
     }
-    const { month } = req.body as { month?: string };
-    const targetPeriod = month ?? new Date().toISOString().slice(0, 7);
+    const { month } = zodParse(payrollRunSchema.safeParse(req.body ?? {}));
+    const targetPeriod = month ?? currentPeriod();
 
     // P02-S5-CRIT — every other GL writer in this file (HR accruals at
     // hr.ts:5082, expense claims, etc.) and across the codebase
@@ -2115,7 +2486,7 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
     );
     const gosiSettingsMap = new Map(gosiSettings.map((r) => [r.key, r.value]));
     const gosiComponent = salaryComponents.find((c: any) => c.isGosi && c.type === 'deduction');
-    const GOSI_EMPLOYEE_RATE = gosiComponent
+    const GOSI_EMPLOYEE_RATE = gosiComponent && Number(gosiComponent.value) > 0
       ? Number(gosiComponent.value) / 100
       : Number(gosiSettingsMap.get("gosiEmployeeRate") ?? "9.75") / 100;
     const GOSI_EMPLOYER_RATE = Number(gosiSettingsMap.get("gosiEmployerRate") ?? "11.75") / 100;
@@ -2166,7 +2537,7 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
     const absenceRows = await rawQuery<any>(
       `SELECT a."assignmentId", COUNT(*) AS "absentDays"
        FROM attendance a
-       WHERE a."companyId" = $1 AND TO_CHAR(a.date, 'YYYY-MM') = $2 AND a.status = 'absent'
+       WHERE a."companyId" = $1 AND TO_CHAR(a.date, 'YYYY-MM') = $2 AND a.status = 'absent' AND a."deletedAt" IS NULL
        GROUP BY a."assignmentId"`,
       [scope.companyId, targetPeriod]
     );
@@ -2191,7 +2562,7 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
        WHERE li."companyId" = $1 AND li.period = $2 AND li.status = 'pending'
        GROUP BY li."assignmentId"`,
       [scope.companyId, targetPeriod]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
     for (const row of hrLoanRows) {
       const aId = Number(row.assignmentId);
       loanMap.set(aId, (loanMap.get(aId) ?? 0) + Number(row.installment ?? 0));
@@ -2201,7 +2572,7 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
     const overtimeRows = await rawQuery<any>(
       `SELECT a."assignmentId", COALESCE(SUM(a."overtimeMinutes"), 0) AS "totalOvertimeMinutes"
        FROM attendance a
-       WHERE a."companyId" = $1 AND TO_CHAR(a.date, 'YYYY-MM') = $2 AND a."overtimeMinutes" > 0
+       WHERE a."companyId" = $1 AND TO_CHAR(a.date, 'YYYY-MM') = $2 AND a."overtimeMinutes" > 0 AND a."deletedAt" IS NULL
        GROUP BY a."assignmentId"`,
       [scope.companyId, targetPeriod]
     );
@@ -2212,10 +2583,10 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
     const hrOtRows = await rawQuery<any>(
       `SELECT "assignmentId", COALESCE(SUM("totalAmount"), 0) AS "otAmount"
        FROM hr_overtime_requests
-       WHERE "companyId" = $1 AND TO_CHAR("overtimeDate", 'YYYY-MM') = $2 AND status = 'approved'
+       WHERE "companyId" = $1 AND TO_CHAR("overtimeDate", 'YYYY-MM') = $2 AND status = 'approved' AND "deletedAt" IS NULL
        GROUP BY "assignmentId"`,
       [scope.companyId, targetPeriod]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
     const hrOtMap = new Map<number, number>();
     for (const row of hrOtRows) hrOtMap.set(Number(row.assignmentId), Number(row.otAmount ?? 0));
 
@@ -2245,9 +2616,9 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
           const compValue = Number(comp.value);
           let amount = 0;
           if (calcType === "percentage") {
-            amount = Math.round(basic * (compValue / 100) * 100) / 100;
+            amount = roundTo2(basic * (compValue / 100));
           } else {
-            amount = Math.round(compValue * 100) / 100;
+            amount = roundTo2(compValue);
           }
           if (compName.includes("سكن") || compName.toLowerCase().includes("housing")) {
             housingAllowance = amount;
@@ -2264,22 +2635,22 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
 
       const lateDeduction = lateMap.get(aId) ?? 0;
       const absentDays = absenceMap.get(aId) ?? 0;
-      const absenceDeduction = Math.round((absentDays * (basic / 30)) * 100) / 100;
+      const absenceDeduction = roundTo2(absentDays * (basic / 30));
       const violationDeduction = (penaltyMap.get(aId) ?? 0) + (violationMap.get(aId) ?? 0);
       const loanDeduction = loanMap.get(aId) ?? 0;
-      const gosiEmployee = Math.round(basic * GOSI_EMPLOYEE_RATE * 100) / 100;
-      const gosiEmployer = Math.round(basic * GOSI_EMPLOYER_RATE * 100) / 100;
+      const gosiEmployee = roundTo2(basic * GOSI_EMPLOYEE_RATE);
+      const gosiEmployer = roundTo2(basic * GOSI_EMPLOYER_RATE);
       totalGosiEmployer += gosiEmployer;
       const overtimeMinutes = overtimeMap.get(aId) ?? 0;
-      const overtimeHours = Math.round((overtimeMinutes / 60) * 100) / 100;
+      const overtimeHours = roundTo2(overtimeMinutes / 60);
       const hourlyRate = basic / (30 * 8);
-      const attendanceOt = Math.round(overtimeHours * hourlyRate * 1.5 * 100) / 100;
+      const attendanceOt = roundTo2(overtimeHours * hourlyRate * 1.5);
       const hrOtAmount = hrOtMap.get(aId) ?? 0;
       // استخدام الأعلى بين وقت الحضور ومبلغ طلبات OT المعتمدة (لتجنب الاحتساب المزدوج)
       const overtime = Math.max(attendanceOt, hrOtAmount);
 
       const totalDeductions = lateDeduction + absenceDeduction + violationDeduction + loanDeduction + gosiEmployee;
-      const net = Math.max(0, Math.round((gross + overtime - totalDeductions) * 100) / 100);
+      const net = Math.max(0, roundTo2(gross + overtime - totalDeductions));
       totalNet += net;
 
       lines.push({
@@ -2290,18 +2661,18 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
       });
     }
 
-    const totalGross = Math.round(lines.reduce((s, l) => s + l.gross, 0) * 100) / 100;
-    const totalGosiEmployee = Math.round(lines.reduce((s, l) => s + l.gosiEmployee, 0) * 100) / 100;
-    const totalOvertime = Math.round(lines.reduce((s, l) => s + l.overtime, 0) * 100) / 100;
-    const totalOtherDeductions = Math.round(lines.reduce((s, l) => s + l.lateDeduction + l.absenceDeduction + l.violationDeduction + l.loanDeduction, 0) * 100) / 100;
-    const totalBankPayout = Math.round(totalNet * 100) / 100;
-    const totalGosiPayable = Math.round((totalGosiEmployer + totalGosiEmployee) * 100) / 100;
+    const totalGross = roundTo2(lines.reduce((s, l) => s + l.gross, 0));
+    const totalGosiEmployee = roundTo2(lines.reduce((s, l) => s + l.gosiEmployee, 0));
+    const totalOvertime = roundTo2(lines.reduce((s, l) => s + l.overtime, 0));
+    const totalOtherDeductions = roundTo2(lines.reduce((s, l) => s + l.lateDeduction + l.absenceDeduction + l.violationDeduction + l.loanDeduction, 0));
+    const totalBankPayout = roundTo2(totalNet);
+    const totalGosiPayable = roundTo2(totalGosiEmployer + totalGosiEmployee);
 
     const runId = await withTransaction(async (client) => {
       const runResult = await client.query(
         `INSERT INTO payroll_runs ("companyId", period, status, "totalNet", "runBy")
-         VALUES ($1,$2,'completed',$3,$4) RETURNING id`,
-        [scope.companyId, targetPeriod, Math.round(totalNet * 100) / 100, scope.activeAssignmentId]
+         VALUES ($1,$2,'pending_approval',$3,$4) RETURNING id`,
+        [scope.companyId, targetPeriod, roundTo2(totalNet), scope.activeAssignmentId]
       );
       const newRunId = runResult.rows[0].id;
 
@@ -2378,30 +2749,21 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
     });
 
     try {
-      const [salaryExpenseCode, gosiExpenseCode, overtimeExpenseCode, bankCode, gosiPayableCode, deductionsPayableCode] = await Promise.all([
-        getAccountCodeFromMapping(scope.companyId, "payroll_salary_expense", "debit", "5100"),
-        getAccountCodeFromMapping(scope.companyId, "payroll_gosi_expense", "debit", "5110"),
-        getAccountCodeFromMapping(scope.companyId, "payroll_overtime_expense", "debit", "5120"),
-        getAccountCodeFromMapping(scope.companyId, "payroll_bank_payout", "credit", "1100"),
-        getAccountCodeFromMapping(scope.companyId, "payroll_gosi_payable", "credit", "2200"),
-        getAccountCodeFromMapping(scope.companyId, "payroll_deductions_payable", "credit", "2210"),
-      ]);
-
-      await createGuardedJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        createdBy: scope.activeAssignmentId,
-        ref: `PAYROLL-${targetPeriod}`,
-        description: `صرف رواتب ${targetPeriod} – ${lines.length} موظف`,
-        lines: [
-          { accountCode: salaryExpenseCode, debit: totalGross, credit: 0 },
-          { accountCode: overtimeExpenseCode, debit: totalOvertime, credit: 0 },
-          { accountCode: gosiExpenseCode, debit: Math.round(totalGosiEmployer * 100) / 100, credit: 0 },
-          { accountCode: bankCode, debit: 0, credit: totalBankPayout },
-          { accountCode: gosiPayableCode, debit: 0, credit: totalGosiPayable },
-          { accountCode: deductionsPayableCode, debit: 0, credit: totalOtherDeductions },
-        ].filter(l => l.debit > 0 || l.credit > 0),
-      }, { table: "payroll_runs", id: runId });
+      const { hrEngine } = await import("../lib/engines/index.js");
+      await hrEngine.postPayrollRunGL(
+        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
+        {
+          runId,
+          period: targetPeriod,
+          employeeCount: lines.length,
+          totalGross,
+          totalOvertime,
+          totalGosiEmployer,
+          totalBankPayout,
+          totalGosiPayable,
+          totalOtherDeductions,
+        }
+      );
     } catch (journalErr) {
       throw new IntegrationError(
         "تم صرف الرواتب لكن فشل القيد المحاسبي. راجع المدير المالي",
@@ -2416,13 +2778,13 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
       companyId: scope.companyId, userId: scope.userId,
       action: "payroll.completed", entity: "payroll_runs", entityId: runId,
       details: JSON.stringify({ period: targetPeriod, totalNet, totalGosiEmployer, assignmentCount: lines.length }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "payroll.run", entity: "payroll_runs", entityId: runId,
       after: { period: targetPeriod, totalNet, totalGosiEmployer, assignmentCount: lines.length },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     // Employee-level aggregate for response
     const empAgg = new Map<number, { total: number; count: number }>();
@@ -2435,8 +2797,8 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
 
     res.status(201).json({
       id: runId, month: targetPeriod,
-      totalAmount: Math.round(totalNet * 100) / 100,
-      totalGosiEmployer: Math.round(totalGosiEmployer * 100) / 100,
+      totalAmount: roundTo2(totalNet),
+      totalGosiEmployer: roundTo2(totalGosiEmployer),
       assignmentCount: lines.length,
       employeeCount: empAgg.size,
       gosiEmployeeRate: GOSI_EMPLOYEE_RATE,
@@ -2448,11 +2810,39 @@ router.post("/payroll", requirePermission("hr:create"), async (req, res) => {
   }
 });
 
+router.post("/payroll/:id/approve", authorize({ feature: "hr.payroll.runs", action: "approve", resource: { table: "payroll_runs", idParam: "id" } }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!PAYROLL_ROLES.includes(scope.role)) {
+      throw new ForbiddenError("ليس لديك الصلاحية للموافقة على مسير الرواتب");
+    }
+    const id = parseId(req.params.id, "id");
+    const [run] = await rawQuery<any>(
+      `SELECT id, status, "runBy" FROM payroll_runs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!run) throw new NotFoundError("مسير الرواتب غير موجود");
+    if (run.status !== "pending_approval") {
+      throw new ConflictError(`لا يمكن الموافقة — الحالة الحالية: ${run.status}`);
+    }
+    if (run.runBy === scope.activeAssignmentId) {
+      throw new ForbiddenError("لا يمكن للشخص الذي أنشأ المسير أن يوافق عليه (maker-checker)");
+    }
+    await rawExecute(
+      `UPDATE payroll_runs SET status='completed', "approvedBy"=$1, "approvedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+      [scope.activeAssignmentId, id, scope.companyId]
+    );
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "payroll.approved", entity: "payroll_runs", entityId: id, details: JSON.stringify({ approvedBy: scope.activeAssignmentId }) }).catch((e) => logger.error(e, "hr background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "payroll.approve", entity: "payroll_runs", entityId: id, after: { approvedBy: scope.activeAssignmentId } }).catch((e) => logger.error(e, "hr background task failed"));
+    res.json({ message: "تمت الموافقة على مسير الرواتب", status: "completed" });
+  } catch (err) { handleRouteError(err, res, "Approve payroll error:"); }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // VIOLATIONS, SHIFTS, PERFORMANCE, LEGACY LEAVE
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/violations", requirePermission("hr:read"), async (req, res) => {
+router.get("/violations", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -2464,12 +2854,13 @@ router.get("/violations", requirePermission("hr:read"), async (req, res) => {
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (err) { console.error("Get violations error:", err); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
+  } catch (err) { logger.error(err, "Get violations error:"); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
 });
 
-router.get("/violations/:id", requirePermission("hr:read"), async (req, res) => {
+router.get("/violations/:id", authorize({ feature: "hr", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [item] = await rawQuery<any>(
       `SELECT ev.*, e.name AS "employeeName", e."empNumber",
               ea."jobTitle", ea.salary, b.name AS "branchName"
@@ -2478,33 +2869,32 @@ router.get("/violations/:id", requirePermission("hr:read"), async (req, res) => 
        JOIN employees e ON e.id = ea."employeeId"
        LEFT JOIN branches b ON b.id = ea."branchId"
        WHERE ev.id = $1 AND ev."companyId" = $2 AND ev."deletedAt" IS NULL`,
-      [req.params.id, scope.companyId]
+      [id, scope.companyId]
     );
     if (!item) throw new NotFoundError("المخالفة غير موجودة");
 
     // جلب محضر التحقيق المرتبط إن وجد
     const memos = await rawQuery<any>(
-      `SELECT dm.id, dm."memoNumber", dm.status, dm."penaltyLabel",
-              dm."baseDeductionAmount", dm."totalDeductionAmount", dm."createdAt"
-       FROM discipline_memos dm
-       WHERE dm."violationId" = $1 AND dm."companyId" = $2
-       ORDER BY dm."createdAt" DESC`,
+      `SELECT m.id, m."memoNumber", m.status, m."appliedPenaltyLabel" AS "penaltyLabel",
+              m."appliedDeductionAmount" AS "baseDeductionAmount", m."appliedExtraDeduction", m."createdAt"
+       FROM hr_inquiry_memos m
+       WHERE m."violationId" = $1 AND m."companyId" = $2 AND m."deletedAt" IS NULL
+       ORDER BY m."createdAt" DESC`,
       [item.id, scope.companyId]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
 
     res.json({ ...item, memos });
   } catch (err) { handleRouteError(err, res, "Get violation detail error"); }
 });
 
-router.post("/violations", requirePermission("hr:create"), async (req, res) => {
+router.post("/violations", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = violationSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(violationSchema.safeParse(req.body));
     const {
       assignmentId, type, description, severity, deduction,
       period: reqPeriod, incidentDate: reqIncidentDate, regulationId,
-    } = parsed.data as any;
+    } = parsed as any;
 
     // FK pre-check: assignment must exist inside the caller's company scope.
     // Without this, a bad assignmentId would fail as a deep 23503 whose
@@ -2524,8 +2914,8 @@ router.post("/violations", requirePermission("hr:create"), async (req, res) => {
       });
     }
 
-    const period = reqPeriod || new Date().toISOString().slice(0, 7);
-    const incidentDate = reqIncidentDate || new Date().toISOString().slice(0, 10);
+    const period = reqPeriod || currentPeriod();
+    const incidentDate = reqIncidentDate || todayISO();
     const effectiveSeverity = severity ?? "medium";
     const effectiveDeduction = Number(deduction ?? 0);
 
@@ -2557,7 +2947,7 @@ router.post("/violations", requirePermission("hr:create"), async (req, res) => {
       regulationId: regulationId ? Number(regulationId) : undefined,
       source: "manual",
       createdBy: scope.userId,
-    }).catch((err) => console.error("inquiry memo create failed:", err));
+    }).catch((err) => logger.error(err, "inquiry memo create failed:"));
 
     // Notify the offender and their manager.
     createNotification({
@@ -2569,8 +2959,8 @@ router.post("/violations", requirePermission("hr:create"), async (req, res) => {
       priority: "high",
       refType: "employee_violations",
       refId: insertId,
-    }).catch(console.error);
-    const managerAsn = await getManagerAssignmentId(scope.companyId, asn.branchId ?? scope.branchId ?? null).catch(() => null);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    const managerAsn = await getManagerAssignmentId(scope.companyId, asn.branchId ?? scope.branchId ?? null).catch((e) => { logger.error(e, "hr manager lookup failed"); return null; });
     if (managerAsn && managerAsn !== Number(assignmentId)) {
       createNotification({
         companyId: scope.companyId,
@@ -2581,7 +2971,7 @@ router.post("/violations", requirePermission("hr:create"), async (req, res) => {
         priority: "normal",
         refType: "employee_violations",
         refId: insertId,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr background task failed"));
     }
 
     await emitEvent({
@@ -2620,40 +3010,30 @@ router.post("/violations", requirePermission("hr:create"), async (req, res) => {
       },
     });
 
-    res.status(201).json({
-      id: insertId,
-      assignmentId: Number(assignmentId),
-      employeeId: asn.employeeId,
-      employeeName: asn.employeeName,
-      type,
-      description,
-      severity: effectiveSeverity,
-      deduction: effectiveDeduction,
-      period,
-      incidentDate,
-    });
+    const [row] = await rawQuery<any>(`SELECT v.*, e.name AS "employeeName" FROM employee_violations v JOIN employee_assignments ea ON ea.id=v."assignmentId" JOIN employees e ON e.id=ea."employeeId" WHERE v.id=$1 AND v."companyId"=$2 AND v."deletedAt" IS NULL`, [insertId, scope.companyId]);
+    res.status(201).json(row || { id: insertId, assignmentId: Number(assignmentId), employeeId: asn.employeeId, type, severity: effectiveSeverity, deduction: effectiveDeduction, period });
   } catch (err) { handleRouteError(err, res, "Create violation error:"); }
 });
 
-router.get("/shifts", requirePermission("hr:read"), async (req, res) => {
+router.get("/shifts", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(`SELECT * FROM shifts WHERE "companyId" = $1 ORDER BY name`, [scope.companyId]);
+    const rows = await rawQuery<any>(`SELECT * FROM shifts WHERE "companyId" = $1 AND "deletedAt" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (err) { console.error("Get shifts error:", err); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
+  } catch (err) { logger.error(err, "Get shifts error:"); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
 });
 
-router.post("/shifts", requirePermission("hr:create"), async (req, res) => {
+router.post("/shifts", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = shiftSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    const parsed = zodParse(shiftSchema.safeParse(req.body));
     const {
-      name, startTime, endTime, days, isDefault,
+      name, startTime, endTime, days, isDefault, branchId,
       shiftType, remoteAllowed,
       splitBreakStart, splitBreakEnd,
       flexStartEarliest, flexStartLatest,
-    } = parsed.data;
+    } = parsed;
+    const effectiveBranchId = branchId ?? scope.branchId;
     // shiftType: 'fixed' (default) | 'flexible' | 'remote' | 'split'
     const effectiveShiftType = shiftType ?? 'fixed';
     const validShiftTypes = ["fixed", "flexible", "remote", "split"];
@@ -2673,48 +3053,69 @@ router.post("/shifts", requirePermission("hr:create"), async (req, res) => {
     }
     const effectiveRemote = remoteAllowed ?? (effectiveShiftType === 'remote');
 
-    if (isDefault) {
-      await rawExecute(`UPDATE shifts SET "isDefault" = false WHERE "companyId" = $1`, [scope.companyId]);
-    }
-    const { insertId } = await rawExecute(
-      `INSERT INTO shifts ("companyId","branchId",name,"startTime","endTime",days,"isDefault",status,"shiftType","remoteAllowed","splitBreakStart","splitBreakEnd","flexStartEarliest","flexStartLatest")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,'active',$8,$9,$10,$11,$12,$13)`,
-      [scope.companyId, scope.branchId, String(name).trim(), startTime ?? null, endTime ?? null, days ?? "0,1,2,3,4", isDefault ?? false,
-       effectiveShiftType, effectiveRemote,
-       splitBreakStart || null, splitBreakEnd || null,
-       flexStartEarliest || null, flexStartLatest || null]
-    );
+    let insertId!: number;
+    await withTransaction(async (client) => {
+      if (isDefault) {
+        await client.query(`UPDATE shifts SET "isDefault" = false WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [scope.companyId]);
+      }
+      const result = await client.query(
+        `INSERT INTO shifts ("companyId","branchId",name,"startTime","endTime",days,"isDefault",status,"shiftType","remoteAllowed","splitBreakStart","splitBreakEnd","flexStartEarliest","flexStartLatest")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'active',$8,$9,$10,$11,$12,$13) RETURNING id`,
+        [scope.companyId, effectiveBranchId, String(name).trim(), startTime ?? null, endTime ?? null, days ?? "0,1,2,3,4", isDefault ?? false,
+         effectiveShiftType, effectiveRemote,
+         splitBreakStart || null, splitBreakEnd || null,
+         flexStartEarliest || null, flexStartLatest || null]
+      );
+      insertId = result.rows[0].id;
+    });
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "shifts", entityId: insertId,
       after: { name, startTime: startTime ?? null, endTime: endTime ?? null, days: days ?? "0,1,2,3,4", shiftType: effectiveShiftType, isDefault: !!isDefault },
-    }).catch(console.error);
-    const [row] = await rawQuery<any>(`SELECT * FROM shifts WHERE id = $1`, [insertId]);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "shift.created", entity: "hr_shifts", entityId: insertId, details: JSON.stringify({ name, shiftType: effectiveShiftType }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    const [row] = await rawQuery<any>(`SELECT * FROM shifts WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "shift.created", entity: "hr_shifts", entityId: insertId, details: JSON.stringify({ name, shiftType: effectiveShiftType }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create shift error:"); }
 });
 
-router.get("/performance", requirePermission("hr:read"), async (req, res) => {
+router.get("/performance", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
       `SELECT pr.*, e.name AS "employeeName", e."empNumber"
        FROM performance_reviews pr
        JOIN employees e ON e.id = pr."employeeId"
-       WHERE pr."companyId" = $1 ORDER BY pr."createdAt" DESC LIMIT 100`,
+       WHERE pr."companyId" = $1 AND pr."deletedAt" IS NULL ORDER BY pr."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (err) { console.error("Get performance error:", err); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
+  } catch (err) { logger.error(err, "Get performance error:"); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
 });
 
-router.post("/performance", requirePermission("hr:create"), async (req, res) => {
+router.get("/performance/:id", authorize({ feature: "hr", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = performanceSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { employeeId, assignmentId, period, overallScore, scores, categories, comments, notes, status } = parsed.data as any;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(
+      `SELECT pr.*, pr."overallScore" AS "overallRating", pr.period AS "reviewPeriod",
+              e.name AS "employeeName", e."empNumber",
+              rv.name AS "reviewerName"
+       FROM performance_reviews pr
+       JOIN employees e ON e.id = pr."employeeId"
+       LEFT JOIN employees rv ON rv.id = pr."reviewerId"
+       WHERE pr.id = $1 AND pr."companyId" = $2 AND pr."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("تقييم الأداء غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Get performance detail error:"); }
+});
+
+router.post("/performance", authorize({ feature: "hr", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { employeeId, assignmentId, period, overallScore, scores, categories, comments, notes, status } = zodParse(performanceSchema.safeParse(req.body)) as any;
 
     // Resolve the employee PK — performance_reviews."employeeId" is a FK
     // on employees.id, NOT employee_assignments.id. The old handler blindly
@@ -2724,8 +3125,10 @@ router.post("/performance", requirePermission("hr:create"), async (req, res) => 
     let resolvedEmployeeId: number | null = null;
     if (employeeId) {
       const [emp] = await rawQuery<{ id: number }>(
-        `SELECT id FROM employees WHERE id = $1 LIMIT 1`,
-        [Number(employeeId)]
+        `SELECT e.id FROM employees e
+         JOIN employee_assignments ea ON ea."employeeId" = e.id
+         WHERE e.id = $1 AND ea."companyId" = $2 AND ea.status = 'active' LIMIT 1`,
+        [Number(employeeId), scope.companyId]
       );
       if (!emp) {
         throw new ValidationError(`الموظف رقم ${employeeId} غير موجود`, {
@@ -2779,34 +3182,27 @@ router.post("/performance", requirePermission("hr:create"), async (req, res) => 
       entityId: insertId,
       after: { employeeId: resolvedEmployeeId, period, overallScore: Number(overallScore ?? 0), status: effectiveStatus },
     });
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "performance.created", entity: "hr_performance", entityId: insertId, details: JSON.stringify({ employeeId: resolvedEmployeeId, period }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "performance.created", entity: "hr_performance", entityId: insertId, details: JSON.stringify({ employeeId: resolvedEmployeeId, period }) }).catch((e) => logger.error(e, "hr background task failed"));
 
-    res.status(201).json({
-      id: insertId,
-      employeeId: resolvedEmployeeId,
-      period,
-      overallScore: Number(overallScore ?? 0),
-      status: effectiveStatus,
-      scores: scores ?? categories ?? null,
-      comments: finalComments,
-    });
+    const [row] = await rawQuery<any>(`SELECT * FROM performance_reviews WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json(row || { id: insertId, employeeId: resolvedEmployeeId, period, overallScore: Number(overallScore ?? 0), status: effectiveStatus });
   } catch (err) { handleRouteError(err, res, "Create performance error:"); }
 });
 
-router.get("/attendance-stats", requirePermission("hr:read"), async (req, res) => {
+router.get("/attendance-stats", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const month = (req.query.month as string) ?? new Date().toISOString().slice(0, 7);
+    const month = (req.query.month as string) ?? currentPeriod();
     const [present] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND status='present'`,
+      `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND status='present' AND "deletedAt" IS NULL`,
       [scope.companyId, month]
     );
     const [absent] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND status='absent'`,
+      `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND status='absent' AND "deletedAt" IS NULL`,
       [scope.companyId, month]
     );
     const [late] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND "lateMinutes">0`,
+      `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND "lateMinutes">0 AND "deletedAt" IS NULL`,
       [scope.companyId, month]
     );
     const [totalEmp] = await rawQuery<any>(
@@ -2820,23 +3216,23 @@ router.get("/attendance-stats", requirePermission("hr:read"), async (req, res) =
       totalEmployees: Number(totalEmp?.count ?? 0),
       month,
     });
-  } catch (_e) { res.json({ present: 0, absent: 0, late: 0, totalEmployees: 0 }); }
+  } catch (_e) { logger.error(_e, "attendance-stats query failed"); res.json({ present: 0, absent: 0, late: 0, totalEmployees: 0 }); }
 });
 
-router.get("/leave-stats", requirePermission("hr:read"), async (req, res) => {
+router.get("/leave-stats", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const [pending] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='pending'`, [scope.companyId]
+      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='pending' AND "deletedAt" IS NULL`, [scope.companyId]
     );
     const [approved] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='approved'`, [scope.companyId]
+      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='approved' AND "deletedAt" IS NULL`, [scope.companyId]
     );
     const [rejected] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='rejected'`, [scope.companyId]
+      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='rejected' AND "deletedAt" IS NULL`, [scope.companyId]
     );
     const [total] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1`, [scope.companyId]
+      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]
     );
     res.json({
       pending: Number(pending?.count ?? 0),
@@ -2844,29 +3240,27 @@ router.get("/leave-stats", requirePermission("hr:read"), async (req, res) => {
       rejected: Number(rejected?.count ?? 0),
       total: Number(total?.count ?? 0),
     });
-  } catch (_e) { res.json({ pending: 0, approved: 0, rejected: 0, total: 0 }); }
+  } catch (_e) { logger.error(_e, "leave-stats query failed"); res.json({ pending: 0, approved: 0, rejected: 0, total: 0 }); }
 });
 
-router.get("/salary-components", requirePermission("hr:read"), async (req, res) => {
+router.get("/salary-components", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT * FROM salary_components WHERE "companyId"=$1 ORDER BY name`, [scope.companyId]
+      `SELECT * FROM salary_components WHERE "companyId"=$1 ORDER BY name LIMIT 500`, [scope.companyId]
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { logger.error(_e, "salary-components query failed"); res.json({ data: [], total: 0 }); }
 });
 
-router.post("/salary-components", requirePermission("hr:create"), async (req, res) => {
+router.post("/salary-components", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = salaryComponentSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { name, type, category, value, taxable } = parsed.data;
+    const { name, type, calculationType, value, taxable } = zodParse(salaryComponentSchema.safeParse(req.body));
     const { insertId } = await rawExecute(
-      `INSERT INTO salary_components ("companyId",name,type,category,value,taxable,status)
-       VALUES ($1,$2,$3,$4,$5,$6,'active')`,
-      [scope.companyId, String(name).trim(), type ?? "fixed", category ?? "allowance", Number(value ?? 0), taxable ?? true]
+      `INSERT INTO salary_components ("companyId",name,type,"calculationType",value,"isTaxable","isActive")
+       VALUES ($1,$2,$3,$4,$5,$6,true)`,
+      [scope.companyId, String(name).trim(), type ?? "earning", calculationType ?? "fixed", Number(value ?? 0), taxable ?? true]
     );
     await createAuditLog({
       companyId: scope.companyId,
@@ -2874,14 +3268,15 @@ router.post("/salary-components", requirePermission("hr:create"), async (req, re
       action: "create",
       entity: "salary_components",
       entityId: insertId,
-      after: { name, type: type ?? "fixed", category: category ?? "allowance", value: Number(value ?? 0), taxable: taxable ?? true },
+      after: { name, type: type ?? "earning", calculationType: calculationType ?? "fixed", value: Number(value ?? 0), taxable: taxable ?? true },
     });
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "salary_component.created", entity: "hr_salary_components", entityId: insertId, details: JSON.stringify({ name, type: type ?? "fixed", category: category ?? "allowance" }) }).catch(console.error);
-    res.status(201).json({ id: insertId, name, type: type ?? "fixed", category: category ?? "allowance", value: Number(value ?? 0), taxable: taxable ?? true, status: "active" });
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "salary_component.created", entity: "hr_salary_components", entityId: insertId, details: JSON.stringify({ name, type: type ?? "earning", calculationType: calculationType ?? "fixed" }) }).catch((e) => logger.error(e, "hr background task failed"));
+    const [row] = await rawQuery<any>(`SELECT * FROM salary_components WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json(row || { id: insertId, name, type: type ?? "earning", calculationType: calculationType ?? "fixed", value: Number(value ?? 0), taxable: taxable ?? true, status: "active" });
   } catch (err) { handleRouteError(err, res, "Create salary component error:"); }
 });
 
-router.get("/approval-chains", requirePermission("hr:read"), async (req, res) => {
+router.get("/approval-chains", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -2897,14 +3292,14 @@ router.get("/approval-chains", requirePermission("hr:read"), async (req, res) =>
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { logger.error(_e, "approval-chains query failed"); res.json({ data: [], total: 0 }); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // APPROVAL CHAINS — Generic approval chain management (5 types)
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/approval-chain-definitions", requirePermission("hr:read"), async (req, res) => {
+router.get("/approval-chain-definitions", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const chains = await rawQuery<any>(
@@ -2912,75 +3307,78 @@ router.get("/approval-chain-definitions", requirePermission("hr:read"), async (r
               json_agg(json_build_object('id', acs.id, 'stepOrder', acs."stepOrder", 'requiredRole', acs."requiredRole", 'timeoutHours', acs."timeoutHours", 'autoApproveOnTimeout', acs."autoApproveOnTimeout") ORDER BY acs."stepOrder") AS steps
        FROM approval_chains ac
        LEFT JOIN approval_chain_steps acs ON acs."chainId" = ac.id
-       WHERE ac."companyId" = $1
+       WHERE ac."companyId" = $1 AND ac."deletedAt" IS NULL
        GROUP BY ac.id
-       ORDER BY ac."chainType", ac."minAmount"`,
+       ORDER BY ac."chainType", ac."minAmount" LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: chains, total: chains.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { logger.error(_e, "approval-chain-definitions query failed"); res.json({ data: [], total: 0 }); }
 });
 
-router.post("/approval-chain-definitions", requirePermission("hr:create"), async (req, res) => {
+router.post("/approval-chain-definitions", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح بإنشاء سلاسل موافقات");
     }
-    const parsed = approvalChainSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { name, chainType, minAmount, maxAmount, steps } = parsed.data;
+    const { name, chainType, minAmount, maxAmount, steps } = zodParse(approvalChainSchema.safeParse(req.body));
 
-    const { insertId: chainId } = await rawExecute(
-      `INSERT INTO approval_chains ("companyId",name,"chainType","minAmount","maxAmount")
-       VALUES ($1,$2,$3,$4,$5)`,
-      [scope.companyId, name, chainType, minAmount ?? 0, maxAmount ?? 999999999]
-    );
+    let chainId!: number;
+    await withTransaction(async (client) => {
+      const ins = await client.query(
+        `INSERT INTO approval_chains ("companyId",name,"chainType","minAmount","maxAmount")
+         VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+        [scope.companyId, name, chainType, minAmount ?? 0, maxAmount ?? 999999999]
+      );
+      chainId = ins.rows[0].id;
 
-    if (Array.isArray(steps)) {
-      for (let i = 0; i < steps.length; i++) {
-        const step = steps[i];
-        await rawExecute(
+      if (Array.isArray(steps) && steps.length > 0) {
+        const values = steps.map((_, i) => `($${i * 5 + 1},$${i * 5 + 2},$${i * 5 + 3},$${i * 5 + 4},$${i * 5 + 5})`).join(",");
+        const params = steps.flatMap((step, i) => [chainId, i + 1, step.requiredRole ?? "branch_manager", step.timeoutHours ?? 48, step.autoApproveOnTimeout ?? false]);
+        await client.query(
           `INSERT INTO approval_chain_steps ("chainId","stepOrder","requiredRole","timeoutHours","autoApproveOnTimeout")
-           VALUES ($1,$2,$3,$4,$5)`,
-          [chainId, i + 1, step.requiredRole ?? "branch_manager", step.timeoutHours ?? 48, step.autoApproveOnTimeout ?? false]
+           VALUES ${values}`,
+          params
         );
       }
-    }
+    });
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "approval_chains", entityId: chainId,
       after: { name, chainType, minAmount, maxAmount, stepCount: steps?.length ?? 0 },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "approval_chain.created", entity: "hr_approval_chain_definitions", entityId: chainId, details: JSON.stringify({ name, chainType }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "approval_chain.created", entity: "hr_approval_chain_definitions", entityId: chainId, details: JSON.stringify({ name, chainType }) }).catch((e) => logger.error(e, "hr background task failed"));
 
-    res.status(201).json({ id: chainId, name, chainType, stepsCreated: steps?.length ?? 0 });
+    const [row] = await rawQuery<any>(`SELECT * FROM approval_chains WHERE id=$1 AND "companyId"=$2`, [chainId, scope.companyId]);
+    res.status(201).json({ ...row, stepsCreated: steps?.length ?? 0 });
   } catch (err) { handleRouteError(err, res, "Create approval chain error:"); }
 });
 
-router.delete("/approval-chain-definitions/:id", requirePermission("hr:delete"), async (req, res) => {
+router.delete("/approval-chain-definitions/:id", authorize({ feature: "hr", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: يتطلب صلاحية مالك أو HR أو مدير عام");
     }
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT * FROM approval_chains WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
-    await rawExecute(`UPDATE approval_chains SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE approval_chains SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("سلسلة الموافقة غير موجودة");
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "approval_chains", entityId: id,
       before: existing ?? { id },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "approval_chain.deleted", entity: "hr_approval_chain_definitions", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "approval_chain.deleted", entity: "hr_approval_chain_definitions", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
 // ─── Generic approval request endpoints ──────────────────────
 
-router.get("/approval-requests", requirePermission("hr:read"), async (req, res) => {
+router.get("/approval-requests", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const statusFilter = (req.query.status as string) ?? "pending";
@@ -2990,25 +3388,26 @@ router.get("/approval-requests", requirePermission("hr:read"), async (req, res) 
        LEFT JOIN employee_assignments ea ON ea.id = ar."assignedTo"
        LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE ar."companyId" = $1 AND ar.status = $2
-       ORDER BY ar."createdAt" DESC`,
+       ORDER BY ar."createdAt" DESC LIMIT 500`,
       [scope.companyId, statusFilter]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { logger.error(_e, "approval-requests query failed"); res.json({ data: [], total: 0 }); }
 });
 
-router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), async (req, res) => {
+router.patch("/approval-requests/:id/decide", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { approved, reason } = req.body as any;
+    const id = parseId(req.params.id, "id");
+    const { approved, reason } = zodParse(approvalRequestDecisionSchema.safeParse(req.body ?? {}));
 
-    if (!["branch_manager", "hr_manager", "finance_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!OPS_CLOSE_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح بالموافقة أو الرفض");
     }
 
     const [request] = await rawQuery<any>(
       `SELECT * FROM approval_requests WHERE id = $1 AND "companyId" = $2 AND status = 'pending'`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!request) {
       throw new NotFoundError("طلب الموافقة غير موجود أو تمت معالجته");
@@ -3044,8 +3443,8 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
           [request.refId]
         );
         requesterId = refRow?.requesterId ?? undefined;
-      } catch {
-        // column may not exist for all entity types; skip check
+      } catch (e) {
+        logger.warn(e, "hr approval requester lookup (column may not exist for entity type)");
       }
     }
     if (requesterId !== undefined && requesterId === scope.activeAssignmentId) {
@@ -3067,16 +3466,14 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
       const target = entityUpdateMap[request.refType];
       if (target) {
         await rawExecute(
-          `UPDATE ${target.table} SET ${target.column} = 'approved' WHERE id = $1`,
-          [request.refId]
+          `UPDATE ${target.table} SET ${target.column} = 'approved' WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status IN ('pending','pending_approval','draft')`,
+          [request.refId, scope.companyId]
         );
       }
       const journalRefTypes = ["expense", "salary_advance", "custody"];
       if (journalRefTypes.includes(request.refType)) {
-        await rawExecute(
-          `UPDATE journal_entries SET status = 'posted' WHERE id = $1 AND status = 'pending_approval'`,
-          [request.refId]
-        );
+        const { financialEngine } = await import("../lib/engines/index.js");
+        await financialEngine.updateJournalStatus(request.refId, "posted");
       }
     } else if (result.status === "rejected") {
       const entityUpdateMap: Record<string, { table: string; column: string }> = {
@@ -3086,16 +3483,14 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
       const target = entityUpdateMap[request.refType];
       if (target) {
         await rawExecute(
-          `UPDATE ${target.table} SET ${target.column} = 'rejected' WHERE id = $1`,
-          [request.refId]
+          `UPDATE ${target.table} SET ${target.column} = 'rejected' WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status IN ('pending','pending_approval','draft')`,
+          [request.refId, scope.companyId]
         );
       }
       const journalRefTypes = ["expense", "salary_advance", "custody"];
       if (journalRefTypes.includes(request.refType)) {
-        await rawExecute(
-          `UPDATE journal_entries SET status = 'rejected' WHERE id = $1 AND status = 'pending_approval'`,
-          [request.refId]
-        );
+        const { financialEngine } = await import("../lib/engines/index.js");
+        await financialEngine.updateJournalStatus(request.refId, "rejected");
       }
 
       // Cancel any queued email/WhatsApp dispatches for a rejected official
@@ -3103,36 +3498,36 @@ router.patch("/approval-requests/:id/decide", requirePermission("hr:update"), as
       if (request.refType === "official_letter") {
         await rawExecute(
           `UPDATE email_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
-            WHERE "refType"='official_letter' AND "refId"=$1 AND status='pending'`,
-          [request.refId]
-        ).catch((e) => console.error("cancel email_queue for rejected letter failed:", e));
+            WHERE "refType"='official_letter' AND "refId"=$1 AND "companyId"=$2 AND status='pending'`,
+          [request.refId, scope.companyId]
+        ).catch((e) => logger.error(e, "cancel email_queue for rejected letter failed:"));
         await rawExecute(
           `UPDATE whatsapp_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
-            WHERE "refType"='official_letter' AND "refId"=$1 AND status='pending'`,
-          [request.refId]
-        ).catch(() => { /* whatsapp_queue may not exist */ });
+            WHERE "refType"='official_letter' AND "refId"=$1 AND "companyId"=$2 AND status='pending'`,
+          [request.refId, scope.companyId]
+        ).catch((e) => { logger.warn(e, "hr whatsapp_queue insert failed (table may not exist)"); });
       }
     }
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "approval_requests", entityId: Number(req.params.id),
+      action: "update", entity: "approval_requests", entityId: id,
       before: { status: request.status, refType: request.refType, refId: request.refId },
       after: { status: result.status, approved: !!approved, reason: reason ?? null },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: `approval.${result.status}`, entity: "approval_requests",
-      entityId: Number(req.params.id),
+      entityId: id,
       details: JSON.stringify({ refType: request.refType, refId: request.refId, result: result.status }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Approval decision error:"); }
 });
 
 // ─── Attendance policy management ──────────────────────
-router.get("/attendance-policy", requirePermission("hr:read"), async (req, res) => {
+router.get("/attendance-policy", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const [policy] = await rawQuery<any>(
@@ -3146,16 +3541,16 @@ router.get("/attendance-policy", requirePermission("hr:read"), async (req, res) 
       penaltyLevel3Label: "خصم يوم", penaltyLevel4Label: "خصم يومين",
       penaltyLevel5Label: "خصم ثلاثة أيام + إنذار نهائي",
     });
-  } catch (_e) { res.json({}); }
+  } catch (e) { logger.error(e, "attendance-policy GET error"); res.json({}); }
 });
 
-router.put("/attendance-policy", requirePermission("hr:update"), async (req, res) => {
+router.put("/attendance-policy", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["owner", "hr_manager", "general_manager"].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح");
     }
-    const b = req.body as any;
+    const b = zodParse(attendancePolicySchema.safeParse(req.body ?? {}));
     await rawExecute(
       `INSERT INTO attendance_policies ("companyId","lateThresholdMinutes","gpsRadiusMeters",
         "penaltyLevel1","penaltyLevel2","penaltyLevel3","penaltyLevel4","penaltyLevel5",
@@ -3176,18 +3571,18 @@ router.put("/attendance-policy", requirePermission("hr:update"), async (req, res
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "attendance_policies", entityId: scope.companyId,
       after: { lateThresholdMinutes: b.lateThresholdMinutes ?? 15, gpsRadiusMeters: b.gpsRadiusMeters ?? 500 },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "attendance_policy.updated", entity: "hr_attendance_policies", entityId: scope.companyId, details: JSON.stringify({ lateThresholdMinutes: b.lateThresholdMinutes ?? 15, gpsRadiusMeters: b.gpsRadiusMeters ?? 500 }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "attendance_policy.updated", entity: "hr_attendance_policies", entityId: scope.companyId, details: JSON.stringify({ lateThresholdMinutes: b.lateThresholdMinutes ?? 15, gpsRadiusMeters: b.gpsRadiusMeters ?? 500 }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
 // ─── Employee payroll summary (aggregate all assignments) ──────────────────────
-router.get("/payroll-summary", requirePermission("hr:read"), async (req, res) => {
+router.get("/payroll-summary", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { period } = req.query as { period?: string };
-    const targetPeriod = period ?? new Date().toISOString().slice(0, 7);
+    const targetPeriod = period ?? currentPeriod();
 
     const lines = await rawQuery<any>(
       `SELECT pl.*, e.name AS "employeeName", e."empNumber", ea."jobTitle", ea."branchId", b.name AS "branchName"
@@ -3197,7 +3592,7 @@ router.get("/payroll-summary", requirePermission("hr:read"), async (req, res) =>
        LEFT JOIN branches b ON b.id = ea."branchId"
        JOIN payroll_runs pr ON pr.id = pl."runId"
        WHERE pr."companyId" = $1 AND pr.period = $2 AND pr."deletedAt" IS NULL AND pl."deletedAt" IS NULL
-       ORDER BY e.name, ea.id`,
+       ORDER BY e.name, ea.id LIMIT 1000`,
       [scope.companyId, targetPeriod]
     );
 
@@ -3236,13 +3631,13 @@ router.get("/payroll-summary", requirePermission("hr:read"), async (req, res) =>
 
     const data = Array.from(empMap.values());
     res.json({ data, total: data.length, period: targetPeriod });
-  } catch (err) { res.json({ data: [], total: 0 }); }
+  } catch (err) { logger.error(err, "payslip-preview query failed"); res.json({ data: [], total: 0 }); }
 });
 
-router.get("/violations-stats", requirePermission("hr:read"), async (req, res) => {
+router.get("/violations-stats", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const currentMonth = new Date().toISOString().slice(0, 7);
+    const currentMonth = currentPeriod();
     const [total] = await rawQuery<any>(
       `SELECT COUNT(*) AS count FROM employee_violations WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]
     );
@@ -3257,17 +3652,17 @@ router.get("/violations-stats", requirePermission("hr:read"), async (req, res) =
       thisMonth: Number(thisMonthRow?.count ?? 0),
       totalDeductions: Number(totalDeductions?.total ?? 0),
     });
-  } catch (_e) { res.json({ total: 0, thisMonth: 0, totalDeductions: 0 }); }
+  } catch (_e) { logger.error(_e, "violations-stats query failed"); res.json({ total: 0, thisMonth: 0, totalDeductions: 0 }); }
 });
 
-router.patch("/violations/:id", requirePermission("hr:update"), async (req, res) => {
+router.patch("/violations/:id", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["hr_manager", "branch_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_APPROVAL_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: تعديل المخالفات مقصور على HR أو المدير أو المالك");
     }
-    const id = Number(req.params.id);
-    const b = req.body as any;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(violationPatchSchema.safeParse(req.body ?? {}));
     const sets: string[] = [];
     const params: any[] = [];
     if (b.type !== undefined) { params.push(b.type); sets.push(`type=$${params.length}`); }
@@ -3284,15 +3679,16 @@ router.patch("/violations/:id", requirePermission("hr:update"), async (req, res)
     }
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM employee_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE employee_violations SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
+    const { affectedRows } = await rawExecute(`UPDATE employee_violations SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("المخالفة غير موجودة");
     const [updated] = await rawQuery<any>(`SELECT * FROM employee_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "employee_violations", entityId: id,
       before: beforeRow ?? {},
       after: updated ?? {},
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "violation.updated", entity: "hr_violations", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "violation.updated", entity: "hr_violations", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json(updated || { message: "تم التحديث" });
   } catch (err) { handleRouteError(err, res, "Patch violation error:"); }
 });
@@ -3300,11 +3696,11 @@ router.patch("/violations/:id", requirePermission("hr:update"), async (req, res)
 async function violationApprovalAction(req: any, res: any, newStatus: "approved" | "rejected" | "returned") {
   try {
     const scope = req.scope!;
-    if (!["hr_manager", "branch_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_APPROVAL_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: اعتماد المخالفات مقصور على HR أو المدير أو المالك");
     }
-    const id = Number(req.params.id);
-    const { notes } = req.body as any;
+    const id = parseId(req.params.id, "id");
+    const { notes } = zodParse(violationApprovalSchema.safeParse(req.body ?? {}));
     const [violation] = await rawQuery<any>(
       `SELECT * FROM employee_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -3313,28 +3709,33 @@ async function violationApprovalAction(req: any, res: any, newStatus: "approved"
     if ((newStatus === "rejected" || newStatus === "returned") && (!notes || !String(notes).trim())) {
       throw new ValidationError(newStatus === "rejected" ? "يجب ذكر سبب الرفض" : "يجب ذكر سبب الإرجاع", { field: "notes" });
     }
-    await rawExecute(`UPDATE employee_violations SET status=$1 WHERE id=$2`, [newStatus, id]);
-    try {
-      await rawExecute(
-        `INSERT INTO approval_actions ("entityType","entityId",action,notes,"actionBy","companyId") VALUES ('violation',$1,$2,$3,$4,$5)`,
-        [id, newStatus, notes || null, scope.userId, scope.companyId]
-      );
-    } catch (e) { console.error(e); }
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: `violation.${newStatus}`, entity: "employee_violations", entityId: id, before: { status: violation.status }, after: { status: newStatus } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: `violation.${newStatus}`, entity: "hr_violations", entityId: id, details: JSON.stringify({ id, status: newStatus }) }).catch(console.error);
+    await applyTransition({
+      entity: "employee_violations",
+      id,
+      scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
+      action: `violation.${newStatus}`,
+      toState: newStatus,
+      reason: notes || undefined,
+      onApply: async (_row, client) => {
+        await client.query(
+          `INSERT INTO approval_actions ("entityType","entityId",action,notes,"actionBy","companyId") VALUES ('violation',$1,$2,$3,$4,$5)`,
+          [id, newStatus, notes || null, scope.userId, scope.companyId]
+        );
+      },
+    });
     const labels: Record<string, string> = { approved: "تم اعتماد المخالفة", rejected: "تم رفض المخالفة", returned: "تم إرجاع المخالفة" };
     res.json({ message: labels[newStatus], status: newStatus });
   } catch (err) { handleRouteError(err, res, "Violation approval error:"); }
 }
-router.patch("/violations/:id/approve", requirePermission("hr:update"), (req, res) => violationApprovalAction(req, res, "approved"));
-router.patch("/violations/:id/reject", requirePermission("hr:update"), (req, res) => violationApprovalAction(req, res, "rejected"));
-router.patch("/violations/:id/return", requirePermission("hr:update"), (req, res) => violationApprovalAction(req, res, "returned"));
+router.patch("/violations/:id/approve", authorize({ feature: "hr", action: "update" }), (req, res) => violationApprovalAction(req, res, "approved"));
+router.patch("/violations/:id/reject", authorize({ feature: "hr", action: "update" }), (req, res) => violationApprovalAction(req, res, "rejected"));
+router.patch("/violations/:id/return", authorize({ feature: "hr", action: "update" }), (req, res) => violationApprovalAction(req, res, "returned"));
 
-router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => {
+router.patch("/shifts/:id", authorize({ feature: "hr", action: "update", resource: { table: "shifts", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
-    const b = req.body as any;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(shiftPatchSchema.safeParse(req.body ?? {}));
     const sets: string[] = [];
     const params: any[] = [];
     if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
@@ -3349,7 +3750,6 @@ router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => 
     if (b.flexStartEarliest !== undefined) { params.push(b.flexStartEarliest); sets.push(`"flexStartEarliest"=$${params.length}`); }
     if (b.flexStartLatest !== undefined) { params.push(b.flexStartLatest); sets.push(`"flexStartLatest"=$${params.length}`); }
     if (b.isDefault !== undefined) {
-      if (b.isDefault) await rawExecute(`UPDATE shifts SET "isDefault"=false WHERE "companyId"=$1`, [scope.companyId]);
       params.push(b.isDefault); sets.push(`"isDefault"=$${params.length}`);
     }
     if (sets.length === 0) {
@@ -3357,36 +3757,41 @@ router.patch("/shifts/:id", requirePermission("hr:update"), async (req, res) => 
     }
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE shifts SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length}`, params);
+    await withTransaction(async (client) => {
+      if (b.isDefault) await client.query(`UPDATE shifts SET "isDefault"=false WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]);
+      const result = await client.query(`UPDATE shifts SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+      if (!result.rowCount) throw new NotFoundError("السجل غير موجود");
+    });
     const [row] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "shifts", entityId: id,
       before: beforeRow ?? {},
       after: row ?? {},
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "shift.updated", entity: "hr_shifts", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "shift.updated", entity: "hr_shifts", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Patch shift error:"); }
 });
 
-router.delete("/shifts/:id", requirePermission("hr:delete"), async (req, res) => {
+router.delete("/shifts/:id", authorize({ feature: "hr", action: "delete", resource: { table: "shifts", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    await rawExecute(`UPDATE shifts SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE shifts SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود");
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "shifts", entityId: id,
       before: beforeRow ?? { id },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "shift.deleted", entity: "hr_shifts", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "shift.deleted", entity: "hr_shifts", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json({ message: "تم حذف الوردية" });
   } catch (err) { handleRouteError(err, res, "Delete shift error:"); }
 });
 
-router.get("/shift-assignments", requirePermission("hr:read"), async (req, res) => {
+router.get("/shift-assignments", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -3401,15 +3806,13 @@ router.get("/shift-assignments", requirePermission("hr:read"), async (req, res) 
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { logger.error(_e, "shift-assignments query failed"); res.json({ data: [], total: 0 }); }
 });
 
-router.post("/shift-assignments", requirePermission("hr:create"), async (req, res) => {
+router.post("/shift-assignments", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = shiftAssignmentSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { assignmentId, shiftId, startDate, endDate } = parsed.data;
+    const { assignmentId, shiftId, startDate, endDate } = zodParse(shiftAssignmentSchema.safeParse(req.body));
     if (endDate && new Date(endDate) < new Date(startDate)) {
       throw new ValidationError("تاريخ النهاية قبل تاريخ البداية", {
         field: "endDate",
@@ -3448,13 +3851,21 @@ router.post("/shift-assignments", requirePermission("hr:create"), async (req, re
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "employee_shift_assignments", entityId: insertId,
       after: { assignmentId: Number(assignmentId), shiftId: Number(shiftId), startDate, endDate: endDate ?? null },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "shift.assignment.created", entity: "hr_shift_assignments", entityId: insertId, details: JSON.stringify({ assignmentId: Number(assignmentId), shiftId: Number(shiftId) }) }).catch(console.error);
-    res.status(201).json({ id: insertId, assignmentId: Number(assignmentId), shiftId: Number(shiftId), startDate, endDate: endDate ?? null });
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "shift.assignment.created", entity: "hr_shift_assignments", entityId: insertId, details: JSON.stringify({ assignmentId: Number(assignmentId), shiftId: Number(shiftId) }) }).catch((e) => logger.error(e, "hr background task failed"));
+    const [row] = await rawQuery<any>(
+      `SELECT esa.*, s.name AS "shiftName"
+         FROM employee_shift_assignments esa
+         JOIN employee_assignments ea ON ea.id = esa."assignmentId" AND ea."companyId" = $2
+         LEFT JOIN shifts s ON s.id = esa."shiftId"
+        WHERE esa.id = $1`,
+      [insertId, scope.companyId]
+    );
+    res.status(201).json(row || { id: insertId, assignmentId: Number(assignmentId), shiftId: Number(shiftId), startDate, endDate: endDate ?? null });
   } catch (err) { handleRouteError(err, res, "Create shift assignment error:"); }
 });
 
-router.get("/official-letters", requirePermission("hr:read"), async (req, res) => {
+router.get("/official-letters", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -3463,20 +3874,18 @@ router.get("/official-letters", requirePermission("hr:read"), async (req, res) =
        FROM official_letters ol
        LEFT JOIN employees e ON e.id = ol."employeeId"
        LEFT JOIN branches b ON b.id = ol."branchId"
-       WHERE ol."companyId" = $1
+       WHERE ol."companyId" = $1 AND ol."deletedAt" IS NULL
        ORDER BY ol."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { logger.error(_e, "official-letters query failed"); res.json({ data: [], total: 0 }); }
 });
 
-router.post("/official-letters", requirePermission("hr:create"), async (req, res) => {
+router.post("/official-letters", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = officialLetterSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { employeeId, type, subject, content, status } = parsed.data;
+    const { employeeId, type, subject, content, status } = zodParse(officialLetterSchema.safeParse(req.body));
 
     // FK pre-check: employee must belong to this company (via any assignment).
     const [emp] = await rawQuery<{ id: number }>(
@@ -3492,14 +3901,18 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
       });
     }
 
-    const [seqRow] = await rawQuery<any>(`SELECT nextval('letter_number_seq') AS seq`).catch(() => [{ seq: Date.now() }]);
-    const letterRef = `LTR-${new Date().getFullYear()}-${String(seqRow.seq).padStart(4, "0")}`;
+    const [seqRow] = await rawQuery<any>(`SELECT nextval('letter_number_seq') AS seq`).catch((e) => { logger.error(e, "letter sequence query failed"); return [{ seq: Date.now() % 1000000 }]; });
+    const letterRef = generateRef("LTR", seqRow.seq);
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO official_letters ("companyId","employeeId",type,subject,content,status,"createdByAssignmentId",ref,"branchId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [scope.companyId, Number(employeeId), type ?? "general", String(subject).trim(), String(content).trim(), status ?? "draft", scope.activeAssignmentId, letterRef, scope.branchId || null]
-    );
+    let insertId!: number;
+    await withTransaction(async (client) => {
+      const ins = await client.query(
+        `INSERT INTO official_letters ("companyId","employeeId",type,subject,content,status,"createdByAssignmentId",ref,"branchId")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+        [scope.companyId, Number(employeeId), type ?? "general", String(subject).trim(), String(content).trim(), status ?? "draft", scope.activeAssignmentId, letterRef, scope.branchId || null]
+      );
+      insertId = ins.rows[0].id;
+    });
 
     const approvalResult = await initiateApprovalChain({
       companyId: scope.companyId, branchId: scope.branchId,
@@ -3508,8 +3921,8 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
 
     if (approvalResult.requiresApproval) {
       await rawExecute(
-        `UPDATE official_letters SET status = 'pending_approval' WHERE id = $1`,
-        [insertId]
+        `UPDATE official_letters SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft' AND "deletedAt" IS NULL`,
+        [insertId, scope.companyId]
       );
     }
 
@@ -3523,7 +3936,7 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
       submittedBy: scope.activeAssignmentId,
       submittedByName: scope.userName,
       data: { type, subject, content },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     // Leave a creation trail: the approval chain writes its own rows but the
     // letter itself had no audit entry, so the employee timeline started at
@@ -3541,7 +3954,7 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
         subject,
         status: approvalResult.requiresApproval ? "pending_approval" : (status ?? "draft"),
       },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -3550,37 +3963,39 @@ router.post("/official-letters", requirePermission("hr:create"), async (req, res
       entity: "official_letter",
       entityId: insertId,
       after: { employeeId, type: type ?? "general", subject },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
-    res.status(201).json({ id: insertId, ...req.body, approval: approvalResult });
+    const [row] = await rawQuery<any>(`SELECT * FROM official_letters WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json({ ...row, approval: approvalResult });
   } catch (err) { handleRouteError(err, res, "Create official letter error:"); }
 });
 
-router.get("/monthly-attendance", requirePermission("hr:read"), async (req, res) => {
+router.get("/monthly-attendance", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const month = (req.query.month as string) ?? new Date().toISOString().slice(0, 7);
+    const month = (req.query.month as string) ?? currentPeriod();
     const rows = await rawQuery<any>(
       `SELECT ema.*, e.name AS "employeeName", e."empNumber"
        FROM employee_monthly_attendance ema
        JOIN employee_assignments ea ON ea.id = ema."assignmentId"
        JOIN employees e ON e.id = ea."employeeId"
        WHERE ema."companyId" = $1 AND ema.period = $2
-       ORDER BY e.name`,
+       ORDER BY e.name LIMIT 500`,
       [scope.companyId, month]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { logger.error(_e, "monthly-attendance query failed"); res.json({ data: [], total: 0 }); }
 });
 
 // ─── Leave requests general PATCH/DELETE ──────────────────────
-router.patch("/leave-requests/:id", requirePermission("hr:update"), async (req, res) => {
+router.patch("/leave-requests/:id", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+    const id = parseId(req.params.id, "id");
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: تعديل طلبات الإجازة مقصور على HR أو المالك");
     }
-    const { status, reason } = req.body as any;
+    const { status, reason } = zodParse(leaveRequestPatchSchema.safeParse(req.body ?? {}));
     if (status && ["approved", "rejected"].includes(status)) {
       throw new ValidationError("استخدم نقطة نهاية الموافقة/الرفض المخصصة", { field: "status" });
     }
@@ -3592,9 +4007,9 @@ router.patch("/leave-requests/:id", requirePermission("hr:update"), async (req, 
     if (sets.length === 0) {
       throw new ValidationError("لا توجد بيانات للتحديث");
     }
-    params.push(Number(req.params.id), scope.companyId);
+    params.push(id, scope.companyId);
     const [row] = await rawQuery<any>(
-      `UPDATE hr_leave_requests SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
+      `UPDATE hr_leave_requests SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
     if (!row) {
@@ -3602,10 +4017,10 @@ router.patch("/leave-requests/:id", requirePermission("hr:update"), async (req, 
     }
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "hr_leave_requests", entityId: Number(req.params.id),
+      action: "update", entity: "hr_leave_requests", entityId: id,
       after: { status: status ?? undefined, reason: reason ?? undefined },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "leave.updated", entity: "hr_leave_requests", entityId: Number(req.params.id), details: JSON.stringify({ id: Number(req.params.id), status, reason }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "leave.updated", entity: "hr_leave_requests", entityId: id, details: JSON.stringify({ id: id, status, reason }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -3614,38 +4029,29 @@ router.patch("/leave-requests/:id", requirePermission("hr:update"), async (req, 
  * Cancel an approved leave request — restores balance, cancels obligations.
  * Use when leave is no longer needed (e.g. employee returned early, emergency).
  */
-router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async (req, res) => {
-  // P3.2 pilot — this endpoint is the unification plan's reference
-  // implementation for how a cancel handler should look after adoption:
-  //   - structured errors via the P0.3 TypedError hierarchy
-  //   - one thrown error per failure reason, no `res.status().json()` calls
-  //   - handleRouteError translates the TypedError to the exact
-  //     { error, code, field?, fix? } shape the frontend's
-  //     PageErrorBoundary + useApiMutation(.onFieldError) expect
-  // Leaves approve/reject untouched for now — they need a separate
-  // multi-stage refactor that's tracked under P3.x follow-ups.
+router.post("/leave-requests/:id/cancel", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
-    const b = req.body || {};
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(leaveCancelSchema.safeParse(req.body ?? {}));
     if (!b.reason) {
       throw new ValidationError("سبب الإلغاء مطلوب", {
         field: "reason",
         fix: "أدخل سبب إلغاء الإجازة",
       });
     }
+
     const [request] = await rawQuery<any>(
       `SELECT lr.*, lt.name AS "leaveTypeName"
        FROM hr_leave_requests lr
        LEFT JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-       WHERE lr.id = $1 AND lr."companyId" = $2`,
+       WHERE lr.id = $1 AND lr."companyId" = $2 AND lr."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
-    if (!request) {
-      throw new NotFoundError("طلب الإجازة غير موجود");
-    }
+    if (!request) throw new NotFoundError("طلب الإجازة غير موجود");
+
     const isOwn = request.employeeId === scope.employeeId;
-    if (!isOwn && !["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!isOwn && !HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError(
         "إلغاء الإجازة مقصور على صاحب الطلب أو HR أو المالك",
         { fix: "اطلب من مدير الموارد البشرية تنفيذ الإلغاء." },
@@ -3662,72 +4068,69 @@ router.post("/leave-requests/:id/cancel", requirePermission("hr:update"), async 
       );
     }
 
-    // Restore balance if was approved (used → 0, or reduce used by days)
-    if (request.status === "approved") {
-      const year = new Date(request.startDate).getFullYear();
-      await rawExecute(
-        `UPDATE hr_leave_balances
-           SET used = GREATEST(used - $1, 0)
-         WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
-        [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
-      );
-      // Clear attendance 'on_leave' records for future dates
-      await rawExecute(
-        `DELETE FROM attendance
-         WHERE "companyId" = $1 AND status = 'on_leave' AND notes LIKE $2
-           AND date >= CURRENT_DATE AND date BETWEEN $3 AND $4`,
-        [scope.companyId, `%طلب رقم ${id}%`, request.startDate, request.endDate]
-      ).catch(() => {});
-    } else if (request.status === "pending") {
-      // Release reserved balance
-      const year = new Date(request.startDate).getFullYear();
-      await rawExecute(
-        `UPDATE hr_leave_balances
-           SET reserved = GREATEST(reserved - $1, 0)
-         WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
-        [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
-      );
-    }
+    const prevStatus = request.status;
+    await applyTransition({
+      entity: "hr_leave_requests",
+      id,
+      scope,
+      action: "leave.cancelled",
+      fromStates: ["approved", "pending"],
+      toState: "cancelled",
+      reason: b.reason,
+      setExtras: {
+        rejectedReason: b.reason ? `${(request as any).rejectedReason || ""} | إلغاء: ${b.reason}`.trim() : null,
+      },
+      onApply: async (_row, client) => {
+        const year = new Date(request.startDate).getFullYear();
+        if (prevStatus === "approved") {
+          await client.query(
+            `UPDATE hr_leave_balances SET used = GREATEST(used - $1, 0)
+             WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+            [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
+          );
+          await client.query(
+            `DELETE FROM attendance
+             WHERE "companyId" = $1 AND status = 'on_leave' AND notes LIKE $2
+               AND date >= CURRENT_DATE AND date BETWEEN $3 AND $4 AND "deletedAt" IS NULL`,
+            [scope.companyId, `%[leave_request:${id}]%`, request.startDate, request.endDate]
+          );
+        } else {
+          await client.query(
+            `UPDATE hr_leave_balances SET reserved = GREATEST(reserved - $1, 0)
+             WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+            [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
+          );
+        }
+      },
+      after: { status: "cancelled", reason: b.reason, previousStatus: prevStatus },
+    });
 
-    await rawExecute(
-      `UPDATE hr_leave_requests SET status = 'cancelled', notes = COALESCE(notes,'') || ' | إلغاء: ' || $1 WHERE id = $2`,
-      [b.reason, id]
-    );
-
-    // Cancel return-to-work obligation
     await cancelObligation(scope.companyId, "hr_leave_request", id);
 
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "hr_leave_requests", entityId: id,
-      before: { status: request.status, employeeId: request.employeeId, days: request.days },
-      after: { status: "cancelled", reason: b.reason },
-    }).catch(console.error);
-    await emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "leave.cancelled",
-      entity: "hr_leave_requests",
-      entityId: id,
-      details: `إلغاء إجازة #${id}: ${b.reason}`,
-    }).catch(console.error);
-
     res.json({ message: "تم إلغاء الإجازة", status: "cancelled", reason: b.reason });
-  } catch (err) { handleRouteError(err, res, "Cancel leave error:"); }
+  } catch (err) {
+    if (err instanceof LifecycleError) {
+      const typed = err.status === 404
+        ? new NotFoundError(err.message)
+        : new ConflictError(err.message, { field: err.field });
+      return handleRouteError(typed, res, "Cancel leave error:");
+    }
+    handleRouteError(err, res, "Cancel leave error:");
+  }
 });
 
-router.delete("/leave-requests/:id", requirePermission("hr:delete"), async (req, res) => {
+router.delete("/leave-requests/:id", authorize({ feature: "hr", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [leaveReq] = await rawQuery<any>(
       `SELECT lr.id, lr."employeeId", lr."leaveTypeId", lr.days, lr."startDate", lr.status
-       FROM hr_leave_requests lr WHERE lr.id = $1 AND lr."companyId" = $2`,
+       FROM hr_leave_requests lr WHERE lr.id = $1 AND lr."companyId" = $2 AND lr."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!leaveReq) throw new NotFoundError("طلب الإجازة غير موجود");
     const isOwnRequest = leaveReq.employeeId === scope.employeeId;
-    if (!isOwnRequest && !["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!isOwnRequest && !HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError(
         "حذف طلبات الإجازة مقصور على صاحب الطلب أو HR أو المالك",
         { fix: "اطلب من مدير الموارد البشرية تنفيذ الحذف." }
@@ -3744,55 +4147,55 @@ router.delete("/leave-requests/:id", requirePermission("hr:delete"), async (req,
       );
     }
 
-    const [row] = await rawQuery<any>(
-      `UPDATE hr_leave_requests SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND status = 'pending' AND "deletedAt" IS NULL RETURNING id`,
-      [id, scope.companyId]
-    );
-    if (!row) {
-      // Race: the request was either decided or deleted between the SELECT
-      // and the DELETE. Same NotFoundError shape as everywhere else.
+    const year = new Date(leaveReq.startDate).getFullYear();
+    let deleted = false;
+    await withTransaction(async (client: any) => {
+      const { rows } = await client.query(
+        `UPDATE hr_leave_requests SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND status = 'pending' AND "deletedAt" IS NULL RETURNING id`,
+        [id, scope.companyId]
+      );
+      if (!rows[0]) return;
+      deleted = true;
+      await client.query(
+        `UPDATE hr_leave_balances
+         SET reserved = GREATEST(reserved - $1, 0)
+         WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+        [leaveReq.days, scope.companyId, leaveReq.employeeId, leaveReq.leaveTypeId, year]
+      );
+    });
+    if (!deleted) {
       throw new NotFoundError("طلب الإجازة غير موجود أو لا يمكن حذفه (تمت معالجته)");
     }
-
-    // Deleting a pending leave request must release the reserved balance so
-    // the employee can use those days again. Previously deletion left orphan
-    // reservations that silently capped leave availability.
-    const year = new Date(leaveReq.startDate).getFullYear();
-    await rawExecute(
-      `UPDATE hr_leave_balances
-       SET reserved = GREATEST(reserved - $1, 0)
-       WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
-      [leaveReq.days, scope.companyId, leaveReq.employeeId, leaveReq.leaveTypeId, year]
-    );
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "hr_leave_requests", entityId: id,
       before: { employeeId: leaveReq.employeeId, days: leaveReq.days, status: "pending" },
       after: { status: "deleted" },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "leave.deleted", entity: "hr_leave_requests", entityId: id,
       details: `حذف طلب إجازة — ${leaveReq.days} أيام — رصيد مُحرّر`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
 // ─── Payroll PATCH/DELETE ──────────────────────
-router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) => {
+router.patch("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "update", resource: { table: "payroll_runs", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["hr_manager", "finance_manager", "general_manager", "owner"].includes(scope.role)) {
+    const id = parseId(req.params.id, "id");
+    if (!PAYROLL_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: تعديل الرواتب مقصور على HR أو المالية أو المالك");
     }
-    const { status } = req.body as any;
+    const { status } = zodParse(payrollPatchSchema.safeParse(req.body ?? {}));
 
     const [existing] = await rawQuery<any>(
       `SELECT id, status, period, "totalNet" FROM payroll_runs WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("دورة الرواتب غير موجودة");
 
@@ -3801,9 +4204,9 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
       const totalNet = Number(existing.totalNet ?? 0);
 
       const lines = await rawQuery<any>(
-        `SELECT pl."employeeId", pl."gosiEmployee", pl."gosiEmployer", pl.basic, pl."grossSalary", pl."netSalary"
+        `SELECT pl."employeeId", pl.gosi AS "gosiEmployee", pl."gosiEmployer", pl.basic, pl."grossSalary", pl."netSalary"
          FROM payroll_lines pl WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL`,
-        [Number(req.params.id)]
+        [id]
       );
 
       const totalGross = lines.reduce((s: number, l: any) => s + Number(l.grossSalary ?? l.basic ?? 0), 0);
@@ -3812,52 +4215,24 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
       const totalGosiPayable = totalGosiEmployee + totalGosiEmployer;
       const totalBankPayout = Math.max(0, totalNet);
 
-      const [salaryExpenseCode, gosiExpenseCode, bankCode, gosiPayableCode] = await Promise.all([
-        getAccountCodeFromMapping(scope.companyId, "payroll_salary_expense", "debit", "5100"),
-        getAccountCodeFromMapping(scope.companyId, "payroll_gosi_expense", "debit", "5110"),
-        getAccountCodeFromMapping(scope.companyId, "payroll_bank_payout", "credit", "1100"),
-        getAccountCodeFromMapping(scope.companyId, "payroll_gosi_payable", "credit", "2200"),
-      ]);
-
-      const jlLines = [
-        { code: salaryExpenseCode, debit: totalGross, credit: 0, desc: "مصاريف رواتب" },
-        { code: gosiExpenseCode, debit: Math.round(totalGosiEmployer * 100) / 100, credit: 0, desc: "تأمينات اجتماعية صاحب عمل" },
-        { code: bankCode, debit: 0, credit: totalBankPayout, desc: "صرف رواتب — بنك" },
-        { code: gosiPayableCode, debit: 0, credit: Math.round(totalGosiPayable * 100) / 100, desc: "تأمينات اجتماعية مستحقة" },
-      ].filter(l => l.debit > 0 || l.credit > 0);
-
-      const totalJeDebit = jlLines.reduce((s, l) => s + l.debit, 0);
-      const totalJeCredit = jlLines.reduce((s, l) => s + l.credit, 0);
-      if (Math.abs(totalJeDebit - totalJeCredit) > 0.01) {
-        throw new ValidationError(
-          `لا يمكن ترحيل الرواتب: القيد المحاسبي غير متوازن (مدين=${totalJeDebit.toFixed(2)} ≠ دائن=${totalJeCredit.toFixed(2)})`,
-          { meta: { totalJeDebit, totalJeCredit } },
-        );
-      }
-
       const [updatedRun] = await rawQuery<any>(
-        `UPDATE payroll_runs SET status = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL RETURNING *`,
-        [status, Number(req.params.id), scope.companyId]
+        `UPDATE payroll_runs SET status = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL AND status = $4 RETURNING *`,
+        [status, id, scope.companyId, existing.status]
       );
-      if (!updatedRun) throw new Error("دورة الرواتب غير موجودة");
+      if (!updatedRun) throw new NotFoundError("دورة الرواتب غير موجودة");
 
-      const jeRef = `PAYROLL-POST-${period}`;
-      await createGuardedJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        createdBy: scope.activeAssignmentId,
-        ref: jeRef,
-        description: `قيد إقفال رواتب ${period}`,
-        type: "payroll",
-        sourceType: "payroll_run",
-        sourceId: Number(req.params.id),
-        lines: jlLines.map(l => ({
-          accountCode: l.code,
-          debit: l.debit,
-          credit: l.credit,
-          description: l.desc,
-        })),
-      }, { table: "payroll_runs", id: Number(req.params.id) });
+      const { hrEngine } = await import("../lib/engines/index.js");
+      await hrEngine.postPayrollPostGL(
+        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
+        {
+          runId: id,
+          period,
+          totalGross,
+          totalGosiEmployer,
+          totalBankPayout,
+          totalGosiPayable,
+        }
+      );
 
       // Register monthly GOSI submission obligation (due 14th of NEXT month)
       try {
@@ -3869,7 +4244,7 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
               companyId: scope.companyId,
               branchId: scope.branchId ?? null,
               entityType: "payroll_run",
-              entityId: Number(req.params.id),
+              entityId: id,
               obligationType: "declaration",
               title: `تقديم اشتراكات التأمينات الاجتماعية — ${period} (${totalGosiPayable.toFixed(2)} ريال)`,
               dueAt: gosiDue.toISOString(),
@@ -3887,7 +4262,7 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
             companyId: scope.companyId,
             branchId: scope.branchId ?? null,
             entityType: "payroll_run",
-            entityId: Number(req.params.id),
+            entityId: id,
             obligationType: "payment",
             title: `صرف رواتب — ${period} (${totalBankPayout.toFixed(2)} ريال صافي)`,
             dueAt: disbursementDue.toISOString(),
@@ -3899,54 +4274,54 @@ router.patch("/payroll/:id", requirePermission("hr:update"), async (req, res) =>
             ],
           });
         }
-      } catch (obErr) { console.error("Payroll obligation registration failed:", obErr); }
+      } catch (obErr) { logger.error(obErr, "Payroll obligation registration failed:"); }
 
       await emitEvent({
         companyId: scope.companyId,
         userId: scope.userId,
         action: "payroll.posted",
         entity: "payroll_runs",
-        entityId: Number(req.params.id),
+        entityId: id,
         details: `ترحيل رواتب ${period}: صافي ${totalBankPayout.toFixed(2)} / GOSI ${totalGosiPayable.toFixed(2)}`,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr background task failed"));
 
       const [row] = await rawQuery<any>(
-        `SELECT * FROM payroll_runs WHERE id = $1`,
-        [Number(req.params.id)]
+        `SELECT * FROM payroll_runs WHERE id = $1 AND "companyId" = $2`,
+        [id, scope.companyId]
       );
       createAuditLog({
         companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-        action: "update", entity: "payroll_runs", entityId: Number(req.params.id),
+        action: "update", entity: "payroll_runs", entityId: id,
         before: { status: existing.status, period: existing.period },
         after: { status: "posted", period: existing.period },
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr background task failed"));
       res.json(row);
       return;
     }
 
     const [row] = await rawQuery<any>(
-      `UPDATE payroll_runs SET status = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL RETURNING *`,
-      [status, Number(req.params.id), scope.companyId]
+      `UPDATE payroll_runs SET status = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL AND status = $4 RETURNING *`,
+      [status, id, scope.companyId, existing.status]
     );
     if (!row) throw new NotFoundError("دورة الرواتب غير موجودة");
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "payroll_runs", entityId: Number(req.params.id),
+      action: "update", entity: "payroll_runs", entityId: id,
       before: { status: existing.status },
       after: { status },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.delete("/payroll/:id", requirePermission("hr:delete"), async (req, res) => {
+router.delete("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "delete", resource: { table: "payroll_runs", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: حذف الرواتب مقصور على HR أو المالك");
     }
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [exists] = await rawQuery<any>(
       `SELECT id, status, period, "totalNet" FROM payroll_runs WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]
     );
@@ -3955,6 +4330,48 @@ router.delete("/payroll/:id", requirePermission("hr:delete"), async (req, res) =
       throw new ConflictError("لا يمكن حذف دورة رواتب تم ترحيلها");
     }
     await withTransaction(async (client) => {
+      // ── Reverse financial side effects ──
+
+      // Revert attendance deductions (table has no payrollRunId — match by period)
+      await client.query(
+        `UPDATE attendance_deductions SET status = 'pending_payroll' WHERE period = $1 AND "companyId" = $2 AND status = 'deducted_in_payroll'`,
+        [exists.period, scope.companyId]
+      );
+
+      // Revert loan installments and restore loan remaining amounts (payrollLineId → payroll_lines.runId)
+      const { rows: paidInstallments } = await client.query(
+        `SELECT hli.id, hli."loanId", hli.amount FROM hr_loan_installments hli JOIN payroll_lines pl ON pl.id = hli."payrollLineId" WHERE pl."runId" = $1 AND hli.status = 'paid'`,
+        [id]
+      );
+      if (paidInstallments.length > 0) {
+        await client.query(
+          `UPDATE hr_loan_installments SET status = 'pending' WHERE "payrollLineId" IN (SELECT id FROM payroll_lines WHERE "runId" = $1) AND "companyId" = $2 AND status = 'paid'`,
+          [id, scope.companyId]
+        );
+        for (const inst of paidInstallments) {
+          await client.query(
+            `UPDATE loan_accounts SET "remainingAmount" = "remainingAmount" + $1 WHERE id = $2 AND "companyId" = $3`,
+            [inst.amount, inst.loanId, scope.companyId]
+          );
+        }
+      }
+
+      // Revert overtime requests (payrollLineId → payroll_lines.runId)
+      await client.query(
+        `UPDATE hr_overtime_requests SET status = 'approved' WHERE "payrollLineId" IN (SELECT id FROM payroll_lines WHERE "runId" = $1) AND "companyId" = $2 AND status = 'paid' AND "deletedAt" IS NULL`,
+        [id, scope.companyId]
+      );
+
+      // Reverse GL journal entry if one exists (via finance helper to respect domain boundaries)
+      const { rows: journalRows } = await client.query(
+        `SELECT id FROM journal_entries WHERE "sourceType" = 'payroll_runs' AND "sourceId" = $1 AND "deletedAt" IS NULL`,
+        [id]
+      );
+      for (const je of journalRows) {
+        await softDeleteJournalEntry(scope.companyId, Number(je.id));
+      }
+
+      // Soft-delete payroll lines and the run itself
       await client.query(`UPDATE payroll_lines SET "deletedAt" = NOW() WHERE "runId" = $1 AND "deletedAt" IS NULL`, [id]);
       await client.query(`UPDATE payroll_runs SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     });
@@ -3964,25 +4381,26 @@ router.delete("/payroll/:id", requirePermission("hr:delete"), async (req, res) =
       action: "delete", entity: "payroll_runs", entityId: id,
       before: { period: exists.period, status: exists.status, totalNet: exists.totalNet },
       after: { status: "deleted" },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "payroll.deleted", entity: "payroll_runs", entityId: id,
       details: `حذف دورة رواتب ${exists.period}`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
 // ─── Performance PATCH/DELETE ──────────────────────
-router.patch("/performance/:id", requirePermission("hr:update"), async (req, res) => {
+router.patch("/performance/:id", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["hr_manager", "branch_manager", "general_manager", "owner"].includes(scope.role)) {
+    const id = parseId(req.params.id, "id");
+    if (!HR_APPROVAL_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: تعديل التقييمات مقصور على HR أو المدير أو المالك");
     }
-    const { overallScore, score, comments, feedback, status, strengths, improvements, goals } = req.body as any;
+    const { overallScore, score, comments, feedback, status, strengths, improvements, goals } = zodParse(performancePatchSchema.safeParse(req.body ?? {}));
     const sets: string[] = [];
     const params: any[] = [];
     let idx = 1;
@@ -3998,31 +4416,31 @@ router.patch("/performance/:id", requirePermission("hr:update"), async (req, res
       throw new ValidationError("لا توجد بيانات");
     }
     sets.push(`"updatedAt" = NOW()`);
-    params.push(Number(req.params.id), scope.companyId);
-    const [beforeRow] = await rawQuery<any>(`SELECT * FROM performance_reviews WHERE id = $1 AND "companyId" = $2`, [Number(req.params.id), scope.companyId]);
+    params.push(id, scope.companyId);
+    const [beforeRow] = await rawQuery<any>(`SELECT * FROM performance_reviews WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     const [row] = await rawQuery<any>(
-      `UPDATE performance_reviews SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
+      `UPDATE performance_reviews SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx++} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
     if (!row) throw new NotFoundError("التقييم غير موجود");
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "performance_reviews", entityId: Number(req.params.id),
+      action: "update", entity: "performance_reviews", entityId: id,
       before: beforeRow ?? {},
       after: row,
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "performance.updated", entity: "hr_performance", entityId: Number(req.params.id), details: JSON.stringify({ id: Number(req.params.id) }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "performance.updated", entity: "hr_performance", entityId: id, details: JSON.stringify({ id: id }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Patch performance error:"); }
 });
 
-router.delete("/performance/:id", requirePermission("hr:delete"), async (req, res) => {
+router.delete("/performance/:id", authorize({ feature: "hr", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: حذف التقييمات مقصور على HR أو المالك");
     }
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM performance_reviews WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     const [row] = await rawQuery<any>(
       `UPDATE performance_reviews SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
@@ -4033,20 +4451,20 @@ router.delete("/performance/:id", requirePermission("hr:delete"), async (req, re
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "performance_reviews", entityId: id,
       before: beforeRow ?? { id },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "performance.deleted", entity: "hr_performance", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "performance.deleted", entity: "hr_performance", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
 // ─── Violations DELETE ──────────────────────
-router.delete("/violations/:id", requirePermission("hr:delete"), async (req, res) => {
+router.delete("/violations/:id", authorize({ feature: "hr", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: حذف المخالفات مقصور على HR أو المالك");
     }
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM employee_violations WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     const [row] = await rawQuery<any>(
       `UPDATE employee_violations SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
@@ -4057,17 +4475,17 @@ router.delete("/violations/:id", requirePermission("hr:delete"), async (req, res
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "employee_violations", entityId: id,
       before: beforeRow ?? { id },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "violation.deleted", entity: "hr_violations", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "violation.deleted", entity: "hr_violations", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
 // ─── Single official letter with letterhead ──────────────
-router.get("/official-letters/:id", requirePermission("hr:read"), async (req, res) => {
+router.get("/official-letters/:id", authorize({ feature: "hr", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [letter] = await rawQuery<any>(
       `SELECT ol.*, e.name AS "employeeName", e."empNumber",
               e."nationalId", e."passportNumber", e."iqamaNumber",
@@ -4083,7 +4501,7 @@ router.get("/official-letters/:id", requirePermission("hr:read"), async (req, re
        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = ol."companyId" AND ea.status = 'active'
        LEFT JOIN branches b ON b.id = COALESCE(ol."branchId", ea."branchId")
        LEFT JOIN companies c ON c.id = ol."companyId"
-       WHERE ol.id = $1 AND ol."companyId" = $2`,
+       WHERE ol.id = $1 AND ol."companyId" = $2 AND ol."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!letter) throw new NotFoundError("الخطاب غير موجود");
@@ -4092,13 +4510,13 @@ router.get("/official-letters/:id", requirePermission("hr:read"), async (req, re
 });
 
 // ─── Official letters PATCH/DELETE ──────────────────────
-router.patch("/official-letters/:id", requirePermission("hr:update"), async (req, res) => {
+router.patch("/official-letters/:id", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["hr_manager", "branch_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_APPROVAL_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: تعديل الخطابات مقصور على HR أو المدير أو المالك");
     }
-    const { subject, content, status, type } = req.body as any;
+    const { subject, content, status, type } = zodParse(officialLetterPatchSchema.safeParse(req.body ?? {}));
     const sets: string[] = [];
     const params: any[] = [];
     let idx = 1;
@@ -4109,11 +4527,11 @@ router.patch("/official-letters/:id", requirePermission("hr:update"), async (req
     if (sets.length === 0) {
       throw new ValidationError("لا توجد بيانات");
     }
-    const letterId = Number(req.params.id);
-    const [beforeRow] = await rawQuery<any>(`SELECT * FROM official_letters WHERE id = $1 AND "companyId" = $2`, [letterId, scope.companyId]);
+    const letterId = parseId(req.params.id, "id");
+    const [beforeRow] = await rawQuery<any>(`SELECT * FROM official_letters WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [letterId, scope.companyId]);
     params.push(letterId, scope.companyId);
     const [row] = await rawQuery<any>(
-      `UPDATE official_letters SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
+      `UPDATE official_letters SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
     if (!row) throw new NotFoundError("الخطاب غير موجود");
@@ -4122,19 +4540,19 @@ router.patch("/official-letters/:id", requirePermission("hr:update"), async (req
       action: "update", entity: "official_letters", entityId: letterId,
       before: beforeRow ?? {},
       after: row,
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "letter.updated", entity: "hr_official_letters", entityId: letterId, details: JSON.stringify({ id: letterId }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "letter.updated", entity: "hr_official_letters", entityId: letterId, details: JSON.stringify({ id: letterId }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.delete("/official-letters/:id", requirePermission("hr:delete"), async (req, res) => {
+router.delete("/official-letters/:id", authorize({ feature: "hr", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: حذف الخطابات مقصور على HR أو المالك");
     }
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM official_letters WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     const [row] = await rawQuery<any>(
       `UPDATE official_letters SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
@@ -4145,24 +4563,23 @@ router.delete("/official-letters/:id", requirePermission("hr:delete"), async (re
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "official_letters", entityId: id,
       before: beforeRow ?? { id },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "letter.deleted", entity: "hr_official_letters", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "letter.deleted", entity: "hr_official_letters", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.patch("/official-letters/:id/approve", requirePermission("hr:update"), async (req, res) => {
+router.patch("/official-letters/:id/approve", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const HR_APPROVAL_ROLES = ["hr_manager", "branch_manager", "general_manager", "owner"];
     if (!HR_APPROVAL_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: لا تملك صلاحية اعتماد الخطابات");
     }
     const { id } = req.params;
-    const { approved, notes } = req.body as any;
+    const { approved, notes } = zodParse(letterApprovalSchema.safeParse(req.body ?? {}));
 
     const [letter] = await rawQuery<any>(
-      `SELECT * FROM official_letters WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM official_letters WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(id), scope.companyId]
     );
     if (!letter) throw new NotFoundError("الخطاب غير موجود");
@@ -4176,13 +4593,13 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
       await rawExecute(
         `UPDATE official_letters
            SET status = $1, "approvedAt" = NOW(), "approvedBy" = $3
-         WHERE id = $2`,
-        [newStatus, Number(id), scope.userId]
+         WHERE id = $2 AND "companyId" = $4 AND status = 'pending_approval' AND "deletedAt" IS NULL`,
+        [newStatus, Number(id), scope.userId, scope.companyId]
       );
     } else {
       await rawExecute(
-        `UPDATE official_letters SET status = $1 WHERE id = $2`,
-        [newStatus, Number(id)]
+        `UPDATE official_letters SET status = $1 WHERE id = $2 AND "companyId" = $3 AND status = 'pending_approval' AND "deletedAt" IS NULL`,
+        [newStatus, Number(id), scope.companyId]
       );
     }
 
@@ -4191,14 +4608,14 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
     if (newStatus === "rejected" || newStatus === "returned") {
       await rawExecute(
         `UPDATE email_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
-          WHERE "refType"='official_letter' AND "refId"=$1 AND status='pending'`,
-        [Number(id)]
-      ).catch((e) => console.error("cancel email_queue for rejected letter failed:", e));
+          WHERE "refType"='official_letter' AND "refId"=$1 AND "companyId"=$2 AND status='pending'`,
+        [Number(id), scope.companyId]
+      ).catch((e) => logger.error(e, "cancel email_queue for rejected letter failed:"));
       await rawExecute(
         `UPDATE whatsapp_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
-          WHERE "refType"='official_letter' AND "refId"=$1 AND status='pending'`,
-        [Number(id)]
-      ).catch(() => { /* whatsapp_queue may not exist */ });
+          WHERE "refType"='official_letter' AND "refId"=$1 AND "companyId"=$2 AND status='pending'`,
+        [Number(id), scope.companyId]
+      ).catch((e) => { logger.warn(e, "hr whatsapp_queue insert failed (table may not exist)"); });
 
       // Notify whoever filed the letter about the rejection/return so they
       // can see the reason and take action. Prefer the creator assignment
@@ -4214,7 +4631,7 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
                     LIMIT 1)
                 ) AS "assignmentId"
            FROM official_letters ol
-          WHERE ol.id = $1`,
+          WHERE ol.id = $1 AND ol."deletedAt" IS NULL`,
         [Number(id)]
       );
       if (targetAssignment?.assignmentId) {
@@ -4229,7 +4646,7 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
           priority: "high",
           refType: "official_letter",
           refId: Number(id),
-        }).catch((e) => console.error("notify letter creator failed:", e));
+        }).catch((e) => logger.error(e, "notify letter creator failed:"));
       }
     }
 
@@ -4238,7 +4655,7 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
         `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('official_letter',$1,$2,$3,$4,$5)`,
         [Number(id), newStatus, notes || null, scope.userId, scope.companyId]
       );
-    } catch (e) { console.error("Failed to log approval action:", e); }
+    } catch (e) { logger.error(e, "Failed to log approval action:"); }
 
     // Close the loop: emit a lifecycle event so the letter actually gets
     // dispatched (email_queue). Without this the route used to stop at
@@ -4268,14 +4685,14 @@ router.patch("/official-letters/:id/approve", requirePermission("hr:update"), as
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "official_letters", entityId: Number(id),
       after: { status: newStatus, subject: letter.subject, type: letter.type, notes: notes ?? null },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.json({ id: Number(id), status: newStatus });
   } catch (err) { handleRouteError(err, res, "خطأ في اعتماد الخطاب"); }
 });
 
 // ─── HR Stats ──────────────────────
-router.get("/stats", requirePermission("hr:read"), async (req, res) => {
+router.get("/stats", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const [empCount] = await rawQuery<any>(
@@ -4286,7 +4703,7 @@ router.get("/stats", requirePermission("hr:read"), async (req, res) => {
       `SELECT COUNT(*) AS total,
               COUNT(*) FILTER(WHERE status='pending') AS pending,
               COUNT(*) FILTER(WHERE status='approved') AS approved
-       FROM hr_leave_requests WHERE "companyId" = $1`,
+       FROM hr_leave_requests WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [scope.companyId]
     );
     const [violationCount] = await rawQuery<any>(
@@ -4308,24 +4725,24 @@ router.get("/stats", requirePermission("hr:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.get("/deductions", requirePermission("hr:read"), async (req, res) => {
+router.get("/deductions", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const month = (req.query.month as string) ?? new Date().toISOString().slice(0, 7);
+    const month = (req.query.month as string) ?? currentPeriod();
     const rows = await rawQuery<any>(
       `SELECT ad.*, e.name AS "employeeName"
        FROM attendance_deductions ad
        JOIN employee_assignments ea ON ea.id = ad."assignmentId"
        JOIN employees e ON e.id = ea."employeeId"
        WHERE ad."companyId" = $1 AND ad.period = $2
-       ORDER BY ad."createdAt" DESC`,
+       ORDER BY ad."createdAt" DESC LIMIT 500`,
       [scope.companyId, month]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (_e) { res.json({ data: [], total: 0 }); }
+  } catch (_e) { logger.error(_e, "deductions query failed"); res.json({ data: [], total: 0 }); }
 });
 
-router.get("/onboarding-steps", requirePermission("hr:read"), async (req, res) => {
+router.get("/onboarding-steps", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(
@@ -4337,16 +4754,16 @@ router.get("/onboarding-steps", requirePermission("hr:read"), async (req, res) =
       res.json({ data: val }); return;
     }
     res.json({ data: ["تسليم أجهزة IT", "توقيع عقد العمل", "تعريف المدير المباشر", "دورة التعريف بالشركة", "فتح حساب بنكي", "تسجيل التأمينات"] });
-  } catch { res.json({ data: [] }); }
+  } catch (e) { logger.error(e, "failed to load onboarding steps"); res.json({ data: [] }); }
 });
 
-router.put("/onboarding-steps", requirePermission("hr:update"), async (req, res) => {
+router.put("/onboarding-steps", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!['owner', 'general_manager', 'hr_manager'].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح بتعديل إعدادات التهيئة");
     }
-    const { steps } = req.body as { steps: string[] };
+    const { steps } = zodParse(onboardingStepsSchema.safeParse(req.body ?? {}));
     if (!Array.isArray(steps)) {
       throw new ValidationError("الخطوات مطلوبة", { field: "steps" });
     }
@@ -4361,8 +4778,8 @@ router.put("/onboarding-steps", requirePermission("hr:update"), async (req, res)
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "settings", entityId: scope.companyId,
       after: { key: "hr.onboarding_steps", steps },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "onboarding.steps_updated", entity: "hr_onboarding_steps", entityId: scope.companyId, details: JSON.stringify({ stepCount: steps.length }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "onboarding.steps_updated", entity: "hr_onboarding_steps", entityId: scope.companyId, details: JSON.stringify({ stepCount: steps.length }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json({ data: steps });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -4371,77 +4788,68 @@ router.put("/onboarding-steps", requirePermission("hr:update"), async (req, res)
 // IMPACT PREVIEW — preview the effects of HR actions before approval
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.post("/impact-preview/leave", requirePermission("hr:read"), async (req, res) => {
+router.post("/impact-preview/leave", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { employeeId, leaveTypeId, startDate, endDate, days } = req.body as any;
-    if (!employeeId || !leaveTypeId || !startDate || !endDate) {
-      throw new ValidationError("بيانات غير مكتملة");
-    }
+    const { employeeId, leaveTypeId, startDate, endDate, days } = zodParse(impactPreviewLeaveSchema.safeParse(req.body ?? {}));
     const [assignment] = await rawQuery<any>(
       `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
-      [Number(employeeId), scope.companyId]
+      [employeeId, scope.companyId]
     );
     if (!assignment) throw new NotFoundError("الموظف غير موجود");
     const daysCount = days ?? Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1);
-    const impact = await computeLeaveImpact(scope.companyId, Number(employeeId), assignment.id, Number(leaveTypeId), startDate, endDate, daysCount);
+    const impact = await computeLeaveImpact(scope.companyId, employeeId, assignment.id, leaveTypeId, startDate, endDate, daysCount);
 
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "hr.leave.impact_preview", entity: "hr_leave_requests", entityId: Number(employeeId) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "hr.leave.impact_preview", entity: "hr_leave_requests", entityId: Number(employeeId) }).catch((e) => logger.error(e, "hr background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "preview", entity: "hr_leave_requests", entityId: Number(employeeId),
       after: { employeeId: Number(employeeId), leaveTypeId: Number(leaveTypeId), startDate, endDate },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.json(impact);
   } catch (err) { handleRouteError(err, res, "خطأ في حساب الأثر"); }
 });
 
-router.post("/impact-preview/termination", requirePermission("hr:read"), async (req, res) => {
+router.post("/impact-preview/termination", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { employeeId } = req.body as any;
-    if (!employeeId) {
-      throw new ValidationError("معرف الموظف مطلوب", { field: "employeeId" });
-    }
+    const { employeeId } = zodParse(impactPreviewTerminationSchema.safeParse(req.body ?? {}));
     const [assignment] = await rawQuery<any>(
       `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
-      [Number(employeeId), scope.companyId]
+      [employeeId, scope.companyId]
     );
     if (!assignment) throw new NotFoundError("الموظف غير موجود");
-    const impact = await computeTerminationImpact(scope.companyId, Number(employeeId), assignment.id);
+    const impact = await computeTerminationImpact(scope.companyId, employeeId, assignment.id);
 
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "hr.termination.impact_preview", entity: "employees", entityId: Number(employeeId) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "hr.termination.impact_preview", entity: "employees", entityId: Number(employeeId) }).catch((e) => logger.error(e, "hr background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "preview", entity: "employees", entityId: Number(employeeId),
       after: { employeeId: Number(employeeId) },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.json(impact);
   } catch (err) { handleRouteError(err, res, "خطأ في حساب الأثر"); }
 });
 
-router.post("/impact-preview/violation", requirePermission("hr:read"), async (req, res) => {
+router.post("/impact-preview/violation", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { employeeId, deduction = 0, severity = "medium" } = req.body as any;
-    if (!employeeId) {
-      throw new ValidationError("معرف الموظف مطلوب", { field: "employeeId" });
-    }
+    const { employeeId, deduction, severity } = zodParse(impactPreviewViolationSchema.safeParse(req.body ?? {}));
     const [assignment] = await rawQuery<any>(
       `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
-      [Number(employeeId), scope.companyId]
+      [employeeId, scope.companyId]
     );
     if (!assignment) throw new NotFoundError("الموظف غير موجود");
-    const impact = await computeViolationImpact(scope.companyId, Number(employeeId), assignment.id, Number(deduction), severity);
+    const impact = await computeViolationImpact(scope.companyId, employeeId, assignment.id, deduction, severity);
 
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "hr.violation.impact_preview", entity: "employee_violations", entityId: Number(employeeId) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "hr.violation.impact_preview", entity: "employee_violations", entityId: Number(employeeId) }).catch((e) => logger.error(e, "hr background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "preview", entity: "employee_violations", entityId: Number(employeeId),
       after: { employeeId: Number(employeeId), deduction: Number(deduction), severity },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.json(impact);
   } catch (err) { handleRouteError(err, res, "خطأ في حساب الأثر"); }
@@ -4451,7 +4859,7 @@ router.post("/impact-preview/violation", requirePermission("hr:read"), async (re
 // EMPLOYEE OPERATIONAL STATUS — live state calculation
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/employee-status/:employeeId", requirePermission("hr:read"), async (req, res) => {
+router.get("/employee-status/:employeeId", authorize({ feature: "hr", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { employeeId } = req.params;
@@ -4468,14 +4876,15 @@ router.get("/employee-status/:employeeId", requirePermission("hr:read"), async (
   } catch (err) { handleRouteError(err, res, "خطأ في حساب حالة الموظف"); }
 });
 
-router.get("/employees-status", requirePermission("hr:read"), async (req, res) => {
+router.get("/employees-status", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const employees = await rawQuery<any>(
       `SELECT e.id AS "employeeId", ea.id AS "assignmentId"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 AND ea.status = 'active'
-       WHERE e.status = 'active'`,
+       WHERE e.status = 'active' AND e."deletedAt" IS NULL
+       LIMIT 500`,
       [scope.companyId]
     );
 
@@ -4485,7 +4894,8 @@ router.get("/employees-status", requirePermission("hr:read"), async (req, res) =
         try {
           const s = await computeEmployeeOperationalStatus(scope.companyId, emp.employeeId, emp.assignmentId);
           return { employeeId: emp.employeeId, ...s };
-        } catch {
+        } catch (e) {
+          logger.error(e, "failed to compute employee operational status");
           return { employeeId: emp.employeeId, status: "working", label: "على رأس العمل", color: "bg-green-100 text-green-700", reason: "" };
         }
       })
@@ -4499,14 +4909,11 @@ router.get("/employees-status", requirePermission("hr:read"), async (req, res) =
 // 360° SMART EVALUATION SYSTEM
 // ─────────────────────────────────────────────────────────────────────────────
 
-const HR_ROLES = ["hr_manager", "owner", "general_manager"] as const;
-const MGR_ROLES = ["branch_manager", "hr_manager", "owner", "general_manager"] as const;
-
 function isHR(scope: { role: string }): boolean {
-  return (HR_ROLES as readonly string[]).includes(scope.role);
+  return HR_ROLES.includes(scope.role);
 }
 function isMgr(scope: { role: string }): boolean {
-  return (MGR_ROLES as readonly string[]).includes(scope.role);
+  return MGR_ROLES.includes(scope.role);
 }
 
 // Helper: compute system evaluation scores for an employee
@@ -4519,7 +4926,7 @@ async function computeSystemEvaluation(companyId: number, employeeId: number): P
   overallScore: number;
   metrics: Record<string, number>;
 }> {
-  const today = new Date().toISOString().split("T")[0]!;
+  const today = todayISO()!;
   const { calculateEmployeeKPIs } = await import("../lib/kpiEngine.js");
   const kpiMetrics = await calculateEmployeeKPIs(companyId, employeeId, today);
 
@@ -4556,7 +4963,7 @@ async function computeSystemEvaluation(companyId: number, employeeId: number): P
   // Document quality score: count of documents with description in last 90 days
   const [docRow] = await rawQuery<any>(
     `SELECT COUNT(*) AS total,
-            COUNT(*) FILTER (WHERE description IS NOT NULL AND description != '') AS documented
+            COUNT(*) FILTER (WHERE notes IS NOT NULL AND notes != '') AS documented
      FROM employee_documents
      WHERE "companyId" = $1 AND "employeeId" = $2
        AND "createdAt" >= CURRENT_DATE - INTERVAL '90 days'`,
@@ -4647,7 +5054,7 @@ async function recomputeSummary(cycleId: number, companyId: number, employeeId: 
 }
 
 // GET /hr/evaluation-cycles — list cycles (scoped by role)
-router.get("/evaluation-cycles", requirePermission("hr:read"), async (req, res) => {
+router.get("/evaluation-cycles", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { employeeId } = req.query as any;
@@ -4666,7 +5073,7 @@ router.get("/evaluation-cycles", requirePermission("hr:read"), async (req, res) 
          ORDER BY ec."createdAt" DESC LIMIT 200`,
         employeeId ? [scope.companyId, employeeId] : [scope.companyId]
       );
-    } else if (["branch_manager", "general_manager"].includes(scope.role)) {
+    } else if (BRANCH_GM_ROLES.includes(scope.role)) {
       // Managers see cycles for employees they manage (same branch)
       rows = await rawQuery<any>(
         `SELECT ec.*, e.name AS "employeeName", e."empNumber",
@@ -4703,16 +5110,14 @@ router.get("/evaluation-cycles", requirePermission("hr:read"), async (req, res) 
 });
 
 // POST /hr/evaluation-cycles — start a new evaluation cycle (HR only)
-router.post("/evaluation-cycles", requirePermission("hr:create"), async (req, res): Promise<any> => {
+router.post("/evaluation-cycles", authorize({ feature: "hr", action: "create" }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     if (!isHR(scope)) {
       throw new ForbiddenError("مسموح فقط لـ HR بإنشاء دورات التقييم");
     }
 
-    const parsed = evaluationCycleSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { employeeId, period, notes, participants = [] } = parsed.data as any;
+    const { employeeId, period, notes, participants = [] } = zodParse(evaluationCycleSchema.safeParse(req.body)) as any;
 
     // Validate subject employee belongs to this company (multi-tenant integrity)
     const [subjectAssign] = await rawQuery<any>(
@@ -4723,67 +5128,82 @@ router.post("/evaluation-cycles", requirePermission("hr:create"), async (req, re
       throw new ValidationError("الموظف لا ينتمي إلى هذه الشركة", { field: "employeeId" });
     }
 
-    // Create the cycle
-    const { insertId: cycleId } = await rawExecute(
-      `INSERT INTO evaluation_cycles ("companyId","employeeId","initiatorId",period,status,notes,"startDate")
-       VALUES ($1,$2,$3,$4,'open',$5,CURRENT_DATE)`,
-      [scope.companyId, employeeId, scope.employeeId ?? null, period, notes ?? null]
-    );
+    // Compute system evaluation before transaction (read-only)
+    const evalData = await computeSystemEvaluation(scope.companyId, employeeId);
 
-    // Register participants — validate each belongs to this company before inserting
-    // validRoles must match the DB CHECK constraint: ('manager','peer')
+    // Validate participants before transaction (read-only)
     const validRoles = new Set(["manager", "peer"]);
-    for (const p of participants as Array<{ evaluatorId: number; evaluatorRole: string }>) {
-      if (!p.evaluatorId || !validRoles.has(p.evaluatorRole)) continue;
-      const [participantAssign] = await rawQuery<any>(
-        `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 LIMIT 1`,
-        [p.evaluatorId, scope.companyId]
+    const candidateParticipants = (participants as Array<{ evaluatorId: number; evaluatorRole: string }>)
+      .filter(p => p.evaluatorId && validRoles.has(p.evaluatorRole));
+    let validParticipants: Array<{ evaluatorId: number; evaluatorRole: string }> = [];
+    if (candidateParticipants.length > 0) {
+      const evalIds = candidateParticipants.map(p => p.evaluatorId);
+      const idPlaceholders = evalIds.map((_, i) => `$${i + 2}`).join(",");
+      const validAssignments = await rawQuery<any>(
+        `SELECT DISTINCT "employeeId" FROM employee_assignments WHERE "companyId"=$1 AND "employeeId" IN (${idPlaceholders})`,
+        [scope.companyId, ...evalIds]
       );
-      if (!participantAssign) continue; // silently skip cross-company IDs
-      await rawExecute(
-        `INSERT INTO evaluation_participants ("cycleId","companyId","evaluatorId","evaluatorRole")
-         VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING`,
-        [cycleId, scope.companyId, p.evaluatorId, p.evaluatorRole]
-      );
+      const validIdSet = new Set(validAssignments.map((a: any) => a.employeeId));
+      validParticipants = candidateParticipants.filter(p => validIdSet.has(p.evaluatorId));
     }
 
-    // Auto-generate system evaluation
-    const evalData = await computeSystemEvaluation(scope.companyId, employeeId);
-    await rawExecute(
-      `INSERT INTO system_evaluations ("cycleId","companyId","employeeId","attendanceScore","taskCompletionScore","onTimeScore","clientSatScore","docQualityScore","overallScore",metrics)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [cycleId, scope.companyId, employeeId,
-       evalData.attendanceScore, evalData.taskCompletionScore,
-       evalData.onTimeScore, evalData.clientSatScore, evalData.docQualityScore,
-       evalData.overallScore, JSON.stringify(evalData.metrics)]
-    );
+    // Wrap all inserts in a single atomic transaction
+    const cycleId = await withTransaction(async (client) => {
+      const cycleRes = await client.query(
+        `INSERT INTO evaluation_cycles ("companyId","employeeId","initiatorId",period,status,notes,"startDate")
+         VALUES ($1,$2,$3,$4,'open',$5,CURRENT_DATE) RETURNING id`,
+        [scope.companyId, employeeId, scope.employeeId ?? null, period, notes ?? null]
+      );
+      const cId = cycleRes.rows[0].id;
+
+      if (validParticipants.length > 0) {
+        const values = validParticipants.map((_, i) => `($${i * 4 + 1},$${i * 4 + 2},$${i * 4 + 3},$${i * 4 + 4})`).join(",");
+        const params = validParticipants.flatMap(p => [cId, scope.companyId, p.evaluatorId, p.evaluatorRole]);
+        await client.query(
+          `INSERT INTO evaluation_participants ("cycleId","companyId","evaluatorId","evaluatorRole")
+           VALUES ${values} ON CONFLICT DO NOTHING`,
+          params
+        );
+      }
+
+      await client.query(
+        `INSERT INTO system_evaluations ("cycleId","companyId","employeeId","attendanceScore","taskCompletionScore","onTimeScore","clientSatScore","docQualityScore","overallScore",metrics)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [cId, scope.companyId, employeeId,
+         evalData.attendanceScore, evalData.taskCompletionScore,
+         evalData.onTimeScore, evalData.clientSatScore, evalData.docQualityScore,
+         evalData.overallScore, JSON.stringify(evalData.metrics)]
+      );
+
+      return cId;
+    });
 
     // Initialize summary
     await recomputeSummary(cycleId, scope.companyId, employeeId);
 
-    // Update cycle status
-    await rawExecute(`UPDATE evaluation_cycles SET status='in_progress' WHERE id=$1`, [cycleId]);
-
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "create", entity: "evaluation_cycles", entityId: cycleId,
-      after: { employeeId, period, status: "in_progress", participantCount: participants.length },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "evaluation.created", entity: "hr_evaluation_cycles", entityId: cycleId, details: JSON.stringify({ employeeId, period }) }).catch(console.error);
+    await applyTransition({
+      entity: "evaluation_cycles",
+      id: cycleId,
+      scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
+      action: "evaluation.created",
+      toState: "in_progress",
+      after: { employeeId, period, participantCount: participants.length },
+    });
     res.status(201).json({ id: cycleId, period, employeeId, status: 'in_progress', systemEval: evalData });
   } catch (err) { handleRouteError(err, res, "خطأ في بدء دورة التقييم"); }
 });
 
 // GET /hr/evaluation-cycles/:id — get cycle details (access-controlled)
-router.get("/evaluation-cycles/:id", requirePermission("hr:read"), async (req, res): Promise<any> => {
+router.get("/evaluation-cycles/:id", authorize({ feature: "hr", action: "view" }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
-    const cycleId = Number(req.params.id);
+    const cycleId = parseId(req.params.id, "id");
 
     const [cycle] = await rawQuery<any>(
-      `SELECT ec.*, e.name AS "employeeName", e."empNumber", e."jobTitle"
+      `SELECT ec.*, e.name AS "employeeName", e."empNumber", ea."jobTitle"
        FROM evaluation_cycles ec
        JOIN employees e ON e.id = ec."employeeId"
+       LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
        WHERE ec.id = $1 AND ec."companyId" = $2`,
       [cycleId, scope.companyId]
     );
@@ -4795,7 +5215,7 @@ router.get("/evaluation-cycles/:id", requirePermission("hr:read"), async (req, r
     // - Employee: only their own cycle, or cycles where they are an assigned participant
     if (isHR(scope)) {
       // HR: unrestricted within company — already filtered by companyId above
-    } else if (["branch_manager", "general_manager"].includes(scope.role)) {
+    } else if (BRANCH_GM_ROLES.includes(scope.role)) {
       // Manager must share at least one branch with the employee being evaluated (any active assignment)
       const [sharedBranch] = await rawQuery<any>(
         `SELECT 1 FROM employee_assignments ea_mgr
@@ -4828,11 +5248,12 @@ router.get("/evaluation-cycles/:id", requirePermission("hr:read"), async (req, r
     );
 
     const peerEvals = await rawQuery<any>(
-      `SELECT pe.*, e.name AS "evaluatorName", e."jobTitle" AS "evaluatorTitle"
+      `SELECT pe.*, e.name AS "evaluatorName", ea."jobTitle" AS "evaluatorTitle"
        FROM peer_evaluations pe
        JOIN employees e ON e.id = pe."evaluatorId"
+       LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active' AND ea."companyId" = $2
        WHERE pe."cycleId" = $1`,
-      [cycleId]
+      [cycleId, scope.companyId]
     );
 
     const participants = await rawQuery<any>(
@@ -4873,10 +5294,10 @@ router.get("/evaluation-cycles/:id", requirePermission("hr:read"), async (req, r
 });
 
 // GET /hr/evaluation-cycles/:id/system-report — get auto-generated report
-router.get("/evaluation-cycles/:id/system-report", requirePermission("hr:read"), async (req, res): Promise<any> => {
+router.get("/evaluation-cycles/:id/system-report", authorize({ feature: "hr", action: "list" }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
-    const cycleId = Number(req.params.id);
+    const cycleId = parseId(req.params.id, "id");
 
     const [cycle] = await rawQuery<any>(
       `SELECT ec."employeeId", ec."companyId"
@@ -4889,7 +5310,7 @@ router.get("/evaluation-cycles/:id/system-report", requirePermission("hr:read"),
     // Enforce the same cycle-level authorization as the detail endpoint
     if (isHR(scope)) {
       // unrestricted
-    } else if (["branch_manager", "general_manager"].includes(scope.role)) {
+    } else if (BRANCH_GM_ROLES.includes(scope.role)) {
       const [sharedBranch] = await rawQuery<any>(
         `SELECT 1 FROM employee_assignments ea_mgr
          JOIN employee_assignments ea_sub ON ea_sub."branchId" = ea_mgr."branchId"
@@ -4942,11 +5363,11 @@ router.get("/evaluation-cycles/:id/system-report", requirePermission("hr:read"),
 
 // POST /hr/evaluation-cycles/:id/peer-evaluation — submit manager/peer review
 // Evaluator identity is derived from the authenticated session (scope.employeeId), NOT the request body
-router.post("/evaluation-cycles/:id/peer-evaluation", requirePermission("hr:create"), async (req, res): Promise<any> => {
+router.post("/evaluation-cycles/:id/peer-evaluation", authorize({ feature: "hr", action: "create" }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
-    const cycleId = Number(req.params.id);
-    const { overallScore, scores, comments } = req.body as any;
+    const cycleId = parseId(req.params.id, "id");
+    const { overallScore, scores, comments } = zodParse(peerEvaluationSchema.safeParse(req.body ?? {}));
 
     // Evaluator is always the authenticated user — prevents impersonation
     const evaluatorId = scope.employeeId;
@@ -4974,7 +5395,7 @@ router.post("/evaluation-cycles/:id/peer-evaluation", requirePermission("hr:crea
     } else if (isHR(scope)) {
       // HR can submit evaluations for any cycle without being a pre-assigned participant
       evaluatorRole = "peer";
-    } else if (["branch_manager", "general_manager"].includes(scope.role)) {
+    } else if (BRANCH_GM_ROLES.includes(scope.role)) {
       // Manager must share at least one branch with the subject employee (any active assignment, not just primary)
       const [sharedBranch] = await rawQuery<any>(
         `SELECT 1 FROM employee_assignments ea_mgr
@@ -4992,45 +5413,49 @@ router.post("/evaluation-cycles/:id/peer-evaluation", requirePermission("hr:crea
       throw new ForbiddenError("أنت لست ضمن المقيِّمين المعينين لهذه الدورة");
     }
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO peer_evaluations ("cycleId","companyId","evaluatorId","employeeId","evaluatorRole","overallScore",scores,comments)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-       ON CONFLICT ("cycleId","evaluatorId") DO UPDATE SET
-         "evaluatorRole"=$5,"overallScore"=$6,scores=$7,comments=$8`,
-      [cycleId, scope.companyId, evaluatorId, cycle.employeeId, evaluatorRole, overallScore,
-       scores ? JSON.stringify(scores) : null, comments ?? null]
-    );
-
-    // Mark participant as submitted — no participant record is valid for HR/manager paths
-    await rawExecute(
-      `UPDATE evaluation_participants SET "hasSubmitted"=true,"submittedAt"=NOW()
-       WHERE "cycleId"=$1 AND "evaluatorId"=$2`,
-      [cycleId, evaluatorId]
-    );
+    let insertId!: number;
+    await withTransaction(async (client) => {
+      const result = await client.query(
+        `INSERT INTO peer_evaluations ("cycleId","companyId","evaluatorId","employeeId","evaluatorRole","overallScore",scores,comments)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         ON CONFLICT ("cycleId","evaluatorId") DO UPDATE SET
+           "evaluatorRole"=$5,"overallScore"=$6,scores=$7,comments=$8
+         RETURNING id`,
+        [cycleId, scope.companyId, evaluatorId, cycle.employeeId, evaluatorRole, overallScore,
+         scores ? JSON.stringify(scores) : null, comments ?? null]
+      );
+      insertId = result.rows[0].id;
+      await client.query(
+        `UPDATE evaluation_participants SET "hasSubmitted"=true,"submittedAt"=NOW()
+         WHERE "cycleId"=$1 AND "evaluatorId"=$2`,
+        [cycleId, evaluatorId]
+      );
+    });
 
     await recomputeSummary(cycleId, scope.companyId, cycle.employeeId);
 
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "evaluation.peer_submitted", entity: "peer_evaluations", entityId: insertId,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "peer_evaluations", entityId: insertId,
       after: { cycleId, evaluatorId, evaluatorRole, overallScore },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
-    res.status(201).json({ id: insertId, cycleId, evaluatorId, evaluatorRole, overallScore });
+    const [row] = await rawQuery<any>(`SELECT * FROM peer_evaluations WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json(row || { id: insertId, cycleId, evaluatorId, evaluatorRole, overallScore });
   } catch (err) { handleRouteError(err, res, "خطأ في إرسال التقييم"); }
 });
 
 // POST /hr/evaluation-cycles/:id/upward-review — anonymous upward review (employee rates manager)
-router.post("/evaluation-cycles/:id/upward-review", requirePermission("hr:create"), async (req, res): Promise<any> => {
+router.post("/evaluation-cycles/:id/upward-review", authorize({ feature: "hr", action: "create" }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
-    const cycleId = Number(req.params.id);
-    const { managerId, overallScore, scores, comments } = req.body as any;
+    const cycleId = parseId(req.params.id, "id");
+    const { managerId, overallScore, scores, comments } = zodParse(upwardReviewSchema.safeParse(req.body ?? {}));
 
     if (!managerId || !overallScore) {
       throw new ValidationError("managerId و overallScore مطلوبان", {
@@ -5079,7 +5504,7 @@ router.post("/evaluation-cycles/:id/upward-review", requirePermission("hr:create
     // Prevent duplicate submissions from the same person per cycle per manager
     // We store a one-way hash (HMAC) that uniquely identifies this reviewer-cycle-manager
     // pair without revealing the reviewer's identity
-    const crypto = await import("crypto");
+    const crypto = await import("node:crypto");
     const secret = process.env.JWT_SECRET;
     if (!secret) {
       throw new IntegrationError("خطأ في إعداد النظام: JWT_SECRET غير مضبوط", {
@@ -5112,28 +5537,29 @@ router.post("/evaluation-cycles/:id/upward-review", requirePermission("hr:create
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "evaluation.upward_submitted", entity: "anonymous_upward_reviews", entityId: insertId,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "anonymous_upward_reviews", entityId: insertId,
       after: { cycleId, managerId, overallScore },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.status(201).json({ id: insertId, cycleId, anonymous: true, message: "تم إرسال التقييم بنجاح — هويتك محمية" });
   } catch (err) { handleRouteError(err, res, "خطأ في إرسال التقييم العكسي"); }
 });
 
 // GET /hr/evaluation-cycles/:id/summary — get 360 summary
-router.get("/evaluation-cycles/:id/summary", requirePermission("hr:read"), async (req, res): Promise<any> => {
+router.get("/evaluation-cycles/:id/summary", authorize({ feature: "hr", action: "list" }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
-    const cycleId = Number(req.params.id);
+    const cycleId = parseId(req.params.id, "id");
 
     const [cycle] = await rawQuery<any>(
-      `SELECT ec.*, e.name AS "employeeName", e."jobTitle"
+      `SELECT ec.*, e.name AS "employeeName", ea."jobTitle"
        FROM evaluation_cycles ec
        JOIN employees e ON e.id = ec."employeeId"
+       LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
        WHERE ec.id = $1 AND ec."companyId" = $2`,
       [cycleId, scope.companyId]
     );
@@ -5142,7 +5568,7 @@ router.get("/evaluation-cycles/:id/summary", requirePermission("hr:read"), async
     // Access check (same branch-scoped rules as detail endpoint)
     if (isHR(scope)) {
       // unrestricted
-    } else if (["branch_manager", "general_manager"].includes(scope.role)) {
+    } else if (BRANCH_GM_ROLES.includes(scope.role)) {
       const [sharedBranch] = await rawQuery<any>(
         `SELECT 1 FROM employee_assignments ea_mgr
          JOIN employee_assignments ea_sub ON ea_sub."branchId" = ea_mgr."branchId"
@@ -5177,12 +5603,16 @@ router.get("/evaluation-cycles/:id/summary", requirePermission("hr:read"), async
     );
 
     let [summary] = await rawQuery<any>(
-      `SELECT * FROM evaluation_summaries WHERE "cycleId" = $1`, [cycleId]
+      `SELECT * FROM evaluation_summaries WHERE "cycleId" = $1 AND "companyId" = $2`,
+      [cycleId, scope.companyId]
     );
 
     if (!summary) {
       await recomputeSummary(cycleId, scope.companyId, cycle.employeeId);
-      [summary] = await rawQuery<any>(`SELECT * FROM evaluation_summaries WHERE "cycleId" = $1`, [cycleId]);
+      [summary] = await rawQuery<any>(
+        `SELECT * FROM evaluation_summaries WHERE "cycleId" = $1 AND "companyId" = $2`,
+        [cycleId, scope.companyId]
+      );
     }
 
     const upwardCount = Number(upwardRow?.count ?? 0);
@@ -5201,10 +5631,10 @@ router.get("/evaluation-cycles/:id/summary", requirePermission("hr:read"), async
 });
 
 // GET /hr/employees/:id/evaluation-history — performance trend over time
-router.get("/employees/:id/evaluation-history", requirePermission("hr:read"), async (req, res): Promise<any> => {
+router.get("/employees/:id/evaluation-history", authorize({ feature: "hr", action: "list" }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
-    const employeeId = Number(req.params.id);
+    const employeeId = parseId(req.params.id, "id");
 
     // Validate employee belongs to this company via assignment (prevents cross-tenant PII leakage)
     const [empAssign] = await rawQuery<any>(
@@ -5222,7 +5652,7 @@ router.get("/employees/:id/evaluation-history", requirePermission("hr:read"), as
     // - Employee: own history only
     if (isHR(scope)) {
       // unrestricted
-    } else if (["branch_manager", "general_manager"].includes(scope.role)) {
+    } else if (BRANCH_GM_ROLES.includes(scope.role)) {
       const [sharedBranch] = await rawQuery<any>(
         `SELECT 1 FROM employee_assignments ea_mgr
          JOIN employee_assignments ea_sub ON ea_sub."branchId" = ea_mgr."branchId"
@@ -5245,7 +5675,7 @@ router.get("/employees/:id/evaluation-history", requirePermission("hr:read"), as
        FROM evaluation_cycles ec
        LEFT JOIN evaluation_summaries es ON es."cycleId" = ec.id
        WHERE ec."companyId" = $1 AND ec."employeeId" = $2
-       ORDER BY ec."startDate" ASC`,
+       ORDER BY ec."startDate" ASC LIMIT 500`,
       [scope.companyId, employeeId]
     );
 
@@ -5257,10 +5687,10 @@ router.get("/employees/:id/evaluation-history", requirePermission("hr:read"), as
 });
 
 // GET /hr/upward-reviews/manager/:managerId — aggregated upward reviews for a manager (HR only)
-router.get("/upward-reviews/manager/:managerId", requirePermission("hr:read"), async (req, res): Promise<any> => {
+router.get("/upward-reviews/manager/:managerId", authorize({ feature: "hr", action: "view" }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
-    const managerId = Number(req.params.managerId);
+    const managerId = parseId(req.params.managerId, "managerId");
 
     // Only HR or the manager themselves can view this — no cross-manager access
     if (!isHR(scope) && scope.employeeId !== managerId) {
@@ -5304,30 +5734,28 @@ router.get("/upward-reviews/manager/:managerId", requirePermission("hr:read"), a
   } catch (err) { handleRouteError(err, res, "خطأ في جلب التقييمات العكسية"); }
 });
 
-router.get("/delegations", requirePermission("hr:read"), async (req, res) => {
+router.get("/delegations", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT d.id, d."delegatorId", d."delegateId", d.scope, d.reason, d.status, d."startDate", d."endDate", d."createdAt",
+      `SELECT d.id, d."fromUserId" AS "delegatorId", d."toUserId" AS "delegateId", d.scope, d.reason, d.status, d."startDate", d."endDate", d."createdAt",
               e1.name AS "delegatorName", e2.name AS "delegateName"
        FROM delegations d
-       LEFT JOIN employees e1 ON e1.id = d."delegatorId"
-       LEFT JOIN employees e2 ON e2.id = d."delegateId"
+       LEFT JOIN employees e1 ON e1.id = d."fromUserId"
+       LEFT JOIN employees e2 ON e2.id = d."toUserId"
        WHERE d."companyId" = $1
        ORDER BY d."createdAt" DESC
        LIMIT 50`,
       [scope.companyId]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
     res.json({ data: rows, total: rows.length });
-  } catch (err) { res.json({ data: [], total: 0 }); }
+  } catch (err) { logger.error(err, "delegations query failed"); res.json({ data: [], total: 0 }); }
 });
 
-router.post("/delegations", requirePermission("hr:approve"), async (req, res) => {
+router.post("/delegations", authorize({ feature: "hr", action: "approve" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = delegationSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { delegateId, scope: delegationScope, reason, startDate, endDate } = parsed.data;
+    const { delegateId, scope: delegationScope, reason, startDate, endDate } = zodParse(delegationSchema.safeParse(req.body));
     if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
       throw new ValidationError("تاريخ النهاية قبل تاريخ البداية", {
         field: "endDate",
@@ -5336,7 +5764,7 @@ router.post("/delegations", requirePermission("hr:approve"), async (req, res) =>
     }
 
     const [emp] = await rawQuery<{ id: number }>(
-      `SELECT id FROM employees WHERE "userId" = $1 LIMIT 1`,
+      `SELECT e.id FROM employees e JOIN users u ON u."employeeId" = e.id WHERE u.id = $1 LIMIT 1`,
       [scope.userId]
     );
     if (!emp) throw new ValidationError("لم يتم العثور على الموظف المرتبط بحسابك");
@@ -5366,16 +5794,17 @@ router.post("/delegations", requirePermission("hr:approve"), async (req, res) =>
     // { success: true, id: null } — a lie to the caller. Drop the catch so
     // real DB errors surface through handleRouteError (with requestId).
     const r = await rawExecute(
-      `INSERT INTO delegations ("delegatorId","delegateId","companyId",scope,reason,status,"startDate","endDate") VALUES ($1,$2,$3,$4,$5,'active',$6,$7)`,
+      `INSERT INTO delegations ("fromUserId","toUserId","companyId",scope,reason,status,"startDate","endDate") VALUES ($1,$2,$3,$4,$5,'active',$6,$7)`,
       [emp.id, Number(delegateId), scope.companyId, delegationScope || "عام", String(reason).trim(), startDate || new Date(), endDate || null]
     );
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "delegations", entityId: r.insertId,
       after: { delegatorId: emp.id, delegateId: Number(delegateId), scope: delegationScope || "عام", reason, startDate: startDate || null, endDate: endDate || null },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "delegation.created", entity: "hr_delegations", entityId: r.insertId, details: JSON.stringify({ delegateId: Number(delegateId), scope: delegationScope || "عام" }) }).catch(console.error);
-    res.status(201).json({ success: true, id: r.insertId, delegateId: Number(delegateId), startDate: startDate || null, endDate: endDate || null });
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "delegation.created", entity: "hr_delegations", entityId: r.insertId, details: JSON.stringify({ delegateId: Number(delegateId), scope: delegationScope || "عام" }) }).catch((e) => logger.error(e, "hr background task failed"));
+    const [row] = await rawQuery<any>(`SELECT * FROM delegations WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { success: true, id: r.insertId, delegateId: Number(delegateId), startDate: startDate || null, endDate: endDate || null });
   } catch (err) { handleRouteError(err, res, "خطأ في إنشاء التفويض"); }
 });
 
@@ -5383,30 +5812,28 @@ router.post("/delegations", requirePermission("hr:approve"), async (req, res) =>
 // PUBLIC HOLIDAYS — تقويم الإجازات الرسمية
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/public-holidays", requirePermission("hr:read"), async (req, res) => {
+router.get("/public-holidays", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { year } = req.query as any;
-    const conditions = [`"companyId" = $1`];
+    const conditions = [`"companyId" = $1`, `"deletedAt" IS NULL`];
     const params: any[] = [scope.companyId];
     if (year) { params.push(Number(year)); conditions.push(`year = $${params.length}`); }
     const rows = await rawQuery<any>(
-      `SELECT * FROM public_holidays WHERE ${conditions.join(" AND ")} ORDER BY "startDate"`,
+      `SELECT * FROM public_holidays WHERE ${conditions.join(" AND ")} ORDER BY "startDate" LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "Public holidays error:"); }
 });
 
-router.post("/public-holidays", requirePermission("hr:create"), async (req, res) => {
+router.post("/public-holidays", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح: إدارة الإجازات الرسمية مقصورة على HR أو المالك");
     }
-    const parsed = publicHolidaySchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data;
+    const b = zodParse(publicHolidaySchema.safeParse(req.body));
     const startDate = new Date(b.startDate);
     const year = b.year || startDate.getFullYear();
     const { insertId } = await rawExecute(
@@ -5415,25 +5842,25 @@ router.post("/public-holidays", requirePermission("hr:create"), async (req, res)
       [scope.companyId, b.name, b.startDate, b.endDate || b.startDate, year,
        b.type || 'national', b.description || null, b.isRecurring || false]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM public_holidays WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM public_holidays WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "public_holidays", entityId: insertId,
       after: { name: b.name, startDate: b.startDate, endDate: b.endDate || b.startDate, year, type: b.type || "national" },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "holiday.created", entity: "hr_public_holidays", entityId: insertId, details: JSON.stringify({ name: b.name, startDate: b.startDate }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "holiday.created", entity: "hr_public_holidays", entityId: insertId, details: JSON.stringify({ name: b.name, startDate: b.startDate }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create holiday error:"); }
 });
 
-router.patch("/public-holidays/:id", requirePermission("hr:update"), async (req, res) => {
+router.patch("/public-holidays/:id", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح");
     }
-    const id = Number(req.params.id);
-    const b = req.body;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(publicHolidayPatchSchema.safeParse(req.body ?? {}));
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
     if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
@@ -5446,7 +5873,7 @@ router.patch("/public-holidays/:id", requirePermission("hr:update"), async (req,
     params.push(id); params.push(scope.companyId);
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM public_holidays WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     const rows = await rawQuery<any>(
-      `UPDATE public_holidays SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} RETURNING *`,
+      `UPDATE public_holidays SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
     if (!rows[0]) throw new NotFoundError("العطلة غير موجودة");
@@ -5455,33 +5882,14 @@ router.patch("/public-holidays/:id", requirePermission("hr:update"), async (req,
       action: "update", entity: "public_holidays", entityId: id,
       before: beforeRow ?? {},
       after: rows[0],
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "holiday.updated", entity: "hr_public_holidays", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "holiday.updated", entity: "hr_public_holidays", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update holiday error:"); }
 });
 
-router.delete("/public-holidays/:id", requirePermission("hr:delete"), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
-      throw new ForbiddenError("غير مصرح");
-    }
-    const id = Number(req.params.id);
-    const [beforeRow] = await rawQuery<any>(`SELECT * FROM public_holidays WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    await rawExecute(`UPDATE public_holidays SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "delete", entity: "public_holidays", entityId: id,
-      before: beforeRow ?? { id },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "holiday.deleted", entity: "hr_public_holidays", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
-    res.json({ message: "تم حذف العطلة" });
-  } catch (err) { handleRouteError(err, res, "Delete holiday error:"); }
-});
-
 // Check if a date is a public holiday
-router.get("/public-holidays/check", requirePermission("hr:read"), async (req, res) => {
+router.get("/public-holidays/check", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { date } = req.query as any;
@@ -5494,11 +5902,31 @@ router.get("/public-holidays/check", requirePermission("hr:read"), async (req, r
   } catch (err) { handleRouteError(err, res, "Check holiday error:"); }
 });
 
+router.delete("/public-holidays/:id", authorize({ feature: "hr", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!HR_ROLES.includes(scope.role)) {
+      throw new ForbiddenError("غير مصرح");
+    }
+    const id = parseId(req.params.id, "id");
+    const [beforeRow] = await rawQuery<any>(`SELECT * FROM public_holidays WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE public_holidays SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود");
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "public_holidays", entityId: id,
+      before: beforeRow ?? { id },
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "holiday.deleted", entity: "hr_public_holidays", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "hr background task failed"));
+    res.json({ message: "تم حذف العطلة" });
+  } catch (err) { handleRouteError(err, res, "Delete holiday error:"); }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // EMPLOYEE TRANSFERS — نقل الموظف بين الفروع
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/transfers", requirePermission("hr:read"), async (req, res) => {
+router.get("/transfers", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
@@ -5516,14 +5944,39 @@ router.get("/transfers", requirePermission("hr:read"), async (req, res) => {
        LEFT JOIN departments d1 ON d1.id=t."fromDeptId"
        LEFT JOIN departments d2 ON d2.id=t."toDeptId"
        WHERE ${conditions.join(" AND ")}
-       ORDER BY t."createdAt" DESC`,
+       ORDER BY t."createdAt" DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "Transfers error:"); }
 });
 
-router.post("/transfers", requirePermission("hr:create"), async (req, res) => {
+router.get("/transfers/:id", authorize({ feature: "hr", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(
+      `SELECT t.*, t."effectiveDate" AS "transferDate",
+              e.name AS "employeeName", e."empNumber",
+              b1.name AS "fromBranchName", b1.name AS "fromBranch",
+              b2.name AS "toBranchName", b2.name AS "toBranch",
+              d1.name AS "fromDeptName", d1.name AS "fromDepartment",
+              d2.name AS "toDeptName", d2.name AS "toDepartment"
+       FROM employee_transfers t
+       JOIN employees e ON e.id=t."employeeId"
+       LEFT JOIN branches b1 ON b1.id=t."fromBranchId"
+       LEFT JOIN branches b2 ON b2.id=t."toBranchId"
+       LEFT JOIN departments d1 ON d1.id=t."fromDeptId"
+       LEFT JOIN departments d2 ON d2.id=t."toDeptId"
+       WHERE t.id = $1 AND t."companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("طلب النقل غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Transfer detail error:"); }
+});
+
+router.post("/transfers", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   // Step 3 of the HR operational audit — transfer request creation.
   // Converts the 2 raw res.status(...) error sites to typed throws and
   // adds a pre-check that the destination branch actually exists in the
@@ -5532,9 +5985,7 @@ router.post("/transfers", requirePermission("hr:create"), async (req, res) => {
   // side-effect notification).
   try {
     const scope = req.scope!;
-    const parsed = transferSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(transferSchema.safeParse(req.body)) as any;
     const [assignment] = await rawQuery<any>(
       `SELECT ea.id, ea."branchId", ea."departmentId", ea.salary, ea."jobTitle"
        FROM employee_assignments ea
@@ -5578,7 +6029,7 @@ router.post("/transfers", requirePermission("hr:create"), async (req, res) => {
        scope.employeeId, b.reason || null, b.effectiveDate || null, b.notes || null]
     );
 
-    const [row] = await rawQuery<any>(`SELECT * FROM employee_transfers WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     // Notify HR
     const hrAssign = await rawQuery<any>(
@@ -5591,14 +6042,14 @@ router.post("/transfers", requirePermission("hr:create"), async (req, res) => {
         type: "transfer_request", title: "طلب نقل موظف جديد",
         body: `طلب نقل موظف بين الفروع — يحتاج مراجعة HR`,
         priority: "normal", refType: "employee_transfer", refId: insertId,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr background task failed"));
     }
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "employee_transfers", entityId: insertId,
       after: { employeeId: b.employeeId, fromBranchId: assignment.branchId, toBranchId: b.toBranchId, status: "pending" },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -5611,27 +6062,27 @@ router.post("/transfers", requirePermission("hr:create"), async (req, res) => {
         fromBranchId: assignment.branchId,
         toBranchId: b.toBranchId,
       }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create transfer error:"); }
 });
 
 // ── Step 1: HR Manager approves → notifies receiving branch manager ──
-router.patch("/transfers/:id/approve", requirePermission("hr:update"), async (req, res) => {
+router.patch("/transfers/:id/approve", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   // Step 3 of the HR operational audit — HR approval step of a transfer.
   // Converts 2 raw res.status error sites to typed throws and emits a
   // canonical `hr.transfer.hr_approved` / `hr.transfer.rejected` event
   // so the audit trail sees every HR decision on a transfer.
   try {
     const scope = req.scope!;
-    if (!["hr_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("هذه الخطوة محصورة بمدير الموارد البشرية أو المدير العام", {
         fix: "اطلب من مدير الموارد البشرية اتخاذ القرار.",
       });
     }
-    const id = Number(req.params.id);
-    const { approved, notes } = req.body as any;
+    const id = parseId(req.params.id, "id");
+    const { approved, notes } = zodParse(transferApprovalSchema.safeParse(req.body ?? {}));
     const [transfer] = await rawQuery<any>(
       `SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
@@ -5651,13 +6102,6 @@ router.patch("/transfers/:id/approve", requirePermission("hr:update"), async (re
     }
 
     if (approved) {
-      // HR approved — move to pending_receiving_manager for the destination branch manager to confirm
-      await rawExecute(
-        `UPDATE employee_transfers SET status='pending_receiving_manager',"approvedBy"=$1,"approvedAt"=NOW(),notes=COALESCE($2,notes) WHERE id=$3`,
-        [scope.employeeId, notes || null, id]
-      );
-
-      // Notify the receiving branch manager
       const [receivingMgr] = await rawQuery<any>(
         `SELECT ea.id FROM employee_assignments ea
          WHERE ea."companyId"=$1 AND ea."branchId"=$2
@@ -5665,86 +6109,59 @@ router.patch("/transfers/:id/approve", requirePermission("hr:update"), async (re
          ORDER BY CASE ea.role WHEN 'branch_manager' THEN 1 WHEN 'general_manager' THEN 2 ELSE 3 END LIMIT 1`,
         [scope.companyId, transfer.toBranchId]
       );
-      if (receivingMgr) {
-        createNotification({
-          companyId: scope.companyId, assignmentId: receivingMgr.id,
+      await applyTransition({
+        entity: "employee_transfers",
+        id,
+        scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
+        action: "hr.transfer.hr_approved",
+        fromStates: ["pending"],
+        toState: "pending_receiving_manager",
+        reason: notes || undefined,
+        setExtras: { approvedBy: scope.employeeId, approvedAt: { raw: "NOW()" }, notes: notes || null },
+        notifications: receivingMgr ? [{
+          assignmentId: receivingMgr.id,
           type: "transfer_receiving_approval", title: "طلب استقبال موظف منقول",
           body: `يحتاج استلام موظف منقول إلى فرعك — يرجى المراجعة والتأكيد`,
           priority: "high", refType: "employee_transfer", refId: id,
-        }).catch(console.error);
-      }
-
-      try {
-        await rawExecute(
-          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('employee_transfer',$1,'approved',$2,$3,$4)`,
-          [id, notes || null, scope.userId, scope.companyId]
-        );
-      } catch (e) { console.error("Failed to log approval action:", e); }
-
-      emitEvent({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        userId: scope.userId,
-        action: "hr.transfer.hr_approved",
-        entity: "employee_transfers",
-        entityId: id,
-        before: { status: "pending" },
-        after: { status: "pending_receiving_manager", approvedBy: scope.employeeId },
-        reason: notes ?? undefined,
-      }).catch(console.error);
+        }] : [],
+      });
     } else {
-      await rawExecute(
-        `UPDATE employee_transfers SET status='rejected',"approvedBy"=$1,"approvedAt"=NOW(),notes=COALESCE($2,notes) WHERE id=$3`,
-        [scope.employeeId, notes || null, id]
-      );
-      // Notify employee of rejection
       const [empAssign] = await rawQuery<any>(
         `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
         [transfer.employeeId, scope.companyId]
       );
-      if (empAssign) {
-        createNotification({
-          companyId: scope.companyId, assignmentId: empAssign.id,
+      await applyTransition({
+        entity: "employee_transfers",
+        id,
+        scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
+        action: "hr.transfer.rejected",
+        fromStates: ["pending"],
+        toState: "rejected",
+        reason: notes || undefined,
+        setExtras: { approvedBy: scope.employeeId, approvedAt: { raw: "NOW()" }, notes: notes || null },
+        notifications: empAssign ? [{
+          assignmentId: empAssign.id,
           type: "transfer_decision", title: "تم رفض طلب النقل",
           body: notes || "تم رفض طلب النقل من قبل مدير الموارد البشرية",
           priority: "high", refType: "employee_transfer", refId: id,
-        }).catch(console.error);
-      }
-
-      try {
-        await rawExecute(
-          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('employee_transfer',$1,'rejected',$2,$3,$4)`,
-          [id, notes || null, scope.userId, scope.companyId]
-        );
-      } catch (e) { console.error("Failed to log approval action:", e); }
-
-      emitEvent({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        userId: scope.userId,
-        action: "hr.transfer.rejected",
-        entity: "employee_transfers",
-        entityId: id,
-        before: { status: "pending" },
-        after: { status: "rejected", approvedBy: scope.employeeId },
-        reason: notes ?? undefined,
-      }).catch(console.error);
+        }] : [],
+      });
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM employee_transfers WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "employee_transfers", entityId: id,
       after: { status: row?.status, approved, notes: notes ?? null },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Approve transfer error:"); }
 });
 
 // ── Step 2: Receiving branch manager confirms the transfer ──
-router.patch("/transfers/:id/receive", requirePermission("hr:update"), async (req, res) => {
+router.patch("/transfers/:id/receive", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   // Step 3 of the HR operational audit — receiving branch manager confirms
   // (or rejects) a transfer the HR manager has already approved.
   // Converts 3 raw res.status error sites to typed throws and emits the
@@ -5752,14 +6169,14 @@ router.patch("/transfers/:id/receive", requirePermission("hr:update"), async (re
   // event so the audit trail sees the final disposition.
   try {
     const scope = req.scope!;
-    if (!["branch_manager", "general_manager", "owner"].includes(scope.role)) {
+    if (!PR_APPROVAL_ROLES.includes(scope.role)) {
       throw new ForbiddenError(
         "استقبال الموظف المنقول محصور بمدير الفرع أو المدير العام",
         { fix: "اطلب من مدير الفرع تنفيذ الاستقبال." }
       );
     }
-    const id = Number(req.params.id);
-    const { confirmed, notes } = req.body as any;
+    const id = parseId(req.params.id, "id");
+    const { confirmed, notes } = zodParse(transferConfirmSchema.safeParse(req.body ?? {}));
     const [transfer] = await rawQuery<any>(
       `SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
@@ -5802,58 +6219,35 @@ router.patch("/transfers/:id/receive", requirePermission("hr:update"), async (re
       const newDeptId = transfer.toDeptId;
       const newJobTitle = transfer.toJobTitle;
       const newSalary = transfer.toSalary;
-      await rawExecute(
-        `UPDATE employee_assignments SET "branchId"=$1,"departmentId"=$2,"jobTitle"=$3,salary=$4 WHERE "employeeId"=$5 AND "companyId"=$6 AND status='active'`,
-        [newBranchId, newDeptId, newJobTitle, newSalary, transfer.employeeId, scope.companyId]
-      );
-      await rawExecute(
-        `UPDATE employee_transfers SET status='approved',"receivedBy"=$1,"receivedAt"=NOW(),notes=COALESCE($2,notes) WHERE id=$3`,
-        [scope.employeeId, notes || null, id]
-      );
-
       // Notify employee of final approval
       const [empAssign] = await rawQuery<any>(
         `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
         [transfer.employeeId, scope.companyId]
       );
-      if (empAssign) {
-        createNotification({
-          companyId: scope.companyId, assignmentId: empAssign.id,
+      await applyTransition({
+        entity: "employee_transfers",
+        id,
+        scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
+        action: "hr.transfer.completed",
+        fromStates: ["pending_receiving_manager"],
+        toState: "approved",
+        reason: notes || undefined,
+        setExtras: { receivedBy: scope.employeeId, receivedAt: { raw: "NOW()" } },
+        onApply: async (_row, client) => {
+          await client.query(
+            `UPDATE employee_assignments SET "branchId"=$1,"departmentId"=$2,"jobTitle"=$3,salary=$4 WHERE "employeeId"=$5 AND "companyId"=$6 AND status='active'`,
+            [newBranchId, newDeptId, newJobTitle, newSalary, transfer.employeeId, scope.companyId]
+          );
+        },
+        after: { branchId: newBranchId, departmentId: newDeptId, jobTitle: newJobTitle, salary: newSalary },
+        notifications: empAssign ? [{
+          assignmentId: empAssign.id,
           type: "transfer_decision", title: "تم اعتماد نقلك وتفعيله",
           body: notes || "تمت الموافقة على نقلك وتم تحديث بياناتك",
           priority: "high", refType: "employee_transfer", refId: id,
-        }).catch(console.error);
-      }
-
-      emitEvent({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        userId: scope.userId,
-        action: "hr.transfer.completed",
-        entity: "employee_transfers",
-        entityId: id,
-        before: {
-          status: "pending_receiving_manager",
-          branchId: transfer.fromBranchId,
-          departmentId: transfer.fromDeptId,
-          jobTitle: transfer.fromJobTitle,
-          salary: transfer.fromSalary,
-        },
-        after: {
-          status: "approved",
-          branchId: newBranchId,
-          departmentId: newDeptId,
-          jobTitle: newJobTitle,
-          salary: newSalary,
-        },
-        reason: notes ?? undefined,
-      }).catch(console.error);
+        }] : [],
+      });
     } else {
-      await rawExecute(
-        `UPDATE employee_transfers SET status='rejected_by_receiver',"receivedBy"=$1,"receivedAt"=NOW(),notes=COALESCE($2,notes) WHERE id=$3`,
-        [scope.employeeId, notes || null, id]
-      );
-
       // Notify employee — previously silent if receiver declined, which
       // left the employee without feedback. Also notify the original HR
       // manager so they know the receiving branch declined.
@@ -5861,35 +6255,31 @@ router.patch("/transfers/:id/receive", requirePermission("hr:update"), async (re
         `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
         [transfer.employeeId, scope.companyId]
       );
-      if (empAssign) {
-        createNotification({
-          companyId: scope.companyId, assignmentId: empAssign.id,
+      await applyTransition({
+        entity: "employee_transfers",
+        id,
+        scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
+        action: "hr.transfer.rejected_by_receiver",
+        fromStates: ["pending_receiving_manager"],
+        toState: "rejected_by_receiver",
+        reason: notes || undefined,
+        setExtras: { receivedBy: scope.employeeId, receivedAt: { raw: "NOW()" } },
+        notifications: empAssign ? [{
+          assignmentId: empAssign.id,
           type: "transfer_decision", title: "رفض الفرع المستقبل طلب نقلك",
           body: notes || "رفض مدير الفرع المستقبل استقبالك. راجع الموارد البشرية.",
           priority: "high", refType: "employee_transfer", refId: id,
-        }).catch(console.error);
-      }
-
-      emitEvent({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        userId: scope.userId,
-        action: "hr.transfer.rejected_by_receiver",
-        entity: "employee_transfers",
-        entityId: id,
-        before: { status: "pending_receiving_manager" },
-        after: { status: "rejected_by_receiver", receivedBy: scope.employeeId },
-        reason: notes ?? undefined,
-      }).catch(console.error);
+        }] : [],
+      });
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM employee_transfers WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "employee_transfers", entityId: id,
       after: { status: row?.status, confirmed, notes: notes ?? null },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Receive transfer error:"); }
@@ -5899,11 +6289,11 @@ router.patch("/transfers/:id/receive", requirePermission("hr:update"), async (re
 // INDIVIDUAL DEVELOPMENT PLANS (IDP) — خطة التطوير الفردي
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/idp", requirePermission("hr:read"), async (req, res) => {
+router.get("/idp", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { employeeId } = req.query as any;
-    const conditions = [`idp."companyId"=$1`];
+    const conditions = [`idp."companyId"=$1`, `idp."deletedAt" IS NULL`];
     const params: any[] = [scope.companyId];
     if (employeeId) { params.push(Number(employeeId)); conditions.push(`idp."employeeId"=$${params.length}`); }
     else if (scope.role === "employee" && scope.employeeId) {
@@ -5914,19 +6304,17 @@ router.get("/idp", requirePermission("hr:read"), async (req, res) => {
        FROM employee_development_plans idp
        JOIN employees e ON e.id=idp."employeeId"
        WHERE ${conditions.join(" AND ")}
-       ORDER BY idp."createdAt" DESC`,
+       ORDER BY idp."createdAt" DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "IDP list error:"); }
 });
 
-router.post("/idp", requirePermission("hr:create"), async (req, res) => {
+router.post("/idp", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = idpSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(idpSchema.safeParse(req.body)) as any;
     const goals = Array.isArray(b.goals) ? JSON.stringify(b.goals) : (b.goals || '[]');
     const skills = Array.isArray(b.skills) ? JSON.stringify(b.skills) : (b.skills || '[]');
     const trainingIds = Array.isArray(b.trainingIds) ? JSON.stringify(b.trainingIds) : (b.trainingIds || '[]');
@@ -5937,22 +6325,22 @@ router.post("/idp", requirePermission("hr:create"), async (req, res) => {
       [scope.companyId, b.employeeId, scope.employeeId, b.title || 'خطة التطوير الفردي',
        goals, skills, trainingIds, b.targetDate || null, b.notes || null, b.reviewDate || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM employee_development_plans WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM employee_development_plans WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "employee_development_plans", entityId: insertId,
       after: { employeeId: b.employeeId, title: b.title || "خطة التطوير الفردي", status: "planned" },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "idp.created", entity: "hr_individual_development_plans", entityId: insertId, details: JSON.stringify({ employeeId: b.employeeId, title: b.title || "خطة التطوير الفردي" }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "idp.created", entity: "hr_individual_development_plans", entityId: insertId, details: JSON.stringify({ employeeId: b.employeeId, title: b.title || "خطة التطوير الفردي" }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create IDP error:"); }
 });
 
-router.patch("/idp/:id", requirePermission("hr:update"), async (req, res) => {
+router.patch("/idp/:id", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
-    const b = req.body;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(idpPatchSchema.safeParse(req.body ?? {}));
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: any[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
@@ -5966,7 +6354,7 @@ router.patch("/idp/:id", requirePermission("hr:update"), async (req, res) => {
     params.push(id); params.push(scope.companyId);
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM employee_development_plans WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     const rows = await rawQuery<any>(
-      `UPDATE employee_development_plans SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} RETURNING *`,
+      `UPDATE employee_development_plans SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
     if (!rows[0]) throw new NotFoundError("خطة التطوير غير موجودة");
@@ -5975,24 +6363,25 @@ router.patch("/idp/:id", requirePermission("hr:update"), async (req, res) => {
       action: "update", entity: "employee_development_plans", entityId: id,
       before: beforeRow ?? {},
       after: rows[0],
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "idp.updated", entity: "hr_individual_development_plans", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "idp.updated", entity: "hr_individual_development_plans", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update IDP error:"); }
 });
 
-router.delete("/idp/:id", requirePermission("hr:delete"), async (req, res) => {
+router.delete("/idp/:id", authorize({ feature: "hr", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [beforeRow] = await rawQuery<any>(`SELECT * FROM employee_development_plans WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    await rawExecute(`UPDATE employee_development_plans SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE employee_development_plans SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود");
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "employee_development_plans", entityId: id,
       before: beforeRow ?? { id },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "idp.deleted", entity: "hr_individual_development_plans", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "idp.deleted", entity: "hr_individual_development_plans", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.json({ message: "تم حذف خطة التطوير" });
   } catch (err) { handleRouteError(err, res, "Delete IDP error:"); }
 });
@@ -6001,14 +6390,14 @@ router.delete("/idp/:id", requirePermission("hr:delete"), async (req, res) => {
 // END OF SERVICE GRATUITY — مكافأة نهاية الخدمة
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/gratuity/:employeeId", requirePermission("hr:read"), async (req, res) => {
+router.get("/gratuity/:employeeId", authorize({ feature: "hr", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const employeeId = Number(req.params.employeeId);
+    const employeeId = parseId(req.params.employeeId, "employeeId");
     const { terminationType, terminationDate } = req.query as any;
 
     const [assignment] = await rawQuery<any>(
-      `SELECT ea.salary, ea."startDate", ea."jobTitle",
+      `SELECT ea.salary, ea."hireDate" AS "startDate", ea."jobTitle",
               ec."startDate" AS "contractStart", ec."endDate" AS "contractEnd",
               e.name AS "employeeName"
        FROM employee_assignments ea
@@ -6046,22 +6435,22 @@ router.get("/gratuity/:employeeId", requirePermission("hr:read"), async (req, re
       else reductionFactor = 0; // Less than 2 years = no gratuity for resignation
     }
 
-    const finalGratuity = Math.round(gratuity * reductionFactor * 100) / 100;
+    const finalGratuity = roundTo2(gratuity * reductionFactor);
 
     res.json({
       employeeName: assignment.employeeName,
       jobTitle: assignment.jobTitle,
       monthlySalary,
-      startDate: startDate.toISOString().split('T')[0],
-      endDate: endDate.toISOString().split('T')[0],
-      yearsOfService: Math.round(yearsOfService * 100) / 100,
+      startDate: toDateISO(startDate),
+      endDate: toDateISO(endDate),
+      yearsOfService: roundTo2(yearsOfService),
       terminationType: type,
-      gratuityBeforeReduction: Math.round(gratuity * 100) / 100,
+      gratuityBeforeReduction: roundTo2(gratuity),
       reductionFactor,
       finalGratuity,
       breakdown: {
-        first5Years: Math.min(yearsOfService, 5) > 0 ? Math.round((monthlySalary / 2) * Math.min(yearsOfService, 5) * 100) / 100 : 0,
-        above5Years: yearsOfService > 5 ? Math.round(monthlySalary * (yearsOfService - 5) * 100) / 100 : 0,
+        first5Years: Math.min(yearsOfService, 5) > 0 ? roundTo2((monthlySalary / 2) * Math.min(yearsOfService, 5)) : 0,
+        above5Years: yearsOfService > 5 ? roundTo2(monthlySalary * (yearsOfService - 5)) : 0,
       },
     });
   } catch (err) { handleRouteError(err, res, "Gratuity calculation error:"); }
@@ -6074,11 +6463,11 @@ router.get("/gratuity/:employeeId", requirePermission("hr:read"), async (req, re
 // then 1/12 afterwards). Idempotent per period via the JE ref check.
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res) => {
+router.post("/accruals/monthly", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { period } = (req.body || {}) as { period?: string };
-    const targetPeriod = period || new Date().toISOString().slice(0, 7);
+    const { period } = zodParse(monthlyAccrualsSchema.safeParse(req.body ?? {}));
+    const targetPeriod = period || currentPeriod();
 
     if (!/^\d{4}-\d{2}$/.test(targetPeriod)) {
       throw new ValidationError("صيغة الفترة غير صحيحة (YYYY-MM)", { field: "period" });
@@ -6105,8 +6494,8 @@ router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res
     }
 
     const employees = await rawQuery<any>(
-      `SELECT ea."employeeId", ea.salary, ea."startDate",
-              COALESCE(ec."startDate", ea."startDate") AS "contractStart"
+      `SELECT ea."employeeId", ea.salary, ea."hireDate",
+              COALESCE(ec."startDate", ea."hireDate") AS "contractStart"
        FROM employee_assignments ea
        LEFT JOIN employee_contracts ec ON ec."employeeId"=ea."employeeId"
                                       AND ec."companyId"=$1 AND ec.status='active'
@@ -6130,7 +6519,7 @@ router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res
 
       const dailyRate = salary / 30;
       const monthlyLeaveDays = DEFAULT_ANNUAL_LEAVE_DAYS / 12;
-      const leaveAccrual = Math.round(dailyRate * monthlyLeaveDays * 100) / 100;
+      const leaveAccrual = roundTo2(dailyRate * monthlyLeaveDays);
 
       const startDate = new Date(emp.contractStart || emp.startDate);
       const yearsOfService = (periodEnd.getTime() - startDate.getTime()) / (365.25 * 24 * 3600 * 1000);
@@ -6142,7 +6531,7 @@ router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res
       } else {
         monthlyEosAccrual = salary / 12;
       }
-      monthlyEosAccrual = Math.round(monthlyEosAccrual * 100) / 100;
+      monthlyEosAccrual = roundTo2(monthlyEosAccrual);
 
       totalLeaveAccrual += leaveAccrual;
       totalEosAccrual += monthlyEosAccrual;
@@ -6154,37 +6543,21 @@ router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res
       });
     }
 
-    totalLeaveAccrual = Math.round(totalLeaveAccrual * 100) / 100;
-    totalEosAccrual = Math.round(totalEosAccrual * 100) / 100;
+    totalLeaveAccrual = roundTo2(totalLeaveAccrual);
+    totalEosAccrual = roundTo2(totalEosAccrual);
 
     if (totalLeaveAccrual <= 0 && totalEosAccrual <= 0) {
       throw new ValidationError("لا توجد مبالغ استحقاق لاحتسابها");
     }
 
-    const [leaveExpenseCode, leaveLiabilityCode, eosExpenseCode, eosLiabilityCode] = await Promise.all([
-      getAccountCodeFromMapping(scope.companyId, "hr_leave_accrual_expense", "debit", "5120"),
-      getAccountCodeFromMapping(scope.companyId, "hr_leave_accrual_liability", "credit", "2220"),
-      getAccountCodeFromMapping(scope.companyId, "hr_eos_accrual_expense", "debit", "5130"),
-      getAccountCodeFromMapping(scope.companyId, "hr_eos_accrual_liability", "credit", "2230"),
-    ]);
-
-    const lines = [
-      { accountCode: leaveExpenseCode, debit: totalLeaveAccrual, credit: 0 },
-      { accountCode: eosExpenseCode, debit: totalEosAccrual, credit: 0 },
-      { accountCode: leaveLiabilityCode, debit: 0, credit: totalLeaveAccrual },
-      { accountCode: eosLiabilityCode, debit: 0, credit: totalEosAccrual },
-    ].filter((l) => l.debit > 0 || l.credit > 0);
-
     let journalId: number | null = null;
     try {
-      journalId = await createGuardedJournalEntry({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        createdBy: scope.activeAssignmentId,
-        ref,
-        description: `استحقاقات شهرية: إجازات ${totalLeaveAccrual} + نهاية خدمة ${totalEosAccrual} (${employees.length} موظف)`,
-        lines,
-      }, { table: "journal_entries", id: 0 });
+      const { hrEngine } = await import("../lib/engines/index.js");
+      const glResult = await hrEngine.postMonthlyAccrualsGL(
+        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
+        { ref, period: targetPeriod, totalLeaveAccrual, totalEosAccrual, employeeCount: employees.length }
+      );
+      journalId = glResult.journalId;
     } catch (journalErr) {
       throw new IntegrationError("فشل تسجيل قيد الاستحقاقات", {
         meta: { integration: "journal", period: targetPeriod },
@@ -6199,13 +6572,13 @@ router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res
       entity: "journal_entries",
       entityId: journalId ?? 0,
       details: JSON.stringify({ period: targetPeriod, totalLeaveAccrual, totalEosAccrual, employeeCount: employees.length }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "journal_entries", entityId: journalId ?? 0,
       after: { period: targetPeriod, totalLeaveAccrual, totalEosAccrual, employeeCount: employees.length, ref },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
     res.status(201).json({
       journalId,
@@ -6222,10 +6595,10 @@ router.post("/accruals/monthly", requirePermission("hr:update"), async (req, res
 });
 
 // Preview accruals without posting
-router.get("/accruals/preview", requirePermission("hr:read"), async (req, res) => {
+router.get("/accruals/preview", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const period = (req.query.period as string) || new Date().toISOString().slice(0, 7);
+    const period = (req.query.period as string) || currentPeriod();
 
     if (!/^\d{4}-\d{2}$/.test(period)) {
       throw new ValidationError("صيغة الفترة غير صحيحة (YYYY-MM)", { field: "period" });
@@ -6238,8 +6611,8 @@ router.get("/accruals/preview", requirePermission("hr:read"), async (req, res) =
     );
 
     const employees = await rawQuery<any>(
-      `SELECT ea."employeeId", e.name AS "employeeName", ea.salary, ea."startDate",
-              COALESCE(ec."startDate", ea."startDate") AS "contractStart"
+      `SELECT ea."employeeId", e.name AS "employeeName", ea.salary, ea."hireDate" AS "startDate",
+              COALESCE(ec."startDate", ea."hireDate") AS "contractStart"
        FROM employee_assignments ea
        JOIN employees e ON e.id=ea."employeeId"
        LEFT JOIN employee_contracts ec ON ec."employeeId"=ea."employeeId"
@@ -6257,19 +6630,18 @@ router.get("/accruals/preview", requirePermission("hr:read"), async (req, res) =
       const salary = Number(emp.salary) || 0;
       const dailyRate = salary / 30;
       const monthlyLeaveDays = DEFAULT_ANNUAL_LEAVE_DAYS / 12;
-      const leaveAccrual = Math.round(dailyRate * monthlyLeaveDays * 100) / 100;
+      const leaveAccrual = roundTo2(dailyRate * monthlyLeaveDays);
       const startDate = new Date(emp.contractStart || emp.startDate);
       const yearsOfService = (periodEnd.getTime() - startDate.getTime()) / (365.25 * 24 * 3600 * 1000);
-      const monthlyEosAccrual = Math.round(
-        (yearsOfService > 5 ? salary / 12 : salary / 24) * 100
-      ) / 100;
+      const monthlyEosAccrual = roundTo2(
+        (yearsOfService > 5 ? salary / 12 : salary / 24));
       totalLeaveAccrual += leaveAccrual;
       totalEosAccrual += monthlyEosAccrual;
       return {
         employeeId: emp.employeeId,
         employeeName: emp.employeeName,
         salary,
-        yearsOfService: Math.round(yearsOfService * 100) / 100,
+        yearsOfService: roundTo2(yearsOfService),
         leaveAccrual,
         eosAccrual: monthlyEosAccrual,
       };
@@ -6280,9 +6652,9 @@ router.get("/accruals/preview", requirePermission("hr:read"), async (req, res) =
       alreadyPosted: !!existing,
       existingJournalId: existing?.id ?? null,
       employeeCount: employees.length,
-      totalLeaveAccrual: Math.round(totalLeaveAccrual * 100) / 100,
-      totalEosAccrual: Math.round(totalEosAccrual * 100) / 100,
-      total: Math.round((totalLeaveAccrual + totalEosAccrual) * 100) / 100,
+      totalLeaveAccrual: roundTo2(totalLeaveAccrual),
+      totalEosAccrual: roundTo2(totalEosAccrual),
+      total: roundTo2(totalLeaveAccrual + totalEosAccrual),
       rows,
     });
   } catch (err) {
@@ -6294,11 +6666,11 @@ router.get("/accruals/preview", requirePermission("hr:read"), async (req, res) =
 // TURNOVER REPORT — تقرير دوران الموظفين
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/turnover-report", requirePermission("hr:read"), async (req, res) => {
+router.get("/turnover-report", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { year } = req.query as any;
-    const targetYear = year ? Number(year) : new Date().getFullYear();
+    const targetYear = year ? Number(year) : currentYear();
 
     const [totalActive] = await rawQuery<any>(
       `SELECT COUNT(DISTINCT "employeeId") AS count FROM employee_assignments
@@ -6307,24 +6679,25 @@ router.get("/turnover-report", requirePermission("hr:read"), async (req, res) =>
     );
 
     const terminated = await rawQuery<any>(
-      `SELECT ec."terminationType", ec."terminationDate",
+      `SELECT ec."terminationReason" AS "terminationType", ec."terminatedAt" AS "terminationDate",
               e.name AS "employeeName", ea."departmentId", ea."branchId",
               d.name AS "deptName", b.name AS "branchName",
-              EXTRACT(MONTH FROM ec."terminationDate") AS month
+              EXTRACT(MONTH FROM ec."terminatedAt") AS month
        FROM employee_contracts ec
        JOIN employees e ON e.id=ec."employeeId"
        LEFT JOIN employee_assignments ea ON ea."employeeId"=ec."employeeId" AND ea."companyId"=$1
        LEFT JOIN departments d ON d.id=ea."departmentId"
        LEFT JOIN branches b ON b.id=ea."branchId"
-       WHERE ec."companyId"=$1 AND ec."terminationDate" IS NOT NULL
-         AND EXTRACT(YEAR FROM ec."terminationDate")=$2`,
+       WHERE ec."companyId"=$1 AND ec."terminatedAt" IS NOT NULL
+         AND ec."deletedAt" IS NULL
+         AND EXTRACT(YEAR FROM ec."terminatedAt")=$2`,
       [scope.companyId, targetYear]
     );
 
     const totalTerminated = terminated.length;
     const totalActiveCount = Number(totalActive?.count || 0);
     const avgHeadcount = Math.max(1, totalActiveCount + totalTerminated);
-    const turnoverRate = Math.round((totalTerminated / avgHeadcount) * 100 * 100) / 100;
+    const turnoverRate = roundTo2((totalTerminated / avgHeadcount) * 100);
 
     // Breakdown by reason
     const byReason: Record<string, number> = {};
@@ -6383,10 +6756,10 @@ router.get("/turnover-report", requirePermission("hr:read"), async (req, res) =>
 // EXPIRING DOCUMENTS — وثائق على وشك الانتهاء
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/expiring-documents", requirePermission("hr:read"), async (req, res) => {
+router.get("/expiring-documents", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const days = Number(req.query.days || 90);
+    const days = Number(req.query.days) || 90;
 
     const workPermits = await rawQuery<any>(
       `SELECT e.id AS "employeeId", e.name AS "employeeName", e."workPermitExpiry" AS "expiryDate",
@@ -6394,7 +6767,8 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
               (e."workPermitExpiry"::date - CURRENT_DATE) AS "daysLeft"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active'
-       WHERE e."workPermitExpiry" IS NOT NULL
+       WHERE e."deletedAt" IS NULL
+         AND e."workPermitExpiry" IS NOT NULL
          AND e."workPermitExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
     );
@@ -6405,7 +6779,8 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
               (e."iqamaExpiry"::date - CURRENT_DATE) AS "daysLeft"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active'
-       WHERE e."iqamaExpiry" IS NOT NULL
+       WHERE e."deletedAt" IS NULL
+         AND e."iqamaExpiry" IS NOT NULL
          AND e."iqamaExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
     );
@@ -6416,7 +6791,8 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
               (e."passportExpiry"::date - CURRENT_DATE) AS "daysLeft"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active'
-       WHERE e."passportExpiry" IS NOT NULL
+       WHERE e."deletedAt" IS NULL
+         AND e."passportExpiry" IS NOT NULL
          AND e."passportExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
     );
@@ -6428,6 +6804,7 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
        FROM employee_contracts ec
        JOIN employees e ON e.id=ec."employeeId"
        WHERE ec."companyId"=$1 AND ec.status='active'
+         AND ec."deletedAt" IS NULL
          AND ec."endDate" IS NOT NULL
          AND ec."endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
@@ -6441,6 +6818,7 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
               'driver' AS "entityType"
        FROM fleet_drivers fd
        WHERE fd."companyId"=$1 AND fd.status='active'
+         AND fd."deletedAt" IS NULL
          AND fd."licenseExpiry" IS NOT NULL
          AND fd."licenseExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
@@ -6454,7 +6832,7 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
               (fv."registrationExpiry"::date - CURRENT_DATE) AS "daysLeft",
               'vehicle' AS "entityType"
        FROM fleet_vehicles fv
-       WHERE fv."companyId"=$1 AND fv.status != 'scrapped'
+       WHERE fv."companyId"=$1 AND fv.status != 'scrapped' AND fv."deletedAt" IS NULL
          AND fv."registrationExpiry" IS NOT NULL
          AND fv."registrationExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
@@ -6468,7 +6846,7 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
               (fv."insuranceExpiry"::date - CURRENT_DATE) AS "daysLeft",
               'vehicle' AS "entityType"
        FROM fleet_vehicles fv
-       WHERE fv."companyId"=$1 AND fv.status != 'scrapped'
+       WHERE fv."companyId"=$1 AND fv.status != 'scrapped' AND fv."deletedAt" IS NULL
          AND fv."insuranceExpiry" IS NOT NULL
          AND fv."insuranceExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
@@ -6482,7 +6860,7 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
               (fv."nextInspectionDate"::date - CURRENT_DATE) AS "daysLeft",
               'vehicle' AS "entityType"
        FROM fleet_vehicles fv
-       WHERE fv."companyId"=$1 AND fv.status != 'scrapped'
+       WHERE fv."companyId"=$1 AND fv.status != 'scrapped' AND fv."deletedAt" IS NULL
          AND fv."nextInspectionDate" IS NOT NULL
          AND fv."nextInspectionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
@@ -6491,21 +6869,21 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
     // Employee documents (iqama, work permit, driving license, etc.) from employee_documents table
     const employeeDocs = await rawQuery<any>(
       `SELECT ed."employeeId" AS "entityId", e.name AS "entityName", ed."expiryDate",
-              ed."documentType" AS "docType", ed."documentType" AS "docLabel",
+              ed.type AS "docType", ed.name AS "docLabel",
               (ed."expiryDate"::date - CURRENT_DATE) AS "daysLeft",
               'employee' AS "entityType"
        FROM employee_documents ed
        JOIN employees e ON e.id=ed."employeeId"
-       WHERE ed."companyId"=$1 AND ed.status='active'
+       WHERE ed."companyId"=$1 AND ed.status='valid'
          AND ed."expiryDate" IS NOT NULL
          AND ed."expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
 
     // Company documents (commercial registration, chamber of commerce, etc.)
     const companyDocs = await rawQuery<any>(
-      `SELECT cd.id AS "entityId", cd."documentType" AS "entityName", cd."expiryDate",
-              cd."documentType" AS "docType", cd."documentType" AS "docLabel",
+      `SELECT cd.id AS "entityId", cd.title AS "entityName", cd."expiryDate",
+              cd.type AS "docType", cd.title AS "docLabel",
               (cd."expiryDate"::date - CURRENT_DATE) AS "daysLeft",
               'company' AS "entityType"
        FROM company_documents cd
@@ -6513,7 +6891,7 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
          AND cd."expiryDate" IS NOT NULL
          AND cd."expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
 
     const all = [
       ...workPermits.map((d: any) => ({ ...d, entityType: 'employee' })),
@@ -6536,46 +6914,47 @@ router.get("/expiring-documents", requirePermission("hr:read"), async (req, res)
 // COMPANY DOCUMENTS — وثائق المنشأة (سجل تجاري، رخصة بلدية، غرفة تجارية)
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/company-documents", requirePermission("hr:read"), async (req, res) => {
+router.get("/company-documents", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { page = "1", limit: lim = "50" } = req.query as any;
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+    const pageNum = Math.max(Number(page) || 1, 1);
+    const perPage = Math.min(Number(lim) || 50, 500);
+    const offset = (pageNum - 1) * perPage;
 
     const [countRow] = await rawQuery<any>(
       `SELECT COUNT(*) AS total FROM company_documents WHERE "companyId"=$1 AND status != 'deleted'`,
       [scope.companyId]
-    ).catch(() => [{ total: 0 }] as any[]);
+    ).catch((e) => { logger.error(e, "hr query failed"); return [{ total: 0 }] as any[]; });
     const rows = await rawQuery<any>(
       `SELECT * FROM company_documents WHERE "companyId"=$1 AND status != 'deleted' ORDER BY "expiryDate" ASC NULLS LAST LIMIT $2 OFFSET $3`,
-      [scope.companyId, Number(lim), offset]
-    ).catch(() => [] as any[]);
-    res.json({ data: rows, total: Number(countRow.total), page: Number(page), pageSize: Number(lim) });
+      [scope.companyId, perPage, offset]
+    ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
+    res.json({ data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage });
   } catch (err) { handleRouteError(err, res, "Company documents error:"); }
 });
 
-router.post("/company-documents", requirePermission("hr:create"), async (req, res) => {
+router.post("/company-documents", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = companyDocumentSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(companyDocumentSchema.safeParse(req.body)) as any;
 
     const { insertId } = await rawExecute(
-      `INSERT INTO company_documents ("companyId","documentType","documentNumber","issueDate","expiryDate","issuingAuthority","reminderDays",notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [scope.companyId, b.documentType, b.documentNumber || null, b.issueDate || null,
-       b.expiryDate || null, b.issuingAuthority || null, b.reminderDays || 30, b.notes || null]
+      `INSERT INTO company_documents ("companyId",title,type,"expiryDate",notes)
+       VALUES ($1,$2,$3,$4,$5)`,
+      [scope.companyId, b.documentType || b.title, b.documentNumber || b.type || null,
+       b.expiryDate || null, b.notes || null]
     );
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "company_document.created", entity: "hr_company_documents", entityId: insertId, details: JSON.stringify({ documentType: b.documentType }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "company_document.created", entity: "hr_company_documents", entityId: insertId, details: JSON.stringify({ documentType: b.documentType }) }).catch((e) => logger.error(e, "hr background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "company_documents", entityId: insertId,
       after: { documentType: b.documentType, documentNumber: b.documentNumber, expiryDate: b.expiryDate },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
-    res.status(201).json({ id: insertId, message: "تم إضافة وثيقة المنشأة" });
+    const [row] = await rawQuery<any>(`SELECT * FROM company_documents WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json(row || { id: insertId, message: "تم إضافة وثيقة المنشأة" });
   } catch (err) { handleRouteError(err, res, "Company documents error:"); }
 });
 
@@ -6583,29 +6962,32 @@ router.post("/company-documents", requirePermission("hr:create"), async (req, re
 // EMPLOYEE DOCUMENTS — وثائق الموظف الإضافية (رخصة قيادة، شهادات، إلخ)
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/employee-documents", requirePermission("hr:read"), async (req, res) => {
+router.get("/employee-documents", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { employeeId, page = "1", limit: lim = "50" } = req.query as any;
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+    const pageNum = Math.max(Number(page) || 1, 1);
+    const perPage = Math.min(Number(lim) || 50, 500);
+    const offset = (pageNum - 1) * perPage;
 
     let paramIdx = 1;
     const params: any[] = [scope.companyId];
     paramIdx++;
-    let where = `WHERE ed."companyId"=$1 AND ed.status != 'deleted'`;
+    const conditions: string[] = [`ed."companyId"=$1`, `ed.status != 'deleted'`];
     if (employeeId) {
-      where += ` AND ed."employeeId"=$${paramIdx}`;
-      params.push(Number(employeeId));
+      conditions.push(`ed."employeeId"=$${paramIdx}`);
+      params.push(Number(employeeId) || 0);
       paramIdx++;
     }
+    const where = `WHERE ${conditions.join(" AND ")}`;
 
     const countParams = [...params];
     const [countRow] = await rawQuery<any>(
-      `SELECT COUNT(*) AS total FROM employee_documents ed WHERE ${where.replace('WHERE ', '')}`,
+      `SELECT COUNT(*) AS total FROM employee_documents ed ${where}`,
       countParams
-    ).catch(() => [{ total: 0 }] as any[]);
+    ).catch((e) => { logger.error(e, "hr query failed"); return [{ total: 0 }] as any[]; });
 
-    params.push(Number(lim));
+    params.push(perPage);
     const limitParam = paramIdx++;
     params.push(offset);
     const offsetParam = paramIdx++;
@@ -6618,34 +7000,33 @@ router.get("/employee-documents", requirePermission("hr:read"), async (req, res)
        ORDER BY ed."expiryDate" ASC NULLS LAST
        LIMIT $${limitParam} OFFSET $${offsetParam}`,
       params
-    ).catch(() => [] as any[]);
-    res.json({ data: rows, total: Number(countRow.total), page: Number(page), pageSize: Number(lim) });
+    ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
+    res.json({ data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage });
   } catch (err) { handleRouteError(err, res, "Employee documents error:"); }
 });
 
-router.post("/employee-documents", requirePermission("hr:create"), async (req, res) => {
+router.post("/employee-documents", authorize({ feature: "hr", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = employeeDocumentSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data as any;
+    const b = zodParse(employeeDocumentSchema.safeParse(req.body)) as any;
 
     const { insertId } = await rawExecute(
-      `INSERT INTO employee_documents ("companyId","employeeId","documentType","documentNumber","issueDate","expiryDate","issuingAuthority","reminderDays",notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [scope.companyId, Number(b.employeeId), b.documentType, b.documentNumber || null,
-       b.issueDate || null, b.expiryDate || null, b.issuingAuthority || null,
-       b.reminderDays || 30, b.notes || null]
+      `INSERT INTO employee_documents ("companyId","employeeId",type,name,number,"issueDate","expiryDate",notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [scope.companyId, Number(b.employeeId), b.documentType || b.type, b.documentType || b.name || '',
+       b.documentNumber || b.number || null, b.issueDate || null,
+       b.expiryDate || null, b.notes || null]
     );
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "employee_document.created", entity: "hr_employee_documents", entityId: insertId, details: JSON.stringify({ employeeId: Number(b.employeeId), documentType: b.documentType }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "employee_document.created", entity: "hr_employee_documents", entityId: insertId, details: JSON.stringify({ employeeId: Number(b.employeeId), documentType: b.documentType }) }).catch((e) => logger.error(e, "hr background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "employee_documents", entityId: insertId,
       after: { employeeId: Number(b.employeeId), documentType: b.documentType, documentNumber: b.documentNumber, expiryDate: b.expiryDate },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
 
-    res.status(201).json({ id: insertId, message: "تم إضافة وثيقة الموظف" });
+    const [row] = await rawQuery<any>(`SELECT * FROM employee_documents WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json(row || { id: insertId, message: "تم إضافة وثيقة الموظف" });
   } catch (err) { handleRouteError(err, res, "Employee documents error:"); }
 });
 
@@ -6653,11 +7034,11 @@ router.post("/employee-documents", requirePermission("hr:create"), async (req, r
 // Excuse Requests (استئذان خروج مبكر / تأخر)
 // ═══════════════════════════════════════════════════════════════════════════
 
-router.get("/excuse-requests", requirePermission("hr:read"), async (req, res) => {
+router.get("/excuse-requests", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, month } = req.query as any;
-    const targetMonth = month || new Date().toISOString().slice(0, 7);
+    const targetMonth = month || currentPeriod();
     let where = `e."companyId" = $1 AND TO_CHAR(e."excuseDate", 'YYYY-MM') = $2`;
     const params: any[] = [scope.companyId, targetMonth];
     if (status) {
@@ -6670,7 +7051,7 @@ router.get("/excuse-requests", requirePermission("hr:read"), async (req, res) =>
        JOIN employee_assignments ea ON ea.id = e."assignmentId"
        JOIN employees emp ON emp.id = ea."employeeId"
        WHERE ${where}
-       ORDER BY e."excuseDate" DESC, e."createdAt" DESC`,
+       ORDER BY e."excuseDate" DESC, e."createdAt" DESC LIMIT 500`,
       params
     );
     const pending = rows.filter((r: any) => r.status === "pending").length;
@@ -6678,12 +7059,28 @@ router.get("/excuse-requests", requirePermission("hr:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "List excuse requests error:"); }
 });
 
-router.post("/excuse-requests", requirePermission("hr:create"), async (req, res) => {
+router.get("/excuse-requests/:id", authorize({ feature: "hr", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = excuseRequestSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { assignmentId, excuseDate, excuseType, startTime, endTime, estimatedMinutes, reason } = parsed.data;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(
+      `SELECT e.*, e."excuseDate" AS date, e."estimatedMinutes" AS duration,
+              emp.name AS "employeeName", emp."empNumber"
+       FROM hr_excuse_requests e
+       JOIN employee_assignments ea ON ea.id = e."assignmentId"
+       JOIN employees emp ON emp.id = ea."employeeId"
+       WHERE e.id = $1 AND ea."companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("طلب الاستئذان غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Get excuse request detail error:"); }
+});
+
+router.post("/excuse-requests", authorize({ feature: "hr", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { assignmentId, excuseDate, excuseType, startTime, endTime, estimatedMinutes, reason } = zodParse(excuseRequestSchema.safeParse(req.body));
 
     const effectiveAssignmentId = assignmentId || scope.activeAssignmentId;
     const [assignment] = await rawQuery<any>(
@@ -6712,59 +7109,66 @@ router.post("/excuse-requests", requirePermission("hr:create"), async (req, res)
       companyId: scope.companyId, branchId: assignment.branchId, userId: scope.userId,
       action: "create", entity: "hr_excuse_requests", entityId: insertId,
       after: { excuseDate, excuseType, estimatedMinutes },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: assignment.branchId, userId: scope.userId, action: "excuse.created", entity: "hr_excuse_requests", entityId: insertId, details: JSON.stringify({ excuseDate, excuseType }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: assignment.branchId, userId: scope.userId, action: "excuse.created", entity: "hr_excuse_requests", entityId: insertId, details: JSON.stringify({ excuseDate, excuseType }) }).catch((e) => logger.error(e, "hr background task failed"));
 
-    res.status(201).json({ id: insertId, message: "تم تقديم طلب الاستئذان بنجاح" });
+    const [row] = await rawQuery<any>(`SELECT * FROM hr_excuse_requests WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json(row || { id: insertId, message: "تم تقديم طلب الاستئذان بنجاح" });
   } catch (err) { handleRouteError(err, res, "Create excuse request error:"); }
 });
 
-router.patch("/excuse-requests/:id/approve", requirePermission("hr:update"), async (req, res) => {
+router.patch("/excuse-requests/:id/approve", authorize({ feature: "hr", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
-    const { approved, rejectionReason } = req.body as any;
-    const [excuse] = await rawQuery<any>(
-      `SELECT * FROM hr_excuse_requests WHERE id = $1 AND "companyId" = $2`,
-      [Number(id), scope.companyId]
-    );
-    if (!excuse) throw new NotFoundError("طلب الاستئذان غير موجود");
-    if (excuse.status !== "pending") throw new ConflictError("الطلب ليس في حالة انتظار");
+    const excuseId = parseId(req.params.id, "id");
+    const { approved, rejectionReason } = zodParse(excuseApprovalSchema.safeParse(req.body ?? {}));
 
     const newStatus = approved ? "approved" : "rejected";
     if (!approved && !rejectionReason) {
       throw new ValidationError("يجب ذكر سبب الرفض", { field: "rejectionReason" });
     }
 
-    await rawExecute(
-      `UPDATE hr_excuse_requests SET status = $1, "approvedBy" = $2, "approvedAt" = NOW(),
-       "rejectionReason" = $3, "updatedAt" = NOW() WHERE id = $4`,
-      [newStatus, scope.activeAssignmentId, rejectionReason || null, Number(id)]
+    const [excuse] = await rawQuery<any>(
+      `SELECT * FROM hr_excuse_requests WHERE id = $1 AND "companyId" = $2`,
+      [excuseId, scope.companyId]
     );
+    if (!excuse) throw new NotFoundError("طلب الاستئذان غير موجود");
 
-    try {
-      await rawExecute(
-        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('hr_excuse_request',$1,$2,$3,$4,$5)`,
-        [Number(id), newStatus, rejectionReason || null, scope.userId, scope.companyId]
-      );
-    } catch (e) { console.error("Failed to log approval action:", e); }
-
-    createNotification({
-      companyId: scope.companyId, assignmentId: excuse.assignmentId,
-      type: `excuse_${newStatus}`, title: approved ? "تمت الموافقة على الاستئذان" : "تم رفض طلب الاستئذان",
-      body: approved ? `تمت الموافقة على استئذانك بتاريخ ${excuse.excuseDate}` : `تم رفض استئذانك: ${rejectionReason}`,
-      priority: "normal", refType: "hr_excuse_request", refId: Number(id),
-    }).catch(console.error);
-
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: newStatus, entity: "hr_excuse_requests", entityId: Number(id),
-      before: { status: "pending" }, after: { status: newStatus },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "excuse.approved", entity: "hr_excuse_requests", entityId: Number(id), details: JSON.stringify({ id: Number(id), status: newStatus }) }).catch(console.error);
+    const row = await applyTransition({
+      entity: "hr_excuse_requests",
+      id: excuseId,
+      scope,
+      action: `excuse.${newStatus}`,
+      fromStates: ["pending"],
+      toState: newStatus,
+      reason: rejectionReason || undefined,
+      setExtras: {
+        approvedBy: scope.activeAssignmentId ?? 0,
+        approvedAt: { raw: "NOW()" },
+        rejectionReason: rejectionReason || null,
+      },
+      after: { status: newStatus },
+      notifications: [{
+        assignmentId: excuse.assignmentId,
+        type: `excuse_${newStatus}`,
+        title: approved ? "تمت الموافقة على الاستئذان" : "تم رفض طلب الاستئذان",
+        body: approved ? `تمت الموافقة على استئذانك بتاريخ ${excuse.excuseDate}` : `تم رفض استئذانك: ${rejectionReason}`,
+        priority: "normal",
+        refType: "hr_excuse_request",
+        refId: excuseId,
+      }],
+    });
 
     res.json({ message: approved ? "تمت الموافقة على الاستئذان" : "تم رفض الاستئذان", status: newStatus });
-  } catch (err) { handleRouteError(err, res, "Approve excuse request error:"); }
+  } catch (err) {
+    if (err instanceof LifecycleError) {
+      const typed = err.status === 404
+        ? new NotFoundError(err.message)
+        : new ConflictError(err.message, { field: err.field });
+      return handleRouteError(typed, res, "Approve excuse request error:");
+    }
+    handleRouteError(err, res, "Approve excuse request error:");
+  }
 });
 
 export default router;

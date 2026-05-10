@@ -1,6 +1,7 @@
 import webpush from "web-push";
 import { rawQuery, rawExecute } from "./rawdb.js";
 import { decryptPushEndpoint } from "./pushCrypto.js";
+import { logger } from "./logger.js";
 
 let vapidInitialized = false;
 
@@ -11,7 +12,7 @@ function ensureVapidKeys(): void {
   const subject = process.env.VAPID_SUBJECT ?? "mailto:admin@ghayth.app";
 
   if (!publicKey || !privateKey) {
-    console.warn("[Push] VAPID keys not set — push notifications will not work. Generate with: npx web-push generate-vapid-keys");
+    logger.warn("[Push] VAPID keys not set — push notifications will not work. Generate with: npx web-push generate-vapid-keys");
     return;
   }
 
@@ -80,10 +81,10 @@ export async function sendPushToCompany(
       const statusCode = (err as { statusCode?: number })?.statusCode;
       if (statusCode === 410 || statusCode === 404) {
         await rawExecute(`DELETE FROM push_subscriptions WHERE id = $1`, [sub.id]).catch((delErr: unknown) => {
-          console.warn(`[Push] Failed to remove stale subscription ${sub.id}:`, delErr);
+          logger.warn(`[Push] Failed to remove stale subscription ${sub.id}: ${delErr}`);
         });
       } else {
-        console.warn(`[Push] Failed to send to subscription ${sub.id}:`, err instanceof Error ? err.message : String(err));
+        logger.warn(`[Push] Failed to send to subscription ${sub.id}: ${err instanceof Error ? err.message : String(err)}`);
       }
       failed++;
     }

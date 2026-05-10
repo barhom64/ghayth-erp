@@ -7,14 +7,18 @@ import {
   NotFoundError,
   ConflictError,
   ForbiddenError,
+  parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
-import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { emitEvent, createAuditLog, currentPeriod, currentYear, toDateISO, roundTo2, validateBudget } from "../lib/businessHelpers.js";
 import { pushToDLQ } from "../lib/eventBus.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { logger } from "../lib/logger.js";
 
 const createBudgetSchema = z.object({
   accountCode: z.string().min(1, "رمز الحساب مطلوب"),
@@ -23,35 +27,102 @@ const createBudgetSchema = z.object({
   branchId: z.coerce.number().optional().nullable(),
 });
 
+const validateBudgetSchema = z.object({
+  accountCode: z.string().min(1, "رمز الحساب مطلوب"),
+  amount: z.coerce.number({ required_error: "المبلغ مطلوب" }).positive("المبلغ يجب أن يكون أكبر من صفر"),
+  period: z.string().optional(),
+});
+
+const updateBudgetSchema = z.object({
+  accountCode: z.string().min(1).optional(),
+  period: z.string().min(1).optional(),
+  amount: z.coerce.number().min(0).optional(),
+});
+
+const APPROVAL_SOURCE_TYPES = ["purchase_order", "invoice", "expense", "manual"] as const;
+
+const createApprovalRequestSchema = z.object({
+  accountCode: z.string().min(1, "رمز الحساب مطلوب"),
+  period: z.string().min(1, "الفترة مطلوبة"),
+  requestedAmount: z.coerce.number({ required_error: "المبلغ مطلوب" }).positive("المبلغ يجب أن يكون أكبر من صفر"),
+  sourceType: z.string().optional().nullable(),
+  sourceId: z.coerce.number().optional().nullable(),
+  reason: z.string().optional().nullable(),
+});
+
+const APPROVAL_DECISIONS = ["approved", "rejected"] as const;
+
+const decideApprovalSchema = z.object({
+  decision: z.string().refine((v) => (APPROVAL_DECISIONS as readonly string[]).includes(v), {
+    message: "القرار يجب أن يكون approved أو rejected",
+  }),
+  notes: z.string().optional().nullable(),
+});
+
 export const budgetRouter = Router();
 budgetRouter.use(authMiddleware);
 
-budgetRouter.get("/budget", requirePermission("finance:read"), async (req, res) => {
+budgetRouter.get("/budget", authorize({ feature: "finance.budget", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'b."companyId"', branchColumn: 'b."branchId"', enforceBranchScope: true });
+    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'b."companyId"', branchColumn: 'b."branchId"', enforceBranchScope: true, softDeleteColumn: 'b."deletedAt"' });
     const rows = await rawQuery<any>(
       `SELECT b.*, coa.name AS "accountName"
        FROM budgets b
-       LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = b."companyId"
+       LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = b."companyId" AND coa."deletedAt" IS NULL
        WHERE ${where}
        ORDER BY b.period DESC, b."accountCode"`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (_e) {
+  } catch (_e) { logger.error(_e, "budget list query failed");
     res.json({ data: [], total: 0, page: 1, pageSize: 0 });
   }
 });
 
-budgetRouter.post("/budget", requirePermission("finance:create"), async (req, res) => {
+budgetRouter.get("/budget-vs-actual", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { period } = req.query as { period?: string };
+    const now = new Date();
+    let startDate: string, endDate: string;
+    if (period === "year") {
+      startDate = `${now.getFullYear()}-01-01`;
+      endDate = `${now.getFullYear()}-12-31`;
+    } else if (period === "quarter") {
+      const q = Math.floor(now.getMonth() / 3);
+      startDate = `${now.getFullYear()}-${String(q * 3 + 1).padStart(2, "0")}-01`;
+      const em = q * 3 + 3;
+      const qLastDay = new Date(now.getFullYear(), em, 0).getDate();
+      endDate = `${now.getFullYear()}-${String(em).padStart(2, "0")}-${String(qLastDay).padStart(2, "0")}`;
+    } else {
+      startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      endDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+    }
+    const rows = await rawQuery<any>(
+      `SELECT b."accountCode", coa.name AS "accountName",
+              SUM(b.amount) AS budget,
+              COALESCE(SUM(b.used), 0) AS actual
+       FROM budgets b
+       LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = b."companyId" AND coa."deletedAt" IS NULL
+       WHERE b."companyId" = $1 AND b."deletedAt" IS NULL AND b.period >= $2 AND b.period <= $3
+       GROUP BY b."accountCode", coa.name
+       ORDER BY b."accountCode"`,
+      [scope.companyId, startDate.slice(0, 7), endDate.slice(0, 7)]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (_e) { logger.error(_e, "budget-vs-actual query failed");
+    res.json({ data: [], total: 0 });
+  }
+});
+
+budgetRouter.post("/budget", authorize({ feature: "finance.budget", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
-    const parsed = createBudgetSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { accountCode, period, amount, branchId } = parsed.data;
+    const { accountCode, period, amount, branchId } = zodParse(createBudgetSchema.safeParse(req.body));
     const { insertId } = await rawExecute(
       `INSERT INTO budgets ("companyId","branchId","accountCode",period,amount,used)
        VALUES ($1,$2,$3,$4,$5,0)
@@ -59,78 +130,80 @@ budgetRouter.post("/budget", requirePermission("finance:create"), async (req, re
       [scope.companyId, branchId ?? scope.branchId, accountCode, period, Number(amount)]
     );
 
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "budget.created",
-      entity: "budgets",
-      entityId: insertId,
-      details: JSON.stringify({ accountCode, period, amount: Number(amount) }),
-    }).catch((err) => pushToDLQ("event", { action: "budget.created", entityId: insertId }, err, scope.companyId));
+    if (insertId) {
+      emitEvent({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "budget.created",
+        entity: "budgets",
+        entityId: insertId,
+        details: JSON.stringify({ accountCode, period, amount: Number(amount) }),
+      }).catch((err) => pushToDLQ("event", { action: "budget.created", entityId: insertId }, err, scope.companyId));
 
-    createAuditLog({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "create",
-      entity: "budgets",
-      entityId: insertId,
-      after: { accountCode, period, amount: Number(amount) },
-    }).catch((err) => console.error("[audit] budget.created:", err));
+      createAuditLog({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "create",
+        entity: "budgets",
+        entityId: insertId,
+        after: { accountCode, period, amount: Number(amount) },
+      }).catch((err) => logger.error(err, "[audit] budget.created:"));
+    }
 
-    res.status(201).json({ id: insertId, ...req.body });
+    const [row] = await rawQuery<any>(`SELECT * FROM budgets WHERE id=$1 AND "companyId"=$2`, [insertId || 0, scope.companyId]);
+    res.status(201).json(row || { id: insertId, accountCode, period, amount: Number(amount), branchId: branchId ?? scope.branchId });
   } catch (err) {
     handleRouteError(err, res, "Create budget error:");
   }
 });
 
-budgetRouter.post("/budget/validate", requirePermission("finance:create"), async (req, res) => {
+budgetRouter.post("/budget/validate", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { accountCode, amount, period } = req.body as any;
-    if (!accountCode || !amount) {
-      throw new ValidationError("الحساب والمبلغ مطلوبان", {
-        field: !accountCode ? "accountCode" : "amount",
-        fix: "أدخل رمز الحساب والمبلغ المراد التحقق منه",
-      });
+    const { accountCode, amount, period } = zodParse(validateBudgetSchema.safeParse(req.body ?? {}));
+
+    const result = await validateBudget({
+      companyId: scope.companyId,
+      accountCode,
+      amount,
+      period,
+      role: scope.role,
+    });
+
+    const response: Record<string, any> = {
+      status: result.status,
+      message: result.status === "no_budget"
+        ? "لا توجد ميزانية محددة لهذا الحساب"
+        : result.message,
+      canProceed: result.canProceed,
+    };
+
+    if (result.status !== "no_budget") {
+      response.utilization = result.utilization;
+      response.requiresApproval = result.requiresApproval;
     }
 
-    const targetPeriod = period ?? new Date().toISOString().slice(0, 7);
-    const [budget] = await rawQuery<any>(
-      `SELECT amount, used FROM budgets
-       WHERE "companyId" = $1 AND "accountCode" = $2 AND period = $3`,
-      [scope.companyId, accountCode, targetPeriod]
-    );
-
-    if (!budget) {
-      res.json({ status: "no_budget", message: "لا توجد ميزانية محددة لهذا الحساب", canProceed: true });
-      return;
+    if (result.status === "warning_cfo") {
+      response.approvalLevel = "cfo";
+    } else if (result.status === "blocked_gm") {
+      response.approvalLevel = "gm";
+      response.note = "حظر – يتطلب موافقة المدير العام حصراً";
+    } else if (result.status === "rejected") {
+      response.blocked = true;
     }
 
-    const budgetAmount = Number(budget.amount);
-    const usedAmount = Number(budget.used);
-    const newUsed = usedAmount + Number(amount);
-    const utilization = budgetAmount > 0 ? (newUsed / budgetAmount) * 100 : 0;
-
-    if (utilization <= 80) {
-      res.json({ status: "auto_approved", message: "الميزانية متاحة – موافقة تلقائية", utilization: Math.round(utilization), canProceed: true, requiresApproval: false });
-    } else if (utilization <= 99) {
-      res.json({ status: "warning_cfo", message: "تحذير: استخدام الميزانية 80-99%. يتطلب موافقة المدير المالي", utilization: Math.round(utilization), canProceed: true, requiresApproval: true, approvalLevel: "cfo" });
-    } else if (utilization <= 110) {
-      res.json({ status: "blocked_gm", message: "تجاوز الميزانية 100-110%. يتطلب موافقة المدير العام فقط", utilization: Math.round(utilization), canProceed: true, requiresApproval: true, approvalLevel: "gm", note: "حظر – يتطلب موافقة المدير العام حصراً" });
-    } else {
-      res.json({ status: "rejected", message: "تجاوز الميزانية أكثر من 110% – رفض نهائي", utilization: Math.round(utilization), canProceed: false, requiresApproval: false, blocked: true });
-    }
+    res.json(response);
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
   }
 });
 
-budgetRouter.patch("/budget/:id", requirePermission("finance:update"), async (req, res) => {
+budgetRouter.patch("/budget/:id", authorize({ feature: "finance.budget", action: "update", resource: { table: "budgets", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
 
-    const id = Number(req.params.id);
-    const b = req.body;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(updateBudgetSchema.safeParse(req.body ?? {}));
     const fields: string[] = [];
     const params: any[] = [];
     const addField = (col: string, val: any) => { if (val !== undefined) { params.push(val); fields.push(`"${col}" = $${params.length}`); } };
@@ -144,7 +217,7 @@ budgetRouter.patch("/budget/:id", requirePermission("finance:update"), async (re
       });
     }
     params.push(id); params.push(scope.companyId);
-    const rows = await rawQuery<any>(`UPDATE budgets SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
+    const rows = await rawQuery<any>(`UPDATE budgets SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`, params);
     if (rows.length === 0) throw new NotFoundError("الميزانية غير موجودة");
 
     emitEvent({
@@ -163,17 +236,17 @@ budgetRouter.patch("/budget/:id", requirePermission("finance:update"), async (re
       entity: "budgets",
       entityId: id,
       after: { fields: Object.keys(b) },
-    }).catch((err) => console.error("[audit] budget.updated:", err));
+    }).catch((err) => logger.error(err, "[audit] budget.updated:"));
 
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update budget error:"); }
 });
 
-budgetRouter.delete("/budget/:id", requirePermission("finance:delete"), async (req, res) => {
+budgetRouter.delete("/budget/:id", authorize({ feature: "finance.budget", action: "delete", resource: { table: "budgets", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
 
-    const budgetId = Number(req.params.id);
+    const budgetId = parseId(req.params.id, "id");
 
     const [existing] = await rawQuery<any>(
       `SELECT id, "accountCode", period, amount, used FROM budgets WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -223,7 +296,7 @@ budgetRouter.delete("/budget/:id", requirePermission("finance:delete"), async (r
         period: existing.period,
         amount: Number(existing.amount),
       },
-    }).catch((err) => console.error("[audit] budget.deleted:", err));
+    }).catch((err) => logger.error(err, "[audit] budget.deleted:"));
 
     res.json({ message: "تم حذف الميزانية" });
   } catch (err) { handleRouteError(err, res, "Delete budget error:"); }
@@ -272,20 +345,14 @@ async function ensureBudgetApprovalTable() {
   `);
 }
 
-budgetRouter.post("/budget/approval-requests", requirePermission("finance:create"), async (req, res) => {
+budgetRouter.post("/budget/approval-requests", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { accountCode, period, requestedAmount, sourceType, sourceId, reason } = req.body as any;
-    if (!accountCode || !period || !requestedAmount || Number(requestedAmount) <= 0) {
-      throw new ValidationError("الحساب والفترة والمبلغ مطلوبة", {
-        field: "requestedAmount",
-        fix: "أدخل قيمة موجبة والفترة بصيغة YYYY-MM",
-      });
-    }
+    const { accountCode, period, requestedAmount, sourceType, sourceId, reason } = zodParse(createApprovalRequestSchema.safeParse(req.body ?? {}));
     await ensureBudgetApprovalTable();
 
     const [budget] = await rawQuery<any>(
-      `SELECT amount, used FROM budgets WHERE "companyId"=$1 AND "accountCode"=$2 AND period=$3`,
+      `SELECT amount, used FROM budgets WHERE "companyId"=$1 AND "accountCode"=$2 AND period=$3 AND "deletedAt" IS NULL`,
       [scope.companyId, accountCode, period]
     );
     if (!budget) throw new NotFoundError("لا توجد ميزانية محددة لهذا الحساب");
@@ -303,7 +370,7 @@ budgetRouter.post("/budget/approval-requests", requirePermission("finance:create
       throw new ConflictError("تجاوز 110% — مرفوض نهائياً ولا يمكن اعتماده", {
         field: "requestedAmount",
         fix: "قلّل المبلغ المطلوب أو زِد سقف الميزانية أولاً",
-        meta: { utilizationAfter: Math.round(utilAfter * 100) / 100, capPct: 110 },
+        meta: { utilizationAfter: roundTo2(utilAfter), capPct: 110 },
       });
     }
 
@@ -319,7 +386,7 @@ budgetRouter.post("/budget/approval-requests", requirePermission("finance:create
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        RETURNING *`,
       [scope.companyId, scope.branchId ?? null, accountCode, period, Number(requestedAmount),
-       budgetAmount, Math.round(utilBefore * 100) / 100, Math.round(utilAfter * 100) / 100,
+       budgetAmount, roundTo2(utilBefore), roundTo2(utilAfter),
        level, sourceType ?? null, sourceId ?? null, reason ?? null, scope.activeAssignmentId]
     );
 
@@ -339,7 +406,7 @@ budgetRouter.post("/budget/approval-requests", requirePermission("finance:create
       entity: "budget_approval_requests",
       entityId: row.id,
       after: { accountCode, period, requestedAmount: Number(requestedAmount), level },
-    }).catch((err) => console.error("[audit] budget.approval_requested:", err));
+    }).catch((err) => logger.error(err, "[audit] budget.approval_requested:"));
 
     res.status(201).json({ data: row });
   } catch (err) {
@@ -347,7 +414,7 @@ budgetRouter.post("/budget/approval-requests", requirePermission("finance:create
   }
 });
 
-budgetRouter.get("/budget/approval-requests", requirePermission("finance:read"), async (req, res) => {
+budgetRouter.get("/budget/approval-requests", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     await ensureBudgetApprovalTable();
@@ -355,7 +422,7 @@ budgetRouter.get("/budget/approval-requests", requirePermission("finance:read"),
     const rows = await rawQuery<any>(
       `SELECT ar.*, coa.name AS "accountName"
        FROM budget_approval_requests ar
-       LEFT JOIN chart_of_accounts coa ON coa.code = ar."accountCode" AND coa."companyId" = ar."companyId"
+       LEFT JOIN chart_of_accounts coa ON coa.code = ar."accountCode" AND coa."companyId" = ar."companyId" AND coa."deletedAt" IS NULL
        WHERE ar."companyId"=$1 AND ar.status=$2 AND ar."deletedAt" IS NULL
        ORDER BY ar."requestedAt" DESC LIMIT 200`,
       [scope.companyId, status]
@@ -366,17 +433,12 @@ budgetRouter.get("/budget/approval-requests", requirePermission("finance:read"),
   }
 });
 
-budgetRouter.post("/budget/approval-requests/:id/decide", requirePermission("finance:create"), async (req, res) => {
+// RBAC v2: budget approval — approval_limits apply to amount in body if configured.
+budgetRouter.post("/budget/approval-requests/:id/decide", authorize({ feature: "finance.budget", action: "approve", resource: { table: "budget_approval_requests", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const requestId = Number(req.params.id);
-    const { decision, notes } = req.body as any; // decision: 'approved' | 'rejected'
-    if (!["approved", "rejected"].includes(decision)) {
-      throw new ValidationError("القرار يجب أن يكون approved أو rejected", {
-        field: "decision",
-        fix: "استخدم approved أو rejected",
-      });
-    }
+    const requestId = parseId(req.params.id, "id");
+    const { decision, notes } = zodParse(decideApprovalSchema.safeParse(req.body ?? {}));
     await ensureBudgetApprovalTable();
 
     // Fetch approval level + context to drive business rules that sit
@@ -444,10 +506,10 @@ budgetRouter.post("/budget/approval-requests/:id/decide", requirePermission("fin
 // BUDGET VARIANCE REPORT — تقرير الفروقات بين الميزانية والفعلي
 // ─────────────────────────────────────────────────────────────────────────────
 
-budgetRouter.get("/budget/variance", requirePermission("finance:read"), async (req, res) => {
+budgetRouter.get("/budget/variance", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const period = (req.query.period as string) ?? new Date().toISOString().slice(0, 7);
+    const period = (req.query.period as string) ?? currentPeriod();
     if (!/^\d{4}-\d{2}$/.test(period)) {
       throw new ValidationError("period يجب أن يكون بصيغة YYYY-MM", {
         field: "period",
@@ -456,7 +518,7 @@ budgetRouter.get("/budget/variance", requirePermission("finance:read"), async (r
     }
     const [y, m] = period.split("-").map(Number);
     const periodStart = `${y}-${String(m).padStart(2, "0")}-01`;
-    const periodEnd = new Date(y, m, 0).toISOString().slice(0, 10);
+    const periodEnd = toDateISO(new Date(y, m, 0));
 
     const rows = await rawQuery<any>(
       `SELECT b."accountCode", coa.name AS "accountName", coa.type AS "accountType",
@@ -472,9 +534,10 @@ budgetRouter.get("/budget/variance", requirePermission("finance:read"), async (r
                   AND je."createdAt"::date BETWEEN $2::date AND $3::date
               ), 0) AS "actualAmount"
        FROM budgets b
-       LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = b."companyId"
-       WHERE b."companyId" = $1 AND b.period = $4
-       ORDER BY b."accountCode"`,
+       LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = b."companyId" AND coa."deletedAt" IS NULL
+       WHERE b."companyId" = $1 AND b."deletedAt" IS NULL AND b.period = $4
+       ORDER BY b."accountCode"
+       LIMIT 500`,
       [scope.companyId, periodStart, periodEnd, period]
     );
 
@@ -487,10 +550,10 @@ budgetRouter.get("/budget/variance", requirePermission("finance:read"), async (r
       if (r.accountType === "revenue" || r.accountType === "liability" || r.accountType === "equity") {
         actualAmount = -actualAmount;
       }
-      const variance = Math.round((budgetAmount - actualAmount) * 100) / 100;
-      const variancePct = budgetAmount > 0 ? Math.round((variance / budgetAmount) * 10000) / 100 : 0;
-      totalBudget += budgetAmount;
-      totalActual += actualAmount;
+      const variance = roundTo2(budgetAmount - actualAmount);
+      const variancePct = budgetAmount > 0 ? roundTo2((variance / budgetAmount) * 100) : 0;
+      totalBudget = roundTo2(totalBudget + budgetAmount);
+      totalActual = roundTo2(totalActual + actualAmount);
       let status: string;
       if (budgetAmount === 0) status = "no_budget";
       else if (actualAmount > budgetAmount) status = "over_budget";
@@ -501,19 +564,19 @@ budgetRouter.get("/budget/variance", requirePermission("finance:read"), async (r
         accountName: r.accountName,
         accountType: r.accountType,
         budgetAmount,
-        actualAmount: Math.round(actualAmount * 100) / 100,
+        actualAmount: roundTo2(actualAmount),
         variance,
         variancePct,
-        utilizationPct: budgetAmount > 0 ? Math.round((actualAmount / budgetAmount) * 10000) / 100 : 0,
+        utilizationPct: budgetAmount > 0 ? roundTo2((actualAmount / budgetAmount) * 100) : 0,
         status,
       };
     });
 
     res.json({
       period,
-      totalBudget: Math.round(totalBudget * 100) / 100,
-      totalActual: Math.round(totalActual * 100) / 100,
-      totalVariance: Math.round((totalBudget - totalActual) * 100) / 100,
+      totalBudget: roundTo2(totalBudget),
+      totalActual: roundTo2(totalActual),
+      totalVariance: roundTo2(totalBudget - totalActual),
       lines,
     });
   } catch (err) {
@@ -521,15 +584,31 @@ budgetRouter.get("/budget/variance", requirePermission("finance:read"), async (r
   }
 });
 
-budgetRouter.get("/fiscal-periods", requirePermission("finance:read"), async (req, res) => {
+budgetRouter.get("/budget/:id", authorize({ feature: "finance.budget", action: "view", resource: { table: "budgets", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const currentYear = new Date().getFullYear();
+    const id = parseId(req.params.id, "id");
+    const [item] = await rawQuery<any>(
+      `SELECT b.*, coa.name AS "accountName"
+       FROM budgets b
+       LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = b."companyId" AND coa."deletedAt" IS NULL
+       WHERE b.id = $1 AND b."companyId" = $2 AND b."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!item) throw new NotFoundError("الميزانية غير موجودة");
+    res.json(item);
+  } catch (err) { handleRouteError(err, res, "Get budget detail error:"); }
+});
+
+budgetRouter.get("/fiscal-periods", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const thisYear = currentYear();
     const currentMonth = new Date().getMonth() + 1;
 
     const periods = [];
     for (let m = 1; m <= 12; m++) {
-      const period = `${currentYear}-${String(m).padStart(2, "0")}`;
+      const period = `${thisYear}-${String(m).padStart(2, "0")}`;
       const [stats] = await rawQuery<any>(
         `SELECT COUNT(*) AS entries,
                 COALESCE(SUM(jl.debit), 0) AS "totalDebit"
@@ -541,7 +620,7 @@ budgetRouter.get("/fiscal-periods", requirePermission("finance:read"), async (re
 
       periods.push({
         period,
-        name: new Date(currentYear, m - 1).toLocaleDateString("ar-SA", { month: "long", year: "numeric" }),
+        name: new Date(thisYear, m - 1).toLocaleDateString("ar-SA", { month: "long", year: "numeric" }),
         entries: Number(stats?.entries ?? 0),
         totalAmount: Number(stats?.totalDebit ?? 0),
         status: m < currentMonth ? "closed" : m === currentMonth ? "active" : "future",
@@ -554,7 +633,7 @@ budgetRouter.get("/fiscal-periods", requirePermission("finance:read"), async (re
   }
 });
 
-budgetRouter.post("/fiscal-periods/:period/close", requirePermission("finance:create"), async (req, res) => {
+budgetRouter.post("/fiscal-periods/:period/close", authorize({ feature: "finance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 

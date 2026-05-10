@@ -28,9 +28,9 @@ export default function RecruitmentPage() {
   const { permissions } = useAppContext();
   const canManage = permissions.canManageEmployees;
   const [filters, setFilters] = useFilters();
-  const { data: jobsData, isLoading, isError, refetch: refetchJobs } = useApiQuery<any>(["jobs"], "/recruitment/postings");
-  const { data: appsData, refetch: refetchApps } = useApiQuery<any>(["applicants"], "/recruitment/applications");
-  const { data: stats } = useApiQuery<any>(["recruitment-stats"], "/recruitment/stats");
+  const { data: jobsData, isLoading, isError, refetch: refetchJobs } = useApiQuery<any>(["jobs"], "/hr/recruitment/postings");
+  const { data: appsData, refetch: refetchApps } = useApiQuery<any>(["applicants"], "/hr/recruitment/applications");
+  const { data: stats } = useApiQuery<any>(["recruitment-stats"], "/hr/recruitment/stats");
   const jobs = jobsData?.data || [];
   const apps = appsData?.data || [];
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
@@ -45,7 +45,7 @@ export default function RecruitmentPage() {
   ];
 
   const jobActions = useInlineActions({
-    endpoint: "/recruitment/postings",
+    endpoint: "/hr/recruitment/postings",
     queryKeys: [["jobs"], ["recruitment-stats"]],
     onSuccess: () => refetchJobs(),
   });
@@ -59,7 +59,7 @@ export default function RecruitmentPage() {
   ];
 
   const appActions = useInlineActions({
-    endpoint: "/recruitment/applications",
+    endpoint: "/hr/recruitment/applications",
     queryKeys: [["applicants"], ["recruitment-stats"]],
     onSuccess: () => refetchApps(),
   });
@@ -191,7 +191,7 @@ export default function RecruitmentPage() {
       />
 
       <BulkActionsBar
-        entityType="job_posting"
+        entityType="job-posting"
         items={filteredJobs}
         selectedIds={selectedIds}
         onToggle={toggleSelect}

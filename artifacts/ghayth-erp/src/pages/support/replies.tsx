@@ -1,11 +1,12 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { PageStatusBadge } from "@/components/page-status-badge";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { MessageSquare, Clock, CheckCircle2, User, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatDateAr } from "@/lib/formatters";
 import { useApiQuery } from "@/lib/api";
 import { PageShell } from "@/components/page-shell";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { SupportTabsNav } from "@/components/shared/support-tabs-nav";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 interface Reply {
   id: number;
@@ -32,19 +33,6 @@ interface StatCard {
   color: string;
 }
 
-const columns: DataTableColumn<Reply>[] = [
-  { key: "ticketId", header: "رقم التذكرة", searchable: true, sortable: true, ltr: true, className: "font-mono text-xs" },
-  { key: "ticketTitle", header: "عنوان التذكرة", searchable: true, sortable: true, className: "font-medium" },
-  { key: "reply", header: "الرد", searchable: true, className: "text-gray-600 max-w-xs truncate" },
-  { key: "agent", header: "الوكيل", searchable: true, sortable: true, className: "text-gray-500" },
-  { key: "date", header: "التاريخ", sortable: true, className: "text-gray-500 whitespace-nowrap" },
-  {
-    key: "status",
-    header: "الحالة",
-    render: (r) => <PageStatusBadge status={r.status} domain="ticket" />,
-  },
-];
-
 export default function SupportReplies() {
   const { data, isLoading, isError } = useApiQuery<RepliesResponse>(["support-replies"], "/support/replies");
 
@@ -57,13 +45,24 @@ export default function SupportReplies() {
     { label: "وكلاء نشطون", value: data?.activeAgents || 0, icon: User, color: "text-purple-600 bg-purple-50" },
   ];
 
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "ticketId", header: "رقم التذكرة", sortable: true, searchable: true, render: (r: any) => <span className="font-mono text-xs">{r.ticketId}</span> },
+    { key: "ticketTitle", header: "عنوان التذكرة", sortable: true, searchable: true, render: (r: any) => <span className="font-medium">{r.ticketTitle}</span> },
+    { key: "reply", header: "الرد", searchable: true, render: (r: any) => <span className="text-gray-600 max-w-xs truncate inline-block">{r.reply}</span> },
+    { key: "agent", header: "الوكيل", sortable: true, searchable: true, render: (r: any) => <span className="text-gray-500">{r.agent}</span> },
+    { key: "date", header: "التاريخ", sortable: true, render: (r: any) => <span className="text-gray-500 whitespace-nowrap">{r.date ? formatDateAr(r.date) : "-"}</span> },
+    { key: "status", header: "الحالة", sortable: true, render: (r: any) => <PageStatusBadge status={r.status} domain="ticket" /> },
+  ];
+
   return (
     <PageShell
       title="ردود الدعم الفني"
       breadcrumbs={[{ href: "/support", label: "الدعم" }, { label: "ردود الدعم الفني" }]}
       loading={isLoading}
     >
-      <SupportTabsNav />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((c) => {
           const Icon = c.icon;
@@ -85,13 +84,9 @@ export default function SupportReplies() {
         data={replies}
         isLoading={isLoading}
         isError={isError}
-        onRetry={() => window.location.reload()}
         searchPlaceholder="بحث في الردود..."
         emptyMessage="لا توجد ردود"
-        statusOptions={[
-          { value: "resolved", label: "تم الحل" },
-          { value: "pending", label: "بانتظار الرد" },
-        ]}
+        emptyIcon={<MessageSquare className="h-6 w-6 text-slate-400" />}
       />
     </PageShell>
   );

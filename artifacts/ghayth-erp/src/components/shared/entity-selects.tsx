@@ -86,7 +86,7 @@ function QuickCreateDialog({
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
-          <Button onClick={handleCreate} disabled={createMut.isPending}>
+          <Button onClick={handleCreate} disabled={createMut.isPending} rateLimitAware>
             {createMut.isPending ? "جاري الإنشاء..." : "إنشاء"}
           </Button>
         </div>
@@ -367,19 +367,19 @@ export const ProjectSelect = buildEntitySelect({
 
 export const AccountSelect = buildEntitySelect({
   queryKey: "chart-of-accounts",
-  endpoint: "/finance/accounts/chart?limit=500",
+  endpoint: "/finance/accounts?limit=500",
   defaultLabel: "الحساب",
   defaultPlaceholder: "اختر الحساب",
   searchPlaceholder: "ابحث عن حساب (اسم أو رقم)...",
   createTitle: "إضافة حساب جديد",
   createLabel: "+ حساب جديد",
-  createApiPath: "/finance/accounts/chart",
+  createApiPath: "/finance/accounts",
   createFields: [
     { key: "code", label: "رقم الحساب", required: true },
-    { key: "nameAr", label: "اسم الحساب", required: true },
+    { key: "name", label: "اسم الحساب", required: true },
   ],
   getValueField: "code",
-  getName: (r) => r?.nameAr ? `${r.code} - ${r.nameAr}` : r?.code || `#${r?.id}`,
+  getName: (r) => r?.name ? `${r.code} - ${r.name}` : r?.code || `#${r?.id}`,
   getSublabel: (r) => r?.type || "",
 });
 

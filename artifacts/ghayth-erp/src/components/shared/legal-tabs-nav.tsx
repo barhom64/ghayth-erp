@@ -1,9 +1,10 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { Scale, Calendar, Gavel, Mail } from "lucide-react";
+import { Scale, Calendar, Gavel, Mail, FileText } from "lucide-react";
 
 const TABS = [
-  { href: "/legal", label: "القضايا", icon: Scale, match: ["/legal"], exact: true },
+  { href: "/legal/cases", label: "القضايا", icon: Scale, match: ["/legal/cases"] },
+  { href: "/legal/contracts", label: "العقود", icon: FileText, match: ["/legal/contracts"] },
   { href: "/legal/sessions", label: "الجلسات", icon: Calendar, match: ["/legal/sessions"] },
   { href: "/legal/judgments", label: "الأحكام", icon: Gavel, match: ["/legal/judgments"] },
   { href: "/legal/correspondence", label: "المراسلات", icon: Mail, match: ["/legal/correspondence"] },
@@ -15,9 +16,8 @@ export function LegalTabsNav() {
     <div className="border-b mb-4 -mt-2 overflow-x-auto">
       <nav className="flex gap-1 min-w-max" dir="rtl">
         {TABS.map((tab) => {
-          const isActive = tab.exact
-            ? location === tab.href
-            : tab.match.some((m) => location === m || location.startsWith(`${m}/`));
+          const isActive = tab.match.some((m) => location === m || location.startsWith(`${m}/`))
+            || (tab.href === "/legal/cases" && location === "/legal");
           const Icon = tab.icon;
           return (
             <Link key={tab.href} href={tab.href}>

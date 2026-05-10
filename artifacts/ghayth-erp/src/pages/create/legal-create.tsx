@@ -53,7 +53,7 @@ export default function LegalCreate() {
   }, [copyFromId, copied]);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const clients = clientsData?.data || [];
 
@@ -190,7 +190,7 @@ export default function LegalCreate() {
         <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات العقد" />
         <div className="flex justify-end gap-3 pt-4">
           <Button type="button" variant="outline" onClick={() => setLocation("/legal")}>إلغاء</Button>
-          <Button type="submit" disabled={addContract.isPending}>{addContract.isPending ? "جاري الحفظ..." : "حفظ"}</Button>
+          <Button type="submit" disabled={addContract.isPending} rateLimitAware>{addContract.isPending ? "جاري الحفظ..." : "حفظ"}</Button>
         </div>
       </div>
       </form>

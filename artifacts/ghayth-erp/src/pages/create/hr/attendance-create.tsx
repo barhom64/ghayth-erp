@@ -170,7 +170,7 @@ export default function AttendanceCreate() {
 
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/hr/attendance")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={submitting} size="lg">
+        <Button onClick={handleSubmit} disabled={submitting} size="lg" rateLimitAware>
           {submitting ? "جاري التسجيل..." : currentActivity?.label || "تسجيل"}
         </Button>
       </div>

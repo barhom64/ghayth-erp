@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,7 @@ import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
  */
 
 export default function PurchaseOrdersPage() {
+  const [, navigate] = useLocation();
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(
@@ -223,7 +224,7 @@ export default function PurchaseOrdersPage() {
       />
 
       <BulkActionsBar
-        entityType="purchase_order"
+        entityType="purchase-order"
         items={filtered}
         selectedIds={selectedIds}
         onToggle={toggleSelect}
@@ -255,6 +256,7 @@ export default function PurchaseOrdersPage() {
             : undefined
         }
         noToolbar
+        onRowClick={(row) => navigate(`/finance/purchase-orders/${row.id}`)}
         renderRowExtras={(po) => {
           if (expandedId !== po.id) return null;
           return (
@@ -263,7 +265,7 @@ export default function PurchaseOrdersPage() {
                 <div className="bg-white p-4 rounded-lg border border-amber-200">
                   <h4 className="font-semibold mb-3">اتخاذ إجراء</h4>
                   <ApprovalActions
-                    entityType="purchase_order"
+                    entityType="purchase-order"
                     entityId={po.id}
                     currentStatus={po.status}
                     approveEndpoint={`/finance/purchase-orders/${po.id}/approve`}
@@ -275,7 +277,7 @@ export default function PurchaseOrdersPage() {
                   />
                 </div>
               )}
-              <ActionHistory entityType="purchase_order" entityId={po.id} defaultOpen />
+              <ActionHistory entityType="purchase-order" entityId={po.id} defaultOpen />
             </div>
           );
         }}

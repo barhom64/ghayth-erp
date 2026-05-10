@@ -30,7 +30,7 @@ export default function ShiftsManagementPage() {
   const isError = shiftsError || assignmentsError || empError;
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const shifts = shiftsData?.data || [];
   const assignments = assignmentsData?.data || [];
@@ -117,7 +117,7 @@ export default function ShiftsManagementPage() {
                     </Select>
                   </div>
                   <div><Label>من تاريخ</Label><div className="mt-1"><DatePicker value={assignForm.startDate} onChange={(v) => setAssignForm({ ...assignForm, startDate: v })} /></div></div>
-                  <div className="flex items-end"><Button onClick={handleAssign} disabled={!assignForm.shiftId || assignMut.isPending}>تعيين</Button></div>
+                  <div className="flex items-end"><Button onClick={handleAssign} disabled={!assignForm.shiftId || assignMut.isPending} rateLimitAware>تعيين</Button></div>
                 </div>
               </CardContent>
             </Card>

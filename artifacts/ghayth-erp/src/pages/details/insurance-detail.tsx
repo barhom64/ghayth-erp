@@ -1,6 +1,11 @@
 import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 import { DetailPageLayout, type RelatedEntity } from "@/components/shared/detail-page-layout";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
@@ -8,6 +13,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, CheckCircle2, Edit, Shield, Car } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 const STATUS_LABELS: Record<string, string> = {
   active: "ساري",
@@ -94,14 +101,29 @@ export default function InsuranceDetail() {
     return sections;
   }, [insurance, id]);
 
-  const handleEdit = () => {
-    setLocation(`/fleet/insurance`);
-  };
+  const editDelete = useDetailEditDelete({
+    entityLabel: "التأمين",
+    patchPath: `/fleet/insurance/${id}`,
+    deletePath: `/fleet/insurance/${id}`,
+    listPath: "/fleet/insurance",
+    initialValues: insurance,
+    fields: [
+      { key: "policyNumber", label: "رقم البوليصة" },
+      { key: "provider", label: "شركة التأمين" },
+      { key: "premium", label: "القسط", type: "number" },
+      { key: "coverageAmount", label: "مبلغ التغطية", type: "number" },
+    ],
+    invalidateKeys: [["insurance", String(id)], ["insurance"]],
+    onSaved: () => refetch(),
+  });
 
   const premium = insurance?.premium || insurance?.amount || 0;
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
+      <div className="md:col-span-3">
+        <InlineEditCard hook={editDelete} />
+      </div>
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
@@ -225,6 +247,9 @@ export default function InsuranceDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {id && <EntityComments entityType="insurance" entityId={id} />}
+      {id && <EntityTags entityType="insurance" entityId={id} />}
     </div>
   );
 
@@ -268,16 +293,7 @@ export default function InsuranceDetail() {
               sections={printSections}
             />
           )}
-          <GuardedButton
-            perm="fleet:update"
-            variant="outline"
-            size="sm"
-            onClick={handleEdit}
-            disabled={!insurance || ["expired", "cancelled"].includes(insurance.status)}
-          >
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
+          <DetailActionButtons hook={editDelete} />
         </>
       }
     />

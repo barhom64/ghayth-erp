@@ -73,7 +73,7 @@ export default function SalaryComponentsPage() {
   ];
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   return (
     <PageShell
@@ -133,7 +133,7 @@ export default function SalaryComponentsPage() {
               </div>
               <div><Label>القيمة</Label><Input className="mt-1" type="number" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} /></div>
               <div className="flex items-end">
-                <Button onClick={handleSubmit} disabled={!form.name || createMut.isPending}>{createMut.isPending ? "جاري الحفظ..." : "حفظ"}</Button>
+                <Button onClick={handleSubmit} disabled={!form.name || createMut.isPending} rateLimitAware>{createMut.isPending ? "جاري الحفظ..." : "حفظ"}</Button>
               </div>
             </div>
           </CardContent>

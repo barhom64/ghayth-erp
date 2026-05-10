@@ -50,13 +50,13 @@ export default function TrainingDetailPage() {
 
   const { data: program, isLoading, isError } = useApiQuery<any>(
     ["training-program", id ?? ""],
-    `/training/programs/${id ?? 0}`,
+    `/hr/training/programs/${id ?? 0}`,
     { enabled: !!id },
   );
 
   const { data: enrollmentsData } = useApiQuery<any>(
     ["training-enrollments", id ?? ""],
-    `/training/enrollments?programId=${id ?? 0}`,
+    `/hr/training/enrollments?programId=${id ?? 0}`,
     { enabled: !!id },
   );
   const enrollments = enrollmentsData?.data || [];
@@ -233,7 +233,7 @@ export default function TrainingDetailPage() {
         <CardHeader className="pb-2"><CardTitle className="text-base">إجراءات الاعتماد</CardTitle></CardHeader>
         <CardContent>
           <ApprovalActions
-            entityType="training_program"
+            entityType="training-program"
             entityId={Number(id)}
             approveEndpoint={`/hr/training/programs/${id}/approve`}
             rejectEndpoint={`/hr/training/programs/${id}/reject`}
@@ -243,7 +243,7 @@ export default function TrainingDetailPage() {
           />
         </CardContent>
       </Card>
-      <ActionHistory entityType="training_program" entityId={Number(id)} />
+      <ActionHistory entityType="training-program" entityId={Number(id)} />
     </>
   ) : null;
 
@@ -253,11 +253,11 @@ export default function TrainingDetailPage() {
       subtitle={program?.description || undefined}
       backPath="/hr/training"
       backLabel="العودة"
-      entityType="hr_training"
+      entityType="training-program"
       entityId={id ?? ""}
       isLoading={isLoading}
       error={isError || (!isLoading && !program) ? true : undefined}
-      onRetry={() => window.location.reload()}
+     
       overview={overview}
       status={program?.status ? { label: program.status, tone: STATUS_TONE_MAP[program.status] ?? "default" } : undefined}
       createdAt={program?.createdAt}

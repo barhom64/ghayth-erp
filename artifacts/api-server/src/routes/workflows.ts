@@ -1,9 +1,13 @@
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
+import { authorize } from "../lib/rbac/authorize.js";
+import { buildScopedWhere } from "../lib/scopedQuery.js";
+import { handleRouteError, NotFoundError,
+  parseId,
+  zodParse,
+} from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import {
   submitWorkflow,
@@ -15,6 +19,7 @@ import {
   getTimeline,
   getTimelineByRef,
 } from "../lib/workflowEngine.js";
+import { logger } from "../lib/logger.js";
 
 // ── Zod Schemas ──────────────────────────────────────────────────────────────
 
@@ -74,6 +79,7 @@ const createDefinitionSchema = z.object({
 });
 
 const updateDefinitionSchema = z.object({
+  requestType: z.string().min(1).optional(),
   requestTypeLabel: z.string().min(1).optional(),
   description: z.string().optional(),
   isReturnable: z.boolean().optional(),
@@ -93,13 +99,10 @@ const slaDefinitionSchema = z.object({
 });
 
 const router = Router();
-router.use(authMiddleware);
 
-router.post("/submit", requirePermission("admin:write"), async (req, res) => {
+router.post("/submit", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
-    const parsed_submitSchema = submitSchema.safeParse(req.body);
-    if (!parsed_submitSchema.success) throw new ValidationError(parsed_submitSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_submitSchema.data;
+    const body = zodParse(submitSchema.safeParse(req.body));
     const scope = req.scope!;
     const { requestType, refTable, refId, title, data } = body;
     const result = await submitWorkflow({
@@ -113,22 +116,21 @@ router.post("/submit", requirePermission("admin:write"), async (req, res) => {
       submittedByName: scope.userName,
       data,
     });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflow_instances", entityId: result.instanceId, after: { requestType, title } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.created", entity: "workflow_instances", entityId: result.instanceId, details: JSON.stringify({ requestType, title }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflow_instances", entityId: result.instanceId, after: { requestType, title } }).catch((e) => logger.error(e, "workflows background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.created", entity: "workflow_instances", entityId: result.instanceId, details: JSON.stringify({ requestType, title }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.status(201).json(result);
   } catch (err) {
     handleRouteError(err, res, "workflows");
   }
 });
 
-router.post("/:id/approve", requirePermission("admin:write"), async (req, res) => {
+router.post("/:id/approve", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
-    const parsed_approveSchema = approveSchema.safeParse(req.body);
-    if (!parsed_approveSchema.success) throw new ValidationError(parsed_approveSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_approveSchema.data;
+    const body = zodParse(approveSchema.safeParse(req.body));
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const result = await approveWorkflow({
-      instanceId: Number(req.params.id),
+      instanceId: id,
       companyId: scope.companyId,
       branchId: scope.branchId,
       actionBy: scope.activeAssignmentId,
@@ -137,25 +139,19 @@ router.post("/:id/approve", requirePermission("admin:write"), async (req, res) =
       attachments: body.attachments,
       overrideReason: body.overrideReason,
     });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "approve" } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.approved", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ notes: body.notes }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: id, after: { action: "approve" } }).catch((e) => logger.error(e, "workflows background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.approved", entity: "workflow_instances", entityId: id, details: JSON.stringify({ notes: body.notes }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.json(result);
-  } catch (e: any) {
-    const code = e.message.includes("غير موجودة") ? 404 :
-                 e.message.includes("شروط غير مستوفاة") ? 422 :
-                 e.message.includes("انتقال غير مصرح") ? 409 : 400;
-    res.status(code).json({ error: e.message });
-  }
+  } catch (err) { handleRouteError(err, res, "Workflow approve error:"); }
 });
 
-router.post("/:id/reject", requirePermission("admin:write"), async (req, res) => {
+router.post("/:id/reject", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
-    const parsed_rejectSchema = rejectSchema.safeParse(req.body);
-    if (!parsed_rejectSchema.success) throw new ValidationError(parsed_rejectSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_rejectSchema.data;
+    const body = zodParse(rejectSchema.safeParse(req.body));
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const result = await rejectWorkflow({
-      instanceId: Number(req.params.id),
+      instanceId: id,
       companyId: scope.companyId,
       branchId: scope.branchId,
       actionBy: scope.activeAssignmentId,
@@ -163,25 +159,20 @@ router.post("/:id/reject", requirePermission("admin:write"), async (req, res) =>
       notes: body.notes,
       overrideReason: body.overrideReason,
     });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "reject" } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.rejected", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ notes: body.notes }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: id, after: { action: "reject" } }).catch((e) => logger.error(e, "workflows background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.rejected", entity: "workflow_instances", entityId: id, details: JSON.stringify({ notes: body.notes }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.json(result);
-  } catch (e: any) {
-    const code = e.message.includes("غير موجودة") ? 404 :
-                 e.message.includes("انتقال غير مصرح") ? 409 : 400;
-    res.status(code).json({ error: e.message });
-  }
+  } catch (err) { handleRouteError(err, res, "Workflow reject error:"); }
 });
 
-router.post("/:id/refer", requirePermission("admin:write"), async (req, res) => {
+router.post("/:id/refer", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
-    const parsed_referSchema = referSchema.safeParse(req.body);
-    if (!parsed_referSchema.success) throw new ValidationError(parsed_referSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_referSchema.data;
+    const body = zodParse(referSchema.safeParse(req.body));
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const { referredTo, referredToName, notes, overrideReason } = body;
     const result = await referWorkflow({
-      instanceId: Number(req.params.id),
+      instanceId: id,
       companyId: scope.companyId,
       branchId: scope.branchId,
       actionBy: scope.activeAssignmentId,
@@ -191,24 +182,19 @@ router.post("/:id/refer", requirePermission("admin:write"), async (req, res) => 
       referredToName,
       overrideReason,
     });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "refer", referredTo } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.updated", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ action: "refer", referredTo }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: id, after: { action: "refer", referredTo } }).catch((e) => logger.error(e, "workflows background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.updated", entity: "workflow_instances", entityId: id, details: JSON.stringify({ action: "refer", referredTo }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.json(result);
-  } catch (e: any) {
-    const code = e.message.includes("غير موجودة") ? 404 :
-                 e.message.includes("انتقال غير مصرح") ? 409 : 400;
-    res.status(code).json({ error: e.message });
-  }
+  } catch (err) { handleRouteError(err, res, "Workflow refer error:"); }
 });
 
-router.post("/:id/escalate", requirePermission("admin:write"), async (req, res) => {
+router.post("/:id/escalate", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
-    const parsed_escalateSchema = escalateSchema.safeParse(req.body);
-    if (!parsed_escalateSchema.success) throw new ValidationError(parsed_escalateSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_escalateSchema.data;
+    const body = zodParse(escalateSchema.safeParse(req.body));
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const result = await escalateWorkflow({
-      instanceId: Number(req.params.id),
+      instanceId: id,
       companyId: scope.companyId,
       branchId: scope.branchId,
       actionBy: scope.activeAssignmentId,
@@ -216,24 +202,19 @@ router.post("/:id/escalate", requirePermission("admin:write"), async (req, res) 
       notes: body.notes,
       overrideReason: body.overrideReason,
     });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "escalate" } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.updated", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ action: "escalate" }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: id, after: { action: "escalate" } }).catch((e) => logger.error(e, "workflows background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.updated", entity: "workflow_instances", entityId: id, details: JSON.stringify({ action: "escalate" }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.json(result);
-  } catch (e: any) {
-    const code = e.message.includes("غير موجودة") ? 404 :
-                 e.message.includes("انتقال غير مصرح") ? 409 : 400;
-    res.status(code).json({ error: e.message });
-  }
+  } catch (err) { handleRouteError(err, res, "Workflow escalate error:"); }
 });
 
-router.post("/:id/return", requirePermission("admin:write"), async (req, res) => {
+router.post("/:id/return", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
-    const parsed_returnSchema = returnSchema.safeParse(req.body);
-    if (!parsed_returnSchema.success) throw new ValidationError(parsed_returnSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_returnSchema.data;
+    const body = zodParse(returnSchema.safeParse(req.body));
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const result = await returnWorkflow({
-      instanceId: Number(req.params.id),
+      instanceId: id,
       companyId: scope.companyId,
       branchId: scope.branchId,
       actionBy: scope.activeAssignmentId,
@@ -241,57 +222,63 @@ router.post("/:id/return", requirePermission("admin:write"), async (req, res) =>
       notes: body.notes,
       overrideReason: body.overrideReason,
     });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: Number(req.params.id), after: { action: "return" } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.updated", entity: "workflow_instances", entityId: Number(req.params.id), details: JSON.stringify({ action: "return" }) }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_instances", entityId: id, after: { action: "return" } }).catch((e) => logger.error(e, "workflows background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.instance.updated", entity: "workflow_instances", entityId: id, details: JSON.stringify({ action: "return" }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.json(result);
-  } catch (e: any) {
-    const code = e.message.includes("غير موجودة") ? 404 :
-                 e.message.includes("انتقال غير مصرح") ? 409 : 400;
-    res.status(code).json({ error: e.message });
-  }
+  } catch (err) { handleRouteError(err, res, "Workflow return error:"); }
 });
 
-router.get("/:id/timeline", requirePermission("admin:read"), async (req, res) => {
+router.get("/:id/timeline", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const result = await getTimeline(Number(req.params.id), scope.companyId);
+    const id = parseId(req.params.id, "id");
+    const result = await getTimeline(id, scope.companyId);
     res.json(result);
-  } catch (e: any) {
-    res.status(e.message.includes("غير موجودة") ? 404 : 500).json({ error: e.message });
-  }
+  } catch (err) { handleRouteError(err, res, "Workflow timeline error:"); }
 });
 
-router.get("/timeline/:refTable/:refId", requirePermission("admin:read"), async (req, res) => {
+router.get("/timeline/:refTable/:refId", authorize({ feature: "admin", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const result = await getTimelineByRef(String(req.params.refTable), Number(req.params.refId), scope.companyId);
+    const refId = parseId(req.params.refId, "refId");
+    const result = await getTimelineByRef(String(req.params.refTable), refId, scope.companyId);
     res.json(result);
   } catch (err) {
     handleRouteError(err, res, "workflows");
   }
 });
 
-router.get("/", requirePermission("admin:read"), async (req, res) => {
+router.get("/", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, requestType } = req.query as any;
-    let where = `wi."companyId" = $1`;
-    const params: any[] = [scope.companyId];
+
+    const { where: scopeWhere, params, nextParamIndex } = buildScopedWhere(
+      scope,
+      {},
+      {
+        companyColumn: 'wi."companyId"',
+        disableBranchScope: true,
+        softDeleteColumn: 'wi."deletedAt"',
+      }
+    );
+    const conditions = [scopeWhere];
+    let paramIdx = nextParamIndex;
 
     if (status) {
       params.push(status);
-      where += ` AND wi.status = $${params.length}`;
+      conditions.push(`wi.status = $${paramIdx++}`);
     }
     if (requestType) {
       params.push(requestType);
-      where += ` AND wi."requestType" = $${params.length}`;
+      conditions.push(`wi."requestType" = $${paramIdx++}`);
     }
 
     const rows = await rawQuery<any>(
       `SELECT wi.*, wd."requestTypeLabel" AS "defLabel"
        FROM workflow_instances wi
        LEFT JOIN workflow_definitions wd ON wd.id = wi."definitionId"
-       WHERE ${where}
+       WHERE ${conditions.join(" AND ")}
        ORDER BY wi."createdAt" DESC
        LIMIT 200`,
       params
@@ -302,13 +289,14 @@ router.get("/", requirePermission("admin:read"), async (req, res) => {
   }
 });
 
-router.get("/pending", requirePermission("admin:read"), async (req, res) => {
+router.get("/pending", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
       `SELECT wi.*
        FROM workflow_instances wi
        WHERE wi."companyId" = $1
+         AND wi."deletedAt" IS NULL
          AND wi.status IN ('pending', 'in_review')
          AND wi."currentAssignee" = $2
        ORDER BY
@@ -318,7 +306,8 @@ router.get("/pending", requirePermission("admin:read"), async (req, res) => {
            WHEN 'warning' THEN 2
            ELSE 3
          END,
-         wi."createdAt" ASC`,
+         wi."createdAt" ASC
+       LIMIT 200`,
       [scope.companyId, scope.activeAssignmentId]
     );
     res.json({ data: rows, total: rows.length });
@@ -327,14 +316,14 @@ router.get("/pending", requirePermission("admin:read"), async (req, res) => {
   }
 });
 
-router.get("/definitions", requirePermission("admin:read"), async (req, res) => {
+router.get("/definitions", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const defs = await rawQuery<any>(
       `SELECT wd.*, (SELECT COUNT(*) FROM workflow_steps ws WHERE ws."definitionId" = wd.id) AS "stepCount"
        FROM workflow_definitions wd
        WHERE wd."companyId" = $1
-       ORDER BY wd."requestTypeLabel"`,
+       ORDER BY wd."requestTypeLabel" LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: defs, total: defs.length });
@@ -343,16 +332,17 @@ router.get("/definitions", requirePermission("admin:read"), async (req, res) => 
   }
 });
 
-router.get("/definitions/:id", requirePermission("admin:read"), async (req, res) => {
+router.get("/definitions/:id", authorize({ feature: "admin", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [def] = await rawQuery<any>(
       `SELECT * FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!def) throw new NotFoundError("التعريف غير موجود");
     const steps = await rawQuery<any>(
-      `SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder"`,
+      `SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder" LIMIT 500`,
       [def.id]
     );
     res.json({ ...def, steps });
@@ -361,95 +351,100 @@ router.get("/definitions/:id", requirePermission("admin:read"), async (req, res)
   }
 });
 
-router.post("/definitions", requirePermission("admin:write"), async (req, res) => {
+router.post("/definitions", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
-    const parsed_createDefinitionSchema = createDefinitionSchema.safeParse(req.body);
-    if (!parsed_createDefinitionSchema.success) throw new ValidationError(parsed_createDefinitionSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createDefinitionSchema.data;
+    const body = zodParse(createDefinitionSchema.safeParse(req.body));
     const scope = req.scope!;
     const { requestType, requestTypeLabel, description, isReturnable, enableEscalation, defaultSlaHours, steps } = body;
-    const { insertId } = await rawExecute(
-      `INSERT INTO workflow_definitions ("companyId", "requestType", "requestTypeLabel", description, "isReturnable", "enableEscalation", "defaultSlaHours")
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [scope.companyId, requestType, requestTypeLabel, description ?? null, isReturnable ?? true, enableEscalation ?? true, defaultSlaHours ?? 48]
-    );
-    if (Array.isArray(steps)) {
-      for (let i = 0; i < steps.length; i++) {
-        const s = steps[i];
-        await rawExecute(
-          `INSERT INTO workflow_steps ("definitionId", "stepOrder", "stepName", "requiredRole", "slaHours", "autoApproveOnTimeout", "canReject", "canRefer")
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-          [insertId, i + 1, s.stepName, s.requiredRole, s.slaHours ?? 48, s.autoApproveOnTimeout ?? false, s.canReject ?? true, s.canRefer ?? true]
-        );
+    const insertId = await withTransaction(async (client) => {
+      const defRes = await client.query(
+        `INSERT INTO workflow_definitions ("companyId", "requestType", "requestTypeLabel", description, "isReturnable", "enableEscalation", "defaultSlaHours")
+         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+        [scope.companyId, requestType, requestTypeLabel, description ?? null, isReturnable ?? true, enableEscalation ?? true, defaultSlaHours ?? 48]
+      );
+      const defId = defRes.rows[0].id;
+      if (Array.isArray(steps)) {
+        for (let i = 0; i < steps.length; i++) {
+          const s = steps[i];
+          await client.query(
+            `INSERT INTO workflow_steps ("definitionId", "stepOrder", "stepName", "requiredRole", "slaHours", "autoApproveOnTimeout", "canReject", "canRefer")
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [defId, i + 1, s.stepName, s.requiredRole, s.slaHours ?? 48, s.autoApproveOnTimeout ?? false, s.canReject ?? true, s.canRefer ?? true]
+          );
+        }
       }
-    }
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflow_definitions", entityId: insertId, after: { requestType, requestTypeLabel } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.created", entity: "workflow_definitions", entityId: insertId, details: JSON.stringify({ requestType, requestTypeLabel }) }).catch(console.error);
-    res.status(201).json({ id: insertId });
+      return defId;
+    });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflow_definitions", entityId: insertId, after: { requestType, requestTypeLabel } }).catch((e) => logger.error(e, "workflows background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.created", entity: "workflow_definitions", entityId: insertId, details: JSON.stringify({ requestType, requestTypeLabel }) }).catch((e) => logger.error(e, "workflows background task failed"));
+    const [row] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const defSteps = await rawQuery<any>(`SELECT * FROM workflow_steps WHERE "definitionId"=$1 ORDER BY "stepOrder" LIMIT 500`, [insertId]);
+    res.status(201).json(row ? { ...row, steps: defSteps } : { id: insertId });
   } catch (err) {
     handleRouteError(err, res, "workflows");
   }
 });
 
-router.put("/definitions/:id", requirePermission("admin:write"), async (req, res) => {
+router.put("/definitions/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
-    const parsed_updateDefinitionSchema = updateDefinitionSchema.safeParse(req.body);
-    if (!parsed_updateDefinitionSchema.success) throw new ValidationError(parsed_updateDefinitionSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_updateDefinitionSchema.data;
+    const body = zodParse(updateDefinitionSchema.safeParse(req.body));
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { requestTypeLabel, description, isReturnable, enableEscalation, defaultSlaHours, isActive, steps } = body;
 
-    await rawExecute(
-      `UPDATE workflow_definitions SET "requestTypeLabel" = COALESCE($1, "requestTypeLabel"),
-       description = COALESCE($2, description), "isReturnable" = COALESCE($3, "isReturnable"),
-       "enableEscalation" = COALESCE($4, "enableEscalation"), "defaultSlaHours" = COALESCE($5, "defaultSlaHours"),
-       "isActive" = COALESCE($6, "isActive"), "updatedAt" = NOW()
-       WHERE id = $7 AND "companyId" = $8`,
-      [requestTypeLabel ?? null, description ?? null, isReturnable ?? null, enableEscalation ?? null, defaultSlaHours ?? null, isActive ?? null, id, scope.companyId]
-    );
+    await withTransaction(async (client) => {
+      await client.query(
+        `UPDATE workflow_definitions SET "requestTypeLabel" = COALESCE($1, "requestTypeLabel"),
+         description = COALESCE($2, description), "isReturnable" = COALESCE($3, "isReturnable"),
+         "enableEscalation" = COALESCE($4, "enableEscalation"), "defaultSlaHours" = COALESCE($5, "defaultSlaHours"),
+         "isActive" = COALESCE($6, "isActive"), "updatedAt" = NOW()
+         WHERE id = $7 AND "companyId" = $8`,
+        [requestTypeLabel ?? null, description ?? null, isReturnable ?? null, enableEscalation ?? null, defaultSlaHours ?? null, isActive ?? null, id, scope.companyId]
+      );
 
-    if (Array.isArray(steps)) {
-      await rawExecute(`DELETE FROM workflow_steps WHERE "definitionId" = $1`, [id]);
-      for (let i = 0; i < steps.length; i++) {
-        const s = steps[i];
-        await rawExecute(
-          `INSERT INTO workflow_steps ("definitionId", "stepOrder", "stepName", "requiredRole", "slaHours", "autoApproveOnTimeout", "canReject", "canRefer")
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-          [id, i + 1, s.stepName, s.requiredRole, s.slaHours ?? 48, s.autoApproveOnTimeout ?? false, s.canReject ?? true, s.canRefer ?? true]
-        );
+      if (Array.isArray(steps)) {
+        await client.query(`DELETE FROM workflow_steps WHERE "definitionId" = $1`, [id]);
+        for (let i = 0; i < steps.length; i++) {
+          const s = steps[i];
+          await client.query(
+            `INSERT INTO workflow_steps ("definitionId", "stepOrder", "stepName", "requiredRole", "slaHours", "autoApproveOnTimeout", "canReject", "canRefer")
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [id, i + 1, s.stepName, s.requiredRole, s.slaHours ?? 48, s.autoApproveOnTimeout ?? false, s.canReject ?? true, s.canRefer ?? true]
+          );
+        }
       }
-    }
+    });
 
-    const [def] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id = $1`, [id]);
-    const updatedSteps = await rawQuery<any>(`SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder"`, [id]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_definitions", entityId: id, after: { requestTypeLabel } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.updated", entity: "workflow_definitions", entityId: id, details: JSON.stringify({ requestTypeLabel }) }).catch(console.error);
+    const [def] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    const updatedSteps = await rawQuery<any>(`SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder" LIMIT 500`, [id]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_definitions", entityId: id, after: { requestTypeLabel } }).catch((e) => logger.error(e, "workflows background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.updated", entity: "workflow_definitions", entityId: id, details: JSON.stringify({ requestTypeLabel }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.json({ ...def, steps: updatedSteps });
   } catch (err) {
     handleRouteError(err, res, "workflows");
   }
 });
 
-router.delete("/definitions/:id", requirePermission("admin:write"), async (req, res) => {
+router.delete("/definitions/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [before] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
-    await rawExecute(`DELETE FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "workflow_definitions", entityId: id, before }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.deleted", entity: "workflow_definitions", entityId: id, details: JSON.stringify({ requestType: before?.requestType }) }).catch(console.error);
+    const { affectedRows } = await rawExecute(`DELETE FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("التعريف غير موجود");
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "workflow_definitions", entityId: id, before }).catch((e) => logger.error(e, "workflows background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.deleted", entity: "workflow_definitions", entityId: id, details: JSON.stringify({ requestType: before?.requestType }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.json({ message: "تم الحذف" });
   } catch (err) {
     handleRouteError(err, res, "workflows");
   }
 });
 
-router.get("/sla-definitions", requirePermission("admin:read"), async (req, res) => {
+router.get("/sla-definitions", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT * FROM sla_definitions WHERE "companyId" = $1 ORDER BY "requestType"`,
+      `SELECT * FROM sla_definitions WHERE "companyId" = $1 ORDER BY "requestType" LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
@@ -458,11 +453,9 @@ router.get("/sla-definitions", requirePermission("admin:read"), async (req, res)
   }
 });
 
-router.post("/sla-definitions", requirePermission("admin:write"), async (req, res) => {
+router.post("/sla-definitions", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
-    const parsed_slaDefinitionSchema = slaDefinitionSchema.safeParse(req.body);
-    if (!parsed_slaDefinitionSchema.success) throw new ValidationError(parsed_slaDefinitionSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_slaDefinitionSchema.data;
+    const body = zodParse(slaDefinitionSchema.safeParse(req.body));
     const scope = req.scope!;
     const { requestType, warningHours, deadlineHours, escalationHours, autoApproveOnTimeout, escalateTo } = body;
     const { insertId } = await rawExecute(
@@ -474,21 +467,22 @@ router.post("/sla-definitions", requirePermission("admin:write"), async (req, re
        "escalateTo" = EXCLUDED."escalateTo"`,
       [scope.companyId, requestType, warningHours ?? 24, deadlineHours ?? 48, escalationHours ?? 72, autoApproveOnTimeout ?? false, escalateTo ?? "hr_manager"]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "sla_definitions", entityId: insertId, after: { requestType } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.created", entity: "sla_definitions", entityId: insertId, details: JSON.stringify({ requestType }) }).catch(console.error);
-    res.status(201).json({ id: insertId });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "sla_definitions", entityId: insertId, after: { requestType } }).catch((e) => logger.error(e, "workflows background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.created", entity: "sla_definitions", entityId: insertId, details: JSON.stringify({ requestType }) }).catch((e) => logger.error(e, "workflows background task failed"));
+    const [row] = await rawQuery<any>(`SELECT * FROM sla_definitions WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json(row || { id: insertId });
   } catch (err) {
     handleRouteError(err, res, "workflows");
   }
 });
 
-router.get("/stats", requirePermission("admin:read"), async (req, res) => {
+router.get("/stats", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [total] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1`, [scope.companyId]);
-    const [pending] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND status IN ('pending','in_review')`, [scope.companyId]);
-    const [slaWarning] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "slaStatus" IN ('warning','exceeded') AND status IN ('pending','in_review')`, [scope.companyId]);
-    const [escalated] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "slaStatus" = 'escalated' AND status IN ('pending','in_review')`, [scope.companyId]);
+    const [total] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [scope.companyId]);
+    const [pending] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status IN ('pending','in_review')`, [scope.companyId]);
+    const [slaWarning] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "slaStatus" IN ('warning','exceeded') AND status IN ('pending','in_review')`, [scope.companyId]);
+    const [escalated] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "slaStatus" = 'escalated' AND status IN ('pending','in_review')`, [scope.companyId]);
     res.json({
       total: Number(total.count),
       pending: Number(pending.count),

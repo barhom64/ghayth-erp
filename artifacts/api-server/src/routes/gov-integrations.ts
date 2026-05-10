@@ -1,16 +1,22 @@
-import { handleRouteError, ValidationError, NotFoundError, ForbiddenError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
+  parseId,
+  zodParse,
+} from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
+import { buildScopedWhere } from "../lib/scopedQuery.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import dns from "node:dns/promises";
 import { z } from "zod";
+import { logger } from "../lib/logger.js";
+import { GOV_ADMIN_ROLES, GOV_READ_ROLES } from "../lib/rbacCatalog.js";
 
 const updateIntegrationSchema = z.object({
   config: z.record(z.unknown()).optional(),
   enabled: z.boolean().optional(),
-  status: z.string().optional(),
+  status: z.enum(["active", "inactive", "error"]).optional(),
 });
 
 const createLinkSchema = z.object({
@@ -25,7 +31,7 @@ const createLinkSchema = z.object({
 const patchLinkSchema = z.object({
   enabled: z.boolean().optional(),
   externalRef: z.string().optional().nullable(),
-  syncStatus: z.string().optional(),
+  syncStatus: z.enum(["pending", "synced", "failed", "skipped"]).optional(),
   notes: z.string().optional().nullable(),
 });
 
@@ -46,10 +52,6 @@ function isPrivateIP(ip: string): boolean {
 }
 
 const router = Router();
-router.use(authMiddleware);
-
-const GOV_ADMIN_ROLES = ["owner", "admin", "general_manager", "hr_manager", "operations"];
-const GOV_READ_ROLES = [...GOV_ADMIN_ROLES, "finance_manager", "branch_manager", "supervisor"];
 
 function requireGovAdmin(scope: any, res: any): boolean {
   if (!scope || !GOV_ADMIN_ROLES.includes(scope.role)) {
@@ -86,12 +88,13 @@ function maskConfig(config: any): any {
 
 const GOV_SAFE_COLUMNS = `id, "companyId", type, name, status, enabled, "lastCheckedAt", "lastCheckStatus", "lastCheckMessage", "createdAt", "updatedAt"`;
 
-router.get("/", requirePermission("admin:write"), async (req, res) => {
+router.get("/", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    const { where, params } = buildScopedWhere(scope, {}, { disableBranchScope: true });
     const rows = await rawQuery<any>(
-      `SELECT ${GOV_SAFE_COLUMNS}, config FROM gov_integrations WHERE "companyId" = $1 ORDER BY type ASC`,
-      [scope.companyId]
+      `SELECT ${GOV_SAFE_COLUMNS}, config FROM gov_integrations WHERE ${where} ORDER BY type ASC`,
+      params
     );
     if (rows.length === 0) {
       for (const type of ["muqeem", "tam", "absher_business"]) {
@@ -101,8 +104,8 @@ router.get("/", requirePermission("admin:write"), async (req, res) => {
         );
       }
       const fresh = await rawQuery<any>(
-        `SELECT ${GOV_SAFE_COLUMNS}, config FROM gov_integrations WHERE "companyId" = $1 ORDER BY type ASC`,
-        [scope.companyId]
+        `SELECT ${GOV_SAFE_COLUMNS}, config FROM gov_integrations WHERE ${where} ORDER BY type ASC`,
+        params
       );
       res.json({ data: fresh.map((r: any) => ({ ...r, config: maskConfig(r.config) })) });
       return;
@@ -111,13 +114,11 @@ router.get("/", requirePermission("admin:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Gov integrations list error:"); }
 });
 
-router.put("/:id", requirePermission("admin:write"), async (req, res) => {
+router.put("/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
-    const parsed_updateIntegrationSchema = updateIntegrationSchema.safeParse(req.body);
-    if (!parsed_updateIntegrationSchema.success) throw new ValidationError(parsed_updateIntegrationSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_updateIntegrationSchema.data;
+    const body = zodParse(updateIntegrationSchema.safeParse(req.body));
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { config, enabled, status } = body;
 
     if (config !== undefined && (typeof config !== "object" || config === null || Array.isArray(config))) {
@@ -151,8 +152,9 @@ router.put("/:id", requirePermission("admin:write"), async (req, res) => {
     if (status !== undefined && enabled === undefined) { params.push(status); sets.push(`status=$${params.length}`); }
 
     params.push(id);
+    params.push(scope.companyId);
     await rawExecute(
-      `UPDATE gov_integrations SET ${sets.join(",")} WHERE id=$${params.length}`,
+      `UPDATE gov_integrations SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`,
       params
     );
 
@@ -161,19 +163,19 @@ router.put("/:id", requirePermission("admin:write"), async (req, res) => {
       entity: "gov_integrations", entityId: id,
       before: { enabled: existing.enabled, status: existing.status },
       after: { enabled, status, configUpdated: config !== undefined },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.integration.updated", entity: "gov_integrations", entityId: id, details: JSON.stringify({ enabled, status, configUpdated: config !== undefined }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "gov-integrations background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.integration.updated", entity: "gov_integrations", entityId: id, details: JSON.stringify({ enabled, status, configUpdated: config !== undefined }) }).catch((e) => logger.error(e, "gov-integrations background task failed"));
 
-    const [updated] = await rawQuery<any>(`SELECT * FROM gov_integrations WHERE id=$1`, [id]);
-    res.json(updated);
+    const [updated] = await rawQuery<any>(`SELECT * FROM gov_integrations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    res.json({ ...updated, config: maskConfig(updated.config) });
   } catch (err) { handleRouteError(err, res, "Gov integration update error:"); }
 });
 
-router.post("/:id/test", requirePermission("admin:write"), async (req, res) => {
+router.post("/:id/test", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
-    { const _guard = testIntegrationSchema.safeParse(req.body); if (!_guard.success) throw new ValidationError(_guard.error.errors[0]?.message ?? "بيانات غير صالحة"); }
+    zodParse(testIntegrationSchema.safeParse(req.body));
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
 
     const [integration] = await rawQuery<any>(
       `SELECT * FROM gov_integrations WHERE id = $1 AND "companyId" = $2`,
@@ -199,14 +201,15 @@ router.post("/:id/test", requirePermission("admin:write"), async (req, res) => {
       let parsedUrl: URL;
       try {
         parsedUrl = new URL(urlStr);
-      } catch {
+      } catch (e) {
+        logger.warn(e, "gov integration URL parse failed");
         checkStatus = "error";
         checkMessage = "رابط الخدمة غير صالح — يجب أن يبدأ بـ https://";
         await rawExecute(
-          `UPDATE gov_integrations SET "lastCheckedAt"=NOW(), "lastCheckStatus"=$2, "lastCheckMessage"=$3, "updatedAt"=NOW() WHERE id=$1`,
-          [id, checkStatus, checkMessage]
+          `UPDATE gov_integrations SET "lastCheckedAt"=NOW(), "lastCheckStatus"=$2, "lastCheckMessage"=$3, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$4`,
+          [id, checkStatus, checkMessage, scope.companyId]
         );
-        res.json({ success: false, status: checkStatus, message: checkMessage, checkedAt: new Date().toISOString() });
+        res.status(400).json({ success: false, status: checkStatus, message: checkMessage, checkedAt: new Date().toISOString() });
         return;
       }
 
@@ -219,11 +222,11 @@ router.post("/:id/test", requirePermission("admin:write"), async (req, res) => {
       } else {
         let resolvedPrivate = false;
         try {
-          const addresses = await dns.resolve4(parsedUrl.hostname).catch(() => []);
-          const addresses6 = await dns.resolve6(parsedUrl.hostname).catch(() => []);
+          const addresses = await dns.resolve4(parsedUrl.hostname).catch((e) => { logger.error(e, "gov integrations query failed"); return []; });
+          const addresses6 = await dns.resolve6(parsedUrl.hostname).catch((e) => { logger.error(e, "gov integrations query failed"); return []; });
           const allAddrs = [...addresses, ...addresses6];
           if (allAddrs.some(isPrivateIP)) resolvedPrivate = true;
-        } catch { /* DNS resolution failure handled by fetch below */ }
+        } catch (e) { logger.warn(e, "gov integration DNS resolution failure"); }
         if (resolvedPrivate) {
           checkStatus = "error";
           checkMessage = "عنوان DNS يشير إلى شبكة داخلية — غير مسموح";
@@ -258,16 +261,16 @@ router.post("/:id/test", requirePermission("admin:write"), async (req, res) => {
     }
 
     await rawExecute(
-      `UPDATE gov_integrations SET "lastCheckedAt"=NOW(), "lastCheckStatus"=$2, "lastCheckMessage"=$3, "updatedAt"=NOW() WHERE id=$1`,
-      [id, checkStatus, checkMessage]
+      `UPDATE gov_integrations SET "lastCheckedAt"=NOW(), "lastCheckStatus"=$2, "lastCheckMessage"=$3, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$4`,
+      [id, checkStatus, checkMessage, scope.companyId]
     );
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "test_gov_integration",
       entity: "gov_integrations", entityId: id,
       after: { checkStatus, checkMessage },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.integration.tested", entity: "gov_integrations", entityId: id, details: JSON.stringify({ checkStatus, checkMessage }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "gov-integrations background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.integration.tested", entity: "gov_integrations", entityId: id, details: JSON.stringify({ checkStatus, checkMessage }) }).catch((e) => logger.error(e, "gov-integrations background task failed"));
 
     res.json({
       success: checkStatus === "connected",
@@ -278,7 +281,7 @@ router.post("/:id/test", requirePermission("admin:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Gov integration test error:"); }
 });
 
-router.get("/expiring/iqama", requirePermission("admin:write"), async (req, res) => {
+router.get("/expiring/iqama", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const days = Number(req.query.days) || 30;
@@ -293,7 +296,7 @@ router.get("/expiring/iqama", requirePermission("admin:write"), async (req, res)
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
        LEFT JOIN branches b ON b.id = ea."branchId"
-       WHERE ea."companyId" = $1 AND e.status = 'active'
+       WHERE ea."companyId" = $1 AND e.status = 'active' AND e."deletedAt" IS NULL
          AND (
            (e."iqamaExpiry" IS NOT NULL AND e."iqamaExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::INTERVAL)
            OR (e."visaExpiry" IS NOT NULL AND e."visaExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::INTERVAL)
@@ -306,7 +309,7 @@ router.get("/expiring/iqama", requirePermission("admin:write"), async (req, res)
   } catch (err) { handleRouteError(err, res, "Expiring iqama error:"); }
 });
 
-router.get("/expiring/registration", requirePermission("admin:write"), async (req, res) => {
+router.get("/expiring/registration", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const days = Number(req.query.days) || 30;
@@ -317,7 +320,7 @@ router.get("/expiring/registration", requirePermission("admin:write"), async (re
               (fv."registrationExpiry"::date - CURRENT_DATE) AS "registrationDaysLeft",
               (fv."nextInspectionDate"::date - CURRENT_DATE) AS "inspectionDaysLeft"
        FROM fleet_vehicles fv
-       WHERE fv."companyId" = $1 AND fv.status != 'decommissioned'
+       WHERE fv."companyId" = $1 AND fv.status != 'decommissioned' AND fv."deletedAt" IS NULL
          AND (
            (fv."registrationExpiry" IS NOT NULL AND fv."registrationExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::INTERVAL)
            OR (fv."nextInspectionDate" IS NOT NULL AND fv."nextInspectionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::INTERVAL)
@@ -329,7 +332,7 @@ router.get("/expiring/registration", requirePermission("admin:write"), async (re
   } catch (err) { handleRouteError(err, res, "Expiring registration error:"); }
 });
 
-router.get("/links", requirePermission("admin:write"), async (req, res) => {
+router.get("/links", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId } = req.query as any;
@@ -339,6 +342,7 @@ router.get("/links", requirePermission("admin:write"), async (req, res) => {
     if (entityType) { params.push(entityType); conditions.push(`gl."entityType" = $${params.length}`); }
     if (entityId) { params.push(Number(entityId)); conditions.push(`gl."entityId" = $${params.length}`); }
 
+    conditions.push(`gl."deletedAt" IS NULL`);
     const rows = await rawQuery<any>(
       `SELECT gl.*, gi.type AS "integrationType", gi.name AS "integrationName"
        FROM gov_integration_links gl
@@ -351,11 +355,9 @@ router.get("/links", requirePermission("admin:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Gov links list error:"); }
 });
 
-router.post("/links", requirePermission("admin:write"), async (req, res) => {
+router.post("/links", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
-    const parsed_createLinkSchema = createLinkSchema.safeParse(req.body);
-    if (!parsed_createLinkSchema.success) throw new ValidationError(parsed_createLinkSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createLinkSchema.data;
+    const body = zodParse(createLinkSchema.safeParse(req.body));
     const scope = req.scope!;
     const { integrationId, entityType, entityId, externalRef, enabled, notes } = body;
 
@@ -381,14 +383,14 @@ router.post("/links", requirePermission("admin:write"), async (req, res) => {
         companyId: scope.companyId, userId: scope.userId, action: "create_gov_link",
         entity: "gov_integration_links", entityId: insertId,
         after: { integrationId, entityType, entityId: Number(entityId), externalRef, enabled },
-      }).catch(console.error);
-      emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.link.created", entity: "gov_integration_links", entityId: insertId, details: JSON.stringify({ integrationId, entityType, entityId: Number(entityId) }) }).catch(console.error);
+      }).catch((e) => logger.error(e, "gov-integrations background task failed"));
+      emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.link.created", entity: "gov_integration_links", entityId: insertId, details: JSON.stringify({ integrationId, entityType, entityId: Number(entityId) }) }).catch((e) => logger.error(e, "gov-integrations background task failed"));
 
-      const [row] = await rawQuery<any>(`SELECT gl.*, gi.type AS "integrationType", gi.name AS "integrationName" FROM gov_integration_links gl JOIN gov_integrations gi ON gi.id = gl."integrationId" WHERE gl.id=$1`, [insertId]);
+      const [row] = await rawQuery<any>(`SELECT gl.*, gi.type AS "integrationType", gi.name AS "integrationName" FROM gov_integration_links gl JOIN gov_integrations gi ON gi.id = gl."integrationId" WHERE gl.id=$1 AND gl."companyId"=$2 AND gl."deletedAt" IS NULL`, [insertId, scope.companyId]);
       res.status(201).json(row);
     } else {
       const [existing] = await rawQuery<any>(
-        `SELECT gl.*, gi.type AS "integrationType", gi.name AS "integrationName" FROM gov_integration_links gl JOIN gov_integrations gi ON gi.id = gl."integrationId" WHERE gl."companyId" = $1 AND gl."integrationId" = $2 AND gl."entityType" = $3 AND gl."entityId" = $4`,
+        `SELECT gl.*, gi.type AS "integrationType", gi.name AS "integrationName" FROM gov_integration_links gl JOIN gov_integrations gi ON gi.id = gl."integrationId" WHERE gl."companyId" = $1 AND gl."integrationId" = $2 AND gl."entityType" = $3 AND gl."entityId" = $4 AND gl."deletedAt" IS NULL`,
         [scope.companyId, integrationId, entityType, Number(entityId)]
       );
       res.status(200).json(existing);
@@ -396,17 +398,15 @@ router.post("/links", requirePermission("admin:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Gov link create error:"); }
 });
 
-router.patch("/links/:id", requirePermission("admin:write"), async (req, res) => {
+router.patch("/links/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
-    const parsed_patchLinkSchema = patchLinkSchema.safeParse(req.body);
-    if (!parsed_patchLinkSchema.success) throw new ValidationError(parsed_patchLinkSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_patchLinkSchema.data;
+    const body = zodParse(patchLinkSchema.safeParse(req.body));
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const { enabled, externalRef, syncStatus, notes } = body;
 
     const [existing] = await rawQuery<any>(
-      `SELECT gl.id FROM gov_integration_links gl WHERE gl.id = $1 AND gl."companyId" = $2`,
+      `SELECT gl.id FROM gov_integration_links gl WHERE gl.id = $1 AND gl."companyId" = $2 AND gl."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!existing) { throw new NotFoundError("الربط غير موجود"); }
@@ -418,31 +418,32 @@ router.patch("/links/:id", requirePermission("admin:write"), async (req, res) =>
     if (syncStatus !== undefined) { params.push(syncStatus); sets.push(`"syncStatus"=$${params.length}`); }
     if (notes !== undefined) { params.push(notes); sets.push(`notes=$${params.length}`); }
 
-    params.push(id);
-    await rawExecute(`UPDATE gov_integration_links SET ${sets.join(",")} WHERE id=$${params.length}`, params);
+    params.push(id); params.push(scope.companyId);
+    const { affectedRows } = await rawExecute(`UPDATE gov_integration_links SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("الرابط غير موجود");
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_gov_link",
       entity: "gov_integration_links", entityId: id,
       after: { enabled, externalRef, syncStatus, notes },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.link.updated", entity: "gov_integration_links", entityId: id, details: JSON.stringify({ enabled, externalRef, syncStatus }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "gov-integrations background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.link.updated", entity: "gov_integration_links", entityId: id, details: JSON.stringify({ enabled, externalRef, syncStatus }) }).catch((e) => logger.error(e, "gov-integrations background task failed"));
 
-    const [row] = await rawQuery<any>(`SELECT gl.*, gi.type AS "integrationType", gi.name AS "integrationName" FROM gov_integration_links gl JOIN gov_integrations gi ON gi.id = gl."integrationId" WHERE gl.id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT gl.*, gi.type AS "integrationType", gi.name AS "integrationName" FROM gov_integration_links gl JOIN gov_integrations gi ON gi.id = gl."integrationId" WHERE gl.id=$1 AND gl."companyId"=$2 AND gl."deletedAt" IS NULL`, [id, scope.companyId]);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Gov link update error:"); }
 });
 
-router.delete("/links/:id", requirePermission("admin:write"), async (req, res) => {
+router.delete("/links/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [before] = await rawQuery<any>(
-      `SELECT * FROM gov_integration_links WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM gov_integration_links WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     await rawExecute(
-      `DELETE FROM gov_integration_links WHERE id = $1 AND "companyId" = $2`,
+      `UPDATE gov_integration_links SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
 
@@ -450,8 +451,8 @@ router.delete("/links/:id", requirePermission("admin:write"), async (req, res) =
       companyId: scope.companyId, userId: scope.userId, action: "delete_gov_link",
       entity: "gov_integration_links", entityId: id,
       before,
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.link.deleted", entity: "gov_integration_links", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "gov-integrations background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.link.deleted", entity: "gov_integration_links", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "gov-integrations background task failed"));
 
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Gov link delete error:"); }

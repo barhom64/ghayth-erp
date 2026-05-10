@@ -8,12 +8,13 @@ import { AlertTriangle, Plus, Eye } from "lucide-react";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { formatDateAr } from "@/lib/formatters";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export function RisksTab() {
+  const [, navigate] = useLocation();
   const { data: risksResp, isLoading, isError, error, refetch } = useApiQuery<any>(["gov-risks"], "/governance/risks");
   const risks = asList(risksResp);
   const [previewRisk, setPreviewRisk] = useState<any>(null);
@@ -63,7 +64,7 @@ export function RisksTab() {
   ];
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   return (
     <div className="space-y-4">
@@ -108,6 +109,7 @@ export function RisksTab() {
             isError={isError}
             error={error as Error | null}
             onRetry={() => refetch()}
+            onRowClick={(r) => navigate(`/governance/risks/${r.id}`)}
             emptyMessage="لا توجد مخاطر"
             emptyIcon={<AlertTriangle className="h-6 w-6 text-slate-400" />}
             noToolbar

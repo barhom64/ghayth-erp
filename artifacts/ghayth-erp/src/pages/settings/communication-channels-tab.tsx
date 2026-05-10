@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { MessageSquare, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -46,7 +45,7 @@ export function CommunicationChannelsTab() {
   }, [data]);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const handleSave = async (entries: Record<string, string>, secretFields?: { key: string; configured: boolean }[]) => {
     setSaving(true);
@@ -88,9 +87,11 @@ export function CommunicationChannelsTab() {
             </CardTitle>
             <div className="flex items-center gap-2">
               <Label className="text-xs text-gray-500">تفعيل</Label>
-              <Checkbox
+              <input
+                type="checkbox"
                 checked={smsForm.sms_enabled === "true"}
-                onCheckedChange={(c) => setSmsForm({ ...smsForm, sms_enabled: c ? "true" : "false" })}
+                onChange={(e) => setSmsForm({ ...smsForm, sms_enabled: e.target.checked ? "true" : "false" })}
+                className="h-4 w-4"
               />
             </div>
           </div>
@@ -146,9 +147,11 @@ export function CommunicationChannelsTab() {
             </CardTitle>
             <div className="flex items-center gap-2">
               <Label className="text-xs text-gray-500">تفعيل</Label>
-              <Checkbox
+              <input
+                type="checkbox"
                 checked={waForm.whatsapp_enabled === "true"}
-                onCheckedChange={(c) => setWaForm({ ...waForm, whatsapp_enabled: c ? "true" : "false" })}
+                onChange={(e) => setWaForm({ ...waForm, whatsapp_enabled: e.target.checked ? "true" : "false" })}
+                className="h-4 w-4"
               />
             </div>
           </div>
@@ -208,9 +211,11 @@ export function CommunicationChannelsTab() {
             </CardTitle>
             <div className="flex items-center gap-2">
               <Label className="text-xs text-gray-500">تفعيل</Label>
-              <Checkbox
+              <input
+                type="checkbox"
                 checked={pushEnabled === "true"}
-                onCheckedChange={(c) => setPushEnabled(c ? "true" : "false")}
+                onChange={(e) => setPushEnabled(e.target.checked ? "true" : "false")}
+                className="h-4 w-4"
               />
             </div>
           </div>

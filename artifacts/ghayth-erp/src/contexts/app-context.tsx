@@ -176,7 +176,7 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const { user, assignments, isAuthenticated, updateToken } = useAuth();
+  const { user, assignments, isAuthenticated, notifyTokenRefreshed } = useAuth();
   const queryClient = useQueryClient();
 
   const backendRoles: UserRole[] = useMemo(() => {
@@ -366,19 +366,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const match = assignments.find((a) => a.companyId === companyId);
     if (!match) return;
     try {
-      const data = await apiFetch("/auth/switch-assignment", {
+      await apiFetch("/auth/switch-assignment", {
         method: "POST",
         body: JSON.stringify({ assignmentId: match.id }),
       });
-      if (data?.token) {
-        updateToken(data.token);
-        queryClient.clear();
-        setRefreshKey((k) => k + 1);
-        setPermRefreshKey((k) => k + 1);
-      }
+      notifyTokenRefreshed();
+      queryClient.clear();
+      setRefreshKey((k) => k + 1);
+      setPermRefreshKey((k) => k + 1);
     } catch {
     }
-  }, [assignments, updateToken, queryClient]);
+  }, [assignments, notifyTokenRefreshed, queryClient]);
 
   const hasPermission = (permission: PermissionKey) => permissions[permission];
   const canAccessModule = (module: ModuleType) => allowedModules.includes(module);

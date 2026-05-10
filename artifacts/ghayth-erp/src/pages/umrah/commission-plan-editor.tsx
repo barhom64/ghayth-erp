@@ -75,7 +75,7 @@ export default function UmrahCommissionPlanEditor() {
     baseSalary: 0,
   });
 
-  // TODO: endpoint not yet implemented — placeholder response
+
   const loadQ = useApiQuery<{ data: CommissionPlan }>(
     ["umrah-commission-plan", planId ?? ""],
     isEditMode && planId ? `/umrah/commission-plans/${planId}` : null,
@@ -83,7 +83,7 @@ export default function UmrahCommissionPlanEditor() {
 
   const employeesQ = useApiQuery<{ data: any[] }>(["employees"], "/employees");
   const seasonsQ = useApiQuery<{ data: any[] }>(["umrah-seasons"], "/umrah/seasons");
-  // TODO: endpoint not yet implemented — placeholder response
+
   const assignmentsQ = useApiQuery<{ data: any[] }>(
     ["umrah-employee-assignments", String(plan.employeeId ?? "")],
     plan.employeeId ? `/umrah/employees/${plan.employeeId}/assignments` : null,
@@ -126,7 +126,7 @@ export default function UmrahCommissionPlanEditor() {
     }
     setSimBusy(true);
     try {
-      // TODO: endpoint not yet implemented — placeholder response
+    
       const res: any = await apiFetch(`/umrah/commission-plans/${plan.id}/simulate`, {
         method: "POST",
         body: JSON.stringify(sim),

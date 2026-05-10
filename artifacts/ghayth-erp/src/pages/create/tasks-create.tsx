@@ -3,7 +3,6 @@ import { useLocation, useSearch } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, AutoField, CreationDateField } from "@/components/create-page-layout";
@@ -15,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Link2 } from "lucide-react";
 import { Autocomplete, type AutocompleteOption } from "@/components/ui/autocomplete";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
-import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { TextField, TextAreaField, DateField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const ENTITY_TYPE_OPTIONS = [
   { value: "", label: "— بدون ربط —" },
@@ -73,10 +72,10 @@ export default function TasksCreate() {
     subtitle: item.category || item.email || item.phone || undefined,
   }));
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
-
   const { fieldErrors, validate, setApiError } = useFieldErrors();
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
 
   const handleSubmit = async () => {
     const firstError = validate({
@@ -145,9 +144,7 @@ export default function TasksCreate() {
             </SelectContent>
           </Select>
         </FormFieldWrapper>
-        <FormFieldWrapper label="الموعد">
-          <Input type="datetime-local" value={form.scheduledStart} onChange={(e) => setForm((f) => ({ ...f, scheduledStart: e.target.value }))} />
-        </FormFieldWrapper>
+        <DateField label="الموعد" mode="datetime" value={form.scheduledStart} onChange={(v) => setForm((f) => ({ ...f, scheduledStart: v }))} />
         <FormFieldWrapper label="العميل">
           <Select value={form.clientName || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, clientName: v === "_none" ? "" : v }))}>
             <SelectTrigger><SelectValue placeholder="— بدون عميل —" /></SelectTrigger>
@@ -199,7 +196,7 @@ export default function TasksCreate() {
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/tasks")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={!form.title || createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={!form.title || createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
         </Button>
       </div>

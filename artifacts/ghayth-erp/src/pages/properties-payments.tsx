@@ -1,23 +1,17 @@
-import { useState } from "react";
-import { Link } from "wouter";
-import { useApiQuery, apiFetch, asList } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { Link, useLocation } from "wouter";
+import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
-import { Banknote, CheckCircle, DollarSign, AlertTriangle, FileText, ShieldAlert } from "lucide-react";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { KpiGrid } from "@/components/shared/kpi-card";
-import { useAppContext } from "@/contexts/app-context";
-import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { PageShell } from "@/components/page-shell";
-import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
-import { toast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
+import { Banknote, CheckCircle } from "lucide-react";
+import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { useAppContext } from "@/contexts/app-context";
 
 export default function PropertiesPayments() {
+  const [, navigate] = useLocation();
   const { scopeQueryString, permissions, roleLevel } = useAppContext();
   const canManage = permissions.canManageProperty || roleLevel >= 50;
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
@@ -27,32 +21,6 @@ export default function PropertiesPayments() {
   );
   const payments = asList(paymentsResp);
   const [filters, setFilters] = useFilters();
-  const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
-  const queryClient = useQueryClient();
-  const [escalateConfirm, setEscalateConfirm] = useState(false);
-  const [escalating, setEscalating] = useState(false);
-
-  const handleEscalate = async () => {
-    if (!escalateConfirm) {
-      setEscalateConfirm(true);
-      return;
-    }
-    setEscalating(true);
-    try {
-      await apiFetch("/properties/late-rent/escalate", { method: "POST" });
-      toast({ title: "تم التصعيد بنجاح" });
-      queryClient.invalidateQueries({ queryKey: ["rent-payments"] });
-    } catch {
-      toast({ title: "فشل التصعيد", variant: "destructive" });
-    } finally {
-      setEscalating(false);
-      setEscalateConfirm(false);
-    }
-  };
-
-  if (isLoading) return <PageShell title="المدفوعات" breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "المدفوعات" }]}><LoadingSpinner /></PageShell>;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
-
   const filtered = applyFilters(payments, filters, {
     searchFields: ["tenantName", "unitNumber"] as any,
     statusField: "status" as any,
@@ -60,16 +28,6 @@ export default function PropertiesPayments() {
   });
 
   const columns: DataTableColumn<any>[] = [
-    {
-      key: "_select",
-      header: "",
-      width: "32px",
-      render: (v) => (
-        <span onClick={(ev) => ev.stopPropagation()}>
-          <BulkCheckbox checked={selectedIds.has(v.id)} onChange={() => toggleSelect(v.id)} />
-        </span>
-      ),
-    },
     { key: "tenantName", header: "المستأجر", sortable: true, className: "font-medium" },
     { key: "unitNumber", header: "الوحدة", sortable: true, render: (p) => p.unitNumber || "—" },
     { key: "dueDate", header: "تاريخ الاستحقاق", sortable: true, render: (p) => formatDateAr(p.dueDate) },
@@ -98,36 +56,17 @@ export default function PropertiesPayments() {
 
   return (
     <PageShell
-      title="المدفوعات"
+      title="مدفوعات الإيجار"
       subtitle="متابعة وتسجيل مدفوعات الإيجار"
-      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "المدفوعات" }]}
+      breadcrumbs={[{ href: "/properties", label: "إدارة الأملاك" }]}
       actions={canManage && (
-        <div className="flex items-center gap-2">
-          <Button
-            variant={escalateConfirm ? "destructive" : "outline"}
-            className="gap-2"
-            onClick={handleEscalate}
-            disabled={escalating}
-            onBlur={() => setEscalateConfirm(false)}
-          >
-            <ShieldAlert className="h-4 w-4" />
-            {escalateConfirm ? "تأكيد التصعيد" : "تصعيد متأخرات"}
+        <Link href="/properties/payments/new/pay">
+          <Button className="gap-2">
+            <Banknote className="h-4 w-4" /> تسجيل دفعة
           </Button>
-          <Link href="/properties/payments/new/pay">
-            <Button className="gap-2">
-              <Banknote className="h-4 w-4" /> تسجيل دفعة
-            </Button>
-          </Link>
-        </div>
+        </Link>
       )}
     >
-      <PropertyTabsNav />
-      <KpiGrid items={[
-        { label: "إجمالي المدفوعات", value: payments.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
-        { label: "مدفوع", value: payments.filter((p: any) => p.status === "paid").length, icon: CheckCircle, color: "text-emerald-600 bg-emerald-50" },
-        { label: "متأخر", value: payments.filter((p: any) => p.status === "overdue").length, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
-        { label: "إجمالي المبلغ", value: formatCurrency(payments.reduce((s: number, p: any) => s + Number(p.amount || 0), 0)), icon: DollarSign, color: "text-purple-600 bg-purple-50" },
-      ]} />
 
       <AdvancedFilters
         config={{
@@ -152,26 +91,6 @@ export default function PropertiesPayments() {
         resultCount={filtered?.length}
       />
 
-      <BulkActionsBar
-        entityType="rent_payment"
-        items={filtered}
-        selectedIds={selectedIds}
-        onToggle={toggleSelect}
-        onToggleAll={() => toggleAll(filtered.map((i: any) => i.id))}
-        onClear={clearSelection}
-        invalidateKeys={[["rent-payments"]]}
-        actions={["export"]}
-        csvColumns={[
-          { key: "tenantName", label: "المستأجر" },
-          { key: "unitNumber", label: "الوحدة" },
-          { key: "dueDate", label: "تاريخ الاستحقاق" },
-          { key: "amount", label: "المبلغ" },
-          { key: "paidAmount", label: "المدفوع" },
-          { key: "status", label: "الحالة" },
-        ]}
-        csvFileName="المدفوعات"
-      />
-
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><Banknote className="h-5 w-5 text-indigo-500" /> مدفوعات الإيجار</CardTitle>
@@ -188,6 +107,7 @@ export default function PropertiesPayments() {
             emptyIcon={<Banknote className="h-6 w-6 text-slate-400" />}
             noToolbar
             rowClassName={(p) => p.status === 'pending' && new Date(p.dueDate) < new Date() ? "bg-rose-50" : undefined}
+            onRowClick={(row) => navigate(`/properties/payments/${row.id}`)}
           />
         </CardContent>
       </Card>

@@ -28,7 +28,7 @@
 // `system.obligation.breached`. Escalation policies are handled downstream
 // by the notification engine.
 
-import { rawExecute, rawQuery, withTransaction } from "./rawdb.js";
+import { rawExecute, rawQuery, withTransaction, pool } from "./rawdb.js";
 import { emitEvent, createNotification } from "./businessHelpers.js";
 
 export type ObligationType =
@@ -71,8 +71,10 @@ export interface RegisterObligationInput {
  * Create the obligations table if missing. Called lazily on first use so that
  * we don't need a dedicated migration for hot-patching.
  */
+let obligationsTableEnsured = false;
 export async function ensureObligationsTable(): Promise<void> {
-  await rawExecute(`
+  if (obligationsTableEnsured) return;
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS obligations (
       id SERIAL PRIMARY KEY,
       "companyId" INTEGER NOT NULL,
@@ -96,18 +98,19 @@ export async function ensureObligationsTable(): Promise<void> {
       "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
     )
   `);
-  await rawExecute(`
+  await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_obligations_scan
       ON obligations (status, "dueAt")
   `);
-  await rawExecute(`
+  await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_obligations_entity
       ON obligations ("companyId", "entityType", "entityId")
   `);
-  await rawExecute(`
+  await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_obligations_dedupe
       ON obligations ("companyId", "dedupeKey") WHERE "dedupeKey" IS NOT NULL
   `);
+  obligationsTableEnsured = true;
 }
 
 /**
@@ -211,7 +214,7 @@ export async function cancelObligation(
  *
  * Returns counts for observability.
  */
-export async function scanObligations(): Promise<{
+export async function scanObligations(companyId?: number): Promise<{
   breachedCount: number;
   escalatedL1: number;
   escalatedL2: number;
@@ -220,6 +223,7 @@ export async function scanObligations(): Promise<{
   let breachedCount = 0;
   let escalatedL1 = 0;
   let escalatedL2 = 0;
+  const companyFilter = companyId ? ` AND "companyId" = ${Number(companyId)}` : '';
 
   await withTransaction(async (client: any) => {
     // 1) pending → breached
@@ -230,19 +234,26 @@ export async function scanObligations(): Promise<{
              "escalationLevel"=1,
              "lastScannedAt"=NOW(),
              "updatedAt"=NOW()
-       WHERE status='pending' AND "dueAt" < NOW()
+       WHERE status='pending' AND "dueAt" < NOW()${companyFilter}
        RETURNING id, "companyId", "entityType", "entityId", "obligationType",
                  title, "assignedTo", "escalationSteps", "dueAt"`
     );
     breachedCount = newlyBreached.rowCount ?? 0;
 
     for (const o of newlyBreached.rows) {
+      const daysLate = Math.max(
+        0,
+        Math.floor((Date.now() - new Date(o.dueAt).getTime()) / 86_400_000),
+      );
       await emitEvent({
         companyId: o.companyId,
         userId: 0,
         action: "system.obligation.breached",
         entity: o.entityType,
         entityId: o.entityId,
+        obligationId: o.id,
+        entityType: o.entityType,
+        daysLate,
         details: `التزام متأخر: ${o.title}`,
       });
       if (o.assignedTo) {
@@ -267,7 +278,7 @@ export async function scanObligations(): Promise<{
        WHERE status='breached'
          AND "escalationSteps" IS NOT NULL
          AND jsonb_array_length("escalationSteps") >= 1
-         AND "dueAt" + (("escalationSteps"->0->>'hoursAfterDue')::int || ' hours')::interval <= NOW()
+         AND "dueAt" + (("escalationSteps"->0->>'hoursAfterDue')::int || ' hours')::interval <= NOW()${companyFilter}
        RETURNING id, "companyId", "entityType", "entityId", title`
     );
     escalatedL1 = l1.rowCount ?? 0;
@@ -293,7 +304,7 @@ export async function scanObligations(): Promise<{
        WHERE status='escalated_l1'
          AND "escalationSteps" IS NOT NULL
          AND jsonb_array_length("escalationSteps") >= 2
-         AND "dueAt" + (("escalationSteps"->1->>'hoursAfterDue')::int || ' hours')::interval <= NOW()
+         AND "dueAt" + (("escalationSteps"->1->>'hoursAfterDue')::int || ' hours')::interval <= NOW()${companyFilter}
        RETURNING id, "companyId", "entityType", "entityId", title`
     );
     escalatedL2 = l2.rowCount ?? 0;
@@ -318,7 +329,7 @@ export async function scanObligations(): Promise<{
        WHERE status='pending'
          AND "dueAt" > NOW()
          AND "dueAt" <= NOW() + INTERVAL '24 hours'
-         AND COALESCE((metadata->>'reminder24hSent')::boolean, false) = false
+         AND COALESCE((metadata->>'reminder24hSent')::boolean, false) = false${companyFilter}
        RETURNING id, "companyId", "entityType", "entityId", title, "assignedTo", "dueAt"`
     );
 
@@ -388,8 +399,9 @@ export async function queryObligations(input: QueryObligationsInput): Promise<an
   if (input.dueAfter) { params.push(input.dueAfter); where += ` AND "dueAt" > $${params.length}::timestamp`; }
 
   const limit = Math.min(500, Math.max(1, input.limit ?? 100));
+  params.push(limit);
   return rawQuery<any>(
-    `SELECT * FROM obligations WHERE ${where} ORDER BY "dueAt" ASC LIMIT ${limit}`,
+    `SELECT * FROM obligations WHERE ${where} ORDER BY "dueAt" ASC LIMIT $${params.length}`,
     params
   );
 }

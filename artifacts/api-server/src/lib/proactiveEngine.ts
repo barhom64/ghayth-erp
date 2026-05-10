@@ -1,6 +1,7 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
-import { createNotification, getManagerAssignmentId } from "./businessHelpers.js";
+import { createNotification, getManagerAssignmentId, currentYear, toDateISO } from "./businessHelpers.js";
 import { eventBus } from "./eventBus.js";
+import { logger } from "./logger.js";
 
 async function logAutomation(params: {
   companyId: number | null;
@@ -36,9 +37,9 @@ async function logAutomation(params: {
     await rawExecute(
       `UPDATE proactive_rules SET "lastRunAt" = NOW(), "totalExecutions" = "totalExecutions" + 1 WHERE name = $1`,
       [params.automationType]
-    ).catch(() => {});
+    ).catch((e) => logger.error(e, "proactive rule execution update failed"));
   } catch (err) {
-    console.error("[ProactiveEngine] Failed to log automation:", err);
+    logger.error(err, "[ProactiveEngine] Failed to log automation:");
   }
 }
 
@@ -100,13 +101,13 @@ async function createTaskForAssignment(params: {
 }): Promise<number | null> {
   try {
     const [row] = await rawQuery<any>(
-      `INSERT INTO tasks ("companyId","branchId",title,description,priority,status,"assignedTo","scheduledDate","createdAt")
-       VALUES ($1,$2,$3,$4,$5,'pending',$6,$7,NOW()) RETURNING id`,
+      `INSERT INTO tasks ("companyId","branchId",type,title,description,priority,status,"assignedTo","scheduledDate","createdAt")
+       VALUES ($1,$2,'follow_up',$3,$4,$5,'pending',$6,$7,NOW()) RETURNING id`,
       [params.companyId, params.branchId ?? null, params.title, params.description, params.priority, params.assignedTo, params.dueDate ?? null]
     );
     return row?.id ?? null;
   } catch (err) {
-    console.error("[ProactiveEngine] Failed to create task:", err);
+    logger.error(err, "[ProactiveEngine] Failed to create task:");
     return null;
   }
 }
@@ -404,7 +405,7 @@ export async function proactiveAnnualPerformanceReview(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let created = 0;
   const currentMonth = new Date().getMonth() + 1;
-  const currentYear = new Date().getFullYear();
+  const curYear = currentYear();
   if (currentMonth !== 1 && currentMonth !== 7) return "Not review month (Jan/Jul)";
   for (const company of companies) {
     if (!(await isRuleActive("annual_performance_review", company.id))) continue;
@@ -420,7 +421,7 @@ export async function proactiveAnnualPerformanceReview(): Promise<string> {
              AND EXTRACT(YEAR FROM al."createdAt") = $2
              AND EXTRACT(MONTH FROM al."createdAt") = $3
          )`,
-      [company.id, currentYear, currentMonth]
+      [company.id, curYear, currentMonth]
     );
     for (const emp of employees) {
       const managerId = await getManagerAssignmentId(company.id, emp.branchId ?? 0);
@@ -528,11 +529,11 @@ export async function proactiveVehicleBreakdown(payload: {
       const [maint] = await rawQuery<any>(
         `INSERT INTO fleet_maintenance ("companyId","vehicleId",type,description,cost,"serviceDate",status,"nextServiceDate")
          VALUES ($1,$2,'breakdown',$3,0,CURRENT_DATE,'pending',$4) RETURNING id`,
-        [payload.companyId, payload.vehicleId, payload.description || `عطل تلقائي — ${payload.plateNumber}`, nextServiceDate.toISOString().split('T')[0]]
+        [payload.companyId, payload.vehicleId, payload.description || `عطل تلقائي — ${payload.plateNumber}`, toDateISO(nextServiceDate)]
       );
       maintenanceId = maint?.id ?? null;
     } catch (err) {
-      console.error("[ProactiveEngine] Failed to create fleet_maintenance:", err);
+      logger.error(err, "[ProactiveEngine] Failed to create fleet_maintenance:");
     }
   }
 
@@ -566,7 +567,7 @@ let proactiveListenersRegistered = false;
 
 export function registerProactiveEventListeners(): void {
   if (proactiveListenersRegistered) {
-    console.log("[ProactiveEngine] Event listeners already registered, skipping");
+    logger.debug("ProactiveEngine event listeners already registered, skipping");
     return;
   }
   proactiveListenersRegistered = true;
@@ -583,11 +584,11 @@ export function registerProactiveEventListeners(): void {
         });
       }
     } catch (err) {
-      console.error("[ProactiveEngine] Vehicle breakdown handler failed:", err);
+      logger.error(err, "[ProactiveEngine] Vehicle breakdown handler failed:");
     }
   });
 
-  console.log("[ProactiveEngine] Event listeners registered");
+  logger.info("ProactiveEngine event listeners registered");
 }
 
 export async function runAllProactiveChecks(): Promise<string> {

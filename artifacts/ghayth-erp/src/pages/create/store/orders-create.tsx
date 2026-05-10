@@ -37,7 +37,7 @@ export default function OrdersCreate() {
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (loadingC || loadingP) return <LoadingSpinner />;
-  if (errorC || errorP) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (errorC || errorP) return <ErrorState />;
 
   const handleClientSelect = (clientId: string) => {
     const client = clients.find((c: any) => String(c.id) === clientId);
@@ -122,7 +122,7 @@ export default function OrdersCreate() {
           </Select>
         </FormFieldWrapper>
         <TextField label="اسم العميل" required value={form.customerName} onChange={(v) => setForm((f) => ({ ...f, customerName: v }))} error={fieldErrors.customerName} />
-        <TextField label="هاتف العميل" dir="ltr" value={form.customerPhone} onChange={(v) => setForm((f) => ({ ...f, customerPhone: v }))} placeholder="05xxxxxxxx" />
+        <TextField label="هاتف العميل" type="tel" inputMode="tel" dir="ltr" value={form.customerPhone} onChange={(v) => setForm((f) => ({ ...f, customerPhone: v }))} placeholder="05xxxxxxxx" />
         <FormFieldWrapper label="الحالة">
           <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
             <SelectTrigger><SelectValue /></SelectTrigger>
@@ -188,7 +188,7 @@ export default function OrdersCreate() {
 
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/store")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={createMut.isPending}>{createMut.isPending ? "جاري الإنشاء..." : "إنشاء الطلب"}</Button>
+        <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>{createMut.isPending ? "جاري الإنشاء..." : "إنشاء الطلب"}</Button>
       </div>
     </CreatePageLayout>
   );

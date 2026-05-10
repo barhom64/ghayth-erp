@@ -1,11 +1,9 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { apiFetch, useApiQuery } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -20,15 +18,9 @@ export default function PilgrimCreate() {
   const [form, setForm] = useState<any>({});
   const [saving, setSaving] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const { data: seasons, isLoading: l1, isError: e1 } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
-  const { data: agents, isLoading: l2, isError: e2 } = useApiQuery<any>(["umrah-agents"], "/umrah/agents");
-  const { data: packages, isLoading: l3, isError: e3 } = useApiQuery<any>(["umrah-packages"], "/umrah/packages");
-
-  const isLoading = l1 || l2 || l3;
-  const isError = e1 || e2 || e3;
-
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  const { data: seasons } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
+  const { data: agents } = useApiQuery<any>(["umrah-agents"], "/umrah/agents");
+  const { data: packages } = useApiQuery<any>(["umrah-packages"], "/umrah/packages");
 
   const update = (key: string, val: any) => setForm((prev: any) => ({ ...prev, [key]: val }));
 
@@ -95,7 +87,7 @@ export default function PilgrimCreate() {
           <div><Label>تاريخ المغادرة</Label><DatePicker value={form.departureDate || ""} onChange={v => update("departureDate", v)} /></div>
           <div><Label>الفندق</Label><Input value={form.hotelName || ""} onChange={e => update("hotelName", e.target.value)} /></div>
           <div><Label>رقم الغرفة</Label><Input value={form.roomNumber || ""} onChange={e => update("roomNumber", e.target.value)} /></div>
-          <div className="md:col-span-3"><Label>ملاحظات</Label><Textarea rows={3} value={form.notes || ""} onChange={e => update("notes", e.target.value)} /></div>
+          <div className="md:col-span-3"><Label>ملاحظات</Label><textarea className="w-full border rounded p-2 text-sm" rows={3} value={form.notes || ""} onChange={e => update("notes", e.target.value)} /></div>
           <div className="md:col-span-3">
             <FileDropZone files={attachments} onFilesChange={setAttachments} />
           </div>

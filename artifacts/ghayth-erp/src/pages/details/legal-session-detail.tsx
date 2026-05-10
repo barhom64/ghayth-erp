@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Gavel } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 const STATUS_LABELS: Record<string, string> = {
   scheduled: "مجدولة",
@@ -254,6 +256,9 @@ export default function LegalSessionDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {id && <EntityComments entityType="legal-session" entityId={id} />}
+      {id && <EntityTags entityType="legal-session" entityId={id} />}
     </div>
   );
 

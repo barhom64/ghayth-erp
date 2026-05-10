@@ -82,7 +82,7 @@ export default function PerformanceCreate() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const avgScore = competencies.filter((c) => c.score > 0).length > 0
     ? (competencies.reduce((sum, c) => sum + c.score, 0) / competencies.filter((c) => c.score > 0).length)
@@ -244,7 +244,7 @@ export default function PerformanceCreate() {
 
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/hr/performance")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={createMut.isPending} size="lg">
+        <Button onClick={handleSubmit} disabled={createMut.isPending} size="lg" rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "حفظ التقييم"}
         </Button>
       </div>

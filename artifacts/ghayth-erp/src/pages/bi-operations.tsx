@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
+import { ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -385,7 +386,8 @@ function TrendTab({ from, to, departmentId }: { from: string; to: string; depart
   if (to) params.set("to", to);
   if (departmentId) params.set("departmentId", departmentId);
   const qs = params.toString() ? `?${params.toString()}` : "";
-  const { data } = useApiQuery<any>(["bi-trend", from, to, departmentId], `/bi/operations/trend${qs}`);
+  const { data, isError } = useApiQuery<any>(["bi-trend", from, to, departmentId], `/bi/operations/trend${qs}`);
+  if (isError) return <ErrorState />;
   const rows = data?.data || [];
 
   return (
@@ -421,7 +423,8 @@ function ApprovalTimeliness({ from, to, departmentId }: { from: string; to: stri
   if (to) params.set("to", to);
   if (departmentId) params.set("departmentId", departmentId);
   const qs = params.toString() ? `?${params.toString()}` : "";
-  const { data } = useApiQuery<any>(["bi-approval-timeliness", from, to, departmentId], `/bi/operations/approval-timeliness${qs}`);
+  const { data, isError } = useApiQuery<any>(["bi-approval-timeliness", from, to, departmentId], `/bi/operations/approval-timeliness${qs}`);
+  if (isError) return <ErrorState />;
   if (!data) return null;
 
   return (

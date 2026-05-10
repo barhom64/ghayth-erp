@@ -1,4 +1,5 @@
 import { pool } from "./rawdb.js";
+import { logger } from "./logger.js";
 import type pg from "pg";
 
 async function exec(client: pg.PoolClient, sql: string, params: any[] = []) {
@@ -23,11 +24,11 @@ export async function bootstrapCompany(companyId: number, companyName: string) {
     await createDefaultSettings(client, companyId, companyName);
 
     await client.query("COMMIT");
-    console.log(`[CompanyBootstrap] Company ${companyId} bootstrapped with all defaults`);
+    logger.info({ companyId }, "Company bootstrapped with all defaults");
     return { branchId };
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error(`[CompanyBootstrap] Failed to bootstrap company ${companyId}:`, err);
+    logger.error(err, `[CompanyBootstrap] Failed to bootstrap company ${companyId}:`);
     throw err;
   } finally {
     client.release();
@@ -59,10 +60,10 @@ async function createDefaultLeaveTypes(client: pg.PoolClient, companyId: number)
   for (const t of types) {
     await exec(
       client,
-      `INSERT INTO hr_leave_types (name, "nameEn", "defaultDays", "isPaid", "companyId", code)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO hr_leave_types (name, "annualDays", "isPaid", "companyId")
+       VALUES ($1, $2, $3, $4)
        ON CONFLICT DO NOTHING`,
-      [t.name, t.nameEn, t.days, t.isPaid, companyId, t.code]
+      [t.name, t.days, t.isPaid, companyId]
     );
   }
 }
@@ -96,10 +97,10 @@ async function createDefaultShifts(client: pg.PoolClient, companyId: number, bra
   for (const s of shifts) {
     await exec(
       client,
-      `INSERT INTO shifts (name, "nameEn", "startTime", "endTime", "companyId", "branchId")
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO shifts (name, "startTime", "endTime", "companyId", "branchId")
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT DO NOTHING`,
-      [s.name, s.nameEn, s.startTime, s.endTime, companyId, branchId]
+      [s.name, s.startTime, s.endTime, companyId, branchId]
     );
   }
 }
@@ -125,20 +126,20 @@ async function createDefaultApprovalChains(client: pg.PoolClient, companyId: num
 
 async function createDefaultSalaryComponents(client: pg.PoolClient, companyId: number) {
   const components = [
-    { name: "الراتب الأساسي", nameEn: "Basic Salary", type: "earning", isFixed: true, percentage: 60 },
-    { name: "بدل سكن", nameEn: "Housing Allowance", type: "earning", isFixed: true, percentage: 25 },
-    { name: "بدل نقل", nameEn: "Transportation Allowance", type: "earning", isFixed: true, percentage: 10 },
-    { name: "بدل طعام", nameEn: "Food Allowance", type: "earning", isFixed: false, percentage: 0 },
-    { name: "تأمينات اجتماعية", nameEn: "GOSI", type: "deduction", isFixed: true, percentage: 9.75 },
-    { name: "ضريبة الدخل", nameEn: "Income Tax", type: "deduction", isFixed: false, percentage: 0 },
+    { name: "الراتب الأساسي", nameEn: "Basic Salary", type: "earning", calculationType: "fixed", value: 60 },
+    { name: "بدل سكن", nameEn: "Housing Allowance", type: "earning", calculationType: "fixed", value: 25 },
+    { name: "بدل نقل", nameEn: "Transportation Allowance", type: "earning", calculationType: "fixed", value: 10 },
+    { name: "بدل طعام", nameEn: "Food Allowance", type: "earning", calculationType: "percentage", value: 0 },
+    { name: "تأمينات اجتماعية", nameEn: "GOSI", type: "deduction", calculationType: "percentage", value: 9.75 },
+    { name: "ضريبة الدخل", nameEn: "Income Tax", type: "deduction", calculationType: "percentage", value: 0 },
   ];
   for (const c of components) {
     await exec(
       client,
-      `INSERT INTO salary_components (name, "nameEn", type, "isFixed", percentage, "companyId")
+      `INSERT INTO salary_components (name, "nameEn", type, "calculationType", value, "companyId")
        VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT DO NOTHING`,
-      [c.name, c.nameEn, c.type, c.isFixed, c.percentage, companyId]
+      [c.name, c.nameEn, c.type, c.calculationType, c.value, companyId]
     );
   }
 }

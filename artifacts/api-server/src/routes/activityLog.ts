@@ -1,13 +1,12 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 
 const router = Router();
-router.use(authMiddleware);
 
-router.get("/", requirePermission("admin:read"), async (req, res) => {
+router.get("/", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -16,11 +15,13 @@ router.get("/", requirePermission("admin:read"), async (req, res) => {
     const pageOffset = Number(off) || 0;
 
     let moduleFilter = "";
+    let moduleParamIndex = 0;
     const params: any[] = [cid];
 
     if (module && typeof module === "string") {
       params.push(module);
-      moduleFilter = ` AND module = $${params.length}`;
+      moduleParamIndex = params.length;
+      moduleFilter = ` AND module = $${moduleParamIndex}`;
     }
 
     const rows = await rawQuery<any>(
@@ -56,7 +57,7 @@ router.get("/", requirePermission("admin:read"), async (req, res) => {
         LEFT JOIN users u ON u.id = je."createdBy"
         LEFT JOIN employees e ON e.id = u."employeeId"
         WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
-        ${module ? `AND 'finance' = $${params.indexOf(module) + 1}` : ""}
+        ${module ? `AND 'finance' = $${moduleParamIndex}` : ""}
 
         UNION ALL
 
@@ -76,8 +77,8 @@ router.get("/", requirePermission("admin:read"), async (req, res) => {
           r.id::text AS "entityId",
           'request' AS "entityType"
         FROM requests r
-        WHERE (r."companyId" = $1 OR r."companyId" IS NULL)
-        ${module ? `AND 'requests' = $${params.indexOf(module) + 1}` : ""}
+        WHERE r."companyId" = $1 AND r."deletedAt" IS NULL
+        ${module ? `AND 'requests' = $${moduleParamIndex}` : ""}
 
         UNION ALL
 
@@ -96,8 +97,8 @@ router.get("/", requirePermission("admin:read"), async (req, res) => {
           cl.id::text AS "entityId",
           'communication' AS "entityType"
         FROM communications_log cl
-        WHERE cl."companyId" = $1
-        ${module ? `AND 'communications' = $${params.indexOf(module) + 1}` : ""}
+        WHERE cl."companyId" = $1 AND cl."deletedAt" IS NULL
+        ${module ? `AND 'communications' = $${moduleParamIndex}` : ""}
 
         UNION ALL
 
@@ -119,8 +120,8 @@ router.get("/", requirePermission("admin:read"), async (req, res) => {
         FROM hr_leave_requests lr
         JOIN employees e ON e.id = lr."employeeId"
         LEFT JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-        WHERE lr."companyId" = $1
-        ${module ? `AND 'hr' = $${params.indexOf(module) + 1}` : ""}
+        WHERE lr."companyId" = $1 AND lr."deletedAt" IS NULL
+        ${module ? `AND 'hr' = $${moduleParamIndex}` : ""}
 
         UNION ALL
 
@@ -141,9 +142,9 @@ router.get("/", requirePermission("admin:read"), async (req, res) => {
           i.id::text AS "entityId",
           'invoice' AS "entityType"
         FROM invoices i
-        LEFT JOIN clients c ON c.id = i."clientId"
+        LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
         WHERE i."companyId" = $1 AND i."deletedAt" IS NULL
-        ${module ? `AND 'finance' = $${params.indexOf(module) + 1}` : ""}
+        ${module ? `AND 'finance' = $${moduleParamIndex}` : ""}
 
       ) AS combined
       ORDER BY "timestamp" DESC
@@ -152,15 +153,20 @@ router.get("/", requirePermission("admin:read"), async (req, res) => {
     );
 
     const [countResult] = await rawQuery<any>(
-      `SELECT
-        (SELECT COUNT(*) FROM audit_logs WHERE "companyId" = $1) +
-        (SELECT COUNT(*) FROM journal_entries WHERE "companyId" = $1 AND "deletedAt" IS NULL) +
-        (SELECT COUNT(*) FROM requests WHERE "companyId" = $1 OR "companyId" IS NULL) +
-        (SELECT COUNT(*) FROM communications_log WHERE "companyId" = $1) +
-        (SELECT COUNT(*) FROM hr_leave_requests WHERE "companyId" = $1) +
-        (SELECT COUNT(*) FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL)
-        AS total`,
-      [cid]
+      `SELECT COUNT(*) AS total FROM (
+        SELECT al.id FROM audit_logs al WHERE al."companyId" = $1${moduleFilter}
+        UNION ALL
+        SELECT je.id FROM journal_entries je WHERE je."companyId" = $1 AND je."deletedAt" IS NULL ${module ? `AND 'finance' = $${moduleParamIndex}` : ""}
+        UNION ALL
+        SELECT r.id FROM requests r WHERE r."companyId" = $1 AND r."deletedAt" IS NULL ${module ? `AND 'requests' = $${moduleParamIndex}` : ""}
+        UNION ALL
+        SELECT cl.id FROM communications_log cl WHERE cl."companyId" = $1 AND cl."deletedAt" IS NULL ${module ? `AND 'communications' = $${moduleParamIndex}` : ""}
+        UNION ALL
+        SELECT lr.id FROM hr_leave_requests lr WHERE lr."companyId" = $1 AND lr."deletedAt" IS NULL ${module ? `AND 'hr' = $${moduleParamIndex}` : ""}
+        UNION ALL
+        SELECT i.id FROM invoices i WHERE i."companyId" = $1 AND i."deletedAt" IS NULL ${module ? `AND 'finance' = $${moduleParamIndex}` : ""}
+      ) AS combined`,
+      params
     );
 
     res.json({
@@ -174,25 +180,25 @@ router.get("/", requirePermission("admin:read"), async (req, res) => {
   }
 });
 
-router.get("/summary", requirePermission("admin:read"), async (req, res) => {
+router.get("/summary", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
 
     const [pendingRequests] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM requests WHERE status='pending' AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]);
+      `SELECT COUNT(*) AS count FROM requests WHERE status='pending' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [pendingLeaves] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE status='pending' AND "companyId"=$1`, [cid]);
+      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE status='pending' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [overdueInvoices] = await rawQuery<any>(
       `SELECT COUNT(*) AS count FROM invoices WHERE status='overdue' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [openTickets] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM support_tickets WHERE status='open' AND "companyId"=$1`, [cid]);
+      `SELECT COUNT(*) AS count FROM support_tickets WHERE status='open' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [todayAttendance] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM attendance WHERE date=CURRENT_DATE AND "companyId"=$1`, [cid]);
+      `SELECT COUNT(*) AS count FROM attendance WHERE date=CURRENT_DATE AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [expiringContracts] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM legal_contracts WHERE status='active' AND "endDate"::date - CURRENT_DATE <= 30 AND "companyId"=$1`, [cid]);
+      `SELECT COUNT(*) AS count FROM legal_contracts WHERE status='active' AND "endDate"::date - CURRENT_DATE <= 30 AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [lowStock] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM warehouse_products WHERE "currentStock" <= "minStock" AND status='active' AND "companyId"=$1`, [cid]);
+      `SELECT COUNT(*) AS count FROM warehouse_products WHERE "currentStock" <= "minStock" AND status='active' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [unreadNotifications] = await rawQuery<any>(
       `SELECT COUNT(*) AS count FROM notifications WHERE "isRead"=false AND "assignmentId"=$2 AND "companyId"=$1`,
       [cid, scope.activeAssignmentId]);

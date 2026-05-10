@@ -10,8 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
-import { PageStatusBadge } from "@/components/page-status-badge";
-import { STATUSES } from "@/lib/constants";
+import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -158,7 +157,7 @@ function AddSessionForm({ caseId, onSuccess }: { caseId: number; onSuccess: () =
             <strong>الأثر المتوقع:</strong> إضافة جلسة ستحدث حالة القضية تلقائياً (مفتوح → جاري) وستُرسل إشعار للمحامي.
           </div>
         </div>
-        <Button size="sm" className="mt-3" onClick={handleSave} disabled={saving}>
+        <Button size="sm" className="mt-3" onClick={handleSave} disabled={saving} rateLimitAware>
           {saving ? "جاري الحفظ..." : "حفظ الجلسة"}
         </Button>
       </CardContent>
@@ -220,16 +219,16 @@ export default function LegalCaseDetail() {
   const { toast } = useToast();
   const [showAddSession, setShowAddSession] = useState(false);
 
-  const { data: caseData, refetch, isLoading, error } = useApiQuery<any>(["legal-case", id], `/legal/cases/${id}`);
+  const { data: caseData, refetch, isLoading, error } = useApiQuery<any>(["legal-case", id], id ? `/legal/cases/${id}` : null);
 
   const transitionMut = useApiMutation<any, { status: string }>(
-    `/legal/cases/${id}`,
+    () => `/legal/cases/${id}`,
     "PATCH",
     [["legal-case", String(id)], ["legal-cases"]],
     {
       successMessage: false,
       onSuccess: (_d, body) => {
-        toast({ title: `تم تحديث حالة القضية إلى: ${STATUSES[body.status] || body.status}` });
+        toast({ title: `تم تحديث حالة القضية إلى: ${resolveStatus(body.status, "legal_case")?.label || body.status}` });
       },
     }
   );
@@ -274,7 +273,7 @@ export default function LegalCaseDetail() {
             "border-blue-300 text-blue-700 hover:bg-blue-50": t === "in_progress" || t === "judgment",
           })}
         >
-          {STATUSES[t] || t}
+          {resolveStatus(t, "legal_case")?.label || t}
         </Button>
       ))}
     </div>
@@ -343,7 +342,7 @@ export default function LegalCaseDetail() {
       <div className="space-y-4">
         <StepImpactPanel caseStatus={caseData.status} />
         <RiskPanel caseData={caseData} sessions={sessions} />
-        {id && <EntityObligations entityType="legal_case" entityId={Number(id)} hideWhenEmpty />}
+        {id && <EntityObligations entityType="legal-case" entityId={Number(id)} hideWhenEmpty />}
       </div>
     </div>
   ) : null;
@@ -428,13 +427,13 @@ export default function LegalCaseDetail() {
       backPath="/legal/cases"
       backLabel="القضايا"
       status={caseData ? {
-        label: STATUSES[caseData.status] || caseData.status,
+        label: resolveStatus(caseData.status, "legal_case")?.label || caseData.status,
         tone: statusToneMap[caseData.status] || "default",
       } : undefined}
       refNumber={caseData?.caseNumber || undefined}
       createdAt={caseData?.createdAt}
       updatedAt={caseData?.updatedAt}
-      entityType="legal_case"
+      entityType="legal-case"
       entityId={Number(id)}
       isLoading={isLoading}
       error={error}

@@ -462,11 +462,11 @@ export default function DisciplineMemoDetailPage() {
       refNumber={memo?.memoNumber}
       createdAt={memo?.createdAt}
       updatedAt={memo?.updatedAt}
-      entityType="hr_inquiry_memo"
+      entityType="hr-inquiry-memo"
       entityId={id ?? ""}
       isLoading={isLoading}
       error={isError ? true : undefined}
-      onRetry={() => window.location.reload()}
+     
       actions={headerActions}
       overview={overview}
     />

@@ -1,24 +1,22 @@
 import React from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useToast } from "@/hooks/use-toast";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { Users, Plane, AlertTriangle, UserPlus, Play, Zap } from "lucide-react";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { PageShell } from "@/components/page-shell";
-import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 
 export default function UmrahDashboard() {
-  const { data: seasons } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
+  const { data: seasons, isLoading: seasonsLoading, isError: seasonsError } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
   const activeSeason = (seasons?.data || []).find((s: any) => s.status === "open");
   const seasonId = activeSeason?.id;
-  const { data: dash, refetch, isLoading, isError } = useApiQuery<any>(
+  const { data: dash, refetch, isLoading: dashLoading, isError: dashError } = useApiQuery<any>(
     ["umrah-dashboard", String(seasonId || "")],
-    seasonId ? `/umrah/dashboard?seasonId=${seasonId}` : "/umrah/dashboard"
+    seasonId ? `/umrah/dashboard?seasonId=${seasonId}` : null
   );
   const { toast } = useToast();
   const p = dash?.pilgrims || {};
@@ -39,14 +37,21 @@ export default function UmrahDashboard() {
     } catch { toast({ variant: "destructive", title: "خطأ في محرك الغرامات" }); }
   };
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (seasonsLoading || dashLoading) return <LoadingSpinner />;
+  if (seasonsError || dashError) return <ErrorState />;
+  if (!activeSeason) return (
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      <AlertTriangle className="w-12 h-12 text-orange-400 mb-4" />
+      <h2 className="text-xl font-semibold mb-2">لا يوجد موسم نشط</h2>
+      <p className="text-muted-foreground">يرجى إنشاء موسم عمرة وتفعيله من صفحة المواسم</p>
+    </div>
+  );
 
   return (
-    <PageShell title="العمرة" breadcrumbs={[{ label: "العمرة" }, { label: "نظرة عامة" }]}>
-      <UmrahTabsNav />
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
+          <h1 className="text-3xl font-bold tracking-tight">لوحة تشغيل العمرة</h1>
           {activeSeason && <p className="text-sm text-muted-foreground mt-1">الموسم النشط: {activeSeason.title}</p>}
         </div>
         <div className="flex gap-2">
@@ -118,7 +123,7 @@ export default function UmrahDashboard() {
           <CardHeader><CardTitle className="text-base">الغرامات</CardTitle></CardHeader>
           <CardContent>
             <div className="flex justify-between items-center">
-              <div><span className="text-2xl font-bold text-red-600">{formatCurrency(Number(pen.totalAmount || 0))}</span></div>
+              <div><span className="text-2xl font-bold text-red-600">{Number(pen.totalAmount || 0).toLocaleString()}</span> <span className="text-sm">ريال</span></div>
               <Badge variant="outline">{pen.pending || 0} معلقة</Badge>
             </div>
           </CardContent>
@@ -159,6 +164,6 @@ export default function UmrahDashboard() {
           </CardContent>
         </Card>
       )}
-    </PageShell>
+    </div>
   );
 }

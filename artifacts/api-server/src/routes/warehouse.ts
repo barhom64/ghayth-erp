@@ -4,30 +4,116 @@ import {
   ValidationError,
   ConflictError,
   IntegrationError,
+  parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { movingAverage } from "../lib/algorithms.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
-import { eventBus } from "../lib/eventBus.js";
 import {
-  createGuardedJournalEntry,
   checkFinancialPeriodOpen,
-  getAccountCodeFromMapping,
   createAuditLog,
   emitEvent,
+  todayISO,
+  toDateISO,
+  roundTo2,
+  roundTo4,
+  generateTimeRef,
 } from "../lib/businessHelpers.js";
+import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
-router.use(authMiddleware);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WAREHOUSE STATE MACHINES — Phase C.8 Warehouse audit
 // ─────────────────────────────────────────────────────────────────────────────
 const MOVEMENT_TYPES = ["in", "out", "return", "transfer_in", "transfer_out", "adjustment"] as const;
+
+const createProductSchema = z.object({
+  name: z.string().min(1, "اسم المنتج مطلوب"),
+  sku: z.string().min(1, "رمز المنتج (SKU) مطلوب"),
+  costPrice: z.coerce.number().min(0, "سعر التكلفة غير صالح").optional(),
+  sellPrice: z.coerce.number().min(0, "سعر البيع غير صالح").optional(),
+  description: z.string().optional().nullable(),
+  categoryId: z.coerce.number().optional().nullable(),
+  unit: z.string().optional(),
+  minStock: z.coerce.number().optional(),
+  maxStock: z.coerce.number().optional(),
+  currentStock: z.coerce.number().optional(),
+  location: z.string().optional().nullable(),
+  branchId: z.coerce.number().optional().nullable(),
+});
+
+const patchProductSchema = z.object({
+  name: z.string().min(1).optional(),
+  sku: z.string().min(1).optional(),
+  description: z.string().optional().nullable(),
+  categoryId: z.coerce.number().optional().nullable(),
+  unit: z.string().optional(),
+  minStock: z.coerce.number().optional(),
+  maxStock: z.coerce.number().optional(),
+  costPrice: z.coerce.number().min(0, "سعر التكلفة غير صالح").optional(),
+  sellPrice: z.coerce.number().min(0, "سعر البيع غير صالح").optional(),
+  location: z.string().optional().nullable(),
+  status: z.string().optional(),
+});
+
+const createTransferSchema = z.object({
+  productId: z.coerce.number({ required_error: "المنتج مطلوب" }).int().positive(),
+  quantity: z.coerce.number({ required_error: "الكمية مطلوبة" }).positive("الكمية يجب أن تكون أكبر من صفر"),
+  fromLocation: z.string().optional().nullable(),
+  toLocation: z.string().optional().nullable(),
+  fromWarehouseId: z.coerce.number().optional().nullable(),
+  toWarehouseId: z.coerce.number().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+const createCategorySchema = z.object({
+  name: z.string().min(1, "اسم الفئة مطلوب"),
+  parentId: z.coerce.number().optional().nullable(),
+});
+
+const patchCategorySchema = z.object({
+  name: z.string().min(1).optional(),
+  parentId: z.coerce.number().optional().nullable(),
+});
+
+const createSupplierSchema = z.object({
+  name: z.string().min(1, "اسم المورد مطلوب"),
+  contactPerson: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  email: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  taxNumber: z.string().optional().nullable(),
+  paymentTerms: z.coerce.number().optional(),
+});
+
+const patchSupplierSchema = z.object({
+  name: z.string().min(1).optional(),
+  contactPerson: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  email: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  taxNumber: z.string().optional().nullable(),
+  paymentTerms: z.coerce.number().optional(),
+});
+
+const createInventoryCountSchema = z.object({
+  countDate: z.string().optional(),
+  notes: z.string().optional().nullable(),
+  warehouseLocation: z.string().optional().nullable(),
+});
+
+const createCountItemSchema = z.object({
+  productId: z.coerce.number({ required_error: "المنتج مطلوب" }).int().positive(),
+  physicalCount: z.coerce.number().optional(),
+  notes: z.string().optional().nullable(),
+});
 
 const createMovementSchema = z.object({
   productId: z.coerce.number({ required_error: "المنتج مطلوب", invalid_type_error: "معرف المنتج يجب أن يكون رقماً" }).int().positive("معرف المنتج يجب أن يكون رقماً موجباً"),
@@ -62,14 +148,15 @@ const COUNT_TRANSITIONS: Record<string, readonly string[]> = {
 // ─────────────────────────────────────────────────────────────────────────────
 async function updateWeightedAverageCost(
   productId: number,
+  companyId: number,
   qty: number,
   unitCost: number,
   direction: "in" | "out"
 ): Promise<void> {
   try {
     const [product] = await rawQuery<any>(
-      `SELECT "currentStock", "costPrice" FROM warehouse_products WHERE id=$1`,
-      [productId]
+      `SELECT "currentStock", "costPrice" FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [productId, companyId]
     );
     if (!product) return;
     const prevQty = Math.max(0, Number(product.currentStock ?? 0));
@@ -81,23 +168,21 @@ async function updateWeightedAverageCost(
       const newTotalQty = prevQty + movQty;
       const newWa =
         newTotalQty > 0
-          ? Math.round((newTotalValue / newTotalQty) * 10000) / 10000
+          ? roundTo4(newTotalValue / newTotalQty)
           : movCost;
       await rawExecute(
-        `UPDATE warehouse_products SET "costPrice"=$1, "lastWaCost"=$1, "updatedAt"=NOW() WHERE id=$2`,
-        [newWa, productId]
+        `UPDATE warehouse_products SET "costPrice"=$1, "lastWaCost"=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+        [newWa, productId, companyId]
       );
     } else {
-      // "out": weighted-average stays the same; just refresh lastWaCost snapshot
       await rawExecute(
-        `UPDATE warehouse_products SET "lastWaCost"="costPrice", "updatedAt"=NOW() WHERE id=$1`,
-        [productId]
+        `UPDATE warehouse_products SET "lastWaCost"="costPrice", "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [productId, companyId]
       );
     }
   } catch (err) {
-    console.warn(
-      `[warehouse] updateWeightedAverageCost failed for product ${productId}:`,
-      err
+    logger.warn(
+      `[warehouse] updateWeightedAverageCost failed for product ${productId}: ${err}`
     );
   }
 }
@@ -131,8 +216,7 @@ async function postInventoryMovementGl(params: {
 }): Promise<number | null> {
   try {
     const totalValue =
-      Math.round(Math.abs(params.quantity) * Math.abs(params.unitCost) * 100) /
-      100;
+      roundTo2(Math.abs(params.quantity) * Math.abs(params.unitCost));
     // Transfers are internal — no GL impact.
     if (params.trigger === "transfer") return null;
     if (totalValue <= 0) {
@@ -140,7 +224,7 @@ async function postInventoryMovementGl(params: {
       return null;
     }
 
-    const today = (params.date ?? new Date().toISOString().slice(0, 10))
+    const today = (params.date ?? todayISO())
       .toString()
       .slice(0, 10);
     const period = await checkFinancialPeriodOpen(params.companyId, today);
@@ -156,9 +240,8 @@ async function postInventoryMovementGl(params: {
           ]
         );
       } catch (noteErr) {
-        console.warn(
-          "[warehouse-gl] failed to append closed-period note:",
-          noteErr
+        logger.warn(
+          `[warehouse-gl] failed to append closed-period note: ${noteErr}`
         );
       }
       return null;
@@ -168,127 +251,27 @@ async function postInventoryMovementGl(params: {
       params.reference && params.reference.length > 0
         ? `${params.reference}-JE-${params.movementId}`
         : `INV-MV-${params.movementId}`;
-    const productLabel = params.productName ? ` — ${params.productName}` : "";
 
-    let lines: {
-      accountCode: string;
-      debit: number;
-      credit: number;
-      description?: string;
-    }[] = [];
-    let description = "";
-    let operationType: string | undefined;
-
-    if (params.trigger === "receipt") {
-      // DR Inventory 1300 / CR GRNI 2115 (was 2110 in spec but 2110 is taken)
-      const drCode = await getAccountCodeFromMapping(
-        params.companyId,
-        "inventory_receipt",
-        "debit",
-        "1300"
-      );
-      const crCode = await getAccountCodeFromMapping(
-        params.companyId,
-        "inventory_receipt",
-        "credit",
-        "2115"
-      );
-      description = `استلام مخزون${productLabel} — ${totalValue.toFixed(2)} ريال`;
-      lines = [
-        { accountCode: drCode, debit: totalValue, credit: 0 },
-        { accountCode: crCode, debit: 0, credit: totalValue },
-      ];
-      operationType = "inventory_receipt";
-    } else if (params.trigger === "issue") {
-      // DR COGS 5110 / CR Inventory 1300
-      const drCode = await getAccountCodeFromMapping(
-        params.companyId,
-        "inventory_issue_cogs",
-        "debit",
-        "5110"
-      );
-      const crCode = await getAccountCodeFromMapping(
-        params.companyId,
-        "inventory_issue_cogs",
-        "credit",
-        "1300"
-      );
-      description = `صرف مخزون${productLabel} — تكلفة ${totalValue.toFixed(2)} ريال`;
-      lines = [
-        { accountCode: drCode, debit: totalValue, credit: 0 },
-        { accountCode: crCode, debit: 0, credit: totalValue },
-      ];
-      operationType = "inventory_issue_cogs";
-    } else if (params.trigger === "variance_in") {
-      // Variance surplus: DR Inventory / CR Variance (gain side)
-      const drCode = await getAccountCodeFromMapping(
-        params.companyId,
-        "inventory_variance",
-        "debit",
-        "1300"
-      );
-      const crCode = await getAccountCodeFromMapping(
-        params.companyId,
-        "inventory_variance",
-        "credit",
-        "5150"
-      );
-      description = `فائض جرد${productLabel} — ${totalValue.toFixed(2)} ريال`;
-      lines = [
-        { accountCode: drCode, debit: totalValue, credit: 0 },
-        { accountCode: crCode, debit: 0, credit: totalValue },
-      ];
-      operationType = "inventory_variance";
-    } else if (params.trigger === "variance_out") {
-      // Variance shortage: DR Variance (expense) / CR Inventory
-      const drCode = await getAccountCodeFromMapping(
-        params.companyId,
-        "inventory_variance",
-        "debit",
-        "5150"
-      );
-      const crCode = await getAccountCodeFromMapping(
-        params.companyId,
-        "inventory_variance",
-        "credit",
-        "1300"
-      );
-      description = `عجز جرد${productLabel} — ${totalValue.toFixed(2)} ريال`;
-      lines = [
-        { accountCode: drCode, debit: totalValue, credit: 0 },
-        { accountCode: crCode, debit: 0, credit: totalValue },
-      ];
-      operationType = "inventory_variance";
-    }
-
-    if (lines.length === 0) return null;
-
-    const journalId = await createGuardedJournalEntry({
-      companyId: params.companyId,
-      branchId: params.branchId,
-      createdBy: params.createdBy,
-      ref,
-      description,
-      sourceType: "warehouse_movement",
-      sourceId: params.movementId,
-      operationType,
-      lines,
-    }, { table: "warehouse_movements", id: params.movementId });
-    return journalId;
-  } catch (glErr) {
-    console.error(
-      `[warehouse-gl] journal entry failed for movement ${params.movementId}:`,
-      glErr
+    const trigger = params.trigger as "receipt" | "issue" | "variance_in" | "variance_out";
+    const { warehouseEngine } = await import("../lib/engines/index.js");
+    const glResult = await warehouseEngine.postMovementGL(
+      { companyId: params.companyId, branchId: params.branchId, createdBy: params.createdBy },
+      { id: params.movementId, trigger, totalValue, productName: params.productName, ref }
     );
+    return glResult.journalId;
+  } catch (glErr) {
+    logger.error(glErr, `[warehouse-gl] journal entry failed for movement ${params.movementId}:`);
     return null;
   }
 }
 
-router.get("/products", requirePermission("warehouse:read"), async (req, res) => {
+router.get("/products", authorize({ feature: "warehouse.inventory", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { search, status, page = "1", limit: lim = "50" } = req.query as any;
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+    const pageNum = Math.max(Number(page) || 1, 1);
+    const perPage = Math.min(Number(lim) || 50, 500);
+    const offset = (pageNum - 1) * perPage;
     const filters = parseScopeFilters(req);
     if (search) { filters.search = String(search); filters.searchColumns = ['p.name', 'p.sku']; }
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'p."companyId"', branchColumn: 'p."branchId"', enforceBranchScope: true });
@@ -302,7 +285,7 @@ router.get("/products", requirePermission("warehouse:read"), async (req, res) =>
       countParams
     );
 
-    params.push(Number(lim));
+    params.push(perPage);
     const limitParam = paramIdx++;
     params.push(offset);
     const offsetParam = paramIdx++;
@@ -311,29 +294,17 @@ router.get("/products", requirePermission("warehouse:read"), async (req, res) =>
       `SELECT p.*, c.name AS "categoryName" FROM warehouse_products p LEFT JOIN warehouse_categories c ON c.id=p."categoryId" WHERE ${where} AND p."deletedAt" IS NULL ORDER BY p.name LIMIT $${limitParam} OFFSET $${offsetParam}`,
       params
     );
-    res.json({ data: rows, total: Number(countRow.total), page: Number(page), pageSize: Number(lim) });
+    res.json({ data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage });
   } catch (err) { handleRouteError(err, res, "Warehouse products error:"); }
 });
 
-router.post("/products", requirePermission("warehouse:create"), async (req, res) => {
+router.post("/products", authorize({ feature: "warehouse.inventory", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const b = zodParse(createProductSchema.safeParse(req.body));
 
-    if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
-      throw new ValidationError("اسم المنتج مطلوب", { field: "name", fix: "أدخل اسم المنتج" });
-    }
-    if (!b.sku || typeof b.sku !== "string" || !b.sku.trim()) {
-      throw new ValidationError("رمز المنتج (SKU) مطلوب", { field: "sku", fix: "أدخل رمز تعريف فريد للمنتج" });
-    }
     const costPrice = Number(b.costPrice) || 0;
     const sellPrice = Number(b.sellPrice) || 0;
-    if (!Number.isFinite(costPrice) || costPrice < 0) {
-      throw new ValidationError("سعر التكلفة غير صالح", { field: "costPrice", fix: "أدخل قيمة غير سالبة" });
-    }
-    if (!Number.isFinite(sellPrice) || sellPrice < 0) {
-      throw new ValidationError("سعر البيع غير صالح", { field: "sellPrice", fix: "أدخل قيمة غير سالبة" });
-    }
     // Duplicate SKU check
     const [dup] = await rawQuery<any>(
       `SELECT id FROM warehouse_products WHERE sku=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
@@ -361,7 +332,7 @@ router.post("/products", requirePermission("warehouse:create"), async (req, res)
       `INSERT INTO warehouse_products ("companyId",sku,name,description,"categoryId",unit,"minStock","maxStock","currentStock","costPrice","sellPrice",location,"branchId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
       [scope.companyId, b.sku.trim(), b.name.trim(), b.description, b.categoryId || null, b.unit || 'piece', b.minStock || 0, b.maxStock || 99999, b.currentStock || 0, costPrice, sellPrice, b.location, b.branchId || scope.branchId]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_products WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -371,7 +342,7 @@ router.post("/products", requirePermission("warehouse:create"), async (req, res)
       entity: "warehouse_products",
       entityId: insertId,
       after: { sku: b.sku, name: b.name, categoryId: b.categoryId, costPrice, sellPrice },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
 
     emitEvent({
       companyId: scope.companyId,
@@ -381,47 +352,42 @@ router.post("/products", requirePermission("warehouse:create"), async (req, res)
       entity: "warehouse_products",
       entityId: insertId,
       details: `منتج جديد: ${b.name} (${b.sku})`,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
 
     res.status(201).json({ ...row, sellPriceWarning: sellPriceWarning ? "سعر البيع أقل من سعر التكلفة" : null });
   } catch (err) { handleRouteError(err, res, "Create product error:"); }
 });
 
-router.get("/products/:id", requirePermission("warehouse:read"), async (req, res) => {
+// RBAC v2: warehouse.inventory view with branch-scope check.
+router.get("/products/:id", authorize({ feature: "warehouse.inventory", action: "view", resource: { table: "warehouse_products", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(`SELECT p.*, c.name AS "categoryName" FROM warehouse_products p LEFT JOIN warehouse_categories c ON c.id=p."categoryId" WHERE p.id=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL`, [Number(req.params.id), scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(`SELECT p.*, c.name AS "categoryName" FROM warehouse_products p LEFT JOIN warehouse_categories c ON c.id=p."categoryId" WHERE p.id=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المنتج غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Get product error:"); }
 });
 
-router.patch("/products/:id", requirePermission("warehouse:update"), async (req, res) => {
+router.patch("/products/:id", authorize({ feature: "warehouse.inventory", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("المنتج غير موجود");
-    const b = req.body;
+    const b = zodParse(patchProductSchema.safeParse(req.body));
 
-    // State machine on status
-    if (b.status !== undefined && b.status !== existing.status) {
-      if (!PRODUCT_STATUSES.includes(b.status)) {
-        throw new ValidationError(
-          `حالة منتج غير صالحة: ${b.status}`,
-          { field: "status", fix: `اختر من: ${PRODUCT_STATUSES.join(", ")}` }
-        );
-      }
-      const allowed = PRODUCT_TRANSITIONS[existing.status] ?? [];
-      if (!allowed.includes(b.status)) {
-        throw new ConflictError(
-          `لا يمكن نقل المنتج من "${existing.status}" إلى "${b.status}"`,
-          { field: "status", fix: `الانتقالات المسموحة: ${allowed.length ? allowed.join(", ") : "لا يوجد (حالة نهائية)"}` }
-        );
-      }
+    const statusChanging = b.status !== undefined && b.status !== existing.status;
+
+    // Validate status value (applyTransition validates the transition itself)
+    if (statusChanging && !PRODUCT_STATUSES.includes(b.status as any)) {
+      throw new ValidationError(
+        `حالة منتج غير صالحة: ${b.status}`,
+        { field: "status", fix: `اختر من: ${PRODUCT_STATUSES.join(", ")}` }
+      );
     }
     // Duplicate SKU on rename
     if (b.sku && b.sku !== existing.sku) {
@@ -436,79 +402,113 @@ router.patch("/products/:id", requirePermission("warehouse:update"), async (req,
         );
       }
     }
-    if (b.costPrice !== undefined) {
-      const c = Number(b.costPrice);
-      if (!Number.isFinite(c) || c < 0) {
-        throw new ValidationError("سعر التكلفة غير صالح", { field: "costPrice", fix: "أدخل قيمة غير سالبة" });
-      }
-    }
-    if (b.sellPrice !== undefined) {
-      const s = Number(b.sellPrice);
-      if (!Number.isFinite(s) || s < 0) {
-        throw new ValidationError("سعر البيع غير صالح", { field: "sellPrice", fix: "أدخل قيمة غير سالبة" });
-      }
-    }
-
     const effectiveCost = b.costPrice !== undefined ? Number(b.costPrice) : Number(existing.costPrice);
     const effectiveSell = b.sellPrice !== undefined ? Number(b.sellPrice) : Number(existing.sellPrice);
     const sellPriceWarning = effectiveSell > 0 && effectiveSell < effectiveCost;
 
-    const tracked = ["name","sku","description","categoryId","unit","minStock","maxStock","costPrice","sellPrice","location","status"] as const;
+    // Build the set of changed non-status fields
+    const nonStatusTracked = ["name","sku","description","categoryId","unit","minStock","maxStock","costPrice","sellPrice","location"] as const;
     const colMap: Record<string, string> = {
       name: "name", sku: "sku", description: "description", categoryId: '"categoryId"',
       unit: "unit", minStock: '"minStock"', maxStock: '"maxStock"',
-      costPrice: '"costPrice"', sellPrice: '"sellPrice"', location: "location", status: "status",
+      costPrice: '"costPrice"', sellPrice: '"sellPrice"', location: "location",
     };
-    const sets: string[] = [`"updatedAt"=NOW()`];
-    const params: any[] = [];
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};
-    for (const f of tracked) {
+    const extraSets: Record<string, string | number | boolean | null> = {};
+    for (const f of nonStatusTracked) {
       if (b[f] === undefined) continue;
       if (b[f] === existing[f]) continue;
-      params.push(b[f]);
-      sets.push(`${colMap[f]}=$${params.length}`);
       before[f] = existing[f];
       after[f] = b[f];
+      extraSets[f] = b[f];
     }
+    if (statusChanging) {
+      before.status = existing.status;
+      after.status = b.status;
+    }
+
     if (Object.keys(after).length === 0) {
       res.json({ ...existing, sellPriceWarning: sellPriceWarning ? "سعر البيع أقل من سعر التكلفة" : null });
       return;
     }
-    params.push(id);
-    await rawExecute(`UPDATE warehouse_products SET ${sets.join(",")} WHERE id=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_products WHERE id=$1`, [id]);
 
-    createAuditLog({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      action: "update",
-      entity: "warehouse_products",
-      entityId: id,
-      before,
-      after,
-    }).catch(console.error);
+    let row: any;
 
-    emitEvent({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      action: "status" in after ? "warehouse.product.status_changed" : "warehouse.product.updated",
-      entity: "warehouse_products",
-      entityId: id,
-      before,
-      after,
-    }).catch(console.error);
+    if (statusChanging) {
+      // Use lifecycle engine for status transitions — it validates the
+      // transition against PRODUCT_TRANSITIONS, sets the status atomically,
+      // and writes audit_log + event_log in a single transaction.
+      const actionName = b.status === "inactive"
+        ? "warehouse.product.deactivated"
+        : b.status === "discontinued"
+          ? "warehouse.product.discontinued"
+          : "warehouse.product.reactivated";
+      const fromStates = Object.entries(PRODUCT_TRANSITIONS)
+        .filter(([, targets]) => (targets as readonly string[]).includes(b.status!))
+        .map(([src]) => src);
+
+      row = await applyTransition({
+        entity: "warehouse_products",
+        id,
+        scope,
+        action: actionName,
+        fromStates,
+        toState: b.status!,
+        setExtras: Object.keys(extraSets).length > 0 ? extraSets : undefined,
+        extraWhere: `"deletedAt" IS NULL`,
+        after,
+      });
+    } else {
+      // No status change — plain field update with manual audit/event.
+      const sets: string[] = [`"updatedAt"=NOW()`];
+      const params: any[] = [];
+      for (const f of nonStatusTracked) {
+        if (b[f] === undefined) continue;
+        if (b[f] === existing[f]) continue;
+        params.push(b[f]);
+        sets.push(`${colMap[f]}=$${params.length}`);
+      }
+      params.push(id);
+      await rawExecute(`UPDATE warehouse_products SET ${sets.join(",")} WHERE id=$${params.length} AND "companyId"=$${params.length + 1} AND "deletedAt" IS NULL`, [...params, scope.companyId]);
+      const [fetched] = await rawQuery<any>(`SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+      row = fetched;
+
+      createAuditLog({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: "update",
+        entity: "warehouse_products",
+        entityId: id,
+        before,
+        after,
+      }).catch((e) => logger.error(e, "warehouse background task failed"));
+
+      emitEvent({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: "warehouse.product.updated",
+        entity: "warehouse_products",
+        entityId: id,
+        before,
+        after,
+      }).catch((e) => logger.error(e, "warehouse background task failed"));
+    }
 
     res.json({ ...row, sellPriceWarning: sellPriceWarning ? "سعر البيع أقل من سعر التكلفة" : null });
-  } catch (err) { handleRouteError(err, res, "Update product error:"); }
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Update product error:");
+  }
 });
 
-router.delete("/products/:id", requirePermission("warehouse:delete"), async (req, res) => {
+router.delete("/products/:id", authorize({ feature: "warehouse.inventory", action: "delete", resource: { table: "warehouse_products", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT id, sku, name, "currentStock" FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -523,52 +523,68 @@ router.delete("/products/:id", requirePermission("warehouse:delete"), async (req
       );
     }
 
-    await rawExecute(`UPDATE warehouse_products SET "deletedAt"=NOW(), status='inactive' WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-
-    emitEvent({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      action: "warehouse.product.deleted",
+    await applyTransition({
       entity: "warehouse_products",
-      entityId: id,
-      before: { sku: existing.sku, name: existing.name },
-      after: { deletedAt: new Date().toISOString() },
-    }).catch(console.error);
-
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "delete", entity: "warehouse_products", entityId: id,
+      id,
+      scope,
+      action: "warehouse.product.deleted",
+      fromStates: ["active", "inactive"],
+      toState: "inactive",
+      setExtras: {
+        deletedAt: { raw: "NOW()" },
+      },
+      extraWhere: `"deletedAt" IS NULL`,
       after: { sku: existing.sku, name: existing.name, deletedAt: new Date().toISOString() },
-    }).catch(console.error);
+    });
 
     res.json({ message: "تم حذف المنتج بنجاح" });
-  } catch (err) { handleRouteError(err, res, "Delete product error:"); }
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Delete product error:");
+  }
 });
 
-router.get("/movements", requirePermission("warehouse:read"), async (req, res) => {
+router.get("/movements", authorize({ feature: "warehouse.transfers", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { productId } = req.query as any;
+    const { productId, search, status } = req.query as any;
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'm."companyId"', branchColumn: 'm."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (productId) { where += ` AND m."productId" = $${paramIdx}`; params.push(Number(productId)); paramIdx++; }
+    if (search) { params.push(`%${search}%`); where += ` AND (p.name ILIKE $${paramIdx} OR m.reference ILIKE $${paramIdx})`; paramIdx++; }
+    if (status) { where += ` AND m.type = $${paramIdx}`; params.push(status); paramIdx++; }
     const rows = await rawQuery<any>(
-      `SELECT m.*, p.name AS "productName", p.sku FROM warehouse_movements m LEFT JOIN warehouse_products p ON p.id=m."productId" WHERE ${where} ORDER BY m.id DESC`,
+      `SELECT m.*, p.name AS "productName", p.sku FROM warehouse_movements m LEFT JOIN warehouse_products p ON p.id=m."productId" WHERE ${where} ORDER BY m.id DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Warehouse movements error:"); }
 });
 
-router.post("/movements", requirePermission("warehouse:create"), async (req, res): Promise<void> => {
+// RBAC v2: warehouse.transfers view (movements between branches).
+router.get("/movements/:id", authorize({ feature: "warehouse.transfers", action: "view", resource: { table: "warehouse_movements", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createMovementSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed.data;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(
+      `SELECT m.*, p.name AS "productName", p.sku
+       FROM warehouse_movements m
+       LEFT JOIN warehouse_products p ON p.id=m."productId"
+       WHERE m.id=$1 AND m."companyId"=$2`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("حركة المخزن غير موجودة");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Warehouse movement detail error:"); }
+});
+
+router.post("/movements", authorize({ feature: "warehouse.transfers", action: "create" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(createMovementSchema.safeParse(req.body));
     const qtyNum = b.quantity;
 
     let unitCost = b.unitCost || 0;
@@ -635,7 +651,7 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
       }
 
       if (b.type === 'in') {
-        const batchNum = `BATCH-${Date.now().toString(36).toUpperCase()}`;
+        const batchNum = generateTimeRef("BATCH");
         await client.query(
           `INSERT INTO warehouse_stock_batches ("productId","batchNumber",quantity,"unitCost","receivedDate") VALUES ($1,$2,$3,$4,NOW())`,
           [b.productId, batchNum, b.quantity, b.unitCost || 0]
@@ -650,7 +666,7 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
       insertId = movRes.rows[0]?.id ?? 0;
 
       const newStock = Number(product.currentStock) + sign * Math.abs(Number(b.quantity));
-      await client.query(`UPDATE warehouse_products SET "currentStock" = "currentStock" + $1, "updatedAt" = NOW() WHERE id = $2`, [sign * Math.abs(b.quantity), b.productId]);
+      await client.query(`UPDATE warehouse_products SET "currentStock" = "currentStock" + $1, "updatedAt" = NOW() WHERE id = $2 AND "deletedAt" IS NULL`, [sign * Math.abs(b.quantity), b.productId]);
 
       if (b.type === 'in' || b.type === 'return' || b.type === 'transfer_in') {
         const incomingQty = Math.abs(Number(b.quantity));
@@ -659,14 +675,14 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
         const prevCost = Number(product.costPrice ?? 0);
         const newTotalValue = prevStock * prevCost + incomingQty * incomingCost;
         const newTotalQty = prevStock + incomingQty;
-        const newWaCost = newTotalQty > 0 ? Math.round((newTotalValue / newTotalQty) * 10000) / 10000 : incomingCost;
+        const newWaCost = newTotalQty > 0 ? roundTo4(newTotalValue / newTotalQty) : incomingCost;
         await client.query(
-          `UPDATE warehouse_products SET "costPrice"=$1, "lastWaCost"=$1, "updatedAt"=NOW() WHERE id=$2`,
+          `UPDATE warehouse_products SET "costPrice"=$1, "lastWaCost"=$1, "updatedAt"=NOW() WHERE id=$2 AND "deletedAt" IS NULL`,
           [newWaCost, b.productId]
         );
       } else if ((b.type === 'out' || b.type === 'transfer_out') && newStock <= 0) {
         await client.query(
-          `UPDATE warehouse_products SET "lastWaCost"="costPrice", "updatedAt"=NOW() WHERE id=$1`,
+          `UPDATE warehouse_products SET "lastWaCost"="costPrice", "updatedAt"=NOW() WHERE id=$1 AND "deletedAt" IS NULL`,
           [b.productId]
         );
       }
@@ -701,7 +717,7 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
             reference: b.reference ?? null,
           });
         } else {
-          console.warn(
+          logger.warn(
             `[warehouse-gl] receipt movement ${insertId} has no unitCost — GL posting skipped`
           );
         }
@@ -712,7 +728,7 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
         if (!(issueCost > 0)) {
           issueCost = productCost;
           if (issueCost > 0) {
-            console.warn(
+            logger.warn(
               `[warehouse-gl] issue movement ${insertId}: using product.costPrice fallback (${issueCost}) — weighted-average unavailable`
             );
           }
@@ -731,20 +747,17 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
             reference: b.reference ?? null,
           });
         } else {
-          console.warn(
+          logger.warn(
             `[warehouse-gl] issue movement ${insertId} has no unit cost (WA or fallback) — GL posting skipped`
           );
         }
       }
       // transfer_in / transfer_out: internal movement, no GL impact
     } catch (glOuterErr) {
-      console.error(
-        `[warehouse-gl] unexpected error posting GL for movement ${insertId}:`,
-        glOuterErr
-      );
+      logger.error(glOuterErr, `[warehouse-gl] unexpected error posting GL for movement ${insertId}:`);
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_movements WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_movements WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     if (row) (row as any).journalEntryId = journalEntryId;
 
     // Bus emission — closes the dead listener in eventListeners.ts:261 so the
@@ -763,20 +776,20 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
         unitCost: row?.unitCost,
         reference: row?.reference,
       }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "warehouse_movements", entityId: insertId,
       after: { productId: b.productId, type: b.type, quantity: b.quantity, unitCost, reference: b.reference },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
 
     if (updatedProduct && Number(updatedProduct.currentStock) <= Number(updatedProduct.minStock)) {
       let autoRequestId: number | null = null;
       try {
-        autoRequestId = await triggerMinStockPipeline(scope.companyId, updatedProduct, scope.userId);
+        autoRequestId = await triggerMinStockPipeline(scope.companyId, updatedProduct, scope.userId, scope.activeAssignmentId);
       } catch (e) {
-        console.error("[MinStock] Pipeline error (non-critical, movement already committed):", e);
+        logger.error(e, "[MinStock] Pipeline error (non-critical, movement already committed):");
       }
       res.status(201).json({ ...row, autoRequestId, lowStockAlert: true });
       return;
@@ -788,7 +801,7 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
   }
 });
 
-async function triggerMinStockPipeline(companyId: number, product: any, userId: number): Promise<number | null> {
+async function triggerMinStockPipeline(companyId: number, product: any, userId: number, assignmentId?: number): Promise<number | null> {
   const lastOrders = await rawQuery<any>(
     `SELECT pri."unitPrice" AS "unitCost" FROM purchase_request_items pri JOIN purchase_requests pr ON pr.id=pri."requestId" WHERE pri."productId"=$1 AND pr."companyId"=$2 ORDER BY pr."createdAt" DESC LIMIT 3`,
     [product.id, companyId]
@@ -798,40 +811,41 @@ async function triggerMinStockPipeline(companyId: number, product: any, userId: 
   const reorderQty = Math.max(Number(product.maxStock) - Number(product.currentStock), Number(product.minStock) * 2, 1);
 
   const preferredSupplier = await rawQuery<any>(
-    `SELECT s.* FROM suppliers s JOIN purchase_requests pr ON pr."supplierId"=s.id WHERE pr."companyId"=$1 ORDER BY pr."createdAt" DESC LIMIT 1`,
+    `SELECT s.* FROM suppliers s JOIN purchase_requests pr ON pr."supplierId"=s.id WHERE pr."companyId"=$1 AND s."deletedAt" IS NULL ORDER BY pr."createdAt" DESC LIMIT 1`,
     [companyId]
   );
   const supplierId = preferredSupplier[0]?.id || null;
   const estimatedTotal = reorderQty * estimatedUnitCost;
-  const ref = `PR-AUTO-${Date.now().toString(36).toUpperCase()}`;
+  const ref = generateTimeRef("PR-AUTO");
 
-  const { insertId: prId } = await rawExecute(
-    `INSERT INTO purchase_requests ("companyId","supplierId",ref,status,"totalAmount","requestedBy",notes) VALUES ($1,$2,$3,'pending_approval',$4,$5,$6)`,
-    [companyId, supplierId, ref, estimatedTotal, userId, `طلب شراء تلقائي - مخزون منخفض: ${product.name}`]
-  );
-  if (prId) {
-    await rawExecute(
+  let effectiveAssignmentId = assignmentId;
+  if (!effectiveAssignmentId) {
+    const [asgn] = await rawQuery<any>(`SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`, [userId, companyId]);
+    effectiveAssignmentId = asgn?.id || userId;
+  }
+  let prId = 0;
+  await withTransaction(async (client) => {
+    const result = await client.query(
+      `INSERT INTO purchase_requests ("companyId","supplierId",ref,status,"totalAmount","requestedBy",notes) VALUES ($1,$2,$3,'pending',$4,$5,$6) RETURNING id`,
+      [companyId, supplierId, ref, estimatedTotal, effectiveAssignmentId, `طلب شراء تلقائي - مخزون منخفض: ${product.name}`]
+    );
+    prId = result.rows[0].id;
+    await client.query(
       `INSERT INTO purchase_request_items ("requestId","productId",quantity,"unitPrice","totalPrice") VALUES ($1,$2,$3,$4,$5)`,
       [prId, product.id, reorderQty, estimatedUnitCost, estimatedTotal]
     );
-  }
+  });
   return prId || null;
 }
 
-router.post("/transfers", requirePermission("warehouse:create"), async (req, res): Promise<void> => {
+router.post("/transfers", authorize({ feature: "warehouse.transfers", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const b = zodParse(createTransferSchema.safeParse(req.body));
 
-    if (!b.productId) {
-      throw new ValidationError("المنتج مطلوب", { field: "productId", fix: "اختر المنتج المراد تحويله" });
-    }
-    const qtyNum = Number(b.quantity);
-    if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
-      throw new ValidationError("الكمية يجب أن تكون أكبر من صفر", { field: "quantity", fix: "أدخل كمية موجبة" });
-    }
+    const qtyNum = b.quantity;
 
-    const transferRef = `TRANSFER-${Date.now().toString(36).toUpperCase()}`;
+    const transferRef = generateTimeRef("TRANSFER");
     const fromLocation = b.fromLocation || b.fromWarehouseId ? `مستودع-${b.fromWarehouseId}` : 'المستودع الرئيسي';
     const toLocation = b.toLocation || b.toWarehouseId ? `مستودع-${b.toWarehouseId}` : 'المستودع الفرعي';
 
@@ -868,6 +882,12 @@ router.post("/transfers", requirePermission("warehouse:create"), async (req, res
         [scope.companyId, b.productId, b.quantity, unitCost, transferRef, fromLocation, toLocation, `استلام تحويل من ${fromLocation} في ${toLocation}`, scope.userId]
       );
       inId = inRes.rows[0].id;
+
+      // Decrement source product stock (transfer_out)
+      await client.query(
+        `UPDATE warehouse_products SET "currentStock" = "currentStock" - $1, "updatedAt" = NOW() WHERE id = $2 AND "deletedAt" IS NULL`,
+        [qtyNum, b.productId]
+      );
     });
 
     emitEvent({
@@ -878,18 +898,20 @@ router.post("/transfers", requirePermission("warehouse:create"), async (req, res
       entity: "warehouse_movements",
       entityId: outId,
       details: JSON.stringify({ transferRef, fromLocation, toLocation, quantity: b.quantity, productId: b.productId }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "warehouse_transfers", entityId: outId,
       after: { transferRef, fromLocation, toLocation, quantity: b.quantity, productId: b.productId, unitCost },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
 
+    const [outRow] = await rawQuery<any>(`SELECT * FROM warehouse_movements WHERE id=$1 AND "companyId"=$2`, [outId, scope.companyId]);
+    const [inRow] = await rawQuery<any>(`SELECT * FROM warehouse_movements WHERE id=$1 AND "companyId"=$2`, [inId, scope.companyId]);
     res.status(201).json({
       transferRef,
-      outMovementId: outId,
-      inMovementId: inId,
+      outMovement: outRow || { id: outId },
+      inMovement: inRow || { id: inId },
       fromLocation,
       toLocation,
       quantity: b.quantity,
@@ -902,31 +924,49 @@ router.post("/transfers", requirePermission("warehouse:create"), async (req, res
   }
 });
 
-router.get("/categories", requirePermission("warehouse:read"), async (req, res) => {
+router.get("/categories", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { page = "1", limit: lim = "50" } = req.query as any;
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+    const { page = "1", limit: lim = "50", search, status } = req.query as any;
+    const pageNum = Math.max(Number(page) || 1, 1);
+    const perPage = Math.min(Number(lim) || 50, 500);
+    const offset = (pageNum - 1) * perPage;
+
+    const params: any[] = [scope.companyId];
+    let where = `"companyId"=$1 AND "deletedAt" IS NULL`;
+    let paramIdx = 2;
+    if (search) { params.push(`%${search}%`); where += ` AND name ILIKE $${paramIdx}`; paramIdx++; }
+    if (status) { params.push(status); where += ` AND status = $${paramIdx}`; paramIdx++; }
 
     const [countRow] = await rawQuery<any>(
-      `SELECT COUNT(*) AS total FROM warehouse_categories WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
-      [scope.companyId]
+      `SELECT COUNT(*) AS total FROM warehouse_categories WHERE ${where}`,
+      params
     );
     const rows = await rawQuery<any>(
-      `SELECT * FROM warehouse_categories WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY name LIMIT $2 OFFSET $3`,
-      [scope.companyId, Number(lim), offset]
+      `SELECT * FROM warehouse_categories WHERE ${where} ORDER BY name LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
+      [...params, perPage, offset]
     );
-    res.json({ data: rows, total: Number(countRow.total), page: Number(page), pageSize: Number(lim) });
+    res.json({ data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage });
   } catch (err) { handleRouteError(err, res, "Warehouse categories error:"); }
 });
 
-router.post("/categories", requirePermission("warehouse:create"), async (req, res) => {
+router.get("/categories/:id", authorize({ feature: "warehouse", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
-    if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
-      throw new ValidationError("اسم الفئة مطلوب", { field: "name", fix: "أدخل اسم الفئة" });
-    }
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(
+      `SELECT * FROM warehouse_categories WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("الفئة غير موجودة");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Warehouse category detail error:"); }
+});
+
+router.post("/categories", authorize({ feature: "warehouse", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(createCategorySchema.safeParse(req.body));
     if (b.parentId) {
       const [parent] = await rawQuery<any>(
         `SELECT id FROM warehouse_categories WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
@@ -940,7 +980,7 @@ router.post("/categories", requirePermission("warehouse:create"), async (req, re
       `INSERT INTO warehouse_categories ("companyId",name,"parentId") VALUES ($1,$2,$3)`,
       [scope.companyId, b.name.trim(), b.parentId || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_categories WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_categories WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -949,41 +989,59 @@ router.post("/categories", requirePermission("warehouse:create"), async (req, re
       entity: "warehouse_categories",
       entityId: insertId,
       details: JSON.stringify({ name: b.name.trim(), parentId: b.parentId || null }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "warehouse_categories", entityId: insertId,
       after: { name: b.name.trim(), parentId: b.parentId || null },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create category error:"); }
 });
 
-router.get("/suppliers", requirePermission("warehouse:read"), async (req, res) => {
+router.get("/suppliers", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { page = "1", limit: lim = "50" } = req.query as any;
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+    const { page = "1", limit: lim = "50", search, status } = req.query as any;
+    const pageNum = Math.max(Number(page) || 1, 1);
+    const perPage = Math.min(Number(lim) || 50, 500);
+    const offset = (pageNum - 1) * perPage;
+
+    const params: any[] = [scope.companyId];
+    let where = `"companyId"=$1 AND "deletedAt" IS NULL`;
+    let paramIdx = 2;
+    if (search) { params.push(`%${search}%`); where += ` AND (name ILIKE $${paramIdx} OR "contactPerson" ILIKE $${paramIdx} OR phone ILIKE $${paramIdx})`; paramIdx++; }
+    if (status) { params.push(status); where += ` AND status = $${paramIdx}`; paramIdx++; }
 
     const [countRow] = await rawQuery<any>(
-      `SELECT COUNT(*) AS total FROM suppliers WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
-      [scope.companyId]
+      `SELECT COUNT(*) AS total FROM suppliers WHERE ${where}`,
+      params
     );
     const rows = await rawQuery<any>(
-      `SELECT * FROM suppliers WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY name LIMIT $2 OFFSET $3`,
-      [scope.companyId, Number(lim), offset]
+      `SELECT * FROM suppliers WHERE ${where} ORDER BY name LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
+      [...params, perPage, offset]
     );
-    res.json({ data: rows, total: Number(countRow.total), page: Number(page), pageSize: Number(lim) });
+    res.json({ data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage });
   } catch (err) { handleRouteError(err, res, "Suppliers error:"); }
 });
 
-router.post("/suppliers", requirePermission("warehouse:create"), async (req, res) => {
+router.get("/suppliers/:id", authorize({ feature: "warehouse", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
-    if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
-      throw new ValidationError("اسم المورد مطلوب", { field: "name", fix: "أدخل اسم المورد" });
-    }
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(
+      `SELECT * FROM suppliers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("المورد غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Supplier detail error:"); }
+});
+
+router.post("/suppliers", authorize({ feature: "warehouse", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(createSupplierSchema.safeParse(req.body));
     if (b.taxNumber) {
       const [dup] = await rawQuery<any>(
         `SELECT id FROM suppliers WHERE "taxNumber"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
@@ -1000,7 +1058,7 @@ router.post("/suppliers", requirePermission("warehouse:create"), async (req, res
       `INSERT INTO suppliers ("companyId",name,"contactPerson",phone,email,address,"taxNumber","paymentTerms") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [scope.companyId, b.name.trim(), b.contactPerson, b.phone, b.email, b.address, b.taxNumber, b.paymentTerms || 30]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM suppliers WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM suppliers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -1009,28 +1067,28 @@ router.post("/suppliers", requirePermission("warehouse:create"), async (req, res
       entity: "suppliers",
       entityId: insertId,
       details: JSON.stringify({ name: b.name.trim() }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "warehouse_suppliers", entityId: insertId,
       after: { name: b.name.trim(), contactPerson: b.contactPerson, phone: b.phone, email: b.email, taxNumber: b.taxNumber },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create supplier error:"); }
 });
 
-router.patch("/categories/:id", requirePermission("warehouse:update"), async (req, res) => {
+router.patch("/categories/:id", authorize({ feature: "warehouse", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
-    const b = req.body;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(patchCategorySchema.safeParse(req.body));
     const fields: string[] = [];
     const params: any[] = [];
     if (b.name !== undefined) { params.push(b.name); fields.push(`name = $${params.length}`); }
     if (b.parentId !== undefined) { params.push(b.parentId); fields.push(`"parentId" = $${params.length}`); }
     if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
-    const rows = await rawQuery<any>(`UPDATE warehouse_categories SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
+    const rows = await rawQuery<any>(`UPDATE warehouse_categories SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`, params);
     if (rows.length === 0) throw new NotFoundError("الفئة غير موجودة");
     emitEvent({
       companyId: scope.companyId,
@@ -1040,20 +1098,20 @@ router.patch("/categories/:id", requirePermission("warehouse:update"), async (re
       entity: "warehouse_categories",
       entityId: id,
       details: JSON.stringify({ name: b.name, parentId: b.parentId }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "warehouse_categories", entityId: id,
       after: { name: b.name, parentId: b.parentId },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update category error:"); }
 });
 
-router.delete("/categories/:id", requirePermission("warehouse:delete"), async (req, res) => {
+router.delete("/categories/:id", authorize({ feature: "warehouse", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT id, name FROM warehouse_categories WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -1090,21 +1148,21 @@ router.delete("/categories/:id", requirePermission("warehouse:delete"), async (r
       entity: "warehouse_categories",
       entityId: id,
       details: JSON.stringify({ name: existing.name }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "warehouse_categories", entityId: id,
       after: { name: existing.name },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     res.json({ message: "تم حذف الفئة" });
   } catch (err) { handleRouteError(err, res, "Delete category error:"); }
 });
 
-router.patch("/suppliers/:id", requirePermission("warehouse:update"), async (req, res) => {
+router.patch("/suppliers/:id", authorize({ feature: "warehouse", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
-    const b = req.body;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(patchSupplierSchema.safeParse(req.body));
     const fields: string[] = [];
     const params: any[] = [];
     const addField = (col: string, val: any) => { if (val !== undefined) { params.push(val); fields.push(`"${col}" = $${params.length}`); } };
@@ -1117,7 +1175,7 @@ router.patch("/suppliers/:id", requirePermission("warehouse:update"), async (req
     addField("paymentTerms", b.paymentTerms);
     if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
-    const rows = await rawQuery<any>(`UPDATE suppliers SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
+    const rows = await rawQuery<any>(`UPDATE suppliers SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`, params);
     if (rows.length === 0) throw new NotFoundError("المورد غير موجود");
     emitEvent({
       companyId: scope.companyId,
@@ -1127,23 +1185,23 @@ router.patch("/suppliers/:id", requirePermission("warehouse:update"), async (req
       entity: "suppliers",
       entityId: id,
       details: JSON.stringify({ name: b.name }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "warehouse_suppliers", entityId: id,
       after: { name: b.name, contactPerson: b.contactPerson, phone: b.phone, email: b.email, taxNumber: b.taxNumber },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     res.json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Update supplier error:"); }
 });
 
-router.delete("/suppliers/:id", requirePermission("warehouse:delete"), async (req, res) => {
+router.delete("/suppliers/:id", authorize({ feature: "warehouse", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
-    const [existing] = await rawQuery<any>(`SELECT id FROM suppliers WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const id = parseId(req.params.id, "id");
+    const [existing] = await rawQuery<any>(`SELECT id FROM suppliers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المورد غير موجود");
-    await rawExecute(`UPDATE suppliers SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await rawExecute(`UPDATE suppliers SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -1152,17 +1210,17 @@ router.delete("/suppliers/:id", requirePermission("warehouse:delete"), async (re
       entity: "suppliers",
       entityId: id,
       details: JSON.stringify({ id }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "warehouse_suppliers", entityId: id,
       after: { id },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     res.json({ message: "تم حذف المورد" });
   } catch (err) { handleRouteError(err, res, "Delete supplier error:"); }
 });
 
-router.get("/stats", requirePermission("warehouse:read"), async (req, res) => {
+router.get("/stats", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -1177,7 +1235,7 @@ router.get("/stats", requirePermission("warehouse:read"), async (req, res) => {
 // INVENTORY COUNT — جرد المخزن
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/inventory-counts", requirePermission("warehouse:read"), async (req, res) => {
+router.get("/inventory-counts", authorize({ feature: "warehouse.inventory", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
@@ -1187,28 +1245,28 @@ router.get("/inventory-counts", requirePermission("warehouse:read"), async (req,
     const rows = await rawQuery<any>(
       `SELECT ic.*, e.name AS "conductedByName"
        FROM inventory_counts ic
-       LEFT JOIN employees e ON e.id=ic."conductedBy"
+       LEFT JOIN employees e ON e.id=ic."conductedBy" AND e."deletedAt" IS NULL
        WHERE ${conditions.join(" AND ")}
-       ORDER BY ic."countDate" DESC`,
+       ORDER BY ic."countDate" DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "Inventory counts error:"); }
 });
 
-router.post("/inventory-counts", requirePermission("warehouse:create"), async (req, res) => {
+router.post("/inventory-counts", authorize({ feature: "warehouse.inventory", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = req.body;
+    const b = zodParse(createInventoryCountSchema.safeParse(req.body));
     const { insertId } = await rawExecute(
       `INSERT INTO inventory_counts ("companyId","countDate","conductedBy",status,notes,"warehouseLocation")
        VALUES ($1,$2,$3,'draft',$4,$5)`,
       [scope.companyId,
-       b.countDate || new Date().toISOString().split('T')[0],
+       b.countDate || todayISO(),
        scope.employeeId || null,
        b.notes || null, b.warehouseLocation || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM inventory_counts WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM inventory_counts WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -1217,20 +1275,20 @@ router.post("/inventory-counts", requirePermission("warehouse:create"), async (r
       entity: "inventory_counts",
       entityId: insertId,
       details: JSON.stringify({ countDate: b.countDate, warehouseLocation: b.warehouseLocation }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "inventory_counts", entityId: insertId,
       after: { countDate: b.countDate, warehouseLocation: b.warehouseLocation },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create count error:"); }
 });
 
-router.get("/inventory-counts/:id/items", requirePermission("warehouse:read"), async (req, res) => {
+router.get("/inventory-counts/:id/items", authorize({ feature: "warehouse.inventory", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const countId = Number(req.params.id);
+    const countId = parseId(req.params.id, "id");
     const items = await rawQuery<any>(
       `SELECT ici.*, wp.name AS "productName", wp.sku, wp."currentStock" AS "systemStock"
        FROM inventory_count_items ici
@@ -1272,11 +1330,11 @@ router.get("/inventory-counts/:id/items", requirePermission("warehouse:read"), a
   } catch (err) { handleRouteError(err, res, "Count items error:"); }
 });
 
-router.post("/inventory-counts/:id/items", requirePermission("warehouse:create"), async (req, res) => {
+router.post("/inventory-counts/:id/items", authorize({ feature: "warehouse.inventory", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const countId = Number(req.params.id);
-    const b = req.body;
+    const countId = parseId(req.params.id, "id");
+    const b = zodParse(createCountItemSchema.safeParse(req.body));
     // Ensure count exists and is in draft
     const [count] = await rawQuery<any>(`SELECT * FROM inventory_counts WHERE id=$1 AND "companyId"=$2`, [countId, scope.companyId]);
     if (!count) throw new NotFoundError("الجرد غير موجود");
@@ -1322,130 +1380,141 @@ router.post("/inventory-counts/:id/items", requirePermission("warehouse:create")
       entity: "inventory_count_items",
       entityId: countId,
       details: JSON.stringify({ productId: b.productId, systemStock, physicalCount, variance }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "inventory_count_items", entityId: countId,
       after: { productId: b.productId, systemStock, physicalCount, variance },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "warehouse background task failed"));
     res.json({ productId: b.productId, systemStock, physicalCount, variance });
   } catch (err) { handleRouteError(err, res, "Count item error:"); }
 });
 
-router.post("/inventory-counts/:id/approve", requirePermission("warehouse:create"), async (req, res) => {
+router.post("/inventory-counts/:id/approve", authorize({ feature: "warehouse.inventory", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const countId = Number(req.params.id);
-    const [count] = await rawQuery<any>(
-      `SELECT * FROM inventory_counts WHERE id=$1 AND "companyId"=$2 AND status='draft'`,
-      [countId, scope.companyId]
-    );
-    if (!count) throw new NotFoundError("الجرد غير موجود أو تمت معالجته");
+    const countId = parseId(req.params.id, "id");
 
+    // Pre-fetch count items so we can use them inside onApply and for
+    // GL posting after the transition commits.
     const items = await rawQuery<any>(
-      `SELECT ici.*, wp."currentStock" FROM inventory_count_items ici JOIN warehouse_products wp ON wp.id=ici."productId" WHERE ici."countId"=$1`,
+      `SELECT ici.*, wp."currentStock" FROM inventory_count_items ici JOIN warehouse_products wp ON wp.id=ici."productId" WHERE ici."countId"=$1 LIMIT 10000`,
       [countId]
     );
 
     // P02-MED2 — GL posting failures used to be swallowed by a bare
-    // try/catch + console.error inside the loop. The approval still
-    // returned `{ message: "تم اعتماد الجرد" }` even when zero
-    // journal entries actually landed, so the accountant saw a
-    // green checkmark and only discovered the missing entries days
-    // later when month-end reconciliation refused to balance.
-    // Collect each failure and surface it on the response so the
-    // user knows to follow up. Inventory adjustments still apply
-    // regardless — partial GL state is recoverable manually, but
-    // missing inventory adjustments would force a re-count.
-    const glFailures: Array<{ productId: number; productName?: string; reason: string }> = [];
+    // try/catch + console.error inside the loop. Collect each failure
+    // and surface it on the response so the user knows to follow up.
+    // GL posting runs AFTER the transition commits — a failing journal
+    // entry must never roll back the approved status or the stock
+    // adjustments.
+    const glPendingItems: Array<{
+      movementId: number; productId: number; productName?: string;
+      variance: number; qty: number; preCost: number;
+    }> = [];
     const glSkipped: Array<{ productId: number; productName?: string; reason: string }> = [];
 
-    // Apply adjustments for items with variance
-    for (const item of items) {
-      const variance = Number(item.variance);
-      if (variance !== 0) {
-        const movType = variance > 0 ? 'in' : 'out';
-        const qty = Math.abs(variance);
-        // Snapshot avg cost BEFORE applying the adjustment so the GL
-        // entry uses the pre-adjustment weighted-average.
-        const [prodBefore] = await rawQuery<any>(
-          `SELECT id, name, "costPrice", "lastWaCost" FROM warehouse_products WHERE id=$1`,
-          [item.productId]
-        );
-        const preCost = prodBefore
-          ? Number(prodBefore.costPrice ?? 0) || Number(prodBefore.lastWaCost ?? 0)
-          : 0;
-        await rawExecute(
-          `UPDATE warehouse_products SET "currentStock"="currentStock"+$1, "updatedAt"=NOW() WHERE id=$2`,
-          [variance, item.productId]
-        );
-        const movRes = await rawQuery<any>(
-          `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,notes,"createdBy")
-           VALUES ($1,$2,$3,$4,$5,'INV-COUNT-' || $6,$7,$8) RETURNING id`,
-          [scope.companyId, item.productId, movType, qty, preCost, countId,
-           variance > 0 ? `فائض جرد — ${qty} وحدة` : `عجز جرد — ${qty} وحدة`,
-           scope.userId]
-        );
-        const movementId = movRes[0]?.id;
-        // GL posting for variance (non-blocking).
-        if (preCost > 0 && movementId) {
-          try {
-            await postInventoryMovementGl({
-              companyId: scope.companyId,
-              branchId: scope.branchId,
-              createdBy: (scope as any).activeAssignmentId ?? scope.userId,
+    const itemsAdjusted = items.filter((i: any) => Number(i.variance) !== 0).length;
+
+    await applyTransition({
+      entity: "inventory_counts",
+      id: countId,
+      scope,
+      action: "warehouse.inventory_count.approved",
+      fromStates: ["draft", "in_progress"],
+      toState: "approved",
+      setExtras: {
+        approvedAt: { raw: "NOW()" },
+        approvedBy: scope.employeeId || null,
+      },
+      after: { itemsAdjusted, totalItems: items.length },
+      onApply: async (_row, client) => {
+        // Apply stock adjustments for items with variance inside the
+        // same transaction so the status flip and inventory deltas are
+        // atomic.
+        for (const item of items) {
+          const variance = Number(item.variance);
+          if (variance === 0) continue;
+
+          const movType = variance > 0 ? "in" : "out";
+          const qty = Math.abs(variance);
+
+          // Snapshot avg cost BEFORE applying the adjustment so the GL
+          // entry uses the pre-adjustment weighted-average.
+          const prodBeforeRes = await client.query(
+            `SELECT id, name, "costPrice", "lastWaCost" FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL FOR UPDATE`,
+            [item.productId, scope.companyId]
+          );
+          const prodBefore = prodBeforeRes.rows[0];
+          const preCost = prodBefore
+            ? Number(prodBefore.costPrice ?? 0) || Number(prodBefore.lastWaCost ?? 0)
+            : 0;
+
+          await client.query(
+            `UPDATE warehouse_products SET "currentStock"="currentStock"+$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+            [variance, item.productId, scope.companyId]
+          );
+
+          const movRes = await client.query(
+            `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,notes,"createdBy")
+             VALUES ($1,$2,$3,$4,$5,'INV-COUNT-' || $6,$7,$8) RETURNING id`,
+            [scope.companyId, item.productId, movType, qty, preCost, countId,
+             variance > 0 ? `فائض جرد — ${qty} وحدة` : `عجز جرد — ${qty} وحدة`,
+             scope.userId]
+          );
+          const movementId = movRes.rows[0]?.id;
+
+          // Collect data for GL posting (runs outside the transaction).
+          if (preCost > 0 && movementId) {
+            glPendingItems.push({
               movementId,
               productId: Number(item.productId),
               productName: prodBefore?.name ?? undefined,
-              trigger: variance > 0 ? "variance_in" : "variance_out",
-              quantity: qty,
-              unitCost: preCost,
-              reference: `INV-COUNT-${countId}`,
+              variance,
+              qty,
+              preCost,
             });
-          } catch (glErr: any) {
-            console.error(
-              `[warehouse-gl] inventory count variance GL failed for count ${countId}, product ${item.productId}:`,
-              glErr
+          } else if (preCost <= 0) {
+            logger.warn(
+              `[warehouse-gl] inventory count variance for product ${item.productId}: no unit cost — GL posting skipped`
             );
-            glFailures.push({
+            glSkipped.push({
               productId: Number(item.productId),
               productName: prodBefore?.name ?? undefined,
-              reason: glErr?.message ?? String(glErr),
+              reason: "تكلفة الوحدة غير متوفرة",
             });
           }
-        } else if (preCost <= 0) {
-          console.warn(
-            `[warehouse-gl] inventory count variance for product ${item.productId}: no unit cost — GL posting skipped`
-          );
-          glSkipped.push({
-            productId: Number(item.productId),
-            productName: prodBefore?.name ?? undefined,
-            reason: "تكلفة الوحدة غير متوفرة",
-          });
         }
+      },
+    });
+
+    // GL posting runs after the transition committed — failures must
+    // never roll back the approval or stock adjustments.
+    const glFailures: Array<{ productId: number; productName?: string; reason: string }> = [];
+    for (const pending of glPendingItems) {
+      try {
+        await postInventoryMovementGl({
+          companyId: scope.companyId,
+          branchId: scope.branchId,
+          createdBy: (scope as any).activeAssignmentId ?? scope.userId,
+          movementId: pending.movementId,
+          productId: pending.productId,
+          productName: pending.productName,
+          trigger: pending.variance > 0 ? "variance_in" : "variance_out",
+          quantity: pending.qty,
+          unitCost: pending.preCost,
+          reference: `INV-COUNT-${countId}`,
+        });
+      } catch (glErr: any) {
+        logger.error(glErr, `[warehouse-gl] inventory count variance GL failed for count ${countId}, product ${pending.productId}:`);
+        glFailures.push({
+          productId: pending.productId,
+          productName: pending.productName,
+          reason: glErr?.message ?? String(glErr),
+        });
       }
     }
 
-    await rawExecute(
-      `UPDATE inventory_counts SET status='approved', "approvedAt"=NOW(), "approvedBy"=$1 WHERE id=$2`,
-      [scope.employeeId || null, countId]
-    );
-
-    const itemsAdjusted = items.filter((i: any) => Number(i.variance) !== 0).length;
-    emitEvent({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      userId: scope.userId,
-      action: "warehouse.inventory_count.approved",
-      entity: "inventory_counts",
-      entityId: countId,
-      details: JSON.stringify({ itemsAdjusted, totalItems: items.length }),
-    }).catch(console.error);
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "inventory_counts", entityId: countId,
-      after: { status: "approved", itemsAdjusted, totalItems: items.length },
-    }).catch(console.error);
     const baseMessage = "تم اعتماد الجرد وتحديث المخزون";
     if (glFailures.length > 0 || glSkipped.length > 0) {
       const parts: string[] = [];
@@ -1461,7 +1530,11 @@ router.post("/inventory-counts/:id/approve", requirePermission("warehouse:create
       return;
     }
     res.json({ message: baseMessage, itemsAdjusted });
-  } catch (err) { handleRouteError(err, res, "Approve count error:"); }
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Approve count error:");
+  }
 });
 
 export default router;

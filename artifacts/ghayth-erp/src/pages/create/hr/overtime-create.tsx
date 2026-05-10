@@ -43,13 +43,13 @@ export default function OvertimeCreate() {
 
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
-  if (employeesQ.isLoading) return <LoadingSpinner />;
-  if (employeesQ.isError) return <ErrorState onRetry={() => window.location.reload()} />;
-
   const selectedEmployee = useMemo(
     () => employees.find((e: any) => String(e.activeAssignmentId || e.assignmentId) === form.assignmentId),
     [employees, form.assignmentId]
   );
+
+  if (employeesQ.isLoading) return <LoadingSpinner />;
+  if (employeesQ.isError) return <ErrorState />;
 
   const salary = Number(selectedEmployee?.salary || selectedEmployee?.basicSalary || 0);
   const hourlyRate = salary > 0 ? Math.round((salary / 30 / 8) * 100) / 100 : 0;
@@ -232,7 +232,7 @@ export default function OvertimeCreate() {
 
         {/* أزرار الإرسال */}
         <div className="flex items-center gap-3 pt-4 border-t">
-          <Button type="submit" disabled={createMut.isPending} className="gap-1.5">
+          <Button type="submit" disabled={createMut.isPending} className="gap-1.5" rateLimitAware>
             <Clock className="h-4 w-4" />
             {createMut.isPending ? "جاري الإرسال..." : "إرسال الطلب"}
           </Button>

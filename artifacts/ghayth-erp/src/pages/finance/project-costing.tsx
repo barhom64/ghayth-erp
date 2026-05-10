@@ -58,7 +58,7 @@ export default function ProjectCostingPage() {
   );
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const list: Project[] = data?.data ?? data ?? [];
 
@@ -194,7 +194,7 @@ export default function ProjectCostingPage() {
               </div>
               <div className="flex justify-end gap-3 pt-2">
                 <Button type="button" variant="outline" onClick={() => setShowAddCost(false)}>إلغاء</Button>
-                <Button type="submit" disabled={addCostMutation.isPending}>
+                <Button type="submit" disabled={addCostMutation.isPending} rateLimitAware>
                   {addCostMutation.isPending ? "جاري التسجيل..." : "تسجيل التكلفة"}
                 </Button>
               </div>

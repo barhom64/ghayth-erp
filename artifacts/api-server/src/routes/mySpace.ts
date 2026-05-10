@@ -1,24 +1,25 @@
 import { Router } from "express";
+import { HR_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
 import { rawQuery } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError } from "../lib/errorHandler.js";
+import { todayISO, currentPeriod, currentYear, toDateISO } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
-router.use(authMiddleware);
 
 router.get("/", async (req, res) => {
   try {
     const scope = req.scope!;
-    const today = new Date().toISOString().split("T")[0];
-    const year = new Date().getFullYear();
+    const today = todayISO();
+    const year = currentYear();
     const period = today.slice(0, 7);
 
     const [attendance] = await rawQuery<any>(
       `SELECT id, date, "checkIn", "checkOut", "lateMinutes", status
        FROM attendance
-       WHERE "assignmentId" = $1 AND date = $2`,
+       WHERE "assignmentId" = $1 AND date = $2 AND "deletedAt" IS NULL`,
       [scope.activeAssignmentId, today]
-    ).catch((e) => { console.error("my-space attendance error:", e); return [null]; });
+    ).catch((e) => { logger.error(e, "my-space attendance error:"); return [null]; });
 
     let leaveBalances: any[] = [];
     try {
@@ -58,7 +59,7 @@ router.get("/", async (req, res) => {
         }));
       }
     } catch (e) {
-      console.error("my-space leaveBalances error:", e);
+      logger.error(e, "my-space leaveBalances error:");
     }
 
     let openRequests: any[] = [];
@@ -67,10 +68,10 @@ router.get("/", async (req, res) => {
         `SELECT lr.id, 'leave' AS type, lt.name AS title, lr.status, lr."createdAt"
          FROM hr_leave_requests lr
          JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-         WHERE lr."employeeId" = $1 AND lr.status IN ('pending','under_review')
+         WHERE lr."employeeId" = $1 AND lr."companyId" = $2 AND lr.status = 'pending' AND lr."deletedAt" IS NULL
          ORDER BY lr."createdAt" DESC LIMIT 10`,
-        [scope.employeeId]
-      ).catch((e) => { console.error("my-space leaveReqs error:", e); return []; });
+        [scope.employeeId, scope.companyId]
+      ).catch((e) => { logger.error(e, "my-space leaveReqs error:"); return []; });
 
       let advanceReqs: any[] = [];
       try {
@@ -78,12 +79,12 @@ router.get("/", async (req, res) => {
           `SELECT je.id, 'salary_advance' AS type, 'سلفة راتب' AS title, je.status, je."createdAt"
            FROM journal_entries je
            WHERE je."createdBy" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'SALARY-ADV%'
-             AND je.status IN ('pending','pending_approval')
+             AND je.status IN ('draft','pending_approval')
            ORDER BY je."createdAt" DESC LIMIT 5`,
           [scope.activeAssignmentId]
         );
       } catch (e) {
-        console.error("my-space advanceReqs error:", e);
+        logger.error(e, "my-space advanceReqs error:");
       }
 
       let letterReqs: any[] = [];
@@ -91,12 +92,12 @@ router.get("/", async (req, res) => {
         letterReqs = await rawQuery<any>(
           `SELECT ol.id, 'letter' AS type, ol.type AS title, ol.status, ol."createdAt"
            FROM official_letters ol
-           WHERE ol."employeeId" = $1 AND ol.status IN ('pending','pending_approval')
+           WHERE ol."employeeId" = $1 AND ol."companyId" = $2 AND ol.status IN ('pending','pending_approval') AND ol."deletedAt" IS NULL
            ORDER BY ol."createdAt" DESC LIMIT 5`,
-          [scope.employeeId]
+          [scope.employeeId, scope.companyId]
         );
       } catch (e) {
-        console.error("my-space letterReqs error:", e);
+        logger.error(e, "my-space letterReqs error:");
       }
 
       let custodyReqs: any[] = [];
@@ -105,12 +106,12 @@ router.get("/", async (req, res) => {
           `SELECT je.id, 'custody' AS type, je.description AS title, je.status, je."createdAt"
            FROM journal_entries je
            WHERE je."createdBy" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%'
-             AND je.status IN ('pending','pending_approval')
+             AND je.status IN ('draft','pending_approval')
            ORDER BY je."createdAt" DESC LIMIT 5`,
           [scope.activeAssignmentId]
         );
       } catch (e) {
-        console.error("my-space custodyReqs error:", e);
+        logger.error(e, "my-space custodyReqs error:");
       }
 
       let loanReqs: any[] = [];
@@ -123,20 +124,20 @@ router.get("/", async (req, res) => {
           [scope.activeAssignmentId]
         );
       } catch (e) {
-        console.error("my-space loanReqs error:", e);
+        logger.error(e, "my-space loanReqs error:");
       }
 
       let overtimeReqs: any[] = [];
       try {
         overtimeReqs = await rawQuery<any>(
-          `SELECT id, 'overtime' AS type, CONCAT('وقت إضافي ', "overtimeNumber") AS title, status, "createdAt"
+          `SELECT id, 'overtime' AS type, CONCAT('وقت إضافي ', "requestNumber") AS title, status, "createdAt"
            FROM hr_overtime_requests
            WHERE "assignmentId" = $1 AND status IN ('pending') AND "deletedAt" IS NULL
            ORDER BY "createdAt" DESC LIMIT 5`,
           [scope.activeAssignmentId]
         );
       } catch (e) {
-        console.error("my-space overtimeReqs error:", e);
+        logger.error(e, "my-space overtimeReqs error:");
       }
 
       let exitReqs: any[] = [];
@@ -144,18 +145,18 @@ router.get("/", async (req, res) => {
         exitReqs = await rawQuery<any>(
           `SELECT id, 'exit' AS type, CONCAT('نهاية خدمة #', id) AS title, status, "createdAt"
            FROM hr_exit_requests
-           WHERE "assignmentId" = $1 AND status IN ('pending','in_progress') AND "deletedAt" IS NULL
+           WHERE "assignmentId" = $1 AND status = 'pending' AND "deletedAt" IS NULL
            ORDER BY "createdAt" DESC LIMIT 5`,
           [scope.activeAssignmentId]
         );
       } catch (e) {
-        console.error("my-space exitReqs error:", e);
+        logger.error(e, "my-space exitReqs error:");
       }
 
       openRequests = [...leaveReqs, ...advanceReqs, ...letterReqs, ...custodyReqs, ...loanReqs, ...overtimeReqs, ...exitReqs]
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     } catch (e) {
-      console.error("my-space openRequests error:", e);
+      logger.error(e, "my-space openRequests error:");
     }
 
     let pendingApprovals: any[] = [];
@@ -167,7 +168,7 @@ router.get("/", async (req, res) => {
            JOIN employees e ON e.id = lr."employeeId"
            JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
            LEFT JOIN leave_approval_stages las ON las."leaveRequestId" = lr.id AND las.status = 'pending'
-           WHERE lr."companyId" = $1 AND lr.status = 'pending'
+           WHERE lr."companyId" = $1 AND lr.status = 'pending' AND lr."deletedAt" IS NULL
              AND (
                $2 = 'owner'
                OR las."assignedTo" = $3
@@ -175,7 +176,7 @@ router.get("/", async (req, res) => {
              )
            ORDER BY lr."createdAt" DESC LIMIT 10`,
           [scope.companyId, scope.role, scope.activeAssignmentId]
-        ).catch((e) => { console.error("my-space leaveApprovals error:", e); return []; });
+        ).catch((e) => { logger.error(e, "my-space leaveApprovals error:"); return []; });
 
         let loanApprovals: any[] = [];
         try {
@@ -189,13 +190,13 @@ router.get("/", async (req, res) => {
              ORDER BY l."createdAt" DESC LIMIT 5`,
             [scope.companyId]
           );
-        } catch (e) { console.error("my-space loanApprovals error:", e); }
+        } catch (e) { logger.error(e, "my-space loanApprovals error:"); }
 
         let overtimeApprovals: any[] = [];
         try {
           overtimeApprovals = await rawQuery<any>(
             `SELECT o.id, 'overtime' AS type, e.name AS "employeeName",
-                    CONCAT('وقت إضافي ', o."overtimeNumber", ' — ', o.hours, ' ساعة') AS title,
+                    CONCAT('وقت إضافي ', o."requestNumber", ' — ', o.hours, ' ساعة') AS title,
                     o.status, o."createdAt"
              FROM hr_overtime_requests o
              JOIN employees e ON e.id = o."employeeId"
@@ -203,7 +204,7 @@ router.get("/", async (req, res) => {
              ORDER BY o."createdAt" DESC LIMIT 5`,
             [scope.companyId]
           );
-        } catch (e) { console.error("my-space overtimeApprovals error:", e); }
+        } catch (e) { logger.error(e, "my-space overtimeApprovals error:"); }
 
         let exitApprovals: any[] = [];
         try {
@@ -217,13 +218,13 @@ router.get("/", async (req, res) => {
              ORDER BY x."createdAt" DESC LIMIT 5`,
             [scope.companyId]
           );
-        } catch (e) { console.error("my-space exitApprovals error:", e); }
+        } catch (e) { logger.error(e, "my-space exitApprovals error:"); }
 
         pendingApprovals = [...leaveApprovals, ...loanApprovals, ...overtimeApprovals, ...exitApprovals]
           .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       }
     } catch (e) {
-      console.error("my-space pendingApprovals error:", e);
+      logger.error(e, "my-space pendingApprovals error:");
     }
 
     let documents: any[] = [];
@@ -231,12 +232,12 @@ router.get("/", async (req, res) => {
       documents = await rawQuery<any>(
         `SELECT id, type, name, "expiryDate", "createdAt"
          FROM employee_documents
-         WHERE "employeeId" = $1
+         WHERE "employeeId" = $1 AND "companyId" = $2
          ORDER BY "createdAt" DESC LIMIT 10`,
-        [scope.employeeId]
+        [scope.employeeId, scope.companyId]
       );
     } catch (e) {
-      console.error("my-space documents error:", e);
+      logger.error(e, "my-space documents error:");
     }
 
     let lastPayslip: any = null;
@@ -256,7 +257,7 @@ router.get("/", async (req, res) => {
       );
       lastPayslip = ps || null;
     } catch (e) {
-      console.error("my-space lastPayslip error:", e);
+      logger.error(e, "my-space lastPayslip error:");
     }
 
     let todayTasks: any[] = [];
@@ -265,11 +266,12 @@ router.get("/", async (req, res) => {
         `SELECT id, title, status, priority, "scheduledDate"
          FROM tasks
          WHERE "assignedTo" = $1 AND "scheduledDate" = $2 AND status NOT IN ('completed','cancelled')
+           AND "deletedAt" IS NULL
          ORDER BY priority DESC LIMIT 10`,
         [scope.activeAssignmentId, today]
       );
     } catch (e) {
-      console.error("my-space todayTasks error:", e);
+      logger.error(e, "my-space todayTasks error:");
     }
 
     let notifications: any[] = [];
@@ -282,7 +284,7 @@ router.get("/", async (req, res) => {
         [scope.activeAssignmentId]
       );
     } catch (e) {
-      console.error("my-space notifications error:", e);
+      logger.error(e, "my-space notifications error:");
     }
 
     let custodies: any[] = [];
@@ -293,12 +295,12 @@ router.get("/", async (req, res) => {
                 je.status, je."createdAt"
          FROM journal_entries je
          WHERE je."createdBy" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%'
-           AND je.status IN ('approved','pending','pending_approval')
+           AND je.status IN ('approved','draft','pending_approval')
          ORDER BY je."createdAt" DESC LIMIT 10`,
         [scope.activeAssignmentId]
       );
     } catch (e) {
-      console.error("my-space custodies error:", e);
+      logger.error(e, "my-space custodies error:");
     }
 
     let violations: any[] = [];
@@ -311,7 +313,7 @@ router.get("/", async (req, res) => {
         [scope.activeAssignmentId]
       );
     } catch (e) {
-      console.error("my-space violations error:", e);
+      logger.error(e, "my-space violations error:");
     }
 
     let activeLoans: any[] = [];
@@ -325,7 +327,7 @@ router.get("/", async (req, res) => {
         [scope.activeAssignmentId]
       );
     } catch (e) {
-      console.error("my-space activeLoans error:", e);
+      logger.error(e, "my-space activeLoans error:");
     }
 
     let currentShift: any = null;
@@ -351,7 +353,7 @@ router.get("/", async (req, res) => {
         currentShift = defaultShift || null;
       }
     } catch (e) {
-      console.error("my-space currentShift error:", e);
+      logger.error(e, "my-space currentShift error:");
     }
 
     let monthlyStats: any = null;
@@ -364,7 +366,7 @@ router.get("/", async (req, res) => {
       );
       monthlyStats = ms || null;
     } catch (e) {
-      console.error("my-space monthlyStats error:", e);
+      logger.error(e, "my-space monthlyStats error:");
     }
 
     let recentActions: any[] = [];
@@ -372,12 +374,12 @@ router.get("/", async (req, res) => {
       recentActions = await rawQuery<any>(
         `SELECT id, action, entity AS "entityType", "entityId", reason AS description, "createdAt"
          FROM audit_logs
-         WHERE "userId" = $1
+         WHERE "userId" = $1 AND "companyId" = $2
          ORDER BY "createdAt" DESC LIMIT 5`,
-        [scope.userId]
+        [scope.userId, scope.companyId]
       );
     } catch (e) {
-      console.error("my-space recentActions error:", e);
+      logger.error(e, "my-space recentActions error:");
     }
 
     let performanceReviews: any[] = [];
@@ -386,12 +388,12 @@ router.get("/", async (req, res) => {
         `SELECT pr.id, pr.period, pr."overallScore", pr.status, e.name AS "reviewerName", pr."createdAt"
          FROM performance_reviews pr
          LEFT JOIN employees e ON e.id = pr."reviewerId"
-         WHERE pr."employeeId" = $1
+         WHERE pr."employeeId" = $1 AND pr."companyId" = $2 AND pr."deletedAt" IS NULL
          ORDER BY pr."createdAt" DESC LIMIT 5`,
-        [scope.employeeId]
+        [scope.employeeId, scope.companyId]
       );
     } catch (e) {
-      console.error("my-space performanceReviews error:", e);
+      logger.error(e, "my-space performanceReviews error:");
     }
 
     let overdueItems: any[] = [];
@@ -400,7 +402,7 @@ router.get("/", async (req, res) => {
         `SELECT id, title, 'task' AS "itemType", "scheduledDate" AS deadline, status
          FROM tasks
          WHERE "assignedTo" = $1 AND status NOT IN ('completed','cancelled')
-           AND "scheduledDate" < $2
+           AND "scheduledDate" < $2 AND "deletedAt" IS NULL
          ORDER BY "scheduledDate" ASC LIMIT 10`,
         [scope.activeAssignmentId, today]
       );
@@ -408,14 +410,14 @@ router.get("/", async (req, res) => {
         `SELECT lr.id, lt.name AS title, 'leave_request' AS "itemType", lr."createdAt" AS deadline, lr.status
          FROM hr_leave_requests lr
          JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-         WHERE lr."employeeId" = $1 AND lr.status = 'pending'
+         WHERE lr."employeeId" = $1 AND lr."companyId" = $2 AND lr.status = 'pending' AND lr."deletedAt" IS NULL
            AND lr."createdAt" < NOW() - INTERVAL '3 days'
          ORDER BY lr."createdAt" ASC LIMIT 5`,
-        [scope.employeeId]
-      ).catch(() => []);
+        [scope.employeeId, scope.companyId]
+      ).catch((e) => { logger.error(e, "my space query failed"); return []; });
       overdueItems = [...overdueTasks, ...overdueRequests];
     } catch (e) {
-      console.error("my-space overdueItems error:", e);
+      logger.error(e, "my-space overdueItems error:");
     }
 
     let expiringSoon: any[] = [];
@@ -425,11 +427,11 @@ router.get("/", async (req, res) => {
       const expiringDocs = await rawQuery<any>(
         `SELECT id, type AS title, 'document' AS "itemType", "expiryDate"
          FROM employee_documents
-         WHERE "employeeId" = $1 AND "expiryDate" IS NOT NULL
+         WHERE "employeeId" = $1 AND "companyId" = $4 AND "expiryDate" IS NOT NULL
            AND "expiryDate" BETWEEN $2 AND $3
          ORDER BY "expiryDate" ASC LIMIT 10`,
-        [scope.employeeId, today, thirtyDaysLater.toISOString().split("T")[0]]
-      ).catch(() => []);
+        [scope.employeeId, today, toDateISO(thirtyDaysLater), scope.companyId]
+      ).catch((e) => { logger.error(e, "my space query failed"); return []; });
       const expiringContracts = await rawQuery<any>(
         `SELECT c.id, CONCAT('عقد إيجار - ', pu."unitNumber") AS title, 'contract' AS "itemType", c."endDate" AS "expiryDate"
          FROM rental_contracts c
@@ -437,8 +439,8 @@ router.get("/", async (req, res) => {
          WHERE c."companyId" = $1 AND c.status = 'active'
            AND c."endDate" BETWEEN $2 AND $3
          ORDER BY c."endDate" ASC LIMIT 10`,
-        [scope.companyId, today, thirtyDaysLater.toISOString().split("T")[0]]
-      ).catch(() => []);
+        [scope.companyId, today, toDateISO(thirtyDaysLater)]
+      ).catch((e) => { logger.error(e, "my space query failed"); return []; });
       let expiringInsurance: any[] = [];
       try {
         expiringInsurance = await rawQuery<any>(
@@ -448,13 +450,13 @@ router.get("/", async (req, res) => {
            JOIN fleet_vehicles fv ON fv.id = fi."vehicleId"
            WHERE fv."companyId" = $1 AND fi."endDate" BETWEEN $2 AND $3
            ORDER BY fi."endDate" ASC LIMIT 5`,
-          [scope.companyId, today, thirtyDaysLater.toISOString().split("T")[0]]
+          [scope.companyId, today, toDateISO(thirtyDaysLater)]
         );
-      } catch (e) { console.error("my-space expiringInsurance error:", e); }
+      } catch (e) { logger.error(e, "my-space expiringInsurance error:"); }
       expiringSoon = [...expiringDocs, ...expiringContracts, ...expiringInsurance]
         .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
     } catch (e) {
-      console.error("my-space expiringSoon error:", e);
+      logger.error(e, "my-space expiringSoon error:");
     }
 
     let roleEntities: any = null;
@@ -469,11 +471,11 @@ router.get("/", async (req, res) => {
                       COUNT(*) FILTER (WHERE status = 'rented') AS rented,
                       COUNT(*) FILTER (WHERE status = 'available') AS available,
                       COUNT(*) FILTER (WHERE status = 'maintenance') AS maintenance
-               FROM property_units WHERE "companyId" = $1`,
+               FROM property_units WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
               [scope.companyId]
             );
             unitsSummary = us;
-          } catch (e) { console.error("my-space roleEntities units error:", e); }
+          } catch (e) { logger.error(e, "my-space roleEntities units error:"); }
         }
         let vehiclesSummary: any = null;
         if (["owner", "branch_manager", "general_manager", "fleet_manager", "operations_manager"].includes(scope.role)) {
@@ -483,11 +485,11 @@ router.get("/", async (req, res) => {
                       COUNT(*) FILTER (WHERE status = 'available') AS available,
                       COUNT(*) FILTER (WHERE status = 'in_use') AS in_use,
                       COUNT(*) FILTER (WHERE status = 'maintenance') AS maintenance
-               FROM fleet_vehicles WHERE "companyId" = $1`,
+               FROM fleet_vehicles WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
               [scope.companyId]
             );
             vehiclesSummary = vs;
-          } catch (e) { console.error("my-space roleEntities vehicles error:", e); }
+          } catch (e) { logger.error(e, "my-space roleEntities vehicles error:"); }
         }
         let casesSummary: any = null;
         if (["owner", "branch_manager", "general_manager", "legal_manager"].includes(scope.role)) {
@@ -496,14 +498,14 @@ router.get("/", async (req, res) => {
               `SELECT COUNT(*) AS total,
                       COUNT(*) FILTER (WHERE status = 'open') AS open,
                       COUNT(*) FILTER (WHERE status = 'closed') AS closed
-               FROM legal_cases WHERE "companyId" = $1`,
+               FROM legal_cases WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
               [scope.companyId]
             );
             casesSummary = cs;
-          } catch (e) { console.error("my-space roleEntities cases error:", e); }
+          } catch (e) { logger.error(e, "my-space roleEntities cases error:"); }
         }
         let hrSummary: any = null;
-        if (["owner", "branch_manager", "general_manager", "hr_manager"].includes(scope.role)) {
+        if (HR_APPROVAL_ROLES.includes(scope.role)) {
           try {
             const [hs] = await rawQuery<any>(
               `SELECT COUNT(*) AS total,
@@ -514,7 +516,7 @@ router.get("/", async (req, res) => {
               [scope.companyId]
             );
             hrSummary = hs;
-          } catch (e) { console.error("my-space roleEntities hr error:", e); }
+          } catch (e) { logger.error(e, "my-space roleEntities hr error:"); }
         }
         let financeSummary: any = null;
         if (["owner", "branch_manager", "general_manager", "finance_manager"].includes(scope.role)) {
@@ -528,7 +530,7 @@ router.get("/", async (req, res) => {
               [scope.companyId]
             );
             financeSummary = fs;
-          } catch (e) { console.error("my-space roleEntities finance error:", e); }
+          } catch (e) { logger.error(e, "my-space roleEntities finance error:"); }
         }
         roleEntities = {
           units: unitsSummary,
@@ -539,7 +541,7 @@ router.get("/", async (req, res) => {
         };
       }
     } catch (e) {
-      console.error("my-space roleEntities error:", e);
+      logger.error(e, "my-space roleEntities error:");
     }
 
     res.json({
@@ -572,7 +574,7 @@ router.get("/attendance", async (req, res) => {
   try {
     const scope = req.scope!;
     const { month } = req.query as Record<string, string>;
-    const monthStr = month ?? new Date().toISOString().slice(0, 7);
+    const monthStr = month ?? currentPeriod();
     const rows = await rawQuery<any>(
       `SELECT a.id, a.date, a."checkIn", a."checkOut", a."lateMinutes", a.status,
               COALESCE(a."overtimeMinutes", 0) AS "overtimeMinutes",
@@ -598,6 +600,7 @@ router.get("/attendance", async (req, res) => {
        ) v ON TRUE
        WHERE a."assignmentId" = $1
          AND TO_CHAR(a.date, 'YYYY-MM') = $2
+         AND a."deletedAt" IS NULL
        ORDER BY a.date DESC`,
       [scope.activeAssignmentId, monthStr]
     );
@@ -663,7 +666,7 @@ router.get("/performance", async (req, res) => {
       `SELECT pr.id, pr.period, pr."overallScore" AS "overallRating", pr.comments AS notes,
               pr.status, pr."createdAt"
        FROM performance_reviews pr
-       WHERE pr."employeeId" = $1 AND pr."companyId" = $2
+       WHERE pr."employeeId" = $1 AND pr."companyId" = $2 AND pr."deletedAt" IS NULL
        ORDER BY pr."createdAt" DESC LIMIT 20`,
       [scope.employeeId, scope.companyId]
     );
@@ -679,9 +682,9 @@ router.get("/documents", async (req, res) => {
     const rows = await rawQuery<any>(
       `SELECT id, type, name AS title, "fileUrl" AS url, "expiryDate", "createdAt"
        FROM employee_documents
-       WHERE "employeeId" = $1
+       WHERE "employeeId" = $1 AND "companyId" = $2
        ORDER BY "createdAt" DESC LIMIT 50`,
-      [scope.employeeId]
+      [scope.employeeId, scope.companyId]
     );
     res.json({ data: rows });
   } catch (err) {
@@ -706,7 +709,7 @@ router.get("/requests", async (req, res) => {
       conditions.push(`wi."requestType" = $${params.length}`);
     }
 
-    params.push(Number(limit));
+    params.push(Math.min(Number(limit) || 20, 500));
     const rows = await rawQuery<any>(
       `SELECT wi.id, wi."requestType", wi.title, wi.status, wi."slaStatus",
               wi."currentStepOrder", wi."createdAt", wi."completedAt",
@@ -723,10 +726,10 @@ router.get("/requests", async (req, res) => {
       `SELECT lr.id, lt.name AS "leaveTypeName", lr."startDate", lr."endDate", lr.days, lr.status, lr."createdAt"
        FROM hr_leave_requests lr
        JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-       WHERE lr."employeeId" = $1
+       WHERE lr."employeeId" = $1 AND lr."companyId" = $2 AND lr."deletedAt" IS NULL
        ORDER BY lr."createdAt" DESC LIMIT 20`,
-      [scope.employeeId]
-    ).catch(() => []);
+      [scope.employeeId, scope.companyId]
+    ).catch((e) => { logger.error(e, "my space query failed"); return []; });
 
     res.json({ data: rows, leaveRequests: leaveRows, total: rows.length });
   } catch (err) {

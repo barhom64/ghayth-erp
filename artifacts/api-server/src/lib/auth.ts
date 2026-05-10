@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
-import { randomBytes } from "crypto";
+import { randomBytes } from "node:crypto";
 
 const _jwtSecret = process.env.JWT_SECRET;
 if (!_jwtSecret) {
@@ -28,7 +28,7 @@ export function signRefreshToken(): string {
 }
 
 export function verifyToken(token: string): JWTPayload {
-  return jwt.verify(token, SECRET!) as unknown as JWTPayload;
+  return jwt.verify(token, SECRET!, { algorithms: ["HS256"] }) as unknown as JWTPayload;
 }
 
 export async function hashPassword(plain: string): Promise<string> {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,7 @@ import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
  */
 
 export default function JournalPage() {
+  const [, navigate] = useLocation();
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(
@@ -217,7 +218,7 @@ export default function JournalPage() {
       />
 
       <BulkActionsBar
-        entityType="journal_entry"
+        entityType="journal-entry"
         items={filtered}
         selectedIds={selectedIds}
         onToggle={toggleSelect}
@@ -242,7 +243,7 @@ export default function JournalPage() {
         onRetry={() => refetch()}
         emptyMessage="لا توجد قيود"
         emptyIcon={<ScrollText className="h-6 w-6 text-slate-400" />}
-        onRowClick={(j) => setExpandedId(expandedId === j.id ? null : j.id)}
+        onRowClick={(j) => navigate(`/finance/journal/${j.id}`)}
         noToolbar
         renderRowExtras={(j) => {
           if (expandedId !== j.id) return null;
@@ -252,33 +253,25 @@ export default function JournalPage() {
           const totalC = lines.reduce((s: number, l: any) => s + Number(l.credit || 0), 0);
           return (
             <div className="bg-gray-50 px-6 py-3">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-muted-foreground">
-                    <th className="py-1 text-start">الحساب</th>
-                    <th className="py-1 text-start">مدين</th>
-                    <th className="py-1 text-start">دائن</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map((l: any, i: number) => (
-                    <tr key={i} className="border-t border-gray-200">
-                      <td className="py-1.5 font-mono text-sm">{l.accountCode}</td>
-                      <td className="py-1.5 text-emerald-600 font-medium">
-                        {Number(l.debit || 0) > 0 ? formatCurrency(l.debit) : "-"}
-                      </td>
-                      <td className="py-1.5 text-red-600 font-medium">
-                        {Number(l.credit || 0) > 0 ? formatCurrency(l.credit) : "-"}
-                      </td>
-                    </tr>
-                  ))}
-                  <tr className="border-t-2 border-gray-300 font-bold">
-                    <td className="py-1.5">المجموع</td>
-                    <td className="py-1.5 text-emerald-700">{formatCurrency(totalD)}</td>
-                    <td className="py-1.5 text-red-700">{formatCurrency(totalC)}</td>
-                  </tr>
-                </tbody>
-              </table>
+              <DataTable
+                columns={[
+                  { key: "accountCode", header: "الحساب", render: (r: any) => <span className="font-mono text-sm">{r.accountCode}</span> },
+                  { key: "debit", header: "مدين", render: (r: any) => <span className="text-emerald-600 font-medium">{Number(r.debit || 0) > 0 ? formatCurrency(r.debit) : "-"}</span> },
+                  { key: "credit", header: "دائن", render: (r: any) => <span className="text-red-600 font-medium">{Number(r.credit || 0) > 0 ? formatCurrency(r.credit) : "-"}</span> },
+                ] satisfies DataTableColumn<any>[]}
+                data={lines}
+                noToolbar
+                pageSize={0}
+                searchPlaceholder={null}
+                emptyMessage="لا توجد بنود"
+                caption={
+                  <div className="flex gap-6 font-bold text-sm pt-1">
+                    <span>المجموع</span>
+                    <span className="text-emerald-700">{formatCurrency(totalD)}</span>
+                    <span className="text-red-700">{formatCurrency(totalC)}</span>
+                  </div>
+                }
+              />
             </div>
           );
         }}

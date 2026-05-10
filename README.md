@@ -158,6 +158,20 @@ The frontend talks to the API via relative paths (`/api/...`) using Vite's dev p
 | `pnpm --filter @workspace/api-server run dev` | Build + start the API (migrations run on startup). |
 | `pnpm --filter @workspace/ghayth-erp run dev` | Vite dev server for the ERP frontend. |
 | `pnpm --filter @workspace/api-server run typecheck` | Typecheck the API only (fast inner loop). |
+| `pnpm run db:bootstrap`     | Drop + recreate the local DB from `db/schema.sql` + `db/seed*.sql`. |
+| `pnpm run audit:routes`     | Catch orphan page files (defined but never imported). |
+| `pnpm run audit:schema`     | Catch SQL referencing columns/tables not in `db/schema.sql`. |
+| `pnpm run lint:patterns`    | Repo-wide forbidden-pattern guard. |
+
+### Backup / restore (DR)
+
+| Command                                      | What it does |
+| -------------------------------------------- | ------------ |
+| `bash scripts/backup.sh`                     | Create a gzipped logical backup at `backups/ghayth-erp-<UTC>.sql.gz`. |
+| `bash scripts/backup.sh --out /mnt/snapshot` | Same, but write to a custom destination (offsite snapshot). |
+| `bash scripts/restore.sh <file>.sql.gz --yes`| Restore a backup. Refuses prod-looking targets without `--i-know-what-im-doing`. |
+
+Recommended cadence: hourly during business hours + nightly retained 30 days + weekly retained 1 year offsite.
 
 ---
 
@@ -166,6 +180,10 @@ The frontend talks to the API via relative paths (`/api/...`) using Vite's dev p
 Deep-dive docs live under `docs/`:
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — layered architecture, runtime request flow, data-scoping model.
+- [`docs/RBAC_V2.md`](docs/RBAC_V2.md) — layered RBAC v2 (5 layers + approval limits + SoD + ABAC conditions).
+- [`docs/RBAC_USAGE_GUIDE.md`](docs/RBAC_USAGE_GUIDE.md) — RBAC v2 hands-on usage guide (Arabic, with API examples).
+- [`docs/RBAC_COMPARISON.md`](docs/RBAC_COMPARISON.md) — RBAC v2 vs SAP S/4HANA, Oracle NetSuite, Odoo Enterprise, MS Dynamics 365.
+- [`docs/CATALOG_RULES.md`](docs/CATALOG_RULES.md) — pnpm catalog discipline + library bans (toast / router / icons / charts / forms).
 - [`docs/MODULES.md`](docs/MODULES.md) — map of every business module to its backend route file and frontend pages.
 - [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — day-to-day workflow: migrations, seeding, adding routes/pages, conventions.
 - [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md) — open operational gaps and technical debt tracked against the system audit.

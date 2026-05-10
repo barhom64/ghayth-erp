@@ -74,7 +74,7 @@ export default function ScheduledReportsPage() {
   };
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   return (
     <div className="space-y-6">
@@ -137,7 +137,7 @@ export default function ScheduledReportsPage() {
                 <Label>تفعيل التقرير المجدول</Label>
               </div>
               <div className="md:col-span-2 flex gap-2">
-                <Button onClick={handleSubmit} disabled={createMut.isPending}>
+                <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>
                   <Send className="h-4 w-4 me-1" />
                   {createMut.isPending ? "جاري الحفظ..." : "حفظ الجدولة"}
                 </Button>

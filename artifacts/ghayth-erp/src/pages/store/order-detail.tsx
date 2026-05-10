@@ -5,10 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@/components/print-layout";
 import { extractBranchFromResponse } from "@/lib/branch-utils";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { ShoppingCart, User, Phone, Calendar, Package } from "lucide-react";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 export default function StoreOrderDetailPage() {
   const [, params] = useRoute("/store/orders/:id");
@@ -50,25 +50,27 @@ export default function StoreOrderDetailPage() {
         </CardContent></Card>
       </div>
 
-      <Card>
-        <CardHeader><CardTitle>بنود الطلب</CardTitle></CardHeader>
-        <CardContent className="p-0">
-          <DataTable<any>
-            columns={[
-              { key: "_index", header: "#", render: (_r, i) => <span className="text-gray-400">{i + 1}</span> },
-              { key: "name", header: "المنتج", render: (r) => <span className="font-medium">{r.name || r.description || "-"}</span> },
-              { key: "quantity", header: "الكمية", sortable: true, render: (r) => r.quantity || 1 },
-              { key: "price", header: "السعر", sortable: true, render: (r) => formatCurrency(Number(r.price || r.unitPrice || 0)) },
-              { key: "total", header: "الإجمالي", sortable: true, render: (r) => <span className="font-bold">{formatCurrency(Number(r.total || (r.quantity || 1) * (r.price || r.unitPrice || 0)))}</span> },
-            ] satisfies DataTableColumn<any>[]}
-            data={items}
-            pageSize={0}
-            noToolbar
-            searchPlaceholder={null}
-            emptyMessage="لا توجد بنود"
-          />
-        </CardContent>
-      </Card>
+      {items.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle>بنود الطلب</CardTitle></CardHeader>
+          <CardContent className="p-0">
+            <DataTable
+              columns={[
+                { key: "_index", header: "#", render: (_r: any, i: number) => <span className="text-gray-400">{i + 1}</span> },
+                { key: "name", header: "المنتج", render: (r: any) => <span className="font-medium">{r.name || r.description || "-"}</span> },
+                { key: "quantity", header: "الكمية", sortable: true, render: (r: any) => r.quantity || 1 },
+                { key: "price", header: "السعر", sortable: true, render: (r: any) => formatCurrency(Number(r.price || r.unitPrice || 0)) },
+                { key: "total", header: "الإجمالي", sortable: true, render: (r: any) => <span className="font-bold">{formatCurrency(Number(r.total || (r.quantity || 1) * (r.price || r.unitPrice || 0)))}</span> },
+              ] satisfies DataTableColumn<any>[]}
+              data={items}
+              pageSize={0}
+              noToolbar
+              searchPlaceholder={null}
+              emptyMessage="لا توجد بنود"
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {order?.notes && (
         <Card>

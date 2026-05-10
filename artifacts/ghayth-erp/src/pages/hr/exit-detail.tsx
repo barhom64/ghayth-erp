@@ -51,10 +51,10 @@ export default function ExitDetail() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
 
-  const { data, isLoading, isError } = useApiQuery<any>(["hr-exit-detail", id], `/hr/exit/${id}`);
+  const { data, isLoading, isError } = useApiQuery<any>(["hr-exit-detail", id], id ? `/hr/exit/${id}` : null);
   const item = data?.data ?? data;
 
-  const approveMut = useApiMutation(null as any, "PATCH", [["hr-exit"]], {
+  const approveMut = useApiMutation((body: any) => body.__url, "PATCH", [["hr-exit"]], {
     successMessage: "تم اعتماد طلب نهاية الخدمة",
   });
 
@@ -225,7 +225,7 @@ export default function ExitDetail() {
         </Card>
       )}
 
-      <ActionHistory entityType="exit_request" entityId={Number(id)} />
+      <ActionHistory entityType="exit-request" entityId={Number(id)} />
     </div>
   ) : null;
 
@@ -235,11 +235,11 @@ export default function ExitDetail() {
       subtitle={item ? `${EXIT_TYPES[item.exitType] || item.exitType} — ${item.jobTitle || ""}` : undefined}
       backPath="/hr/exit"
       status={{ label: st.label, tone: STATUS_TONE_MAP[item?.status] ?? "default" }}
-      entityType="hr_exit_request"
+      entityType="exit-request"
       entityId={Number(id)}
       isLoading={isLoading}
       error={isError ? true : undefined}
-      onRetry={() => window.location.reload()}
+     
       createdAt={item?.createdAt}
       updatedAt={item?.updatedAt}
       actions={
@@ -249,6 +249,7 @@ export default function ExitDetail() {
             className="bg-green-600 hover:bg-green-700"
             onClick={handleApprove}
             disabled={approveMut.isPending}
+            rateLimitAware
           >
             <CheckCircle className="h-4 w-4 ml-1" />
             اعتماد

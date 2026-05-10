@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,6 @@ import { Building2, Plus, X, Pencil, Trash2, CheckCircle, Zap } from "lucide-rea
 import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from "@/contexts/app-context";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 
 export function CompaniesTab() {
   const { refreshFilters } = useAppContext();
@@ -17,45 +16,38 @@ export function CompaniesTab() {
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [deletingItem, setDeletingItem] = useState<{ id: number; name: string } | null>(null);
+  const [deleting, setDeleting] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ name: "", nameEn: "", taxNumber: "", crNumber: "" });
   const [lastBootstrapOps, setLastBootstrapOps] = useState<string[] | null>(null);
   const items = asList(data);
 
-  const columns = useMemo<DataTableColumn<any>[]>(() => [
+  const companyColumns: DataTableColumn<any>[] = [
     {
       key: "name",
       header: "اسم الشركة",
+      sortable: true,
       searchable: true,
-      render: (item: any) => (
+      render: (r: any) => (
         <div className="font-medium">
-          {item.name}
-          {item.nameEn && <span className="text-gray-400 text-xs me-2 block">{item.nameEn}</span>}
+          {r.name}
+          {r.nameEn && <span className="text-gray-400 text-xs me-2 block">{r.nameEn}</span>}
         </div>
       ),
     },
-    {
-      key: "taxNumber",
-      header: "الرقم الضريبي",
-      render: (item: any) => <span className="text-gray-500">{item.taxNumber || "-"}</span>,
-    },
-    {
-      key: "crNumber",
-      header: "السجل التجاري",
-      render: (item: any) => <span className="text-gray-500">{item.crNumber || "-"}</span>,
-    },
+    { key: "taxNumber", header: "الرقم الضريبي", searchable: true, render: (r: any) => <span className="text-gray-500">{r.taxNumber || "-"}</span> },
+    { key: "crNumber", header: "السجل التجاري", searchable: true, render: (r: any) => <span className="text-gray-500">{r.crNumber || "-"}</span> },
     {
       key: "actions",
       header: "إجراءات",
-      width: "6rem",
-      align: "start",
-      render: (item: any) => (
+      width: "100px",
+      render: (r: any) => (
         <div className="flex gap-1">
-          <Button variant="ghost" size="sm" onClick={() => handleEdit(item)} title="تعديل"><Pencil className="h-4 w-4" /></Button>
+          <Button variant="ghost" size="sm" onClick={() => handleEdit(r)} title="تعديل"><Pencil className="h-4 w-4" /></Button>
           <Button
             variant="ghost" size="sm"
-            onClick={() => setDeletingItem({ id: item.id, name: item.name })}
+            onClick={() => { if (confirm("تحذير: حذف الشركة سيؤثر على جميع البيانات المرتبطة بها. هل أنت متأكد؟")) handleDelete(r.id); }}
+            disabled={deleting === r.id}
             title="حذف"
             className="text-red-500 hover:text-red-700"
           >
@@ -64,7 +56,10 @@ export function CompaniesTab() {
         </div>
       ),
     },
-  ], []);
+  ];
+
+  if (isLoading) return <DataTable columns={companyColumns} data={[]} isLoading={true} searchPlaceholder={null} noToolbar />;
+  if (isError) return <DataTable columns={companyColumns} data={[]} isError={true} searchPlaceholder={null} noToolbar />;
 
   const resetForm = () => {
     setForm({ name: "", nameEn: "", taxNumber: "", crNumber: "" });
@@ -120,10 +115,18 @@ export function CompaniesTab() {
     }
   };
 
-  const handleDeleteDone = () => {
-    setDeletingItem(null);
-    refetch();
-    refreshFilters();
+  const handleDelete = async (id: number) => {
+    setDeleting(id);
+    try {
+      await apiFetch(`/settings/companies/${id}`, { method: "DELETE" });
+      toast({ title: "تم الحذف" });
+      refetch();
+      refreshFilters();
+    } catch (e: any) {
+      toast({ title: "خطأ", description: e.message || "فشل الحذف", variant: "destructive" });
+    } finally {
+      setDeleting(null);
+    }
   };
 
   return (
@@ -193,7 +196,7 @@ export function CompaniesTab() {
               </div>
             )}
             <div className="md:col-span-2">
-              <Button onClick={handleSave} disabled={creating}>
+              <Button onClick={handleSave} disabled={creating} rateLimitAware>
                 {creating ? "جاري الإنشاء..." : (editingId ? "تحديث الشركة" : "إنشاء الشركة")}
               </Button>
             </div>
@@ -202,28 +205,11 @@ export function CompaniesTab() {
       )}
 
       <DataTable
-        columns={columns}
+        columns={companyColumns}
         data={items}
-        isLoading={isLoading}
-        isError={isError}
-        onRetry={() => refetch()}
+        searchPlaceholder="بحث في الشركات..."
         emptyMessage="لا توجد شركات مضافة"
-        emptyIcon={<Building2 className="h-10 w-10 text-gray-300" />}
         pageSize={0}
-        noToolbar
-      />
-
-      <ConfirmDeleteDialog
-        open={deletingItem !== null}
-        onOpenChange={(v) => !v && setDeletingItem(null)}
-        entity={{
-          type: "company",
-          id: deletingItem?.id ?? 0,
-          name: deletingItem?.name ?? "",
-        }}
-        deletePath={`/settings/companies/${deletingItem?.id}`}
-        invalidateKeys={[["settings-companies"]]}
-        onDeleted={handleDeleteDone}
       />
     </div>
   );

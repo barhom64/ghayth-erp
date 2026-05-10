@@ -1,6 +1,7 @@
 import { rawQuery } from "./rawdb.js";
 import type { RequestScope } from "../middlewares/authMiddleware.js";
 import type { Request } from "express";
+import { OWNER_GM_ROLES } from "./rbacCatalog.js";
 
 export function parseScopeFilters(req: Request): ScopeFilters {
   const scope = req.scope!;
@@ -44,9 +45,19 @@ export interface ScopedQueryOptions {
    * `support_tickets`, `hr_leave_requests`, `recurring_invoices`).
    */
   disableBranchScope?: boolean;
+  /**
+   * Opt-in soft-delete filter. When set, appends an
+   * `AND <softDeleteColumn> IS NULL` predicate to the generated WHERE so
+   * list endpoints automatically hide soft-deleted rows. Pass the fully
+   * qualified, quoted column expression that matches your FROM/alias —
+   * e.g. `'"deletedAt"'` for an unaliased table or `'b."deletedAt"'` when
+   * the table is aliased as `b`. Routes that historically appended this
+   * predicate by hand can be migrated to use this option instead.
+   */
+  softDeleteColumn?: string;
 }
 
-const BRANCH_SCOPE_EXEMPT_ROLES = new Set(["owner", "general_manager"]);
+const BRANCH_SCOPE_EXEMPT_ROLES = new Set(OWNER_GM_ROLES);
 
 export function buildScopedWhere(
   scope: RequestScope,
@@ -123,6 +134,10 @@ export function buildScopedWhere(
   if (options.extraParams) {
     params.push(...options.extraParams);
     paramIdx += options.extraParams.length;
+  }
+
+  if (options.softDeleteColumn) {
+    conditions.push(`${options.softDeleteColumn} IS NULL`);
   }
 
   const where = conditions.length > 0 ? conditions.join(" AND ") : "1=1";

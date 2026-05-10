@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { formatDateAr } from "@/lib/formatters";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,6 +24,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { LETTER_TYPES } from "@/lib/hr-type-maps";
 
 export default function OfficialLettersPage() {
+  const [, navigate] = useLocation();
   const [showForm, setShowForm] = useState(false);
   const [previewLetter, setPreviewLetter] = useState<any>(null);
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["official-letters"], "/hr/official-letters");
@@ -67,7 +69,7 @@ export default function OfficialLettersPage() {
       hidden: !canApprove,
       render: (l) => (
         <ApprovalActions
-          entityType="official_letter"
+          entityType="official-letter"
           entityId={l.id}
           currentStatus={l.status}
           approveEndpoint={`/hr/official-letters/${l.id}/approve`}
@@ -99,7 +101,7 @@ export default function OfficialLettersPage() {
   };
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   return (
     <PageShell
@@ -150,7 +152,7 @@ export default function OfficialLettersPage() {
               </div>
               <div><Label>الموضوع</Label><Input className="mt-1" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} /></div>
               <div className="md:col-span-2"><Label>المحتوى</Label><Textarea className="mt-1 h-24" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} /></div>
-              <div><Button onClick={handleSubmit} disabled={!form.subject || createMut.isPending}>{createMut.isPending ? "جاري الحفظ..." : "حفظ"}</Button></div>
+              <div><Button onClick={handleSubmit} disabled={!form.subject || createMut.isPending} rateLimitAware>{createMut.isPending ? "جاري الحفظ..." : "حفظ"}</Button></div>
             </div>
           </CardContent>
         </Card>
@@ -166,6 +168,7 @@ export default function OfficialLettersPage() {
         noToolbar
         emptyMessage="لا توجد خطابات"
         emptyIcon={<FileText className="h-6 w-6 text-slate-400" />}
+
       />
 
       {previewLetter && (

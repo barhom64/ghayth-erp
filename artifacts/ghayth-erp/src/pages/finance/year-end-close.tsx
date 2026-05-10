@@ -208,7 +208,7 @@ export default function YearEndClosePage() {
               <p className="text-sm font-semibold mb-3">
                 قيد إقفال السنة المقترح ({preview.lines.length} بند)
               </p>
-              <DataTable<YearEndPreview["lines"][number]>
+              <DataTable
                 columns={closingEntryColumns}
                 data={preview.lines}
                 searchPlaceholder={null}

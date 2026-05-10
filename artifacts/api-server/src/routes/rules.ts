@@ -1,10 +1,14 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, NotFoundError,
+  parseId,
+  zodParse,
+} from "../lib/errorHandler.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { z } from "zod";
+import { logger } from "../lib/logger.js";
 
 const createRuleSchema = z.object({
   name: z.string().min(1),
@@ -39,14 +43,13 @@ const patchRuleSchema = z.object({
 const toggleRuleSchema = z.object({}).optional();
 
 const router = Router();
-router.use(authMiddleware);
 
-router.get("/", requirePermission("admin:write"), async (req, res) => {
+router.get("/", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rules = await rawQuery<any>(
-      `SELECT * FROM business_rules 
-       WHERE ("companyId" IS NULL OR "companyId" = $1)
+      `SELECT * FROM business_rules
+       WHERE ("companyId" IS NULL OR "companyId" = $1) AND "deletedAt" IS NULL
        ORDER BY priority DESC, "createdAt" DESC`,
       [scope.companyId]
     );
@@ -56,20 +59,22 @@ router.get("/", requirePermission("admin:write"), async (req, res) => {
   }
 });
 
-router.get("/logs", requirePermission("admin:write"), async (req, res) => {
+router.get("/logs", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { ruleId, limit: lim = "50", page = "1" } = req.query as any;
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+    const pageNum = Math.max(Number(page) || 1, 1);
+    const perPage = Math.min(Number(lim) || 50, 500);
+    const offset = (pageNum - 1) * perPage;
     const conditions = [`("companyId" IS NULL OR "companyId" = $1)`];
     const params: any[] = [scope.companyId];
 
     if (ruleId) {
-      params.push(Number(ruleId));
+      params.push(Number(ruleId) || 0);
       conditions.push(`"ruleId" = $${params.length}`);
     }
 
-    params.push(Number(lim));
+    params.push(perPage);
     const limitIdx = params.length;
     params.push(offset);
     const offsetIdx = params.length;
@@ -88,17 +93,15 @@ router.get("/logs", requirePermission("admin:write"), async (req, res) => {
       countParams
     );
 
-    res.json({ data: logs, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) });
+    res.json({ data: logs, total: Number(countRow?.total ?? 0), page: pageNum, pageSize: perPage });
   } catch (err) {
     handleRouteError(err, res, "سجل القواعد");
   }
 });
 
-router.post("/", requirePermission("admin:write"), async (req, res) => {
+router.post("/", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
-    const parsed_createRule = createRuleSchema.safeParse(req.body);
-    if (!parsed_createRule.success) throw new ValidationError(parsed_createRule.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed_createRule.data;
+    const b = zodParse(createRuleSchema.safeParse(req.body));
     const scope = req.scope!;
 
     if (!b.name || !b.triggerEvent || !b.actionType) {
@@ -116,14 +119,14 @@ router.post("/", requirePermission("admin:write"), async (req, res) => {
       ]
     );
 
-    const [rule] = await rawQuery<any>(`SELECT * FROM business_rules WHERE id = $1`, [insertId]);
+    const [rule] = await rawQuery<any>(`SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "create_business_rule",
       entity: "business_rules", entityId: insertId,
       after: { name: b.name, triggerEvent: b.triggerEvent, actionType: b.actionType },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "rules.created", entity: "business_rules", entityId: insertId, details: JSON.stringify({ name: b.name, triggerEvent: b.triggerEvent }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "rules background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "rules.created", entity: "business_rules", entityId: insertId, details: JSON.stringify({ name: b.name, triggerEvent: b.triggerEvent }) }).catch((e) => logger.error(e, "rules background task failed"));
 
     res.status(201).json(rule);
   } catch (err) {
@@ -131,16 +134,14 @@ router.post("/", requirePermission("admin:write"), async (req, res) => {
   }
 });
 
-router.patch("/:id", requirePermission("admin:write"), async (req, res) => {
+router.patch("/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
-    const parsed_patchRule = patchRuleSchema.safeParse(req.body);
-    if (!parsed_patchRule.success) throw new ValidationError(parsed_patchRule.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed_patchRule.data;
+    const b = zodParse(patchRuleSchema.safeParse(req.body));
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
 
     const [existing] = await rawQuery<any>(
-      `SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!existing) {
@@ -164,16 +165,18 @@ router.patch("/:id", requirePermission("admin:write"), async (req, res) => {
     if (b.isActive !== undefined) { params.push(b.isActive); sets.push(`"isActive" = $${params.length}`); }
 
     params.push(id);
-    await rawExecute(`UPDATE business_rules SET ${sets.join(",")} WHERE id = $${params.length}`, params);
+    params.push(scope.companyId);
+    const { affectedRows } = await rawExecute(`UPDATE business_rules SET ${sets.join(",")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("القاعدة غير موجودة");
 
-    const [rule] = await rawQuery<any>(`SELECT * FROM business_rules WHERE id = $1`, [id]);
+    const [rule] = await rawQuery<any>(`SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_business_rule",
       entity: "business_rules", entityId: id,
       before: existing, after: b,
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "rules.updated", entity: "business_rules", entityId: id, details: JSON.stringify({ name: b.name }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "rules background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "rules.updated", entity: "business_rules", entityId: id, details: JSON.stringify({ name: b.name }) }).catch((e) => logger.error(e, "rules background task failed"));
 
     res.json(rule);
   } catch (err) {
@@ -181,25 +184,26 @@ router.patch("/:id", requirePermission("admin:write"), async (req, res) => {
   }
 });
 
-router.delete("/:id", requirePermission("admin:write"), async (req, res) => {
+router.delete("/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
-      `SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!existing) {
       throw new NotFoundError("القاعدة غير موجودة أو لا يمكن حذف القواعد الافتراضية");
     }
-    await rawExecute(`UPDATE business_rules SET "deletedAt" = NOW() WHERE id = $1 AND "deletedAt" IS NULL`, [id]);
+    const { affectedRows } = await rawExecute(`UPDATE business_rules SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("القاعدة غير موجودة");
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "delete_business_rule",
       entity: "business_rules", entityId: id,
       before: existing,
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "rules.deleted", entity: "business_rules", entityId: id }).catch(console.error);
+    }).catch((e) => logger.error(e, "rules background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "rules.deleted", entity: "business_rules", entityId: id }).catch((e) => logger.error(e, "rules background task failed"));
 
     res.json({ message: "تم حذف القاعدة بنجاح" });
   } catch (err) {
@@ -207,27 +211,28 @@ router.delete("/:id", requirePermission("admin:write"), async (req, res) => {
   }
 });
 
-router.patch("/:id/toggle", requirePermission("admin:write"), async (req, res) => {
+router.patch("/:id/toggle", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
-    { const _guard = toggleRuleSchema.safeParse(req.body); if (!_guard.success) throw new ValidationError(_guard.error.errors[0]?.message ?? "بيانات غير صالحة"); }
+    zodParse(toggleRuleSchema.safeParse(req.body));
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
-      `SELECT id, "isActive" FROM business_rules WHERE id = $1 AND ("companyId" IS NULL OR "companyId" = $2)`,
+      `SELECT id, "isActive" FROM business_rules WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!existing) {
       throw new NotFoundError("القاعدة غير موجودة");
     }
     const newActive = !existing.isActive;
-    await rawExecute(`UPDATE business_rules SET "isActive" = $1, "updatedAt" = NOW() WHERE id = $2 AND ("companyId" IS NULL OR "companyId" = $3)`, [newActive, id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE business_rules SET "isActive" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [newActive, id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("القاعدة غير موجودة");
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "toggle_business_rule",
       entity: "business_rules", entityId: id,
       before: { isActive: existing.isActive }, after: { isActive: newActive },
-    }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "rules.toggled", entity: "business_rules", entityId: id, details: JSON.stringify({ isActive: newActive }) }).catch(console.error);
+    }).catch((e) => logger.error(e, "rules background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "rules.toggled", entity: "business_rules", entityId: id, details: JSON.stringify({ isActive: newActive }) }).catch((e) => logger.error(e, "rules background task failed"));
 
     res.json({ id, isActive: newActive, message: newActive ? "تم تفعيل القاعدة" : "تم تعطيل القاعدة" });
   } catch (err) {

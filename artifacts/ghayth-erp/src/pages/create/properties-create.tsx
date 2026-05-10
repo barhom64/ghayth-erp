@@ -54,7 +54,7 @@ export default function PropertiesCreate() {
   });
 
   if (loadingB || loadingO) return <LoadingSpinner />;
-  if (errorB || errorO) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (errorB || errorO) return <ErrorState />;
 
   const AMENITIES_LIST = [
     "مصعد", "موقف سيارة", "حراسة أمنية", "مسبح", "صالة رياضية",
@@ -289,7 +289,7 @@ export default function PropertiesCreate() {
 
         <div className="flex justify-end gap-3 pt-2">
           <Button type="button" variant="outline" onClick={() => setLocation("/properties")}>إلغاء</Button>
-          <Button type="submit" disabled={addUnit.isPending}>{addUnit.isPending ? "جاري الإضافة..." : "إضافة الوحدة"}</Button>
+          <Button type="submit" disabled={addUnit.isPending} rateLimitAware>{addUnit.isPending ? "جاري الإضافة..." : "إضافة الوحدة"}</Button>
         </div>
       </form>
     </CreatePageLayout>

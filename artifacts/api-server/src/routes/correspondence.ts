@@ -1,17 +1,40 @@
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import {
   handleRouteError,
   ValidationError,
   NotFoundError,
+  ConflictError,
+  parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
-import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent, currentYear, generateRef as makeRef } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 const correspondenceRouter = Router();
 correspondenceRouter.use(authMiddleware);
+
+const respondSchema = z.object({
+  subject: z.string().optional(),
+  content: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+const patchCorrespondenceSchema = z.object({
+  subject: z.string().optional(),
+  content: z.string().optional(),
+  senderName: z.string().optional(),
+  senderOrg: z.string().optional(),
+  recipientName: z.string().optional(),
+  recipientOrg: z.string().optional(),
+  channel: z.string().optional(),
+  notes: z.string().optional(),
+  branchId: z.coerce.number().optional(),
+});
 
 const createSchema = z.object({
   direction: z.enum(["outgoing", "incoming"]),
@@ -30,16 +53,16 @@ const createSchema = z.object({
 });
 
 // ── Generate outgoing/incoming reference ──
-async function generateRef(direction: "outgoing" | "incoming", companyId: number): Promise<string> {
-  const seq = direction === "outgoing" ? "correspondence_outgoing_seq" : "correspondence_incoming_seq";
+async function generateCorrespondenceRef(direction: "outgoing" | "incoming", companyId: number): Promise<string> {
   const prefix = direction === "outgoing" ? "OUT" : "IN";
-  const [row] = await rawQuery<any>(`SELECT nextval('${seq}') AS seq`);
-  const year = new Date().getFullYear();
-  return `${prefix}-${year}-${String(row.seq).padStart(4, "0")}`;
+  const seqName = direction === "outgoing" ? "correspondence_outgoing_seq" : "correspondence_incoming_seq";
+  const [row] = await rawQuery<any>(`SELECT nextval($1::regclass) AS seq`, [seqName]);
+  if (!row) throw new Error(`فشل في توليد التسلسل: ${seqName}`);
+  return makeRef(prefix, row.seq);
 }
 
 // ── List correspondence ──
-correspondenceRouter.get("/", requirePermission("communications:read"), async (req, res) => {
+correspondenceRouter.get("/", authorize({ feature: "communications", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { direction, entityType, entityId, search, status } = req.query as Record<string, string>;
@@ -68,9 +91,10 @@ correspondenceRouter.get("/", requirePermission("communications:read"), async (r
     }
 
     const rows = await rawQuery<any>(
-      `SELECT c.*, u.name AS "createdByName"
+      `SELECT c.*, COALESCE(e.name, u.email) AS "createdByName"
        FROM correspondence c
        LEFT JOIN users u ON u.id = c."createdBy"
+       LEFT JOIN employees e ON e.id = u."employeeId"
        WHERE ${where}
        ORDER BY c."createdAt" DESC
        LIMIT 200`,
@@ -83,14 +107,15 @@ correspondenceRouter.get("/", requirePermission("communications:read"), async (r
 });
 
 // ── Get single correspondence ──
-correspondenceRouter.get("/:id", requirePermission("communications:read"), async (req, res) => {
+correspondenceRouter.get("/:id", authorize({ feature: "communications", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
-      `SELECT c.*, u.name AS "createdByName"
+      `SELECT c.*, COALESCE(e.name, u.email) AS "createdByName"
        FROM correspondence c
        LEFT JOIN users u ON u.id = c."createdBy"
+       LEFT JOIN employees e ON e.id = u."employeeId"
        WHERE c.id = $1 AND c."companyId" = $2`,
       [id, scope.companyId]
     );
@@ -102,11 +127,11 @@ correspondenceRouter.get("/:id", requirePermission("communications:read"), async
 });
 
 // ── Create correspondence ──
-correspondenceRouter.post("/", requirePermission("communications:write"), async (req, res) => {
+correspondenceRouter.post("/", authorize({ feature: "communications", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const data = createSchema.parse(req.body);
-    const ref = await generateRef(data.direction, scope.companyId);
+    const ref = await generateCorrespondenceRef(data.direction, scope.companyId);
 
     const [row] = await rawQuery<any>(
       `INSERT INTO correspondence (
@@ -129,7 +154,7 @@ correspondenceRouter.post("/", requirePermission("communications:write"), async 
     );
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "correspondence_created", entity: "correspondence", entityId: row.id, after: { ref, direction: data.direction } });
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "correspondence.created", entity: "correspondence", entityId: row.id, details: JSON.stringify({ ref, direction: data.direction, subject: data.subject }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "correspondence.created", entity: "correspondence", entityId: row.id, details: JSON.stringify({ ref, direction: data.direction, subject: data.subject }) }).catch((e) => logger.error(e, "correspondence background task failed"));
 
     res.status(201).json(row);
   } catch (err) {
@@ -138,10 +163,10 @@ correspondenceRouter.post("/", requirePermission("communications:write"), async 
 });
 
 // ── Update correspondence (draft only) ──
-correspondenceRouter.patch("/:id", requirePermission("communications:write"), async (req, res) => {
+correspondenceRouter.patch("/:id", authorize({ feature: "communications", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT * FROM correspondence WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
@@ -151,15 +176,16 @@ correspondenceRouter.patch("/:id", requirePermission("communications:write"), as
       throw new ValidationError("لا يمكن تعديل مراسلة تم إرسالها");
     }
 
+    const validated = zodParse(patchCorrespondenceSchema.safeParse(req.body ?? {}));
     const allowed = [
       "subject", "content", "senderName", "senderOrg",
       "recipientName", "recipientOrg", "channel", "notes", "branchId",
-    ];
+    ] as const;
     const sets: string[] = [];
     const params: any[] = [];
     for (const key of allowed) {
-      if (req.body[key] !== undefined) {
-        params.push(req.body[key]);
+      if ((validated as any)[key] !== undefined) {
+        params.push((validated as any)[key]);
         sets.push(`"${key}" = $${params.length}`);
       }
     }
@@ -173,7 +199,8 @@ correspondenceRouter.patch("/:id", requirePermission("communications:write"), as
        RETURNING *`,
       params
     );
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "correspondence.updated", entity: "correspondence", entityId: id, details: JSON.stringify({ id }) }).catch(console.error);
+    if (!updated) throw new NotFoundError("المراسلة غير موجودة");
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "correspondence.updated", entity: "correspondence", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "correspondence background task failed"));
     res.json(updated);
   } catch (err) {
     handleRouteError(err, res, "خطأ في تعديل المراسلة");
@@ -181,10 +208,10 @@ correspondenceRouter.patch("/:id", requirePermission("communications:write"), as
 });
 
 // ── Send correspondence ──
-correspondenceRouter.post("/:id/send", requirePermission("communications:write"), async (req, res) => {
+correspondenceRouter.post("/:id/send", authorize({ feature: "communications", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
       `SELECT * FROM correspondence WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
@@ -197,12 +224,13 @@ correspondenceRouter.post("/:id/send", requirePermission("communications:write")
     const sentField = existing.direction === "outgoing" ? '"sentAt"' : '"receivedAt"';
     const [updated] = await rawQuery<any>(
       `UPDATE correspondence SET status = 'sent', ${sentField} = NOW(), "updatedAt" = NOW()
-       WHERE id = $1 RETURNING *`,
-      [id]
+       WHERE id = $1 AND "companyId" = $2 AND status = 'draft' RETURNING *`,
+      [id, scope.companyId]
     );
+    if (!updated) throw new ConflictError("المراسلة تم إرسالها مسبقاً — أعد التحميل");
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "correspondence_sent", entity: "correspondence", entityId: id, after: { ref: existing.ref } });
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "correspondence.sent", entity: "correspondence", entityId: id, details: JSON.stringify({ ref: existing.ref, direction: existing.direction }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "correspondence.sent", entity: "correspondence", entityId: id, details: JSON.stringify({ ref: existing.ref, direction: existing.direction }) }).catch((e) => logger.error(e, "correspondence background task failed"));
 
     res.json(updated);
   } catch (err) {
@@ -211,11 +239,12 @@ correspondenceRouter.post("/:id/send", requirePermission("communications:write")
 });
 
 // ── Record response to correspondence ──
-correspondenceRouter.post("/:id/respond", requirePermission("communications:write"), async (req, res) => {
+correspondenceRouter.post("/:id/respond", authorize({ feature: "communications", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
-    const { subject, content, notes } = req.body as { subject?: string; content?: string; notes?: string };
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(respondSchema.safeParse(req.body ?? {}));
+    const { subject, content, notes } = b;
 
     const [original] = await rawQuery<any>(
       `SELECT * FROM correspondence WHERE id = $1 AND "companyId" = $2`,
@@ -224,36 +253,40 @@ correspondenceRouter.post("/:id/respond", requirePermission("communications:writ
     if (!original) throw new NotFoundError("المراسلة الأصلية غير موجودة");
 
     const responseDirection = original.direction === "outgoing" ? "incoming" : "outgoing";
-    const responseRef = await generateRef(responseDirection as "outgoing" | "incoming", scope.companyId);
+    const responseRef = await generateCorrespondenceRef(responseDirection as "outgoing" | "incoming", scope.companyId);
 
-    const [response] = await rawQuery<any>(
-      `INSERT INTO correspondence (
-        "companyId", "branchId", direction, ref, subject, content,
-        "entityType", "entityId",
-        "senderName", "senderOrg", "recipientName", "recipientOrg",
-        channel, status, "responseRef", notes, "createdBy"
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'draft',$14,$15,$16)
-      RETURNING *`,
-      [
-        scope.companyId, original.branchId, responseDirection, responseRef,
-        subject || `رد: ${original.subject}`, content || null,
-        original.entityType, original.entityId,
-        original.recipientName, original.recipientOrg,
-        original.senderName, original.senderOrg,
-        original.channel, original.ref,
-        notes || null, scope.userId,
-      ]
-    );
+    const response = await withTransaction(async (client) => {
+      const insertRes = await client.query(
+        `INSERT INTO correspondence (
+          "companyId", "branchId", direction, ref, subject, content,
+          "entityType", "entityId",
+          "senderName", "senderOrg", "recipientName", "recipientOrg",
+          channel, status, "responseRef", notes, "createdBy"
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'draft',$14,$15,$16)
+        RETURNING *`,
+        [
+          scope.companyId, original.branchId, responseDirection, responseRef,
+          subject || `رد: ${original.subject}`, content || null,
+          original.entityType, original.entityId,
+          original.recipientName, original.recipientOrg,
+          original.senderName, original.senderOrg,
+          original.channel, original.ref,
+          notes || null, scope.userId,
+        ]
+      );
 
-    await rawExecute(
-      `UPDATE correspondence SET "respondedAt" = NOW(), "responseRef" = $2, "updatedAt" = NOW() WHERE id = $1`,
-      [id, responseRef]
-    );
+      await client.query(
+        `UPDATE correspondence SET "respondedAt" = NOW(), "responseRef" = $2, "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $3`,
+        [id, responseRef, scope.companyId]
+      );
+
+      return insertRes.rows[0];
+    });
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "correspondence_response", entity: "correspondence", entityId: response.id, after: {
       responseRef, originalRef: original.ref,
     } });
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "correspondence.responded", entity: "correspondence", entityId: response.id, details: JSON.stringify({ responseRef, originalRef: original.ref }) }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "correspondence.responded", entity: "correspondence", entityId: response.id, details: JSON.stringify({ responseRef, originalRef: original.ref }) }).catch((e) => logger.error(e, "correspondence background task failed"));
 
     res.status(201).json(response);
   } catch (err) {
@@ -262,7 +295,7 @@ correspondenceRouter.post("/:id/respond", requirePermission("communications:writ
 });
 
 // ── Dashboard stats ──
-correspondenceRouter.get("/stats/summary", requirePermission("communications:read"), async (req, res) => {
+correspondenceRouter.get("/stats/summary", authorize({ feature: "communications", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const [stats] = await rawQuery<any>(

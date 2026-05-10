@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { GitBranch, Plus, X, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -17,7 +16,7 @@ export function ApprovalWorkflowsTab() {
   const chains = data?.data || [];
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const entityTypes = [
     { value: "leave", label: "الإجازات" },
@@ -80,12 +79,9 @@ export function ApprovalWorkflowsTab() {
         <Card><CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <Label>نوع الطلب</Label>
-            <Select value={form.entityType} onValueChange={(v) => setForm({ ...form, entityType: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {entityTypes.map(et => <SelectItem key={et.value} value={et.value}>{et.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <select className="w-full border rounded-md p-2" value={form.entityType} onChange={(e) => setForm({ ...form, entityType: e.target.value })}>
+              {entityTypes.map(et => <option key={et.value} value={et.value}>{et.label}</option>)}
+            </select>
           </div>
           <div>
             <Label>المرحلة (الترتيب)</Label>
@@ -93,19 +89,16 @@ export function ApprovalWorkflowsTab() {
           </div>
           <div>
             <Label>الدور المطلوب للموافقة</Label>
-            <Select value={form.approverRole} onValueChange={(v) => setForm({ ...form, approverRole: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {approverRoles.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <select className="w-full border rounded-md p-2" value={form.approverRole} onChange={(e) => setForm({ ...form, approverRole: e.target.value })}>
+              {approverRoles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+            </select>
           </div>
           <div>
             <Label>التسمية (اختياري)</Label>
             <Input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="مثال: موافقة المدير" />
           </div>
           <div className="md:col-span-2">
-            <Button onClick={handleSubmit}>حفظ</Button>
+            <Button onClick={handleSubmit} rateLimitAware>حفظ</Button>
           </div>
         </CardContent></Card>
       )}

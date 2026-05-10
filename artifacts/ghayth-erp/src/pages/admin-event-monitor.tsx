@@ -4,6 +4,7 @@ import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { formatDateAr } from "@/lib/formatters";
 import { useState } from "react";
 import {
@@ -25,6 +26,19 @@ export default function AdminEventMonitor() {
   const filteredCatalog = domainFilter === "all"
     ? catalog
     : catalog.filter((e: any) => e.domain === domainFilter);
+
+  const recentEventColumns: DataTableColumn<any>[] = [
+    { key: "action", header: "الحدث", searchable: true, render: (r: any) => <span className="font-mono text-xs">{r.action}</span> },
+    { key: "entity", header: "الكيان", render: (r: any) => <span className="text-xs">{r.entity || "—"}</span> },
+    { key: "createdAt", header: "التاريخ", render: (r: any) => <span className="text-xs">{formatDateAr(r.createdAt)}</span> },
+  ];
+
+  const catalogColumns: DataTableColumn<any>[] = [
+    { key: "action", header: "الحدث", searchable: true, render: (r: any) => <span className="font-mono text-xs">{r.action}</span> },
+    { key: "domain", header: "النطاق", render: (r: any) => <Badge variant="outline" className="text-[10px]">{r.domain}</Badge> },
+    { key: "label", header: "الوصف", searchable: true },
+    { key: "critical", header: "حرج", render: (r: any) => r.critical ? <Badge className="bg-red-100 text-red-800">حرج</Badge> : null },
+  ];
 
   return (
     <PageShell
@@ -98,26 +112,12 @@ export default function AdminEventMonitor() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="max-h-[300px] overflow-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-gray-50 sticky top-0">
-                        <th className="p-2 text-start">الحدث</th>
-                        <th className="p-2 text-start">الكيان</th>
-                        <th className="p-2 text-start">التاريخ</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {recentEvents.map((ev: any, i: number) => (
-                        <tr key={i} className="border-b hover:bg-gray-50">
-                          <td className="p-2 font-mono text-xs">{ev.action}</td>
-                          <td className="p-2 text-xs">{ev.entity || "—"}</td>
-                          <td className="p-2 text-xs">{formatDateAr(ev.createdAt)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <DataTable
+                  columns={recentEventColumns}
+                  data={recentEvents}
+                  noToolbar
+                  pageSize={0}
+                />
               </CardContent>
             </Card>
           )}
@@ -132,30 +132,13 @@ export default function AdminEventMonitor() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="max-h-[500px] overflow-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-gray-50 sticky top-0">
-                      <th className="p-2 text-start">الحدث</th>
-                      <th className="p-2 text-start">النطاق</th>
-                      <th className="p-2 text-start">الوصف</th>
-                      <th className="p-2 text-start">حرج</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredCatalog.map((ev: any, i: number) => (
-                      <tr key={i} className="border-b hover:bg-gray-50">
-                        <td className="p-2 font-mono text-xs">{ev.action}</td>
-                        <td className="p-2"><Badge variant="outline" className="text-[10px]">{ev.domain}</Badge></td>
-                        <td className="p-2 text-xs">{ev.label}</td>
-                        <td className="p-2">
-                          {ev.critical && <Badge className="bg-red-100 text-red-800">حرج</Badge>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable
+                columns={catalogColumns}
+                data={filteredCatalog}
+                noToolbar
+                pageSize={0}
+                emptyMessage="لا توجد أحداث"
+              />
             </CardContent>
           </Card>
         </div>

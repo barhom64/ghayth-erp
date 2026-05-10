@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
 export default function ReceivablesPage() {
+  const [, navigate] = useLocation();
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["receivables", scopeQueryString], `/finance/receivables${scopeSuffix}`);
@@ -21,7 +22,7 @@ export default function ReceivablesPage() {
   const [filters, setFilters] = useFilters();
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const filtered = applyFilters(items, filters, {
     searchFields: ["ref", "clientName"],
@@ -144,6 +145,7 @@ export default function ReceivablesPage() {
         emptyMessage="لا توجد مستحقات"
         emptyIcon={<ArrowDownCircle className="h-6 w-6 text-slate-400" />}
         noToolbar
+        onRowClick={(row) => navigate(`/finance/receivables/${row.id}`)}
       />
     </PageShell>
   );

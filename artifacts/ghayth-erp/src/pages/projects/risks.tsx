@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useSearch } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,8 +11,8 @@ import { ShieldAlert, Plus, AlertTriangle } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { ProjectsTabsNav } from "@/components/shared/projects-tabs-nav";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 
 const RISK_LEVEL_COLORS: Record<string, string> = {
   low: "bg-green-100 text-green-700",
@@ -33,14 +32,16 @@ const RISK_STATUS_LABELS: Record<string, string> = {
   open: "مفتوح", mitigated: "مُعالَج", closed: "مغلق",
 };
 
+const STATUS_OPTIONS = Object.entries(RISK_STATUS_LABELS).map(([value, label]) => ({ value, label }));
+const RISK_LEVEL_OPTIONS = Object.entries(RISK_LEVEL_LABELS).map(([value, label]) => ({ value, label }));
+
 export default function RisksPage() {
-  const search = useSearch();
-  const urlProjectId = new URLSearchParams(search).get("projectId") || "";
-  const [projectId, setProjectId] = useState(urlProjectId);
+  const [projectId, setProjectId] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [filters, setFilters] = useFilters();
   const [form, setForm] = useState({ title: "", description: "", probability: "3", impact: "3", mitigationPlan: "" });
 
-  const { data: projects, isLoading, isError } = useApiQuery<any>(["projects-list"], "/projects?limit=100");
+  const { data: projects } = useApiQuery<any>(["projects-list"], "/projects?limit=100");
   const projectList = asList(projects?.data || projects);
 
   const { data, refetch } = useApiQuery<any>(
@@ -75,14 +76,88 @@ export default function RisksPage() {
   const criticalCount = risks.filter((r: any) => r.riskLevel === "critical").length;
   const highCount = risks.filter((r: any) => r.riskLevel === "high").length;
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  const filtered = applyFilters(risks, filters, {
+    searchFields: ["title", "description", "mitigationPlan"],
+    statusField: "status",
+    extraFields: { riskLevel: "riskLevel" },
+  });
+
+  const columns: DataTableColumn<any>[] = [
+    {
+      key: "title",
+      header: "عنوان المخاطرة",
+      sortable: true,
+      searchable: true,
+      render: (r) => (
+        <div>
+          <div className="font-medium">{r.title}</div>
+          {r.description && <div className="text-xs text-gray-500 mt-0.5 max-w-xs truncate">{r.description}</div>}
+        </div>
+      ),
+    },
+    {
+      key: "riskLevel",
+      header: "مستوى الخطورة",
+      sortable: true,
+      render: (r) => (
+        <Badge className={RISK_LEVEL_COLORS[r.riskLevel] || "bg-gray-100 text-gray-600"}>
+          {RISK_LEVEL_LABELS[r.riskLevel] || r.riskLevel}
+        </Badge>
+      ),
+    },
+    {
+      key: "probability",
+      header: "الاحتمالية",
+      sortable: true,
+      align: "center",
+      render: (r) => (
+        <span className="font-bold text-lg">{r.probability}</span>
+      ),
+    },
+    {
+      key: "impact",
+      header: "الأثر",
+      sortable: true,
+      align: "center",
+      render: (r) => (
+        <span className="font-bold text-lg">{r.impact}</span>
+      ),
+    },
+    {
+      key: "riskScore",
+      header: "الدرجة",
+      sortable: true,
+      align: "center",
+      render: (r) => (
+        <Badge variant="outline" className="font-mono">{r.riskScore ?? "-"}</Badge>
+      ),
+    },
+    {
+      key: "mitigationPlan",
+      header: "خطة التخفيف",
+      render: (r) => r.mitigationPlan ? (
+        <div className="text-xs text-gray-600 max-w-xs truncate">{r.mitigationPlan}</div>
+      ) : <span className="text-gray-400">-</span>,
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      render: (r) => (
+        <Select value={r.status} onValueChange={(v) => handleStatusUpdate(r.id, v)}>
+          <SelectTrigger className="w-32 h-7 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {Object.entries(RISK_STATUS_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      ),
+    },
+  ];
 
   return (
     <PageShell
       title="مخاطر المشاريع"
       subtitle="تسجيل وإدارة مخاطر المشاريع وخطط التخفيف"
-      breadcrumbs={[{ href: "/projects", label: "إدارة المشاريع" }, { label: "مخاطر المشاريع" }]}
+      breadcrumbs={[{ href: "/projects", label: "المشاريع" }, { label: "مخاطر المشاريع" }]}
       actions={
         <>
           {criticalCount > 0 && <Badge className="bg-red-100 text-red-700">{criticalCount} حرج</Badge>}
@@ -93,7 +168,6 @@ export default function RisksPage() {
         </>
       }
     >
-      <ProjectsTabsNav />
       <div className="flex items-center gap-2">
         <Label>المشروع:</Label>
         <Select value={projectId} onValueChange={setProjectId}>
@@ -139,7 +213,7 @@ export default function RisksPage() {
               <Textarea value={form.mitigationPlan} onChange={(e) => setForm({ ...form, mitigationPlan: e.target.value })} rows={2} placeholder="الإجراءات للحد من هذه المخاطرة" />
             </div>
             <div className="col-span-2 flex gap-2">
-              <Button onClick={handleSave}>حفظ</Button>
+              <Button onClick={handleSave} rateLimitAware>حفظ</Button>
               <Button variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>
             </div>
           </CardContent>
@@ -148,52 +222,38 @@ export default function RisksPage() {
 
       {!projectId ? (
         <Card><CardContent className="py-8 text-center text-gray-400">اختر مشروعاً لعرض المخاطر</CardContent></Card>
-      ) : risks.length === 0 ? (
-        <Card><CardContent className="py-8 text-center text-gray-400">لا توجد مخاطر مسجلة لهذا المشروع</CardContent></Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {risks.map((r: any) => (
-            <Card key={r.id} className={`hover:shadow-md border-r-4 ${r.riskLevel === "critical" ? "border-r-red-500" : r.riskLevel === "high" ? "border-r-orange-400" : r.riskLevel === "medium" ? "border-r-yellow-400" : "border-r-green-400"}`}>
-              <CardContent className="p-4 space-y-2">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="font-medium">{r.title}</div>
-                    {r.description && <div className="text-xs text-gray-500 mt-0.5">{r.description}</div>}
-                  </div>
-                  <Badge className={RISK_LEVEL_COLORS[r.riskLevel] || "bg-gray-100 text-gray-600"}>{RISK_LEVEL_LABELS[r.riskLevel] || r.riskLevel}</Badge>
-                </div>
-                <div className="grid grid-cols-3 text-xs gap-2">
-                  <div className="text-center p-2 bg-gray-50 rounded">
-                    <div className="font-bold text-lg">{r.probability}</div>
-                    <div className="text-gray-500">احتمالية</div>
-                  </div>
-                  <div className="text-center p-2 bg-gray-50 rounded">
-                    <div className="font-bold text-lg">×</div>
-                    <div className="text-gray-500"></div>
-                  </div>
-                  <div className="text-center p-2 bg-gray-50 rounded">
-                    <div className="font-bold text-lg">{r.impact}</div>
-                    <div className="text-gray-500">أثر</div>
-                  </div>
-                </div>
-                {r.mitigationPlan && (
-                  <div className="text-xs text-gray-600 bg-blue-50 p-2 rounded">
-                    <span className="font-medium">خطة التخفيف: </span>{r.mitigationPlan}
-                  </div>
-                )}
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-400">الدرجة: {r.riskScore}</span>
-                  <Select value={r.status} onValueChange={(v) => handleStatusUpdate(r.id, v)}>
-                    <SelectTrigger className="w-32 h-7 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(RISK_STATUS_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <>
+          <AdvancedFilters
+            config={{
+              showSearch: true,
+              searchPlaceholder: "بحث بالعنوان، الوصف، خطة التخفيف...",
+              statuses: STATUS_OPTIONS,
+              showDateRange: false,
+              extraFilters: [{
+                key: "riskLevel",
+                label: "مستوى الخطورة",
+                options: RISK_LEVEL_OPTIONS,
+              }],
+            }}
+            values={filters}
+            onChange={setFilters}
+            resultCount={filtered.length}
+          />
+
+          <DataTable
+            columns={columns}
+            data={filtered}
+            noToolbar
+            emptyMessage="لا توجد مخاطر مسجلة لهذا المشروع"
+            emptyIcon={<ShieldAlert className="w-10 h-10 text-gray-300" />}
+            rowClassName={(r) => {
+              if (r.riskLevel === "critical") return "bg-red-50/30";
+              if (r.riskLevel === "high") return "bg-orange-50/30";
+              return undefined as any;
+            }}
+          />
+        </>
       )}
     </PageShell>
   );

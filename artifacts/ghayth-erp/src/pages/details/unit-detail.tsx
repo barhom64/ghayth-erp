@@ -21,6 +21,8 @@ import { EntityFinancialProfile } from "@/components/shared/entity-financial-pro
 import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { CheckSquare, BookOpen } from "lucide-react";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const TABS = [
@@ -39,8 +41,8 @@ const STATUS_OPTIONS = [
   { value: "rented", label: "مؤجرة" },
   { value: "maintenance", label: "تحت صيانة" },
   { value: "reserved", label: "محجوزة" },
-  { value: "defaulted", label: "متعثرة" },
-  { value: "expired", label: "منتهي العقد" },
+  { value: "under_maintenance", label: "تحت الصيانة" },
+  { value: "out_of_service", label: "خارج الخدمة" },
 ];
 
 const STATUS_COLORS: Record<string, string> = {
@@ -48,8 +50,8 @@ const STATUS_COLORS: Record<string, string> = {
   rented: "bg-blue-100 text-blue-700 border-blue-200",
   maintenance: "bg-amber-100 text-amber-700 border-amber-200",
   reserved: "bg-purple-100 text-purple-700 border-purple-200",
-  defaulted: "bg-red-100 text-red-700 border-red-200",
-  expired: "bg-gray-100 text-gray-700 border-gray-200",
+  under_maintenance: "bg-amber-100 text-amber-700 border-amber-200",
+  out_of_service: "bg-red-100 text-red-700 border-red-200",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -57,8 +59,8 @@ const STATUS_LABELS: Record<string, string> = {
   rented: "مؤجرة",
   maintenance: "تحت صيانة",
   reserved: "محجوزة",
-  defaulted: "متعثرة",
-  expired: "منتهي العقد",
+  under_maintenance: "تحت الصيانة",
+  out_of_service: "خارج الخدمة",
 };
 
 const DIRECTION_LABELS: Record<string, string> = {
@@ -407,7 +409,7 @@ export default function UnitDetail() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <DataTable<any>
+                <DataTable
                   columns={[
                     { key: "tenantName", header: "المستأجر" },
                     { key: "dueDate", header: "الاستحقاق", render: (p) => <span className="text-red-600">{formatDateAr(p.dueDate)}</span> },
@@ -494,7 +496,7 @@ export default function UnitDetail() {
             {contracts.length === 0 ? (
               <p className="text-center text-gray-400 py-8">لا توجد عقود</p>
             ) : (
-              <DataTable<any>
+              <DataTable
                 columns={[
                   { key: "tenantName", header: "المستأجر", render: (c) => <span className="font-medium">{c.tenantName}</span> },
                   { key: "startDate", header: "من", render: (c) => <span className="text-gray-500">{formatDateAr(c.startDate)}</span> },
@@ -524,7 +526,7 @@ export default function UnitDetail() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <DataTable<any>
+                <DataTable
                   columns={[
                     { key: "tenantName", header: "المستأجر" },
                     { key: "dueDate", header: "تاريخ الاستحقاق", render: (p) => <span className="text-red-600">{formatDateAr(p.dueDate)}</span> },
@@ -550,7 +552,7 @@ export default function UnitDetail() {
               {payments.length === 0 ? (
                 <p className="text-center text-gray-400 py-8">لا توجد مدفوعات</p>
               ) : (
-                <DataTable<any>
+                <DataTable
                   columns={[
                     { key: "tenantName", header: "المستأجر" },
                     { key: "dueDate", header: "تاريخ الاستحقاق", render: (p) => <span className="text-gray-500">{formatDateAr(p.dueDate)}</span> },
@@ -581,7 +583,7 @@ export default function UnitDetail() {
             {maintenance.length === 0 ? (
               <p className="text-center text-gray-400 py-8">لا توجد سجلات صيانة</p>
             ) : (
-              <DataTable<any>
+              <DataTable
                 columns={[
                   { key: "category", header: "الفئة", render: (m) => <span className="font-medium">{m.category || "-"}</span> },
                   { key: "description", header: "الوصف", render: (m) => <span className="text-gray-500 max-w-xs truncate block">{m.description || "-"}</span> },
@@ -634,10 +636,12 @@ export default function UnitDetail() {
       )}
 
       {activeTab === "tasks" && id && (
-        <LinkedTasks entityType="property_unit" entityId={id} includeMaintenanceTasks />
+        <LinkedTasks entityType="property-unit" entityId={id} includeMaintenanceTasks />
       )}
 
 
+      {id && <EntityComments entityType="unit" entityId={id} />}
+      {id && <EntityTags entityType="unit" entityId={id} />}
     </div>
   ) : <div />;
 
@@ -647,12 +651,12 @@ export default function UnitDetail() {
       subtitle={`${unit?.buildingName || "-"}${unit?.address ? ` — ${unit.address}` : ""}`}
       backPath="/properties"
       backLabel="الوحدات"
-      status={{ label: STATUS_LABELS[unit?.status] || unit?.status, tone: unit?.status === "available" ? "success" : unit?.status === "rented" ? "info" : unit?.status === "maintenance" ? "warning" : unit?.status === "defaulted" ? "destructive" : "muted" }}
-      entityType="property_unit"
+      status={{ label: STATUS_LABELS[unit?.status] || unit?.status, tone: unit?.status === "available" ? "success" : unit?.status === "rented" ? "info" : (unit?.status === "maintenance" || unit?.status === "under_maintenance") ? "warning" : unit?.status === "out_of_service" ? "destructive" : "muted" }}
+      entityType="property-unit"
       entityId={id || ""}
       isLoading={isLoading}
       error={isError ? error : undefined}
-      onRetry={() => window.location.reload()}
+     
       createdAt={unit?.createdAt}
       updatedAt={unit?.updatedAt}
       overview={overview}

@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
+import { formatDateAr } from "@/lib/formatters";
 import { useApiQuery, asList } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useQueryClient } from "@tanstack/react-query";
@@ -29,7 +31,7 @@ function LeaveApprovalCard({ request, onDone }: { request: any; onDone: () => vo
             </div>
             <div className="text-sm text-gray-500 ms-10 space-y-1">
               <p>النوع: {request.leaveTypeName || request.leaveType}</p>
-              <p>الفترة: {request.startDate} — {request.endDate} ({request.days} أيام)</p>
+              <p>الفترة: {formatDateAr(request.startDate)} — {formatDateAr(request.endDate)} ({request.days} أيام)</p>
               {request.reason && <p>السبب: {request.reason}</p>}
               <NotesDisplay status={request.status} notes={request.rejectedReason} returnReason={request.returnReason} rejectionReason={request.rejectedReason} />
             </div>
@@ -78,6 +80,7 @@ function LeaveApprovalCard({ request, onDone }: { request: any; onDone: () => vo
 }
 
 export default function LeaveManagementPage() {
+  const [, navigate] = useLocation();
   const { data: requestsData, refetch: refetchPending, isLoading, isError } = useApiQuery<any>(["leaves-pending"], "/hr/leave-requests?status=pending");
   const { data: balanceData } = useApiQuery<any>(["leave-balance"], "/hr/leave-balance");
   const { data: typesData } = useApiQuery<any>(["leave-types"], "/hr/leave-types");
@@ -89,7 +92,7 @@ export default function LeaveManagementPage() {
   const qc = useQueryClient();
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const handleDone = () => {
     refetchPending();
@@ -143,6 +146,7 @@ export default function LeaveManagementPage() {
             noToolbar
             emptyMessage="لا توجد أرصدة"
             pageSize={20}
+            onRowClick={(row) => navigate(`/hr/leaves/${row.id}`)}
           />
         </TabsContent>
 

@@ -8,10 +8,13 @@ import { AttachmentPreview, type PreviewableAttachment } from "@/components/shar
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { Edit, Paperclip, Eye, Wallet } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { PAYMENT_METHODS } from "@/lib/finance-type-maps";
 import { useToast } from "@/hooks/use-toast";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 /**
  * ExpenseDetail — unified detail page for a single expense journal entry.
@@ -359,6 +362,14 @@ export default function ExpenseDetail() {
                 approveEndpoint={`/finance/expenses/${id}/approve`}
                 rejectEndpoint={`/finance/expenses/${id}/approve`}
                 returnEndpoint={`/finance/expenses/${id}/approve`}
+                approveMethod="PATCH"
+                rejectMethod="PATCH"
+                returnMethod="PATCH"
+                approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
+                rejectBody={(notes) => ({ approved: false, notes })}
+                returnBody={(notes) => ({ approved: "returned", notes })}
+                pendingStatuses={["draft", "pending_approval", "returned"]}
+                invalidateKeys={[["expenses"]]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث المصروف" });
@@ -380,6 +391,11 @@ export default function ExpenseDetail() {
           </Card>
         )}
       </div>
+
+      {id && <ApprovalTimeline entityType="expense" entityId={id} />}
+
+      {id && <EntityComments entityType="expense" entityId={id} />}
+      {id && <EntityTags entityType="expense" entityId={id} />}
     </div>
   );
 

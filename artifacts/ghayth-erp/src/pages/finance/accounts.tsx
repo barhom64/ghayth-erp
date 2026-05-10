@@ -267,7 +267,7 @@ export default function AccountsPage() {
   };
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   return (
     <>
@@ -395,6 +395,7 @@ export default function AccountsPage() {
               <DataTable
                 columns={flatColumns}
                 data={sortedFlat}
+                onRowClick={(acc) => navigate(`/finance/ledger/${acc.code}`)}
                 noToolbar
                 emptyMessage="لا توجد حسابات"
               />

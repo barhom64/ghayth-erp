@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -8,6 +7,7 @@ import { Shield, UserCog, CheckCircle, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { ROLE_OPTIONS } from "./shared";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const PERM_MODULES = [
   { key: "hr", label: "الموارد البشرية" },
@@ -50,7 +50,7 @@ export function PermissionsTab() {
   const loadRolePerms = async (role: string) => {
     setLoading(true);
     try {
-      const data = await apiFetch(`/admin/role-permissions?role=${encodeURIComponent(role)}`);
+      const data = await apiFetch(`/permissions/role-permissions?role=${encodeURIComponent(role)}`);
       const perms = (data.data || []).map((p: any) => p.permission);
       setRolePerms(new Set(perms));
     } catch {
@@ -82,14 +82,13 @@ export function PermissionsTab() {
     setSaving(key);
     try {
       if (hasPerm && rolePerms.has(perm)) {
-        const rows = await apiFetch(`/admin/role-permissions?role=${encodeURIComponent(selectedRole)}`);
-        const match = (rows.data || []).find((r: any) => r.permission === perm);
-        if (match) {
-          await apiFetch(`/admin/role-permissions/${match.id}`, { method: "DELETE" });
-          setRolePerms(prev => { const s = new Set(prev); s.delete(perm); return s; });
-        }
+        await apiFetch("/permissions/role-permissions", {
+          method: "DELETE",
+          body: JSON.stringify({ role: selectedRole, permission: perm }),
+        });
+        setRolePerms(prev => { const s = new Set(prev); s.delete(perm); return s; });
       } else if (!hasPerm) {
-        await apiFetch("/admin/role-permissions", {
+        await apiFetch("/permissions/role-permissions", {
           method: "POST",
           body: JSON.stringify({ role: selectedRole, permission: perm }),
         });
@@ -123,8 +122,71 @@ export function PermissionsTab() {
     }
   };
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  const rolePermColumns: DataTableColumn<any>[] = [
+    { key: "label", header: "الوحدة", width: "128px", render: (r: any) => <span className="font-medium text-sm text-gray-700">{r.label}</span> },
+    ...PERM_ACTIONS.map((action) => ({
+      key: action.key,
+      header: action.label,
+      align: "center" as const,
+      render: (r: any) => {
+        const perm = `${r.key}:${action.key}`;
+        const hasWildcard = rolePerms.has("*") || rolePerms.has(`${r.key}:*`);
+        const hasPerm = hasWildcard || rolePerms.has(perm);
+        const isSaving = saving === perm;
+        return (
+          <button
+            onClick={() => !hasWildcard && toggleRolePerm(r.key, action.key)}
+            disabled={hasWildcard || isSaving}
+            className={cn(
+              "w-7 h-7 rounded-md transition-all mx-auto flex items-center justify-center border-2",
+              hasPerm
+                ? hasWildcard
+                  ? "bg-blue-100 border-blue-200 cursor-not-allowed"
+                  : "bg-green-100 border-green-500 hover:bg-green-200"
+                : "bg-white border-gray-200 hover:border-gray-400",
+              isSaving && "opacity-50"
+            )}
+            title={hasWildcard ? "صلاحية كاملة من الدور" : hasPerm ? "انقر لإزالة" : "انقر لإضافة"}
+          >
+            {hasPerm && <CheckCircle className={cn("h-4 w-4", hasWildcard ? "text-blue-500" : "text-green-600")} />}
+          </button>
+        );
+      },
+    })),
+  ];
+
+  const userPermColumns: DataTableColumn<any>[] = [
+    { key: "label", header: "الوحدة", width: "128px", render: (r: any) => <span className="font-medium text-sm text-gray-700">{r.label}</span> },
+    ...PERM_ACTIONS.map((action) => ({
+      key: action.key,
+      header: action.label,
+      align: "center" as const,
+      render: (r: any) => {
+        const perm = `${r.key}:${action.key}`;
+        const existing = userPerms.find((p: any) => p.permission === perm);
+        const isGranted = existing?.type === "grant";
+        const isRevoked = existing?.type === "revoke";
+        return (
+          <button
+            onClick={() => toggleUserPerm(perm, existing?.type || null)}
+            className={cn(
+              "w-7 h-7 rounded-md transition-all mx-auto flex items-center justify-center border-2",
+              isGranted ? "bg-green-100 border-green-500 hover:bg-green-200" :
+              isRevoked ? "bg-red-100 border-red-500 hover:bg-red-200" :
+              "bg-white border-gray-200 hover:border-gray-400"
+            )}
+            title={isGranted ? "مُمنوح — انقر لإزالة" : isRevoked ? "مسحوب — انقر لإزالة" : "انقر لمنح"}
+          >
+            {isGranted && <CheckCircle className="h-4 w-4 text-green-600" />}
+            {isRevoked && <X className="h-4 w-4 text-red-600" />}
+          </button>
+        );
+      },
+    })),
+  ];
+
+  if (isLoading) return <DataTable columns={rolePermColumns} data={[]} isLoading={true} searchPlaceholder={null} noToolbar />;
+  if (isError) return <DataTable columns={rolePermColumns} data={[]} isError={true} searchPlaceholder={null} noToolbar />;
 
   return (
     <div className="space-y-6">
@@ -147,50 +209,14 @@ export function PermissionsTab() {
             {loading ? (
               <p className="text-sm text-gray-400 text-center py-4">جاري التحميل...</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm border-collapse">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="p-2 text-start font-medium text-gray-600 w-32">الوحدة</th>
-                      {PERM_ACTIONS.map(a => (
-                        <th key={a.key} className="p-2 text-center font-medium text-gray-600 min-w-[70px]">{a.label}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {PERM_MODULES.map((mod) => (
-                      <tr key={mod.key} className="border-b hover:bg-gray-50">
-                        <td className="p-2 font-medium text-sm text-gray-700">{mod.label}</td>
-                        {PERM_ACTIONS.map(action => {
-                          const perm = `${mod.key}:${action.key}`;
-                          const hasWildcard = rolePerms.has("*") || rolePerms.has(`${mod.key}:*`);
-                          const hasPerm = hasWildcard || rolePerms.has(perm);
-                          const isSaving = saving === perm;
-                          return (
-                            <td key={action.key} className="p-2 text-center">
-                              <button
-                                onClick={() => !hasWildcard && toggleRolePerm(mod.key, action.key)}
-                                disabled={hasWildcard || isSaving}
-                                className={cn(
-                                  "w-7 h-7 rounded-md transition-all mx-auto flex items-center justify-center border-2",
-                                  hasPerm
-                                    ? hasWildcard
-                                      ? "bg-blue-100 border-blue-200 cursor-not-allowed"
-                                      : "bg-green-100 border-green-500 hover:bg-green-200"
-                                    : "bg-white border-gray-200 hover:border-gray-400",
-                                  isSaving && "opacity-50"
-                                )}
-                                title={hasWildcard ? "صلاحية كاملة من الدور" : hasPerm ? "انقر لإزالة" : "انقر لإضافة"}
-                              >
-                                {hasPerm && <CheckCircle className={cn("h-4 w-4", hasWildcard ? "text-blue-500" : "text-green-600")} />}
-                              </button>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div>
+                <DataTable
+                  columns={rolePermColumns}
+                  data={PERM_MODULES}
+                  noToolbar
+                  pageSize={0}
+                  rowKey={(r: any) => r.key}
+                />
                 {(rolePerms.has("*")) && (
                   <p className="text-xs text-blue-600 mt-2 flex items-center gap-1">
                     <Shield className="h-3 w-3" />
@@ -226,47 +252,14 @@ export function PermissionsTab() {
                 {userLoading ? (
                   <p className="text-sm text-gray-400">جاري التحميل...</p>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm border-collapse">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="p-2 text-start font-medium text-gray-600 w-32">الوحدة</th>
-                          {PERM_ACTIONS.map(a => (
-                            <th key={a.key} className="p-2 text-center font-medium text-gray-600 min-w-[70px]">{a.label}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {PERM_MODULES.map((mod) => (
-                          <tr key={mod.key} className="border-b hover:bg-gray-50">
-                            <td className="p-2 font-medium text-sm text-gray-700">{mod.label}</td>
-                            {PERM_ACTIONS.map(action => {
-                              const perm = `${mod.key}:${action.key}`;
-                              const existing = userPerms.find((p: any) => p.permission === perm);
-                              const isGranted = existing?.type === "grant";
-                              const isRevoked = existing?.type === "revoke";
-                              return (
-                                <td key={action.key} className="p-2 text-center">
-                                  <button
-                                    onClick={() => toggleUserPerm(perm, existing?.type || null)}
-                                    className={cn(
-                                      "w-7 h-7 rounded-md transition-all mx-auto flex items-center justify-center border-2",
-                                      isGranted ? "bg-green-100 border-green-500 hover:bg-green-200" :
-                                      isRevoked ? "bg-red-100 border-red-500 hover:bg-red-200" :
-                                      "bg-white border-gray-200 hover:border-gray-400"
-                                    )}
-                                    title={isGranted ? "مُمنوح — انقر لإزالة" : isRevoked ? "مسحوب — انقر لإزالة" : "انقر لمنح"}
-                                  >
-                                    {isGranted && <CheckCircle className="h-4 w-4 text-green-600" />}
-                                    {isRevoked && <X className="h-4 w-4 text-red-600" />}
-                                  </button>
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div>
+                    <DataTable
+                      columns={userPermColumns}
+                      data={PERM_MODULES}
+                      noToolbar
+                      pageSize={0}
+                      rowKey={(r: any) => r.key}
+                    />
                     <p className="text-xs text-gray-400 mt-2">الصلاحيات الخضراء مُضافة للمستخدم، الحمراء مسحوبة منه. الخلايا الفارغة تعتمد على صلاحيات الدور.</p>
                   </div>
                 )}

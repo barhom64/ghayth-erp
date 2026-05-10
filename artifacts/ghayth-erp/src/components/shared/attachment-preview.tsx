@@ -93,10 +93,7 @@ export function AttachmentPreview({ attachment, open, onOpenChange }: Attachment
       setError(null);
       try {
         const url = attachment.previewUrl || `${BASE}/api/documents/${attachment.id}/preview`;
-        const token = localStorage.getItem("erp_token");
-        const res = await fetch(url, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
+        const res = await fetch(url, { credentials: "include" });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
           throw new Error(body.error || "تعذّر تحميل المعاينة");
@@ -123,10 +120,7 @@ export function AttachmentPreview({ attachment, open, onOpenChange }: Attachment
     if (!attachment) return;
     try {
       const url = attachment.downloadUrl || `${BASE}/api/documents/${attachment.id}/download`;
-      const token = localStorage.getItem("erp_token");
-      const res = await fetch(url, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("فشل التنزيل");
       const blob = await res.blob();
       const a = document.createElement("a");

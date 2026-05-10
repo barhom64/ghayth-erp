@@ -99,6 +99,8 @@ export default function DriversCreate() {
         <TextField
           label="الهاتف"
           required
+          type="tel"
+          inputMode="tel"
           dir="ltr"
           value={form.phone}
           onChange={(v) => setForm((f) => ({ ...f, phone: v }))}
@@ -148,7 +150,7 @@ export default function DriversCreate() {
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/fleet/drivers")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
         </Button>
       </div>

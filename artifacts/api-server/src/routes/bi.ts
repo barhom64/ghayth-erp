@@ -1,13 +1,16 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError, ValidationError } from "../lib/errorHandler.js";
-import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { authorize } from "../lib/rbac/authorize.js";
+import { handleRouteError, ValidationError, ConflictError,
+  parseId,
+  zodParse,
+} from "../lib/errorHandler.js";
+import { createAuditLog, emitEvent, todayISO, currentYear, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
-router.use(authMiddleware);
 
 const createDashboardSchema = z.object({
   title: z.string().min(1, "عنوان لوحة القيادة مطلوب"),
@@ -42,114 +45,120 @@ const muteAlertSchema = z.object({
   reason: z.string().optional().nullable(),
 });
 
-router.get("/dashboards", requirePermission("bi:read"), async (req, res) => {
+router.get("/dashboards", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM bi_dashboards WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM bi_dashboards WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.post("/dashboards", requirePermission("bi:write"), async (req, res) => {
+router.post("/dashboards", authorize({ feature: "bi", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed_createDashboardSchema = createDashboardSchema.safeParse(req.body);
-    if (!parsed_createDashboardSchema.success) throw new ValidationError(parsed_createDashboardSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createDashboardSchema.data;
+    const body = zodParse(createDashboardSchema.safeParse(req.body));
     const { title, description, layout, isDefault } = body;
-    const r = await rawExecute(
-      `INSERT INTO bi_dashboards (title, description, layout, "isDefault", "createdBy", "companyId") VALUES ($1,$2,$3,$4,$5,$6)`,
+    const [row] = await rawQuery<any>(
+      `INSERT INTO bi_dashboards (title, description, layout, "isDefault", "createdBy", "companyId")
+       VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT DO NOTHING
+       RETURNING *`,
       [title, description, layout ? JSON.stringify(layout) : '{}', isDefault || false, scope.userId, scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "bi_dashboards", entityId: r.insertId, after: { title } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.dashboard.created", entity: "bi_dashboards", entityId: r.insertId, details: JSON.stringify({ title }) }).catch(console.error);
-    res.status(201).json({ id: r.insertId });
+    if (!row) throw new ConflictError("لوحة القيادة موجودة مسبقاً", { field: "title", fix: "استخدم عنواناً مختلفاً للوحة القيادة" });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "bi_dashboards", entityId: row.id, after: { title } }).catch((e) => logger.error(e, "bi background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.dashboard.created", entity: "bi_dashboards", entityId: row.id, details: JSON.stringify({ title }) }).catch((e) => logger.error(e, "bi background task failed"));
+    res.status(201).json({ id: row.id });
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.get("/kpis", requirePermission("bi:read"), async (req, res) => {
+router.get("/kpis", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM bi_kpis WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY module, name`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM bi_kpis WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY module, name LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.post("/kpis", requirePermission("bi:write"), async (req, res) => {
+router.post("/kpis", authorize({ feature: "bi", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed_createKpiSchema = createKpiSchema.safeParse(req.body);
-    if (!parsed_createKpiSchema.success) throw new ValidationError(parsed_createKpiSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createKpiSchema.data;
+    const body = zodParse(createKpiSchema.safeParse(req.body));
     const { name, description, module, formula, target, currentValue, unit, frequency } = body;
-    const r = await rawExecute(
-      `INSERT INTO bi_kpis (name, description, module, formula, target, "currentValue", unit, frequency, "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    const [kpiRow] = await rawQuery<any>(
+      `INSERT INTO bi_kpis (name, description, module, formula, target, "currentValue", unit, frequency, "companyId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       ON CONFLICT DO NOTHING
+       RETURNING *`,
       [name, description, module, formula, target, currentValue, unit, frequency || "monthly", scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "bi_kpis", entityId: r.insertId, after: { name, module } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.kpi.created", entity: "bi_kpis", entityId: r.insertId, details: JSON.stringify({ name, module }) }).catch(console.error);
-    res.status(201).json({ id: r.insertId });
+    if (!kpiRow) throw new ConflictError("مؤشر الأداء موجود مسبقاً", { field: "name", fix: "استخدم اسماً مختلفاً لمؤشر الأداء" });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "bi_kpis", entityId: kpiRow.id, after: { name, module } }).catch((e) => logger.error(e, "bi background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.kpi.created", entity: "bi_kpis", entityId: kpiRow.id, details: JSON.stringify({ name, module }) }).catch((e) => logger.error(e, "bi background task failed"));
+    res.status(201).json({ id: kpiRow.id });
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.get("/reports", requirePermission("bi:read"), async (req, res) => {
+router.get("/reports", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM bi_reports WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY "createdAt" DESC`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM bi_reports WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.post("/reports", requirePermission("bi:write"), async (req, res) => {
+router.post("/reports", authorize({ feature: "bi", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed_createReportSchema = createReportSchema.safeParse(req.body);
-    if (!parsed_createReportSchema.success) throw new ValidationError(parsed_createReportSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_createReportSchema.data;
+    const body = zodParse(createReportSchema.safeParse(req.body));
     const { title, description, type, query, filters, scheduledAt } = body;
-    const r = await rawExecute(
-      `INSERT INTO bi_reports (title, description, type, query, filters, "scheduledAt", "createdBy", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+    const [reportRow] = await rawQuery<any>(
+      `INSERT INTO bi_reports (title, description, type, query, filters, "scheduledAt", "createdBy", "companyId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       ON CONFLICT DO NOTHING
+       RETURNING *`,
       [title, description, type, query, filters ? JSON.stringify(filters) : '{}', scheduledAt || null, scope.userId, scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "bi_reports", entityId: r.insertId, after: { title, type } }).catch(console.error);
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.report.created", entity: "bi_reports", entityId: r.insertId, details: JSON.stringify({ title, type }) }).catch(console.error);
-    res.status(201).json({ id: r.insertId });
+    if (!reportRow) throw new ConflictError("التقرير موجود مسبقاً", { field: "title", fix: "استخدم عنواناً مختلفاً للتقرير" });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "bi_reports", entityId: reportRow.id, after: { title, type } }).catch((e) => logger.error(e, "bi background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.report.created", entity: "bi_reports", entityId: reportRow.id, details: JSON.stringify({ title, type }) }).catch((e) => logger.error(e, "bi background task failed"));
+    res.status(201).json({ id: reportRow.id });
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.get("/overview", requirePermission("bi:read"), async (req, res) => {
+router.get("/overview", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
     const [row] = await rawQuery<any>(
       `SELECT
-         (SELECT COUNT(*) FROM employee_assignments WHERE "companyId" = $1) AS employees,
-         (SELECT COUNT(*) FROM clients WHERE "companyId" = $1) AS clients,
+         (SELECT COUNT(*) FROM employee_assignments WHERE "companyId" = $1 AND status = 'active') AS employees,
+         (SELECT COUNT(*) FROM clients WHERE "companyId" = $1 AND "deletedAt" IS NULL) AS clients,
          (SELECT COUNT(*) FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL) AS invoices,
          (SELECT COUNT(*) FROM projects WHERE "companyId" = $1 AND "deletedAt" IS NULL) AS projects,
-         (SELECT COUNT(*) FROM fleet_vehicles WHERE "companyId" = $1) AS vehicles,
-         (SELECT COUNT(*) FROM support_tickets WHERE "companyId" = $1 AND status = 'open') AS "openTickets",
+         (SELECT COUNT(*) FROM fleet_vehicles WHERE "companyId" = $1 AND "deletedAt" IS NULL) AS vehicles,
+         (SELECT COUNT(*) FROM support_tickets WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status = 'open') AS "openTickets",
          (SELECT COALESCE(SUM("paidAmount"), 0) FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "paidAmount" > 0) AS "totalRevenue"`,
       [cid]
     );
     res.json({
-      employees: Number(row.employees),
-      clients: Number(row.clients),
-      invoices: Number(row.invoices),
-      projects: Number(row.projects),
-      vehicles: Number(row.vehicles),
-      openTickets: Number(row.openTickets),
-      totalRevenue: Number(row.totalRevenue),
+      employees: Number(row?.employees ?? 0),
+      clients: Number(row?.clients ?? 0),
+      invoices: Number(row?.invoices ?? 0),
+      projects: Number(row?.projects ?? 0),
+      vehicles: Number(row?.vehicles ?? 0),
+      openTickets: Number(row?.openTickets ?? 0),
+      totalRevenue: Number(row?.totalRevenue ?? 0),
     });
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.get("/operations/sla-delays", requirePermission("bi:read"), async (req, res) => {
+router.get("/operations/sla-delays", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
     const { from, to, departmentId } = req.query as any;
-    const conditions = [`t."companyId" = $1`];
+    const conditions = [`t."companyId" = $1`, `t."deletedAt" IS NULL`];
     const params: any[] = [cid];
     if (from) { params.push(from); conditions.push(`t."scheduledDate" >= $${params.length}::date`); }
     if (to) { params.push(to); conditions.push(`t."scheduledDate" <= $${params.length}::date`); }
@@ -177,12 +186,12 @@ router.get("/operations/sla-delays", requirePermission("bi:read"), async (req, r
   } catch (err) { handleRouteError(err, res, "SLA delays"); }
 });
 
-router.get("/operations/rejection-rate", requirePermission("bi:read"), async (req, res) => {
+router.get("/operations/rejection-rate", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
     const { from, to } = req.query as any;
-    const conditions = [`"companyId" = $1`];
+    const conditions = [`"companyId" = $1`, `"deletedAt" IS NULL`];
     const params: any[] = [cid];
     if (from) { params.push(from); conditions.push(`"createdAt" >= $${params.length}::date`); }
     if (to) { params.push(to); conditions.push(`"createdAt" <= $${params.length}::date`); }
@@ -203,12 +212,12 @@ router.get("/operations/rejection-rate", requirePermission("bi:read"), async (re
   } catch (err) { handleRouteError(err, res, "Rejection rate"); }
 });
 
-router.get("/operations/bottleneck", requirePermission("bi:read"), async (req, res) => {
+router.get("/operations/bottleneck", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
     const { from, to, departmentId } = req.query as any;
-    const conditions = [`t."companyId" = $1`];
+    const conditions = [`t."companyId" = $1`, `t."deletedAt" IS NULL`];
     const params: any[] = [cid];
     if (from) { params.push(from); conditions.push(`t."createdAt" >= $${params.length}::date`); }
     if (to) { params.push(to); conditions.push(`t."createdAt" <= $${params.length}::date`); }
@@ -234,7 +243,7 @@ router.get("/operations/bottleneck", requirePermission("bi:read"), async (req, r
     );
 
     const approvalParams: any[] = [cid];
-    const approvalConds = [`lr."companyId" = $1`, `lr.status = 'pending'`];
+    const approvalConds = [`lr."companyId" = $1`, `lr.status = 'pending'`, `lr."deletedAt" IS NULL`];
     if (from) { approvalParams.push(from); approvalConds.push(`lr."createdAt" >= $${approvalParams.length}::date`); }
     if (to) { approvalParams.push(to); approvalConds.push(`lr."createdAt" <= $${approvalParams.length}::date`); }
     if (departmentId) {
@@ -247,7 +256,7 @@ router.get("/operations/bottleneck", requirePermission("bi:read"), async (req, r
          COUNT(*) AS "pendingApprovals",
          ROUND(AVG(EXTRACT(EPOCH FROM (NOW() - lr."createdAt")) / 3600), 1) AS "avgWaitHours"
        FROM hr_leave_requests lr
-       LEFT JOIN employees e ON e.id = lr."employeeId"
+       LEFT JOIN employees e ON e.id = lr."employeeId" AND e."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 AND ea.status = 'active'
        LEFT JOIN departments d ON d.id = ea."departmentId"
        WHERE ${approvalConds.join(" AND ")}
@@ -255,18 +264,18 @@ router.get("/operations/bottleneck", requirePermission("bi:read"), async (req, r
        ORDER BY "avgWaitHours" DESC
        LIMIT 10`,
       approvalParams
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
     res.json({ departmentDelay, approvalBottleneck });
   } catch (err) { handleRouteError(err, res, "Bottleneck analysis"); }
 });
 
-router.get("/operations/employee-productivity", requirePermission("bi:read"), async (req, res) => {
+router.get("/operations/employee-productivity", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
     const { from, to, departmentId } = req.query as any;
-    const conditions = [`t."companyId" = $1`];
+    const conditions = [`t."companyId" = $1`, `t."deletedAt" IS NULL`];
     const params: any[] = [cid];
     if (from) { params.push(from); conditions.push(`t."completedAt" >= $${params.length}::date`); }
     if (to) { params.push(to); conditions.push(`t."completedAt" <= $${params.length}::date`); }
@@ -289,7 +298,7 @@ router.get("/operations/employee-productivity", requirePermission("bi:read"), as
            THEN ROUND(COUNT(*) FILTER (WHERE t.status = 'completed')::numeric / att.worked_hours, 2)
            ELSE 0 END AS "productivityRate"
        FROM tasks t
-       JOIN employees e ON e.id = t."assignedTo"
+       JOIN employees e ON e.id = t."assignedTo" AND e."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 AND ea.status = 'active'
        LEFT JOIN departments d ON d.id = ea."departmentId"
        LEFT JOIN LATERAL (
@@ -310,12 +319,12 @@ router.get("/operations/employee-productivity", requirePermission("bi:read"), as
   } catch (err) { handleRouteError(err, res, "Employee productivity"); }
 });
 
-router.get("/operations/approval-timeliness", requirePermission("bi:read"), async (req, res) => {
+router.get("/operations/approval-timeliness", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
     const { from, to, departmentId } = req.query as any;
-    const conditions = [`lr."companyId" = $1`];
+    const conditions = [`lr."companyId" = $1`, `lr."deletedAt" IS NULL`];
     const params: any[] = [cid];
     if (from) { params.push(from); conditions.push(`lr."createdAt" >= $${params.length}::date`); }
     if (to) { params.push(to); conditions.push(`lr."createdAt" <= $${params.length}::date`); }
@@ -334,7 +343,7 @@ router.get("/operations/approval-timeliness", requirePermission("bi:read"), asyn
          ROUND(AVG(CASE WHEN lr.status = 'approved' AND lr."approvedAt" IS NOT NULL
            THEN EXTRACT(EPOCH FROM (lr."approvedAt" - lr."createdAt")) / 3600 END), 1) AS "avgApprovalHours"
        FROM hr_leave_requests lr
-       LEFT JOIN employees e ON e.id = lr."employeeId"
+       LEFT JOIN employees e ON e.id = lr."employeeId" AND e."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 AND ea.status = 'active'
        WHERE ${conditions.join(" AND ")}`,
       params
@@ -343,12 +352,12 @@ router.get("/operations/approval-timeliness", requirePermission("bi:read"), asyn
   } catch (err) { handleRouteError(err, res, "Approval timeliness"); }
 });
 
-router.get("/operations/avg-completion-time", requirePermission("bi:read"), async (req, res) => {
+router.get("/operations/avg-completion-time", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
     const { from, to, departmentId } = req.query as any;
-    const conditions = [`t."companyId" = $1`, `t.status = 'completed'`, `t."completedAt" IS NOT NULL`];
+    const conditions = [`t."companyId" = $1`, `t."deletedAt" IS NULL`, `t.status = 'completed'`, `t."completedAt" IS NOT NULL`];
     const params: any[] = [cid];
     if (from) { params.push(from); conditions.push(`t."completedAt" >= $${params.length}::date`); }
     if (to) { params.push(to); conditions.push(`t."completedAt" <= $${params.length}::date`); }
@@ -374,12 +383,12 @@ router.get("/operations/avg-completion-time", requirePermission("bi:read"), asyn
   } catch (err) { handleRouteError(err, res, "Avg completion time"); }
 });
 
-router.get("/operations/trend", requirePermission("bi:read"), async (req, res) => {
+router.get("/operations/trend", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
     const { from, to, departmentId } = req.query as any;
-    const conditions = [`t."companyId" = $1`, `t."scheduledDate" >= CURRENT_DATE - INTERVAL '12 weeks'`];
+    const conditions = [`t."companyId" = $1`, `t."deletedAt" IS NULL`, `t."scheduledDate" >= CURRENT_DATE - INTERVAL '12 weeks'`];
     const params: any[] = [cid];
     if (from) { params.push(from); conditions.push(`t."scheduledDate" >= $${params.length}::date`); }
     if (to) { params.push(to); conditions.push(`t."scheduledDate" <= $${params.length}::date`); }
@@ -406,11 +415,11 @@ router.get("/operations/trend", requirePermission("bi:read"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "Operations trend"); }
 });
 
-router.get("/admin-reports/daily", requirePermission("bi:read"), async (req, res) => {
+router.get("/admin-reports/daily", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const date = (req.query.date as string) || new Date().toISOString().split("T")[0];
+    const date = (req.query.date as string) || todayISO();
 
     const [attendance] = await rawQuery<any>(
       `SELECT
@@ -419,9 +428,9 @@ router.get("/admin-reports/daily", requirePermission("bi:read"), async (req, res
          COUNT(*) FILTER (WHERE status = 'absent') AS absent,
          COUNT(*) FILTER (WHERE status = 'late') AS late
        FROM attendance
-       WHERE "companyId" = $1 AND date = $2::date`,
+       WHERE "companyId" = $1 AND date = $2::date AND "deletedAt" IS NULL`,
       [cid, date]
-    ).catch(() => [{ total: 0, present: 0, absent: 0, late: 0 }]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0, present: 0, absent: 0, late: 0 }]; });
 
     const [tasks] = await rawQuery<any>(
       `SELECT
@@ -429,9 +438,9 @@ router.get("/admin-reports/daily", requirePermission("bi:read"), async (req, res
          COUNT(*) FILTER (WHERE status = 'completed' AND DATE("completedAt") = $2::date) AS completed,
          COUNT(*) FILTER (WHERE status NOT IN ('completed','cancelled') AND "scheduledDate" < $2::date) AS overdue
        FROM tasks
-       WHERE "companyId" = $1`,
+       WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [cid, date]
-    ).catch(() => [{ scheduled: 0, completed: 0, overdue: 0 }]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{ scheduled: 0, completed: 0, overdue: 0 }]; });
 
     const [financial] = await rawQuery<any>(
       `SELECT
@@ -441,22 +450,22 @@ router.get("/admin-reports/daily", requirePermission("bi:read"), async (req, res
        FROM invoices
        WHERE "companyId" = $1 AND "deletedAt" IS NULL AND DATE("createdAt") = $2::date`,
       [cid, date]
-    ).catch(() => [{ invoicesTotal: 0, paidTotal: 0, invoiceCount: 0 }]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{ invoicesTotal: 0, paidTotal: 0, invoiceCount: 0 }]; });
 
     const [leaves] = await rawQuery<any>(
       `SELECT COUNT(*) AS total FROM hr_leave_requests
-       WHERE "companyId" = $1 AND DATE("createdAt") = $2::date`,
+       WHERE "companyId" = $1 AND DATE("createdAt") = $2::date AND "deletedAt" IS NULL`,
       [cid, date]
-    ).catch(() => [{ total: 0 }]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0 }]; });
 
     const [tickets] = await rawQuery<any>(
       `SELECT
          COUNT(*) FILTER (WHERE DATE("createdAt") = $2::date) AS opened,
          COUNT(*) FILTER (WHERE DATE("resolvedAt") = $2::date) AS resolved
        FROM support_tickets
-       WHERE "companyId" = $1`,
+       WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [cid, date]
-    ).catch(() => [{ opened: 0, resolved: 0 }]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{ opened: 0, resolved: 0 }]; });
 
     res.json({
       date,
@@ -485,7 +494,7 @@ router.get("/admin-reports/daily", requirePermission("bi:read"), async (req, res
   } catch (err) { handleRouteError(err, res, "Daily report"); }
 });
 
-router.get("/admin-reports/weekly", requirePermission("bi:read"), async (req, res) => {
+router.get("/admin-reports/weekly", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -498,9 +507,9 @@ router.get("/admin-reports/weekly", requirePermission("bi:read"), async (req, re
            COUNT(*) FILTER (WHERE status NOT IN ('completed','cancelled') AND "scheduledDate" < $3::date) AS overdue,
            ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'completed') / NULLIF(COUNT(*), 0), 0) AS "completionRate"
          FROM tasks
-         WHERE "companyId" = $1 AND "scheduledDate" BETWEEN $2::date AND $3::date`,
+         WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "scheduledDate" BETWEEN $2::date AND $3::date`,
         [cid, startDate, endDate]
-      ).catch(() => [{ total: 0, completed: 0, overdue: 0, completionRate: 0 }]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0, completed: 0, overdue: 0, completionRate: 0 }]; });
 
       const [attendance] = await rawQuery<any>(
         `SELECT
@@ -508,25 +517,25 @@ router.get("/admin-reports/weekly", requirePermission("bi:read"), async (req, re
            COUNT(*) FILTER (WHERE status = 'present') AS present,
            ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'present') / NULLIF(COUNT(*), 0), 0) AS "presentRate"
          FROM attendance
-         WHERE "companyId" = $1 AND date BETWEEN $2::date AND $3::date`,
+         WHERE "companyId" = $1 AND date BETWEEN $2::date AND $3::date AND "deletedAt" IS NULL`,
         [cid, startDate, endDate]
-      ).catch(() => [{ total: 0, present: 0, presentRate: 0 }]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0, present: 0, presentRate: 0 }]; });
 
       const [revenue] = await rawQuery<any>(
         `SELECT COALESCE(SUM("paidAmount"), 0) AS total
          FROM invoices
          WHERE "companyId" = $1 AND "deletedAt" IS NULL AND DATE("createdAt") BETWEEN $2::date AND $3::date`,
         [cid, startDate, endDate]
-      ).catch(() => [{ total: 0 }]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0 }]; });
 
       const [tickets] = await rawQuery<any>(
         `SELECT
            COUNT(*) FILTER (WHERE DATE("createdAt") BETWEEN $2::date AND $3::date) AS opened,
            COUNT(*) FILTER (WHERE DATE("resolvedAt") BETWEEN $2::date AND $3::date) AS resolved
          FROM support_tickets
-         WHERE "companyId" = $1`,
+         WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
         [cid, startDate, endDate]
-      ).catch(() => [{ opened: 0, resolved: 0 }]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{ opened: 0, resolved: 0 }]; });
 
       return {
         tasks: {
@@ -557,7 +566,7 @@ router.get("/admin-reports/weekly", requirePermission("bi:read"), async (req, re
     const lastWeekStart = new Date(lastWeekEnd);
     lastWeekStart.setDate(lastWeekStart.getDate() - 6);
 
-    const fmt = (d: Date) => d.toISOString().split("T")[0];
+    const fmt = toDateISO;
     const [thisWeek, lastWeek] = await Promise.all([
       buildWeekStats(fmt(thisWeekStart), fmt(thisWeekEnd)),
       buildWeekStats(fmt(lastWeekStart), fmt(lastWeekEnd)),
@@ -578,7 +587,7 @@ router.get("/admin-reports/weekly", requirePermission("bi:read"), async (req, re
   } catch (err) { handleRouteError(err, res, "Weekly report"); }
 });
 
-router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, res) => {
+router.get("/admin-reports/monthly", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -587,7 +596,7 @@ router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, r
     const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-    const fmt = (d: Date) => d.toISOString().split("T")[0];
+    const fmt = toDateISO;
 
     const buildMonthStats = async (startDate: string, endDate: string) => {
       const [tasks] = await rawQuery<any>(
@@ -596,9 +605,9 @@ router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, r
            COUNT(*) FILTER (WHERE status = 'completed') AS completed,
            COUNT(*) FILTER (WHERE status NOT IN ('completed','cancelled') AND "scheduledDate" < $3::date) AS overdue,
            ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'completed') / NULLIF(COUNT(*), 0), 0) AS "completionRate"
-         FROM tasks WHERE "companyId" = $1 AND "scheduledDate" BETWEEN $2::date AND $3::date`,
+         FROM tasks WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "scheduledDate" BETWEEN $2::date AND $3::date`,
         [cid, startDate, endDate]
-      ).catch(() => [{ total: 0, completed: 0, overdue: 0, completionRate: 0 }]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0, completed: 0, overdue: 0, completionRate: 0 }]; });
 
       const [attendance] = await rawQuery<any>(
         `SELECT
@@ -607,9 +616,9 @@ router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, r
            COUNT(*) FILTER (WHERE status = 'absent') AS absent,
            COUNT(*) FILTER (WHERE status = 'late') AS late,
            ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'present') / NULLIF(COUNT(*), 0), 0) AS "presentRate"
-         FROM attendance WHERE "companyId" = $1 AND date BETWEEN $2::date AND $3::date`,
+         FROM attendance WHERE "companyId" = $1 AND date BETWEEN $2::date AND $3::date AND "deletedAt" IS NULL`,
         [cid, startDate, endDate]
-      ).catch(() => [{ total: 0, present: 0, absent: 0, late: 0, presentRate: 0 }]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0, present: 0, absent: 0, late: 0, presentRate: 0 }]; });
 
       const [financial] = await rawQuery<any>(
         `SELECT
@@ -619,7 +628,7 @@ router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, r
            COUNT(*) FILTER (WHERE status IN ('overdue','sent') AND "dueDate" < CURRENT_DATE) AS "overdueInvoices"
          FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL AND DATE("createdAt") BETWEEN $2::date AND $3::date`,
         [cid, startDate, endDate]
-      ).catch(() => [{ revenue: 0, collected: 0, invoiceCount: 0, overdueInvoices: 0 }]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{ revenue: 0, collected: 0, invoiceCount: 0, overdueInvoices: 0 }]; });
 
       const [hr] = await rawQuery<any>(
         `SELECT
@@ -627,7 +636,7 @@ router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, r
          FROM employee_assignments
          WHERE "companyId" = $1 AND DATE("createdAt") BETWEEN $2::date AND $3::date`,
         [cid, startDate, endDate]
-      ).catch(() => [{ newEmployees: 0 }]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{ newEmployees: 0 }]; });
 
       const [leaves] = await rawQuery<any>(
         `SELECT
@@ -636,9 +645,9 @@ router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, r
            COUNT(*) FILTER (WHERE status = 'rejected') AS rejected,
            SUM(CASE WHEN status = 'approved' THEN days ELSE 0 END) AS "totalDays"
          FROM hr_leave_requests
-         WHERE "companyId" = $1 AND DATE("createdAt") BETWEEN $2::date AND $3::date`,
+         WHERE "companyId" = $1 AND DATE("createdAt") BETWEEN $2::date AND $3::date AND "deletedAt" IS NULL`,
         [cid, startDate, endDate]
-      ).catch(() => [{ total: 0, approved: 0, rejected: 0, totalDays: 0 }]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0, approved: 0, rejected: 0, totalDays: 0 }]; });
 
       const [tickets] = await rawQuery<any>(
         `SELECT
@@ -646,9 +655,9 @@ router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, r
            COUNT(*) FILTER (WHERE DATE("resolvedAt") BETWEEN $2::date AND $3::date) AS resolved,
            ROUND(AVG(CASE WHEN "resolvedAt" IS NOT NULL
              THEN EXTRACT(EPOCH FROM ("resolvedAt" - "createdAt")) / 3600 END), 1) AS "avgResolutionHours"
-         FROM support_tickets WHERE "companyId" = $1`,
+         FROM support_tickets WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
         [cid, startDate, endDate]
-      ).catch(() => [{ opened: 0, resolved: 0, avgResolutionHours: 0 }]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{ opened: 0, resolved: 0, avgResolutionHours: 0 }]; });
 
       return {
         tasks: {
@@ -682,10 +691,10 @@ router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, r
          COUNT(*) AS total,
          COUNT(*) FILTER (WHERE status = 'completed') AS completed
        FROM tasks
-       WHERE "companyId" = $1 AND "scheduledDate" >= $2::date
+       WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "scheduledDate" >= $2::date
        GROUP BY week ORDER BY week`,
       [cid, fmt(thisMonthStart)]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
     const [current, previous] = await Promise.all([
       buildMonthStats(fmt(thisMonthStart), fmt(now)),
@@ -709,14 +718,14 @@ router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, r
 });
 
 
-router.get("/ceo-dashboard", requirePermission("bi:read"), async (req, res) => {
+router.get("/ceo-dashboard", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
     const now = new Date();
-    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split("T")[0];
-    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split("T")[0];
+    const thisMonthStart = toDateISO(new Date(now.getFullYear(), now.getMonth(), 1));
+    const lastMonthStart = toDateISO(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+    const lastMonthEnd = toDateISO(new Date(now.getFullYear(), now.getMonth(), 0));
 
     const [financial] = await rawQuery<any>(
       `SELECT
@@ -727,7 +736,7 @@ router.get("/ceo-dashboard", requirePermission("bi:read"), async (req, res) => {
          COALESCE(SUM(total - "paidAmount") FILTER (WHERE status IN ('sent','partial','overdue') AND "dueDate" < CURRENT_DATE), 0) AS "overdueAmount"
        FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [cid, thisMonthStart, lastMonthStart, lastMonthEnd]
-    ).catch(() => [{}]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
     const [expenses] = await rawQuery<any>(
       `SELECT
@@ -735,7 +744,7 @@ router.get("/ceo-dashboard", requirePermission("bi:read"), async (req, res) => {
          COALESCE(SUM(CASE WHEN DATE("createdAt") >= $3::date AND DATE("createdAt") <= $4::date THEN amount ELSE 0 END), 0) AS "expensesLastMonth"
        FROM vouchers WHERE "companyId" = $1 AND type = 'payment'`,
       [cid, thisMonthStart, lastMonthStart, lastMonthEnd]
-    ).catch(() => [{}]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
     const [hr] = await rawQuery<any>(
       `SELECT
@@ -743,52 +752,52 @@ router.get("/ceo-dashboard", requirePermission("bi:read"), async (req, res) => {
          COUNT(*) FILTER (WHERE status = 'pending') AS "pendingLeaveRequests"
        FROM employee_assignments WHERE "companyId" = $1`,
       [cid]
-    ).catch(() => [{}]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
     const [attendance] = await rawQuery<any>(
       `SELECT
          COUNT(*) FILTER (WHERE status = 'present') AS "presentToday",
          COUNT(*) AS "totalToday"
-       FROM attendance WHERE "companyId" = $1 AND date = CURRENT_DATE`,
+       FROM attendance WHERE "companyId" = $1 AND date = CURRENT_DATE AND "deletedAt" IS NULL`,
       [cid]
-    ).catch(() => [{}]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
     const [pendingLeave] = await rawQuery<any>(
-      `SELECT COUNT(*) AS cnt FROM hr_leave_requests WHERE "companyId" = $1 AND status = 'pending'`,
+      `SELECT COUNT(*) AS cnt FROM hr_leave_requests WHERE "companyId" = $1 AND status = 'pending' AND "deletedAt" IS NULL`,
       [cid]
-    ).catch(() => [{ cnt: 0 }]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{ cnt: 0 }]; });
 
     const [ops] = await rawQuery<any>(
       `SELECT
-         COUNT(*) FILTER (WHERE status NOT IN ('completed','cancelled') AND "scheduledDate" < CURRENT_DATE) AS "overdueProjects",
+         COUNT(*) FILTER (WHERE status NOT IN ('completed','cancelled') AND "endDate" < CURRENT_DATE) AS "overdueProjects",
          COUNT(*) AS "totalProjects"
        FROM projects WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [cid]
-    ).catch(() => [{}]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
     const [tickets] = await rawQuery<any>(
-      `SELECT COUNT(*) FILTER (WHERE status = 'open') AS "openTickets" FROM support_tickets WHERE "companyId" = $1`,
+      `SELECT COUNT(*) FILTER (WHERE status = 'open') AS "openTickets" FROM support_tickets WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [cid]
-    ).catch(() => [{}]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
     const [maintenance] = await rawQuery<any>(
-      `SELECT COUNT(*) FILTER (WHERE status = 'pending') AS "pendingMaintenance" FROM maintenance_requests WHERE "companyId" = $1`,
+      `SELECT COUNT(*) FILTER (WHERE status = 'pending') AS "pendingMaintenance" FROM maintenance_requests WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [cid]
-    ).catch(() => [{}]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
     const [contracts] = await rawQuery<any>(
       `SELECT
          COUNT(*) FILTER (WHERE status='active' AND "endDate"::date - CURRENT_DATE <= 30) AS "expiringContracts",
          COUNT(*) FILTER (WHERE status='active' AND "endDate"::date - CURRENT_DATE <= 90) AS "expiringContracts90"
-       FROM legal_contracts WHERE "companyId" = $1`,
+       FROM legal_contracts WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [cid]
-    ).catch(() => [{}]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
     const [docs] = await rawQuery<any>(
       `SELECT COUNT(*) AS "expiringDocs" FROM employee_documents
        WHERE "companyId" = $1 AND "expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'`,
       [cid]
-    ).catch(() => [{}]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
     const revenueThisMonth = Number(financial?.revenueThisMonth ?? 0);
     const revenueLastMonth = Number(financial?.revenueLastMonth ?? 0);
@@ -835,16 +844,16 @@ router.get("/ceo-dashboard", requirePermission("bi:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "CEO dashboard"); }
 });
 
-router.get("/reports/branch-performance", requirePermission("bi:read"), async (req, res) => {
+router.get("/reports/branch-performance", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
     const { from, to } = req.query as any;
-    const dateFrom = from || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0];
-    const dateTo = to || new Date().toISOString().split("T")[0];
+    const dateFrom = from || toDateISO(new Date(currentYear(), new Date().getMonth(), 1));
+    const dateTo = to || todayISO();
 
     const branches = await rawQuery<any>(
-      `SELECT b.id, b.name FROM branches b WHERE b."companyId" = $1 ORDER BY b.name`,
+      `SELECT b.id, b.name FROM branches b WHERE b."companyId" = $1 ORDER BY b.name LIMIT 500`,
       [cid]
     );
 
@@ -855,20 +864,20 @@ router.get("/reports/branch-performance", requirePermission("bi:read"), async (r
          FROM invoices WHERE "companyId" = $1 AND "branchId" = $2 AND "deletedAt" IS NULL
            AND DATE("createdAt") BETWEEN $3::date AND $4::date`,
         [cid, branch.id, dateFrom, dateTo]
-      ).catch(() => [{}]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
       const [expenses] = await rawQuery<any>(
         `SELECT COALESCE(SUM(amount), 0) AS expenses FROM vouchers
          WHERE "companyId" = $1 AND "branchId" = $2 AND type = 'payment'
            AND DATE("createdAt") BETWEEN $3::date AND $4::date`,
         [cid, branch.id, dateFrom, dateTo]
-      ).catch(() => [{}]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
       const [employees] = await rawQuery<any>(
         `SELECT COUNT(*) AS total FROM employee_assignments
          WHERE "companyId" = $1 AND "branchId" = $2 AND status = 'active'`,
         [cid, branch.id]
-      ).catch(() => [{}]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
       const [attRow] = await rawQuery<any>(
         `SELECT
@@ -876,22 +885,22 @@ router.get("/reports/branch-performance", requirePermission("bi:read"), async (r
            COUNT(*) AS total
          FROM attendance
          WHERE "companyId" = $1 AND "branchId" = $2
-           AND date BETWEEN $3::date AND $4::date`,
+           AND date BETWEEN $3::date AND $4::date AND "deletedAt" IS NULL`,
         [cid, branch.id, dateFrom, dateTo]
-      ).catch(() => [{}]);
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
       const [ticketsRow] = await rawQuery<any>(
         `SELECT COUNT(*) AS cnt FROM support_tickets
-         WHERE "companyId" = $1 AND "branchId" = $2 AND status = 'open'`,
-        [cid, branch.id]
-      ).catch(() => [{}]);
+         WHERE "companyId" = $1 AND status = 'open'`,
+        [cid]
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
       const [satisfactionRow] = await rawQuery<any>(
         `SELECT COALESCE(AVG(rating), 0) AS avg FROM support_tickets
-         WHERE "companyId" = $1 AND "branchId" = $2 AND rating IS NOT NULL
-           AND DATE("createdAt") BETWEEN $3::date AND $4::date`,
-        [cid, branch.id, dateFrom, dateTo]
-      ).catch(() => [{}]);
+         WHERE "companyId" = $1 AND rating IS NOT NULL
+           AND DATE("createdAt") BETWEEN $2::date AND $3::date`,
+        [cid, dateFrom, dateTo]
+      ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
       const rev = Number(revenue?.revenue ?? 0);
       const exp = Number(expenses?.expenses ?? 0);
@@ -919,13 +928,13 @@ router.get("/reports/branch-performance", requirePermission("bi:read"), async (r
   } catch (err) { handleRouteError(err, res, "Branch performance report"); }
 });
 
-router.get("/reports/vendor-performance", requirePermission("bi:read"), async (req, res) => {
+router.get("/reports/vendor-performance", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
     const { from, to } = req.query as any;
-    const dateFrom = from || new Date(new Date().getFullYear(), 0, 1).toISOString().split("T")[0];
-    const dateTo = to || new Date().toISOString().split("T")[0];
+    const dateFrom = from || toDateISO(new Date(currentYear(), 0, 1));
+    const dateTo = to || todayISO();
 
     const rows = await rawQuery<any>(
       `SELECT
@@ -941,12 +950,12 @@ router.get("/reports/vendor-performance", requirePermission("bi:read"), async (r
        FROM suppliers v
        LEFT JOIN purchase_orders po ON po."supplierId" = v.id AND po."companyId" = $1
          AND DATE(po."createdAt") BETWEEN $2::date AND $3::date
-       WHERE v."companyId" = $1
+       WHERE v."companyId" = $1 AND v."deletedAt" IS NULL
        GROUP BY v.id, v.name
        HAVING COUNT(po.id) > 0
        ORDER BY "totalSpend" DESC`,
       [cid, dateFrom, dateTo]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
     const data = rows.map((r: any) => {
       const total = Number(r.totalOrders);
@@ -969,7 +978,7 @@ router.get("/reports/vendor-performance", requirePermission("bi:read"), async (r
   } catch (err) { handleRouteError(err, res, "Vendor performance report"); }
 });
 
-router.get("/reports/fleet-tco", requirePermission("bi:read"), async (req, res) => {
+router.get("/reports/fleet-tco", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -982,36 +991,36 @@ router.get("/reports/fleet-tco", requirePermission("bi:read"), async (req, res) 
          fv.model,
          fv.year,
          fv.status,
-         COALESCE(fv."purchasePrice", 0) AS "purchasePrice",
-         COALESCE(fv."monthlyLeaseCost", 0) AS "monthlyLeaseCost",
+         0 AS "purchasePrice",
+         0 AS "monthlyLeaseCost",
          COALESCE(fm_total.total, 0) AS "maintenanceCost",
          COALESCE(fuel_total.total, 0) AS "fuelCost",
          COALESCE(ins_total.total, 0) AS "insuranceCost",
-         fv."odometer"
+         fv."currentMileage" AS "odometer"
        FROM fleet_vehicles fv
        LEFT JOIN LATERAL (
          SELECT COALESCE(SUM(cost), 0) AS total FROM fleet_maintenance
-         WHERE "vehicleId" = fv.id AND "companyId" = $1
+         WHERE "vehicleId" = fv.id AND "companyId" = $1 AND "deletedAt" IS NULL
        ) fm_total ON true
        LEFT JOIN LATERAL (
-         SELECT COALESCE(SUM(amount), 0) AS total FROM fleet_fuel_logs
-         WHERE "vehicleId" = fv.id AND "companyId" = $1
+         SELECT COALESCE(SUM("totalCost"), 0) AS total FROM fleet_fuel_logs
+         WHERE "vehicleId" = fv.id AND "companyId" = $1 AND "deletedAt" IS NULL
        ) fuel_total ON true
        LEFT JOIN LATERAL (
-         SELECT COALESCE(SUM("premiumAmount"), 0) AS total FROM fleet_insurance
-         WHERE "vehicleId" = fv.id AND "companyId" = $1
+         SELECT COALESCE(SUM(premium), 0) AS total FROM fleet_insurance
+         WHERE "vehicleId" = fv.id AND "companyId" = $1 AND "deletedAt" IS NULL
        ) ins_total ON true
-       WHERE fv."companyId" = $1
+       WHERE fv."companyId" = $1 AND fv."deletedAt" IS NULL
        ORDER BY fv."plateNumber"`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
     const data = rows.map((r: any) => {
       const purchasePrice = Number(r.purchasePrice);
       const maintenanceCost = Number(r.maintenanceCost);
       const fuelCost = Number(r.fuelCost);
       const insuranceCost = Number(r.insuranceCost);
-      const yearsOld = r.year ? new Date().getFullYear() - Number(r.year) : 0;
+      const yearsOld = r.year ? currentYear() - Number(r.year) : 0;
       const depreciation = purchasePrice > 0 ? Math.round(purchasePrice * 0.2 * Math.min(yearsOld, 5)) : 0;
       const tco = purchasePrice + maintenanceCost + fuelCost + insuranceCost + depreciation;
       const odometer = Number(r.odometer ?? 0);
@@ -1029,7 +1038,7 @@ router.get("/reports/fleet-tco", requirePermission("bi:read"), async (req, res) 
         depreciation,
         tco,
         odometer,
-        costPerKm: odometer > 0 ? Math.round((tco / odometer) * 100) / 100 : 0,
+        costPerKm: odometer > 0 ? roundTo2(tco / odometer) : 0,
       };
     });
 
@@ -1037,11 +1046,11 @@ router.get("/reports/fleet-tco", requirePermission("bi:read"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "Fleet TCO report"); }
 });
 
-router.get("/reports/department-leave-balance", requirePermission("bi:read"), async (req, res) => {
+router.get("/reports/department-leave-balance", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const year = new Date().getFullYear();
+    const year = currentYear();
 
     const rows = await rawQuery<any>(
       `SELECT
@@ -1053,12 +1062,13 @@ router.get("/reports/department-leave-balance", requirePermission("bi:read"), as
              SELECT 1 FROM hr_leave_requests lr
              WHERE lr."employeeId" = ea."employeeId"
                AND lr.status = 'approved'
+               AND lr."deletedAt" IS NULL
                AND CURRENT_DATE BETWEEN lr."startDate" AND lr."endDate"
            )
          ) AS "onLeaveNow",
-         ROUND(AVG(COALESCE(lb.balance, lb.entitled, 0)), 1) AS "avgRemainingBalance",
+         ROUND(AVG(COALESCE(lb.remaining, lb.entitled, 0)), 1) AS "avgRemainingBalance",
          SUM(COALESCE(lb.used, 0)) AS "totalUsedDays",
-         SUM(COALESCE(lb.balance, lb.entitled, 0)) AS "totalRemainingDays"
+         SUM(COALESCE(lb.remaining, lb.entitled, 0)) AS "totalRemainingDays"
        FROM employee_assignments ea
        LEFT JOIN departments d ON d.id = ea."departmentId"
        LEFT JOIN hr_leave_balances lb ON lb."employeeId" = ea."employeeId"
@@ -1067,7 +1077,7 @@ router.get("/reports/department-leave-balance", requirePermission("bi:read"), as
        GROUP BY d.id, d.name
        ORDER BY department`,
       [cid, year]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
     const data = rows.map((r: any) => {
       const total = Number(r.totalEmployees);
@@ -1090,7 +1100,7 @@ router.get("/reports/department-leave-balance", requirePermission("bi:read"), as
   } catch (err) { handleRouteError(err, res, "Department leave balance"); }
 });
 
-router.get("/reports/property-occupancy", requirePermission("bi:read"), async (req, res) => {
+router.get("/reports/property-occupancy", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -1106,13 +1116,13 @@ router.get("/reports/property-occupancy", requirePermission("bi:read"), async (r
          ROUND(AVG(rc."monthlyRent") FILTER (WHERE rc.status = 'active'), 0) AS "avgMonthlyRent",
          COALESCE(SUM(rc."monthlyRent") FILTER (WHERE rc.status = 'active'), 0) AS "totalMonthlyRevenue"
        FROM property_buildings pb
-       LEFT JOIN property_units pu ON pu."buildingId" = pb.id
-       LEFT JOIN rental_contracts rc ON rc."unitId" = pu.id AND rc.status = 'active'
-       WHERE pb."companyId" = $1
+       LEFT JOIN property_units pu ON pu."buildingId" = pb.id AND pu."deletedAt" IS NULL
+       LEFT JOIN rental_contracts rc ON rc."unitId" = pu.id AND rc.status = 'active' AND rc."deletedAt" IS NULL
+       WHERE pb."companyId" = $1 AND pb."deletedAt" IS NULL
        GROUP BY pb.id, pb.name, pb.address
        ORDER BY pb.name`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
     const data = rows.map((r: any) => {
       const total = Number(r.totalUnits);
@@ -1136,45 +1146,45 @@ router.get("/reports/property-occupancy", requirePermission("bi:read"), async (r
   } catch (err) { handleRouteError(err, res, "Property occupancy report"); }
 });
 
-router.get("/reports/training-roi", requirePermission("bi:read"), async (req, res) => {
+router.get("/reports/training-roi", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
     const { from, to } = req.query as any;
-    const dateFrom = from || new Date(new Date().getFullYear(), 0, 1).toISOString().split("T")[0];
-    const dateTo = to || new Date().toISOString().split("T")[0];
+    const dateFrom = from || toDateISO(new Date(currentYear(), 0, 1));
+    const dateTo = to || todayISO();
 
     const [summary] = await rawQuery<any>(
       `SELECT
          COUNT(DISTINCT tp."employeeId") AS "trainedEmployees",
          COUNT(*) AS "totalSessions",
-         COALESCE(SUM(tp.hours), 0) AS "totalHours",
+         COALESCE(SUM(t.duration), 0) AS "totalHours",
          COALESCE(SUM(t.cost), 0) AS "totalCost",
          ROUND(AVG(tp.score), 1) AS "avgScore"
        FROM training_participants tp
-       JOIN trainings t ON t.id = tp."trainingId"
+       JOIN training_programs t ON t.id = tp."trainingId" AND t."deletedAt" IS NULL
        WHERE t."companyId" = $1
          AND DATE(t."startDate") BETWEEN $2::date AND $3::date`,
       [cid, dateFrom, dateTo]
-    ).catch(() => [{}]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
     const byProgram = await rawQuery<any>(
       `SELECT
          t.title AS "programName",
          t.type,
          COUNT(tp."employeeId") AS participants,
-         COALESCE(SUM(tp.hours), 0) AS "totalHours",
+         COALESCE(t.duration, 0) AS "totalHours",
          COALESCE(t.cost, 0) AS cost,
          ROUND(AVG(tp.score), 1) AS "avgScore",
          ROUND(COALESCE(t.cost, 0) / NULLIF(COUNT(tp."employeeId"), 0), 0) AS "costPerParticipant"
-       FROM trainings t
+       FROM training_programs t
        LEFT JOIN training_participants tp ON tp."trainingId" = t.id
-       WHERE t."companyId" = $1 AND DATE(t."startDate") BETWEEN $2::date AND $3::date
+       WHERE t."companyId" = $1 AND DATE(t."startDate") BETWEEN $2::date AND $3::date AND t."deletedAt" IS NULL
        GROUP BY t.id, t.title, t.type, t.cost
        ORDER BY cost DESC
        LIMIT 20`,
       [cid, dateFrom, dateTo]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
     res.json({
       summary: {
@@ -1192,7 +1202,7 @@ router.get("/reports/training-roi", requirePermission("bi:read"), async (req, re
   } catch (err) { handleRouteError(err, res, "Training ROI report"); }
 });
 
-router.get("/ai-insights", requirePermission("bi:read"), async (req, res) => {
+router.get("/ai-insights", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -1208,7 +1218,7 @@ router.get("/ai-insights", requirePermission("bi:read"), async (req, res) => {
     }
 
     const alerts = await rawQuery<any>(
-      `SELECT sa.id, sa.type, sa.title, sa.message, sa.severity, sa."createdAt",
+      `SELECT sa.id, sa.type, sa.title, sa.description AS message, sa.severity, sa."createdAt",
               sa."relatedType", sa."relatedId", sa."isDismissed", sa."isRead",
               sa."suggestedAction"
        FROM smart_alerts sa
@@ -1218,7 +1228,7 @@ router.get("/ai-insights", requirePermission("bi:read"), async (req, res) => {
          sa."createdAt" DESC
        LIMIT $${params.length + 1}`,
       [...params, pageSize]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
     const proactive = await rawQuery<any>(
       `SELECT al.id, al."automationType", al."triggerReason", al."actionTaken",
@@ -1228,7 +1238,7 @@ router.get("/ai-insights", requirePermission("bi:read"), async (req, res) => {
        ORDER BY al."createdAt" DESC
        LIMIT 20`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
     const [counts] = await rawQuery<any>(
       `SELECT
@@ -1238,7 +1248,7 @@ router.get("/ai-insights", requirePermission("bi:read"), async (req, res) => {
          COUNT(*) FILTER (WHERE "isDismissed" = false) AS total
        FROM smart_alerts WHERE "companyId" = $1`,
       [cid]
-    ).catch(() => [{}]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
     res.json({
       alerts,
@@ -1253,51 +1263,49 @@ router.get("/ai-insights", requirePermission("bi:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "AI insights"); }
 });
 
-router.patch("/ai-insights/:id/dismiss", requirePermission("bi:write"), async (req, res) => {
+router.patch("/ai-insights/:id/dismiss", authorize({ feature: "bi", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     await rawExecute(
       `UPDATE smart_alerts SET "isDismissed" = true WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.insight.dismissed", entity: "smart_alerts", entityId: id, details: JSON.stringify({ isDismissed: true }) }).catch(console.error);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "ai_insights", entityId: id, after: { isDismissed: true } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.insight.dismissed", entity: "smart_alerts", entityId: id, details: JSON.stringify({ isDismissed: true }) }).catch((e) => logger.error(e, "bi background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "ai_insights", entityId: id, after: { isDismissed: true } }).catch((e) => logger.error(e, "bi background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Dismiss insight"); }
 });
 
-router.patch("/ai-insights/:id/read", requirePermission("bi:write"), async (req, res) => {
+router.patch("/ai-insights/:id/read", authorize({ feature: "bi", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     await rawExecute(
       `UPDATE smart_alerts SET "isRead" = true WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.insight.read", entity: "smart_alerts", entityId: id, details: JSON.stringify({ isRead: true }) }).catch(console.error);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "ai_insights", entityId: id, after: { isRead: true } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.insight.read", entity: "smart_alerts", entityId: id, details: JSON.stringify({ isRead: true }) }).catch((e) => logger.error(e, "bi background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "ai_insights", entityId: id, after: { isRead: true } }).catch((e) => logger.error(e, "bi background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Mark insight read"); }
 });
 
-router.get("/alert-fatigue/settings", requirePermission("bi:read"), async (req, res) => {
+router.get("/alert-fatigue/settings", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
       `SELECT * FROM alert_fatigue_settings WHERE "assignmentId" = $1`,
       [scope.activeAssignmentId]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "bi query failed"); return []; });
     res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "Alert fatigue settings"); }
 });
 
-router.post("/alert-fatigue/mute", requirePermission("bi:write"), async (req, res) => {
+router.post("/alert-fatigue/mute", authorize({ feature: "bi", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed_muteAlertSchema = muteAlertSchema.safeParse(req.body);
-    if (!parsed_muteAlertSchema.success) throw new ValidationError(parsed_muteAlertSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_muteAlertSchema.data;
+    const body = zodParse(muteAlertSchema.safeParse(req.body));
     const { alertType, muteUntil, reason } = body;
 
     await rawExecute(
@@ -1307,34 +1315,34 @@ router.post("/alert-fatigue/mute", requirePermission("bi:write"), async (req, re
          SET "muteUntil" = $4, reason = $5, "updatedAt" = NOW()`,
       [scope.companyId, scope.activeAssignmentId, alertType, muteUntil || null, reason || null]
     );
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.alert.muted", entity: "alert_mute_rules", entityId: 0, details: JSON.stringify({ alertType, muteUntil }) }).catch(console.error);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "alert_mute_rules", entityId: 0, after: { alertType, muteUntil, reason } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.alert.muted", entity: "alert_mute_rules", entityId: 0, details: JSON.stringify({ alertType, muteUntil }) }).catch((e) => logger.error(e, "bi background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "alert_mute_rules", entityId: 0, after: { alertType, muteUntil, reason } }).catch((e) => logger.error(e, "bi background task failed"));
     res.json({ success: true, message: `تم كتم تنبيهات "${alertType}"` });
   } catch (err) { handleRouteError(err, res, "Mute alert type"); }
 });
 
-router.delete("/alert-fatigue/mute/:alertType", requirePermission("bi:write"), async (req, res) => {
+router.delete("/alert-fatigue/mute/:alertType", authorize({ feature: "bi", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { alertType } = req.params;
     await rawExecute(
-      `DELETE FROM alert_mute_rules WHERE "assignmentId" = $1 AND "alertType" = $2`,
-      [scope.activeAssignmentId, alertType]
+      `DELETE FROM alert_mute_rules WHERE "assignmentId" = $1 AND "alertType" = $2 AND "companyId" = $3`,
+      [scope.activeAssignmentId, alertType, scope.companyId]
     );
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.alert.unmuted", entity: "alert_mute_rules", entityId: 0, details: JSON.stringify({ alertType }) }).catch(console.error);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "alert_mute_rules", entityId: 0, after: { alertType } }).catch(console.error);
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.alert.unmuted", entity: "alert_mute_rules", entityId: 0, details: JSON.stringify({ alertType }) }).catch((e) => logger.error(e, "bi background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "alert_mute_rules", entityId: 0, after: { alertType } }).catch((e) => logger.error(e, "bi background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Unmute alert type"); }
 });
 
-router.get("/alert-fatigue/daily-count", requirePermission("bi:read"), async (req, res) => {
+router.get("/alert-fatigue/daily-count", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(
       `SELECT COUNT(*) AS today_count FROM notifications
        WHERE "assignmentId" = $1 AND DATE("createdAt") = CURRENT_DATE`,
       [scope.activeAssignmentId]
-    ).catch(() => [{ today_count: 0 }]);
+    ).catch((e) => { logger.error(e, "bi query failed"); return [{ today_count: 0 }]; });
     const limit = 50;
     const count = Number(row?.today_count ?? 0);
     res.json({ todayCount: count, dailyLimit: limit, isOverLimit: count >= limit });

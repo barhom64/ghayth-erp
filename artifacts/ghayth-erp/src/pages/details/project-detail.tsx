@@ -455,14 +455,14 @@ export default function ProjectDetail() {
             {tasks.length === 0 && !showTaskForm ? (
               <p className="text-center text-gray-400 py-8">لا توجد مهام</p>
             ) : tasks.length > 0 ? (
-              <DataTable<any>
+              <DataTable
                 columns={[
-                  { key: "title", header: "المهمة", render: (t) => <span className="font-medium">{t.title}</span> },
-                  { key: "assigneeName", header: "المسؤول", render: (t) => <span className="text-gray-500">{t.assigneeName || "-"}</span> },
-                  { key: "priority", header: "الأولوية", render: (t) => <Badge className={priorityColors[t.priority] || "bg-gray-100 text-gray-700"}>{priorityLabels[t.priority] || t.priority}</Badge> },
-                  { key: "status", header: "الحالة", render: (t) => <Badge className={taskStatusColors[t.status] || "bg-gray-100 text-gray-700"}>{taskStatusLabels[t.status] || t.status}</Badge> },
-                  { key: "dueDate", header: "تاريخ الاستحقاق", render: (t) => <span className="text-gray-500">{t.dueDate ? formatDateAr(t.dueDate) : "-"}</span> },
-                  { key: "action", header: "إجراء", render: (t) => t.status !== "done" ? (
+                  { key: "title", header: "المهمة", render: (t: any) => <span className="font-medium">{t.title}</span> },
+                  { key: "assigneeName", header: "المسؤول", render: (t: any) => <span className="text-gray-500">{t.assigneeName || "-"}</span> },
+                  { key: "priority", header: "الأولوية", render: (t: any) => <Badge className={priorityColors[t.priority] || "bg-gray-100 text-gray-700"}>{priorityLabels[t.priority] || t.priority}</Badge> },
+                  { key: "status", header: "الحالة", render: (t: any) => <PageStatusBadge status={t.status} domain="project" /> },
+                  { key: "dueDate", header: "تاريخ الاستحقاق", render: (t: any) => <span className="text-gray-500">{t.dueDate ? formatDateAr(t.dueDate) : "-"}</span> },
+                  { key: "action", header: "إجراء", render: (t: any) => t.status !== "done" ? (
                     <Select value={t.status} onValueChange={(v) => updateTaskStatus(t.id, v)}>
                       <SelectTrigger className="h-8 w-[120px] text-xs"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -492,7 +492,7 @@ export default function ProjectDetail() {
             {resources.length === 0 ? (
               <p className="text-center text-gray-400 py-8">لم يتم تعيين أعضاء للفريق بعد</p>
             ) : (
-              <DataTable<any>
+              <DataTable
                 columns={[
                   { key: "employeeName", header: "الموظف", render: (r) => <span className="font-medium">{r.employeeName || `#${r.employeeId}`}</span> },
                   { key: "employeeJobTitle", header: "المنصب", render: (r) => <span className="text-gray-500">{r.employeeJobTitle || "-"}</span> },
@@ -555,7 +555,7 @@ export default function ProjectDetail() {
               {costs.length === 0 && !showCostForm ? (
                 <p className="text-center text-gray-400 py-8">لا توجد تكاليف مسجلة</p>
               ) : (
-                <DataTable<any>
+                <DataTable
                   columns={[
                     { key: "description", header: "الوصف", render: (c) => <span className="font-medium">{c.description}</span> },
                     { key: "amount", header: "المبلغ", render: (c) => <span className="font-bold">{formatCurrency(Number(c.amount))}</span> },
@@ -604,13 +604,13 @@ export default function ProjectDetail() {
             {letters.length === 0 ? (
               <p className="text-center text-gray-400 py-8">لا توجد مراسلات مرتبطة بهذا المشروع</p>
             ) : (
-              <DataTable<any>
+              <DataTable
                 columns={[
                   { key: "subject", header: "الموضوع", render: (l) => <span className="font-medium">{l.subject}</span> },
                   { key: "direction", header: "الاتجاه", render: (l) => <Badge variant="outline">{l.direction === "outgoing" ? "صادر" : "وارد"}</Badge> },
                   { key: "type", header: "النوع", render: (l) => <span className="text-gray-500">{l.type || "-"}</span> },
                   { key: "letterDate", header: "التاريخ", render: (l) => <span className="text-gray-500">{l.letterDate ? formatDateAr(l.letterDate) : "-"}</span> },
-                  { key: "status", header: "الحالة", render: (l) => <Badge className="bg-gray-100 text-gray-700">{l.status || "مسودة"}</Badge> },
+                  { key: "status", header: "الحالة", render: (l) => <PageStatusBadge status={l.status || "draft"} /> },
                 ]}
                 data={letters}
                 noToolbar
@@ -638,7 +638,7 @@ export default function ProjectDetail() {
       entityId={id || ""}
       isLoading={isLoading}
       error={isError ? error : undefined}
-      onRetry={() => window.location.reload()}
+     
       createdAt={project?.createdAt}
       updatedAt={project?.updatedAt}
       overview={overview}

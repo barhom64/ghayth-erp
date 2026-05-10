@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { KpiGrid } from "@/components/shared/kpi-card";
-import { Calendar as CalendarIcon, Flag, Clock, FileText, ListTodo, GraduationCap, IdCard, Car, Shield, List, Grid3x3, ChevronRight, ChevronLeft } from "lucide-react";
+import { Calendar as CalendarIcon, Calendar, Flag, Clock, FileText, ListTodo, GraduationCap, IdCard, Car, Shield, Users, List, Grid3x3, ChevronRight, ChevronLeft } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 
 const CATEGORY_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
@@ -21,6 +21,8 @@ const CATEGORY_CONFIG: Record<string, { label: string; color: string; icon: any 
   vehicle_expiry: { label: "مركبة", color: "bg-slate-100 text-slate-700", icon: Car },
   vehicle_maintenance: { label: "صيانة", color: "bg-stone-100 text-stone-700", icon: Car },
   insurance_expiry: { label: "تأمين", color: "bg-emerald-100 text-emerald-700", icon: Shield },
+  leave: { label: "إجازة", color: "bg-green-100 text-green-700", icon: Calendar },
+  interview: { label: "مقابلة", color: "bg-indigo-100 text-indigo-700", icon: Users },
 };
 
 function groupByDate(events: any[]): Record<string, any[]> {
@@ -132,6 +134,8 @@ export default function CalendarPage() {
               <SelectItem value="document_expiry">الوثائق</SelectItem>
               <SelectItem value="vehicle_expiry">المركبات</SelectItem>
               <SelectItem value="insurance_expiry">التأمين</SelectItem>
+              <SelectItem value="leave">الإجازات</SelectItem>
+              <SelectItem value="interview">المقابلات</SelectItem>
             </SelectContent>
           </Select>
           <Select value={days} onValueChange={setDays}>
@@ -156,6 +160,8 @@ export default function CalendarPage() {
         { label: "وثائق تنتهي", value: summary.documentExpiries || 0, icon: IdCard, color: "text-yellow-600 bg-yellow-50" },
         { label: "أحداث مركبات", value: summary.vehicleExpiries || 0, icon: Car, color: "text-slate-600 bg-slate-50" },
         { label: "تأمينات تنتهي", value: summary.insuranceExpiries || 0, icon: Shield, color: "text-emerald-600 bg-emerald-50" },
+        { label: "إجازات", value: summary.leaves || 0, icon: Calendar, color: "text-green-600 bg-green-50" },
+        { label: "مقابلات", value: summary.interviews || 0, icon: Users, color: "text-indigo-600 bg-indigo-50" },
       ]} />
 
       {view === "month" ? (

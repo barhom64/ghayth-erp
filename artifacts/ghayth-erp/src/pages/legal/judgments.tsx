@@ -1,12 +1,12 @@
+import { useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
+import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle } from "lucide-react";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { PageShell } from "@/components/page-shell";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { LegalTabsNav } from "@/components/shared/legal-tabs-nav";
+import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 
 interface Judgment {
   id: number;
@@ -41,14 +41,17 @@ const columns: DataTableColumn<Judgment>[] = [
 ];
 
 export default function LegalJudgments() {
+  const [, navigate] = useLocation();
   const { data, isLoading, isError, error } = useApiQuery<any>(["legal-judgments"], "/legal/judgments/financial-report");
   const rows = asList(data?.data || data);
   const totalAmount = data?.totalAmount || 0;
   const totalPaid = data?.totalPaid || 0;
   const outstanding = data?.outstanding || 0;
-
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  const [filters, setFilters] = useFilters();
+  const filtered = applyFilters(rows, filters, {
+    searchFields: ["caseTitle", "verdict", "caseNumber"],
+    statusField: "riskLevel",
+  });
 
   return (
     <PageShell
@@ -57,13 +60,13 @@ export default function LegalJudgments() {
       breadcrumbs={[{ href: "/legal", label: "الشؤون القانونية" }, { label: "الأحكام القضائية" }]}
       loading={isLoading}
     >
-      <LegalTabsNav />
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card><CardContent className="p-4 text-center"><p className="text-sm text-muted-foreground">إجمالي المبالغ</p><p className="text-xl font-bold">{formatCurrency(Number(totalAmount))}</p></CardContent></Card>
         <Card><CardContent className="p-4 text-center"><p className="text-sm text-muted-foreground">المدفوع</p><p className="text-xl font-bold text-green-600">{formatCurrency(Number(totalPaid))}</p></CardContent></Card>
         <Card><CardContent className="p-4 text-center"><p className="text-sm text-muted-foreground">المتبقي</p><p className="text-xl font-bold text-red-600">{formatCurrency(Number(outstanding))}</p></CardContent></Card>
       </div>
-      <DataTable columns={columns} data={rows} isLoading={isLoading} isError={isError} error={error} />
+      <AdvancedFilters config={{ searchPlaceholder: "بحث...", showDateRange: false }} values={filters} onChange={setFilters} resultCount={filtered.length} />
+      <DataTable columns={columns} data={filtered} isLoading={isLoading} isError={isError} error={error} onRowClick={(j) => navigate(`/legal/judgments/${j.id}`)} />
     </PageShell>
   );
 }

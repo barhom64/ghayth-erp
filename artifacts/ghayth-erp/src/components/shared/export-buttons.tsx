@@ -1,16 +1,20 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Download, FileSpreadsheet, FileText, ChevronDown, Loader2 } from "lucide-react";
+import { Download, FileSpreadsheet, FileText, ChevronDown, Loader2, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { notifyRateLimited, RateLimitError } from "@/lib/rate-limit-toast";
+import { useRateLimitCooldown } from "@/hooks/use-rate-limit-cooldown";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 async function authFetchBlob(endpoint: string, qs: string = ""): Promise<Blob> {
-  const token = localStorage.getItem("erp_token");
-  const headers: Record<string, string> = {};
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  const response = await fetch(`${BASE}/api${endpoint}${qs}`, { headers, credentials: "include" });
+  const response = await fetch(`${BASE}/api${endpoint}${qs}`, { credentials: "include" });
+  if (response.status === 429) {
+    // Surface the live cooldown so the export button (and every other
+    // rate-limit-aware button on the page) ticks down "حاول بعد N ثانية…".
+    throw new RateLimitError(notifyRateLimited(response));
+  }
   if (!response.ok) {
     const text = await response.text().catch(() => response.statusText);
     throw new Error(text || `HTTP ${response.status}`);
@@ -31,6 +35,7 @@ interface ExportButtonProps {
 export function ExportButton({ endpoint, filename, type, label, params, size = "sm", variant = "outline" }: ExportButtonProps) {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const cooldown = useRateLimitCooldown();
 
   const handleExport = async () => {
     setLoading(true);
@@ -47,16 +52,25 @@ export function ExportButton({ endpoint, filename, type, label, params, size = "
       URL.revokeObjectURL(url);
       toast({ title: `تم تصدير ${filename}` });
     } catch (err: any) {
-      toast({ variant: "destructive", title: "فشل التصدير", description: err.message });
+      // The shared rate-limit toast already explains the 429 — skip the
+      // duplicate destructive toast here.
+      if (!(err instanceof RateLimitError)) {
+        toast({ variant: "destructive", title: "فشل التصدير", description: err.message });
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  const disabled = loading || cooldown.isCoolingDown;
   return (
-    <Button variant={variant} size={size} onClick={handleExport} disabled={loading} className="gap-1">
-      {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : type === "excel" ? <FileSpreadsheet className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
-      {label || (type === "excel" ? "ملف إكسل" : "ملف للطباعة")}
+    <Button variant={variant} size={size} onClick={handleExport} disabled={disabled} className="gap-1" rateLimitAware>
+      {loading
+        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        : cooldown.isCoolingDown
+          ? <Clock className="h-3.5 w-3.5" />
+          : type === "excel" ? <FileSpreadsheet className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
+      {cooldown.isCoolingDown ? cooldown.label : (label || (type === "excel" ? "ملف إكسل" : "ملف للطباعة"))}
     </Button>
   );
 }
@@ -75,6 +89,7 @@ interface MultiExportButtonProps {
 export function MultiExportButton({ exports: exportItems, label = "تصدير" }: MultiExportButtonProps) {
   const [loading, setLoading] = useState<string | null>(null);
   const { toast } = useToast();
+  const cooldown = useRateLimitCooldown();
 
   const handleExport = async (item: typeof exportItems[0]) => {
     setLoading(item.filename);
@@ -91,19 +106,26 @@ export function MultiExportButton({ exports: exportItems, label = "تصدير" }
       URL.revokeObjectURL(url);
       toast({ title: `تم تصدير ${item.filename}` });
     } catch (err: any) {
-      toast({ variant: "destructive", title: "فشل التصدير", description: err.message });
+      if (!(err instanceof RateLimitError)) {
+        toast({ variant: "destructive", title: "فشل التصدير", description: err.message });
+      }
     } finally {
       setLoading(null);
     }
   };
 
+  const triggerDisabled = !!loading || cooldown.isCoolingDown;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-1" disabled={!!loading}>
-          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-          {label}
-          <ChevronDown className="h-3 w-3" />
+        <Button variant="outline" size="sm" className="gap-1" disabled={triggerDisabled}>
+          {loading
+            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            : cooldown.isCoolingDown
+              ? <Clock className="h-3.5 w-3.5" />
+              : <Download className="h-3.5 w-3.5" />}
+          {cooldown.isCoolingDown ? cooldown.label : label}
+          {!cooldown.isCoolingDown && <ChevronDown className="h-3 w-3" />}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">

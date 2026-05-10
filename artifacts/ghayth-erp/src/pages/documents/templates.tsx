@@ -224,7 +224,7 @@ export default function DocumentsTemplates() {
   };
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   if (viewMode === "editor") {
     return (
@@ -240,7 +240,7 @@ export default function DocumentsTemplates() {
             <Button variant="outline" onClick={handleLivePreview} disabled={!form.htmlContent}>
               <Eye className="h-4 w-4 me-1" />معاينة
             </Button>
-            <Button onClick={handleSave}>
+            <Button onClick={handleSave} rateLimitAware>
               <Save className="h-4 w-4 me-1" />حفظ
             </Button>
           </div>

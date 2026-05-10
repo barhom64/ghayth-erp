@@ -6,13 +6,7 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { Badge } from "@/components/ui/badge";
 import { CheckSquare, Plus } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
-
-const priorityLabels: Record<string, string> = { high: "عالية", medium: "متوسطة", low: "منخفضة" };
-const priorityColors: Record<string, string> = {
-  high: "bg-rose-100 text-rose-700",
-  medium: "bg-amber-100 text-amber-700",
-  low: "bg-emerald-100 text-emerald-700",
-};
+import { priorityLabel, priorityBadgeClass } from "@/lib/priority-labels";
 
 interface LinkedTasksProps {
   entityType: string;
@@ -21,7 +15,7 @@ interface LinkedTasksProps {
 }
 
 export function LinkedTasks({ entityType, entityId }: LinkedTasksProps) {
-  const extraParams = entityType === "property_unit" ? "&includeRelatedMaintenance=true" : "";
+  const extraParams = entityType === "property-unit" ? "&includeRelatedMaintenance=true" : "";
   const { data: tasksResp, isLoading } = useApiQuery<any>(
     ["linked-tasks", entityType, String(entityId)],
     `/tasks?linkedEntityType=${entityType}&linkedEntityId=${entityId}${extraParams}`,
@@ -69,8 +63,8 @@ export function LinkedTasks({ entityType, entityId }: LinkedTasksProps) {
                     )}
                   </td>
                   <td className="p-3">
-                    <Badge className={priorityColors[task.priority] || "bg-gray-100 text-gray-700"}>
-                      {priorityLabels[task.priority] || task.priority}
+                    <Badge className={priorityBadgeClass(task.priority)}>
+                      {priorityLabel(task.priority)}
                     </Badge>
                   </td>
                   <td className="p-3"><PageStatusBadge status={task.status} /></td>

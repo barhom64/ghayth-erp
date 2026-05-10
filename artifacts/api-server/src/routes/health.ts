@@ -1,12 +1,18 @@
 import { Router, type IRouter } from "express";
 import { HealthCheckResponse } from "@workspace/api-zod";
 import { rawQuery } from "../lib/rawdb.js";
+import { logger } from "../lib/logger.js";
+import { getRedisRateLimitStatus } from "../lib/rateLimitStore.js";
 
 const router: IRouter = Router();
 
 router.get("/healthz", (_req, res) => {
+  // Validate the spec'd subset, then add operator-only diagnostics that
+  // aren't part of the OpenAPI contract. `redisRateLimit` lets external
+  // monitors notice when caps have silently degraded to per-replica memory
+  // (see artifacts/api-server/src/lib/rateLimitStore.ts).
   const data = HealthCheckResponse.parse({ status: "ok" });
-  res.json(data);
+  res.json({ ...data, redisRateLimit: getRedisRateLimitStatus() });
 });
 
 /**
@@ -187,7 +193,8 @@ router.get("/health/schema", async (_req, res) => {
         `SELECT COUNT(*)::text AS count FROM schema_migrations`
       );
       migrationsApplied = Number(countRows[0]?.count ?? 0);
-    } catch {
+    } catch (e) {
+      logger.warn(e, "schema_migrations table does not exist");
       // schema_migrations itself doesn't exist — that's a critical miss and
       // is already reflected in `criticalMissing`.
     }

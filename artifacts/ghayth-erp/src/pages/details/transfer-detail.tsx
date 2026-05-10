@@ -178,6 +178,14 @@ export default function TransferDetail() {
                 approveEndpoint={`/hr/transfers/${id}/approve`}
                 rejectEndpoint={`/hr/transfers/${id}/approve`}
                 returnEndpoint={`/hr/transfers/${id}/approve`}
+                approveMethod="PATCH"
+                rejectMethod="PATCH"
+                returnMethod="PATCH"
+                approveBody={(notes) => ({ approved: true, reason: notes || undefined })}
+                rejectBody={(notes) => ({ approved: false, reason: notes })}
+                returnBody={(notes) => ({ approved: "returned", reason: notes })}
+                pendingStatuses={["pending", "returned"]}
+                invalidateKeys={[["transfers"]]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث طلب النقل" });

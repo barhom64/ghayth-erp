@@ -47,7 +47,7 @@ export default function IntercompanyPage() {
   const companies = companiesData?.data ?? companiesData ?? [];
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -168,7 +168,7 @@ export default function IntercompanyPage() {
               </div>
               <div className="flex justify-end gap-3 pt-2">
                 <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>إلغاء</Button>
-                <Button type="submit" disabled={createMutation.isPending}>
+                <Button type="submit" disabled={createMutation.isPending} rateLimitAware>
                   {createMutation.isPending ? "جاري التسجيل..." : "تسجيل المعاملة"}
                 </Button>
               </div>

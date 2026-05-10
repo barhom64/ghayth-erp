@@ -9,7 +9,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieCha
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
@@ -32,7 +32,7 @@ export default function TurnoverReportPage() {
   const { data, isLoading, isError } = useApiQuery<any>(["turnover-report", String(year)], `/hr/turnover-report?year=${year}`);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
 
   const monthlyData = (data?.byMonth || []).map((m: any) => ({
@@ -202,9 +202,7 @@ export default function TurnoverReportPage() {
                   sortable: true,
                   render: (v: any) => (
                     <span className="text-sm text-gray-500">
-                      {v.terminationDate
-                        ? new Date(v.terminationDate).toLocaleDateString("ar-SA", { year: "numeric", month: "short", day: "numeric" })
-                        : "-"}
+                      {formatDateAr(v.terminationDate)}
                     </span>
                   ),
                 },

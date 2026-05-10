@@ -40,6 +40,21 @@ INSERT INTO public.branches (id, "companyId", name, address, lat, lon, phone, st
 
 
 --
+-- Data for Name: departments; Type: TABLE DATA; Schema: public; Owner: -
+-- Seed a canonical default department so creating an employee on a freshly
+-- bootstrapped dev DB does not 422 with "القسم … غير موجود". Idempotent: the
+-- WHERE NOT EXISTS guard makes re-running seed.sql (or running it on a DB
+-- that already has departments) a no-op. Mirrors migration
+-- 121_default_department_seed.sql for environments that bypass migrations
+-- by pre-marking them in schema_migrations during bootstrap.
+--
+
+INSERT INTO public.departments (name, "companyId", status)
+SELECT 'الإدارة العامة', 1, 'active'
+WHERE NOT EXISTS (SELECT 1 FROM public.departments WHERE "companyId" = 1);
+
+
+--
 -- Data for Name: chart_of_accounts; Type: TABLE DATA; Schema: public; Owner: -
 --
 

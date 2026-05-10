@@ -191,9 +191,17 @@ export default function LeaveDetail() {
                 entityType="leave"
                 entityId={id}
                 currentStatus={leave.status}
-                approveEndpoint={`/hr/leaves/${id}/approve`}
-                rejectEndpoint={`/hr/leaves/${id}/approve`}
-                returnEndpoint={`/hr/leaves/${id}/approve`}
+                approveEndpoint={`/hr/leave-requests/${id}/approve`}
+                rejectEndpoint={`/hr/leave-requests/${id}/approve`}
+                returnEndpoint={`/hr/leave-requests/${id}/approve`}
+                approveMethod="PATCH"
+                rejectMethod="PATCH"
+                returnMethod="PATCH"
+                approveBody={(notes) => ({ approved: true, reason: notes || undefined })}
+                rejectBody={(notes) => ({ approved: false, reason: notes })}
+                returnBody={(notes) => ({ approved: "returned", reason: notes })}
+                pendingStatuses={["pending", "returned"]}
+                invalidateKeys={[["leaves"], ["leave-requests"], ["leave-balance"], ["leave-stats"]]}
                 onDone={() => {
                   refetch();
                   toast({ title: "تم تحديث الإجازة" });

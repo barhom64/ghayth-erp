@@ -35,7 +35,7 @@ export default function PaymentRegisterPage() {
   const remaining = payment ? payment.amount - (payment.paidAmount || 0) : 0;
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   if (payment && !form.paidAmount && remaining > 0) {
     setForm(f => ({ ...f, paidAmount: String(remaining) }));
@@ -121,7 +121,7 @@ export default function PaymentRegisterPage() {
 
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/properties/payments")}>إلغاء</Button>
-        <Button onClick={handleSave} disabled={saving} className="gap-2">
+        <Button onClick={handleSave} disabled={saving} className="gap-2" rateLimitAware>
           <Save className="h-4 w-4" /> {saving ? "جاري التسجيل..." : "تسجيل الدفعة"}
         </Button>
       </div>

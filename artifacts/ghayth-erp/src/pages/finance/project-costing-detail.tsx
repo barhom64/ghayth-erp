@@ -73,7 +73,7 @@ export default function ProjectCostingDetailPage() {
           <div className="pt-4 border-t">
             <p className="text-sm font-semibold mb-2">القيود المحاسبية المرتبطة بالمشروع</p>
             <div className="rounded-xl border overflow-hidden text-sm">
-              <DataTable<any>
+              <DataTable
                 columns={[
                   { key: "ref", header: "المرجع", render: (r) => <span className="font-mono text-xs">{r.ref}</span> },
                   { key: "description", header: "البيان" },
@@ -104,7 +104,7 @@ export default function ProjectCostingDetailPage() {
       refNumber={project?.ref}
       createdAt={project?.startDate || project?.createdAt}
       updatedAt={project?.updatedAt}
-      entityType="project_costing"
+      entityType="project-costing"
       entityId={id}
       isLoading={isLoading}
       error={isError ? true : undefined}

@@ -33,12 +33,12 @@ export default function ExitRequestsPage() {
   const items = data?.data || [];
   const stats = data?.stats || {};
 
-  const approveMut = useApiMutation(null as any, "PATCH", [["hr-exit"]], {
+  const approveMut = useApiMutation((body: any) => body.__url, "PATCH", [["hr-exit"]], {
     successMessage: "تم اعتماد الطلب",
   });
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const handleApprove = async (id: number) => {
     await approveMut.mutateAsync({ __url: `/hr/exit/${id}/approve` } as any);

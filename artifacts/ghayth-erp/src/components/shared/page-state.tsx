@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -229,6 +230,10 @@ export function PageStateWrapper({
   compact = false,
   children,
 }: PageStateWrapperProps) {
+  // Default retry handler invalidates every active query — far cheaper than
+  // window.location.reload() which re-bootstraps auth, layout, and settings.
+  const qc = useQueryClient();
+  const handleRetry = onRetry ?? (() => qc.invalidateQueries());
   if (isLoading) {
     return (
       <div className={compact ? "py-6" : "py-12"} dir="rtl">
@@ -274,8 +279,8 @@ export function PageStateWrapper({
           )}
         </div>
         <div className="flex items-center gap-2 pt-1">
-          {desc.allowRetry && onRetry && (
-            <Button onClick={onRetry} size="sm" variant="default">
+          {desc.allowRetry && (
+            <Button onClick={handleRetry} size="sm" variant="default">
               <RefreshCw className="h-4 w-4 ms-1" />
               إعادة المحاولة
             </Button>

@@ -1,13 +1,12 @@
 import { handleRouteError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
+import { buildScopedWhere } from "../lib/scopedQuery.js";
 
 const router = Router();
-router.use(authMiddleware);
 
-router.get("/", requirePermission("audit:read"), async (req, res) => {
+router.get("/", authorize({ feature: "admin.audit", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const {
@@ -15,29 +14,36 @@ router.get("/", requirePermission("audit:read"), async (req, res) => {
       page = "1", limit: lim = "50",
       dateFrom, dateTo,
     } = req.query as any;
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+    const pageNum = Math.max(Number(page) || 1, 1);
+    const perPage = Math.min(Number(lim) || 50, 500);
+    const offset = (pageNum - 1) * perPage;
 
-    const conditions = [`al."companyId" = $1`];
-    const params: any[] = [scope.companyId];
+    const { where: scopeWhere, params, nextParamIndex } = buildScopedWhere(
+      scope,
+      {},
+      { companyColumn: 'al."companyId"', disableBranchScope: true }
+    );
+    const conditions = [scopeWhere];
+    let paramIdx = nextParamIndex;
 
-    if (entityType) { params.push(String(entityType)); conditions.push(`al.entity = $${params.length}`); }
-    if (entityId) { params.push(String(entityId)); conditions.push(`al."entityId" = $${params.length}`); }
+    if (entityType) { params.push(String(entityType)); conditions.push(`al.entity = $${paramIdx++}`); }
+    if (entityId) { params.push(String(entityId)); conditions.push(`al."entityId" = $${paramIdx++}`); }
     if (action) {
       params.push(String(action));
-      const actionIdx = params.length;
+      const actionIdx = paramIdx++;
       params.push(`%.${String(action)}`);
-      const likeIdx = params.length;
+      const likeIdx = paramIdx++;
       conditions.push(`(al.action = $${actionIdx} OR al.action LIKE $${likeIdx})`);
     }
-    if (userId) { params.push(Number(userId)); conditions.push(`al."userId" = $${params.length}`); }
-    if (dateFrom) { params.push(String(dateFrom)); conditions.push(`al."createdAt" >= $${params.length}::timestamptz`); }
-    if (dateTo) { params.push(String(dateTo) + "T23:59:59Z"); conditions.push(`al."createdAt" <= $${params.length}::timestamptz`); }
+    if (userId) { params.push(Number(userId) || 0); conditions.push(`al."userId" = $${paramIdx++}`); }
+    if (dateFrom) { params.push(String(dateFrom)); conditions.push(`al."createdAt" >= $${paramIdx++}::timestamptz`); }
+    if (dateTo) { params.push(String(dateTo) + "T23:59:59Z"); conditions.push(`al."createdAt" <= $${paramIdx++}::timestamptz`); }
 
     const where = conditions.join(" AND ");
-    params.push(Number(lim));
-    const limitIdx = params.length;
+    params.push(perPage);
+    const limitIdx = paramIdx++;
     params.push(offset);
-    const offsetIdx = params.length;
+    const offsetIdx = paramIdx++;
 
     const rows = await rawQuery<any>(
       `SELECT al.id, al."companyId", al."branchId", al."userId", al.action, al.entity, al."entityId",
@@ -60,17 +66,17 @@ router.get("/", requirePermission("audit:read"), async (req, res) => {
       countParams
     );
 
-    res.json({ data: rows, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) });
+    res.json({ data: rows, total: Number(countRow?.total ?? 0), page: pageNum, pageSize: perPage });
   } catch (err) {
     handleRouteError(err, res, "Get audit logs error:");
   }
 });
 
-router.get("/entities", requirePermission("audit:read"), async (req, res) => {
+router.get("/entities", authorize({ feature: "admin.audit", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT DISTINCT entity FROM audit_logs WHERE "companyId" = $1 ORDER BY entity`,
+      `SELECT DISTINCT entity FROM audit_logs WHERE "companyId" = $1 ORDER BY entity LIMIT 500`,
       [scope.companyId]
     );
     const entities = rows.map((r: any) => r.entity);
@@ -80,7 +86,7 @@ router.get("/entities", requirePermission("audit:read"), async (req, res) => {
   }
 });
 
-router.get("/:entityType/:entityId", requirePermission("audit:read"), async (req, res) => {
+router.get("/:entityType/:entityId", authorize({ feature: "admin.audit", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId } = req.params;

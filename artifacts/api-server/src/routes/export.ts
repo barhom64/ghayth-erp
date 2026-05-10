@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requireModule } from "../middlewares/roleGuard.js";
-import { handleRouteError } from "../lib/errorHandler.js";
+import { handleRouteError,
+  parseId,
+} from "../lib/errorHandler.js";
 import {
   exportTrialBalanceExcel,
   exportIncomeStatementExcel,
@@ -106,7 +108,7 @@ exportRouter.get("/excel/fleet", fleetGuard, async (req, res) => {
 exportRouter.get("/pdf/invoice/:id", financeGuard, async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const buf = await exportInvoicePdf(scope.companyId, id);
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename=invoice-${id}.pdf`);
@@ -119,7 +121,7 @@ exportRouter.get("/pdf/invoice/:id", financeGuard, async (req, res) => {
 exportRouter.get("/pdf/purchase-order/:id", financeGuard, async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const buf = await exportPurchaseOrderPdf(scope.companyId, id);
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename=purchase-order-${id}.pdf`);
@@ -132,7 +134,7 @@ exportRouter.get("/pdf/purchase-order/:id", financeGuard, async (req, res) => {
 exportRouter.get("/pdf/voucher/:id", financeGuard, async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const buf = await exportVoucherPdf(scope.companyId, id);
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename=voucher-${id}.pdf`);
@@ -145,7 +147,7 @@ exportRouter.get("/pdf/voucher/:id", financeGuard, async (req, res) => {
 exportRouter.get("/pdf/payroll/:id", hrGuard, async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     const buf = await exportPayrollSlipPdf(scope.companyId, id);
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename=payroll-slip-${id}.pdf`);

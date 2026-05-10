@@ -3,15 +3,17 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 import { rawQuery } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
+import { logger } from "../lib/logger.js";
 
 export const calendarRouter = Router();
 calendarRouter.use(authMiddleware);
 
 async function safe<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
-  try { return await fn(); } catch { return fallback; }
+  try { return await fn(); } catch (e) { logger.error(e, "calendar query failed"); return fallback; }
 }
 
-calendarRouter.get("/upcoming", requirePermission("operations:read"), async (req, res) => {
+calendarRouter.get("/upcoming", authorize({ feature: "projects", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -35,7 +37,7 @@ calendarRouter.get("/upcoming", requirePermission("operations:read"), async (req
         `SELECT pm.id, pm.title, pm."dueDate" as "date", pm.status, p.name as "projectName", p.id as "projectId"
          FROM project_milestones pm
          JOIN projects p ON p.id = pm."projectId"
-         WHERE p."companyId" = $1 AND pm.status NOT IN ('completed','cancelled')
+         WHERE p."companyId" = $1 AND p."deletedAt" IS NULL AND pm.status NOT IN ('completed','cancelled')
            AND pm."dueDate" BETWEEN $2 AND $3
          ORDER BY pm."dueDate" LIMIT 50`,
         [cid, now, cutoff]
@@ -53,31 +55,32 @@ calendarRouter.get("/upcoming", requirePermission("operations:read"), async (req
                 t.name as "tenantName", rc."unitId"
          FROM rental_contracts rc
          LEFT JOIN tenants t ON t.id = rc."tenantId"
-         WHERE rc."companyId" = $1 AND rc.status = 'active'
+         WHERE rc."companyId" = $1 AND rc."deletedAt" IS NULL AND rc.status = 'active'
            AND rc."endDate" BETWEEN $2 AND $3
          ORDER BY rc."endDate" LIMIT 30`,
         [cid, now, cutoff]
       ), []),
       safe(() => rawQuery<any>(
-        `SELECT t.id, t.title, t."dueDate" as "date", t.status, t.priority, p.name as "projectName"
-         FROM project_tasks t
-         LEFT JOIN projects p ON p.id = t."projectId"
-         WHERE t."companyId" = $1 AND t.status NOT IN ('completed','cancelled')
-           AND t."dueDate" BETWEEN $2 AND $3
-         ORDER BY t."dueDate" LIMIT 50`,
+        `SELECT t.id, t.title, t."scheduledDate" as "date", t.status, t.priority,
+                p.name as "projectName"
+         FROM tasks t
+         LEFT JOIN projects p ON t."linkedEntityType" = 'project' AND p.id = t."linkedEntityId"
+         WHERE t."companyId" = $1 AND t."deletedAt" IS NULL AND t.status NOT IN ('completed','cancelled')
+           AND t."scheduledDate" BETWEEN $2 AND $3
+         ORDER BY t."scheduledDate" LIMIT 50`,
         [cid, now, cutoff]
       ), []),
       safe(() => rawQuery<any>(
         `SELECT id, name, "startDate" as "date", status, provider
          FROM training_programs
-         WHERE "companyId" = $1 AND status IN ('planned','ongoing')
+         WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status IN ('planned','ongoing')
            AND "startDate" BETWEEN $2 AND $3
          ORDER BY "startDate" LIMIT 30`,
         [cid, now.slice(0, 10), cutoff.slice(0, 10)]
       ), []),
       safe(() => rawQuery<any>(
         `SELECT ed.id, ed.type, ed.name, ed."expiryDate" as "date", ed."employeeId",
-                e."firstName" || ' ' || e."lastName" as "employeeName"
+                e."name" as "employeeName"
          FROM employee_documents ed
          JOIN employees e ON e.id = ed."employeeId"
          WHERE ed."companyId" = $1 AND ed."expiryDate" BETWEEN $2 AND $3
@@ -90,7 +93,7 @@ calendarRouter.get("/upcoming", requirePermission("operations:read"), async (req
                 "nextInspectionDate" as "inspExp",
                 "nextServiceDate" as "svcExp"
          FROM fleet_vehicles
-         WHERE "companyId" = $1
+         WHERE "companyId" = $1 AND "deletedAt" IS NULL
            AND (
              ("registrationExpiry" BETWEEN $2 AND $3)
              OR ("nextInspectionDate" BETWEEN $2 AND $3)
@@ -102,29 +105,29 @@ calendarRouter.get("/upcoming", requirePermission("operations:read"), async (req
       safe(() => rawQuery<any>(
         `SELECT id, "unitNumber", "insuranceExpiry" as "date"
          FROM property_units
-         WHERE "companyId" = $1 AND "insuranceExpiry" BETWEEN $2 AND $3
+         WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "insuranceExpiry" BETWEEN $2 AND $3
          ORDER BY "insuranceExpiry" LIMIT 30`,
         [cid, now.slice(0, 10), cutoff.slice(0, 10)]
       ), []),
       safe(() => rawQuery<any>(
         `SELECT lr.id, lr."startDate" as "date", lr."endDate", lr.status, lr.days,
-                lr."employeeId", e."firstName" || ' ' || e."lastName" as "employeeName",
+                lr."employeeId", e."name" as "employeeName",
                 lt.name as "leaveTypeName"
          FROM hr_leave_requests lr
          JOIN employees e ON e.id = lr."employeeId"
          LEFT JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-         WHERE lr."companyId" = $1
+         WHERE lr."companyId" = $1 AND lr."deletedAt" IS NULL
            AND lr.status IN ('approved','pending')
            AND lr."startDate" BETWEEN $2 AND $3
          ORDER BY lr."startDate" LIMIT 50`,
         [cid, now.slice(0, 10), cutoff.slice(0, 10)]
       ), []),
       safe(() => rawQuery<any>(
-        `SELECT a.id, a."interviewDate" as "date", a.name as "candidateName",
+        `SELECT a.id, a."interviewDate" as "date", a."applicantName" as "candidateName",
                 a.status, jp.title as "jobTitle", a."postingId"
          FROM job_applications a
          LEFT JOIN job_postings jp ON jp.id = a."postingId"
-         WHERE (jp."companyId" = $1 OR jp."companyId" IS NULL)
+         WHERE jp."companyId" = $1
            AND a."interviewDate" IS NOT NULL
            AND a."interviewDate" BETWEEN $2 AND $3
            AND a."deletedAt" IS NULL

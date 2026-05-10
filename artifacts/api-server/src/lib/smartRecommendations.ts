@@ -1,4 +1,6 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
+import { logger } from "./logger.js";
+import { MGR_ROLES, OPS_CLOSE_ROLES } from "./rbacCatalog.js";
 
 export interface SmartRecommendation {
   id: string;
@@ -48,7 +50,7 @@ export async function getPersonalizedRecommendations(
         });
       }
     }
-  } catch (err) { console.error("Shortcut recommendations error:", err); }
+  } catch (err) { logger.error(err, "Shortcut recommendations error:"); }
 
   // 2. Clients that stopped ordering (churn risk alerts)
   if (["branch_manager", "general_manager", "owner", "finance_manager", "sales"].includes(role)) {
@@ -75,7 +77,7 @@ export async function getPersonalizedRecommendations(
           metadata: { clientId: cl.id, recencyDays: cl.recencyDays },
         });
       }
-    } catch (err) { console.error("Churn alert recs error:", err); }
+    } catch (err) { logger.error(err, "Churn alert recs error:"); }
   }
 
   // 3. Best time to contact clients with pending tasks
@@ -118,11 +120,11 @@ export async function getPersonalizedRecommendations(
           });
         }
       }
-    } catch (err) { console.error("Contact time recs error:", err); }
+    } catch (err) { logger.error(err, "Contact time recs error:"); }
   }
 
   // 4. Employees with productivity drop
-  if (["branch_manager", "general_manager", "hr_manager", "owner"].includes(role)) {
+  if (MGR_ROLES.includes(role)) {
     try {
       const prodDrop = await rawQuery<any>(
         `WITH recent AS (
@@ -163,11 +165,11 @@ export async function getPersonalizedRecommendations(
           priority: "high",
         });
       }
-    } catch (err) { console.error("Productivity drop recs error:", err); }
+    } catch (err) { logger.error(err, "Productivity drop recs error:"); }
   }
 
   // 5. Budget overspend warnings
-  if (["branch_manager", "general_manager", "finance_manager", "owner"].includes(role)) {
+  if (OPS_CLOSE_ROLES.includes(role)) {
     try {
       const budgetAlerts = await rawQuery<any>(
         `SELECT b."accountCode", b.amount, b.used,
@@ -190,11 +192,11 @@ export async function getPersonalizedRecommendations(
           priority: b.utilization >= 100 ? "urgent" : "high",
         });
       }
-    } catch (err) { console.error("Budget recs error:", err); }
+    } catch (err) { logger.error(err, "Budget recs error:"); }
   }
 
   // 6. Clients with 3+ consecutive unpaid invoices
-  if (["branch_manager", "general_manager", "finance_manager", "owner"].includes(role)) {
+  if (OPS_CLOSE_ROLES.includes(role)) {
     try {
       const badPayers = await rawQuery<any>(
         `SELECT c.id, c.name, COUNT(i.id)::int AS "unpaidCount",
@@ -219,7 +221,7 @@ export async function getPersonalizedRecommendations(
           priority: "urgent",
         });
       }
-    } catch (err) { console.error("Unpaid invoices recs error:", err); }
+    } catch (err) { logger.error(err, "Unpaid invoices recs error:"); }
   }
 
   return recs;
@@ -234,21 +236,21 @@ export async function saveRecommendationsForUser(
   const recs = await getPersonalizedRecommendations(companyId, userId, assignmentId, role);
 
   await rawExecute(
-    `DELETE FROM smart_recommendations WHERE "companyId"=$1 AND "userId"=$2 AND status='active'`,
+    `DELETE FROM smart_recommendations WHERE "companyId"=$1 AND "userId"=$2 AND "dismissedAt" IS NULL`,
     [companyId, userId]
-  ).catch(() => {});
+  ).catch((e) => logger.error(e, "smart recommendations cleanup failed"));
 
   let saved = 0;
   for (const rec of recs) {
     try {
       await rawExecute(
-        `INSERT INTO smart_recommendations ("companyId","userId","assignmentId",type,title,description,action,"actionLink",priority,status,metadata,"expiresAt","createdAt")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'active',$10,NOW() + INTERVAL '7 days',NOW())`,
-        [companyId, userId, assignmentId, rec.type, rec.title, rec.description, rec.action,
-         rec.actionLink ?? null, rec.priority, rec.metadata ? JSON.stringify(rec.metadata) : null]
+        `INSERT INTO smart_recommendations ("companyId","userId",type,title,description,"actionUrl",priority,"expiresAt","createdAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,NOW() + INTERVAL '7 days',NOW())`,
+        [companyId, userId, rec.type, rec.title, rec.description,
+         rec.actionLink ?? null, rec.priority]
       );
       saved++;
-    } catch (err) { console.error("Save recommendation error:", err); }
+    } catch (err) { logger.error(err, "Save recommendation error:"); }
   }
   return saved;
 }

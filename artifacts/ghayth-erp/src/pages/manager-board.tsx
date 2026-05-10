@@ -35,7 +35,7 @@ export default function ManagerBoard() {
   const { toast } = useToast();
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
 
-  const { data: actionData, isLoading: actionLoading, refetch: refetchAction } = useApiQuery<any>(
+  const { data: actionData, isLoading: actionLoading, isError: actionError, refetch: refetchAction } = useApiQuery<any>(
     ["action-center", scopeQueryString],
     `/action-center${scopeSuffix}`
   );
@@ -98,6 +98,7 @@ export default function ManagerBoard() {
   );
 
   if (actionLoading) return <LoadingSpinner />;
+  if (actionError) return <ErrorState />;
 
   const pending = actionData || {};
   const leaves = pending.pendingLeaves || [];
@@ -441,7 +442,7 @@ export default function ManagerBoard() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <DataTable<any>
+          <DataTable
             columns={pendingColumns}
             data={allPending}
             rowKey={(item) => `${item._type}-${item.id}`}

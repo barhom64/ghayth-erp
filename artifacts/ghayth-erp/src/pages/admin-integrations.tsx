@@ -78,7 +78,7 @@ function IntegrationsList() {
   );
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const handleCreate = () => {
     let parsedConfig = {};
@@ -125,7 +125,7 @@ function IntegrationsList() {
               />
             </div>
             <div className="md:col-span-2">
-              <Button onClick={handleCreate} disabled={!form.name || createMut.isPending}>حفظ التكامل</Button>
+              <Button onClick={handleCreate} disabled={!form.name || createMut.isPending} rateLimitAware>حفظ التكامل</Button>
             </div>
           </CardContent>
         </Card>

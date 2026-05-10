@@ -1,38 +1,37 @@
-import { useState } from "react";
-import { Link } from "wouter";
+import { useState, useEffect } from "react";
+import { Link, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 // P4.5 — Property sweep: shared header + status chips.
 import { PageShell } from "@/components/page-shell";
-import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { useApiQuery, asList } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Building, Building2, Plus, Eye, Home, DollarSign } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
+import { AdvancedFilters, useFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
+import { PageStateWrapper } from "@/components/shared/page-state";
 
 export default function Properties() {
+  const [, navigate] = useLocation();
   const { roleLevel, permissions, scopeQueryString } = useAppContext();
   const canManage = permissions.canManageProperty || roleLevel >= 50;
   const scopeSuffix = scopeQueryString ? `&${scopeQueryString}` : "";
   const { data: stats } = useApiQuery<any>(["properties-stats", scopeQueryString], `/properties/stats?${scopeQueryString}`);
   const [page, setPage] = useState(1);
   const pageSize = 20;
+  const [filters, setFilters] = useFilters();
+  useEffect(() => { setPage(1); }, [filters.search, filters.status]);
+  const filterParams = `&search=${encodeURIComponent(filters.search || "")}&status=${encodeURIComponent(filters.status || "")}`;
   const { data: unitsResp, isLoading, isError, error, refetch } = useApiQuery<any>(
-    ["property-units", String(page), scopeQueryString], `/properties/units?page=${page}&limit=${pageSize}${scopeSuffix}`
+    ["property-units", String(page), filters.search, filters.status, scopeQueryString], `/properties/units?page=${page}&limit=${pageSize}${scopeSuffix}${filterParams}`
   );
   const units = asList(unitsResp);
   const total = unitsResp?.total || units.length;
-  const [filters, setFilters] = useFilters();
-  const filtered = applyFilters(units, filters, {
-    searchFields: ["unitNumber", "buildingName"],
-    statusField: "status",
-  });
+  const filtered = units;
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/properties/units",
@@ -85,14 +84,17 @@ export default function Properties() {
     },
   ];
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return (
+    <PageStateWrapper isLoading={false} error={error} onRetry={() => refetch()}>
+      <div />
+    </PageStateWrapper>
+  );
 
   return (
     <PageShell
       title="الوحدات العقارية"
       subtitle="إدارة وتتبع الوحدات العقارية"
-      breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "الوحدات العقارية" }]}
+      breadcrumbs={[{ label: "العقارات" }]}
       actions={
         canManage ? (
           <Link href="/properties/create">
@@ -101,7 +103,6 @@ export default function Properties() {
         ) : null
       }
     >
-      <PropertyTabsNav />
       <KpiGrid items={[
         { label: "إجمالي العقارات", value: stats?.totalUnits || 0, icon: Building2, color: "text-blue-600 bg-blue-50" },
         { label: "وحدات شاغرة", value: stats?.available || 0, icon: Home, color: "text-emerald-600 bg-emerald-50" },
@@ -142,6 +143,7 @@ export default function Properties() {
             isError={isError}
             error={error as Error | null}
             onRetry={() => refetch()}
+            onRowClick={(u) => navigate(`/properties/${u.id}`)}
             emptyMessage="لا توجد وحدات"
             emptyIcon={<Building className="h-6 w-6 text-slate-400" />}
             noToolbar
@@ -154,7 +156,7 @@ export default function Properties() {
                 return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(u.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
               }
               if (deletingId === u.id) {
-                return <InlineDeleteConfirm onConfirm={() => handleDelete(u.id)} onCancel={cancelDelete} isPending={isPending} itemName={u.unitNumber} entityType="property_unit" entityId={u.id} />;
+                return <InlineDeleteConfirm onConfirm={() => handleDelete(u.id)} onCancel={cancelDelete} isPending={isPending} itemName={u.unitNumber} entityType="property-unit" entityId={u.id} />;
               }
               return null;
             }}

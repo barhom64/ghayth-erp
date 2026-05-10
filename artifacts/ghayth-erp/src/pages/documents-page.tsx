@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { useToast } from "@/hooks/use-toast";
 
 const CATEGORIES = [
   { value: "contracts", label: "عقود" },
@@ -60,6 +61,7 @@ function CategoryBadge({ category }: { category: string }) {
 
 function DocumentsList() {
   const qc = useQueryClient();
+  const { toast } = useToast();
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -91,9 +93,8 @@ function DocumentsList() {
 
   const handleDownload = async (docId: number, fileName: string) => {
     try {
-      const token = localStorage.getItem("erp_token");
       const res = await fetch(`${BASE}/api/documents/${docId}/download`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: "include",
       });
       if (!res.ok) throw new Error("فشل التنزيل");
       const blob = await res.blob();
@@ -106,7 +107,7 @@ function DocumentsList() {
       a.remove();
       URL.revokeObjectURL(url);
     } catch (err: any) {
-      alert(err.message);
+      toast({ variant: "destructive", title: "فشل التنزيل", description: err.message });
     }
   };
 
@@ -265,7 +266,7 @@ function FoldersTab() {
         <Card><CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div><Label>الاسم</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
           <div><Label>اللون</Label><Input value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} placeholder="#3B82F6" /></div>
-          <div className="md:col-span-2"><Button onClick={handleCreate} disabled={!form.name}>حفظ</Button></div>
+          <div className="md:col-span-2"><Button onClick={handleCreate} disabled={!form.name} rateLimitAware>حفظ</Button></div>
         </CardContent></Card>
       )}
       {isLoading ? (
@@ -335,7 +336,7 @@ function TemplatesTab() {
           <div><Label>الاسم</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
           <div><Label>التصنيف</Label><Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} /></div>
           <div className="md:col-span-2"><Label>الوصف</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
-          <div className="md:col-span-2"><Button onClick={handleCreate} disabled={!form.name}>حفظ</Button></div>
+          <div className="md:col-span-2"><Button onClick={handleCreate} disabled={!form.name} rateLimitAware>حفظ</Button></div>
         </CardContent></Card>
       )}
       <DataTable
@@ -354,7 +355,7 @@ export default function DocumentsPage() {
   const { data: stats, isLoading, isError } = useApiQuery<any>(["doc-stats"], "/documents/stats");
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const s = stats || {};
 

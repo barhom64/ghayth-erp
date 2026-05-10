@@ -16,6 +16,8 @@ import { useAuth } from "@/lib/auth";
 import type { LucideIcon } from "lucide-react";
 import { Target, DollarSign, Calendar, User, TrendingUp, Phone, Mail, MessageSquare, Pencil, Trash2, X, Check } from "lucide-react";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 export default function OpportunityDetail() {
   const [, params] = useRoute("/crm/:id");
@@ -197,6 +199,9 @@ export default function OpportunityDetail() {
         </Card>
         </div>
       </div>
+
+      {id && <EntityComments entityType="opportunity" entityId={id} />}
+      {id && <EntityTags entityType="opportunity" entityId={id} />}
     </>
   );
 
@@ -207,11 +212,11 @@ export default function OpportunityDetail() {
         subtitle={opportunity?.clientName || opportunity?.contactName || undefined}
         backPath="/crm/opportunities"
         backLabel="العودة"
-        entityType="crm_opportunity"
+        entityType="opportunity"
         entityId={id!}
         isLoading={isLoading}
         error={isError ? error : undefined}
-        onRetry={() => window.location.reload()}
+       
         createdAt={opportunity?.createdAt}
         updatedAt={opportunity?.updatedAt}
         overview={overview}

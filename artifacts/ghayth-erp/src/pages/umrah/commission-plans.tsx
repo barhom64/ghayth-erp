@@ -50,7 +50,7 @@ const TYPE_LABEL: Record<CommissionType, string> = {
 };
 
 export default function UmrahCommissionPlans() {
-  // TODO: endpoint not yet implemented — placeholder response
+
   const plansQ = useApiQuery<{ data: CommissionPlan[] }>(["umrah-commission-plans"], "/umrah/commission-plans");
   const employeesQ = useApiQuery<{ data: any[] }>(["employees"], "/employees");
   const seasonsQ = useApiQuery<{ data: any[] }>(["umrah-seasons"], "/umrah/seasons");

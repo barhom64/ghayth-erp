@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { Clock, Plus, CheckCircle, XCircle, AlertCircle, Users, ChevronDown, Che
 import { ExportButton } from "@/components/shared/export-buttons";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { cn } from "@/lib/utils";
-import { formatCurrency, formatTimeAr } from "@/lib/formatters";
+import { formatCurrency, formatTimeAr, formatDateAr } from "@/lib/formatters";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
@@ -112,6 +112,7 @@ export default function AttendancePage() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["attendance", month, scopeQueryString], `/hr/attendance?month=${month}${scopeSuffix}`);
   const { data: stats } = useApiQuery<any>(["attendance-stats", month, scopeQueryString], `/hr/attendance-stats?month=${month}${scopeSuffix}`);
   const items = asList(data);
+  const [, navigate] = useLocation();
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
 
   const filtersForApply = filters.status === "late"
@@ -161,7 +162,7 @@ export default function AttendancePage() {
       key: "date",
       header: "التاريخ",
       sortable: true,
-      render: (a) => <span className="text-gray-500">{a.date}</span>,
+      render: (a) => <span className="text-gray-500">{formatDateAr(a.date)}</span>,
     },
     {
       key: "checkIn",
@@ -222,7 +223,7 @@ export default function AttendancePage() {
   ];
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   return (
     <PageShell
@@ -316,6 +317,7 @@ export default function AttendancePage() {
             emptyMessage="لا توجد سجلات حضور لهذا الشهر"
             emptyIcon={<Clock className="h-6 w-6 text-slate-400" />}
             noToolbar
+            onRowClick={(a) => navigate(`/hr/attendance/${a.id}`)}
             rowClassName={(a) => expandedId === a.id ? "bg-gray-50" : undefined}
             renderRowExtras={(a) => {
               const hasPenalty = (a.lateMinutes > 0) || (a.penaltyLevel > 0) || (a.deductionAmount > 0) || (a.overtimeMinutes > 0);

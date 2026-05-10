@@ -134,7 +134,7 @@ export default function PublicHolidaysPage() {
               </div>
             </div>
             <div className="flex gap-2 mt-4">
-              <Button onClick={handleSave}><Save className="w-4 h-4 me-1" /> حفظ</Button>
+              <Button onClick={handleSave} rateLimitAware><Save className="w-4 h-4 me-1" /> حفظ</Button>
               <Button variant="outline" onClick={() => { setShowForm(false); setEditingId(null); }}><X className="w-4 h-4 me-1" /> إلغاء</Button>
             </div>
           </CardContent>
@@ -144,7 +144,7 @@ export default function PublicHolidaysPage() {
       {isLoading ? (
         <LoadingSpinner />
       ) : isError ? (
-        <ErrorState onRetry={() => window.location.reload()} />
+        <ErrorState />
       ) : holidays.length === 0 ? (
         <Card><CardContent className="py-10 text-center text-gray-400">لا توجد عطل لهذا العام</CardContent></Card>
       ) : (

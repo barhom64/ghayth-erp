@@ -7,8 +7,12 @@ import { EntityPrintButton, type PrintSection } from "@/components/shared/entity
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
+import { ApprovalActions } from "@/components/approval-actions";
 import { Edit, FileText } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { useToast } from "@/hooks/use-toast";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "مسودة",
@@ -42,6 +46,8 @@ export default function LegalContractDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/legal/contracts/:id");
   const id = params?.id ? Number(params.id) : null;
+
+  const { toast } = useToast();
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["legal-contract", String(id)],
@@ -206,6 +212,37 @@ export default function LegalContractDetail() {
       </Card>
 
       <div className="space-y-3">
+        {/* Approval actions */}
+        {id && contract && ["pending", "under_review", "returned"].includes(contract.status) && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">إجراءات الاعتماد</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ApprovalActions
+                entityType="legal-contract"
+                entityId={id}
+                currentStatus={contract.status}
+                approveEndpoint={`/legal/contracts/${id}/approve`}
+                rejectEndpoint={`/legal/contracts/${id}/approve`}
+                returnEndpoint={`/legal/contracts/${id}/approve`}
+                approveMethod="PATCH"
+                rejectMethod="PATCH"
+                returnMethod="PATCH"
+                approveBody={(notes: string) => ({ approved: true, notes: notes || undefined })}
+                rejectBody={(notes: string) => ({ approved: false, notes })}
+                returnBody={(notes: string) => ({ approved: "returned", notes })}
+                pendingStatuses={["pending", "under_review", "returned"]}
+                invalidateKeys={[["legal-cases"]]}
+                onDone={() => {
+                  refetch();
+                  toast({ title: "تم تحديث العقد" });
+                }}
+              />
+            </CardContent>
+          </Card>
+        )}
+
         {/* Additional info card */}
         <Card>
           <CardHeader className="pb-2">

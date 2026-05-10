@@ -4,8 +4,9 @@ import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { formatDateAr } from "@/lib/formatters";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   RefreshCw, AlertTriangle, CheckCircle, XCircle,
 } from "lucide-react";
@@ -14,15 +15,38 @@ export default function AdminPostingFailures() {
   const [showResolved, setShowResolved] = useState(false);
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["posting-failures", String(showResolved)],
-    `/finance-hardening/posting-failures?resolved=${showResolved}`
+    `/finance/posting-failures?resolved=${showResolved}`
   );
   const resolveMutation = useApiMutation<any, any>(
-    (id: any) => `/finance-hardening/posting-failures/${id}/resolve`,
+    (id: any) => `/finance/posting-failures/${id}/resolve`,
     "PATCH",
     [["posting-failures"]],
   );
 
   const rows = data?.data ?? [];
+
+  const failureColumns: DataTableColumn<any>[] = useMemo(() => [
+    { key: "id", header: "#", render: (r: any) => <span className="text-xs">{r.id}</span> },
+    { key: "operation", header: "العملية", searchable: true, render: (r: any) => <span className="font-mono text-xs">{r.operation || r.action || "—"}</span> },
+    { key: "entity", header: "الكيان", searchable: true, render: (r: any) => <span className="text-xs">{r.entity || "—"} {r.entityId ? `#${r.entityId}` : ""}</span> },
+    { key: "error", header: "الخطأ", render: (r: any) => <span className="text-xs text-red-600 max-w-[300px] truncate block">{r.error || r.errorMessage || "—"}</span> },
+    { key: "createdAt", header: "التاريخ", sortable: true, render: (r: any) => <span className="text-xs">{formatDateAr(r.createdAt)}</span> },
+    { key: "resolved", header: "الحالة", render: (r: any) => r.resolved ? (
+      <Badge className="bg-green-100 text-green-800">محلول</Badge>
+    ) : (
+      <Badge className="bg-red-100 text-red-800">مفتوح</Badge>
+    )},
+    { key: "actions", header: "إجراء", hidden: showResolved, render: (r: any) => (
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={resolveMutation.isPending}
+        onClick={() => resolveMutation.mutate(r.id)}
+      >
+        حل
+      </Button>
+    )},
+  ], [showResolved, resolveMutation]);
 
   return (
     <PageShell
@@ -78,58 +102,13 @@ export default function AdminPostingFailures() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="max-h-[500px] overflow-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-gray-50 sticky top-0">
-                      <th className="p-2 text-start">#</th>
-                      <th className="p-2 text-start">العملية</th>
-                      <th className="p-2 text-start">الكيان</th>
-                      <th className="p-2 text-start">الخطأ</th>
-                      <th className="p-2 text-start">التاريخ</th>
-                      <th className="p-2 text-start">الحالة</th>
-                      {!showResolved && <th className="p-2 text-start">إجراء</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row: any) => (
-                      <tr key={row.id} className="border-b hover:bg-gray-50">
-                        <td className="p-2 text-xs">{row.id}</td>
-                        <td className="p-2 font-mono text-xs">{row.operation || row.action || "—"}</td>
-                        <td className="p-2 text-xs">{row.entity || "—"} {row.entityId ? `#${row.entityId}` : ""}</td>
-                        <td className="p-2 text-xs text-red-600 max-w-[300px] truncate">{row.error || row.errorMessage || "—"}</td>
-                        <td className="p-2 text-xs">{formatDateAr(row.createdAt)}</td>
-                        <td className="p-2">
-                          {row.resolved ? (
-                            <Badge className="bg-green-100 text-green-800">محلول</Badge>
-                          ) : (
-                            <Badge className="bg-red-100 text-red-800">مفتوح</Badge>
-                          )}
-                        </td>
-                        {!showResolved && (
-                          <td className="p-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={resolveMutation.isPending}
-                              onClick={() => resolveMutation.mutate(row.id)}
-                            >
-                              حل
-                            </Button>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                    {rows.length === 0 && (
-                      <tr>
-                        <td colSpan={showResolved ? 6 : 7} className="p-6 text-center text-gray-400">
-                          {showResolved ? "لا توجد سجلات محلولة" : "لا توجد أعطال — النظام يعمل بشكل طبيعي"}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable
+                columns={failureColumns}
+                data={rows}
+                noToolbar
+                pageSize={0}
+                emptyMessage={showResolved ? "لا توجد سجلات محلولة" : "لا توجد أعطال — النظام يعمل بشكل طبيعي"}
+              />
             </CardContent>
           </Card>
         </div>

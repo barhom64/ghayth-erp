@@ -2,7 +2,11 @@ import { Router } from "express";
 import { z } from "zod";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
+import { authorize } from "../lib/rbac/authorize.js";
+import { handleRouteError, ValidationError, NotFoundError,
+  parseId,
+  zodParse,
+} from "../lib/errorHandler.js";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 
 export const scheduledReportsRouter = Router();
@@ -25,7 +29,7 @@ const patchScheduledReportSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-scheduledReportsRouter.get("/", requirePermission("reports:read"), async (req, res) => {
+scheduledReportsRouter.get("/", authorize({ feature: "reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -35,7 +39,7 @@ scheduledReportsRouter.get("/", requirePermission("reports:read"), async (req, r
        LEFT JOIN employee_assignments ea ON ea.id = sr."createdBy"
        LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE sr."companyId" = $1
-       ORDER BY sr."createdAt" DESC`,
+       ORDER BY sr."createdAt" DESC LIMIT 200`,
       [scope.companyId]
     );
     res.json({ data: rows });
@@ -44,12 +48,10 @@ scheduledReportsRouter.get("/", requirePermission("reports:read"), async (req, r
   }
 });
 
-scheduledReportsRouter.post("/", requirePermission("reports:write"), async (req, res) => {
+scheduledReportsRouter.post("/", authorize({ feature: "reports", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const parsed = createScheduledReportSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { reportType, title, frequency, recipients, params, isActive } = parsed.data;
+    const { reportType, title, frequency, recipients, params, isActive } = zodParse(createScheduledReportSchema.safeParse(req.body));
     const [row] = await rawQuery<any>(
       `INSERT INTO scheduled_reports ("companyId", "reportType", title, frequency, recipients, params, "isActive", "createdBy", "createdAt")
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
@@ -62,13 +64,11 @@ scheduledReportsRouter.post("/", requirePermission("reports:write"), async (req,
   }
 });
 
-scheduledReportsRouter.patch("/:id", requirePermission("reports:write"), async (req, res) => {
+scheduledReportsRouter.patch("/:id", authorize({ feature: "reports", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
-    const parsed = patchScheduledReportSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const { title, frequency, recipients, params, isActive } = parsed.data;
+    const id = parseId(req.params.id, "id");
+    const { title, frequency, recipients, params, isActive } = zodParse(patchScheduledReportSchema.safeParse(req.body));
     const updates: string[] = [];
     const vals: any[] = [id, scope.companyId];
     if (title !== undefined) { vals.push(title); updates.push(`title = $${vals.length}`); }
@@ -88,10 +88,10 @@ scheduledReportsRouter.patch("/:id", requirePermission("reports:write"), async (
   }
 });
 
-scheduledReportsRouter.delete("/:id", requirePermission("reports:write"), async (req, res) => {
+scheduledReportsRouter.delete("/:id", authorize({ feature: "reports", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const id = Number(req.params.id);
+    const id = parseId(req.params.id, "id");
     await rawExecute(
       `DELETE FROM scheduled_reports WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
@@ -102,7 +102,7 @@ scheduledReportsRouter.delete("/:id", requirePermission("reports:write"), async 
   }
 });
 
-scheduledReportsRouter.get("/history", requirePermission("reports:read"), async (req, res) => {
+scheduledReportsRouter.get("/history", authorize({ feature: "reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(

@@ -73,7 +73,7 @@ export default function Evaluation360PeerPage() {
   const avgScore = Math.round(Object.values(scores).reduce((a, b) => a + b, 0) / Object.values(scores).length);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   function handleSubmit() {
     submitMutation.mutate(
@@ -185,7 +185,7 @@ export default function Evaluation360PeerPage() {
         <Link href={`/hr/evaluation-360/${cycleId}`}>
           <Button variant="outline">إلغاء</Button>
         </Link>
-        <Button onClick={handleSubmit} disabled={submitMutation.isPending}>
+        <Button onClick={handleSubmit} disabled={submitMutation.isPending} rateLimitAware>
           {submitMutation.isPending ? "جارٍ الإرسال..." : "إرسال التقييم"}
         </Button>
       </div>

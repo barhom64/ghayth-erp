@@ -47,7 +47,7 @@ export default function CashflowDashboard() {
 
   const { data: invoicesData } = useApiQuery<any>(
     ["finance-invoices-pending"],
-    `/finance/invoices?status=pending&limit=5${qstr ? "&" + scopeQueryString : ""}`
+    `/finance/invoices?status=draft&limit=5${qstr ? "&" + scopeQueryString : ""}`
   );
 
   const { data: expensesData } = useApiQuery<any>(
@@ -59,7 +59,7 @@ export default function CashflowDashboard() {
   const isError = summaryError || budgetError;
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const summary = summaryData?.data || summaryData || {};
   const budget = budgetData?.data || budgetData || {};

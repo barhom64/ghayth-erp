@@ -4,6 +4,7 @@ import { PageShell } from "@/components/page-shell";
 import { formatDateAr, formatCurrency, formatNumber } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { resolveStatus } from "@/components/page-status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Users, DollarSign, Truck, Scale, Building2, FolderKanban,
@@ -68,7 +69,7 @@ function MiniBar({ label, value, max, color = "blue" }: { label: string; value: 
 function HrDashboard() {
   const { data, isLoading, isError } = useApiQuery<any>(["module-dash-hr"], "/module-dashboards/hr");
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
   if (!data) return null;
 
   return (
@@ -116,7 +117,7 @@ function HrDashboard() {
                       <div className="bg-red-400" style={{ height: `${(Number(d.absent) / total) * 60}px` }} />
                       <div className="bg-orange-400 rounded-b" style={{ height: `${(Number(d.late) / total) * 60}px` }} />
                     </div>
-                    <span className="text-[9px] text-muted-foreground">{d.date ? new Date(d.date).toLocaleDateString("ar-SA", { weekday: "short" }) : ""}</span>
+                    <span className="text-[9px] text-muted-foreground">{d.date ? formatDateAr(d.date) : ""}</span>
                   </div>
                 );
               })}
@@ -136,7 +137,7 @@ function HrDashboard() {
 function FinanceDashboard() {
   const { data, isLoading, isError } = useApiQuery<any>(["module-dash-finance"], "/module-dashboards/finance");
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
   if (!data) return null;
 
   return (
@@ -193,7 +194,7 @@ function FinanceDashboard() {
 function FleetDashboard() {
   const { data, isLoading, isError } = useApiQuery<any>(["module-dash-fleet"], "/module-dashboards/fleet");
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
   if (!data) return null;
 
   return (
@@ -242,7 +243,7 @@ function FleetDashboard() {
 function LegalDashboard() {
   const { data, isLoading, isError } = useApiQuery<any>(["module-dash-legal"], "/module-dashboards/legal");
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
   if (!data) return null;
 
   return (
@@ -261,7 +262,7 @@ function LegalDashboard() {
             {(data.casesByStatus || []).map((s: any) => (
               <MiniBar
                 key={s.status}
-                label={s.status === "open" ? "مفتوحة" : s.status === "in_progress" ? "قيد النظر" : s.status === "closed" ? "مغلقة" : s.status}
+                label={resolveStatus(s.status, "legal_case")?.label ?? s.status}
                 value={Number(s.count)}
                 max={data.cases?.total ?? 1}
                 color={s.status === "open" ? "red" : s.status === "in_progress" ? "orange" : "green"}
@@ -288,7 +289,7 @@ function LegalDashboard() {
 function PropertiesDashboard() {
   const { data, isLoading, isError } = useApiQuery<any>(["module-dash-properties"], "/module-dashboards/properties");
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
   if (!data) return null;
 
   return (
@@ -340,7 +341,7 @@ function PropertiesDashboard() {
 function ProjectsDashboard() {
   const { data, isLoading, isError } = useApiQuery<any>(["module-dash-projects"], "/module-dashboards/projects");
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
   if (!data) return null;
 
   return (
@@ -417,7 +418,7 @@ function ProjectsDashboard() {
 function CrmDashboard() {
   const { data, isLoading, isError } = useApiQuery<any>(["module-dash-crm"], "/module-dashboards/crm");
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
   if (!data) return null;
 
   return (
@@ -456,7 +457,7 @@ function CrmDashboard() {
 function StoreDashboard() {
   const { data, isLoading, isError } = useApiQuery<any>(["module-dash-store"], "/module-dashboards/store");
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
   if (!data) return null;
 
   return (
@@ -493,7 +494,7 @@ function StoreDashboard() {
 function SupportDashboard() {
   const { data, isLoading, isError } = useApiQuery<any>(["module-dash-support"], "/module-dashboards/support");
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
   if (!data) return null;
 
   return (
@@ -536,7 +537,7 @@ function SupportDashboard() {
                       <div className="bg-blue-400 rounded-t" style={{ height: `${(Number(d.created) / maxVal) * 60}px` }} />
                       <div className="bg-green-400 rounded-b" style={{ height: `${(Number(d.resolved) / maxVal) * 60}px` }} />
                     </div>
-                    <span className="text-[9px] text-muted-foreground">{d.date ? new Date(d.date).toLocaleDateString("ar-SA", { weekday: "short" }) : ""}</span>
+                    <span className="text-[9px] text-muted-foreground">{d.date ? formatDateAr(d.date) : ""}</span>
                   </div>
                 );
               })}
@@ -555,7 +556,7 @@ function SupportDashboard() {
 function TasksDashboard() {
   const { data, isLoading, isError } = useApiQuery<any>(["module-dash-tasks"], "/module-dashboards/tasks");
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
   if (!data) return null;
 
   return (
@@ -603,7 +604,7 @@ function TasksDashboard() {
 function WarehouseDashboard() {
   const { data, isLoading, isError } = useApiQuery<any>(["module-dash-warehouse"], "/module-dashboards/warehouse");
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
   if (!data) return null;
 
   return (

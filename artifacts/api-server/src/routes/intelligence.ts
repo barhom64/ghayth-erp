@@ -1,12 +1,12 @@
-import { handleRouteError, ValidationError, NotFoundError } from "../lib/errorHandler.js";
+import { handleRouteError, NotFoundError, parseId, zodParse } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { requireRole } from "../middlewares/roleGuard.js";
 import { aiEngine } from "../lib/aiEngine.js";
-import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import { calculateEmployeeKPIs, getCompanyKPIs } from "../lib/kpiEngine.js";
 import { buildAllSchedules, buildEmployeeSchedule } from "../lib/scheduleBuilder.js";
 import { runSmartAlerts } from "../lib/smartAlerts.js";
@@ -14,6 +14,7 @@ import { haversineDistance, movingAverage, selectLeastLoadedResource, loadBalanc
 import { getUsageStats } from "../lib/activityTracker.js";
 import { calculateClientRFM, calculateAllClientsRFM, getClientAnalyticsSummary, getBestContactTime, detectSeasonalPatterns } from "../lib/clientAnalytics.js";
 import { getPersonalizedRecommendations } from "../lib/smartRecommendations.js";
+import { logger } from "../lib/logger.js";
 
 // ── Zod Schemas ──────────────────────────────────────────────────────────────
 
@@ -78,9 +79,8 @@ const smartAssignSchema = z.object({
 });
 
 const router = Router();
-router.use(authMiddleware);
 
-router.get("/alerts", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/alerts", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { severity, isRead } = req.query as any;
@@ -93,11 +93,11 @@ router.get("/alerts", requirePermission("admin:read"), async (req, res): Promise
   } catch (err) { handleRouteError(err, res, "Alerts error:"); }
 });
 
-router.post("/alerts/scan", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/alerts/scan", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const result = await runSmartAlerts(scope.companyId);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "smart_alerts", entityId: 0, after: { fired: result.fired } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "smart_alerts", entityId: 0, after: { fired: result.fired } }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -106,97 +106,97 @@ router.post("/alerts/scan", requirePermission("admin:write"), async (req, res): 
       entity: "smart_alerts",
       entityId: 0,
       details: JSON.stringify({ fired: result.fired }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json({ message: `تم فحص التنبيهات الذكية`, fired: result.fired, details: result.details });
   } catch (err) { handleRouteError(err, res, "Alert scan error:"); }
 });
 
-router.patch("/alerts/:id/read", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.patch("/alerts/:id/read", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
     await rawQuery(
       `UPDATE smart_alerts SET "isRead"=true WHERE id=$1 AND "companyId"=$2`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "smart_alerts", entityId: Number(id), after: { isRead: true } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "smart_alerts", entityId: id, after: { isRead: true } }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
       userId: scope.userId,
       action: "intelligence.alert.read",
       entity: "smart_alerts",
-      entityId: Number(id),
+      entityId: id,
       details: JSON.stringify({ isRead: true }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json({ message: "تم تعليم التنبيه كمقروء" });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.get("/kpis", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/kpis", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { employeeId, metricName } = req.query as any;
     const conditions = [`"companyId" = $1`];
     const params: any[] = [scope.companyId];
-    if (employeeId) { params.push(Number(employeeId)); conditions.push(`"employeeId" = $${params.length}`); }
+    if (employeeId) { params.push(Number(employeeId) || 0); conditions.push(`"employeeId" = $${params.length}`); }
     if (metricName) { params.push(metricName); conditions.push(`"metricName" = $${params.length}`); }
     const rows = await rawQuery<any>(`SELECT * FROM kpi_snapshots WHERE ${conditions.join(" AND ")} ORDER BY "snapshotDate" DESC LIMIT 200`, params);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "KPIs error:"); }
 });
 
-router.get("/kpis/employee/:employeeId", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/kpis/employee/:employeeId", authorize({ feature: "admin", action: "view" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { employeeId } = req.params;
-    const date = (req.query.date as string) ?? new Date().toISOString().split("T")[0];
-    const metrics = await calculateEmployeeKPIs(scope.companyId, Number(employeeId), date);
-    res.json({ employeeId: Number(employeeId), date, metrics });
+    const employeeId = parseId(req.params.employeeId, "employeeId");
+    const date = (req.query.date as string) ?? todayISO();
+    const metrics = await calculateEmployeeKPIs(scope.companyId, employeeId, date);
+    res.json({ employeeId, date, metrics });
   } catch (err) { handleRouteError(err, res, "Employee KPI error:"); }
 });
 
-router.get("/daily-schedule", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/daily-schedule", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const date = (req.query.date as string) ?? new Date().toISOString().split("T")[0];
+    const date = (req.query.date as string) ?? todayISO();
     const schedules = await buildAllSchedules(cid, date);
     res.json({ date, schedules });
   } catch (err) { handleRouteError(err, res, "Daily schedule error:"); }
 });
 
-router.get("/daily-schedule/employee/:employeeId", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/daily-schedule/employee/:employeeId", authorize({ feature: "admin", action: "view" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { employeeId } = req.params;
-    const date = (req.query.date as string) ?? new Date().toISOString().split("T")[0];
-    const schedule = await buildEmployeeSchedule(scope.companyId, Number(employeeId), date);
+    const employeeId = parseId(req.params.employeeId, "employeeId");
+    const date = (req.query.date as string) ?? todayISO();
+    const schedule = await buildEmployeeSchedule(scope.companyId, employeeId, date);
     res.json(schedule);
   } catch (err) { handleRouteError(err, res, "Employee schedule error:"); }
 });
 
-router.get("/overview", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/overview", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
 
     const [employees] = await rawQuery<any>(`SELECT COUNT(*) as total FROM employee_assignments WHERE "companyId"=$1 AND status='active'`, [cid]);
-    const [vehicles] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_vehicles WHERE "companyId"=$1`, [cid]);
-    const [properties] = await rawQuery<any>(`SELECT COUNT(*) as total FROM property_units WHERE "companyId"=$1`, [cid]);
+    const [vehicles] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_vehicles WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [properties] = await rawQuery<any>(`SELECT COUNT(*) as total FROM property_units WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [projects] = await rawQuery<any>(`SELECT COUNT(*) as active FROM projects WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]);
-    const [tickets] = await rawQuery<any>(`SELECT COUNT(*) as open FROM support_tickets WHERE "companyId"=$1 AND status='open'`, [cid]);
+    const [tickets] = await rawQuery<any>(`SELECT COUNT(*) as open FROM support_tickets WHERE "companyId"=$1 AND status='open' AND "deletedAt" IS NULL`, [cid]);
     const [revenue] = await rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) as total FROM invoices WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "createdAt" >= date_trunc('month', CURRENT_DATE)`, [cid]);
     const [alerts] = await rawQuery<any>(`SELECT COUNT(*) as unread FROM smart_alerts WHERE "companyId"=$1 AND "isRead"=false`, [cid]);
 
     res.json({
-      totalEmployees: Number(employees.total),
-      totalVehicles: Number(vehicles.total),
-      totalProperties: Number(properties.total),
-      activeProjects: Number(projects.active),
-      openTickets: Number(tickets.open),
-      monthlyRevenue: Number(revenue.total),
-      unreadAlerts: Number(alerts.unread),
+      totalEmployees: Number(employees?.total ?? 0),
+      totalVehicles: Number(vehicles?.total ?? 0),
+      totalProperties: Number(properties?.total ?? 0),
+      activeProjects: Number(projects?.active ?? 0),
+      openTickets: Number(tickets?.open ?? 0),
+      monthlyRevenue: Number(revenue?.total ?? 0),
+      unreadAlerts: Number(alerts?.unread ?? 0),
     });
   } catch (err) { handleRouteError(err, res, "Intelligence overview error:"); }
 });
@@ -210,15 +210,15 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
     const overloadedEmployees = await rawQuery<any>(
       `SELECT e.name,
               (SELECT COUNT(*) FROM tasks t WHERE t."assignedTo" = ea.id AND t."companyId" = $1
-               AND t.status NOT IN ('completed','cancelled'))::int AS "activeTasks"
+               AND t.status NOT IN ('completed','cancelled') AND t."deletedAt" IS NULL)::int AS "activeTasks"
        FROM employee_assignments ea
-       JOIN employees e ON e.id = ea."employeeId"
+       JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
        WHERE ea."companyId" = $1 AND ea.status = 'active'
          AND (SELECT COUNT(*) FROM tasks t WHERE t."assignedTo" = ea.id AND t."companyId" = $1
-              AND t.status NOT IN ('completed','cancelled'))::int > 6
+              AND t.status NOT IN ('completed','cancelled') AND t."deletedAt" IS NULL)::int > 6
        LIMIT 5`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
 
     for (const emp of overloadedEmployees) {
       suggestions.push({
@@ -233,11 +233,11 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
       `SELECT id, title, "endDate",
               (lc."endDate"::date - CURRENT_DATE) AS "daysLeft"
        FROM legal_contracts lc
-       WHERE lc."companyId" = $1 AND lc.status = 'active'
+       WHERE lc."companyId" = $1 AND lc.status = 'active' AND lc."deletedAt" IS NULL
          AND lc."endDate"::date - CURRENT_DATE BETWEEN 0 AND 30
        ORDER BY "daysLeft" ASC LIMIT 5`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
 
     for (const c of expiringContracts) {
       suggestions.push({
@@ -259,7 +259,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
        HAVING MAX(CURRENT_DATE - i."dueDate"::date) > 30
        ORDER BY "maxDaysLate" DESC LIMIT 5`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
 
     for (const cl of overdueClients) {
       suggestions.push({
@@ -277,12 +277,12 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
        LEFT JOIN employees e ON e.id = lr."employeeId"
        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1
        LEFT JOIN departments d ON d.id = ea."departmentId"
-       WHERE lr."companyId" = $1 AND lr.status = 'pending'
+       WHERE lr."companyId" = $1 AND lr.status = 'pending' AND lr."deletedAt" IS NULL
        GROUP BY d.name
        HAVING AVG(EXTRACT(EPOCH FROM (NOW() - lr."createdAt")) / 86400) > 2
        ORDER BY "avgDays" DESC LIMIT 3`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
 
     for (const dept of slowDepartments) {
       suggestions.push({
@@ -295,23 +295,23 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
 
     const costlyVehicles = await rawQuery<any>(
       `SELECT fv.id, fv."plateNumber",
-              COALESCE(SUM(fm.cost), 0)::float AS "maintenanceCost",
-              COALESCE(fv.value, 0)::float AS "vehicleValue"
+              COALESCE(SUM(fm.cost), 0)::float AS "maintenanceCost"
        FROM fleet_maintenance fm
        JOIN fleet_vehicles fv ON fv.id = fm."vehicleId"
        WHERE fm."companyId" = $1
          AND fm."createdAt" >= NOW() - INTERVAL '12 months'
-       GROUP BY fv.id, fv."plateNumber", fv.value
-       HAVING COALESCE(fv.value, 0) > 0 AND COALESCE(SUM(fm.cost), 0) > COALESCE(fv.value, 0) * 0.5
+         AND fm."deletedAt" IS NULL
+         AND fv."deletedAt" IS NULL
+       GROUP BY fv.id, fv."plateNumber"
        ORDER BY "maintenanceCost" DESC LIMIT 3`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
 
     for (const v of costlyVehicles) {
       suggestions.push({
         id: `vehicle-${v.id}`, type: "vehicle_costly", severity: "warning",
         title: `مركبة ${v.plateNumber} تكلفة صيانتها مرتفعة`,
-        description: `تكلفة الصيانة ${Number(v.maintenanceCost).toLocaleString()} مقابل قيمة ${Number(v.vehicleValue).toLocaleString()} — يُقترح استبدال المركبة`,
+        description: `تكلفة الصيانة ${Number(v.maintenanceCost).toLocaleString()} — يُقترح استبدال المركبة`,
         action: "مراجعة المركبة", actionLink: "/fleet",
       });
     }
@@ -320,12 +320,12 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
     const prodDrops = await rawQuery<any>(
       `WITH recent AS (
          SELECT t."assignedTo", COUNT(*) FILTER (WHERE t.status='completed')::float / NULLIF(COUNT(*),0) AS rate
-         FROM tasks t WHERE t."companyId"=$1 AND t."scheduledDate"::date >= CURRENT_DATE - INTERVAL '7 days'
+         FROM tasks t WHERE t."companyId"=$1 AND t."deletedAt" IS NULL AND t."scheduledDate"::date >= CURRENT_DATE - INTERVAL '7 days'
          GROUP BY t."assignedTo"
        ),
        historical AS (
          SELECT t."assignedTo", COUNT(*) FILTER (WHERE t.status='completed')::float / NULLIF(COUNT(*),0) AS rate
-         FROM tasks t WHERE t."companyId"=$1 AND t."scheduledDate"::date BETWEEN CURRENT_DATE - INTERVAL '37 days' AND CURRENT_DATE - INTERVAL '8 days'
+         FROM tasks t WHERE t."companyId"=$1 AND t."deletedAt" IS NULL AND t."scheduledDate"::date BETWEEN CURRENT_DATE - INTERVAL '37 days' AND CURRENT_DATE - INTERVAL '8 days'
          GROUP BY t."assignedTo"
        )
        SELECT r."assignedTo", e.name,
@@ -337,7 +337,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
        WHERE h.rate > 0.3 AND r.rate < h.rate * 0.7
        LIMIT 3`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
     for (const emp of prodDrops) {
       suggestions.push({
         id: `prod-drop-${emp.assignedTo}`, type: "productivity_drop_historical", severity: "warning",
@@ -354,7 +354,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
          COALESCE(SUM(CASE WHEN "createdAt" BETWEEN CURRENT_DATE - INTERVAL '60 days' AND CURRENT_DATE - INTERVAL '30 days' THEN "paidAmount" ELSE 0 END),0)::float AS prev
        FROM invoices WHERE "companyId"=$1 AND "deletedAt" IS NULL AND status NOT IN ('cancelled','draft')`,
       [cid]
-    ).catch(() => [] as any[]);
+    ).catch((e) => { logger.error(e, "intelligence query failed"); return [] as any[]; });
     const revTrend = revTrendRows[0] ?? null;
     if (revTrend && revTrend.prev > 0) {
       const revChange = Math.round(((revTrend.curr - revTrend.prev) / revTrend.prev) * 100);
@@ -383,7 +383,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
        WHERE rs."companyId"=$1 AND rs."churnRisk"='high'
        ORDER BY rs."churnScore" DESC LIMIT 3`,
       [cid]
-    ).catch(() => []);
+    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
     for (const cl of churnClients) {
       suggestions.push({
         id: `churn-hist-${cl.name}`, type: "churn_risk_historical", severity: "warning",
@@ -397,15 +397,13 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
   } catch (err) { handleRouteError(err, res, "Smart suggestions"); }
 });
 
-router.post("/ai/categorize", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/ai/categorize", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
-    const parsed_aiCategorizeSchema = aiCategorizeSchema.safeParse(req.body);
-    if (!parsed_aiCategorizeSchema.success) throw new ValidationError(parsed_aiCategorizeSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_aiCategorizeSchema.data;
+    const body = zodParse(aiCategorizeSchema.safeParse(req.body));
     const scope = req.scope!;
     const { message, context } = body;
     const result = await aiEngine.receptionCategorize(message, context);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_categorize", entityId: 0, after: { message: message?.substring(0, 100) } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_categorize", entityId: 0, after: { message: message?.substring(0, 100) } }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -414,20 +412,18 @@ router.post("/ai/categorize", requirePermission("admin:write"), async (req, res)
       entity: "ai_categorize",
       entityId: 0,
       details: JSON.stringify({ message: message?.substring(0, 100) }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json(result);
   } catch (err) { handleRouteError(err, res, "AI categorize error:"); }
 });
 
-router.post("/ai/draft-reply", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/ai/draft-reply", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
-    const parsed_aiDraftReplySchema = aiDraftReplySchema.safeParse(req.body);
-    if (!parsed_aiDraftReplySchema.success) throw new ValidationError(parsed_aiDraftReplySchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_aiDraftReplySchema.data;
+    const body = zodParse(aiDraftReplySchema.safeParse(req.body));
     const scope = req.scope!;
     const { ticketTitle, ticketDescription, history } = body;
     const draft = await aiEngine.responderDraft(ticketTitle, ticketDescription, history);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_draft_reply", entityId: 0, after: { ticketTitle } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_draft_reply", entityId: 0, after: { ticketTitle } }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -436,20 +432,18 @@ router.post("/ai/draft-reply", requirePermission("admin:write"), async (req, res
       entity: "ai_draft_reply",
       entityId: 0,
       details: JSON.stringify({ ticketTitle }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json({ draft });
   } catch (err) { handleRouteError(err, res, "AI draft reply error:"); }
 });
 
-router.post("/ai/translate", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/ai/translate", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
-    const parsed_aiTranslateSchema = aiTranslateSchema.safeParse(req.body);
-    if (!parsed_aiTranslateSchema.success) throw new ValidationError(parsed_aiTranslateSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_aiTranslateSchema.data;
+    const body = zodParse(aiTranslateSchema.safeParse(req.body));
     const scope = req.scope!;
     const { text, targetLanguage } = body;
     const translated = await aiEngine.translatorTranslate(text, targetLanguage);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_translate", entityId: 0, after: { targetLanguage } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_translate", entityId: 0, after: { targetLanguage } }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -458,20 +452,18 @@ router.post("/ai/translate", requirePermission("admin:write"), async (req, res):
       entity: "ai_translate",
       entityId: 0,
       details: JSON.stringify({ targetLanguage }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json({ translated, targetLanguage });
   } catch (err) { handleRouteError(err, res, "AI translate error:"); }
 });
 
-router.post("/ai/summarize", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/ai/summarize", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
-    const parsed_aiSummarizeSchema = aiSummarizeSchema.safeParse(req.body);
-    if (!parsed_aiSummarizeSchema.success) throw new ValidationError(parsed_aiSummarizeSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_aiSummarizeSchema.data;
+    const body = zodParse(aiSummarizeSchema.safeParse(req.body));
     const scope = req.scope!;
     const { content, maxLength } = body;
     const summary = await aiEngine.summarizerSummarize(content, maxLength);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_summarize", entityId: 0 }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_summarize", entityId: 0 }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -480,20 +472,18 @@ router.post("/ai/summarize", requirePermission("admin:write"), async (req, res):
       entity: "ai_summarize",
       entityId: 0,
       details: JSON.stringify({ maxLength }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json({ summary });
   } catch (err) { handleRouteError(err, res, "AI summarize error:"); }
 });
 
-router.post("/ai/evaluate-rules", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/ai/evaluate-rules", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
-    const parsed_aiEvaluateRulesSchema = aiEvaluateRulesSchema.safeParse(req.body);
-    if (!parsed_aiEvaluateRulesSchema.success) throw new ValidationError(parsed_aiEvaluateRulesSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_aiEvaluateRulesSchema.data;
+    const body = zodParse(aiEvaluateRulesSchema.safeParse(req.body));
     const scope = req.scope!;
     const { context, data, rules } = body;
     const result = await aiEngine.rulesEngineEvaluate({ context, data, rules });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_evaluate_rules", entityId: 0, after: { context } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_evaluate_rules", entityId: 0, after: { context } }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -502,20 +492,18 @@ router.post("/ai/evaluate-rules", requirePermission("admin:write"), async (req, 
       entity: "ai_evaluate_rules",
       entityId: 0,
       details: JSON.stringify({ context }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json(result);
   } catch (err) { handleRouteError(err, res, "AI rules engine error:"); }
 });
 
-router.post("/ai/forecast", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/ai/forecast", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
-    const parsed_aiForecastSchema = aiForecastSchema.safeParse(req.body);
-    if (!parsed_aiForecastSchema.success) throw new ValidationError(parsed_aiForecastSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_aiForecastSchema.data;
+    const body = zodParse(aiForecastSchema.safeParse(req.body));
     const scope = req.scope!;
     const { metricName, historicalData, forecastPeriods } = body;
     const result = await aiEngine.predictorForecast({ metricName, historicalData, forecastPeriods });
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_forecast", entityId: 0, after: { metricName } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_forecast", entityId: 0, after: { metricName } }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -524,23 +512,21 @@ router.post("/ai/forecast", requirePermission("admin:write"), async (req, res): 
       entity: "ai_forecast",
       entityId: 0,
       details: JSON.stringify({ metricName }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json(result);
   } catch (err) { handleRouteError(err, res, "AI forecast error:"); }
 });
 
-router.post("/algorithms/haversine", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/algorithms/haversine", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
-    const parsed_haversineSchema = haversineSchema.safeParse(req.body);
-    if (!parsed_haversineSchema.success) throw new ValidationError(parsed_haversineSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_haversineSchema.data;
+    const body = zodParse(haversineSchema.safeParse(req.body));
     const scope = req.scope!;
     const { lat1, lon1, lat2, lon2 } = body;
     const distance = haversineDistance(lat1, lon1, lat2, lon2);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "preview", entity: "algorithms", entityId: 0,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -549,23 +535,21 @@ router.post("/algorithms/haversine", requirePermission("admin:write"), async (re
       entity: "algorithms",
       entityId: 0,
       details: JSON.stringify({ lat1, lon1, lat2, lon2, distance }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json({ distance, unit: "km" });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.post("/algorithms/moving-average", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/algorithms/moving-average", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
-    const parsed_movingAverageSchema = movingAverageSchema.safeParse(req.body);
-    if (!parsed_movingAverageSchema.success) throw new ValidationError(parsed_movingAverageSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_movingAverageSchema.data;
+    const body = zodParse(movingAverageSchema.safeParse(req.body));
     const scope = req.scope!;
     const { values, periods } = body;
     const result = movingAverage(values, periods);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "preview", entity: "algorithms", entityId: 0,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -574,23 +558,21 @@ router.post("/algorithms/moving-average", requirePermission("admin:write"), asyn
       entity: "algorithms",
       entityId: 0,
       details: JSON.stringify({ periods, dataPoints: values.length }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json({ result, periods, dataPoints: values.length });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.post("/algorithms/load-balance", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/algorithms/load-balance", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
-    const parsed_loadBalanceSchema = loadBalanceSchema.safeParse(req.body);
-    if (!parsed_loadBalanceSchema.success) throw new ValidationError(parsed_loadBalanceSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_loadBalanceSchema.data;
+    const body = zodParse(loadBalanceSchema.safeParse(req.body));
     const scope = req.scope!;
     const { resources, targetLat, targetLon, maxWorkload } = body;
     const selected = selectLeastLoadedResource(resources, { targetLat, targetLon, maxWorkload });
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "preview", entity: "algorithms", entityId: 0,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -599,7 +581,7 @@ router.post("/algorithms/load-balance", requirePermission("admin:write"), async 
       entity: "algorithms",
       entityId: 0,
       details: JSON.stringify({ resourceCount: resources.length }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json({ selected });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
@@ -635,10 +617,10 @@ router.get("/clients/analytics/recalculate", requireRole("branch_manager", "gene
 router.get("/clients/:clientId/rfm", requireRole("branch_manager", "general_manager", "owner", "finance_manager"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { clientId } = req.params;
-    const rfm = await calculateClientRFM(scope.companyId, Number(clientId));
+    const clientId = parseId(req.params.clientId, "clientId");
+    const rfm = await calculateClientRFM(scope.companyId, clientId);
     if (!rfm) throw new NotFoundError("العميل غير موجود");
-    const contactTime = await getBestContactTime(scope.companyId, Number(clientId));
+    const contactTime = await getBestContactTime(scope.companyId, clientId);
     res.json({ ...rfm, bestContactTime: contactTime });
   } catch (err) { handleRouteError(err, res, "Client RFM error:"); }
 });
@@ -653,7 +635,7 @@ router.get("/seasonal-patterns", requireRole("branch_manager", "general_manager"
 
 // ── Smart Recommendations ─────────────────────────────────────────────────────
 
-router.get("/recommendations", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/recommendations", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const recs = await getPersonalizedRecommendations(
@@ -677,9 +659,7 @@ router.get("/company-kpis", requireRole("branch_manager", "general_manager", "ow
 
 router.post("/smart-assign", requireRole("branch_manager", "general_manager", "owner", "hr_manager"), async (req, res): Promise<void> => {
   try {
-    const parsed_smartAssignSchema = smartAssignSchema.safeParse(req.body);
-    if (!parsed_smartAssignSchema.success) throw new ValidationError(parsed_smartAssignSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const body = parsed_smartAssignSchema.data;
+    const body = zodParse(smartAssignSchema.safeParse(req.body));
     const scope = req.scope!;
     const { taskType, targetLat, targetLon, requiredSpecialty, taskTitle } = body;
 
@@ -698,11 +678,11 @@ router.post("/smart-assign", requireRole("branch_manager", "general_manager", "o
     const [emp] = await rawQuery<any>(
       `SELECT e.id, e.name, e.email,
               (SELECT COUNT(*) FROM tasks t JOIN employee_assignments ea3 ON ea3.id = t."assignedTo"
-               WHERE ea3."employeeId"=e.id AND t."companyId"=$1 AND t.status NOT IN ('completed','cancelled'))::int AS "currentTasks"
-       FROM employees e WHERE e.id=$2`,
+               WHERE ea3."employeeId"=e.id AND t."companyId"=$1 AND t.status NOT IN ('completed','cancelled') AND t."deletedAt" IS NULL)::int AS "currentTasks"
+       FROM employees e WHERE e.id=$2 AND e."deletedAt" IS NULL`,
       [scope.companyId, result.employeeId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "smart_assign", entityId: result.assignmentId, after: { employeeId: result.employeeId, taskType: taskType ?? "general" } }).catch(console.error);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "smart_assign", entityId: result.assignmentId, after: { employeeId: result.employeeId, taskType: taskType ?? "general" } }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -711,7 +691,7 @@ router.post("/smart-assign", requireRole("branch_manager", "general_manager", "o
       entity: "smart_assign",
       entityId: result.assignmentId,
       details: JSON.stringify({ employeeId: result.employeeId, taskType: taskType ?? "general", taskTitle }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json({
       recommended: {
         employeeId: result.employeeId,
@@ -741,7 +721,7 @@ router.get("/insights-summary", requireRole("branch_manager", "general_manager",
     ]);
 
     const [totalEmployees] = await rawQuery<any>(`SELECT COUNT(*) AS count FROM employee_assignments WHERE "companyId"=$1 AND status='active'`, [cid]);
-    const [totalClients] = await rawQuery<any>(`SELECT COUNT(*) AS count FROM clients WHERE "companyId"=$1`, [cid]);
+    const [totalClients] = await rawQuery<any>(`SELECT COUNT(*) AS count FROM clients WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
     const [monthRevenue] = await rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) AS total FROM invoices WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "createdAt" >= date_trunc('month',CURRENT_DATE)`, [cid]);
     const [prevMonthRevenue] = await rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) AS total FROM invoices WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "createdAt" >= date_trunc('month',CURRENT_DATE - INTERVAL '1 month') AND "createdAt" < date_trunc('month',CURRENT_DATE)`, [cid]);
 

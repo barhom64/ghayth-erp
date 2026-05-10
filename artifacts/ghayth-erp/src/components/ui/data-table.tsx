@@ -38,6 +38,7 @@ import { cn } from "@/lib/utils";
 import { DataTableWrapper, PaginationBar } from "@/components/data-table-wrapper";
 import { SortableTableHead } from "@/components/sortable-table-head";
 import { useSortedData } from "@/hooks/use-sorted-data";
+import { useRateLimitCooldown } from "@/hooks/use-rate-limit-cooldown";
 import { BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 
 export type Align = "start" | "center" | "end";
@@ -199,6 +200,9 @@ export function DataTable<T>({
   // --- Search / status filter (internal when noToolbar is false) ---
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  // Task #170 — pause typing while a 429 cooldown is active so we don't
+  // fire a fresh request on every keystroke and keep getting throttled.
+  const cooldown = useRateLimitCooldown();
 
   const searchableKeys = useMemo(
     () => visibleColumns.filter((c) => c.searchable).map((c) => c.key),
@@ -300,12 +304,25 @@ export function DataTable<T>({
                 <Input
                   value={search}
                   onChange={(e) => {
+                    if (cooldown.isCoolingDown) return;
                     setSearch(e.target.value);
                     setCurrentPage(1);
                   }}
-                  placeholder={searchPlaceholder}
+                  placeholder={cooldown.isCoolingDown ? cooldown.label : searchPlaceholder}
+                  disabled={cooldown.isCoolingDown}
+                  aria-disabled={cooldown.isCoolingDown}
+                  title={cooldown.isCoolingDown ? cooldown.label : undefined}
                   className="pe-8"
                 />
+                {cooldown.isCoolingDown && (
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    className="mt-1 text-[11px] text-amber-600"
+                  >
+                    {cooldown.label}
+                  </div>
+                )}
               </div>
             )}
             {statusOptions && statusOptions.length > 0 && (

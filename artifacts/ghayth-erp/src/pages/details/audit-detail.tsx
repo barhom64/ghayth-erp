@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, ClipboardCheck } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 const STATUS_LABELS: Record<string, string> = {
   planned: "مخطط",
@@ -210,6 +212,9 @@ export default function AuditDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {id && <EntityComments entityType="audit" entityId={id} />}
+      {id && <EntityTags entityType="audit" entityId={id} />}
     </div>
   );
 

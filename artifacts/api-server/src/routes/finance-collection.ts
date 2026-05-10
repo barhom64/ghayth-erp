@@ -1,19 +1,29 @@
 import { Router } from "express";
+import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import {
   handleRouteError,
   NotFoundError,
   ValidationError,
+  parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { pushToDLQ } from "../lib/eventBus.js";
+import { applyTransition } from "../lib/lifecycleEngine.js";
 
 
 export const collectionRouter = Router();
 collectionRouter.use(authMiddleware);
+
+const collectionActionSchema = z.object({
+  stage: z.coerce.number(),
+  notes: z.string().optional(),
+});
 
 const COLLECTION_STAGES = [
   { stage: 1, name: "sms_email_reminder", label: "تذكير SMS + إيميل", daysOverdue: 1 },
@@ -24,7 +34,7 @@ const COLLECTION_STAGES = [
   { stage: 6, name: "legal_churned", label: "إشعار القانونية + تصنيف churned", daysOverdue: 60 },
 ];
 
-collectionRouter.get("/collection", requirePermission("finance:read"), async (req, res) => {
+collectionRouter.get("/collection", authorize({ feature: "finance.collection", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -35,17 +45,18 @@ collectionRouter.get("/collection", requirePermission("finance:read"), async (re
               CURRENT_DATE - i."dueDate" AS "daysOverdue",
               ics.stage AS "currentStage", ics."stageName" AS "currentStageName"
        FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId"
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
        LEFT JOIN LATERAL (
          SELECT stage, "stageName"
          FROM invoice_collection_stages
-         WHERE "invoiceId" = i.id
+         WHERE "invoiceId" = i.id AND "companyId" = i."companyId"
          ORDER BY id DESC LIMIT 1
        ) ics ON true
        WHERE ${where} AND i."deletedAt" IS NULL
          AND i.status IN ('sent','partial','overdue')
          AND i."dueDate" < CURRENT_DATE
-       ORDER BY i."dueDate" ASC`,
+       ORDER BY i."dueDate" ASC
+       LIMIT 500`,
       params
     );
 
@@ -70,18 +81,18 @@ collectionRouter.get("/collection", requirePermission("finance:read"), async (re
   }
 });
 
-collectionRouter.post("/collection/:invoiceId/action", requirePermission("finance:create"), async (req, res) => {
+collectionRouter.post("/collection/:invoiceId/action", authorize({ feature: "finance.collection", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
-    const { invoiceId } = req.params;
-    const { stage, notes } = req.body as any;
+    const invoiceId = parseId(req.params.invoiceId, "invoiceId");
+    const { stage, notes } = zodParse(collectionActionSchema.safeParse(req.body ?? {}));
 
     const [invoice] = await rawQuery<any>(
       `SELECT id, ref, status, "dueDate",
               EXTRACT(DAY FROM NOW() - "dueDate"::timestamptz)::int AS "daysOverdue"
        FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [Number(invoiceId), scope.companyId]
+      [invoiceId, scope.companyId]
     );
     if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
 
@@ -111,8 +122,8 @@ collectionRouter.post("/collection/:invoiceId/action", requirePermission("financ
     }
 
     const [lastStageRecord] = await rawQuery<any>(
-      `SELECT stage FROM invoice_collection_stages WHERE "invoiceId" = $1 ORDER BY id DESC LIMIT 1`,
-      [Number(invoiceId)]
+      `SELECT stage FROM invoice_collection_stages WHERE "invoiceId" = $1 AND "companyId" = $2 ORDER BY id DESC LIMIT 1`,
+      [invoiceId, scope.companyId]
     );
     const lastStage = lastStageRecord ? Number(lastStageRecord.stage) : 0;
     if (requestedStage <= lastStage || requestedStage > lastStage + 1) {
@@ -130,24 +141,31 @@ collectionRouter.post("/collection/:invoiceId/action", requirePermission("financ
     }
 
     if (invoice.status !== "overdue") {
-      await rawExecute(`UPDATE invoices SET status = 'overdue' WHERE id = $1`, [Number(invoiceId)]);
+      await applyTransition({
+        entity: "invoices",
+        id: invoiceId,
+        scope,
+        action: "invoice.overdue",
+        fromStates: ["sent", "posted", "partial"],
+        toState: "overdue",
+      });
     }
 
     await rawExecute(
       `INSERT INTO invoice_collection_stages ("companyId","invoiceId",stage,"stageName",notes,"performedBy")
        VALUES ($1,$2,$3,$4,$5,$6)`,
-      [scope.companyId, Number(invoiceId), stageInfo.stage, stageInfo.name, notes ?? null, scope.activeAssignmentId]
+      [scope.companyId, invoiceId, stageInfo.stage, stageInfo.name, notes ?? null, scope.activeAssignmentId]
     );
 
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
-      action: `collection.${stageInfo.name}`, entity: "invoices", entityId: Number(invoiceId),
+      action: `collection.${stageInfo.name}`, entity: "invoices", entityId: invoiceId,
       details: JSON.stringify({ stage: stageInfo.stage, label: stageInfo.label, notes }),
     }).catch((err) => pushToDLQ("event", { action: `collection.${stageInfo.name}`, entityId: invoiceId }, err, scope.companyId));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: `collection.stage_${stage}`, entity: "invoices", entityId: Number(invoiceId),
+      action: `collection.stage_${stage}`, entity: "invoices", entityId: invoiceId,
       after: { stage: stageInfo.stage, action: stageInfo.name, notes },
     }).catch((err) => pushToDLQ("audit", { entity: "invoices", entityId: invoiceId }, err, scope.companyId));
 
@@ -157,14 +175,14 @@ collectionRouter.post("/collection/:invoiceId/action", requirePermission("financ
   }
 });
 
-collectionRouter.get("/collection/:invoiceId/history", requirePermission("finance:read"), async (req, res) => {
+collectionRouter.get("/collection/:invoiceId/history", authorize({ feature: "finance.collection", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { invoiceId } = req.params;
+    const invoiceId = parseId(req.params.invoiceId, "invoiceId");
 
     const [invoice] = await rawQuery<any>(
       `SELECT id FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [Number(invoiceId), scope.companyId]
+      [invoiceId, scope.companyId]
     );
     if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
 
@@ -173,9 +191,9 @@ collectionRouter.get("/collection/:invoiceId/history", requirePermission("financ
        FROM invoice_collection_stages ics
        LEFT JOIN employee_assignments ea ON ea.id = ics."performedBy"
        LEFT JOIN employees e ON e.id = ea."employeeId"
-       WHERE ics."invoiceId" = $1
+       WHERE ics."invoiceId" = $1 AND ics."companyId" = $2
        ORDER BY ics.id ASC`,
-      [Number(invoiceId)]
+      [invoiceId, scope.companyId]
     );
 
     res.json(history);

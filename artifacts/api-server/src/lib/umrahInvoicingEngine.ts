@@ -1,6 +1,7 @@
 import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
-import { createJournalEntry, createGuardedJournalEntry, getAccountCodeFromMapping, emitEvent, createAuditLog } from "./businessHelpers.js";
+import { createGuardedJournalEntry, getAccountCodeFromMapping, emitEvent, createAuditLog, currentYear, currentMonthPadded, roundTo2 } from "./businessHelpers.js";
 import { NotFoundError, ConflictError, ValidationError } from "./errorHandler.js";
+import { logger } from "./logger.js";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Types
@@ -51,7 +52,7 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
   const [subAgent] = await rawQuery<any>(
     `SELECT sa.*, c.name AS "clientName"
      FROM umrah_sub_agents sa
-     LEFT JOIN clients c ON c.id = sa."clientId"
+     LEFT JOIN clients c ON c.id = sa."clientId" AND c."deletedAt" IS NULL
      WHERE sa.id = $1 AND sa."companyId" = $2 AND sa."deletedAt" IS NULL`,
     [subAgentId, scope.companyId]
   );
@@ -71,6 +72,18 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     throw new NotFoundError("بعض المجموعات غير موجودة");
   }
 
+  const alreadyInvoiced = await rawQuery<any>(
+    `SELECT DISTINCT si."groupId", inv.ref
+     FROM umrah_sales_invoice_items si
+     JOIN umrah_sales_invoices inv ON inv.id = si."invoiceId"
+     WHERE si."groupId" = ANY($1) AND inv."companyId" = $2 AND inv.status != 'cancelled'`,
+    [groupIds, scope.companyId]
+  );
+  if (alreadyInvoiced.length > 0) {
+    const refs = alreadyInvoiced.map((r: any) => r.ref).join(", ");
+    throw new ConflictError(`بعض المجموعات مفوترة مسبقاً في: ${refs}`);
+  }
+
   const lineItems: InvoiceLineItem[] = [];
   let subtotal = 0;
   let totalPilgrims = 0;
@@ -81,6 +94,10 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     const mutamerCount = grp.mutamerCount || 0;
     const entryDate = grp.entryDate;
 
+    if (!entryDate) {
+      throw new ValidationError(`المجموعة ${grp.nuskGroupNumber} لا تحتوي على تاريخ دخول — لا يمكن تحديد السعر`);
+    }
+
     const [pricing] = await rawQuery<any>(
       `SELECT "pricePerMutamer" FROM umrah_pricing
        WHERE "companyId" = $1 AND "deletedAt" IS NULL
@@ -89,7 +106,7 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
          AND "validFrom" <= $5 AND "validTo" >= $5
        ORDER BY "subAgentId" DESC NULLS LAST, "validFrom" DESC
        LIMIT 1`,
-      [scope.companyId, subAgentId, subAgent.agentId, seasonId, entryDate || new Date()]
+      [scope.companyId, subAgentId, subAgent.agentId, seasonId, entryDate]
     );
 
     if (!pricing) {
@@ -158,13 +175,13 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     [scope.companyId]
   );
   const vatRate = vatSetting ? Number(vatSetting.value) : 0;
-  const vatAmount = Math.round(subtotal * (vatRate / 100) * 100) / 100;
+  const vatAmount = roundTo2(subtotal * (vatRate / 100));
   const total = subtotal + penaltiesTotal + vatAmount;
 
   const [seqRow] = await rawQuery<any>(`SELECT nextval('umrah_sales_invoice_seq') AS seq`);
   const seqNum = Number(seqRow.seq);
-  const year = new Date().getFullYear();
-  const month = String(new Date().getMonth() + 1).padStart(2, "0");
+  const year = currentYear();
+  const month = currentMonthPadded();
   const ref = `UINV-${year}${month}-${String(seqNum).padStart(4, "0")}`;
 
   let invoiceId!: number;
@@ -186,17 +203,17 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     invoiceId = invRes.rows[0].id;
 
     if (lineItems.length > 0) {
-      const cols = 7;
+      const cols = 8;
       const valuesSql: string[] = [];
       const params: any[] = [];
       for (const li of lineItems) {
         const base = params.length;
         valuesSql.push(`(${Array.from({ length: cols }, (_, i) => `$${base + i + 1}`).join(",")})`);
-        params.push(invoiceId, li.itemType, li.groupId, li.violationId, li.description, li.quantity, li.lineTotal);
+        params.push(invoiceId, li.itemType, li.groupId, li.violationId, li.description, li.quantity, li.unitPrice, li.lineTotal);
       }
       await client.query(
         `INSERT INTO umrah_sales_invoice_items
-         ("invoiceId","itemType","groupId","violationId",description,quantity,"lineTotal")
+         ("invoiceId","itemType","groupId","violationId",description,quantity,"unitPrice","lineTotal")
          VALUES ${valuesSql.join(",")}`,
         params
       );
@@ -205,16 +222,16 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     for (const v of violations) {
       await client.query(
         `UPDATE umrah_violations SET status = 'invoiced', "linkedInvoiceId" = $1, "updatedBy" = $2, "updatedAt" = NOW()
-         WHERE id = $3`,
-        [invoiceId, scope.userId, v.id]
+         WHERE id = $3 AND "companyId" = $4`,
+        [invoiceId, scope.userId, v.id, scope.companyId]
       );
     }
 
     for (const grp of groups) {
       await client.query(
         `UPDATE umrah_groups SET "salesInvoiceId" = $1, "updatedBy" = $2, "updatedAt" = NOW()
-         WHERE id = $3`,
-        [invoiceId, scope.userId, grp.id]
+         WHERE id = $3 AND "companyId" = $4`,
+        [invoiceId, scope.userId, grp.id, scope.companyId]
       );
     }
   });
@@ -248,8 +265,8 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     lines: glLines,
   }, { table: "umrah_sales_invoices", id: invoiceId });
 
-  emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.invoice.generated", entity: "umrah_sales_invoices", entityId: invoiceId, details: JSON.stringify({ ref, total, subAgentId, groupCount: groups.length, pilgrimCount: totalPilgrims }) }).catch(console.error);
-  createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_sales_invoices", entityId: invoiceId, after: { ref, total } }).catch(console.error);
+  emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.invoice.generated", entity: "umrah_sales_invoices", entityId: invoiceId, details: JSON.stringify({ ref, total, subAgentId, groupCount: groups.length, pilgrimCount: totalPilgrims }) }).catch((e) => logger.error(e, "[umrahInvoicingEngine] background task failed"));
+  createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_sales_invoices", entityId: invoiceId, after: { ref, total } }).catch((e) => logger.error(e, "[umrahInvoicingEngine] background task failed"));
 
   return { invoiceId, ref, subtotal, penaltiesTotal, vatRate, vatAmount, total, pilgrimCount: totalPilgrims, lineItems: lineItems.length, nuskInvoiceRefs, groupRefs };
 }
@@ -271,8 +288,8 @@ export async function registerPayment(scope: Scope, input: RegisterPaymentInput)
 
   const [seqRow] = await rawQuery<any>(`SELECT nextval('umrah_payment_seq') AS seq`);
   const seqNum = Number(seqRow.seq);
-  const year = new Date().getFullYear();
-  const month = String(new Date().getMonth() + 1).padStart(2, "0");
+  const year = currentYear();
+  const month = currentMonthPadded();
   const payRef = `UPAY-${year}${month}-${String(seqNum).padStart(4, "0")}`;
 
   let paymentId!: number;
@@ -323,7 +340,7 @@ export async function registerPayment(scope: Scope, input: RegisterPaymentInput)
       if (invRemaining <= 0) continue;
 
       const allocAmount = Math.min(remaining, invRemaining);
-      remaining = Math.round((remaining - allocAmount) * 100) / 100;
+      remaining = roundTo2(remaining - allocAmount);
 
       await client.query(
         `INSERT INTO umrah_payment_allocations ("paymentId","invoiceId",amount)
@@ -331,18 +348,18 @@ export async function registerPayment(scope: Scope, input: RegisterPaymentInput)
         [paymentId, inv.id, allocAmount]
       );
 
-      const newPaid = Math.round((Number(inv.paidAmount) + allocAmount) * 100) / 100;
+      const newPaid = roundTo2(Number(inv.paidAmount) + allocAmount);
       const newStatus = newPaid >= Number(inv.total) - 0.01 ? "paid" : "partially_paid";
 
       if (newStatus === "paid") {
         await client.query(
-          `UPDATE umrah_sales_invoices SET "paidAmount" = $1, status = $2, "paidAt" = NOW(), "updatedAt" = NOW() WHERE id = $3`,
-          [newPaid, newStatus, inv.id]
+          `UPDATE umrah_sales_invoices SET "paidAmount" = $1, status = $2, "updatedAt" = NOW() WHERE id = $3 AND "companyId" = $4`,
+          [newPaid, newStatus, inv.id, scope.companyId]
         );
       } else {
         await client.query(
-          `UPDATE umrah_sales_invoices SET "paidAmount" = $1, status = $2, "updatedAt" = NOW() WHERE id = $3`,
-          [newPaid, newStatus, inv.id]
+          `UPDATE umrah_sales_invoices SET "paidAmount" = $1, status = $2, "updatedAt" = NOW() WHERE id = $3 AND "companyId" = $4`,
+          [newPaid, newStatus, inv.id, scope.companyId]
         );
       }
 
@@ -370,8 +387,8 @@ export async function registerPayment(scope: Scope, input: RegisterPaymentInput)
     ],
   }, { table: "umrah_payments", id: paymentId });
 
-  emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.payment.received", entity: "umrah_payments", entityId: paymentId, details: JSON.stringify({ ref: payRef, sarAmount, method, allocations }) }).catch(console.error);
-  createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_payments", entityId: paymentId, after: { ref: payRef, sarAmount } }).catch(console.error);
+  emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.payment.received", entity: "umrah_payments", entityId: paymentId, details: JSON.stringify({ ref: payRef, sarAmount, method, allocations }) }).catch((e) => logger.error(e, "[umrahInvoicingEngine] background task failed"));
+  createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_payments", entityId: paymentId, after: { ref: payRef, sarAmount } }).catch((e) => logger.error(e, "[umrahInvoicingEngine] background task failed"));
 
   return { paymentId, ref: payRef, sarAmount, currency, method, allocations, unallocated: remaining };
 }
@@ -481,7 +498,7 @@ function buildDetailedStatement(
   });
 
   for (const item of all) {
-    balance = Math.round((balance + item.entry.debit - item.entry.credit) * 100) / 100;
+    balance = roundTo2(balance + item.entry.debit - item.entry.credit);
     entries.push({ ...item.entry, balance });
   }
 
@@ -546,7 +563,7 @@ function buildSummaryStatement(
   });
 
   for (const item of allEntries) {
-    balance = Math.round((balance + item.entry.amount) * 100) / 100;
+    balance = roundTo2(balance + item.entry.amount);
     entries.push({ ...item.entry, balance });
   }
 
@@ -562,8 +579,8 @@ export async function getDashboard(scope: Scope, seasonId: number) {
     `SELECT
        COUNT(*)::int AS "totalMutamers",
        COUNT(*) FILTER (WHERE "isInsideKingdom" = TRUE)::int AS "insideKingdom",
-       COUNT(*) FILTER (WHERE status IN ('overstayed','overstay'))::int AS "overstayCount",
-       COUNT(*) FILTER (WHERE status = 'absconded')::int AS "abscondedCount"
+       COUNT(*) FILTER (WHERE status = 'overstayed')::int AS "overstayCount",
+       COUNT(*) FILTER (WHERE status = 'violated')::int AS "abscondedCount"
      FROM umrah_pilgrims
      WHERE "companyId" = $1 AND "seasonId" = $2 AND "deletedAt" IS NULL`,
     [scope.companyId, seasonId]

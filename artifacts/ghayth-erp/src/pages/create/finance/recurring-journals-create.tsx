@@ -76,7 +76,7 @@ export default function RecurringJournalsCreatePage() {
   );
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   function updateLine(idx: number, field: keyof TemplateLine, value: string) {
     setLines((prev) => {
@@ -218,7 +218,7 @@ export default function RecurringJournalsCreatePage() {
         <Button variant="outline" onClick={() => setLocation("/finance/recurring-journals")}>
           إلغاء
         </Button>
-        <Button onClick={handleSubmit} disabled={!isBalanced || !name || createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={!isBalanced || !name || createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
         </Button>
       </div>

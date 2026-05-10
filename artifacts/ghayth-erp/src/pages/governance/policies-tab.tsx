@@ -11,12 +11,13 @@ import { formatDateAr } from "@/lib/formatters";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export function PoliciesTab() {
+  const [, navigate] = useLocation();
   const { data: policiesResp, isLoading, isError, error, refetch } = useApiQuery<any>(["gov-policies"], "/governance/policies");
   const policies = asList(policiesResp);
   const [previewItem, setPreviewItem] = useState<any>(null);
@@ -101,7 +102,7 @@ export function PoliciesTab() {
   ];
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   return (
     <div className="space-y-4">
@@ -145,6 +146,7 @@ export function PoliciesTab() {
             isError={isError}
             error={error as Error | null}
             onRetry={() => refetch()}
+            onRowClick={(p) => navigate(`/governance/policies/${p.id}`)}
             emptyMessage="لا توجد سياسات"
             emptyIcon={<FileCheck className="h-6 w-6 text-slate-400" />}
             noToolbar

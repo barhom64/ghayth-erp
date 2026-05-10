@@ -1,3 +1,4 @@
+import { useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,13 +10,14 @@ import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/compon
 import { PageShell } from "@/components/page-shell";
 
 export default function FinancialRequestsPage() {
+  const [, navigate] = useLocation();
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["financial-requests"], "/finance/financial-requests");
   const items = data?.data || [];
   const summary = data?.summary || {};
   const [filters, setFilters] = useFilters();
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const filtered = applyFilters(items, filters, {
     searchFields: ["ref", "supplierName", "requestedByName"],
@@ -122,6 +124,7 @@ export default function FinancialRequestsPage() {
         emptyMessage="لا توجد طلبات مالية"
         emptyIcon={<ClipboardCheck className="h-6 w-6 text-slate-400" />}
         noToolbar
+        onRowClick={(row) => navigate(`/finance/financial-requests/${row.id}`)}
       />
     </PageShell>
   );

@@ -119,7 +119,7 @@ export default function AutoDetectionPage() {
   );
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const settings = settingsQuery.data;
   const summary = summaryQuery.data;
@@ -161,9 +161,7 @@ export default function AutoDetectionPage() {
       sortable: true,
       render: (row) => (
         <span className="font-mono text-sm">
-          {new Date(row.targetDate).toLocaleDateString("ar-SA", {
-            year: "numeric", month: "short", day: "numeric",
-          })}
+          {formatDateAr(row.targetDate)}
         </span>
       ),
     },
@@ -274,6 +272,7 @@ export default function AutoDetectionPage() {
             className="gap-1.5"
             onClick={handleRun}
             disabled={runMutation.isPending}
+            rateLimitAware
           >
             {runMutation.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -520,9 +519,7 @@ export default function AutoDetectionPage() {
               <CardTitle className="text-sm text-blue-700 flex items-center gap-2">
                 <FileText className="h-4 w-4" />
                 تفاصيل الرصد —{" "}
-                {new Date(log.targetDate).toLocaleDateString("ar-SA", {
-                  year: "numeric", month: "long", day: "numeric",
-                })}
+                {formatDateAr(log.targetDate)}
               </CardTitle>
             </CardHeader>
             <CardContent>

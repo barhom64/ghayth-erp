@@ -5,16 +5,19 @@
 // ============================================================================
 
 import { Router } from "express";
+import { LOAN_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import {
   handleRouteError,
   NotFoundError,
   ValidationError,
   ConflictError,
   ForbiddenError,
+  parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
 import {
   createAuditLog,
@@ -23,14 +26,16 @@ import {
   getManagerAssignmentId,
   initiateApprovalChain,
   processApprovalStep,
+  currentPeriod,
+  roundTo2,
 } from "../lib/businessHelpers.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
-import { generateSequentialNumber, nextPeriod as nextPeriodHelper, currentPeriod, advancePeriod as advancePeriodHelper } from "../lib/hrHelpers.js";
+import { generateSequentialNumber, nextPeriod as nextPeriodHelper, advancePeriod as advancePeriodHelper } from "../lib/hrHelpers.js";
 import { HR_TABLES, NUMBER_PREFIXES, LOAN_STATUS } from "../lib/hrEnums.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
-router.use(authMiddleware);
 
 // ─── إنشاء جدول السلف (إذا لم يكن موجوداً) ─────────────────────────────────
 async function ensureLoanTables(): Promise<void> {
@@ -59,7 +64,7 @@ async function ensureLoanTables(): Promise<void> {
       "updatedAt" TIMESTAMPTZ DEFAULT NOW(),
       "deletedAt" TIMESTAMPTZ
     )
-  `).catch(() => {});
+  `).catch((e) => logger.error(e, "hr-loans background task failed"));
 
   await rawExecute(`
     CREATE TABLE IF NOT EXISTS hr_loan_installments (
@@ -75,7 +80,7 @@ async function ensureLoanTables(): Promise<void> {
       "payrollLineId" INTEGER,
       "createdAt" TIMESTAMPTZ DEFAULT NOW()
     )
-  `).catch(() => {});
+  `).catch((e) => logger.error(e, "hr-loans background task failed"));
 }
 
 // ─── رقم السلفة المتسلسل (يستخدم الأداة الموحّدة من hrHelpers) ──────────
@@ -98,10 +103,16 @@ const rejectLoanSchema = z.object({
   reason: z.string().optional(),
 });
 
+const approvalDecisionSchema = z.object({
+  approved: z.boolean().default(true),
+  reason: z.string().optional(),
+  notes: z.string().optional(),
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/loans — قائمة السلف
 // ═══════════════════════════════════════════════════════════════════════════════
-router.get("/loans", requirePermission("hr:read"), async (req, res) => {
+router.get("/loans", authorize({ feature: "hr.loans", action: "list" }), async (req, res) => {
   try {
     await ensureLoanTables();
     const scope = req.scope!;
@@ -130,7 +141,8 @@ router.get("/loans", requirePermission("hr:read"), async (req, res) => {
        JOIN employees e ON e.id = ea."employeeId"
        LEFT JOIN branches b ON b.id = ea."branchId"
        WHERE ${where}
-       ORDER BY l."createdAt" DESC`,
+       ORDER BY l."createdAt" DESC
+       LIMIT 500`,
       params
     );
 
@@ -157,12 +169,34 @@ router.get("/loans", requirePermission("hr:read"), async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// GET /hr/loans/:id — تفاصيل السلفة مع الأقساط
+// GET /hr/loans/my — سلف الموظف الحالي (Self-Service)
 // ═══════════════════════════════════════════════════════════════════════════════
-router.get("/loans/:id", requirePermission("hr:read"), async (req, res) => {
+router.get("/loans/my", authorize({ feature: "hr.loans.my", action: "list" }), async (req, res) => {
   try {
     await ensureLoanTables();
     const scope = req.scope!;
+    const data = await rawQuery<any>(
+      `SELECT l.*, e.name AS "employeeName"
+       FROM hr_employee_loans l
+       JOIN employees e ON e.id = l."employeeId"
+       WHERE l."assignmentId" = $1 AND l."companyId" = $2 AND l."deletedAt" IS NULL
+       ORDER BY l."createdAt" DESC`,
+      [scope.activeAssignmentId, scope.companyId]
+    );
+    res.json({ data });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في قراءة سلفك");
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GET /hr/loans/:id — تفاصيل السلفة مع الأقساط
+// ═══════════════════════════════════════════════════════════════════════════════
+router.get("/loans/:id", authorize({ feature: "hr.loans", action: "view" }), async (req, res) => {
+  try {
+    await ensureLoanTables();
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
     const [loan] = await rawQuery<any>(
       `SELECT l.*, e.name AS "employeeName", e."empNumber",
               ea."jobTitle", ea.salary, b.name AS "branchName"
@@ -171,7 +205,7 @@ router.get("/loans/:id", requirePermission("hr:read"), async (req, res) => {
        JOIN employees e ON e.id = ea."employeeId"
        LEFT JOIN branches b ON b.id = ea."branchId"
        WHERE l.id = $1 AND l."companyId" = $2 AND l."deletedAt" IS NULL`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!loan) throw new NotFoundError("السلفة غير موجودة");
 
@@ -191,17 +225,16 @@ router.get("/loans/:id", requirePermission("hr:read"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // POST /hr/loans — طلب سلفة جديدة
 // ═══════════════════════════════════════════════════════════════════════════════
-router.post("/loans", requirePermission("hr:create"), async (req, res) => {
+router.post("/loans", authorize({ feature: "hr.loans", action: "create" }), async (req, res) => {
   try {
     await ensureLoanTables();
     const scope = req.scope!;
-    const parsed_createLoanSchema = createLoanSchema.safeParse(req.body);
-    if (!parsed_createLoanSchema.success) throw new ValidationError(parsed_createLoanSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed_createLoanSchema.data;
+    const b = zodParse(createLoanSchema.safeParse(req.body));
 
     const amount = b.amount;
     const installmentCount = b.installmentCount;
-    const installmentAmount = Math.round((amount / installmentCount) * 100) / 100;
+    if (!installmentCount || installmentCount <= 0) throw new ValidationError("عدد الأقساط يجب أن يكون أكبر من صفر", { field: "installmentCount" });
+    const installmentAmount = roundTo2(amount / installmentCount);
 
     // التحقق من عدم وجود سلفة نشطة
     const [existing] = await rawQuery<any>(
@@ -255,7 +288,7 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
       refType: "hr_employee_loan",
       refId: insertId,
       amount,
-    }).catch(() => null);
+    }).catch((e) => { logger.error(e, "hr-loans approval chain failed"); return null; });
 
     // ── محرك سير العمل ──
     submitWorkflow({
@@ -268,18 +301,18 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
       submittedBy: scope.activeAssignmentId,
       submittedByName: scope.userName,
       data: { loanNumber, amount, installmentCount, loanType: b.loanType },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-loans background task failed"));
 
     // ── إشعار المدير (fallback إذا لم توجد سلسلة) ──
     if (!approvalResult?.requiresApproval) {
-      const managerId = await getManagerAssignmentId(scope.companyId, emp.branchId ?? scope.branchId).catch(() => null);
+      const managerId = await getManagerAssignmentId(scope.companyId, emp.branchId ?? scope.branchId).catch((e) => { logger.error(e, "hr-loans manager lookup failed"); return null; });
       if (managerId) {
         createNotification({
           companyId: scope.companyId, assignmentId: managerId,
           type: "loan_request", title: "طلب سلفة جديد",
           body: `طلب سلفة بمبلغ ${amount.toLocaleString()} ريال — ${loanNumber}`,
           priority: "high", refType: "hr_employee_loan", refId: insertId,
-        }).catch(console.error);
+        }).catch((e) => logger.error(e, "hr-loans background task failed"));
       }
     }
 
@@ -296,12 +329,10 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
       entity: "hr_employee_loans",
       entityId: insertId,
       details: JSON.stringify({ loanNumber, amount, installmentCount, assignmentId: b.assignmentId }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-loans background task failed"));
 
-    res.status(201).json({
-      id: insertId, loanNumber,
-      approval: approvalResult ?? { requiresApproval: false },
-    });
+    const [row] = await rawQuery<any>(`SELECT * FROM hr_employee_loans WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json({ ...row, approval: approvalResult ?? { requiresApproval: false } });
   } catch (err) {
     handleRouteError(err, res, "خطأ في إنشاء السلفة");
   }
@@ -310,11 +341,13 @@ router.post("/loans", requirePermission("hr:create"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // PATCH /hr/loans/:id/approve — اعتماد السلفة + توليد جدول الأقساط
 // ═══════════════════════════════════════════════════════════════════════════════
-router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, res) => {
+router.patch("/loans/:id/approve", authorize({ feature: "hr.loans", action: "update" }), async (req, res) => {
   try {
-    const { approved = true, reason, notes } = (req.body ?? {}) as { approved?: boolean; reason?: string; notes?: string };
+    const b = zodParse(approvalDecisionSchema.safeParse(req.body ?? {}));
+    const { approved = true, reason, notes } = b;
     const scope = req.scope!;
-    if (!["owner", "hr_manager", "general_manager", "branch_manager", "finance_manager"].includes(scope.role)) {
+    const id = parseId(req.params.id, "id");
+    if (!LOAN_APPROVAL_ROLES.includes(scope.role)) {
       throw new ForbiddenError(
         "صلاحية اعتماد السلف محصورة بالمدير أو HR أو المدير المالي أو المالك",
         {
@@ -326,7 +359,7 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
 
     const [loan] = await rawQuery<any>(
       `SELECT * FROM hr_employee_loans WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!loan) throw new NotFoundError("السلفة غير موجودة");
     if (loan.status !== "pending") throw new ConflictError("لا يمكن اعتماد سلفة بحالة: " + loan.status);
@@ -338,15 +371,16 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
 
     const rejectionReason = reason || notes;
     if (!approved) {
-      await rawExecute(
-        `UPDATE hr_employee_loans SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2`,
-        [rejectionReason || null, loan.id]
+      const { affectedRows } = await rawExecute(
+        `UPDATE hr_employee_loans SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status = 'pending' AND "deletedAt" IS NULL`,
+        [rejectionReason || null, loan.id, scope.companyId]
       );
+      if (!affectedRows) throw new ConflictError("تم تحديث السلفة مسبقاً — أعد التحميل");
       processApprovalStep({
         companyId: scope.companyId, branchId: scope.branchId,
         refType: "hr_employee_loan", refId: loan.id,
         approved: false, decidedBy: scope.activeAssignmentId, reason: rejectionReason,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr-loans background task failed"));
       createNotification({
         companyId: scope.companyId, assignmentId: loan.assignmentId,
         type: "loan_rejected", title: "تم رفض طلب السلفة",
@@ -367,7 +401,7 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
         entity: "hr_employee_loans",
         entityId: loan.id,
         details: JSON.stringify({ loanNumber: loan.loanNumber, reason: rejectionReason }),
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr-loans background task failed"));
       res.json({ success: true, message: "تم رفض السلفة" });
       return;
     }
@@ -381,7 +415,7 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
       approved: true,
       decidedBy: scope.activeAssignmentId,
       requesterId: loan.assignmentId,
-    }).catch(() => ({ status: "approved" as const, message: "" }));
+    }).catch((e) => { logger.error(e, "hr loans approval failed"); return { status: "approved" as const, message: "" }; });
 
     // إذا بقيت خطوات موافقة إضافية
     if (chainResult.status === "pending_next_step") {
@@ -393,38 +427,45 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
       return;
     }
 
-    // ── الموافقة النهائية: تفعيل السلفة ──
-    await rawExecute(
-      `UPDATE hr_employee_loans
-       SET status = 'active', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW()
-       WHERE id = $2`,
-      [scope.userId, loan.id]
-    );
-
-    // توليد جدول الأقساط
-    let period = loan.startDeductionPeriod || nextPeriod();
-    for (let i = 1; i <= loan.installmentCount; i++) {
-      const isLast = i === loan.installmentCount;
-      const amt = isLast
-        ? Math.round((Number(loan.amount) - Number(loan.installmentAmount) * (loan.installmentCount - 1)) * 100) / 100
-        : Number(loan.installmentAmount);
-
-      await rawExecute(
-        `INSERT INTO hr_loan_installments
-           ("loanId","companyId","assignmentId","installmentNumber",amount,period,status)
-         VALUES ($1,$2,$3,$4,$5,$6,'pending')`,
-        [loan.id, scope.companyId, loan.assignmentId, i, amt, period]
+    // ── الموافقة النهائية: تفعيل السلفة + توليد الأقساط ذرياً ──
+    await withTransaction(async (client) => {
+      const upd = await client.query(
+        `UPDATE hr_employee_loans
+         SET status = 'active', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW()
+         WHERE id = $2 AND "companyId" = $3 AND status = 'pending' AND "deletedAt" IS NULL`,
+        [scope.userId, loan.id, scope.companyId]
       );
-      period = advancePeriod(period);
-    }
+      if (!upd.rowCount) throw new ConflictError("تم تحديث السلفة مسبقاً — أعد التحميل");
 
-    // إشعار الموظف
+      let period = loan.startDeductionPeriod || nextPeriod();
+      for (let i = 1; i <= loan.installmentCount; i++) {
+        const isLast = i === loan.installmentCount;
+        const amt = isLast
+          ? roundTo2(Number(loan.amount) - Number(loan.installmentAmount) * (loan.installmentCount - 1))
+          : Number(loan.installmentAmount);
+
+        await client.query(
+          `INSERT INTO hr_loan_installments
+             ("loanId","companyId","assignmentId","installmentNumber",amount,period,status)
+           VALUES ($1,$2,$3,$4,$5,$6,'pending')`,
+          [loan.id, scope.companyId, loan.assignmentId, i, amt, period]
+        );
+        period = advancePeriod(period);
+      }
+    });
+
+    const { hrEngine } = await import("../lib/engines/index.js");
+    hrEngine.postLoanDisbursementGL(
+      { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
+      { id: loan.id, employeeId: loan.employeeId, amount: Number(loan.amount) },
+    ).catch((e: unknown) => logger.error(e, "Loan disbursement GL error:"));
+
     createNotification({
       companyId: scope.companyId, assignmentId: loan.assignmentId,
       type: "loan_approved", title: "تمت الموافقة على سلفتك",
       body: `تمت الموافقة على السلفة ${loan.loanNumber} بمبلغ ${Number(loan.amount).toLocaleString()} ريال — سيبدأ الخصم من فترة ${loan.startDeductionPeriod}`,
       priority: "high", refType: "hr_employee_loan", refId: loan.id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-loans background task failed"));
 
     try {
       await rawExecute(
@@ -446,7 +487,7 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
       entity: "hr_employee_loans",
       entityId: loan.id,
       details: JSON.stringify({ loanNumber: loan.loanNumber, amount: loan.amount, installmentCount: loan.installmentCount }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-loans background task failed"));
 
     res.json({ success: true, message: "تم اعتماد السلفة وتوليد جدول الأقساط" });
   } catch (err) {
@@ -457,19 +498,18 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
 // ═══════════════════════════════════════════════════════════════════════════════
 // PATCH /hr/loans/:id/reject — رفض السلفة
 // ═══════════════════════════════════════════════════════════════════════════════
-router.patch("/loans/:id/reject", requirePermission("hr:update"), async (req, res) => {
+router.patch("/loans/:id/reject", authorize({ feature: "hr.loans", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!["owner", "hr_manager", "general_manager", "branch_manager", "finance_manager"].includes(scope.role)) {
+    const id = parseId(req.params.id, "id");
+    if (!LOAN_APPROVAL_ROLES.includes(scope.role)) {
       throw new ForbiddenError("صلاحية رفض السلف محصورة بالمدير أو HR أو المدير المالي أو المالك");
     }
 
-    const parsed_rejectLoanSchema = rejectLoanSchema.safeParse(req.body);
-    if (!parsed_rejectLoanSchema.success) throw new ValidationError(parsed_rejectLoanSchema.error.errors[0]?.message ?? "بيانات غير صالحة");
-    const b = parsed_rejectLoanSchema.data;
+    const b = zodParse(rejectLoanSchema.safeParse(req.body));
     const [loan] = await rawQuery<any>(
       `SELECT * FROM hr_employee_loans WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [Number(req.params.id), scope.companyId]
+      [id, scope.companyId]
     );
     if (!loan) throw new NotFoundError("السلفة غير موجودة");
     if (loan.status !== "pending") throw new ConflictError("لا يمكن رفض سلفة بحالة: " + loan.status);
@@ -483,19 +523,20 @@ router.patch("/loans/:id/reject", requirePermission("hr:update"), async (req, re
       approved: false,
       decidedBy: scope.activeAssignmentId,
       reason: b.reason,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-loans background task failed"));
 
-    await rawExecute(
-      `UPDATE hr_employee_loans SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2`,
-      [b.reason || null, loan.id]
+    const { affectedRows } = await rawExecute(
+      `UPDATE hr_employee_loans SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status = 'pending' AND "deletedAt" IS NULL`,
+      [b.reason || null, loan.id, scope.companyId]
     );
+    if (!affectedRows) throw new ConflictError("تم تحديث حالة السلفة بالفعل من مستخدم آخر");
 
     createNotification({
       companyId: scope.companyId, assignmentId: loan.assignmentId,
       type: "loan_rejected", title: "تم رفض طلب السلفة",
       body: `تم رفض السلفة ${loan.loanNumber}${b.reason ? " — السبب: " + b.reason : ""}`,
       priority: "normal", refType: "hr_employee_loan", refId: loan.id,
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-loans background task failed"));
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -504,37 +545,16 @@ router.patch("/loans/:id/reject", requirePermission("hr:update"), async (req, re
       entity: "hr_employee_loans",
       entityId: loan.id,
       details: JSON.stringify({ loanNumber: loan.loanNumber, reason: b.reason }),
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-loans background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "hr_employee_loans", entityId: Number(req.params.id),
+      action: "update", entity: "hr_employee_loans", entityId: id,
       after: { status: "rejected", rejectionReason: b.reason || null, loanNumber: loan.loanNumber },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "hr-loans background task failed"));
 
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "خطأ في رفض السلفة");
-  }
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// GET /hr/loans/my — سلف الموظف الحالي (Self-Service)
-// ═══════════════════════════════════════════════════════════════════════════════
-router.get("/loans/my", requirePermission("hr:read"), async (req, res) => {
-  try {
-    await ensureLoanTables();
-    const scope = req.scope!;
-    const data = await rawQuery<any>(
-      `SELECT l.*, e.name AS "employeeName"
-       FROM hr_employee_loans l
-       JOIN employees e ON e.id = l."employeeId"
-       WHERE l."assignmentId" = $1 AND l."companyId" = $2 AND l."deletedAt" IS NULL
-       ORDER BY l."createdAt" DESC`,
-      [scope.activeAssignmentId, scope.companyId]
-    );
-    res.json({ data });
-  } catch (err) {
-    handleRouteError(err, res, "خطأ في قراءة سلفك");
   }
 });
 

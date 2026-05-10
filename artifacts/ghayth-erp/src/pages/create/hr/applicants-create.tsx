@@ -27,17 +27,17 @@ export default function ApplicantsCreate() {
   // HR-U2 — successMessage + onSuccess (callbacks) بدل try/catch العام.
   // الـ useApiMutation الافتراضي يعرض toast مكتوبًا (ValidationError/Conflict…)
   // فالـ catch السابق كان يبتلع الخطأ الحقيقي ويعرض "حدث خطأ" عامًا.
-  const createMut = useApiMutation("/recruitment/applications", "POST", [["applicants"]], {
+  const createMut = useApiMutation("/hr/recruitment/applications", "POST", [["applicants"]], {
     successMessage: "تم إضافة المتقدم بنجاح",
   });
-  const { data: jobsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["jobs"], "/recruitment/postings");
+  const { data: jobsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["jobs"], "/hr/recruitment/postings");
   const jobs = jobsData?.data || [];
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const set = (key: string, value: string) => {
     setForm((f) => ({ ...f, [key]: value }));
@@ -124,7 +124,7 @@ export default function ApplicantsCreate() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <TextField label="الاسم الكامل" required value={form.applicantName} onChange={(v) => set("applicantName", v)} placeholder="الاسم الرباعي" error={fieldErrors.applicantName} />
             <TextField label="البريد الإلكتروني" type="email" dir="ltr" value={form.email} onChange={(v) => set("email", v)} placeholder="email@example.com" error={fieldErrors.email} />
-            <TextField label="الهاتف" dir="ltr" value={form.phone} onChange={(v) => set("phone", v)} placeholder="+966 5xx xxx xxx" />
+            <TextField label="الهاتف" type="tel" inputMode="tel" dir="ltr" value={form.phone} onChange={(v) => set("phone", v)} placeholder="+966 5xx xxx xxx" />
           </div>
         </div>
 
@@ -179,7 +179,7 @@ export default function ApplicantsCreate() {
       <FileDropZone files={attachments} onFilesChange={setAttachments} label="المرفقات (سيرة ذاتية، شهادات)" />
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/hr/recruitment")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "إضافة المتقدم"}
         </Button>
       </div>

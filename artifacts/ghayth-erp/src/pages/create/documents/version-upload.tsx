@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import { useRoute } from "wouter";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
+import { notifyRateLimited, RateLimitError } from "@/lib/rate-limit-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -41,9 +42,6 @@ export default function VersionUploadPage() {
   const { fieldErrors, validate } = useFieldErrors();
   const inputRef = useRef<HTMLInputElement>(null);
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
-
   const handleUploadVersion = useCallback(async () => {
     const firstError = validate({
       file: !file ? "يرجى اختيار ملف للرفع" : null,
@@ -55,12 +53,15 @@ export default function VersionUploadPage() {
     if (!file || !docId) return;
     setUploading(true);
     try {
-      const token = localStorage.getItem("erp_token");
       const urlRes = await fetch(`${BASE}/api/storage/uploads/request-url`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
       });
+      if (urlRes.status === 429) {
+        throw new RateLimitError(notifyRateLimited(urlRes));
+      }
       if (!urlRes.ok) throw new Error("فشل في الحصول على رابط الرفع");
       const { uploadURL, objectPath } = await urlRes.json();
       const putRes = await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
@@ -82,6 +83,11 @@ export default function VersionUploadPage() {
       clearDraft();
       refetch();
     } catch (err: any) {
+      if (err instanceof RateLimitError) {
+        // notifyRateLimited already showed the debounced rate-limit toast.
+        setUploading(false);
+        return;
+      }
       toast({ variant: "destructive", title: err.message || "حدث خطأ" });
     } finally {
       setUploading(false);

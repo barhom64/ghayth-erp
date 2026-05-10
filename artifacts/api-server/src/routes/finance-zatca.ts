@@ -5,21 +5,54 @@ import {
   ConflictError,
   ForbiddenError,
   IntegrationError,
+  parseId,
+  zodParse,
 } from "../lib/errorHandler.js";
-
+import { z } from "zod";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { createAuditLog } from "../lib/businessHelpers.js";
-import crypto from "crypto";
+import { authorize } from "../lib/rbac/authorize.js";
+import { createAuditLog, emitEvent, toDateISO } from "../lib/businessHelpers.js";
+import crypto from "node:crypto";
 import QRCode from "qrcode";
+import { logger } from "../lib/logger.js";
 
 export const zatcaRouter = Router();
 zatcaRouter.use(authMiddleware);
 
+const zatcaSettingsSchema = z.object({
+  enabled: z.boolean().default(false),
+  environment: z.string().default("sandbox"),
+  vatRegistrationNumber: z.string().optional().nullable(),
+  crNumber: z.string().optional().nullable(),
+  organizationName: z.string().optional().nullable(),
+  organizationNameEn: z.string().optional().nullable(),
+  streetName: z.string().optional().nullable(),
+  buildingNumber: z.string().optional().nullable(),
+  cityName: z.string().optional().nullable(),
+  postalCode: z.string().optional().nullable(),
+  countryCode: z.string().default("SA"),
+  oauthClientId: z.string().optional().nullable(),
+  oauthClientSecret: z.string().optional().nullable(),
+  csid: z.string().optional().nullable(),
+  pihKey: z.string().optional().nullable(),
+});
 
+const zatcaInvoicePatchSchema = z.object({
+  isTaxLinked: z.boolean().optional(),
+  invoiceTypeCode: z.string().optional(),
+  taxCategoryCode: z.string().optional(),
+  exemptionReason: z.string().optional(),
+});
 
+const zatcaExpensePatchSchema = z.object({
+  isTaxLinked: z.boolean().optional(),
+  invoiceTypeCode: z.string().optional(),
+  taxCategoryCode: z.string().optional(),
+  exemptionReason: z.string().optional(),
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TLV (Tag-Length-Value) QR Code Encoder — ZATCA compliant
@@ -63,7 +96,8 @@ async function generateZatcaQrCode(params: {
   try {
     const dataUrl = await QRCode.toDataURL(tlvBase64, { width: 160, margin: 1 });
     return dataUrl;
-  } catch {
+  } catch (e) {
+    logger.warn(e, "ZATCA QR code generation failed, falling back to TLV base64");
     return tlvBase64;
   }
 }
@@ -206,7 +240,7 @@ function computeInvoiceHash(xmlContent: string): string {
 // ZATCA Settings CRUD
 // ─────────────────────────────────────────────────────────────────────────────
 
-zatcaRouter.get("/zatca/settings", requirePermission("finance:read"), async (req, res) => {
+zatcaRouter.get("/zatca/settings", authorize({ feature: "finance.zatca", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -229,7 +263,7 @@ zatcaRouter.get("/zatca/settings", requirePermission("finance:read"), async (req
   }
 });
 
-zatcaRouter.put("/zatca/settings", requirePermission("finance:update"), async (req, res) => {
+zatcaRouter.put("/zatca/settings", authorize({ feature: "finance.zatca", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -238,7 +272,7 @@ zatcaRouter.put("/zatca/settings", requirePermission("finance:update"), async (r
       organizationName, organizationNameEn, streetName, buildingNumber,
       cityName, postalCode, countryCode, oauthClientId, oauthClientSecret,
       csid, pihKey,
-    } = req.body as any;
+    } = zodParse(zatcaSettingsSchema.safeParse(req.body ?? {}));
 
     const [existing] = await rawQuery<any>(
       `SELECT id FROM zatca_settings WHERE "companyId" = $1`,
@@ -298,7 +332,12 @@ zatcaRouter.put("/zatca/settings", requirePermission("finance:update"), async (r
       entity: "zatca_settings",
       entityId: scope.companyId,
       after: { enabled, environment, vatRegistrationNumber },
-    }).catch(console.error);
+    }).catch((e) => logger.error(e, "finance-zatca background task failed"));
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "zatca.settings.updated", entity: "zatca_settings",
+      entityId: scope.companyId, details: JSON.stringify({ enabled, environment }),
+    }).catch((e) => logger.error(e, "finance-zatca emitEvent failed"));
 
     const [updated] = await rawQuery<any>(
       `SELECT id, "companyId", enabled, environment, "vatRegistrationNumber", "crNumber",
@@ -321,7 +360,7 @@ zatcaRouter.put("/zatca/settings", requirePermission("finance:update"), async (r
 // ─────────────────────────────────────────────────────────────────────────────
 // Test connection (simulated)
 // ─────────────────────────────────────────────────────────────────────────────
-zatcaRouter.post("/zatca/test-connection", requirePermission("finance:create"), async (req, res) => {
+zatcaRouter.post("/zatca/test-connection", authorize({ feature: "finance.zatca", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -355,11 +394,11 @@ zatcaRouter.post("/zatca/test-connection", requirePermission("finance:create"), 
 // ─────────────────────────────────────────────────────────────────────────────
 // Generate XML for an invoice
 // ─────────────────────────────────────────────────────────────────────────────
-zatcaRouter.get("/zatca/invoice/:id/xml", requirePermission("finance:read"), async (req, res) => {
+zatcaRouter.get("/zatca/invoice/:id/xml", authorize({ feature: "finance.zatca", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
 
     const [settings] = await rawQuery<any>(
       `SELECT * FROM zatca_settings WHERE "companyId" = $1`,
@@ -367,13 +406,13 @@ zatcaRouter.get("/zatca/invoice/:id/xml", requirePermission("finance:read"), asy
     );
 
     const [invoice] = await rawQuery<any>(
-      `SELECT i.*, c.name AS "clientName", c."taxNumber" AS "clientVat",
+      `SELECT i.*, c.name AS "clientName", NULL AS "clientVat",
               b.name AS "branchName", b."taxNumber" AS "branchVat"
        FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId"
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
        LEFT JOIN branches b ON b.id = i."branchId"
        WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
 
     if (!invoice) {
@@ -382,16 +421,17 @@ zatcaRouter.get("/zatca/invoice/:id/xml", requirePermission("finance:read"), asy
 
     const lines = await rawQuery<any>(
       `SELECT * FROM invoice_lines WHERE "invoiceId" = $1 ORDER BY id`,
-      [Number(id)]
+      [id]
     );
 
-    const issueDate = new Date(invoice.createdAt).toISOString().split("T")[0];
-    const issueTime = new Date(invoice.createdAt).toISOString().split("T")[1].substring(0, 8);
+    const issueDate = toDateISO(invoice.createdAt || new Date());
+    const issueTime = new Date(invoice.createdAt || new Date()).toISOString().split("T")[1].substring(0, 8);
 
     let uuid = invoice.zatcaUuid;
     if (!uuid) {
       uuid = crypto.randomUUID();
-      await rawExecute(`UPDATE invoices SET "zatcaUuid" = $1::uuid WHERE id = $2`, [uuid, Number(id)]);
+      const { affectedRows } = await rawExecute(`UPDATE invoices SET "zatcaUuid" = $1::uuid WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [uuid, id, scope.companyId]);
+      if (!affectedRows) throw new NotFoundError("الفاتورة غير موجودة");
     }
 
     const xml = generateZatcaXml({
@@ -442,11 +482,11 @@ zatcaRouter.get("/zatca/invoice/:id/xml", requirePermission("finance:read"), asy
 // ─────────────────────────────────────────────────────────────────────────────
 // Simulate ZATCA submission for invoice
 // ─────────────────────────────────────────────────────────────────────────────
-zatcaRouter.post("/zatca/invoice/:id/submit", requirePermission("finance:create"), async (req, res) => {
+zatcaRouter.post("/zatca/invoice/:id/submit", authorize({ feature: "finance.zatca", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
 
     const [settings] = await rawQuery<any>(
       `SELECT * FROM zatca_settings WHERE "companyId" = $1`,
@@ -458,13 +498,13 @@ zatcaRouter.post("/zatca/invoice/:id/submit", requirePermission("finance:create"
     }
 
     const [invoice] = await rawQuery<any>(
-      `SELECT i.*, c.name AS "clientName", c."taxNumber" AS "clientVat",
+      `SELECT i.*, c.name AS "clientName", NULL AS "clientVat",
               b.name AS "branchName", b."taxNumber" AS "branchVat"
        FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId"
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
        LEFT JOIN branches b ON b.id = i."branchId"
        WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
-      [Number(id), scope.companyId]
+      [id, scope.companyId]
     );
 
     if (!invoice) {
@@ -477,11 +517,11 @@ zatcaRouter.post("/zatca/invoice/:id/submit", requirePermission("finance:create"
 
     const lines = await rawQuery<any>(
       `SELECT * FROM invoice_lines WHERE "invoiceId" = $1 ORDER BY id`,
-      [Number(id)]
+      [id]
     );
 
-    const issueDate = new Date(invoice.createdAt).toISOString().split("T")[0];
-    const issueTime = new Date(invoice.createdAt).toISOString().split("T")[1].substring(0, 8);
+    const issueDate = toDateISO(invoice.createdAt || new Date());
+    const issueTime = new Date(invoice.createdAt || new Date()).toISOString().split("T")[1].substring(0, 8);
     const uuid = invoice.zatcaUuid || crypto.randomUUID();
 
     const xml = generateZatcaXml({
@@ -539,8 +579,8 @@ zatcaRouter.post("/zatca/invoice/:id/submit", requirePermission("finance:create"
 
     await rawExecute(
       `UPDATE invoices SET "zatcaUuid" = $1::uuid, "zatcaHash" = $2, "zatcaStatus" = $3, "zatcaQrCode" = $4
-       WHERE id = $5`,
-      [uuid, hash, submissionStatus, qrCode, Number(id)]
+       WHERE id = $5 AND "companyId" = $6 AND "deletedAt" IS NULL`,
+      [uuid, hash, submissionStatus, qrCode, id, scope.companyId]
     );
 
     const [logRow] = await rawQuery<any>(
@@ -549,7 +589,7 @@ zatcaRouter.post("/zatca/invoice/:id/submit", requirePermission("finance:create"
          status, environment, "requestPayload", "responsePayload", "submittedAt", "submittedBy")
        VALUES ($1,'invoice',$2,$3,$4::uuid,$5,$6,$7,$8,$9,NOW(),$10)
        RETURNING id`,
-      [scope.companyId, Number(id), invoice.ref, uuid, hash,
+      [scope.companyId, id, invoice.ref, uuid, hash,
         submissionStatus, settings.environment,
         xml.substring(0, 5000),
         JSON.stringify({ clearanceStatus: simulatedSuccess ? "CLEARED" : "REPORTED", uuid, hash }),
@@ -573,11 +613,11 @@ zatcaRouter.post("/zatca/invoice/:id/submit", requirePermission("finance:create"
 // ─────────────────────────────────────────────────────────────────────────────
 // Simulate ZATCA submission for expense
 // ─────────────────────────────────────────────────────────────────────────────
-zatcaRouter.post("/zatca/expense/:id/submit", requirePermission("finance:create"), async (req, res) => {
+zatcaRouter.post("/zatca/expense/:id/submit", authorize({ feature: "finance.zatca", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
-    const { id } = req.params;
+    const id = parseId(req.params.id, "id");
 
     const [settings] = await rawQuery<any>(
       `SELECT * FROM zatca_settings WHERE "companyId" = $1`,
@@ -589,8 +629,12 @@ zatcaRouter.post("/zatca/expense/:id/submit", requirePermission("finance:create"
     }
 
     const [expense] = await rawQuery<any>(
-      `SELECT * FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND type = 'expense' AND "deletedAt" IS NULL`,
-      [Number(id), scope.companyId]
+      `SELECT je.*, COALESCE(SUM(jl.debit), 0) AS amount
+       FROM journal_entries je
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
+       WHERE je.id = $1 AND je."companyId" = $2 AND je.type = 'expense' AND je."deletedAt" IS NULL
+       GROUP BY je.id`,
+      [id, scope.companyId]
     );
 
     if (!expense) {
@@ -601,7 +645,7 @@ zatcaRouter.post("/zatca/expense/:id/submit", requirePermission("finance:create"
       throw new ValidationError("المصروف غير مربوط بالهيئة");
     }
 
-    const issueDate = new Date(expense.createdAt).toISOString().split("T")[0];
+    const issueDate = toDateISO(expense.createdAt);
     const uuid = expense.zatcaUuid || crypto.randomUUID();
 
     const sellerName = settings.organizationName || "المنشأة";
@@ -623,8 +667,8 @@ zatcaRouter.post("/zatca/expense/:id/submit", requirePermission("finance:create"
 
     await rawExecute(
       `UPDATE journal_entries SET "zatcaUuid" = $1::uuid, "zatcaHash" = $2, "zatcaStatus" = $3, "zatcaQrCode" = $4
-       WHERE id = $5`,
-      [uuid, hash, submissionStatus, qrCode, Number(id)]
+       WHERE id = $5 AND "companyId" = $6 AND "deletedAt" IS NULL`,
+      [uuid, hash, submissionStatus, qrCode, id, scope.companyId]
     );
 
     await rawQuery<any>(
@@ -633,7 +677,7 @@ zatcaRouter.post("/zatca/expense/:id/submit", requirePermission("finance:create"
          status, environment, "submittedAt", "submittedBy")
        VALUES ($1,'expense',$2,$3,$4::uuid,$5,$6,$7,NOW(),$8)
        RETURNING id`,
-      [scope.companyId, Number(id), expense.ref || `EXP-${expense.id}`, uuid, hash,
+      [scope.companyId, id, expense.ref || `EXP-${expense.id}`, uuid, hash,
         submissionStatus, settings.environment, scope.activeAssignmentId]
     );
 
@@ -649,12 +693,13 @@ zatcaRouter.post("/zatca/expense/:id/submit", requirePermission("finance:create"
 // ─────────────────────────────────────────────────────────────────────────────
 // ZATCA submission log list
 // ─────────────────────────────────────────────────────────────────────────────
-zatcaRouter.get("/zatca/submissions", requirePermission("finance:read"), async (req, res) => {
+zatcaRouter.get("/zatca/submissions", authorize({ feature: "finance.zatca", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
     const { page = "1", limit: lim = "20", status = "" } = req.query as any;
-    const offset = (Math.max(Number(page), 1) - 1) * Number(lim);
+    const safeLim = Math.min(Number(lim) || 50, 500);
+    const offset = (Math.max(Number(page) || 1, 1) - 1) * safeLim;
 
     let whereExtra = "";
     const params: any[] = [scope.companyId];
@@ -663,7 +708,7 @@ zatcaRouter.get("/zatca/submissions", requirePermission("finance:read"), async (
       whereExtra = ` AND l.status = $${params.length}`;
     }
 
-    params.push(Number(lim));
+    params.push(safeLim);
     const limitIdx = params.length;
     params.push(offset);
     const offsetIdx = params.length;
@@ -715,23 +760,23 @@ zatcaRouter.get("/zatca/submissions", requirePermission("finance:read"), async (
 // ─────────────────────────────────────────────────────────────────────────────
 // Update invoice ZATCA fields (isTaxLinked, invoiceTypeCode, taxCategoryCode, exemptionReason)
 // ─────────────────────────────────────────────────────────────────────────────
-zatcaRouter.patch("/zatca/invoice/:id", requirePermission("finance:update"), async (req, res) => {
+zatcaRouter.patch("/zatca/invoice/:id", authorize({ feature: "finance.zatca", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
-    const { id } = req.params;
-    const { isTaxLinked, invoiceTypeCode, taxCategoryCode, exemptionReason } = req.body as any;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(zatcaInvoicePatchSchema.safeParse(req.body ?? {}));
 
     const sets: string[] = [];
     const params: any[] = [];
     let idx = 1;
-    if (isTaxLinked !== undefined) { sets.push(`"isTaxLinked" = $${idx++}`); params.push(isTaxLinked); }
-    if (invoiceTypeCode !== undefined) { sets.push(`"invoiceTypeCode" = $${idx++}`); params.push(invoiceTypeCode); }
-    if (taxCategoryCode !== undefined) { sets.push(`"taxCategoryCode" = $${idx++}`); params.push(taxCategoryCode); }
-    if (exemptionReason !== undefined) { sets.push(`"exemptionReason" = $${idx++}`); params.push(exemptionReason); }
+    if (b.isTaxLinked !== undefined) { sets.push(`"isTaxLinked" = $${idx++}`); params.push(b.isTaxLinked); }
+    if (b.invoiceTypeCode !== undefined) { sets.push(`"invoiceTypeCode" = $${idx++}`); params.push(b.invoiceTypeCode); }
+    if (b.taxCategoryCode !== undefined) { sets.push(`"taxCategoryCode" = $${idx++}`); params.push(b.taxCategoryCode); }
+    if (b.exemptionReason !== undefined) { sets.push(`"exemptionReason" = $${idx++}`); params.push(b.exemptionReason); }
     if (sets.length === 0) { throw new ValidationError("لا توجد بيانات للتحديث"); return; }
 
-    params.push(Number(id), scope.companyId);
+    params.push(id, scope.companyId);
     const [row] = await rawQuery<any>(
       `UPDATE invoices SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND "deletedAt" IS NULL RETURNING id, "isTaxLinked", "invoiceTypeCode", "taxCategoryCode", "exemptionReason", "zatcaStatus"`,
       params
@@ -746,23 +791,23 @@ zatcaRouter.patch("/zatca/invoice/:id", requirePermission("finance:update"), asy
 // ─────────────────────────────────────────────────────────────────────────────
 // Update expense ZATCA fields
 // ─────────────────────────────────────────────────────────────────────────────
-zatcaRouter.patch("/zatca/expense/:id", requirePermission("finance:update"), async (req, res) => {
+zatcaRouter.patch("/zatca/expense/:id", authorize({ feature: "finance.zatca", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
-    const { id } = req.params;
-    const { isTaxLinked, invoiceTypeCode, taxCategoryCode, exemptionReason } = req.body as any;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(zatcaExpensePatchSchema.safeParse(req.body ?? {}));
 
     const sets: string[] = [];
     const params: any[] = [];
     let idx = 1;
-    if (isTaxLinked !== undefined) { sets.push(`"isTaxLinked" = $${idx++}`); params.push(isTaxLinked); }
-    if (invoiceTypeCode !== undefined) { sets.push(`"invoiceTypeCode" = $${idx++}`); params.push(invoiceTypeCode); }
-    if (taxCategoryCode !== undefined) { sets.push(`"taxCategoryCode" = $${idx++}`); params.push(taxCategoryCode); }
-    if (exemptionReason !== undefined) { sets.push(`"exemptionReason" = $${idx++}`); params.push(exemptionReason); }
+    if (b.isTaxLinked !== undefined) { sets.push(`"isTaxLinked" = $${idx++}`); params.push(b.isTaxLinked); }
+    if (b.invoiceTypeCode !== undefined) { sets.push(`"invoiceTypeCode" = $${idx++}`); params.push(b.invoiceTypeCode); }
+    if (b.taxCategoryCode !== undefined) { sets.push(`"taxCategoryCode" = $${idx++}`); params.push(b.taxCategoryCode); }
+    if (b.exemptionReason !== undefined) { sets.push(`"exemptionReason" = $${idx++}`); params.push(b.exemptionReason); }
     if (sets.length === 0) { throw new ValidationError("لا توجد بيانات للتحديث"); return; }
 
-    params.push(Number(id), scope.companyId);
+    params.push(id, scope.companyId);
     const [row] = await rawQuery<any>(
       `UPDATE journal_entries SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND type = 'expense' AND "deletedAt" IS NULL RETURNING id, "isTaxLinked", "invoiceTypeCode", "taxCategoryCode", "exemptionReason", "zatcaStatus"`,
       params
