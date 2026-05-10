@@ -1,20 +1,36 @@
 /**
  * autoMigrate — translates legacy flat permissions into the new layered
- * RBAC v2 model on first boot (and re-runs idempotently).
+ * RBAC v2 model on first boot, then no-ops thereafter.
  *
  * Mapping rules:
  *   • Each legacy `<module>:<action>` permission becomes a v2 grant on
  *     the corresponding feature with `scope` derived from role level:
- *       - owner / general_manager → scope = "company" (or "all" for owner)
+ *       - owner / general_manager → scope = "all" / "company"
  *       - branch_manager          → scope = "branch"
  *       - department/team manager → scope = "department"
  *       - employee                → scope = "self"
  *   • `module:*` permissions become wildcard feature grants.
+ *   • Default scope is clamped to the catalog's availableScopes for
+ *     each feature, so we never emit an invalid grant.
  *   • Self-service features (FEATURE_CATALOG[].selfService) are
  *     guaranteed for every employee role.
  *
- * Runs once per company on boot. Subsequent runs are no-ops unless the
- * legacy tables grow new permissions (idempotent INSERTs).
+ * IMPORTANT — first-run-only semantic:
+ *   Both `rbac_roles` and `rbac_role_grants` upserts use
+ *   `ON CONFLICT DO NOTHING` (since PR #230). Once a row exists, the
+ *   admin owns it: subsequent boots do not overwrite custom labels,
+ *   levels, scope changes, action additions, or conditions. New
+ *   companies still get the full mapping on their first boot; new
+ *   legacy permissions added later still get propagated as new rows
+ *   (existing rows untouched).
+ *
+ *   If you ever need to force-resync legacy → v2 (e.g. after the
+ *   default mapping changes), drop the per-role grants and reboot:
+ *
+ *     DELETE FROM rbac_role_grants WHERE role_id IN
+ *       (SELECT id FROM rbac_roles WHERE "companyId" = $1 AND is_system);
+ *
+ *   Then auto-migrate fills them back in.
  */
 
 import { rawQuery, rawExecute, withTransaction } from "../rawdb.js";
@@ -186,15 +202,25 @@ async function syncCompany(companyId: number): Promise<CompanySync> {
       const color = ROLE_COLORS[key] || "#3b82f6";
       const isSystem = key in ROLE_LABELS;
 
-      const upsert = await client.query<{ id: number }>(
+      // Idempotent FIRST-RUN-ONLY semantic: once a role exists, the
+      // admin owns it. ON CONFLICT DO NOTHING prevents subsequent boots
+      // from clobbering admin customizations (custom label, level
+      // changes, color, is_active toggle).
+      // RETURNING id only fires on the actual insert path, so we read
+      // the id back via SELECT to support both first-time and repeat
+      // boots.
+      await client.query(
         `INSERT INTO rbac_roles ("companyId", role_key, label_ar, level, color, is_system)
          VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT ("companyId", role_key)
-         DO UPDATE SET label_ar = EXCLUDED.label_ar, level = EXCLUDED.level, "updatedAt" = NOW()
-         RETURNING id`,
+         ON CONFLICT ("companyId", role_key) DO NOTHING`,
         [companyId, key, labelAr, level, color, isSystem]
       );
-      const roleId = upsert.rows[0].id;
+      const idRow = await client.query<{ id: number }>(
+        `SELECT id FROM rbac_roles WHERE "companyId" = $1 AND role_key = $2`,
+        [companyId, key]
+      );
+      if (!idRow.rows[0]) continue;
+      const roleId = idRow.rows[0].id;
       roleIdByKey[key] = roleId;
       out.rolesCreated++;
     }
@@ -246,11 +272,13 @@ async function syncCompany(companyId: number): Promise<CompanySync> {
             .sort((a, b) => (SCOPE_RANK[b] || 0) - (SCOPE_RANK[a] || 0))[0];
           scope = fallback || (featureDef.availableScopes[0] as Scope);
         }
+        // Idempotent FIRST-RUN-ONLY: once a grant exists, the admin
+        // owns it. Subsequent boots no-op so admin tweaks (added
+        // actions, scope changes, conditions) survive restarts.
         await client.query(
           `INSERT INTO rbac_role_grants (role_id, feature_key, actions, scope)
            VALUES ($1, $2, $3, $4)
-           ON CONFLICT (role_id, feature_key)
-           DO UPDATE SET actions = EXCLUDED.actions, scope = EXCLUDED.scope, "updatedAt" = NOW()`,
+           ON CONFLICT (role_id, feature_key) DO NOTHING`,
           [roleId, featureKey, actionsArray, scope]
         );
         out.grantsCreated++;
