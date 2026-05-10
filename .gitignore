@@ -61,6 +61,7 @@ audit/all-routes.txt
 audit/api-smoke-results.json
 audit/report/*.csv
 audit/report/*.txt
+audit/report/*.json
 # Keep these tracked: audit/*.mjs scripts and the README
 
 # Stale FE inventory files (regenerable)

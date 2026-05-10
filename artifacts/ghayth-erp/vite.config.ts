@@ -57,6 +57,56 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    // Manual chunk splitting — keeps the initial JS payload small by pulling
+    // big shared libraries into separate, long-cacheable chunks. Route-level
+    // splitting still happens via React.lazy in src/App.tsx; this layer
+    // handles vendor code only.
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          // React core — stays warm for the entire SPA lifetime, isolate it
+          // so router/query updates don't bust this cache entry.
+          if (
+            id.includes("/react/") ||
+            id.includes("/react-dom/") ||
+            id.includes("/scheduler/")
+          ) {
+            return "vendor-react";
+          }
+          // Data layer — TanStack Query is on every page.
+          if (id.includes("@tanstack/react-query")) return "vendor-query";
+          // Routing — react-router-dom + history.
+          if (id.includes("react-router") || id.includes("/history/")) {
+            return "vendor-router";
+          }
+          // Radix UI primitives — large surface, ship as one chunk so the
+          // browser fetches it once on first interaction.
+          if (id.includes("@radix-ui/")) return "vendor-radix";
+          // Charts — heavy, lazy-rendered. Split out so dashboards don't
+          // pay the cost on first paint of HR/Finance lists.
+          if (id.includes("recharts") || id.includes("d3-")) return "vendor-charts";
+          // Form / validation stack.
+          if (
+            id.includes("react-hook-form") ||
+            id.includes("@hookform/") ||
+            id.includes("/zod/")
+          ) {
+            return "vendor-forms";
+          }
+          // Date / i18n.
+          if (id.includes("date-fns") || id.includes("dayjs")) {
+            return "vendor-dates";
+          }
+          // Everything else from node_modules drops into a single fallback
+          // vendor chunk so the entry bundle stays lean.
+          return "vendor-misc";
+        },
+      },
+    },
+    // Warn-only ceiling for the entry bundle. Anything bigger than ~500 KB
+    // gzip belongs in a manual chunk above.
+    chunkSizeWarningLimit: 600,
   },
   server: {
     port,
