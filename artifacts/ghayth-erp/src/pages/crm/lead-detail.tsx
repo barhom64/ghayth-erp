@@ -165,8 +165,8 @@ export default function LeadDetailPage() {
   ];
 
   const metaItems = [
-    lead?.phone && { icon: Phone, label: lead.phone },
-    lead?.email && { icon: Mail, label: lead.email },
+    lead?.contactPhone && { icon: Phone, label: lead.contactPhone },
+    lead?.contactEmail && { icon: Mail, label: lead.contactEmail },
     lead?.clientName && { icon: Building2, label: lead.clientName },
   ].filter(Boolean) as Array<{ icon: any; label: string }>;
 
@@ -203,14 +203,14 @@ export default function LeadDetailPage() {
                 method: "POST",
                 body: JSON.stringify({
                   name: lead?.contactName || lead?.title || "",
-                  email: lead?.email || "",
-                  phone: lead?.phone || "",
+                  email: lead?.contactEmail || "",
+                  phone: lead?.contactPhone || "",
                   company: lead?.clientName || "",
                 }),
               });
-              await apiFetch(`/crm/opportunities/${id}`, {
-                method: "PATCH",
-                body: JSON.stringify({ status: "converted" }),
+              await apiFetch(`/crm/opportunities/${id}/convert`, {
+                method: "POST",
+                body: JSON.stringify({ notes: "تم التحويل إلى عميل" }),
               });
               queryClient.invalidateQueries({ queryKey: ["crm-lead", id] });
               toast({ title: "تم تحويل العميل المحتمل إلى عميل بنجاح" });
