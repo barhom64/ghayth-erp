@@ -10,6 +10,26 @@ import { handleRouteError, ValidationError, NotFoundError, ConflictError,
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 
+// Local row shape for cost_centers (not in @workspace/db schema yet).
+interface CostCenterRow {
+  id: number;
+  companyId: number;
+  code?: string | null;
+  name: string;
+  type: string;
+  parentId?: number | null;
+  relatedEntityType?: string | null;
+  relatedEntityId?: number | null;
+  allocatedAmount?: number | string | null;
+  status: string;
+  createdAt: string;
+  updatedAt?: string | null;
+}
+
+interface CostCenterListRow extends CostCenterRow {
+  relatedEntityName?: string | null;
+}
+
 const router = Router();
 
 // ============================================================================
@@ -38,7 +58,7 @@ const updateCostCenterSchema = z.object({
 router.get("/cost-centers", authorize({ feature: "finance.cost_centers", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<CostCenterListRow>(
       `SELECT cc.*,
               CASE WHEN cc."relatedEntityType" = 'project' THEN (SELECT name FROM projects WHERE id = cc."relatedEntityId" AND "companyId" = $1 AND "deletedAt" IS NULL LIMIT 1)
                    WHEN cc."relatedEntityType" = 'vehicle' THEN (SELECT "plateNumber" FROM fleet_vehicles WHERE id = cc."relatedEntityId" AND "companyId" = $1 AND "deletedAt" IS NULL LIMIT 1)
@@ -61,7 +81,7 @@ router.get("/cost-centers/:id", authorize({ feature: "finance.cost_centers", act
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<CostCenterRow>(
       `SELECT * FROM cost_centers WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
@@ -77,14 +97,14 @@ router.post("/cost-centers", authorize({ feature: "finance.cost_centers", action
     const { code, name, type, parentId, relatedEntityType, relatedEntityId, allocatedAmount } = parsed;
 
     const [existing] = code
-      ? await rawQuery<any>(
+      ? await rawQuery<{ id: number }>(
           `SELECT id FROM cost_centers WHERE "companyId" = $1 AND code = $2 AND status != 'deleted'`,
           [scope.companyId, code]
         )
       : [];
     if (existing) throw new ValidationError("رمز مركز التكلفة مستخدم بالفعل", { field: "code" });
 
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<CostCenterRow>(
       `INSERT INTO cost_centers ("companyId", code, name, type, "parentId", "relatedEntityType", "relatedEntityId", "allocatedAmount")
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        ON CONFLICT ("companyId", code) DO NOTHING
@@ -103,7 +123,7 @@ router.patch("/cost-centers/:id", authorize({ feature: "finance.cost_centers", a
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<CostCenterRow>(
       `SELECT * FROM cost_centers WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
@@ -112,7 +132,7 @@ router.patch("/cost-centers/:id", authorize({ feature: "finance.cost_centers", a
     const parsed = zodParse(updateCostCenterSchema.safeParse(req.body));
     const { name, code, type, parentId, allocatedAmount, status } = parsed;
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     let idx = 1;
 
     if (name !== undefined) { sets.push(`name = $${idx++}`); params.push(name); }
@@ -126,7 +146,7 @@ router.patch("/cost-centers/:id", authorize({ feature: "finance.cost_centers", a
     if (sets.length <= 1) throw new ValidationError("لا توجد بيانات للتحديث");
 
     params.push(id, scope.companyId);
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<CostCenterRow>(
       `UPDATE cost_centers SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
       params
     );
