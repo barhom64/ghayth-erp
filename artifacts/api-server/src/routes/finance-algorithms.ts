@@ -1658,6 +1658,8 @@ financeAlgorithmsRouter.get("/entity-financial-profile", authorize({ feature: "f
       project: 'jl."projectId"',
       contract: 'jl."contractId"',
       department: 'jl."departmentId"',
+      client: 'jl."clientId"',
+      supplier: 'jl."supplierId"',
     };
     const safeCol = safeColumns[entityType];
 
