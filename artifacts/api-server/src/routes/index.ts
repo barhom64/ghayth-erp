@@ -73,6 +73,7 @@ import clientPortalRouter from "./clientPortal.js";
 import publicDataRouter from "./publicData.js";
 import careersPortalRouter from "./careersPortal.js";
 import { exportRouter } from "./export.js";
+import importRouter from "./import.js";
 import { scheduledReportsRouter } from "./scheduled-reports.js";
 import { govIntegrationsRouter } from "./gov-integrations.js";
 import pdplRouter from "./pdpl.js";
@@ -350,6 +351,7 @@ router.use("/umrah", requireModule("operations"), requireGuards("financial"), um
 router.use("/umrah", requireModule("operations"), requireGuards("financial"), umrahEntitiesRouter);
 router.use("/operations-center", requireModule("operations"), requireMinLevel(40), operationsCenterRouter);
 router.use("/export", requireMinLevel(30), exportRouter);
+router.use("/import", requireMinLevel(50), importRouter);
 router.use("/scheduled-reports", requireMinLevel(50), scheduledReportsRouter);
 router.use("/notification-engine", requireModule("notifications"), notificationEngineRouter);
 router.use("/gov-integrations", govIntegrationsRouter);
