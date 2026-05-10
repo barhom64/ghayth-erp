@@ -891,15 +891,15 @@ router.get("/reports/branch-performance", authorize({ feature: "bi", action: "li
 
       const [ticketsRow] = await rawQuery<any>(
         `SELECT COUNT(*) AS cnt FROM support_tickets
-         WHERE "companyId" = $1 AND status = 'open'`,
-        [cid]
+         WHERE "companyId" = $1 AND "branchId" = $2 AND status = 'open'`,
+        [cid, branch.id]
       ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
       const [satisfactionRow] = await rawQuery<any>(
         `SELECT COALESCE(AVG(rating), 0) AS avg FROM support_tickets
-         WHERE "companyId" = $1 AND rating IS NOT NULL
+         WHERE "companyId" = $1 AND "branchId" = $4 AND rating IS NOT NULL
            AND DATE("createdAt") BETWEEN $2::date AND $3::date`,
-        [cid, dateFrom, dateTo]
+        [cid, dateFrom, dateTo, branch.id]
       ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
       const rev = Number(revenue?.revenue ?? 0);

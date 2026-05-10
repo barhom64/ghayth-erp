@@ -2331,9 +2331,9 @@ router.get("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "view
        WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL ORDER BY pl.id LIMIT 1000`,
       [id, scope.companyId]
     );
-    const totalBasic = lines.reduce((s: number, l: any) => s + Number(l.basicSalary || 0), 0);
-    const totalAllowances = lines.reduce((s: number, l: any) => s + Number(l.allowances || 0), 0);
-    const totalDeductions = lines.reduce((s: number, l: any) => s + Number(l.deductions || 0), 0);
+    const totalBasic = lines.reduce((s: number, l: any) => s + Number(l.basic || 0), 0);
+    const totalAllowances = lines.reduce((s: number, l: any) => s + Number(l.housingAllowance || 0) + Number(l.transportAllowance || 0), 0);
+    const totalDeductions = lines.reduce((s: number, l: any) => s + Number(l.gosi || 0) + Number(l.lateDeduction || 0) + Number(l.absenceDeduction || 0) + Number(l.violationDeduction || 0) + Number(l.loanDeduction || 0), 0);
     const sanitizedLines = canSeeSalary ? lines : lines.map((l: any) => ({
       id: l.id, runId: l.runId, assignmentId: l.assignmentId, employeeName: l.employeeName,
     }));
@@ -2810,7 +2810,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
   }
 });
 
-router.post("/payroll/:id/approve", authorize({ feature: "hr.payroll.runs", action: "approve", resource: { table: "payroll_runs", idParam: "id" } }), async (req, res) => {
+router.patch("/payroll/:id/approve", authorize({ feature: "hr.payroll.runs", action: "approve", resource: { table: "payroll_runs", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     if (!PAYROLL_ROLES.includes(scope.role)) {

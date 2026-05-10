@@ -35,7 +35,7 @@ export function CompaniesTab() {
         </div>
       ),
     },
-    { key: "taxNumber", header: "الرقم الضريبي", searchable: true, render: (r: any) => <span className="text-gray-500">{r.taxNumber || "-"}</span> },
+    { key: "taxNumber", header: "الرقم الضريبي", searchable: true, render: (r: any) => <span className="text-gray-500">{r.vatNumber || "-"}</span> },
     { key: "crNumber", header: "السجل التجاري", searchable: true, render: (r: any) => <span className="text-gray-500">{r.crNumber || "-"}</span> },
     {
       key: "actions",
@@ -72,7 +72,7 @@ export function CompaniesTab() {
     setForm({
       name: item.name || "",
       nameEn: item.nameEn || "",
-      taxNumber: item.taxNumber || "",
+      taxNumber: item.vatNumber || "",
       crNumber: item.crNumber || "",
     });
     setEditingId(item.id);

@@ -145,22 +145,22 @@ function ContractDetailPanel({ contract }: { contract: any }) {
             <p className="font-medium">{FREQ_LABELS[c.paymentFrequency] || c.paymentFrequency}</p>
           </div>
         )}
-        {c.annualRent && (
+        {c.yearlyRent && (
           <div className="bg-white border rounded-lg p-3">
             <p className="text-[10px] text-gray-400 mb-0.5">الإيجار السنوي</p>
-            <p className="font-bold text-emerald-700">{formatCurrency(c.annualRent)}</p>
+            <p className="font-bold text-emerald-700">{formatCurrency(c.yearlyRent)}</p>
           </div>
         )}
-        {c.deposit && Number(c.deposit) > 0 && (
+        {c.depositAmount && Number(c.depositAmount) > 0 && (
           <div className="bg-white border rounded-lg p-3">
             <p className="text-[10px] text-gray-400 mb-0.5">التأمين</p>
-            <p className="font-medium">{formatCurrency(c.deposit)}</p>
+            <p className="font-medium">{formatCurrency(c.depositAmount)}</p>
           </div>
         )}
-        {c.latePenaltyRate && Number(c.latePenaltyRate) > 0 && (
+        {c.latePenaltyValue && Number(c.latePenaltyValue) > 0 && (
           <div className="bg-white border rounded-lg p-3">
             <p className="text-[10px] text-gray-400 mb-0.5">غرامة التأخير</p>
-            <p className="font-medium text-red-600">{c.latePenaltyRate}%</p>
+            <p className="font-medium text-red-600">{c.latePenaltyValue}%</p>
           </div>
         )}
         {c.gracePeriodDays && Number(c.gracePeriodDays) > 0 && (
@@ -208,11 +208,11 @@ function ContractDetailPanel({ contract }: { contract: any }) {
             <span className="text-xs text-gray-500">تأمين مطلوب</span>
           </div>
         )}
-        {c.earlyTerminationPenalty && Number(c.earlyTerminationPenalty) > 0 && (
+        {c.earlyTerminationFee && Number(c.earlyTerminationFee) > 0 && (
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 text-red-400" />
             <span className="text-xs text-gray-500">غرامة إنهاء مبكر:</span>
-            <span className="text-xs font-bold text-red-600">{formatCurrency(c.earlyTerminationPenalty)}</span>
+            <span className="text-xs font-bold text-red-600">{formatCurrency(c.earlyTerminationFee)}</span>
           </div>
         )}
       </div>
@@ -315,7 +315,7 @@ export default function PropertiesContracts() {
               { key: "startDate", label: "من" },
               { key: "endDate", label: "إلى" },
               { key: "monthlyRent", label: "الإيجار الشهري" },
-              { key: "annualRent", label: "الإيجار السنوي" },
+              { key: "yearlyRent", label: "الإيجار السنوي" },
               { key: "paymentFrequency", label: "دورة السداد" },
               { key: "status", label: "الحالة" },
             ], "عقود_الإيجار")}
