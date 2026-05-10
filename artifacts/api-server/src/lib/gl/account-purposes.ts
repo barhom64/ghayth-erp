@@ -76,7 +76,7 @@ export interface AccountResolution {
  * table on miss.
  */
 const FALLBACK_CODE: Record<AccountPurpose, string> = {
-  fx_revaluation_ar:        "1300",
+  fx_revaluation_ar:        "1130",
   fx_revaluation_ap:        "2100",
   fx_revaluation_gain:      "4900",
   fx_revaluation_loss:      "5900",
