@@ -27,6 +27,24 @@ export { buildWpsFile, isSaudiIban } from "./wps/builder.js";
 export type { ParsedAckLine, ParsedAckFile } from "./wps/parser.js";
 export { parseAckFile } from "./wps/parser.js";
 
+// WPS run orchestrator (week 5)
+export type {
+  CreateWpsRunInput,
+  BuildAndPersistInput,
+  BuildAndPersistOutcome,
+  AckOutcome,
+  ApplyAckOutcome,
+} from "./wps/run.js";
+export {
+  assertWpsTransition,
+  deriveHeaderStatus,
+  createWpsRun,
+  buildAndPersist,
+  submitWpsRun,
+  applyAck,
+  IllegalWpsTransitionError,
+} from "./wps/run.js";
+
 export { classifyNitaqat } from "./nitaqat.js";
 
 export {
