@@ -30,3 +30,20 @@ export {
   expireDueLots,
   lotExpiryScanCron,
 } from "./lots.js";
+
+export type {
+  VarianceInput,
+  VarianceLine,
+  ScheduleCycleCountInput,
+} from "./cycle-count.js";
+export {
+  computeVarianceLines,
+  summariseVariance,
+  nextCycleCountStatus,
+  assertApprovalEligible,
+  IllegalCycleCountTransitionError,
+  scheduleCycleCount,
+  recordCount,
+  submitForReview,
+  approveCycleCount,
+} from "./cycle-count.js";
