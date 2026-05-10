@@ -130,7 +130,7 @@ export default function VersionUploadPage() {
               <input ref={inputRef} type="file" className="hidden" onChange={(e) => { if (e.target.files?.[0]) setFile(e.target.files[0]); e.target.value = ""; }} />
             </div>
             <TextField label="ملاحظات (اختياري)" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} placeholder="وصف التغييرات في هذا الإصدار" />
-            <Button onClick={handleUploadVersion} disabled={!file || uploading} className="gap-2">
+            <Button onClick={handleUploadVersion} disabled={!file || uploading} className="gap-2" rateLimitAware>
               <Save className="h-4 w-4" /> {uploading ? "جاري الرفع..." : "رفع الإصدار"}
             </Button>
           </div>

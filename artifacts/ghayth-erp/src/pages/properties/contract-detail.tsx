@@ -231,11 +231,11 @@ export default function ContractDetailPage() {
 
   const actions = (
     <div className="flex items-center gap-2">
-      <Button size="sm" onClick={handleRenew} className="gap-1">
+      <Button size="sm" onClick={handleRenew} className="gap-1" rateLimitAware>
         <RotateCcw className="h-4 w-4" />
         تجديد
       </Button>
-      <Button size="sm" variant="outline" onClick={handleTerminate} className="gap-1">
+      <Button size="sm" variant="outline" onClick={handleTerminate} className="gap-1" rateLimitAware>
         <XCircle className="h-4 w-4" />
         إنهاء
       </Button>
