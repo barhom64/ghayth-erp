@@ -22,6 +22,7 @@ import { decryptSecret } from "./secrets.js";
 import { processDueRecurringJournals } from "../routes/finance-recurring.js";
 import { scanObligations } from "./obligationsEngine.js";
 import { runAutoDetectionAllCompanies } from "./autoViolationEngine.js";
+import { UMRAH_CRON_JOBS } from "./umrahCronJobs.js";
 
 async function getSystemTimezone(): Promise<string> {
   try {
@@ -2870,6 +2871,8 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "monthly_bad_debt_reminder", description: "تذكير CFO باحتساب مخصص الديون المشكوك فيها", schedule: "0 9 1 * *", handler: monthlyBadDebtReminder },
   { name: "monthly_fx_revaluation_reminder", description: "تذكير CFO بترحيل إعادة تقييم العملات", schedule: "0 9 28 * *", handler: monthlyFxRevaluationReminder },
   { name: "daily_budget_variance_alert", description: "تنبيه تجاوز الميزانية اليومي", schedule: "0 10 * * *", handler: dailyBudgetVarianceAlert },
+  // Umrah workflow — C27–C32 from §15 of the spec (registry lives in umrahCronJobs.ts)
+  ...UMRAH_CRON_JOBS,
 ];
 
 export async function seedCronJobs(): Promise<void> {
