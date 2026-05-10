@@ -48,3 +48,40 @@ export {
   iqamaDailyAlertCron,
   formatAlertMessage,
 } from "./iqama-cron.js";
+
+// Mudad REST client (week 3)
+export type { MudadEnvironment } from "./mudad/endpoints.js";
+export {
+  mudadBaseUrl,
+  buildMudadUrl,
+  MUDAD_TOKEN_PATH,
+  MUDAD_SALARY_PATH,
+  MUDAD_LEAVE_UNPAID_PATH,
+  MUDAD_EXIT_REENTRY_PATH,
+  MUDAD_TERMINATION_PATH,
+  MUDAD_STATUS_PATH,
+} from "./mudad/endpoints.js";
+export type { MudadCredentials, CachedToken } from "./mudad/auth.js";
+export {
+  getMudadAccessToken,
+  requestMudadToken,
+  parseTokenResponse,
+  bearerHeader,
+  clearMudadTokenCache,
+} from "./mudad/auth.js";
+export type {
+  SalarySubmission,
+  LeaveUnpaidSubmission,
+  TerminationSubmission,
+  MudadResponse,
+  MudadClientCallOpts,
+} from "./mudad/client.js";
+export {
+  submitSalary,
+  submitLeaveUnpaid,
+  submitExitReentry,
+  submitTermination,
+  fetchStatus,
+  parseMudadResponse,
+  MudadTransportError,
+} from "./mudad/client.js";
