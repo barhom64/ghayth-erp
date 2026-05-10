@@ -25,13 +25,6 @@ export function ApprovalWorkflowsTab() {
     { value: "general_request", label: "الطلبات العامة" },
   ];
 
-  const approverRoles = [
-    { value: "manager", label: "المدير المباشر" },
-    { value: "hr", label: "الموارد البشرية" },
-    { value: "finance", label: "المالية" },
-    { value: "owner", label: "المالك" },
-    { value: "director", label: "المدير العام" },
-  ];
 
   const handleSubmit = async () => {
     try {

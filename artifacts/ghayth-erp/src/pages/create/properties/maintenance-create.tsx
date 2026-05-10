@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -7,7 +6,6 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
-import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
 import { TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
@@ -24,7 +22,6 @@ export default function PropertyMaintenanceCreate() {
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("property_maintenance_create", {
     unitId: "", category: "", description: "", priority: "medium", cost: "",
   });
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -109,9 +106,8 @@ export default function PropertyMaintenanceCreate() {
         <TextAreaField label="الوصف" required value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} rows={3} error={fieldErrors.description} className="md:col-span-2" />
         <NumberField label="التكلفة" value={form.cost} onChange={(v) => setForm((f) => ({ ...f, cost: v }))} placeholder="0" step={0.01} min={0} error={fieldErrors.cost} />
       </div>
-      <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">
-        <Button variant="outline" onClick={() => setLocation("/properties")}>إلغاء</Button>
+        <Button variant="outline" onClick={() => setLocation("/properties/maintenance")}>إلغاء</Button>
         <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الإرسال..." : "إرسال الطلب"}
         </Button>
