@@ -769,6 +769,10 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
       action: "warehouse.movement.created",
       entity: "warehouse_movements",
       entityId: insertId,
+      movementId: insertId,
+      type: String(row?.type ?? b.type ?? ""),
+      productId: Number(row?.productId ?? b.productId),
+      qty: Number(row?.quantity ?? b.quantity),
       details: JSON.stringify({
         productId: row?.productId,
         type: row?.type,
