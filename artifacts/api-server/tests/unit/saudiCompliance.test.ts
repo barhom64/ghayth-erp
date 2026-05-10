@@ -157,10 +157,22 @@ describe("buildWpsFile — generic pipe-delimited format", () => {
     ).toThrow(/IBAN/);
   });
 
-  it("rejects per-bank formats until adapters land", () => {
+  it("dispatches per-bank formats to their adapter (NCB)", () => {
+    // After PR #246 the per-bank adapters land — `format: "ncb"`
+    // produces an NCB-shaped file (comma-delimited, halalas amounts)
+    // instead of throwing.
+    const result = buildWpsFile({ summary: SUMMARY, entries: ENTRIES, format: "ncb" });
+    expect(result.recordCount).toBe(2);
+    expect(result.totalAmount).toBe(12500);
+    // NCB header tag is "1" + comma separator (not "H" + pipe)
+    const firstLine = result.fileBytes.split(/\r?\n/)[0];
+    expect(firstLine.startsWith("1,")).toBe(true);
+  });
+
+  it("throws on an unknown bank format tag (typo guard)", () => {
     expect(() =>
-      buildWpsFile({ summary: SUMMARY, entries: ENTRIES, format: "ncb" }),
-    ).toThrow(/per-bank format/);
+      buildWpsFile({ summary: SUMMARY, entries: ENTRIES, format: "fake_bank" as any }),
+    ).toThrow(/unknown format/);
   });
 });
 
