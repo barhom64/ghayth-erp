@@ -38,10 +38,35 @@ let subscriberClient: any = null;
 let initAttempted = false;
 let healthy = false;
 
+// Defensively normalise the REDIS_URL secret (matches rateLimitStore.ts).
+// Operators copy-pasting from provider dashboards routinely include
+// surrounding artefacts that break URL parsing: leading/trailing whitespace,
+// the env-var prefix (`REDIS_URL=...`), surrounding quotes, a leading
+// `export `, or a leading `--tls -u ` from a `redis-cli` snippet. We strip
+// these so the saved value just needs to *contain* a valid redis URL.
+function normaliseRedisUrl(raw: string | undefined): string | undefined {
+  if (!raw) return raw;
+  let v = raw.trim();
+  v = v.replace(/^export\s+/i, "");
+  v = v.replace(/^REDIS_URL\s*=\s*/i, "");
+  v = v.replace(/^(?:--tls\s+)?-u\s+/i, "");
+  if (
+    (v.startsWith('"') && v.endsWith('"')) ||
+    (v.startsWith("'") && v.endsWith("'"))
+  ) {
+    v = v.slice(1, -1);
+  }
+  // Some dashboards URL-encode the surrounding quotes (%22). Strip those too.
+  v = v.replace(/^%22/, "").replace(/%22$/, "");
+  v = v.replace(/^%27/, "").replace(/%27$/, "");
+  v = v.replace(/;\s*$/, "");
+  return v.trim();
+}
+
 function getRedisUrl(): string | null {
   // Prefer the same env vars the rate-limit store uses so ops only set Redis
   // once. Order: REDIS_URL → REDIS_HOST/PORT.
-  const url = process.env.REDIS_URL;
+  const url = normaliseRedisUrl(process.env.REDIS_URL);
   if (url) return url;
   const host = process.env.REDIS_HOST;
   const port = process.env.REDIS_PORT;
