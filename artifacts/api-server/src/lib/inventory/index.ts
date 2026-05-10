@@ -47,3 +47,11 @@ export {
   submitForReview,
   approveCycleCount,
 } from "./cycle-count.js";
+
+export type { AbcInput, AbcLine, AbcThresholds, AbcRunOutcome } from "./abc-analysis.js";
+export {
+  classifyAbc,
+  runAbcAnalysis,
+  abcMonthlyClassificationCron,
+  DEFAULT_ABC_THRESHOLDS,
+} from "./abc-analysis.js";
