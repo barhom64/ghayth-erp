@@ -49,15 +49,76 @@ const AUTH_PRESENCE_RE = /\bauthMiddleware\b/;
 // mapping here so the report annotates them as "OK". This is the same kind
 // of allow-list that lintSql.mjs / lintPermissions.mjs use for known-safe
 // patterns.
+//
+// Each entry was hand-verified against the actual code on origin/main on
+// 2026-05-09. Re-run the audit after any change to one of these files to
+// confirm the design is still intact (e.g. someone didn't accidentally add
+// a route that needs a guard but inherits this allowlist).
 const INTENTIONALLY_UNGUARDED = {
+  // --- Public / anonymous surfaces ---
   "auth.ts":            "auth (login/register/refresh) — anon by definition",
   "health.ts":          "liveness probes — public",
   "publicData.ts":      "public reference data — anon by design",
   "careersPortal.ts":   "applicant flow — anon with portalLimiter",
   "clientPortal.ts":    "client-portal JWT — separate auth chain",
-  "mySpace.ts":         "self-service — owner is the user",
   "events.ts":          "SSE stream — auth happens on subscribe",
   "activityIngest.ts":  "ingest endpoint — token-authed via header",
+
+  // --- Self-service surfaces (user can only see their own data) ---
+  "mySpace.ts":         "self-service — owner is the user",
+
+  // --- Read-only dashboards ---
+  // dashboard.ts and moduleDashboards.ts use scope.companyId via
+  // buildFilter() so the user can only see aggregates for their own
+  // company. They summarise data the user can already see in modules.
+  "dashboard.ts":       "company-scoped via buildFilter(scope)",
+  "moduleDashboards.ts": "company-scoped per-module dashboards — same model as dashboard.ts",
+
+  // --- RBAC v2 self-service ---
+  // /features and /templates expose read-only catalog metadata anyone
+  // authenticated needs for the RBAC editor. JIT routes (/jit/request,
+  // /jit/my, /jit/:id/cancel) operate on the requesting user's own
+  // records. Approve/grant/revoke endpoints in the same file ARE
+  // properly guarded.
+  "rbacV2.ts":          "catalog reads + JIT self-service (own requests only) — others guarded inline",
+
+  // --- Webhook endpoints (provider-side authentication) ---
+  // WhatsApp webhook uses hub.verify_token shared secret on GET and
+  // signature header on POST. PBX endpoints come from the on-prem
+  // gateway over a private network. /push/vapid-key returns the PUBLIC
+  // key (designed to be public per RFC 8292).
+  "communications.ts":  "WhatsApp/PBX webhook auth via provider signatures; vapid-key public by design",
+
+  // --- PDPL ---
+  // /privacy-notice is anon (must be readable before login). The other
+  // routes use authMiddleware + pdplUserLimiter; data-export has an
+  // inline isOwnData / userHasPermission check too.
+  "pdpl.ts":            "privacy-notice anon; rest use authMiddleware + pdpl rate limiters",
+
+  // --- Read-only audit views (company-scoped) ---
+  // /:entityType/:entityId returns approval history for a specific
+  // record, scoped by companyId. /overrides/report has an inline
+  // allowedRoles check (already soft-guarded by the linter).
+  "approvalActions.ts": "entity-scoped audit reads + role-gated overrides report",
+
+  // --- Action center (role-gated inline) ---
+  // The root endpoint enforces ACTION_CENTER_ROLES inline.
+  "actionCenter.ts":    "managers-only — enforced inline via ACTION_CENTER_ROLES",
+
+  // --- Permissions (own data) ---
+  "permissions.ts":     "/my returns own permissions only — others guarded",
+
+  // --- Public storage ---
+  // /storage/public-objects/* is the bucket for public assets (company
+  // logos, public document templates). objectStorageService restricts
+  // to the public namespace.
+  "storage.ts":         "/public-objects/* serves public namespace only — uploads + private files guarded",
+
+  // --- index.ts router-mount file ---
+  // /settings/display returns global defaults BEFORE the authMiddleware
+  // mount (used by the login screen). /_routes is hidden in production
+  // (returns 404) and serves as a dev-only route inventory.
+  "index.ts":           "settings/display = pre-auth defaults; /_routes is dev-only (404 in prod)",
 };
 
 async function walk(dir) {
