@@ -241,12 +241,19 @@ export async function scanObligations(companyId?: number): Promise<{
     breachedCount = newlyBreached.rowCount ?? 0;
 
     for (const o of newlyBreached.rows) {
+      const daysLate = Math.max(
+        0,
+        Math.floor((Date.now() - new Date(o.dueAt).getTime()) / 86_400_000),
+      );
       await emitEvent({
         companyId: o.companyId,
         userId: 0,
         action: "system.obligation.breached",
         entity: o.entityType,
         entityId: o.entityId,
+        obligationId: o.id,
+        entityType: o.entityType,
+        daysLate,
         details: `التزام متأخر: ${o.title}`,
       });
       if (o.assignedTo) {
