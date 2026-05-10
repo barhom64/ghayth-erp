@@ -99,12 +99,9 @@ export default function LegalCasesCreate() {
               <SelectContent>
                 <SelectItem value="open">مفتوحة</SelectItem>
                 <SelectItem value="in_progress">جارية</SelectItem>
-                <SelectItem value="hearing">جلسة</SelectItem>
-                <SelectItem value="appeal">استئناف</SelectItem>
+                <SelectItem value="judgment">حكم</SelectItem>
+                <SelectItem value="execution">تنفيذ</SelectItem>
                 <SelectItem value="closed">مغلقة</SelectItem>
-                <SelectItem value="won">فوز</SelectItem>
-                <SelectItem value="lost">خسارة</SelectItem>
-                <SelectItem value="settled">تسوية</SelectItem>
               </SelectContent>
             </Select>
           </FormFieldWrapper>

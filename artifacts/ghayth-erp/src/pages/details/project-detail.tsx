@@ -39,7 +39,7 @@ const PROJECT_TABS = [
 
 type ProjectTabKey = (typeof PROJECT_TABS)[number]["key"];
 
-const statusLabels: Record<string, string> = { completed: "مكتمل", done: "مكتمل", active: "نشط", in_progress: "قيد التنفيذ", pending: "معلق", planning: "تخطيط", on_hold: "متوقف", todo: "للتنفيذ" };
+const statusLabels: Record<string, string> = { completed: "مكتمل", done: "مكتمل", active: "نشط", in_progress: "قيد التنفيذ", planning: "تخطيط", planned: "مخطط", draft: "مسودة", on_hold: "متوقف", cancelled: "ملغى", blocked: "محظور", pending: "معلق", todo: "للتنفيذ" };
 const priorityColors: Record<string, string> = { high: "bg-red-100 text-red-700", critical: "bg-red-100 text-red-700", medium: "bg-yellow-100 text-yellow-700", low: "bg-green-100 text-green-700" };
 const priorityLabels: Record<string, string> = { high: "عالية", critical: "حرجة", medium: "متوسطة", low: "منخفضة" };
 const taskStatusColors: Record<string, string> = { completed: "bg-green-100 text-green-700", done: "bg-green-100 text-green-700", active: "bg-blue-100 text-blue-700", in_progress: "bg-blue-100 text-blue-700", planning: "bg-purple-100 text-purple-700", pending: "bg-gray-100 text-gray-700", todo: "bg-gray-100 text-gray-700", on_hold: "bg-yellow-100 text-yellow-700" };

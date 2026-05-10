@@ -170,7 +170,6 @@ export default function LegalCreate() {
               <SelectContent>
                 <SelectItem value="draft">مسودة</SelectItem>
                 <SelectItem value="active">ساري</SelectItem>
-                <SelectItem value="pending">قيد المراجعة</SelectItem>
               </SelectContent>
             </Select>
           </FormFieldWrapper>

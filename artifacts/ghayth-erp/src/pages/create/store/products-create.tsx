@@ -74,7 +74,7 @@ export default function ProductsCreate() {
               <SelectContent>
                 <SelectItem value="active">نشط</SelectItem>
                 <SelectItem value="inactive">غير نشط</SelectItem>
-                <SelectItem value="out_of_stock">نفد المخزون</SelectItem>
+                <SelectItem value="draft">مسودة</SelectItem>
               </SelectContent>
             </Select>
           </FormFieldWrapper>
