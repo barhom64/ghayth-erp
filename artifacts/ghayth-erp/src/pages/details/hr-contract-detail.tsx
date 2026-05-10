@@ -10,6 +10,9 @@ import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { Edit, FileText } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
+import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityTags } from "@/components/shared/entity-tags";
 
 
 /**
@@ -100,6 +103,8 @@ export default function HrContractDetail() {
     });
     return sections;
   }, [contract, id]);
+
+  const { extraTabs, hideTabs } = useRegistryTabs("employee_contract", id ?? 0);
 
   const handleEdit = () => {
     setLocation(`/hr/contracts/${id}/edit`);
@@ -213,6 +218,10 @@ export default function HrContractDetail() {
         )}
       </div>
 
+      {/* Tags */}
+      {id && (
+        <EntityTags entityType="hr-contract" entityId={id} />
+      )}
     </div>
   );
 
@@ -243,6 +252,8 @@ export default function HrContractDetail() {
       entityType="hr-contract"
       entityId={id ?? 0}
       overview={overview}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       isLoading={isLoading}
       error={error}
       onRetry={refetch}

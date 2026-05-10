@@ -2,6 +2,7 @@ import { useParams, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -53,6 +54,7 @@ export default function ExitDetail() {
 
   const { data, isLoading, isError } = useApiQuery<any>(["hr-exit-detail", id], id ? `/hr/exit/${id}` : null);
   const item = data?.data ?? data;
+  const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("exit_request", id || "");
 
   const approveMut = useApiMutation((body: any) => body.__url, "PATCH", [["hr-exit"]], {
     successMessage: "تم اعتماد طلب نهاية الخدمة",
@@ -239,7 +241,8 @@ export default function ExitDetail() {
       entityId={Number(id)}
       isLoading={isLoading}
       error={isError ? true : undefined}
-     
+      extraTabs={registryExtraTabs}
+      hideTabs={registryHideTabs}
       createdAt={item?.createdAt}
       updatedAt={item?.updatedAt}
       actions={
