@@ -31,6 +31,7 @@ const CONTRACT_TYPE_LABELS: Record<string, string> = {
   full_time: "دوام كامل",
   part_time: "دوام جزئي",
   temporary: "مؤقت",
+  contract: "عقد مؤقت",
   probation: "تجربة",
 };
 
@@ -83,7 +84,7 @@ export default function HrContractDetail() {
           { label: "تاريخ البداية", value: formatDateAr(contract.startDate) },
           { label: "تاريخ النهاية", value: formatDateAr(contract.endDate) },
           { label: "الراتب", value: formatCurrency(contract.salary) },
-          ...(contract.allowances ? [{ label: "البدلات", value: formatCurrency(contract.allowances) }] : []),
+          ...((contract.housingAllowance || contract.transportAllowance) ? [{ label: "البدلات", value: formatCurrency((Number(contract.housingAllowance) || 0) + (Number(contract.transportAllowance) || 0)) }] : []),
           ...(contract.jobTitle ? [{ label: "المسمى الوظيفي", value: contract.jobTitle }] : []),
           ...(contract.department ? [{ label: "القسم", value: contract.department }] : []),
           { label: "الحالة", value: STATUS_LABELS[contract.status] || contract.status || "-" },

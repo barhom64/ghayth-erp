@@ -70,7 +70,7 @@ function careersAuth(req: Request, res: Response, next: NextFunction): void {
     return;
   }
   try {
-    const payload: any = jwt.verify(auth.slice(7), SECRET);
+    const payload: any = jwt.verify(auth.slice(7), SECRET, { algorithms: ["HS256"] });
     if (payload.type !== "careers_portal") {
       res.status(401).json({ error: "غير مصرح" });
       return;

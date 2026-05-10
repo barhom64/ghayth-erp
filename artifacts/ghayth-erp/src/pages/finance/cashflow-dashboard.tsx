@@ -66,7 +66,7 @@ export default function CashflowDashboard() {
   const pendingInvoices: any[] = invoicesData?.data || [];
   const recentExpenses: any[] = expensesData?.data || [];
 
-  const totalIncome = Number(summary.totalIncome || summary.income || 0);
+  const totalIncome = Number(summary.totalRevenue || summary.totalPaid || summary.totalIncome || 0);
   const totalExpenses = Number(summary.totalExpenses || summary.expenses || 0);
   const netCashflow = totalIncome - totalExpenses;
   const isPositive = netCashflow >= 0;

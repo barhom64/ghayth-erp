@@ -73,6 +73,7 @@ const createDepartmentSchema = z.object({
 
 const updateDepartmentSchema = z.object({
   name: z.string().min(1),
+  nameEn: z.string().optional(),
   manager: z.string().optional(),
 });
 
@@ -445,7 +446,7 @@ router.post("/departments", authorize({ feature: "settings", action: "update" })
     const body = zodParse(createDepartmentSchema.safeParse(req.body));
     const { name, nameEn, manager } = body;
     const scope = req.scope!;
-    const r = await rawExecute(`INSERT INTO departments (name, "companyId", "managerId") VALUES ($1,$2,$3)`, [name, scope.companyId, manager || null]);
+    const r = await rawExecute(`INSERT INTO departments (name, "nameEn", "companyId", "managerId") VALUES ($1,$2,$3,$4)`, [name, nameEn || null, scope.companyId, manager || null]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "create_department",
       entity: "departments", entityId: r.insertId,
@@ -461,9 +462,9 @@ router.put("/departments/:id", authorize({ feature: "settings", action: "update"
   try {
     const body = zodParse(updateDepartmentSchema.safeParse(req.body));
     const id = parseId(req.params.id, "id");
-    const { name, manager } = body;
+    const { name, nameEn, manager } = body;
     const scope = req.scope!;
-    const { affectedRows } = await rawExecute(`UPDATE departments SET name=$1, "managerId"=$2 WHERE id=$3 AND "companyId"=$4 RETURNING id`, [name, manager || null, id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE departments SET name=$1, "nameEn"=$2, "managerId"=$3 WHERE id=$4 AND "companyId"=$5 RETURNING id`, [name, nameEn || null, manager || null, id, scope.companyId]);
     if (!affectedRows) throw new NotFoundError("القسم غير موجود");
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_department",
