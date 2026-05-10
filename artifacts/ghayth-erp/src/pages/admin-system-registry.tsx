@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
 import { PageStateWrapper } from "@/components/shared/page-state";
@@ -5,10 +6,68 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 import {
   RefreshCw, Database, Layers, Shield, Activity, AlertTriangle,
-  FileText, Zap, BarChart3,
+  FileText, Zap, BarChart3, CheckCircle2, XCircle, ChevronDown, ChevronUp,
 } from "lucide-react";
+
+function FeatureDot({ active, title }: { active: boolean; title: string }) {
+  return (
+    <span title={title} className={`inline-block w-2 h-2 rounded-full ${active ? "bg-green-500" : "bg-gray-300"}`} />
+  );
+}
+
+function SeverityCard({ label, count, color }: { label: string; count: number; color: string }) {
+  const colorMap: Record<string, string> = {
+    red: "bg-red-50 border-red-200 text-red-700",
+    amber: "bg-amber-50 border-amber-200 text-amber-700",
+    yellow: "bg-yellow-50 border-yellow-200 text-yellow-700",
+    blue: "bg-blue-50 border-blue-200 text-blue-700",
+  };
+  return (
+    <Card className={`border ${colorMap[color] ?? ""}`}>
+      <CardContent className="p-3 text-center">
+        <p className="text-2xl font-bold">{count}</p>
+        <p className="text-xs">{label}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function categoryLabel(cat: string): string {
+  const map: Record<string, string> = {
+    missing_lifecycle: "بدون دورة حياة",
+    missing_approval: "بدون سلسلة اعتماد",
+    missing_detail_page: "بدون صفحة تفصيل",
+    missing_create_page: "بدون صفحة إنشاء",
+    missing_list_page: "بدون صفحة قائمة",
+    missing_attachments: "بدون مرفقات",
+    missing_events: "بدون أحداث",
+    missing_permissions: "بدون صلاحيات",
+    missing_notifications: "بدون إشعارات",
+    missing_reports: "بدون تقارير",
+    missing_print: "بدون طباعة",
+    missing_financial_impact: "بدون أثر مالي",
+  };
+  return map[cat] ?? cat;
+}
+
+function severityColor(severity: string): string {
+  const map: Record<string, string> = {
+    critical: "bg-red-100 text-red-800 text-[10px]",
+    high: "bg-amber-100 text-amber-800 text-[10px]",
+    medium: "bg-yellow-100 text-yellow-800 text-[10px]",
+    low: "bg-blue-100 text-blue-800 text-[10px]",
+  };
+  return map[severity] ?? "text-[10px]";
+}
+
+function severityLabel(severity: string): string {
+  const map: Record<string, string> = { critical: "حرج", high: "عالي", medium: "متوسط", low: "منخفض" };
+  return map[severity] ?? severity;
+}
 
 function StatCard({ label, value, icon: Icon }: { label: string; value: number | string; icon: any }) {
   return (
@@ -37,11 +96,29 @@ export default function AdminSystemRegistry() {
   const { data: missing, isLoading: missLoading } =
     useApiQuery<any>(["system-registry-missing"], "/admin/system-registry/missing");
 
+  const { data: coverage, isLoading: covLoading } =
+    useApiQuery<any>(["system-registry-coverage"], "/admin/system-registry/coverage");
+
   const overview = registry?.overview ?? {};
   const domains = registry?.domains ?? [];
   const entityList = entities?.entities ?? [];
   const eventList = actions?.events ?? [];
   const recentActions = actions?.recentActions ?? [];
+  const coverageGaps = coverage?.gaps ?? [];
+  const coverageSummary = coverage?.summary ?? {};
+  const coverageBySeverity = coverage?.bySeverity ?? {};
+  const coverageByCategory = coverage?.byCategory ?? {};
+
+  const [domainFilter, setDomainFilter] = useState<string>("all");
+  const [expandedEntity, setExpandedEntity] = useState<string | null>(null);
+
+  const filteredEntities = domainFilter === "all"
+    ? entityList
+    : entityList.filter((e: any) => e.domain === domainFilter);
+
+  const filteredGaps = domainFilter === "all"
+    ? coverageGaps
+    : coverageGaps.filter((g: any) => g.domain === domainFilter);
 
   const isLoading = regLoading;
   const error = regError;
@@ -60,24 +137,80 @@ export default function AdminSystemRegistry() {
       <PageStateWrapper isLoading={isLoading && !registry} error={error} onRetry={refetchReg}>
         <div className="space-y-6">
           {/* Overview Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
             <StatCard label="نطاق" value={overview.domains ?? 0} icon={Layers} />
-            <StatCard label="جدول" value={overview.tables ?? 0} icon={Database} />
+            <StatCard label="كيان مسجّل" value={overview.registeredEntities ?? entityList.length} icon={Database} />
             <StatCard label="آلة حالة" value={overview.lifecycleMachines ?? 0} icon={Activity} />
             <StatCard label="حدث" value={overview.events ?? 0} icon={Zap} />
             <StatCard label="صلاحية" value={overview.permissions ?? 0} icon={Shield} />
-            <StatCard label="دور" value={overview.roles ?? 0} icon={Shield} />
-            <StatCard label="مهمة مجدولة" value={overview.cronJobs ?? 0} icon={BarChart3} />
-            <StatCard label="نطاق مالي" value={overview.glDomains ?? 0} icon={FileText} />
           </div>
 
-          <Tabs defaultValue="domains" dir="rtl">
+          {coverageSummary.totalEntities > 0 && (
+            <Card className="border-blue-200 bg-blue-50/50">
+              <CardContent className="p-4">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center text-sm">
+                  <div>
+                    <p className="text-2xl font-bold text-blue-700">
+                      {coverageSummary.withLifecycle}/{coverageSummary.totalEntities}
+                    </p>
+                    <p className="text-xs text-gray-600">دورة حياة</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-green-700">
+                      {coverageSummary.withApproval}/{coverageSummary.totalEntities}
+                    </p>
+                    <p className="text-xs text-gray-600">سلسلة اعتماد</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-purple-700">
+                      {coverageSummary.withAttachments}/{coverageSummary.totalEntities}
+                    </p>
+                    <p className="text-xs text-gray-600">مرفقات</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-amber-700">
+                      {coverageSummary.withFinancialImpact}/{coverageSummary.totalEntities}
+                    </p>
+                    <p className="text-xs text-gray-600">أثر مالي</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-red-700">
+                      {coverageSummary.withPrint}/{coverageSummary.totalEntities}
+                    </p>
+                    <p className="text-xs text-gray-600">طباعة</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="flex items-center gap-3">
+            <Select value={domainFilter} onValueChange={setDomainFilter}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="جميع النطاقات" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">جميع النطاقات</SelectItem>
+                {domains.map((d: any) => (
+                  <SelectItem key={d.id} value={d.id}>{d.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <Tabs defaultValue="entities" dir="rtl">
             <TabsList className="flex-wrap h-auto">
+              <TabsTrigger value="entities">الكيانات ({filteredEntities.length})</TabsTrigger>
+              <TabsTrigger value="coverage">
+                التغطية
+                {coverageBySeverity.critical > 0 && (
+                  <Badge className="bg-red-100 text-red-800 text-[10px] ms-1">{coverageBySeverity.critical}</Badge>
+                )}
+              </TabsTrigger>
               <TabsTrigger value="domains">النطاقات</TabsTrigger>
-              <TabsTrigger value="entities">الكيانات ({entityList.length})</TabsTrigger>
               <TabsTrigger value="events">الأحداث ({eventList.length})</TabsTrigger>
               <TabsTrigger value="activity">النشاط الأخير</TabsTrigger>
-              <TabsTrigger value="gaps">الفجوات</TabsTrigger>
+              <TabsTrigger value="gaps">الفجوات (قديم)</TabsTrigger>
             </TabsList>
 
             {/* Domains Tab */}
@@ -112,42 +245,176 @@ export default function AdminSystemRegistry() {
               ))}
             </TabsContent>
 
-            {/* Entities Tab */}
-            <TabsContent value="entities" className="mt-4">
-              <Card>
-                <CardContent className="p-0">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="bg-muted/50">
-                        <tr>
-                          <th className="p-3 text-right">الجدول</th>
-                          <th className="p-3 text-right">النطاق</th>
-                          <th className="p-3 text-center">آلة حالة</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {entityList.map((e: any) => (
-                          <tr key={e.table} className="border-t">
-                            <td className="p-3 font-mono text-xs">{e.table}</td>
-                            <td className="p-3">
-                              <Badge variant="outline" className="text-[10px]">{e.domainLabel}</Badge>
-                            </td>
-                            <td className="p-3 text-center">
-                              {e.hasLifecycle ? (
-                                <Badge className="bg-green-100 text-green-800 text-[10px]">
-                                  {e.lifecycle?.states?.length || "?"} حالة
-                                </Badge>
-                              ) : (
-                                <span className="text-gray-400">—</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+            {/* Entities Tab — full operational profiles */}
+            <TabsContent value="entities" className="mt-4 space-y-2">
+              {entLoading ? (
+                <p className="text-gray-400 text-sm p-4">جاري التحميل...</p>
+              ) : filteredEntities.length === 0 ? (
+                <p className="text-gray-400 text-sm p-4">لا توجد كيانات</p>
+              ) : (
+                filteredEntities.map((e: any) => {
+                  const isExpanded = expandedEntity === e.id;
+                  return (
+                    <Card key={e.id} className="overflow-hidden">
+                      <button
+                        className="w-full text-right p-3 flex items-center gap-3 hover:bg-muted/30 transition-colors"
+                        onClick={() => setExpandedEntity(isExpanded ? null : e.id)}
+                      >
+                        {isExpanded ? <ChevronUp className="w-4 h-4 shrink-0" /> : <ChevronDown className="w-4 h-4 shrink-0" />}
+                        <span className="font-semibold text-sm">{e.label}</span>
+                        <Badge variant="outline" className="font-mono text-[10px]">{e.table}</Badge>
+                        <Badge className="text-[10px] bg-gray-100 text-gray-700">{e.type === "document" ? "مستند" : e.type === "transaction" ? "معاملة" : e.type === "master" ? "بيان رئيسي" : "إعداد"}</Badge>
+                        <div className="flex gap-1 ms-auto">
+                          <FeatureDot active={!!e.lifecycle} title="دورة حياة" />
+                          <FeatureDot active={!!e.approval} title="اعتماد" />
+                          <FeatureDot active={!!e.attachments} title="مرفقات" />
+                          <FeatureDot active={!!e.financialImpact} title="أثر مالي" />
+                          <FeatureDot active={!!e.print} title="طباعة" />
+                        </div>
+                      </button>
+                      {isExpanded && (
+                        <CardContent className="border-t bg-muted/10 p-4 text-sm space-y-3">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div><span className="text-gray-500">المالك:</span> <span className="font-medium">{e.owner || "—"}</span></div>
+                            <div><span className="text-gray-500">المنشأ:</span> <span className="font-medium">{e.origin || "—"}</span></div>
+                            <div><span className="text-gray-500">النطاق:</span> <Badge variant="outline" className="text-[10px]">{e.domain}</Badge></div>
+                            <div><span className="text-gray-500">النوع:</span> <span className="font-medium">{e.type}</span></div>
+                          </div>
+                          {e.routes && (
+                            <div>
+                              <p className="text-gray-500 text-xs mb-1">المسارات:</p>
+                              <div className="flex flex-wrap gap-1">
+                                {e.routes.list && <Badge variant="outline" className="font-mono text-[10px]">{e.routes.list}</Badge>}
+                                {e.routes.create && <Badge variant="outline" className="font-mono text-[10px]">{e.routes.create}</Badge>}
+                                {e.routes.detail && <Badge variant="outline" className="font-mono text-[10px]">{e.routes.detail}</Badge>}
+                                {e.routes.api && <Badge variant="outline" className="font-mono text-[10px]">{e.routes.api}</Badge>}
+                              </div>
+                            </div>
+                          )}
+                          {e.lifecycle && (
+                            <div>
+                              <p className="text-gray-500 text-xs mb-1">دورة الحياة:</p>
+                              <div className="flex flex-wrap gap-1">
+                                {e.lifecycle.states.map((s: string) => (
+                                  <Badge key={s} className={s === e.lifecycle.initial ? "bg-blue-100 text-blue-800 text-[10px]" : "bg-gray-100 text-gray-700 text-[10px]"}>
+                                    {s}{s === e.lifecycle.initial ? " (ابتدائي)" : ""}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {e.approval && (
+                            <div>
+                              <p className="text-gray-500 text-xs mb-1">سلسلة الاعتماد:</p>
+                              <div className="flex gap-1 items-center">
+                                {e.approval.chain.map((c: string, i: number) => (
+                                  <span key={c} className="flex items-center gap-1">
+                                    <Badge className="bg-green-100 text-green-800 text-[10px]">{c}</Badge>
+                                    {i < e.approval.chain.length - 1 && <span className="text-gray-400">←</span>}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {e.events && e.events.length > 0 && (
+                            <div>
+                              <p className="text-gray-500 text-xs mb-1">الأحداث ({e.events.length}):</p>
+                              <div className="flex flex-wrap gap-1">
+                                {e.events.map((ev: string) => (
+                                  <Badge key={ev} variant="outline" className="font-mono text-[10px]">{ev}</Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {e.permissions && e.permissions.length > 0 && (
+                            <div>
+                              <p className="text-gray-500 text-xs mb-1">الصلاحيات:</p>
+                              <div className="flex flex-wrap gap-1">
+                                {e.permissions.map((p: string) => (
+                                  <Badge key={p} variant="outline" className="font-mono text-[10px]">{p}</Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </CardContent>
+                      )}
+                    </Card>
+                  );
+                })
+              )}
+            </TabsContent>
+
+            {/* Coverage Tab — gap analysis */}
+            <TabsContent value="coverage" className="mt-4 space-y-4">
+              {covLoading ? (
+                <p className="text-gray-400 text-sm p-4">جاري تحليل التغطية...</p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <SeverityCard label="حرج" count={coverageBySeverity.critical ?? 0} color="red" />
+                    <SeverityCard label="عالي" count={coverageBySeverity.high ?? 0} color="amber" />
+                    <SeverityCard label="متوسط" count={coverageBySeverity.medium ?? 0} color="yellow" />
+                    <SeverityCard label="منخفض" count={coverageBySeverity.low ?? 0} color="blue" />
                   </div>
-                </CardContent>
-              </Card>
+
+                  {Object.keys(coverageByCategory).length > 0 && (
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">الفجوات حسب التصنيف</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        {Object.entries(coverageByCategory).map(([cat, count]) => (
+                          <div key={cat} className="flex items-center gap-3">
+                            <span className="text-xs text-gray-600 w-40 shrink-0">{categoryLabel(cat)}</span>
+                            <Progress value={Math.min(100, ((count as number) / Math.max(1, filteredGaps.length)) * 100)} className="h-2 flex-1" />
+                            <span className="text-xs font-bold w-8 text-left">{count as number}</span>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-500" />
+                        تفاصيل الفجوات ({filteredGaps.length})
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted/50 sticky top-0">
+                            <tr>
+                              <th className="p-2 text-right">الكيان</th>
+                              <th className="p-2 text-right">النطاق</th>
+                              <th className="p-2 text-right">التصنيف</th>
+                              <th className="p-2 text-right">الوصف</th>
+                              <th className="p-2 text-center">الخطورة</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredGaps.map((g: any, i: number) => (
+                              <tr key={i} className="border-t">
+                                <td className="p-2 font-medium text-xs">{g.entityLabel}</td>
+                                <td className="p-2"><Badge variant="outline" className="text-[10px]">{g.domain}</Badge></td>
+                                <td className="p-2 text-xs text-gray-600">{categoryLabel(g.category)}</td>
+                                <td className="p-2 text-xs">{g.description}</td>
+                                <td className="p-2 text-center">
+                                  <Badge className={severityColor(g.severity)}>{severityLabel(g.severity)}</Badge>
+                                </td>
+                              </tr>
+                            ))}
+                            {filteredGaps.length === 0 && (
+                              <tr><td colSpan={5} className="p-4 text-center text-green-600">لا توجد فجوات — تغطية كاملة</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
             </TabsContent>
 
             {/* Events Tab */}

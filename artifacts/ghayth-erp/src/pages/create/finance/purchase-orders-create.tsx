@@ -3,7 +3,6 @@ import { useLocation, useSearch } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -16,7 +15,7 @@ import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zon
 import { CostCenterSelect, SupplierSelect, BranchSelect } from "@/components/shared/entity-selects";
 import { useAppContext } from "@/contexts/app-context";
 import { SupplierContextCard } from "@/components/shared/supplier-context-card";
-import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 
 const DRAFT_KEY = "finance_purchase_orders_create";
@@ -168,8 +167,8 @@ export default function PurchaseOrdersCreate() {
                 </SelectContent>
               </Select>
             </div>
-            <div><Label className="text-xs">الكمية</Label><Input type="number" value={item.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} /></div>
-            <div><Label className="text-xs">سعر الوحدة</Label><Input type="number" value={item.unitPrice} onChange={(e) => updateItem(idx, "unitPrice", e.target.value)} /></div>
+            <NumberField label="الكمية" value={item.quantity} onChange={(v) => updateItem(idx, "quantity", v)} placeholder="1" />
+            <NumberField label="سعر الوحدة" value={item.unitPrice} onChange={(v) => updateItem(idx, "unitPrice", v)} placeholder="0.00" />
             <Button type="button" variant="destructive" size="sm" onClick={() => removeItem(idx)} disabled={items.length <= 1}>حذف</Button>
           </div>
         ))}

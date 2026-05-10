@@ -7,6 +7,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 export default function BiReportsCreate() {
@@ -15,11 +16,15 @@ export default function BiReportsCreate() {
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("bi_reports_create", {
     title: "", type: "analytics", scheduledAt: "", description: "", query: "",
   });
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
   const createMut = useApiMutation<unknown, Record<string, string | undefined>>("/bi/reports", "POST", [["bi-reports"]]);
 
   const handleSubmit = () => {
-    if (!form.title) {
-      toast({ variant: "destructive", title: "يرجى إدخال عنوان التقرير" });
+    const firstError = validate({
+      title: form.title ? null : "يرجى إدخال عنوان التقرير",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     createMut.mutate({
@@ -30,7 +35,7 @@ export default function BiReportsCreate() {
       query: form.query || undefined,
     }, {
       onSuccess: () => { clearDraft(); toast({ title: "تم إنشاء التقرير بنجاح" }); setLocation("/bi/reports"); },
-      onError: (err) => toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء التقرير", description: err.message }),
+      onError: (err: any) => { setApiError(err); toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء التقرير", description: err.message }); },
     });
   };
 
@@ -53,6 +58,7 @@ export default function BiReportsCreate() {
             value={form.title}
             onChange={(v) => setForm((f) => ({ ...f, title: v }))}
             placeholder="عنوان التقرير"
+            error={fieldErrors.title}
           />
           <FormFieldWrapper label="النوع">
             <Select value={form.type} onValueChange={(v) => setForm((f) => ({ ...f, type: v }))}>

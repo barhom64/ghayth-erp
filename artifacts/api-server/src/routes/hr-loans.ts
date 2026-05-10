@@ -353,6 +353,12 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
         body: `تم رفض السلفة ${loan.loanNumber}${rejectionReason ? " — السبب: " + rejectionReason : ""}`,
         priority: "normal", refType: "hr_employee_loan", refId: loan.id,
       }).catch(console.error);
+      try {
+        await rawExecute(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('hr_employee_loan',$1,'rejected',$2,$3,$4)`,
+          [loan.id, rejectionReason || null, scope.userId, scope.companyId]
+        );
+      } catch (e) { console.error("Failed to log approval action:", e); }
       emitEvent({
         companyId: scope.companyId,
         branchId: scope.branchId,
@@ -419,6 +425,13 @@ router.patch("/loans/:id/approve", requirePermission("hr:update"), async (req, r
       body: `تمت الموافقة على السلفة ${loan.loanNumber} بمبلغ ${Number(loan.amount).toLocaleString()} ريال — سيبدأ الخصم من فترة ${loan.startDeductionPeriod}`,
       priority: "high", refType: "hr_employee_loan", refId: loan.id,
     }).catch(console.error);
+
+    try {
+      await rawExecute(
+        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('hr_employee_loan',$1,'approved',$2,$3,$4)`,
+        [loan.id, notes || null, scope.userId, scope.companyId]
+      );
+    } catch (e) { console.error("Failed to log approval action:", e); }
 
     await createAuditLog({
       companyId: scope.companyId, userId: scope.userId,

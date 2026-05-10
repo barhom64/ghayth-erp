@@ -8,6 +8,7 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { Pencil, CheckCircle, XCircle, Info, AlertTriangle, ShieldAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { cn } from "@/lib/utils";
 import { CreatePageLayout } from "@/components/create-page-layout";
 
@@ -43,6 +44,7 @@ export default function VehicleStatusChangePage() {
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("fleet_vehicle_status_change", {
     selectedNewStatus: "",
   });
+  const { fieldErrors, validate } = useFieldErrors();
   const selectedNewStatus = form.selectedNewStatus;
   const setSelectedNewStatus = (v: string) => setForm(f => ({ ...f, selectedNewStatus: v }));
   const [impactData, setImpactData] = useState<any>(null);

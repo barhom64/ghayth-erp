@@ -4,11 +4,9 @@ import { toast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { EntityDetailPage, type EntityTab } from "@/components/shared/entity-detail-page";
-import { EntityDocuments } from "@/components/shared/entity-documents";
-import { EntityTimeline } from "@/components/shared/entity-timeline";
-import { EntityComments } from "@/components/shared/entity-comments";
+import { DetailPageLayout, type ExtraTab } from "@/components/shared/detail-page-layout";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
   User,
@@ -17,7 +15,6 @@ import {
   Building2,
   Activity,
   Target,
-  FileText,
   History,
   MessageCircle,
   FolderOpen,
@@ -48,7 +45,6 @@ export default function LeadDetailPage() {
     !!id
   );
 
-  // Activities for this opportunity
   const { data: activitiesResp } = useApiQuery<any>(
     ["crm-lead-activities", id],
     id ? `/crm/opportunities/${id}/activities` : null,
@@ -56,7 +52,6 @@ export default function LeadDetailPage() {
   );
   const activities: any[] = activitiesResp?.data || (Array.isArray(activitiesResp) ? activitiesResp : []);
 
-  // Related deals — dedicated endpoint, avoids pulling the full opps list.
   const { data: relatedResp } = useApiQuery<any>(
     ["crm-lead-deals", id],
     id ? `/crm/opportunities/${id}/related` : null,
@@ -89,48 +84,135 @@ export default function LeadDetailPage() {
     { key: "probability", header: "الاحتمالية", sortable: true, render: (r) => `${r.probability || 0}%` },
   ];
 
-  const overviewContent = () => (
-    <Card className="border-0 shadow-sm">
-      <CardContent className="p-6 space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <InfoRow label="العنوان" value={lead?.title} />
-          <InfoRow label="جهة الاتصال" value={lead?.contactName} />
-          <InfoRow label="العميل" value={lead?.clientName} />
-          <InfoRow label="المسؤول" value={lead?.assigneeName} />
-          <InfoRow label="المرحلة" value={STAGE_LABELS[lead?.stage] || lead?.stage} />
-          <InfoRow label="القيمة" value={lead?.value != null ? formatCurrency(Number(lead.value)) : undefined} />
-          <InfoRow label="الاحتمالية" value={lead?.probability != null ? `${lead.probability}%` : undefined} />
-          <InfoRow label="تاريخ الإنشاء" value={lead?.createdAt ? formatDateAr(lead.createdAt) : undefined} />
-        </div>
-        {lead?.notes && (
-          <div className="pt-4 border-t">
-            <p className="text-xs text-gray-500 mb-1">ملاحظات</p>
-            <p className="text-sm text-gray-700 whitespace-pre-wrap">{lead.notes}</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-
   const emptyMsg = (msg: string) => (
     <Card className="border-0 shadow-sm">
       <CardContent className="p-10 text-center text-sm text-gray-500">{msg}</CardContent>
     </Card>
   );
 
-  const tabs: EntityTab[] = [
-    { key: "overview", label: "نظرة عامة", icon: Activity, content: overviewContent },
+  const handleConvert = async () => {
+    try {
+      const newClient = await apiFetch<any>("/clients", {
+        method: "POST",
+        body: JSON.stringify({
+          name: lead?.contactName || lead?.title || "",
+          email: lead?.email || "",
+          phone: lead?.phone || "",
+          company: lead?.clientName || "",
+        }),
+      });
+      await apiFetch(`/crm/opportunities/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "converted" }),
+      });
+      queryClient.invalidateQueries({ queryKey: ["crm-lead", id] });
+      toast({ title: "تم تحويل العميل المحتمل إلى عميل بنجاح" });
+      const clientId = newClient?.id || newClient?.data?.id;
+      navigate(clientId ? `/clients/${clientId}` : "/clients");
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "تعذر تحويل العميل المحتمل",
+        description: err.message || "حدث خطأ أثناء التحويل",
+      });
+    }
+  };
+
+  const overview = (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center text-blue-600 bg-blue-50">
+              <Target className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xl font-bold truncate">{totalContacts}</p>
+              <p className="text-xs text-gray-500 truncate">إجمالي الأنشطة</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center text-orange-600 bg-orange-50">
+              <Clock className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xl font-bold truncate">{lastActivity ? formatDateAr(lastActivity) : "—"}</p>
+              <p className="text-xs text-gray-500 truncate">آخر نشاط</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center text-purple-600 bg-purple-50">
+              <UserCheck className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xl font-bold truncate">{daysInPipeline}</p>
+              <p className="text-xs text-gray-500 truncate">أيام في الخط</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center text-green-600 bg-green-50">
+              <DollarSign className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xl font-bold truncate">{formatCurrency(dealValue)}</p>
+              <p className="text-xs text-gray-500 truncate">قيمة الصفقة</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="border-0 shadow-sm">
+        <CardContent className="p-6 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <InfoRow label="العنوان" value={lead?.title} />
+            <InfoRow label="جهة الاتصال" value={lead?.contactName} />
+            <InfoRow label="العميل" value={lead?.clientName} />
+            <InfoRow label="المسؤول" value={lead?.assigneeName} />
+            <InfoRow label="المرحلة" value={STAGE_LABELS[lead?.stage] || lead?.stage} />
+            <InfoRow label="القيمة" value={lead?.value != null ? formatCurrency(Number(lead.value)) : undefined} />
+            <InfoRow label="الاحتمالية" value={lead?.probability != null ? `${lead.probability}%` : undefined} />
+            <InfoRow label="تاريخ الإنشاء" value={lead?.createdAt ? formatDateAr(lead.createdAt) : undefined} />
+          </div>
+          {lead?.notes && (
+            <div className="pt-4 border-t">
+              <p className="text-xs text-gray-500 mb-1">ملاحظات</p>
+              <p className="text-sm text-gray-700 whitespace-pre-wrap">{lead.notes}</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  const actions = (
+    <div className="flex items-center gap-2">
+      <Button size="sm" onClick={handleConvert} className="gap-1">
+        <CheckCircle2 className="h-4 w-4" />
+        تحويل
+      </Button>
+      <Button size="sm" variant="outline" onClick={() => navigate("/crm/activities")} className="gap-1">
+        <Phone className="h-4 w-4" />
+        تسجيل اتصال
+      </Button>
+    </div>
+  );
+
+  const extraTabs: ExtraTab[] = [
     {
       key: "activities",
       label: "الأنشطة",
       icon: Target,
       badge: activities.length || undefined,
       content: () =>
-        activities.length === 0 ? (
-          emptyMsg("لا توجد أنشطة مرتبطة بهذا العميل المحتمل")
-        ) : (
-          <DataTable columns={activityColumns} data={activities} pageSize={10} emptyMessage="لا توجد أنشطة" noToolbar />
-        ),
+        activities.length === 0
+          ? emptyMsg("لا توجد أنشطة مرتبطة بهذا العميل المحتمل")
+          : <DataTable columns={activityColumns} data={activities} pageSize={10} emptyMessage="لا توجد أنشطة" noToolbar />,
     },
     {
       key: "deals",
@@ -138,130 +220,29 @@ export default function LeadDetailPage() {
       icon: DollarSign,
       badge: deals.length || undefined,
       content: () =>
-        deals.length === 0 ? (
-          emptyMsg("لا توجد صفقات أخرى مرتبطة")
-        ) : (
-          <DataTable columns={dealsColumns} data={deals} pageSize={10} emptyMessage="لا توجد صفقات" noToolbar />
-        ),
-    },
-    {
-      key: "documents",
-      label: "المستندات",
-      icon: FolderOpen,
-      content: () => <EntityDocuments entityType="opportunity" entityId={id} />,
-    },
-    {
-      key: "timeline",
-      label: "السجل الزمني",
-      icon: History,
-      content: () => <EntityTimeline entityType="opportunity" entityId={id} />,
-    },
-    {
-      key: "comments",
-      label: "التعليقات",
-      icon: MessageCircle,
-      content: () => <EntityComments entityType="opportunity" entityId={id} />,
+        deals.length === 0
+          ? emptyMsg("لا توجد صفقات أخرى مرتبطة")
+          : <DataTable columns={dealsColumns} data={deals} pageSize={10} emptyMessage="لا توجد صفقات" noToolbar />,
     },
   ];
 
-  const metaItems = [
-    lead?.phone && { icon: Phone, label: lead.phone },
-    lead?.email && { icon: Mail, label: lead.email },
-    lead?.clientName && { icon: Building2, label: lead.clientName },
-  ].filter(Boolean) as Array<{ icon: any; label: string }>;
-
-  const badges = lead?.stage ? <Badge variant="outline">{STAGE_LABELS[lead.stage] || lead.stage}</Badge> : null;
-
-  const notFound = !isLoading && !lead;
-
   return (
-    <EntityDetailPage
-      title={lead?.title || lead?.contactName || (notFound ? "العميل المحتمل غير موجود" : "...")}
+    <DetailPageLayout
+      title={lead?.title || lead?.contactName || "العميل المحتمل"}
       subtitle={lead?.clientName || undefined}
-      avatar={{
-        icon: User,
-        gradientFrom: "from-emerald-500",
-        gradientTo: "to-teal-600",
-        text: (lead?.title || lead?.contactName || "").slice(0, 2),
-      }}
-      badges={badges}
-      metaItems={metaItems}
-      backHref="/crm"
+      backPath="/crm/leads"
       backLabel="العودة للعملاء المحتملين"
+      status={lead?.stage ? { label: STAGE_LABELS[lead.stage] || lead.stage, tone: "info" } : undefined}
+      entityType="crm_lead"
+      entityId={id}
       isLoading={isLoading}
-      isError={isError || notFound}
-      errorMessage={notFound ? "لم يتم العثور على العميل المحتمل" : "تعذر تحميل بيانات العميل المحتمل"}
+      error={isError ? true : undefined}
       onRetry={() => refetch()}
-      actions={[
-        {
-          label: "تحويل",
-          icon: CheckCircle2,
-          variant: "default",
-          onClick: async () => {
-            try {
-              const newClient = await apiFetch<any>("/clients", {
-                method: "POST",
-                body: JSON.stringify({
-                  name: lead?.contactName || lead?.title || "",
-                  email: lead?.email || "",
-                  phone: lead?.phone || "",
-                  company: lead?.clientName || "",
-                }),
-              });
-              await apiFetch(`/crm/opportunities/${id}`, {
-                method: "PATCH",
-                body: JSON.stringify({ status: "converted" }),
-              });
-              queryClient.invalidateQueries({ queryKey: ["crm-lead", id] });
-              toast({ title: "تم تحويل العميل المحتمل إلى عميل بنجاح" });
-              const clientId = newClient?.id || newClient?.data?.id;
-              navigate(clientId ? `/clients/${clientId}` : "/clients");
-            } catch (err: any) {
-              toast({
-                variant: "destructive",
-                title: "تعذر تحويل العميل المحتمل",
-                description: err.message || "حدث خطأ أثناء التحويل",
-              });
-            }
-          },
-        },
-        {
-          label: "تسجيل اتصال",
-          icon: Phone,
-          variant: "outline",
-          onClick: () => {
-            navigate("/crm/activities");
-          },
-        },
-      ]}
-      kpis={[
-        {
-          label: "إجمالي الأنشطة",
-          value: totalContacts,
-          icon: Target,
-          color: "text-blue-600 bg-blue-50",
-        },
-        {
-          label: "آخر نشاط",
-          value: lastActivity ? formatDateAr(lastActivity) : "—",
-          icon: Clock,
-          color: "text-orange-600 bg-orange-50",
-        },
-        {
-          label: "أيام في الخط",
-          value: daysInPipeline,
-          icon: UserCheck,
-          color: "text-purple-600 bg-purple-50",
-        },
-        {
-          label: "قيمة الصفقة",
-          value: formatCurrency(dealValue),
-          icon: DollarSign,
-          color: "text-green-600 bg-green-50",
-        },
-      ]}
-      tabs={tabs}
-      defaultTab="overview"
+      createdAt={lead?.createdAt}
+      updatedAt={lead?.updatedAt}
+      overview={overview}
+      actions={actions}
+      extraTabs={extraTabs}
     />
   );
 }

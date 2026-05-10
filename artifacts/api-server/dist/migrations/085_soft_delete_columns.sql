@@ -1,6 +1,0 @@
--- Add deletedAt columns for soft-delete support on tables that currently use hard-delete
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMPTZ DEFAULT NULL;
-ALTER TABLE store_products ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMPTZ DEFAULT NULL;
-ALTER TABLE job_postings ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMPTZ DEFAULT NULL;
-ALTER TABLE store_orders ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMPTZ DEFAULT NULL;
-ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMPTZ DEFAULT NULL;
