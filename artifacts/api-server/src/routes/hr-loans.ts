@@ -364,7 +364,6 @@ router.patch("/loans/:id/approve", authorize({ feature: "hr.loans", action: "upd
     if (!loan) throw new NotFoundError("السلفة غير موجودة");
     if (loan.status !== "pending") throw new ConflictError("لا يمكن اعتماد سلفة بحالة: " + loan.status);
 
-    // منع الموظف من اعتماد سلفته الخاصة
     if (loan.assignmentId === scope.activeAssignmentId) {
       throw new ForbiddenError("لا يمكنك اعتماد سلفتك الخاصة");
     }
@@ -393,28 +392,16 @@ router.patch("/loans/:id/approve", authorize({ feature: "hr.loans", action: "upd
           [loan.id, rejectionReason || null, scope.userId, scope.companyId]
         );
       } catch (e) { console.error("Failed to log approval action:", e); }
-      emitEvent({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        userId: scope.userId,
-        action: "hr.loan.rejected",
-        entity: "hr_employee_loans",
-        entityId: loan.id,
-        details: JSON.stringify({ loanNumber: loan.loanNumber, reason: rejectionReason }),
-      }).catch((e) => logger.error(e, "hr-loans background task failed"));
+      emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "hr.loan.rejected", entity: "hr_employee_loans", entityId: loan.id, details: JSON.stringify({ loanNumber: loan.loanNumber, reason: rejectionReason }) }).catch((e) => logger.error(e, "hr-loans background task failed"));
       res.json({ success: true, message: "تم رفض السلفة" });
       return;
     }
 
-    // ── معالجة خطوة الموافقة في سلسلة الموافقات ──
+    // ── معالجة خطوة الموافقة ──
     const chainResult = await processApprovalStep({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      refType: "hr_employee_loan",
-      refId: loan.id,
-      approved: true,
-      decidedBy: scope.activeAssignmentId,
-      requesterId: loan.assignmentId,
+      companyId: scope.companyId, branchId: scope.branchId,
+      refType: "hr_employee_loan", refId: loan.id,
+      approved: true, decidedBy: scope.activeAssignmentId, requesterId: loan.assignmentId,
     }).catch((e) => { logger.error(e, "hr loans approval failed"); return { status: "approved" as const, message: "" }; });
 
     // إذا بقيت خطوات موافقة إضافية
