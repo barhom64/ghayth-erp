@@ -923,7 +923,43 @@ router.post("/jit/request", async (req, res) => {
   try {
     const scope = req.scope!;
     const body = jitRequestSchema.parse(req.body);
-    if (!FEATURE_INDEX.has(body.featureKey)) throw new ValidationError(`الميزة "${body.featureKey}" غير معروفة`);
+
+    // Validate against the feature catalog: feature must exist, action
+    // must be in availableActions, and scope must be in availableScopes.
+    // Without these checks, a malformed UI / direct API call could
+    // produce a row the engine can never honour, leaving JIT requests
+    // stuck in 'approved' but useless.
+    const feature = FEATURE_INDEX.get(body.featureKey);
+    if (!feature) {
+      throw new ValidationError(`الميزة "${body.featureKey}" غير معروفة`);
+    }
+    if (!feature.availableActions.includes(body.action as any)) {
+      throw new ValidationError(
+        `الإجراء "${body.action}" غير متاح للميزة "${feature.labelAr}"`,
+        { field: "action", fix: `الإجراءات المتاحة: ${feature.availableActions.join("، ")}` }
+      );
+    }
+    if (!feature.availableScopes.includes(body.scope as any)) {
+      throw new ValidationError(
+        `النطاق "${body.scope}" غير متاح للميزة "${feature.labelAr}"`,
+        { field: "scope", fix: `النطاقات المتاحة: ${feature.availableScopes.join("، ")}` }
+      );
+    }
+
+    // Throttle abuse: a user with one open pending JIT request can't
+    // spam more than 10 in flight per company.
+    const [{ count }] = await rawQuery<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+         FROM rbac_jit_requests
+        WHERE "userId" = $1 AND "companyId" = $2 AND status = 'pending'`,
+      [scope.userId, scope.companyId]
+    );
+    if (Number(count) >= 10) {
+      throw new ValidationError(
+        "لديك طلبات صلاحية مؤقتة كثيرة بانتظار المراجعة (10 حدّ أقصى)",
+        { fix: "ألغِ الطلبات القديمة أو انتظر مراجعتها" }
+      );
+    }
 
     const { insertId } = await rawExecute(
       `INSERT INTO rbac_jit_requests

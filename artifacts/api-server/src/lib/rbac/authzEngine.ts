@@ -49,6 +49,12 @@ export interface AccessSpec {
   };
   /** Currency-bearing actions (approve) — engine validates against approval_limits. */
   amount?: { value: number; currency?: string };
+  /**
+   * Caller IP, extracted from the request by the authorize() middleware.
+   * Required for the `ipPrefixIn` ABAC condition. Without it, that
+   * condition silently passes (security gap).
+   */
+  ipAddress?: string | null;
 }
 
 export interface ResourceRecord {
@@ -462,7 +468,13 @@ export async function checkAccess(scope: RequestScope, spec: AccessSpec, columns
       scope: { userId: scope.userId, companyId: scope.companyId, branchId: scope.branchId, employeeId: scope.employeeId },
       record: spec.resource?.record ?? null,
       userDepartmentId: ctx.departmentId,
-      ipAddress: null,
+      // Caller IP comes from the authorize() middleware; without it,
+      // the ipPrefixIn condition would silently pass.
+      ipAddress: spec.ipAddress ?? null,
+      // Emergency mode is read from the env var so an ops admin can
+      // freeze sensitive operations without needing a deploy. Migration
+      // could later move this to a system_settings row.
+      emergency: process.env.RBAC_EMERGENCY_MODE === "true",
     });
     if (condResult.passed) {
       chosenGrant = grant;
