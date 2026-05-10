@@ -1,0 +1,87 @@
+# Dockerfile.api-server
+# ----------------------------------------------------------------------------
+# Multi-stage build for @workspace/api-server.
+# Output is a small Node 24 image containing only the bundled dist/ + the
+# minimum runtime deps that aren't bundleable (pg, bcryptjs native bits).
+#
+# Build context MUST be the repo root because api-server depends on workspace
+# packages in lib/ — pnpm needs the full monorepo to deploy them.
+#
+#   docker build -f Dockerfile.api-server -t ghayth-api .
+#   docker run -p 8080:8080 --env-file .env ghayth-api
+# ----------------------------------------------------------------------------
+
+# ---- 1. dependencies ------------------------------------------------------
+# Install the full workspace (including dev) so we can run `pnpm build`.
+FROM node:24-alpine AS deps
+
+# pnpm via corepack — pinned to whatever the repo declares.
+RUN corepack enable
+
+WORKDIR /app
+
+# Copy lockfile + package manifests first so docker can cache the install
+# layer when only source code changes.
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY artifacts/api-server/package.json artifacts/api-server/
+COPY lib/api-spec/package.json lib/api-spec/
+COPY lib/api-zod/package.json lib/api-zod/
+COPY lib/api-client-react/package.json lib/api-client-react/
+COPY lib/db/package.json lib/db/
+COPY lib/object-storage-web/package.json lib/object-storage-web/
+COPY scripts/package.json scripts/
+
+# Frozen install — fails fast if the lockfile drifted.
+RUN pnpm install --frozen-lockfile
+
+# ---- 2. build -------------------------------------------------------------
+FROM deps AS build
+
+WORKDIR /app
+
+# Copy the rest of the source needed to build api-server.
+COPY tsconfig.base.json tsconfig.json ./
+COPY lib/ ./lib/
+COPY artifacts/api-server/ ./artifacts/api-server/
+
+# Build typed libs first (declared via tsc --build), then api-server bundle.
+RUN pnpm run typecheck:libs && \
+    pnpm --filter @workspace/api-server run build
+
+# Trim node_modules to production-only so the runtime image stays small.
+# `pnpm prune` keeps workspace symlinks intact.
+RUN pnpm install --prod --frozen-lockfile
+
+# ---- 3. runtime -----------------------------------------------------------
+FROM node:24-alpine AS runtime
+
+# Tini gives us proper signal handling (Ctrl-C, docker stop) for the Node
+# process. Without it, child processes can leak on shutdown.
+RUN apk add --no-cache tini && corepack enable
+
+WORKDIR /app
+
+# Run as non-root for defence in depth. The node image has a `node` user
+# UID 1000 already.
+USER node
+
+# Bundled output + production deps + workspace symlinks.
+COPY --from=build --chown=node:node /app/artifacts/api-server/dist ./dist
+COPY --from=build --chown=node:node /app/artifacts/api-server/package.json ./package.json
+COPY --from=build --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/lib ./lib
+COPY --from=build --chown=node:node /app/artifacts/api-server/src/migrations ./dist/migrations
+
+ENV NODE_ENV=production \
+    PORT=8080 \
+    LOG_LEVEL=info
+
+EXPOSE 8080
+
+# Lightweight liveness probe — orchestrators should hit /api/healthz instead
+# of relying on this, but it's a safe default.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget --quiet --tries=1 --spider http://localhost:${PORT}/api/healthz || exit 1
+
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["node", "--enable-source-maps", "./dist/index.mjs"]
