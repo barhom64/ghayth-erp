@@ -21,9 +21,27 @@
 import { rawQuery, rawExecute } from "../../../src/lib/rawdb.js";
 import { signToken, hashPassword } from "../../../src/lib/auth.js";
 
+export interface SeededRows {
+  clientId: number;
+  projectId: number;
+  taskId: number;
+}
+
 export interface TenantFixture {
-  companyA: { id: number; branchId: number; userId: number; assignmentId: number; employeeId: number };
-  companyB: { id: number; branchId: number; userId: number; assignmentId: number; employeeId: number };
+  companyA: {
+    id: number;
+    branchId: number;
+    userId: number;
+    assignmentId: number;
+    employeeId: number;
+  } & SeededRows;
+  companyB: {
+    id: number;
+    branchId: number;
+    userId: number;
+    assignmentId: number;
+    employeeId: number;
+  } & SeededRows;
   tokenA: string;
   tokenB: string;
 }
@@ -50,6 +68,9 @@ async function truncateAll(): Promise<void> {
   await rawExecute(
     `TRUNCATE TABLE
        refresh_tokens,
+       tasks,
+       projects,
+       clients,
        employee_assignments,
        users,
        employees,
@@ -66,7 +87,7 @@ async function seedCompany(name: string): Promise<{
   userId: number;
   assignmentId: number;
   employeeId: number;
-}> {
+} & SeededRows> {
   const [{ id: companyId }] = await rawQuery<{ id: number }>(
     `INSERT INTO companies (name, status) VALUES ($1, 'active') RETURNING id`,
     [name]
@@ -94,7 +115,33 @@ async function seedCompany(name: string): Promise<{
     [employeeId, `owner-${companyId}@test.local`, passwordHash]
   );
 
-  return { companyId, branchId, userId, assignmentId, employeeId };
+  // Seed one row per company in three common write-target tables so the
+  // dynamic harness can exercise DELETE/PATCH/GET-by-id paths against
+  // both same-tenant and cross-tenant ids.
+  const [{ id: clientId }] = await rawQuery<{ id: number }>(
+    `INSERT INTO clients ("companyId", name, type) VALUES ($1, $2, 'individual') RETURNING id`,
+    [companyId, `Client of ${name}`]
+  );
+  const [{ id: projectId }] = await rawQuery<{ id: number }>(
+    `INSERT INTO projects ("companyId", name) VALUES ($1, $2) RETURNING id`,
+    [companyId, `Project of ${name}`]
+  );
+  const [{ id: taskId }] = await rawQuery<{ id: number }>(
+    `INSERT INTO tasks ("companyId", "branchId", type, title)
+     VALUES ($1, $2, 'manual', $3) RETURNING id`,
+    [companyId, branchId, `Task of ${name}`]
+  );
+
+  return {
+    companyId,
+    branchId,
+    userId,
+    assignmentId,
+    employeeId,
+    clientId,
+    projectId,
+    taskId,
+  };
 }
 
 export async function setupTwoCompanyFixture(): Promise<TenantFixture> {
@@ -114,6 +161,9 @@ export async function setupTwoCompanyFixture(): Promise<TenantFixture> {
       userId: a.userId,
       assignmentId: a.assignmentId,
       employeeId: a.employeeId,
+      clientId: a.clientId,
+      projectId: a.projectId,
+      taskId: a.taskId,
     },
     companyB: {
       id: b.companyId,
@@ -121,6 +171,9 @@ export async function setupTwoCompanyFixture(): Promise<TenantFixture> {
       userId: b.userId,
       assignmentId: b.assignmentId,
       employeeId: b.employeeId,
+      clientId: b.clientId,
+      projectId: b.projectId,
+      taskId: b.taskId,
     },
     tokenA,
     tokenB,
