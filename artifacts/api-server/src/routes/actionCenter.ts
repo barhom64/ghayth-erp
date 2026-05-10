@@ -247,6 +247,132 @@ router.get("/", async (req, res) => {
       }
     }
 
+    let pendingTransfers: any[] = [];
+    if (PAYROLL_ROLES.includes(scope.role)) {
+      try {
+        pendingTransfers = await rawQuery<any>(
+          `SELECT t.id, t.status, t."createdAt",
+                  e.name AS "employeeName"
+           FROM hr_transfers t
+           JOIN employee_assignments ea ON ea.id = t."assignmentId"
+           JOIN employees e ON e.id = ea."employeeId"
+           WHERE t."companyId" = ANY($1::int[]) AND t.status = 'pending' AND t."deletedAt" IS NULL
+           ORDER BY t."createdAt" DESC LIMIT 20`,
+          [scope.allowedCompanies]
+        );
+      } catch (e) {
+        logger.error(e, "Action-center pendingTransfers error");
+      }
+    }
+
+    let pendingExcuses: any[] = [];
+    if (LEAVE_APPROVAL_ROLES.includes(scope.role)) {
+      try {
+        pendingExcuses = await rawQuery<any>(
+          `SELECT er.id, er."excuseDate", er."excuseType", er.reason, er.status, er."createdAt",
+                  e.name AS "employeeName"
+           FROM hr_excuse_requests er
+           JOIN employee_assignments ea ON ea.id = er."assignmentId"
+           JOIN employees e ON e.id = ea."employeeId"
+           WHERE er."companyId" = ANY($1::int[]) AND er.status = 'pending' AND er."deletedAt" IS NULL
+           ORDER BY er."createdAt" DESC LIMIT 20`,
+          [scope.allowedCompanies]
+        );
+      } catch (e) {
+        logger.error(e, "Action-center pendingExcuses error");
+      }
+    }
+
+    let pendingViolations: any[] = [];
+    if (PAYROLL_ROLES.includes(scope.role)) {
+      try {
+        pendingViolations = await rawQuery<any>(
+          `SELECT dm.id, dm.status, dm."createdAt",
+                  e.name AS "employeeName"
+           FROM hr_discipline_memos dm
+           JOIN employee_assignments ea ON ea.id = dm."assignmentId"
+           JOIN employees e ON e.id = ea."employeeId"
+           WHERE dm."companyId" = ANY($1::int[]) AND dm.status IN ('draft','issued','appealed','escalated','gm_review') AND dm."deletedAt" IS NULL
+           ORDER BY dm."createdAt" DESC LIMIT 20`,
+          [scope.allowedCompanies]
+        );
+      } catch (e) {
+        logger.error(e, "Action-center pendingViolations error");
+      }
+    }
+
+    let pendingPurchaseOrders: any[] = [];
+    if (FINANCE_ROLES.includes(scope.role)) {
+      try {
+        pendingPurchaseOrders = await rawQuery<any>(
+          `SELECT id, ref, status, "createdAt"
+           FROM purchase_orders
+           WHERE "companyId" = ANY($1::int[]) AND status = 'pending_approval' AND "deletedAt" IS NULL
+           ORDER BY "createdAt" DESC LIMIT 20`,
+          [scope.allowedCompanies]
+        );
+      } catch (e) {
+        logger.error(e, "Action-center pendingPurchaseOrders error");
+      }
+    }
+
+    let pendingTrainings: any[] = [];
+    if (PAYROLL_ROLES.includes(scope.role)) {
+      try {
+        pendingTrainings = await rawQuery<any>(
+          `SELECT id, name AS title, status, "createdAt"
+           FROM training_programs
+           WHERE "companyId" = ANY($1::int[]) AND status = 'pending' AND "deletedAt" IS NULL
+           ORDER BY "createdAt" DESC LIMIT 20`,
+          [scope.allowedCompanies]
+        );
+      } catch (e) {
+        logger.error(e, "Action-center pendingTrainings error");
+      }
+    }
+
+    let pendingMaintenance: any[] = [];
+    try {
+      pendingMaintenance = await rawQuery<any>(
+        `SELECT id, title, status, priority, "createdAt"
+         FROM maintenance_requests
+         WHERE "companyId" = ANY($1::int[]) AND status = 'pending' AND "deletedAt" IS NULL
+         ORDER BY "createdAt" DESC LIMIT 20`,
+        [scope.allowedCompanies]
+      );
+    } catch (e) {
+      logger.error(e, "Action-center pendingMaintenance error");
+    }
+
+    let pendingJournals: any[] = [];
+    if (FINANCE_ROLES.includes(scope.role)) {
+      try {
+        pendingJournals = await rawQuery<any>(
+          `SELECT id, ref, description, status, "createdAt"
+           FROM journal_entries
+           WHERE "companyId" = ANY($1::int[]) AND status = 'pending_approval' AND "deletedAt" IS NULL
+             AND ref LIKE 'JV-MAN%'
+           ORDER BY "createdAt" DESC LIMIT 20`,
+          [scope.allowedCompanies]
+        );
+      } catch (e) {
+        logger.error(e, "Action-center pendingJournals error");
+      }
+    }
+
+    let pendingInventory: any[] = [];
+    try {
+      pendingInventory = await rawQuery<any>(
+        `SELECT id, status, "countDate", notes, "createdAt"
+         FROM inventory_counts
+         WHERE "companyId" = ANY($1::int[]) AND status = 'pending_approval' AND "deletedAt" IS NULL
+         ORDER BY "createdAt" DESC LIMIT 20`,
+        [scope.allowedCompanies]
+      );
+    } catch (e) {
+      logger.error(e, "Action-center pendingInventory error");
+    }
+
     let pendingWorkflows: any[] = [];
     try {
       pendingWorkflows = await rawQuery<any>(
@@ -269,16 +395,12 @@ router.get("/", async (req, res) => {
     }
 
     const totalPending =
-      pendingLeaves.length +
-      pendingAdvances.length +
-      pendingCustodies.length +
-      pendingLetters.length +
-      pendingPurchases.length +
-      pendingExpenses.length +
-      pendingWorkflows.length +
-      pendingLoans.length +
-      pendingOvertime.length +
-      pendingExitRequests.length;
+      pendingLeaves.length + pendingAdvances.length + pendingCustodies.length +
+      pendingLetters.length + pendingPurchases.length + pendingExpenses.length +
+      pendingLoans.length + pendingOvertime.length + pendingExitRequests.length +
+      pendingTransfers.length + pendingExcuses.length + pendingViolations.length +
+      pendingPurchaseOrders.length + pendingTrainings.length + pendingMaintenance.length +
+      pendingJournals.length + pendingInventory.length + pendingWorkflows.length;
 
     res.json({
       summary: {
@@ -288,20 +410,12 @@ router.get("/", async (req, res) => {
         criticalAlertsCount: criticalAlerts.length,
         workflowPendingCount: pendingWorkflows.length,
       },
-      pendingLeaves,
-      pendingAdvances,
-      pendingCustodies,
-      pendingLetters,
-      pendingPurchases,
-      pendingExpenses,
-      pendingWorkflows,
-      pendingLoans,
-      pendingOvertime,
-      pendingExitRequests,
-      slaBreached,
-      escalations,
-      todayTasks,
-      criticalAlerts,
+      pendingLeaves, pendingAdvances, pendingCustodies, pendingLetters,
+      pendingPurchases, pendingExpenses, pendingLoans, pendingOvertime,
+      pendingExitRequests, pendingTransfers, pendingExcuses, pendingViolations,
+      pendingPurchaseOrders, pendingTrainings, pendingMaintenance,
+      pendingJournals, pendingInventory, pendingWorkflows,
+      slaBreached, escalations, todayTasks, criticalAlerts,
       role: scope.role,
     });
   } catch (err) {
