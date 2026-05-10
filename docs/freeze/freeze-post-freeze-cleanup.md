@@ -52,29 +52,14 @@ This was already addressed during the freeze recovery (see PR #209 and follow-up
 
 The remaining work is the **+100 endpoint migration goal** from the original Day 10-11 plan — that's a feature change, not test debt, and is out of scope for the cleanup sweeps.
 
-### 2. `db/schema.sql` regeneration
+### ~2. `db/schema.sql` regeneration~
 
-The current dump uses an interleaved per-table grouping (PKs, FKs, and CREATE TABLE blocks intermixed) that PG16 can't load in a single pass — see the 2-pass workaround in `.github/workflows/guard.yml`'s `Load schema into test Postgres` step.
-
-**To fix**: re-run `db/dump-schema.sh` on Replit (where the live DB is). The PG16-compatible pg_dump there will emit a clean post-data section and the 2-pass workaround can be removed. After the dump:
-
-```bash
-# On Replit — env already has DATABASE_URL pointed at the live DB
-bash db/dump-schema.sh
-git add db/schema.sql
-git commit -m "db: regenerate schema.sql with PG16-compatible ordering"
-git push
-```
-
-Then locally / in a follow-up PR:
-
-```yaml
-# .github/workflows/guard.yml — replace the 2-pass python heredoc with
-# a single line:
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f db/schema.sql
-```
-
-**Why deferred**: Replit access required.
+**Done 2026-05-10** — re-ran `bash db/dump-schema.sh` on Replit against the live
+DB. New dump is **27,678 lines / 311 tables / 596 indexes / 376 FKs** with a
+clean post-data section: 0 constraints before the first `CREATE TABLE`, all 376
+FKs grouped after the last `CREATE TABLE`. PG16 can now load it in a single
+pass, so the 2-pass workaround in `.github/workflows/guard.yml` (if/when it gets
+re-added) is no longer needed — a single `psql -f db/schema.sql` suffices.
 
 ### 2. Further harness expansion
 
