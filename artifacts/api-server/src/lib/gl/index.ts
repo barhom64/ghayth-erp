@@ -16,3 +16,10 @@ export type {
   BuildEntryInput,
 } from "./journal-poster.js";
 export { buildEntry, buildSimpleEntry } from "./journal-poster.js";
+
+export type {
+  JournalEntryStatus,
+  EntryContext,
+  PostedEntry,
+} from "./posting.js";
+export { postJournalEntry } from "./posting.js";
