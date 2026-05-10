@@ -367,7 +367,9 @@ const allNavSections: NavSection[] = [
       ]},
       { label: "مدير النظام", path: "/admin", icon: Shield, module: "admin", minRoleLevel: 90, children: [
         { label: "المستخدمين", path: "/admin/users", icon: Users },
-        { label: "الأدوار والصلاحيات", path: "/admin/roles", icon: KeyRound },
+        { label: "الأدوار والصلاحيات (v2)", path: "/admin", icon: KeyRound },
+        { label: "مصفوفة الأدوار", path: "/admin/rbac-matrix", icon: Shield },
+        { label: "الأدوار (الكلاسيكي)", path: "/admin/roles", icon: KeyRound },
         { label: "مركز التكاملات", path: "/admin/integrations", icon: Mail },
         { label: "مركز المراقبة", path: "/admin/monitoring", icon: Activity },
         { label: "تقرير المخالفات", path: "/admin/violations-report", icon: AlertTriangle },
