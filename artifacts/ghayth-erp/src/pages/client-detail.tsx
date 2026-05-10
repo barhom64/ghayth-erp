@@ -435,7 +435,7 @@ export default function ClientDetail() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <EntityFinancialProfile entityType="vendor" entityId={id} />
+              <EntityFinancialProfile entityType="client" entityId={id} />
             </CardContent>
           </Card>
           <Card>

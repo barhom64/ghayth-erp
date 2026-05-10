@@ -146,7 +146,7 @@ export default function DriverDetail() {
     listPath: "/fleet/drivers",
     initialValues: driver,
     fields: [
-      { key: "fullName", label: "الاسم الكامل" },
+      { key: "name", label: "الاسم الكامل" },
       { key: "phone", label: "الهاتف" },
       { key: "nationalId", label: "رقم الهوية" },
       { key: "licenseNumber", label: "رقم الرخصة" },

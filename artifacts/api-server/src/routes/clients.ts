@@ -2,7 +2,6 @@ import { handleRouteError, ValidationError, NotFoundError, ConflictError, parseI
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import type pg from "pg";
 import { createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -207,7 +206,7 @@ router.post("/", authorize({ feature: "crm", action: "create" }), async (req, re
         })
       : null;
     let insertedId: number = 0;
-    await withTransaction(async (txClient: pg.PoolClient) => {
+    await withTransaction(async (txClient) => {
       if (email) {
         const { rows: [emailExists] } = await txClient.query<{ id: number }>(
           `SELECT id FROM clients WHERE email = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1 FOR UPDATE`,
