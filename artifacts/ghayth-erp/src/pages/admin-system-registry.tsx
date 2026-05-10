@@ -12,6 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   RefreshCw, Database, Layers, Shield, Activity, AlertTriangle,
   FileText, Zap, BarChart3, CheckCircle2, XCircle, ChevronDown, ChevronUp,
+  Bell, Printer,
 } from "lucide-react";
 
 function FeatureDot({ active, title }: { active: boolean; title: string }) {
@@ -99,6 +100,15 @@ export default function AdminSystemRegistry() {
 
   const { data: coverage, isLoading: covLoading } =
     useApiQuery<any>(["system-registry-coverage"], "/admin/system-registry/coverage");
+
+  const { data: notifRegistry } =
+    useApiQuery<any>(["system-registry-notifications"], "/admin/system-registry/notifications");
+
+  const { data: reportRegistry } =
+    useApiQuery<any>(["system-registry-reports"], "/admin/system-registry/reports");
+
+  const { data: printRegistry } =
+    useApiQuery<any>(["system-registry-print"], "/admin/system-registry/print-templates");
 
   const overview = registry?.overview ?? {};
   const domains = registry?.domains ?? [];
@@ -240,6 +250,15 @@ export default function AdminSystemRegistry() {
               <TabsTrigger value="domains">النطاقات</TabsTrigger>
               <TabsTrigger value="events">الأحداث ({eventList.length})</TabsTrigger>
               <TabsTrigger value="activity">النشاط الأخير</TabsTrigger>
+              <TabsTrigger value="notifications">
+                <Bell className="w-3.5 h-3.5 me-1" />الإشعارات ({notifRegistry?.totalTypes ?? 0})
+              </TabsTrigger>
+              <TabsTrigger value="reports">
+                <BarChart3 className="w-3.5 h-3.5 me-1" />التقارير ({reportRegistry?.totalReports ?? 0})
+              </TabsTrigger>
+              <TabsTrigger value="print">
+                <Printer className="w-3.5 h-3.5 me-1" />الطباعة ({printRegistry?.total ?? 0})
+              </TabsTrigger>
               <TabsTrigger value="gaps">الفجوات (قديم)</TabsTrigger>
             </TabsList>
 
@@ -486,6 +505,94 @@ export default function AdminSystemRegistry() {
                     pageSize={0}
                     emptyMessage="لا توجد بيانات"
                   />
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Notifications Tab */}
+            <TabsContent value="notifications" className="mt-4 space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <StatCard label="نوع إشعار" value={notifRegistry?.totalTypes ?? 0} icon={Bell} />
+                <StatCard label="كيان مغطى" value={notifRegistry?.entitiesWithNotifications ?? 0} icon={CheckCircle2} />
+                <StatCard label="بلا إشعار" value={(notifRegistry?.totalEntities ?? 0) - (notifRegistry?.entitiesWithNotifications ?? 0)} icon={XCircle} />
+              </div>
+              {Object.entries(notifRegistry?.byDomain ?? {}).map(([domain, entries]: [string, any]) => (
+                <Card key={domain}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Bell className="w-4 h-4 text-blue-500" />
+                      {domain} ({entries.length} كيان)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {entries.map((e: any) => (
+                      <div key={e.entityId} className="flex items-start gap-2 p-2 bg-gray-50 rounded-lg">
+                        <span className="text-sm font-medium min-w-[120px]">{e.entityLabel}</span>
+                        <div className="flex flex-wrap gap-1">
+                          {e.notifications.map((n: string) => (
+                            <Badge key={n} variant="outline" className="text-[10px]">{n}</Badge>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              ))}
+            </TabsContent>
+
+            {/* Reports Tab */}
+            <TabsContent value="reports" className="mt-4 space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <StatCard label="تقرير" value={reportRegistry?.totalReports ?? 0} icon={BarChart3} />
+                <StatCard label="كيان مغطى" value={reportRegistry?.entitiesWithReports ?? 0} icon={CheckCircle2} />
+              </div>
+              {Object.entries(reportRegistry?.byDomain ?? {}).map(([domain, entries]: [string, any]) => (
+                <Card key={domain}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <BarChart3 className="w-4 h-4 text-indigo-500" />
+                      {domain} ({entries.length} كيان)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {entries.map((e: any) => (
+                      <div key={e.entityId} className="flex items-start gap-2 p-2 bg-gray-50 rounded-lg">
+                        <span className="text-sm font-medium min-w-[120px]">{e.entityLabel}</span>
+                        <div className="flex flex-wrap gap-1">
+                          {e.reports.map((r: string) => (
+                            <Badge key={r} variant="outline" className="text-[10px]">{r}</Badge>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              ))}
+            </TabsContent>
+
+            {/* Print Templates Tab */}
+            <TabsContent value="print" className="mt-4 space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <StatCard label="قالب طباعة" value={printRegistry?.total ?? 0} icon={Printer} />
+              </div>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Printer className="w-4 h-4 text-gray-500" />
+                    قوالب الطباعة المسجلة
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {(printRegistry?.templates ?? []).map((t: any) => (
+                      <div key={t.entityId} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg text-sm">
+                        <Badge variant="outline" className="text-[10px]">{t.domain}</Badge>
+                        <span className="font-medium">{t.entityLabel}</span>
+                        <span className="font-mono text-xs text-gray-500">{t.templateKey}</span>
+                        {t.detailRoute && <span className="text-xs text-gray-400 ms-auto">{t.detailRoute}</span>}
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
