@@ -1,5 +1,5 @@
 -- =============================================================================
--- 066_hr_discipline_regulation.sql
+-- 034_hr_discipline_regulation.sql
 -- لائحة الانضباط الوظيفي ومحاضر الاستفسار (Living HR Discipline Regulation)
 --
 --   - hr_discipline_regulation:  الكتالوج الحي للمخالفات والجزاءات داخل HR

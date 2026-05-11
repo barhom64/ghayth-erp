@@ -1,5 +1,5 @@
 -- ============================================================
--- 067: Three-way match (PO → GRN → Invoice)
+-- 036: Three-way match (PO → GRN → Invoice)
 --
 -- Adds:
 --   * goods_receipts (header) + goods_receipt_items (lines)

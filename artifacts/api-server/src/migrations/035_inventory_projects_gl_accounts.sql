@@ -1,5 +1,5 @@
 -- ============================================================
--- 066: Seed COA accounts and accounting mappings for the
+-- 035: Seed COA accounts and accounting mappings for the
 --      inventory/warehouse and projects GL integrations.
 --
 -- Notes on code collisions with existing COA (see 016_accounting_engine):

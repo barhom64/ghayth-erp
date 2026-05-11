@@ -1,4 +1,4 @@
--- 141_inventory_advanced_foundations.sql
+-- 157_inventory_advanced_foundations.sql
 -- Foundations for advanced inventory: lots with lifecycle, per-unit
 -- serials, valuation method per product, and the cycle-count
 -- workflow. Week 1 of the plan in docs/INVENTORY_ADVANCED_DESIGN.md.
