@@ -324,7 +324,7 @@ router.put("/sub-agents/:id/link", authorize({ feature: "umrah", action: "create
       finalClientId = newClient.id;
     } else {
       if (!clientId) throw new ValidationError("معرف العميل مطلوب");
-      const [existingClient] = await rawQuery<any>(
+      const [existingClient] = await rawQuery<{ id: number }>(
         `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
         [clientId, scope.companyId]
       );
@@ -360,7 +360,7 @@ router.post("/sub-agents/link-by-nusk", authorize({ feature: "umrah", action: "c
     const scope = req.scope!;
     const parsed = zodParse(linkByNuskSchema.safeParse(req.body));
     const { nuskCode, clientId } = parsed;
-    const [existingClient] = await rawQuery<any>(
+    const [existingClient] = await rawQuery<{ id: number }>(
       `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [clientId, scope.companyId]
     );
@@ -382,7 +382,7 @@ router.post("/sub-agents/:id/link-client", authorize({ feature: "umrah", action:
     const id = parseId(req.params.id, "id");
     const parsed = zodParse(linkClientSchema.safeParse(req.body));
     const { clientId } = parsed;
-    const [existingClient] = await rawQuery<any>(
+    const [existingClient] = await rawQuery<{ id: number }>(
       `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [clientId, scope.companyId]
     );
@@ -629,7 +629,7 @@ router.delete("/groups/:id", authorize({ feature: "umrah", action: "delete" }), 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<{ id: number; salesInvoiceId: number | null }>(
       `SELECT id, "salesInvoiceId" FROM umrah_groups WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -756,7 +756,7 @@ router.patch("/nusk-invoices/:id", authorize({ feature: "umrah", action: "update
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(updateNuskInvoiceSchema.safeParse(req.body));
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<{ id: number; nuskStatus: string }>(
       `SELECT * FROM umrah_nusk_invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -788,7 +788,7 @@ router.delete("/nusk-invoices/:id", authorize({ feature: "umrah", action: "delet
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<{ id: number; nuskStatus: string }>(
       `SELECT id, "nuskStatus" FROM umrah_nusk_invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
