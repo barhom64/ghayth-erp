@@ -87,11 +87,83 @@ function maskConfig(config: any): any {
 
 const GOV_SAFE_COLUMNS = `id, "companyId", type, name, status, enabled, "lastCheckedAt", "lastCheckStatus", "lastCheckMessage", "createdAt", "updatedAt"`;
 
+interface GovIntegrationSafeRow {
+  id: number;
+  companyId: number;
+  type: string;
+  name: string;
+  status: string;
+  enabled: boolean;
+  lastCheckedAt: string | null;
+  lastCheckStatus: string | null;
+  lastCheckMessage: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+  config: unknown;
+}
+
+interface GovIntegrationRow extends GovIntegrationSafeRow {
+  deletedAt: string | null;
+}
+
+interface IqamaExpiryRow {
+  id: number;
+  name: string;
+  empNumber: string | null;
+  iqamaNumber: string | null;
+  iqamaExpiry: string | null;
+  borderNumber: string | null;
+  visaNumber: string | null;
+  visaType: string | null;
+  visaExpiry: string | null;
+  workPermitNumber: string | null;
+  workPermitExpiry: string | null;
+  iqamaStatus: string | null;
+  iqamaDaysLeft: number | null;
+  visaDaysLeft: number | null;
+  workPermitDaysLeft: number | null;
+  jobTitle: string | null;
+  branchId: number | null;
+  branchName: string | null;
+}
+
+interface VehicleRegistrationRow {
+  id: number;
+  plateNumber: string | null;
+  make: string | null;
+  model: string | null;
+  year: number | null;
+  registrationNumber: string | null;
+  registrationExpiry: string | null;
+  inspectionDate: string | null;
+  nextInspectionDate: string | null;
+  plateType: string | null;
+  registrationDaysLeft: number | null;
+  inspectionDaysLeft: number | null;
+}
+
+interface GovLinkRow {
+  id: number;
+  companyId: number;
+  integrationId: number;
+  entityType: string;
+  entityId: number;
+  externalRef: string | null;
+  enabled: boolean;
+  notes: string | null;
+  syncStatus: string;
+  createdAt: string;
+  updatedAt: string | null;
+  deletedAt: string | null;
+  integrationType: string;
+  integrationName: string;
+}
+
 router.get("/", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { where, params } = buildScopedWhere(scope, {}, { disableBranchScope: true });
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<GovIntegrationSafeRow>(
       `SELECT ${GOV_SAFE_COLUMNS}, config FROM gov_integrations WHERE ${where} ORDER BY type ASC`,
       params
     );
@@ -102,14 +174,14 @@ router.get("/", authorize({ feature: "admin", action: "update" }), async (req, r
           [scope.companyId, type, GOV_SYSTEM_NAMES[type]]
         );
       }
-      const fresh = await rawQuery<any>(
+      const fresh = await rawQuery<GovIntegrationSafeRow>(
         `SELECT ${GOV_SAFE_COLUMNS}, config FROM gov_integrations WHERE ${where} ORDER BY type ASC`,
         params
       );
-      res.json({ data: fresh.map((r: any) => ({ ...r, config: maskConfig(r.config) })) });
+      res.json({ data: fresh.map((r) => ({ ...r, config: maskConfig(r.config) })) });
       return;
     }
-    res.json({ data: rows.map((r: any) => ({ ...r, config: maskConfig(r.config) })) });
+    res.json({ data: rows.map((r) => ({ ...r, config: maskConfig(r.config) })) });
   } catch (err) { handleRouteError(err, res, "Gov integrations list error:"); }
 });
 
@@ -124,7 +196,7 @@ router.put("/:id", authorize({ feature: "admin", action: "update" }), async (req
       throw new ValidationError("config must be a JSON object");
     }
 
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<GovIntegrationRow>(
       `SELECT * FROM gov_integrations WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
@@ -136,7 +208,7 @@ router.put("/:id", authorize({ feature: "admin", action: "update" }), async (req
     if (config !== undefined) {
       let mergedConfig = config;
       if (existing.config && typeof existing.config === "object" && typeof config === "object") {
-        mergedConfig = { ...existing.config };
+        mergedConfig = { ...(existing.config as Record<string, unknown>) };
         for (const [key, val] of Object.entries(config)) {
           if (typeof val === "string" && /^\w{2}\*{4}\w{2}$/.test(val)) continue;
           (mergedConfig as any)[key] = val;
@@ -165,7 +237,7 @@ router.put("/:id", authorize({ feature: "admin", action: "update" }), async (req
     }).catch((e) => logger.error(e, "gov-integrations background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.integration.updated", entity: "gov_integrations", entityId: id, details: JSON.stringify({ enabled, status, configUpdated: config !== undefined }) }).catch((e) => logger.error(e, "gov-integrations background task failed"));
 
-    const [updated] = await rawQuery<any>(`SELECT * FROM gov_integrations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [updated] = await rawQuery<GovIntegrationRow>(`SELECT * FROM gov_integrations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json({ ...updated, config: maskConfig(updated.config) });
   } catch (err) { handleRouteError(err, res, "Gov integration update error:"); }
 });
@@ -176,13 +248,13 @@ router.post("/:id/test", authorize({ feature: "admin", action: "update" }), asyn
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
 
-    const [integration] = await rawQuery<any>(
+    const [integration] = await rawQuery<GovIntegrationRow>(
       `SELECT * FROM gov_integrations WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
     if (!integration) { throw new NotFoundError("التكامل غير موجود"); }
 
-    const config = integration.config || {};
+    const config = (integration.config as Record<string, unknown> | null) || {};
     const hasApiKey = config.apiKey && String(config.apiKey).length > 3;
     const hasUrl = config.baseUrl || config.url;
 
@@ -284,7 +356,7 @@ router.get("/expiring/iqama", authorize({ feature: "admin", action: "update" }),
   try {
     const scope = req.scope!;
     const days = Number(req.query.days) || 30;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<IqamaExpiryRow>(
       `SELECT e.id, e.name, e."empNumber", e."iqamaNumber", e."iqamaExpiry",
               e."borderNumber", e."visaNumber", e."visaType", e."visaExpiry",
               e."workPermitNumber", e."workPermitExpiry", e."iqamaStatus",
@@ -312,7 +384,7 @@ router.get("/expiring/registration", authorize({ feature: "admin", action: "upda
   try {
     const scope = req.scope!;
     const days = Number(req.query.days) || 30;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<VehicleRegistrationRow>(
       `SELECT fv.id, fv."plateNumber", fv.make, fv.model, fv.year,
               fv."registrationNumber", fv."registrationExpiry",
               fv."inspectionDate", fv."nextInspectionDate", fv."plateType",
@@ -342,7 +414,7 @@ router.get("/links", authorize({ feature: "admin", action: "update" }), async (r
     if (entityId) { params.push(Number(entityId)); conditions.push(`gl."entityId" = $${params.length}`); }
 
     conditions.push(`gl."deletedAt" IS NULL`);
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<GovLinkRow>(
       `SELECT gl.*, gi.type AS "integrationType", gi.name AS "integrationName"
        FROM gov_integration_links gl
        JOIN gov_integrations gi ON gi.id = gl."integrationId"
@@ -364,7 +436,7 @@ router.post("/links", authorize({ feature: "admin", action: "update" }), async (
       throw new ValidationError("integrationId و entityType و entityId مطلوبة");
     }
 
-    const [integration] = await rawQuery<any>(
+    const [integration] = await rawQuery<{ id: number }>(
       `SELECT id FROM gov_integrations WHERE id = $1 AND "companyId" = $2`,
       [integrationId, scope.companyId]
     );
@@ -385,10 +457,10 @@ router.post("/links", authorize({ feature: "admin", action: "update" }), async (
       }).catch((e) => logger.error(e, "gov-integrations background task failed"));
       emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.link.created", entity: "gov_integration_links", entityId: insertId, details: JSON.stringify({ integrationId, entityType, entityId: Number(entityId) }) }).catch((e) => logger.error(e, "gov-integrations background task failed"));
 
-      const [row] = await rawQuery<any>(`SELECT gl.*, gi.type AS "integrationType", gi.name AS "integrationName" FROM gov_integration_links gl JOIN gov_integrations gi ON gi.id = gl."integrationId" WHERE gl.id=$1 AND gl."companyId"=$2 AND gl."deletedAt" IS NULL`, [insertId, scope.companyId]);
+      const [row] = await rawQuery<GovLinkRow>(`SELECT gl.*, gi.type AS "integrationType", gi.name AS "integrationName" FROM gov_integration_links gl JOIN gov_integrations gi ON gi.id = gl."integrationId" WHERE gl.id=$1 AND gl."companyId"=$2 AND gl."deletedAt" IS NULL`, [insertId, scope.companyId]);
       res.status(201).json(row);
     } else {
-      const [existing] = await rawQuery<any>(
+      const [existing] = await rawQuery<GovLinkRow>(
         `SELECT gl.*, gi.type AS "integrationType", gi.name AS "integrationName" FROM gov_integration_links gl JOIN gov_integrations gi ON gi.id = gl."integrationId" WHERE gl."companyId" = $1 AND gl."integrationId" = $2 AND gl."entityType" = $3 AND gl."entityId" = $4 AND gl."deletedAt" IS NULL`,
         [scope.companyId, integrationId, entityType, Number(entityId)]
       );
@@ -404,7 +476,7 @@ router.patch("/links/:id", authorize({ feature: "admin", action: "update" }), as
     const id = parseId(req.params.id, "id");
     const { enabled, externalRef, syncStatus, notes } = body;
 
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<{ id: number }>(
       `SELECT gl.id FROM gov_integration_links gl WHERE gl.id = $1 AND gl."companyId" = $2 AND gl."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -428,7 +500,7 @@ router.patch("/links/:id", authorize({ feature: "admin", action: "update" }), as
     }).catch((e) => logger.error(e, "gov-integrations background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "gov.link.updated", entity: "gov_integration_links", entityId: id, details: JSON.stringify({ enabled, externalRef, syncStatus }) }).catch((e) => logger.error(e, "gov-integrations background task failed"));
 
-    const [row] = await rawQuery<any>(`SELECT gl.*, gi.type AS "integrationType", gi.name AS "integrationName" FROM gov_integration_links gl JOIN gov_integrations gi ON gi.id = gl."integrationId" WHERE gl.id=$1 AND gl."companyId"=$2 AND gl."deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<GovLinkRow>(`SELECT gl.*, gi.type AS "integrationType", gi.name AS "integrationName" FROM gov_integration_links gl JOIN gov_integrations gi ON gi.id = gl."integrationId" WHERE gl.id=$1 AND gl."companyId"=$2 AND gl."deletedAt" IS NULL`, [id, scope.companyId]);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Gov link update error:"); }
 });
@@ -437,7 +509,7 @@ router.delete("/links/:id", authorize({ feature: "admin", action: "update" }), a
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [before] = await rawQuery<any>(
+    const [before] = await rawQuery<GovLinkRow>(
       `SELECT * FROM gov_integration_links WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
