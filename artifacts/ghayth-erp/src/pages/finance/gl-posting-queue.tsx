@@ -1,18 +1,19 @@
 /**
  * GL posting queue — operator-facing dashboard for the 5 deferred GL
  * integration helpers (#253, #256, #258, #261, #262), exposed via the
- * new `/finance/gl-helpers/*` endpoints in #263.
+ * `/finance/gl-helpers/*` endpoints (#263 + #266 + this PR).
  *
- * Two tabs today (the simplest sources with pending-listing endpoints):
+ * Four tabs:
+ *   - رواتب Mudad     → acknowledged salary settlements, no journalEntryId
+ *   - شطب الدفعات     → recalled/expired/disposed lots, no writeoffJournalEntryId
+ *   - إعادة تقييم FX  → fx_revaluation_log rows where journalEntryId IS NULL
+ *   - جرد دوري        → approved cycle counts where no line carries
+ *                        adjustmentJournalEntryId yet
  *
- *   - Mudad salary settlements with `status='acknowledged'` and no
- *     `journalEntryId` yet → POST /gl-helpers/mudad-salary/:id
- *   - Stock lots in recalled/expired/disposed status with no
- *     `writeoffJournalEntryId` yet → POST /gl-helpers/lot-writeoff/:id
- *
- * The FX revaluation, realised FX, and cycle-count tabs land in
- * follow-ups when their listing endpoints exist (the helpers
- * themselves are already wired through the same route file).
+ * Realised FX is NOT in the queue — its idempotency lives on the
+ * caller (the helper doesn't stamp anything back today), so there's
+ * no clean "pending" view. Operators trigger it from the invoice
+ * settlement workflow directly.
  *
  * Each row has a "Post to GL" button that triggers the helper. The
  * outcome (`posted | draft | skipped | noop`) lands in a toast and
@@ -23,7 +24,7 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Send, AlertCircle, PackageX, Coins } from "lucide-react";
+import { Send, AlertCircle, PackageX, Coins, RefreshCcw, ClipboardCheck } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -53,6 +54,24 @@ interface LotPendingRow {
   expiryDate: string | null;
 }
 
+interface FxRevaluationPendingRow {
+  id: number;
+  periodId: number;
+  asOfDate: string;
+  functionalCurrency: string;
+  totalGain: string;
+  totalLoss: string;
+  createdAt: string;
+}
+
+interface CycleCountPendingRow {
+  id: number;
+  warehouseId: number;
+  scheduledDate: string;
+  approvedAt: string | null;
+  lineCount: string;
+}
+
 interface PostOutcome {
   data: {
     status: "posted" | "draft" | "skipped" | "noop";
@@ -69,8 +88,10 @@ function describeOutcome(o: PostOutcome["data"]): string {
   return "تمت المعالجة";
 }
 
+type Tab = "mudad" | "lots" | "fx" | "cycle";
+
 export default function GLPostingQueuePage() {
-  const [tab, setTab] = useState<"mudad" | "lots">("mudad");
+  const [tab, setTab] = useState<Tab>("mudad");
 
   const mudad = useApiQuery<{ data: MudadPendingRow[] }>(
     ["gl-helpers", "mudad-salary", "pending"],
@@ -79,6 +100,14 @@ export default function GLPostingQueuePage() {
   const lots = useApiQuery<{ data: LotPendingRow[] }>(
     ["gl-helpers", "lot-writeoff", "pending"],
     "/finance/gl-helpers/lot-writeoff/pending",
+  );
+  const fx = useApiQuery<{ data: FxRevaluationPendingRow[] }>(
+    ["gl-helpers", "fx-revaluation", "pending"],
+    "/finance/gl-helpers/fx-revaluation/pending",
+  );
+  const cycle = useApiQuery<{ data: CycleCountPendingRow[] }>(
+    ["gl-helpers", "cycle-count", "pending"],
+    "/finance/gl-helpers/cycle-count/pending",
   );
 
   const postMudad = useApiMutation<PostOutcome, { id: number }>(
@@ -101,11 +130,37 @@ export default function GLPostingQueuePage() {
     },
   );
 
-  if (mudad.isLoading || lots.isLoading) return <LoadingSpinner />;
-  if (mudad.isError || lots.isError) return <ErrorState />;
+  const postFx = useApiMutation<PostOutcome, { id: number }>(
+    (body) => `/finance/gl-helpers/fx-revaluation/${body.id}`,
+    "POST",
+    [["gl-helpers", "fx-revaluation", "pending"]],
+    {
+      successMessage: false,
+      onSuccess: (r) => toast({ title: describeOutcome(r.data) }),
+    },
+  );
+
+  const postCycle = useApiMutation<PostOutcome, { id: number }>(
+    (body) => `/finance/gl-helpers/cycle-count/${body.id}`,
+    "POST",
+    [["gl-helpers", "cycle-count", "pending"]],
+    {
+      successMessage: false,
+      onSuccess: (r) => toast({ title: describeOutcome(r.data) }),
+    },
+  );
+
+  if (mudad.isLoading || lots.isLoading || fx.isLoading || cycle.isLoading) {
+    return <LoadingSpinner />;
+  }
+  if (mudad.isError || lots.isError || fx.isError || cycle.isError) {
+    return <ErrorState />;
+  }
 
   const mudadRows = mudad.data?.data ?? [];
   const lotRows = lots.data?.data ?? [];
+  const fxRows = fx.data?.data ?? [];
+  const cycleRows = cycle.data?.data ?? [];
 
   const mudadColumns: DataTableColumn<MudadPendingRow>[] = [
     {
@@ -220,20 +275,121 @@ export default function GLPostingQueuePage() {
     },
   ];
 
+  const fxColumns: DataTableColumn<FxRevaluationPendingRow>[] = [
+    {
+      key: "id",
+      header: "#",
+      sortable: true,
+      className: "font-mono text-muted-foreground",
+      render: (r) => r.id,
+    },
+    {
+      key: "asOfDate",
+      header: "بتاريخ",
+      sortable: true,
+      className: "font-mono text-blue-600",
+      render: (r) => r.asOfDate,
+    },
+    {
+      key: "functionalCurrency",
+      header: "العملة الوظيفية",
+      render: (r) => r.functionalCurrency,
+    },
+    {
+      key: "totalGain",
+      header: "إجمالي الربح",
+      sortable: true,
+      className: "font-semibold text-emerald-600",
+      render: (r) => formatCurrency(Number(r.totalGain)),
+    },
+    {
+      key: "totalLoss",
+      header: "إجمالي الخسارة",
+      sortable: true,
+      className: "font-semibold text-red-600",
+      render: (r) => formatCurrency(Number(r.totalLoss)),
+    },
+    {
+      key: "actions" as keyof FxRevaluationPendingRow,
+      header: "",
+      render: (r) => (
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={postFx.isPending}
+          onClick={() => postFx.mutate({ id: r.id })}
+        >
+          <Send className="h-3.5 w-3.5 ml-1" />
+          نشر للقيد
+        </Button>
+      ),
+    },
+  ];
+
+  const cycleColumns: DataTableColumn<CycleCountPendingRow>[] = [
+    {
+      key: "id",
+      header: "#",
+      sortable: true,
+      className: "font-mono text-muted-foreground",
+      render: (r) => r.id,
+    },
+    {
+      key: "warehouseId",
+      header: "المستودع",
+      sortable: true,
+      render: (r) => `#${r.warehouseId}`,
+    },
+    {
+      key: "scheduledDate",
+      header: "تاريخ الجرد",
+      sortable: true,
+      className: "font-mono",
+      render: (r) => r.scheduledDate,
+    },
+    {
+      key: "lineCount",
+      header: "عدد الأصناف",
+      sortable: true,
+      render: (r) => r.lineCount,
+    },
+    {
+      key: "approvedAt",
+      header: "تاريخ الاعتماد",
+      sortable: true,
+      render: (r) => (r.approvedAt ?? "").slice(0, 10) || "—",
+    },
+    {
+      key: "actions" as keyof CycleCountPendingRow,
+      header: "",
+      render: (r) => (
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={postCycle.isPending}
+          onClick={() => postCycle.mutate({ id: r.id })}
+        >
+          <Send className="h-3.5 w-3.5 ml-1" />
+          نشر للقيد
+        </Button>
+      ),
+    },
+  ];
+
   return (
     <PageShell
       title="قائمة الانتظار للترحيل المحاسبي"
-      subtitle="السجلات الجاهزة للترحيل إلى الأستاذ العام (Mudad / دفعات المخزون)"
+      subtitle="السجلات الجاهزة للترحيل إلى الأستاذ العام — Mudad، شطب الدفعات، إعادة تقييم FX، الجرد الدوري"
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "قائمة الترحيل" }]}
     >
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-3">
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
             <div className="p-2 bg-blue-50 rounded-lg">
               <Coins className="h-5 w-5 text-blue-600" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">رواتب Mudad معتمدة</p>
+              <p className="text-xs text-muted-foreground">رواتب Mudad</p>
               <p className="text-xl font-bold">{mudadRows.length}</p>
             </div>
           </CardContent>
@@ -244,8 +400,30 @@ export default function GLPostingQueuePage() {
               <PackageX className="h-5 w-5 text-amber-600" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">دفعات مخزون للشطب</p>
+              <p className="text-xs text-muted-foreground">شطب دفعات</p>
               <p className="text-xl font-bold">{lotRows.length}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 bg-violet-50 rounded-lg">
+              <RefreshCcw className="h-5 w-5 text-violet-600" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">إعادة تقييم FX</p>
+              <p className="text-xl font-bold">{fxRows.length}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 bg-teal-50 rounded-lg">
+              <ClipboardCheck className="h-5 w-5 text-teal-600" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">جرد دوري معتمد</p>
+              <p className="text-xl font-bold">{cycleRows.length}</p>
             </div>
           </CardContent>
         </Card>
@@ -255,20 +433,28 @@ export default function GLPostingQueuePage() {
               <AlertCircle className="h-5 w-5 text-slate-600" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">الإجمالي قيد الانتظار</p>
-              <p className="text-xl font-bold">{mudadRows.length + lotRows.length}</p>
+              <p className="text-xs text-muted-foreground">الإجمالي</p>
+              <p className="text-xl font-bold">
+                {mudadRows.length + lotRows.length + fxRows.length + cycleRows.length}
+              </p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as "mudad" | "lots")}>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
         <TabsList>
           <TabsTrigger value="mudad">
             رواتب Mudad ({mudadRows.length})
           </TabsTrigger>
           <TabsTrigger value="lots">
             شطب الدفعات ({lotRows.length})
+          </TabsTrigger>
+          <TabsTrigger value="fx">
+            إعادة تقييم FX ({fxRows.length})
+          </TabsTrigger>
+          <TabsTrigger value="cycle">
+            جرد دوري ({cycleRows.length})
           </TabsTrigger>
         </TabsList>
 
@@ -291,6 +477,30 @@ export default function GLPostingQueuePage() {
             rowKey={(r) => `lot-${r.id}`}
             emptyMessage="لا توجد دفعات مخزون بانتظار الشطب المحاسبي"
             emptyIcon={<PackageX className="h-10 w-10 opacity-30" />}
+            pageSize={20}
+            noToolbar
+          />
+        </TabsContent>
+
+        <TabsContent value="fx" className="mt-3">
+          <DataTable
+            columns={fxColumns}
+            data={fxRows}
+            rowKey={(r) => `fx-${r.id}`}
+            emptyMessage="لا توجد عمليات إعادة تقييم FX بانتظار الترحيل"
+            emptyIcon={<RefreshCcw className="h-10 w-10 opacity-30" />}
+            pageSize={20}
+            noToolbar
+          />
+        </TabsContent>
+
+        <TabsContent value="cycle" className="mt-3">
+          <DataTable
+            columns={cycleColumns}
+            data={cycleRows}
+            rowKey={(r) => `cycle-${r.id}`}
+            emptyMessage="لا توجد عمليات جرد دوري معتمدة بانتظار الترحيل"
+            emptyIcon={<ClipboardCheck className="h-10 w-10 opacity-30" />}
             pageSize={20}
             noToolbar
           />
