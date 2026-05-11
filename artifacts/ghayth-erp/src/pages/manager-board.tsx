@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { PromptDialog } from "@/components/shared/prompt-dialog";
 
 function formatTimeAgo(timestamp: string): string {
   const now = Date.now();
@@ -34,6 +35,12 @@ export default function ManagerBoard() {
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const { toast } = useToast();
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
+  // Tracks the row being rejected so PromptDialog can submit its
+  // reason against the right item. Closing the dialog (esc / cancel)
+  // resets to null without firing the mutation. Native window.prompt()
+  // used to live here — it blocked the event loop, ignored RTL, and
+  // didn't match the app's dark-mode skin.
+  const [rejectTarget, setRejectTarget] = useState<{ _type: string; id: number } | null>(null);
 
   const { data: actionData, isLoading: actionLoading, isError: actionError, refetch: refetchAction } = useApiQuery<any>(
     ["action-center", scopeQueryString],
@@ -160,14 +167,16 @@ export default function ManagerBoard() {
   };
 
   const doReject = (item: any) => {
-    const notes = prompt("سبب الرفض (اختياري):");
-    if (!notes) {
-      toast({ variant: "destructive", title: "يرجى ذكر سبب الرفض" });
-      return;
-    }
-    const key = `${item._type}-${item.id}`;
+    setRejectTarget({ _type: item._type, id: item.id });
+  };
+
+  const handleRejectSubmit = (notes: string) => {
+    if (!rejectTarget) return;
+    const { _type, id } = rejectTarget;
+    const key = `${_type}-${id}`;
     setProcessingIds(prev => new Set([...prev, key]));
-    approvalMut.mutate({ _type: item._type, _itemId: item.id, approved: false, reason: notes, notes });
+    approvalMut.mutate({ _type, _itemId: id, approved: false, reason: notes, notes });
+    setRejectTarget(null);
   };
 
   const tasksDone = tasks.filter((t: any) => t.status === "completed").length;
@@ -461,6 +470,16 @@ export default function ManagerBoard() {
       </Card>
 
       <DelegationBoard delegationsData={delegationsData} />
+
+      <PromptDialog
+        open={rejectTarget !== null}
+        title="سبب الرفض"
+        description="يرجى إدخال سبب رفض هذا الطلب — سيظهر للمتقدم في إشعار الرد."
+        placeholder="اكتب سبب الرفض هنا..."
+        confirmLabel="رفض"
+        onSubmit={handleRejectSubmit}
+        onClose={() => setRejectTarget(null)}
+      />
     </PageShell>
   );
 }
