@@ -9,7 +9,6 @@ import {
   zodParse,
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { emitEvent, createAuditLog, currentPeriod } from "../lib/businessHelpers.js";
 import { applyTransition } from "../lib/lifecycleEngine.js";

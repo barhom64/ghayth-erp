@@ -44,6 +44,30 @@ Each asserts the response status is one of `[401, 403, 404, 422]` — never `200
 
 Adding more write scenarios is mechanical: append to the `CROSS_TENANT_WRITE_CASES` array in the test file and seed any new tables in the fixture's `seedCompany`.
 
+## Sweep #3 — RBAC migration completion + 2 more harness writes (2026-05-11)
+
+**RBAC migration now 100% complete** (modulo `admin.ts` which had 3 holdouts):
+
+- 3 `requirePermission("admin:read")` calls in `admin.ts:1390/1398/1412` (the `/system-registry/*` GET endpoints) → `authorize({ feature: "admin", action: "list" })`. Same authorization semantics, consistent with the 1131 already-migrated endpoints.
+- 65 dead `requirePermission` imports removed across the routes directory. These were leftover from the `requirePermission → authorize` mass migration: every endpoint had been moved but the import line wasn't pruned. Now the import only appears where the symbol is actually used (which after this sweep is zero files outside the middleware module itself).
+
+**Corrected migration stats** — `freeze-day-10-11-rbac.md` claimed "9.2% coverage / 103 authorize / 1017 requirePermission". The current numbers are very different and the doc was massively stale by the time today's session began:
+
+| | claimed (2026-05-09) | actual (2026-05-11) |
+| --- | --- | --- |
+| `authorize()` endpoints | 103 | **1131** |
+| `requirePermission()` endpoints | 1017 | **0** |
+| Coverage | 9.2% | **100%** |
+
+The wide gap is explained by the steady migration drip in the days between the freeze-day-10-11 doc and now (PR #195 alone moved ~100 endpoints; most subsequent feature PRs followed the same pattern).
+
+**Harness expansion**: 2 additional cross-tenant write scenarios:
+
+- PATCH `/api/employees/:id` (foreign employee) → expect [401, 403, 404, 422]
+- DELETE `/api/employees/:id` (foreign employee) → same
+
+Total dynamic scenarios per CI run is now **23** (2 D-class POST repros + 14 list no-leak + 7 cross-tenant writes). The fixture's existing `companyB.employeeId` is the test target — no new seed needed because the fixture already creates one employee per company for the owner assignment.
+
 ## Resolved (not still deferred)
 
 ### ~1. RBAC v2 test debt — 27 files~

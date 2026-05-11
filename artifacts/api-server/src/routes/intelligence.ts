@@ -2,7 +2,6 @@ import { handleRouteError, NotFoundError, parseId, zodParse } from "../lib/error
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { requireRole } from "../middlewares/roleGuard.js";
 import { aiEngine } from "../lib/aiEngine.js";

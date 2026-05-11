@@ -5,7 +5,6 @@ import { rawQuery } from "../lib/rawdb.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { handleRouteError, ValidationError, ForbiddenError, ConflictError , zodParse } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { logger } from "../lib/logger.js";
 

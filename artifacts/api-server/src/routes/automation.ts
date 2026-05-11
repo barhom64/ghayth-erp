@@ -1,7 +1,6 @@
 import { handleRouteError, NotFoundError, parseId } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { triggerJobByName } from "../lib/cronScheduler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";

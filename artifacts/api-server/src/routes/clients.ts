@@ -6,7 +6,6 @@ import { createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpe
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { hashPassword } from "../lib/auth.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { logger } from "../lib/logger.js";
 import type { ClientRow, InvoiceRow } from "../lib/dbTypes.js";
