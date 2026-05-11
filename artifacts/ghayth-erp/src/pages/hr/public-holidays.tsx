@@ -12,6 +12,7 @@ import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { HOLIDAY_TYPES, HOLIDAY_COLORS, MONTHS_AR } from "@/lib/hr-type-maps";
 import { DatePicker } from "@/components/ui/date-picker";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 
 export default function PublicHolidaysPage() {
   const currentYear = new Date().getFullYear();
@@ -19,6 +20,10 @@ export default function PublicHolidaysPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({ name: "", startDate: "", endDate: "", type: "national", description: "", isRecurring: false });
+  // Deletion dialog state (replaces window.confirm). Tracks the
+  // holiday being deleted so ConfirmDeleteDialog can render its name +
+  // fetch /impact-preview for it.
+  const [deletingHoliday, setDeletingHoliday] = useState<{ id: number; name: string } | null>(null);
 
   const { data, isLoading, isError } = useApiQuery<any>(["public-holidays", String(year)], `/hr/public-holidays?year=${year}`);
   const holidays = asList(data?.data || data);
@@ -41,13 +46,6 @@ export default function PublicHolidaysPage() {
     [["public-holidays"]],
     { successMessage: "تم إضافة العطلة", onSuccess: resetForm }
   );
-  const deleteMut = useApiMutation<any, { id: number }>(
-    (body) => `/hr/public-holidays/${body.id}`,
-    "DELETE",
-    [["public-holidays"]],
-    { successMessage: "تم الحذف" }
-  );
-
   const handleSave = () => {
     if (!form.name || !form.startDate) { toast({ title: "الاسم والتاريخ مطلوبان", variant: "destructive" }); return; }
     if (editingId) {
@@ -57,9 +55,10 @@ export default function PublicHolidaysPage() {
     }
   };
 
-  const handleDelete = (id: number) => {
-    if (!confirm("حذف هذه العطلة؟")) return;
-    deleteMut.mutate({ id });
+  // Open the confirm dialog. The actual DELETE fires from inside
+  // ConfirmDeleteDialog via the deletePath it's handed below.
+  const openDeleteDialog = (h: any) => {
+    setDeletingHoliday({ id: h.id, name: h.name || "—" });
   };
 
   const handleEdit = (h: any) => {
@@ -175,7 +174,7 @@ export default function PublicHolidaysPage() {
                       <Badge className={HOLIDAY_COLORS[h.type] || "bg-gray-100 text-gray-700"}>{HOLIDAY_TYPES[h.type] || h.type}</Badge>
                       {h.isRecurring && <Badge className="bg-orange-100 text-orange-700">سنوي</Badge>}
                       <button onClick={() => handleEdit(h)} className="p-1 text-gray-400 hover:text-primary"><Edit2 className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => handleDelete(h.id)} className="p-1 text-gray-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => openDeleteDialog(h)} className="p-1 text-gray-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                   </div>
                 );
@@ -184,6 +183,20 @@ export default function PublicHolidaysPage() {
           </Card>
         ))
       )}
+
+      <ConfirmDeleteDialog
+        open={deletingHoliday !== null}
+        onOpenChange={(v) => { if (!v) setDeletingHoliday(null); }}
+        entity={{
+          type: "public_holiday",
+          id: deletingHoliday?.id ?? 0,
+          name: deletingHoliday?.name ?? "",
+        }}
+        deletePath={`/hr/public-holidays/${deletingHoliday?.id}`}
+        invalidateKeys={[["public-holidays"]]}
+        successMessage="تم الحذف"
+        onDeleted={() => setDeletingHoliday(null)}
+      />
     </PageShell>
   );
 }
