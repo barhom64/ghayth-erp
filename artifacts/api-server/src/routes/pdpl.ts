@@ -79,7 +79,7 @@ router.get("/privacy-notice", privacyNoticeIpLimiter, async (req, res) => {
   }
 });
 
-router.get("/retention-policies", authMiddleware, pdplUserLimiter, async (req, res) => {
+router.get("/retention-policies", authMiddleware, pdplUserLimiter, authorize({ feature: "admin.pdpl", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -99,11 +99,19 @@ router.get("/employee-data-export/:employeeId", authMiddleware, pdplUserLimiter,
     const scope = req.scope!;
     const employeeId = parseId(req.params.employeeId, "employeeId");
 
+    // Self-service exception: an employee can always export their
+    // own PDPL data without holding admin.pdpl. For any OTHER
+    // employee, fall through to the standard pdpl-export permission
+    // OR the legacy hr:read fallback (subject-access requests filed
+    // by HR on behalf of an employee).
     const isOwnData = scope.employeeId === employeeId;
-    const canExportEmployeeData = isOwnData || (await userHasPermission(scope, "hr:read"));
+    const canExportEmployeeData =
+      isOwnData
+      || (await userHasPermission(scope, "hr:read"))
+      || (await userHasPermission(scope, "admin.pdpl:export"));
 
     if (!canExportEmployeeData) {
-      throw new ForbiddenError("يمكنك فقط تصدير بياناتك الشخصية أو يجب أن تملك صلاحية قراءة بيانات الموارد البشرية");
+      throw new ForbiddenError("يمكنك فقط تصدير بياناتك الشخصية أو يجب أن تملك صلاحية تصدير بيانات حماية البيانات الشخصية");
     }
 
     const [employee] = await rawQuery<any>(
@@ -176,7 +184,7 @@ router.get("/employee-data-export/:employeeId", authMiddleware, pdplUserLimiter,
   }
 });
 
-router.post("/data-request", authMiddleware, pdplUserLimiter, authorize({ feature: "admin", action: "update" }), async (req, res) => {
+router.post("/data-request", authMiddleware, pdplUserLimiter, authorize({ feature: "admin.pdpl", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(dataRequestSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -218,7 +226,7 @@ router.post("/data-request", authMiddleware, pdplUserLimiter, authorize({ featur
   }
 });
 
-router.get("/processing-log", authMiddleware, pdplUserLimiter, requireMinLevel(90), async (req, res) => {
+router.get("/processing-log", authMiddleware, pdplUserLimiter, authorize({ feature: "admin.pdpl", action: "view" }), requireMinLevel(90), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
