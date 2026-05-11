@@ -8,7 +8,6 @@ import { Router } from "express";
 import { HR_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import {
   handleRouteError,

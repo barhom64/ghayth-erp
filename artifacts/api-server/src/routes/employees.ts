@@ -8,7 +8,6 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import {
   createNotification,
@@ -25,6 +24,46 @@ import { hashPassword } from "../lib/auth.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
+import type { EmployeeRow, EmployeeAssignmentRow } from "../lib/dbTypes.js";
+
+// Extended employee row — schema has many more columns than the early
+// Drizzle definition. The index signature catches any column we haven't
+// listed explicitly so existing callers stay happy.
+interface FullEmployeeRow extends EmployeeRow {
+  iqamaNumber?: string | null;
+  iqamaExpiry?: string | null;
+  passportNumber?: string | null;
+  passportExpiry?: string | null;
+  gosiNumber?: string | null;
+  bankName?: string | null;
+  bankAccount?: string | null;
+  iban?: string | null;
+  branchId?: number | null;
+  departmentId?: number | null;
+  managerId?: number | null;
+  jobTitle?: string | null;
+  hireDate?: string | null;
+  salary?: number | string | null;
+  housingAllowance?: number | string | null;
+  transportAllowance?: number | string | null;
+  contractType?: string | null;
+  probationDays?: number | null;
+  deletedAt?: string | null;
+  [k: string]: unknown;
+}
+
+// Joined list-row used by GET /employees — adds assignment columns + computed
+// metadata flags.
+interface EmployeeListRow extends FullEmployeeRow {
+  assignmentId?: number | null;
+  companyId?: number | null;
+  branchName?: string | null;
+  departmentName?: string | null;
+  managerName?: string | null;
+}
+
+interface CountRow { count: string | number; total?: string | number }
+interface IdRow { id: number }
 
 const createEmployeeSchema = z.object({
   name: z.string().min(1),
@@ -188,7 +227,7 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
     params.push(offset);
     const offsetIdx = paramIdx++;
 
-    const employees = await rawQuery<any>(
+    const employees = await rawQuery<EmployeeListRow>(
       `SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status,
               ea.id AS "activeAssignmentId",
               e."iqamaNumber", e."iqamaExpiry", e."iqamaStatus",
@@ -207,7 +246,7 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
     );
 
     const countParams = params.slice(0, params.length - 2);
-    const [countRow] = await rawQuery<any>(
+    const [countRow] = await rawQuery<{ total: string | number }>(
       `SELECT COUNT(*) AS total
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id
@@ -438,7 +477,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       const year = currentYear();
       if (leaveTypesRes.rows.length > 0) {
         const valuesSql: string[] = [];
-        const params: any[] = [];
+        const params: unknown[] = [];
         for (const lt of leaveTypesRes.rows) {
           const base = params.length;
           valuesSql.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6},0,0)`);
@@ -529,7 +568,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       );
       if (compSalaryComponents.rows.length > 0) {
         const valuesSql: string[] = [];
-        const params: any[] = [];
+        const params: unknown[] = [];
         for (const sc of compSalaryComponents.rows) {
           const base = params.length;
           valuesSql.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},true,NOW())`);
@@ -558,7 +597,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
         priority: "high", refType: "employee", refId: empId,
       }).catch((e) => logger.error(e, "employees background task failed"));
     }
-    const [hrAssignment] = await rawQuery<any>(
+    const [hrAssignment] = await rawQuery<{ id: number }>(
       `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role IN ('hr_manager','general_manager') AND status = 'active' ORDER BY CASE role WHEN 'hr_manager' THEN 1 ELSE 2 END LIMIT 1`,
       [scope.companyId]
     );
@@ -630,7 +669,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
     // ── Step 12: Auto-create subsidiary accounting accounts ──
     createSubsidiaryAccountsForEntity(scope.companyId, "employee", empId, name).catch((e) => logger.error(e, "employees background task failed"));
 
-    const [employee] = await rawQuery<any>(
+    const [employee] = await rawQuery<EmployeeListRow>(
       `SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status,
               ea."jobTitle", ea.role, ea.salary, ea."branchId",
               b.name AS "branchName"
@@ -665,10 +704,20 @@ router.get("/onboarding-tasks", authorize({ feature: "hr", action: "list" }), as
     const scope = req.scope!;
     const { employeeId, status } = req.query as any;
     const conditions = [`ot."companyId" = $1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (employeeId) { params.push(Number(employeeId)); conditions.push(`ot."employeeId" = $${params.length}`); }
     if (status) { params.push(status); conditions.push(`ot.status = $${params.length}`); }
-    const rows = await rawQuery<any>(
+    interface OnboardingTaskRow extends Record<string, unknown> {
+      id: number;
+      companyId: number;
+      employeeId: number;
+      employeeName?: string | null;
+      empNumber?: string | null;
+      title: string;
+      status: string;
+      createdAt: string;
+    }
+    const rows = await rawQuery<OnboardingTaskRow>(
       `SELECT ot.*, e.name AS "employeeName", e."empNumber"
        FROM onboarding_tasks ot
        JOIN employees e ON e.id = ot."employeeId"
@@ -686,7 +735,15 @@ router.patch("/onboarding-tasks/:id", authorize({ feature: "hr", action: "update
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { status } = body;
-    const [row] = await rawQuery<any>(
+    interface OnboardingTaskRow extends Record<string, unknown> {
+      id: number;
+      employeeId: number;
+      title: string;
+      status: string;
+      completedAt?: string | null;
+      completedBy?: number | null;
+    }
+    const [row] = await rawQuery<OnboardingTaskRow>(
       `UPDATE onboarding_tasks SET status = $1,
        "completedAt" = CASE WHEN $1 = 'completed' THEN NOW() ELSE NULL END,
        "completedBy" = $2
@@ -711,7 +768,12 @@ router.patch("/onboarding-tasks/:id", authorize({ feature: "hr", action: "update
 router.get("/job-titles", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    interface JobTitleRow extends Record<string, unknown> {
+      id: number;
+      name: string;
+      companyId?: number | null;
+    }
+    const rows = await rawQuery<JobTitleRow>(
       `SELECT * FROM job_titles WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY name LIMIT 500`,
       [scope.companyId]
     );
@@ -722,7 +784,15 @@ router.get("/job-titles", authorize({ feature: "hr", action: "list" }), async (r
 router.get("/documents", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    interface EmployeeDocumentRow extends Record<string, unknown> {
+      id: number;
+      employeeId: number;
+      employeeName?: string | null;
+      type?: string | null;
+      title?: string | null;
+      createdAt: string;
+    }
+    const rows = await rawQuery<EmployeeDocumentRow>(
       `SELECT ed.*, e.name AS "employeeName"
        FROM employee_documents ed
        JOIN employees e ON e.id = ed."employeeId"
@@ -746,13 +816,13 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
     const id = parseId(req.params.id, "id");
 
     let extraCondition = "";
-    const queryParams: any[] = [id, scope.companyId];
+    const queryParams: unknown[] = [id, scope.companyId];
     if (!scope.isOwner && scope.role === "employee" && scope.employeeId) {
       extraCondition = ` AND e.id = $3`;
       queryParams.push(scope.employeeId);
     }
 
-    const [employee] = await rawQuery<any>(
+    const [employee] = await rawQuery<EmployeeListRow>(
       `SELECT e.id, e.name, e.phone, e.email, e."empNumber",
               e."photoUrl", e.status, e."createdAt",
               e."nationalId", e.nationality, e.gender, e."dateOfBirth",
@@ -781,7 +851,7 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
     }
 
     const [tasks, attendance, leaves, trainings, payroll, violations, loans, overtime] = await Promise.all([
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT pt.id, pt.title, pt.status, pt.priority, pt."dueDate", p.name AS "projectName"
          FROM project_tasks pt
          LEFT JOIN projects p ON p.id = pt."projectId"
@@ -789,14 +859,14 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
          ORDER BY pt."dueDate" DESC NULLS LAST LIMIT 20`,
         [id, scope.companyId]
       ),
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT a.id, a.date, a."checkIn", a."checkOut", a."lateMinutes", a.status
          FROM attendance a
          WHERE a."assignmentId" = $1 AND a."companyId" = $2
          ORDER BY a.date DESC LIMIT 30`,
         [employee.assignmentId, scope.companyId]
       ),
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT lr.id, lr.status, lr."startDate", lr."endDate", lr.days, lr.reason,
                 lt.name AS "leaveTypeName"
          FROM hr_leave_requests lr
@@ -805,7 +875,7 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
          ORDER BY lr."createdAt" DESC LIMIT 20`,
         [id, scope.companyId]
       ),
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT te.id, te.status, te."completedAt",
                 tp.title AS "courseTitle", tp.type AS "courseType"
          FROM training_enrollments te
@@ -814,7 +884,7 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
          ORDER BY tp."startDate" DESC LIMIT 20`,
         [id, scope.companyId]
       ).catch((e) => { logger.error(e, "employees query failed"); return []; }),
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT pl.id, pl.basic, pl."grossSalary", pl.gosi, pl."lateDeduction", pl."netSalary",
                 pr.period, pr.status, pr."createdAt"
          FROM payroll_lines pl
@@ -823,14 +893,14 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
          ORDER BY pr.period DESC LIMIT 12`,
         [employee.assignmentId, scope.companyId]
       ).catch((e) => { logger.error(e, "employees query failed"); return []; }),
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT ev.id, ev.type, ev.description, ev.severity, ev.deduction, ev.period, ev."createdAt"
          FROM employee_violations ev
          WHERE ev."assignmentId" = $1 AND ev."companyId" = $2 AND ev."deletedAt" IS NULL
          ORDER BY ev."createdAt" DESC LIMIT 20`,
         [employee.assignmentId, scope.companyId]
       ).catch((e) => { logger.error(e, "employees query failed"); return []; }),
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT l.id, l."loanNumber", l."loanType", l.amount, l."paidAmount", l."remainingAmount",
                 l."installmentCount", l."installmentAmount", l.status, l."createdAt"
          FROM hr_employee_loans l
@@ -838,7 +908,7 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
          ORDER BY l."createdAt" DESC LIMIT 20`,
         [employee.assignmentId, scope.companyId]
       ).catch((e) => { logger.error(e, "employees query failed"); return []; }),
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT o.id, o."requestNumber", o."overtimeDate", o.hours, o."totalAmount", o.status, o."createdAt"
          FROM hr_overtime_requests o
          WHERE o."assignmentId" = $1 AND o."companyId" = $2 AND o."deletedAt" IS NULL
@@ -886,7 +956,7 @@ router.patch("/:id", authorize({ feature: "hr.employees", action: "update", reso
     //   - the "before" snapshot for audit diff
     //   - the current email / nationalId so pre-checks can skip no-op cases
     //     (user "changes" to the same value they already had)
-    const [before] = await rawQuery<any>(
+    const [before] = await rawQuery<EmployeeListRow>(
       `SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status,
               e."nationalId", e."iqamaNumber", e."iqamaExpiry",
               e."passportNumber", e."passportExpiry",
@@ -991,7 +1061,7 @@ router.patch("/:id", authorize({ feature: "hr.employees", action: "update", reso
 
     await withTransaction(async (client) => {
       const empFields: string[] = [];
-      const empVals: any[] = [];
+      const empVals: unknown[] = [];
       if (name !== undefined) { empVals.push(name); empFields.push(`name = $${empVals.length}`); }
       if (phone !== undefined) { empVals.push(phone); empFields.push(`phone = $${empVals.length}`); }
       if (email !== undefined) { empVals.push(email); empFields.push(`email = $${empVals.length}`); }
@@ -1049,7 +1119,7 @@ router.patch("/:id", authorize({ feature: "hr.employees", action: "update", reso
 
       if (jobTitle || role || salary !== undefined || branchId || departmentId || bodyJobTitleId !== undefined || bodyManagerId !== undefined) {
         const fields: string[] = [];
-        const vals: any[] = [];
+        const vals: unknown[] = [];
         if (jobTitle) { vals.push(jobTitle); fields.push(`"jobTitle" = $${vals.length}`); }
         if (bodyJobTitleId !== undefined) { vals.push(bodyJobTitleId || null); fields.push(`"jobTitleId" = $${vals.length}`); }
         else if (jobTitle) {
@@ -1087,7 +1157,7 @@ router.patch("/:id", authorize({ feature: "hr.employees", action: "update", reso
     // Re-read the full row so the audit log + event get a reliable "after"
     // snapshot rather than the raw body (which may contain partial updates,
     // sensitive fields, or stale shape).
-    const [after] = await rawQuery<any>(
+    const [after] = await rawQuery<EmployeeListRow>(
       `SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status,
               e."nationalId", e."iqamaNumber", e."iqamaExpiry",
               e."passportNumber", e."passportExpiry",
@@ -1163,7 +1233,7 @@ router.delete("/:id", authorize({ feature: "hr.employees", action: "delete", res
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { reason } = zodParse(deleteEmployeeSchema.safeParse(req.body ?? {}));
-    const [employee] = await rawQuery<any>(
+    const [employee] = await rawQuery<EmployeeListRow>(
       `SELECT e.id, ea.id AS "assignmentId", u.id AS "userId" FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
        LEFT JOIN users u ON u."employeeId" = e.id
@@ -1284,7 +1354,15 @@ router.post("/obligations/seed", authorize({ feature: "hr", action: "update" }),
   try {
     zodParse(seedObligationsSchema.safeParse(req.body));
     const scope = req.scope!;
-    const emps = await rawQuery<any>(
+    interface ExpiryEmployeeRow {
+      id: number;
+      name: string;
+      iqamaExpiry?: string | null;
+      passportExpiry?: string | null;
+      workPermitExpiry?: string | null;
+      visaExpiry?: string | null;
+    }
+    const emps = await rawQuery<ExpiryEmployeeRow>(
       `SELECT e.id, e.name, e."iqamaExpiry", e."passportExpiry", e."workPermitExpiry", e."visaExpiry"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea.status='active'

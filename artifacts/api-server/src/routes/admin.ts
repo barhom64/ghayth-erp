@@ -10,7 +10,7 @@ import { logger } from "../lib/logger.js";
 import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
 import { getRedisRateLimitStatus } from "../lib/rateLimitStore.js";
 import { integrationService } from "../lib/integrationService.js";
-import { requirePermission, invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
+import { invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import crypto from "node:crypto";
@@ -1387,7 +1387,7 @@ router.get("/system-registry", authorize({ feature: "admin", action: "list" }), 
   } catch (err) { handleRouteError(err, res, "System registry error:"); }
 });
 
-router.get("/system-registry/entities", requirePermission("admin:read"), async (req, res) => {
+router.get("/system-registry/entities", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const domain = req.query.domain as string | undefined;
     const entities = domain ? getEntitiesByDomain(domain) : ENTITY_REGISTRY;
@@ -1395,7 +1395,7 @@ router.get("/system-registry/entities", requirePermission("admin:read"), async (
   } catch (err) { handleRouteError(err, res, "Entity registry error:"); }
 });
 
-router.get("/system-registry/coverage", requirePermission("admin:read"), async (_req, res) => {
+router.get("/system-registry/coverage", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
   try {
     const gaps = getMissingCoverage();
     const summary = getCoverageSummary();
@@ -1409,7 +1409,7 @@ router.get("/system-registry/coverage", requirePermission("admin:read"), async (
   } catch (err) { handleRouteError(err, res, "Coverage analysis error:"); }
 });
 
-router.get("/system-registry/notifications", requirePermission("admin:read"), async (_req, res) => {
+router.get("/system-registry/notifications", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
   try {
     const byDomain: Record<string, Array<{ entityId: string; entityLabel: string; notifications: string[] }>> = {};
     for (const entity of ENTITY_REGISTRY) {
@@ -1427,7 +1427,7 @@ router.get("/system-registry/notifications", requirePermission("admin:read"), as
   } catch (err) { handleRouteError(err, res, "Notification registry error:"); }
 });
 
-router.get("/system-registry/reports", requirePermission("admin:read"), async (_req, res) => {
+router.get("/system-registry/reports", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
   try {
     const byDomain: Record<string, Array<{ entityId: string; entityLabel: string; reports: string[] }>> = {};
     for (const entity of ENTITY_REGISTRY) {
@@ -1445,7 +1445,7 @@ router.get("/system-registry/reports", requirePermission("admin:read"), async (_
   } catch (err) { handleRouteError(err, res, "Report registry error:"); }
 });
 
-router.get("/system-registry/print-templates", requirePermission("admin:read"), async (_req, res) => {
+router.get("/system-registry/print-templates", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
   try {
     const templates = ENTITY_REGISTRY
       .filter(e => e.print?.hasTemplate)
@@ -1460,7 +1460,7 @@ router.get("/system-registry/print-templates", requirePermission("admin:read"), 
   } catch (err) { handleRouteError(err, res, "Print templates error:"); }
 });
 
-router.get("/system-registry/actions", requirePermission("admin:read"), async (req, res) => {
+router.get("/system-registry/actions", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const domain = req.query.domain as string | undefined;

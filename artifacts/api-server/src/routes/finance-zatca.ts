@@ -12,7 +12,6 @@ import { z } from "zod";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent, toDateISO } from "../lib/businessHelpers.js";
 import crypto from "node:crypto";

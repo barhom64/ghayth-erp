@@ -12,7 +12,6 @@ import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded, roundTo2, generateTimeRef } from "../lib/businessHelpers.js";

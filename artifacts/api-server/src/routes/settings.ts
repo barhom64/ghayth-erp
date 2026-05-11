@@ -4,7 +4,6 @@ import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import {
   resolveSettings,

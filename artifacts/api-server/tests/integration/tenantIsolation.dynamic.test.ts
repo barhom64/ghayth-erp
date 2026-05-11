@@ -167,6 +167,17 @@ d("Tenant isolation — dynamic (real Postgres)", () => {
       path: (fx) => `/api/tasks/${fx.companyB.taskId}`,
       label: "DELETE /api/tasks/:id (foreign task)",
     },
+    {
+      method: "patch",
+      path: (fx) => `/api/employees/${fx.companyB.employeeId}`,
+      body: { name: "hijacked" },
+      label: "PATCH /api/employees/:id (foreign employee)",
+    },
+    {
+      method: "delete",
+      path: (fx) => `/api/employees/${fx.companyB.employeeId}`,
+      label: "DELETE /api/employees/:id (foreign employee)",
+    },
   ];
 
   for (const c of CROSS_TENANT_WRITE_CASES) {

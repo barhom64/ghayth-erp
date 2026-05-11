@@ -55,3 +55,29 @@ export {
   abcMonthlyClassificationCron,
   DEFAULT_ABC_THRESHOLDS,
 } from "./abc-analysis.js";
+
+// Cycle-count variance → journal entry wiring
+export type {
+  CycleCountLineForJournal,
+  CycleCountTotals,
+  CycleCountAccounts,
+  PostCycleCountOpts,
+  PostCycleCountOutcome,
+} from "./post-cycle-count-journal.js";
+export {
+  aggregateCycleCount,
+  buildCycleCountEntryInput,
+  postCycleCountVarianceJournal,
+} from "./post-cycle-count-journal.js";
+
+// Lot lifecycle write-off → journal entry wiring
+export type {
+  LotWriteoffStatus,
+  LotWriteoffAccounts,
+  PostLotWriteoffOpts,
+  PostLotWriteoffOutcome,
+} from "./post-lot-writeoff-journal.js";
+export {
+  buildLotWriteoffEntryInput,
+  postLotWriteoffJournal,
+} from "./post-lot-writeoff-journal.js";

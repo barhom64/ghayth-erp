@@ -12,7 +12,6 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { requireOwnership } from "../middlewares/contextualRbac.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import {

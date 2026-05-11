@@ -2,7 +2,7 @@ import { handleRouteError, zodParse } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { requirePermission, invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
+import { invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { auditLog } from "../lib/audit.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";

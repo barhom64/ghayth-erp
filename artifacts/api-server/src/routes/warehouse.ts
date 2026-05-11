@@ -10,7 +10,6 @@ import {
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { movingAverage } from "../lib/algorithms.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -769,6 +768,10 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
       action: "warehouse.movement.created",
       entity: "warehouse_movements",
       entityId: insertId,
+      movementId: insertId,
+      type: String(row?.type ?? b.type ?? ""),
+      productId: Number(row?.productId ?? b.productId),
+      qty: Number(row?.quantity ?? b.quantity),
       details: JSON.stringify({
         productId: row?.productId,
         type: row?.type,
@@ -924,7 +927,7 @@ router.post("/transfers", authorize({ feature: "warehouse.transfers", action: "c
   }
 });
 
-router.get("/categories", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
+router.get("/categories", authorize({ feature: "warehouse.inventory", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { page = "1", limit: lim = "50", search, status } = req.query as any;
@@ -950,7 +953,7 @@ router.get("/categories", authorize({ feature: "warehouse", action: "list" }), a
   } catch (err) { handleRouteError(err, res, "Warehouse categories error:"); }
 });
 
-router.get("/categories/:id", authorize({ feature: "warehouse", action: "view" }), async (req, res) => {
+router.get("/categories/:id", authorize({ feature: "warehouse.inventory", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -963,7 +966,7 @@ router.get("/categories/:id", authorize({ feature: "warehouse", action: "view" }
   } catch (err) { handleRouteError(err, res, "Warehouse category detail error:"); }
 });
 
-router.post("/categories", authorize({ feature: "warehouse", action: "create" }), async (req, res) => {
+router.post("/categories", authorize({ feature: "warehouse.inventory", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createCategorySchema.safeParse(req.body));
@@ -1077,7 +1080,7 @@ router.post("/suppliers", authorize({ feature: "warehouse", action: "create" }),
   } catch (err) { handleRouteError(err, res, "Create supplier error:"); }
 });
 
-router.patch("/categories/:id", authorize({ feature: "warehouse", action: "update" }), async (req, res) => {
+router.patch("/categories/:id", authorize({ feature: "warehouse.inventory", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1108,7 +1111,7 @@ router.patch("/categories/:id", authorize({ feature: "warehouse", action: "updat
   } catch (err) { handleRouteError(err, res, "Update category error:"); }
 });
 
-router.delete("/categories/:id", authorize({ feature: "warehouse", action: "delete" }), async (req, res) => {
+router.delete("/categories/:id", authorize({ feature: "warehouse.inventory", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

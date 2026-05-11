@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { handleRouteError, ValidationError, NotFoundError,
@@ -10,6 +9,43 @@ import { handleRouteError, ValidationError, NotFoundError,
 } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
+
+// Local row shapes for recruitment tables.
+
+interface JobPostingRow {
+  id: number;
+  companyId?: number | null;
+  title: string;
+  department?: string | null;
+  location?: string | null;
+  type?: string | null;
+  description?: string | null;
+  requirements?: string | null;
+  salaryMin?: number | string | null;
+  salaryMax?: number | string | null;
+  status: string;
+  closingDate?: string | null;
+  createdBy?: number | null;
+  createdAt: string;
+  updatedAt?: string | null;
+  deletedAt?: string | null;
+}
+
+interface JobApplicationRow {
+  id: number;
+  postingId: number;
+  applicantName: string;
+  email?: string | null;
+  phone?: string | null;
+  resumeUrl?: string | null;
+  status?: string | null;
+  notes?: string | null;
+  rating?: number | string | null;
+  createdAt: string;
+  updatedAt?: string | null;
+  deletedAt?: string | null;
+  postingTitle?: string | null;
+}
 
 const createPostingSchema = z.object({
   title: z.string().min(1, "عنوان الإعلان الوظيفي مطلوب"),
@@ -96,7 +132,7 @@ router.post("/postings", authorize({ feature: "hr.recruitment", action: "create"
       entityId: r.insertId,
       details: JSON.stringify({ title, type: type || "full-time", status: status || "open" }),
     }).catch((e) => logger.error(e, "recruitment background task failed"));
-    const [row] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    const [row] = await rawQuery<JobPostingRow>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
     res.status(201).json(row || { id: r.insertId, title, status: status || "open" });
   } catch (err) { handleRouteError(err, res, "Create job posting error:"); }
 });
@@ -105,7 +141,7 @@ router.get("/postings/:id", authorize({ feature: "hr.recruitment", action: "view
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<JobPostingRow>(`SELECT * FROM job_postings WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("الإعلان الوظيفي غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "recruitment"); }
@@ -117,7 +153,7 @@ router.patch("/postings/:id", authorize({ feature: "hr.recruitment", action: "up
     const id = parseId(req.params.id, "id");
     const b = zodParse(updatePostingSchema.safeParse(req.body)) as any;
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
     if (b.department !== undefined) { params.push(b.department); sets.push(`department=$${params.length}`); }
     if (b.location !== undefined) { params.push(b.location); sets.push(`location=$${params.length}`); }
@@ -132,7 +168,7 @@ router.patch("/postings/:id", authorize({ feature: "hr.recruitment", action: "up
     params.push(id); params.push(scope.companyId);
     const result = await rawExecute(`UPDATE job_postings SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     if (result.affectedRows === 0) throw new NotFoundError("الإعلان الوظيفي غير موجود");
-    const [row] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<JobPostingRow>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "job_postings", entityId: id, after: b }).catch((e) => logger.error(e, "recruitment background task failed"));
     emitEvent({
       companyId: scope.companyId,
@@ -233,7 +269,7 @@ router.delete("/postings/:id", authorize({ feature: "hr.recruitment", action: "d
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [before] = await rawQuery<any>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [before] = await rawQuery<JobPostingRow>(`SELECT * FROM job_postings WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!before) throw new NotFoundError("الإعلان الوظيفي غير موجود");
     await rawExecute(`UPDATE job_postings SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "job_postings", entityId: id, before }).catch((e) => logger.error(e, "recruitment background task failed"));
@@ -253,7 +289,7 @@ router.get("/applications", authorize({ feature: "hr.recruitment", action: "list
     const scope = req.scope!;
     const { postingId } = req.query;
     let where = `(jp."companyId"=$1 OR jp."companyId" IS NULL) AND a."deletedAt" IS NULL AND jp."deletedAt" IS NULL`;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (postingId) { params.push(postingId); where += ` AND a."postingId"=$${params.length}`; }
     const rows = await rawQuery(`SELECT a.*, jp.title as "postingTitle" FROM job_applications a LEFT JOIN job_postings jp ON a."postingId"=jp.id WHERE ${where} ORDER BY a."createdAt" DESC LIMIT 500`, params);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -286,7 +322,7 @@ router.post("/applications", authorize({ feature: "hr.recruitment", action: "cre
       entityId: r.insertId,
       details: JSON.stringify({ postingId: Number(postingId), applicantName }),
     }).catch((e) => logger.error(e, "recruitment background task failed"));
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<JobApplicationRow>(
       `SELECT ja.* FROM job_applications ja JOIN job_postings jp ON jp.id = ja."postingId" WHERE ja.id=$1 AND jp."companyId"=$2 AND ja."deletedAt" IS NULL`,
       [r.insertId, scope.companyId]
     );
@@ -298,7 +334,7 @@ router.get("/applications/:id", authorize({ feature: "hr.recruitment", action: "
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(`SELECT a.*, jp.title as "postingTitle" FROM job_applications a LEFT JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND (jp."companyId"=$2 OR jp."companyId" IS NULL) AND a."deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<JobApplicationRow>(`SELECT a.*, jp.title as "postingTitle" FROM job_applications a LEFT JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND (jp."companyId"=$2 OR jp."companyId" IS NULL) AND a."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("طلب التوظيف غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "recruitment"); }
@@ -308,11 +344,11 @@ router.patch("/applications/:id", authorize({ feature: "hr.recruitment", action:
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(`SELECT a.id FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND jp."companyId"=$2 AND a."deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<{ id: number }>(`SELECT a.id FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND jp."companyId"=$2 AND a."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("طلب التوظيف غير موجود");
-    const b = zodParse(updateApplicationSchema.safeParse(req.body)) as any;
+    const b = zodParse(updateApplicationSchema.safeParse(req.body));
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
     if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes=$${params.length}`); }
     if (b.rating !== undefined) { params.push(b.rating); sets.push(`rating=$${params.length}`); }
@@ -324,7 +360,7 @@ router.patch("/applications/:id", authorize({ feature: "hr.recruitment", action:
        AND "postingId" IN (SELECT id FROM job_postings WHERE "companyId"=$${params.length + 1})`,
       [...params, scope.companyId]
     );
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<JobApplicationRow>(
       `SELECT ja.* FROM job_applications ja JOIN job_postings jp ON jp.id = ja."postingId" WHERE ja.id=$1 AND jp."companyId"=$2 AND ja."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -344,7 +380,7 @@ router.delete("/applications/:id", authorize({ feature: "hr.recruitment", action
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [before] = await rawQuery<any>(`SELECT a.* FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND jp."companyId"=$2 AND a."deletedAt" IS NULL`, [id, scope.companyId]);
+    const [before] = await rawQuery<JobApplicationRow>(`SELECT a.* FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND jp."companyId"=$2 AND a."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!before) throw new NotFoundError("طلب التوظيف غير موجود");
     await rawExecute(`UPDATE job_applications SET "deletedAt" = NOW() WHERE id=$1 AND "deletedAt" IS NULL AND "postingId" IN (SELECT id FROM job_postings WHERE "companyId"=$2)`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "job_applications", entityId: id, before }).catch((e) => logger.error(e, "recruitment background task failed"));
