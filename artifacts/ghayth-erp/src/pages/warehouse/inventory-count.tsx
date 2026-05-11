@@ -64,8 +64,7 @@ export default function InventoryCountPage() {
   const loadItems = async (countId: number) => {
     if (expandedCount === countId) { setExpandedCount(null); return; }
     try {
-      const resp = await fetch(`/api/warehouse/inventory-counts/${countId}/items`, { credentials: "include" });
-      const json = await resp.json();
+      const json = await apiFetch<any>(`/warehouse/inventory-counts/${countId}/items`);
       setCountItems((prev) => ({ ...prev, [countId]: json.data || json }));
       setExpandedCount(countId);
     } catch (e) { toast({ title: "خطأ في جلب العناصر", variant: "destructive" }); }
@@ -77,8 +76,7 @@ export default function InventoryCountPage() {
     if (physical === undefined || physical === "") { toast({ title: "أدخل الكمية الفعلية", variant: "destructive" }); return; }
     try {
       await apiFetch(`/warehouse/inventory-counts/${countId}/items`, { method: "POST", body: JSON.stringify({ productId, physicalCount: Number(physical) }) });
-      const resp = await fetch(`/api/warehouse/inventory-counts/${countId}/items`, { credentials: "include" });
-      const json = await resp.json();
+      const json = await apiFetch<any>(`/warehouse/inventory-counts/${countId}/items`);
       setCountItems((prev) => ({ ...prev, [countId]: json.data || json }));
       toast({ title: "تم حفظ الجرد" });
     } catch (e: any) { toast({ title: e.message, variant: "destructive" }); }

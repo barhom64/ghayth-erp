@@ -1930,18 +1930,23 @@ invoicesRouter.post("/dunning/send", authorize({ feature: "finance.collection", 
     const today = todayISO();
     const results: any[] = [];
 
+    // Batch-fetch all invoices in one query
+    const invoiceIdNums = invoiceIds.map(Number);
+    const allInvoices = await rawQuery<any>(
+      `SELECT i.id, i.ref AS "invoiceNumber", i."createdAt"::date AS "invoiceDate", i."dueDate",
+              i.total, COALESCE(i."paidAmount",0) AS "paidAmount", i."clientId",
+              c.name AS "clientName"
+       FROM invoices i
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+       WHERE i.id = ANY($1::int[]) AND i."companyId"=$2
+         AND i.status NOT IN ('paid','cancelled')
+         AND i."deletedAt" IS NULL`,
+      [invoiceIdNums, scope.companyId]
+    );
+    const invoiceMap = new Map(allInvoices.map((inv: any) => [inv.id, inv]));
+
     for (const invId of invoiceIds) {
-      const [inv] = await rawQuery<any>(
-        `SELECT i.id, i.ref AS "invoiceNumber", i."createdAt"::date AS "invoiceDate", i."dueDate",
-                i.total, COALESCE(i."paidAmount",0) AS "paidAmount", i."clientId",
-                c.name AS "clientName"
-         FROM invoices i
-         LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
-         WHERE i.id=$1 AND i."companyId"=$2
-           AND i.status NOT IN ('paid','cancelled')
-           AND i."deletedAt" IS NULL`,
-        [Number(invId), scope.companyId]
-      );
+      const inv = invoiceMap.get(Number(invId));
       if (!inv) { results.push({ invoiceId: invId, status: "skipped", reason: "not_found_or_paid" }); continue; }
 
       if (!inv.dueDate) { results.push({ invoiceId: invId, status: "skipped", reason: "no_due_date" }); continue; }
