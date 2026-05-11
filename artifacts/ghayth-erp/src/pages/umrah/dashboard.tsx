@@ -7,7 +7,8 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { Users, Plane, AlertTriangle, UserPlus, Play, Zap } from "lucide-react";
+import { Users, Plane, AlertTriangle, UserPlus, Play, Zap, ShieldAlert, TrendingUp, TrendingDown, Coins, Link2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PageShell } from "@/components/page-shell";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
@@ -19,6 +20,16 @@ export default function UmrahDashboard() {
   const { data: dash, refetch, isLoading, isError } = useApiQuery<any>(
     ["umrah-dashboard", String(seasonId || "")],
     seasonId ? `/umrah/dashboard?seasonId=${seasonId}` : "/umrah/dashboard"
+  );
+  // §6.1 NUSK-aware overview — uses the Phase-4 endpoint that reads from
+  // the new umrah_mutamers + umrah_nusk_invoices + umrah_violations tables.
+  const { data: overview } = useApiQuery<{ totals: {
+    totalMutamers: number; insideKingdom: number; overstays: number;
+    absconders: number; totalCost: number; openViolations: number;
+    openViolationsTotal: number; unlinkedSubAgents: number;
+  } }>(
+    ["umrah-overview", String(seasonId || "")],
+    seasonId ? `/umrah/dashboard/overview?seasonId=${seasonId}` : "/umrah/dashboard/overview"
   );
   const { toast } = useToast();
   const p = dash?.pilgrims || {};
@@ -54,6 +65,21 @@ export default function UmrahDashboard() {
           <Button variant="outline" onClick={runPenalties} className="gap-2"><Zap className="h-4 w-4" />تشغيل الغرامات</Button>
         </div>
       </div>
+
+      {/* §6.1 — 8 KPI cards from the NUSK-aware overview endpoint */}
+      {overview?.totals && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <NuskKpi color="blue" icon={Users} label="إجمالي المعتمرين (نسك)" value={overview.totals.totalMutamers} />
+          <NuskKpi color="green" icon={Plane} label="داخل المملكة الآن" value={overview.totals.insideKingdom} />
+          <NuskKpi color="orange" icon={AlertTriangle} label="متجاوزون للبرنامج" value={overview.totals.overstays} />
+          <NuskKpi color="red" icon={ShieldAlert} label="متغيّبون (تم التبليغ)" value={overview.totals.absconders} />
+          <NuskKpi color="gray" icon={Coins} label="إجمالي تكاليف نسك" value={formatCurrency(Number(overview.totals.totalCost))} />
+          <NuskKpi color="red" icon={TrendingDown} label="غرامات مفتوحة" value={overview.totals.openViolations}
+            extra={formatCurrency(Number(overview.totals.openViolationsTotal))} />
+          <NuskKpi color="orange" icon={Link2} label="وكلاء غير مربوطين بعميل" value={overview.totals.unlinkedSubAgents} />
+          <NuskKpi color="purple" icon={TrendingUp} label="الموسم النشط" value={activeSeason?.title ?? "—"} />
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
         <Card className="border-0 shadow-sm">
@@ -139,6 +165,7 @@ export default function UmrahDashboard() {
         </Card>
       </div>
 
+      {/* skipped for brevity */}
       {(dash?.recentArrivals || []).length > 0 && (
         <Card>
           <CardHeader><CardTitle className="text-base">آخر الواصلين</CardTitle></CardHeader>
@@ -160,5 +187,36 @@ export default function UmrahDashboard() {
         </Card>
       )}
     </PageShell>
+  );
+}
+
+function NuskKpi({ color, icon: Icon, label, value, extra }: {
+  color: "blue" | "green" | "orange" | "red" | "gray" | "purple";
+  icon: any; label: string; value: number | string; extra?: string;
+}) {
+  const bgClass: Record<string, string> = {
+    blue: "bg-blue-50 text-blue-600",
+    green: "bg-green-50 text-green-600",
+    orange: "bg-orange-50 text-orange-600",
+    red: "bg-red-50 text-red-600",
+    gray: "bg-slate-50 text-slate-600",
+    purple: "bg-purple-50 text-purple-600",
+  };
+  const [bg, text] = bgClass[color].split(" ");
+  return (
+    <Card className="border-0 shadow-sm">
+      <CardContent className="p-3 flex items-center gap-2">
+        <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", bg)}>
+          <Icon className={cn("w-5 h-5", text)} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-lg font-bold truncate">
+            {typeof value === "number" ? value.toLocaleString("ar-SA") : value}
+          </p>
+          <p className="text-xs text-gray-500 truncate">{label}</p>
+          {extra && <p className="text-[10px] text-muted-foreground">{extra}</p>}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

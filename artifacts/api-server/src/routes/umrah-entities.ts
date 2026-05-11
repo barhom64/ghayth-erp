@@ -886,14 +886,24 @@ router.post("/commission-plans", requirePermission("umrah:write"), async (req, r
     );
     if (!emp) throw new ValidationError("الموظف غير موجود", { field: "employeeId" });
 
+    // Spec §9.5: plans need the general-manager's approval before they
+    // can be calculated against. New plans land as 'suspended' (not
+    // visible to the cron sweep, calculate refuses with 409) until the
+    // approver hits /approve. Owners / general managers / hr_managers
+    // bypass the gate (they ARE the approver).
+    const autoActivate = scope.role === "owner"
+      || scope.role === "general_manager"
+      || scope.role === "hr_manager";
+    const initialStatus = autoActivate ? "active" : "suspended";
+
     const { insertId } = await rawExecute(
       `INSERT INTO employee_commission_plans
          ("companyId","branchId","employeeId","assignmentId","seasonId",
           "planName","baseSalary","commissionType","conditionType",
           "minProfitPerVisa","minSalesPercent","minAvgPrice",
           "excludedMonths","tierUnit","partialTiersAllowed","violationBlocksCommission",
-          status,notes,"createdBy","updatedBy")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'active',$17,$18,$18)
+          status,notes,"approvedBy","approvedAt","createdBy","updatedBy")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$21)
        RETURNING id`,
       [
         scope.companyId, scope.branchId, body.employeeId, body.assignmentId ?? null, body.seasonId ?? null,
@@ -901,15 +911,69 @@ router.post("/commission-plans", requirePermission("umrah:write"), async (req, r
         body.minProfitPerVisa ?? null, body.minSalesPercent ?? null, body.minAvgPrice ?? null,
         JSON.stringify(body.excludedMonths ?? []), body.tierUnit ?? 10000,
         body.partialTiersAllowed ?? false, body.violationBlocksCommission ?? true,
-        body.notes ?? null, scope.userId,
+        initialStatus,
+        body.notes ?? null,
+        autoActivate ? scope.userId : null,
+        autoActivate ? new Date().toISOString() : null,
+        scope.userId,
       ]
     );
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "create", entity: "employee_commission_plans", entityId: insertId, after: body,
+      action: "create", entity: "employee_commission_plans", entityId: insertId,
+      after: { ...body, status: initialStatus, autoActivated: autoActivate },
     });
-    res.status(201).json({ id: insertId });
+    if (!autoActivate) {
+      await emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+        action: "umrah.commission_plan.pending_approval",
+        entity: "employee_commission_plans", entityId: insertId,
+        details: JSON.stringify({ planName: body.planName, employeeId: body.employeeId }),
+      });
+    }
+    res.status(201).json({ id: insertId, status: initialStatus });
   } catch (err) { handleRouteError(err, res, "Create commission plan"); }
+});
+
+router.post("/commission-plans/:id/approve", requirePermission("umrah:write"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = idParam.parse(req.params.id);
+    // Only owner / general_manager / hr_manager can approve per spec §9.5.
+    const allowed = ["owner", "general_manager", "hr_manager"];
+    if (!allowed.includes(scope.role)) {
+      throw new ConflictError("الموافقة على خطط العمولة محصورة بالمدير العام",
+        { meta: { requiredRoles: allowed } });
+    }
+    const [existing] = await rawQuery<any>(
+      `SELECT id, status FROM employee_commission_plans
+        WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("خطة العمولة غير موجودة");
+    if (existing.status === "active") {
+      throw new ConflictError("الخطة معتمدة مسبقاً");
+    }
+    await rawExecute(
+      `UPDATE employee_commission_plans
+          SET status='active', "approvedBy"=$1, "approvedAt"=NOW(),
+              "updatedBy"=$1, "updatedAt"=NOW()
+        WHERE id=$2 AND "companyId"=$3`,
+      [scope.userId, id, scope.companyId]
+    );
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "approve", entity: "employee_commission_plans", entityId: id,
+      before: { status: existing.status }, after: { status: "active" },
+    });
+    await emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.commission_plan.approved",
+      entity: "employee_commission_plans", entityId: id,
+      details: JSON.stringify({ approvedBy: scope.userId }),
+    });
+    res.json({ id, status: "active" });
+  } catch (err) { handleRouteError(err, res, "Approve commission plan"); }
 });
 
 router.patch("/commission-plans/:id", requirePermission("umrah:write"), async (req, res) => {
@@ -1190,27 +1254,45 @@ router.get("/statements/:subAgentId", requirePermission("umrah:read"), async (re
       return parts.length ? ` AND ${parts.join(" AND ")}` : "";
     };
 
+    // 1. Central sales invoices (Phase-7 path via umrah_groups.centralInvoiceId)
     const invoiceParams: any[] = [scope.companyId, subAgentId];
     const invoices = await rawQuery<any>(
-      `SELECT id, "createdAt" AS date, ref, total, status,
+      `SELECT DISTINCT i.id, i."createdAt" AS date, i.ref, i.total, i.status,
               ARRAY(SELECT g."nuskGroupNumber"
-                      FROM umrah_groups g WHERE g."salesInvoiceId" = ai.id) AS "groupRefs"
-         FROM umrah_agent_invoices ai
-        WHERE ai."companyId"=$1
-          AND ai."deletedAt" IS NULL
+                      FROM umrah_groups g
+                     WHERE g."centralInvoiceId" = i.id AND g."deletedAt" IS NULL) AS "groupRefs"
+         FROM invoices i
+         JOIN umrah_groups g ON g."centralInvoiceId" = i.id
+        WHERE i."companyId"=$1
+          AND i."deletedAt" IS NULL
+          AND g."subAgentId"=$2
+          AND g."deletedAt" IS NULL
+          ${dateClause(`i."createdAt"`, invoiceParams)}
+        ORDER BY i."createdAt" ASC`,
+      invoiceParams
+    );
+
+    // 2. Payments against those invoices (central invoice_payments table)
+    const paymentParams: any[] = [scope.companyId, subAgentId];
+    const payments = invoices.length === 0 ? [] : await rawQuery<any>(
+      `SELECT ip.id, ip."paidAt" AS date, ip.amount, ip.method, ip."transactionRef",
+              ip."invoiceId", i.ref AS "invoiceRef"
+         FROM invoice_payments ip
+         JOIN invoices i ON i.id = ip."invoiceId"
+        WHERE ip."companyId"=$1
           AND EXISTS (
             SELECT 1 FROM umrah_groups g
-             WHERE g."salesInvoiceId" = ai.id AND g."subAgentId"=$2
+             WHERE g."centralInvoiceId" = ip."invoiceId" AND g."subAgentId"=$2
           )
-          ${dateClause(`ai."createdAt"`, invoiceParams)}
-        ORDER BY ai."createdAt" ASC`,
-      invoiceParams
+          ${dateClause(`ip."paidAt"`, paymentParams)}
+        ORDER BY ip."paidAt" ASC`,
+      paymentParams
     );
 
     const violationParams: any[] = [scope.companyId, subAgentId];
     const violations = await rawQuery<any>(
       `SELECT v.id, v."createdAt" AS date, v.type, v."referenceType", v."referenceNumber",
-              v."penaltyAmount", v.status
+              v."penaltyAmount", v.status, v."linkedInvoiceId"
          FROM umrah_violations v
         WHERE v."companyId"=$1 AND v."subAgentId"=$2 AND v."deletedAt" IS NULL
           ${dateClause(`v."createdAt"`, violationParams)}
@@ -1219,8 +1301,12 @@ router.get("/statements/:subAgentId", requirePermission("umrah:read"), async (re
     );
 
     if (type === "summary") {
-      // Group invoices + violations by Gregorian YYYY-MM, payments stay per-row.
-      const monthly = new Map<string, { invoiceCount: number; invoiceTotal: number; violationCount: number; violationTotal: number }>();
+      // Spec §5.2: invoices + violations rolled up by month, payments
+      // listed individually so cashflow stays visible.
+      const monthly = new Map<string, {
+        invoiceCount: number; invoiceTotal: number;
+        violationCount: number; violationTotal: number;
+      }>();
       for (const inv of invoices) {
         const m = String(inv.date).slice(0, 7);
         const cur = monthly.get(m) ?? { invoiceCount: 0, invoiceTotal: 0, violationCount: 0, violationTotal: 0 };
@@ -1241,38 +1327,146 @@ router.get("/statements/:subAgentId", requirePermission("umrah:read"), async (re
       res.json({
         subAgent: { id: sub.id, name: sub.name, clientId: sub.clientId, clientName: sub.clientName },
         type, from, to, periods,
+        payments: payments.map((p) => ({
+          date: p.date, amount: Number(p.amount), method: p.method,
+          ref: p.transactionRef, invoiceRef: p.invoiceRef,
+        })),
       });
       return;
     }
 
-    // detailed: merge all rows in date order with running balance.
+    // detailed: merge invoices + violations + payments in date order
+    // with a running balance.
     const ledger: any[] = [];
-    let balance = 0;
     for (const inv of invoices) {
-      balance += Number(inv.total ?? 0);
       ledger.push({
+        sortKey: String(inv.date),
         date: inv.date, kind: "invoice",
         ref: inv.ref, groupRefs: inv.groupRefs,
         debit: Number(inv.total ?? 0), credit: 0,
-        balance, status: inv.status,
+        status: inv.status,
       });
     }
     for (const v of violations) {
-      balance += Number(v.penaltyAmount ?? 0);
       ledger.push({
+        sortKey: String(v.date),
         date: v.date, kind: "violation",
         ref: `${v.referenceType}/${v.referenceNumber}`,
         debit: Number(v.penaltyAmount ?? 0), credit: 0,
-        balance, status: v.status, violationType: v.type,
+        status: v.status, violationType: v.type,
       });
     }
-    ledger.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    for (const p of payments) {
+      ledger.push({
+        sortKey: String(p.date),
+        date: p.date, kind: "payment",
+        ref: p.transactionRef ?? `PAY-${p.id}`,
+        invoiceRef: p.invoiceRef,
+        debit: 0, credit: Number(p.amount ?? 0),
+        method: p.method,
+      });
+    }
+    ledger.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+    let balance = 0;
+    for (const row of ledger) {
+      balance += Number(row.debit ?? 0) - Number(row.credit ?? 0);
+      row.balance = Math.round(balance * 100) / 100;
+      delete row.sortKey;
+    }
 
     res.json({
       subAgent: { id: sub.id, name: sub.name, clientId: sub.clientId, clientName: sub.clientName },
       type, from, to, ledger,
+      totals: {
+        debit: ledger.reduce((s, r) => s + Number(r.debit ?? 0), 0),
+        credit: ledger.reduce((s, r) => s + Number(r.credit ?? 0), 0),
+        balance,
+      },
     });
   } catch (err) { handleRouteError(err, res, "Statement"); }
+});
+
+// ===========================================================================
+// CROSS-SEASON AGENT MATCHING — §3.3 / §13 + acceptance #19
+// ===========================================================================
+
+/**
+ * For a target season, return any agent that EXISTS in another season
+ * but is missing from the target. Surface those as "probable matches"
+ * the wizard can show with "هذا غالبًا نفس الوكيل — هل تؤكد؟".
+ *
+ * Match key is (companyId, name, country). When the same name+country
+ * appears in season X but not in season Y, we suggest carrying it over.
+ */
+router.get("/agents/match-suggestions", requirePermission("umrah:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const targetSeasonId = req.query.targetSeasonId ? Number(req.query.targetSeasonId) : null;
+    if (!targetSeasonId) {
+      throw new ValidationError("targetSeasonId مطلوب", { field: "targetSeasonId" });
+    }
+    const suggestions = await rawQuery<any>(
+      `SELECT a.id AS "previousAgentId", a.name, a.country,
+              a."nuskAgentNumber" AS "previousNuskNumber",
+              a."seasonId" AS "previousSeasonId",
+              s.title AS "previousSeasonTitle",
+              a."clientId" AS "previousClientId"
+         FROM umrah_agents a
+         LEFT JOIN umrah_seasons s ON s.id = a."seasonId"
+        WHERE a."companyId" = $1
+          AND a."deletedAt" IS NULL
+          AND a."seasonId" IS NOT NULL
+          AND a."seasonId" <> $2
+          AND NOT EXISTS (
+            SELECT 1 FROM umrah_agents b
+             WHERE b."companyId" = $1
+               AND b."seasonId" = $2
+               AND b."deletedAt" IS NULL
+               AND lower(trim(b.name)) = lower(trim(a.name))
+               AND COALESCE(lower(trim(b.country)),'') = COALESCE(lower(trim(a.country)),'')
+          )
+        ORDER BY a.name ASC`,
+      [scope.companyId, targetSeasonId]
+    );
+    res.json({ data: suggestions });
+  } catch (err) { handleRouteError(err, res, "Agent match suggestions"); }
+});
+
+/**
+ * Carry a previous-season agent forward into the target season — creates
+ * a new umrah_agents row with the same name+country+clientId. The user
+ * still confirms via the wizard before this is called.
+ */
+router.post("/agents/carry-forward", requirePermission("umrah:write"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const body = z.object({
+      previousAgentId: z.coerce.number().int().positive(),
+      targetSeasonId: z.coerce.number().int().positive(),
+      newNuskAgentNumber: z.string().optional().nullable(),
+    }).parse(req.body);
+    const [prev] = await rawQuery<any>(
+      `SELECT name, country, "clientId" FROM umrah_agents
+        WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [body.previousAgentId, scope.companyId]
+    );
+    if (!prev) throw new NotFoundError("الوكيل المرجعي غير موجود");
+    const { insertId } = await rawExecute(
+      `INSERT INTO umrah_agents
+         ("companyId","branchId",name,country,"clientId","seasonId","nuskAgentNumber",
+          "isActive","createdBy","updatedBy")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,true,$8,$8) RETURNING id`,
+      [scope.companyId, scope.branchId, prev.name, prev.country, prev.clientId,
+        body.targetSeasonId, body.newNuskAgentNumber ?? null, scope.userId]
+    );
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "carry_forward", entity: "umrah_agents", entityId: insertId,
+      before: { previousAgentId: body.previousAgentId },
+      after: { name: prev.name, country: prev.country, seasonId: body.targetSeasonId },
+    });
+    res.status(201).json({ id: insertId });
+  } catch (err) { handleRouteError(err, res, "Carry forward agent"); }
 });
 
 // ===========================================================================

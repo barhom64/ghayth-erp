@@ -958,7 +958,160 @@ async function main() {
   });
 
   // ───────────────────────────────────────────────────────────────────────
-  await section("§17 CLEANUP", async () => {
+  // ───────────────────────────────────────────────────────────────────────
+  await section("§17 PHASE-8 negative paths — no pricing + bad file (§17 #9, #20)", async () => {
+    // 1. Bad file format → ValidationError
+    let badFileRejected = false;
+    try {
+      // Send garbage base64 — engine should reject with 422
+      await api("POST", "/umrah/import/preview/mutamers", {
+        seasonId, fileName: "garbage.xlsx", fileSize: 100,
+        fileBase64: "VGhpc0lzTm90QW5FeGNlbEZpbGUK",
+      });
+    } catch (err) {
+      badFileRejected = err.status === 422 || err.status === 500;
+    }
+    assert(badFileRejected, "spec #20: bad-format file is rejected (422 or 500)");
+
+    // 2. Invoice without pricing → NotFoundError ("لا يوجد سعر ساري")
+    // Build a fresh group + sub-agent without any pricing row
+    await pool.query(
+      `INSERT INTO clients (id, "companyId", code, type, name, classification)
+       VALUES (99, 1, 'NO-PRICE-CLIENT', 'company', 'عميل بدون سعر', 'active')
+       ON CONFLICT (id) DO UPDATE SET "deletedAt"=NULL`
+    );
+    const newAgent = await pool.query(
+      `INSERT INTO umrah_agents
+         ("companyId","branchId",name,country,"nuskAgentNumber","seasonId","isActive")
+       VALUES (1,1,'وكيل بلا سعر','مصر','NOPRICE-1',$1,true) RETURNING id`,
+      [seasonId]
+    );
+    const newSub = await pool.query(
+      `INSERT INTO umrah_sub_agents
+         ("companyId","branchId",name,"nuskCode","agentId","clientId","paymentTerms","isActive")
+       VALUES (1,1,'وكيل فرعي بلا سعر','NOPRICE-SUB',$1,99,'postpaid',true) RETURNING id`,
+      [newAgent.rows[0].id]
+    );
+    const newGrp = await pool.query(
+      `INSERT INTO umrah_groups
+         ("companyId","branchId","nuskGroupNumber",name,"agentId","subAgentId","seasonId",
+          "mutamerCount","programDuration",status)
+       VALUES (1,1,'NOPRICE-GRP-1','مجموعة بلا سعر',$1,$2,$3,5,14,'imported') RETURNING id`,
+      [newAgent.rows[0].id, newSub.rows[0].id, seasonId]
+    );
+
+    let noPriceRejected = false;
+    let errBody;
+    try {
+      await api("POST", "/umrah/invoices/generate", {
+        subAgentId: newSub.rows[0].id,
+        groupIds: [newGrp.rows[0].id],
+      });
+    } catch (err) {
+      noPriceRejected = err.status === 404 &&
+        JSON.stringify(err.body).includes("لا يوجد سعر ساري");
+      errBody = err.body;
+    }
+    assert(noPriceRejected, `spec #9: missing pricing → 404 NotFoundError with Arabic message (body=${JSON.stringify(errBody)})`);
+
+    // Cleanup these fixture rows
+    await pool.query(`DELETE FROM umrah_groups WHERE "nuskGroupNumber"='NOPRICE-GRP-1'`);
+    await pool.query(`DELETE FROM umrah_sub_agents WHERE "nuskCode"='NOPRICE-SUB'`);
+    await pool.query(`DELETE FROM umrah_agents WHERE "nuskAgentNumber"='NOPRICE-1'`);
+    await pool.query(`DELETE FROM clients WHERE id=99`);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  await section("§18 PHASE-8 commission plan approval workflow (§9.5)", async () => {
+    // Owner role auto-activates plans — verify default path still works
+    const auto = await api("POST", "/umrah/commission-plans", {
+      employeeId: 1, planName: "خطة موافقة تلقائية", baseSalary: 3000,
+      commissionType: "tiered", conditionType: "none", tierUnit: 10000,
+    });
+    assert(auto.status === "active", `owner auto-activates plans (got status=${auto.status})`);
+
+    // Verify approval endpoint refuses already-active plans
+    let alreadyActive = false;
+    try {
+      await api("POST", `/umrah/commission-plans/${auto.id}/approve`);
+    } catch (err) {
+      alreadyActive = err.status === 409 && JSON.stringify(err.body).includes("معتمدة مسبقاً");
+    }
+    assert(alreadyActive, "approving already-active plan returns 409");
+
+    // Cleanup
+    await api("DELETE", `/umrah/commission-plans/${auto.id}`);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  await section("§19 PHASE-8 cross-season agent matching (§3.3 + spec #19)", async () => {
+    // Create another season + agent in current season
+    const newSeason = await pool.query(
+      `INSERT INTO umrah_seasons ("companyId", title, "hijriYear", "startDate", "endDate", status)
+       VALUES (1,'موسم اختبار 1448 هـ', 1448, '2026-07-17','2027-07-06','open') RETURNING id`
+    );
+    // The §3 import already created agents with nuskNumber NOT NULL.
+    // Add one of them to the older season too so match-suggestions sees overlap.
+    await pool.query(
+      `INSERT INTO umrah_agents
+         ("companyId","branchId",name,country,"nuskAgentNumber","seasonId","isActive")
+       VALUES (1,1,'وكيل مكرر بين المواسم','الباكستان','MATCH-TEST-X',$1,true)`,
+      [seasonId]
+    );
+
+    const suggestions = await api("GET", `/umrah/agents/match-suggestions?targetSeasonId=${newSeason.rows[0].id}`);
+    assert(suggestions.data.length >= 1, `suggestions returned (got ${suggestions.data.length})`);
+    const carry = suggestions.data.find((s) => s.name === "وكيل مكرر بين المواسم");
+    assert(carry !== undefined, "the cross-season carry suggestion is surfaced");
+
+    // Carry forward
+    const cf = await api("POST", "/umrah/agents/carry-forward", {
+      previousAgentId: carry.previousAgentId,
+      targetSeasonId: newSeason.rows[0].id,
+      newNuskAgentNumber: "MATCH-TEST-Y",
+    });
+    assert(cf.id > 0, `carry-forward created new season-1448 agent (id=${cf.id})`);
+
+    // Cleanup the fixture
+    await pool.query(`DELETE FROM umrah_agents WHERE "nuskAgentNumber" IN ('MATCH-TEST-X','MATCH-TEST-Y')`);
+    await pool.query(`DELETE FROM umrah_seasons WHERE id=$1`, [newSeason.rows[0].id]);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  await section("§20 PHASE-8 statement now includes payments (§5)", async () => {
+    // Find the central invoice we created in §14
+    const inv = await dbRow(
+      `SELECT id, "clientId" FROM invoices WHERE "companyId"=1 AND ref LIKE 'UMR-%' LIMIT 1`
+    );
+    if (!inv) {
+      console.log("  (no UMR-* invoice from §14 — skipping payment ledger test)");
+      return;
+    }
+    // Insert a payment row directly
+    await pool.query(
+      `INSERT INTO invoice_payments ("invoiceId","companyId","clientId",amount,method,"transactionRef")
+       VALUES ($1,1,$2,2500,'bank_transfer','E2E-PAY-1')`,
+      [inv.id, inv.clientId]
+    );
+
+    // Find the sub-agent tied to this invoice via groups
+    const sub = await dbRow(
+      `SELECT g."subAgentId" FROM umrah_groups g WHERE g."centralInvoiceId"=$1 LIMIT 1`,
+      [inv.id]
+    );
+    if (!sub) return;
+    const st = await api("GET", `/umrah/statements/${sub.subAgentId}?type=detailed`);
+    const paymentRow = st.ledger.find((r) => r.kind === "payment");
+    assert(paymentRow !== undefined, "detailed statement includes payment entries");
+    assert(Number(paymentRow.credit) === 2500, `payment row credit=2500 (got ${paymentRow?.credit})`);
+
+    const sum = await api("GET", `/umrah/statements/${sub.subAgentId}?type=summary`);
+    assert(Array.isArray(sum.payments) && sum.payments.length >= 1,
+      "summary statement exposes payments array");
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  await section("§21 CLEANUP", async () => {
     // Cleanup order matters: NULL out FK refs first, then delete in
     // bottom-up dependency order (lines → headers → umrah rows).
     const c2 = await pool.connect();
@@ -972,7 +1125,8 @@ async function main() {
         SELECT id FROM journal_entries WHERE "companyId"=1 AND ("sourceType"='umrah_nusk_invoice' OR "sourceType"='umrah_sales_invoice')
       )`);
       await c2.query(`DELETE FROM journal_entries WHERE "companyId"=1 AND ("sourceType"='umrah_nusk_invoice' OR "sourceType"='umrah_sales_invoice')`);
-      // 3. Delete invoices we created
+      // 3. Delete invoice payments + lines + invoices we created
+      await c2.query(`DELETE FROM invoice_payments WHERE "companyId"=1 AND "transactionRef" LIKE 'E2E-%'`);
       await c2.query(`DELETE FROM invoice_lines WHERE "invoiceId" IN (SELECT id FROM invoices WHERE "companyId"=1 AND ref LIKE 'UMR-%')`);
       await c2.query(`DELETE FROM invoices WHERE "companyId"=1 AND ref LIKE 'UMR-%'`);
       // 4. Letters

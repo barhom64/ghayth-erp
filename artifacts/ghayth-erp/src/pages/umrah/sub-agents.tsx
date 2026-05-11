@@ -6,6 +6,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Building2, Link2, Unlink } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -39,6 +40,8 @@ export default function UmrahSubAgents() {
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<Partial<SubAgent>>({});
+  const [linkingSubAgent, setLinkingSubAgent] = useState<SubAgent | null>(null);
+  const [linkClientId, setLinkClientId] = useState<number | null>(null);
   const { toast } = useToast();
 
   const createMutation = useApiMutation<{ id: number }, Partial<SubAgent>>(
@@ -99,11 +102,8 @@ export default function UmrahSubAgents() {
             <Button
               size="sm" variant="outline"
               onClick={() => {
-                const clientId = window.prompt("أدخل رقم العميل (clientId) لربط الوكيل:");
-                if (!clientId) return;
-                updateMutation.mutate({ id: s.id, clientId: Number(clientId) }, {
-                  onSuccess: () => refetch(),
-                });
+                setLinkingSubAgent(s);
+                setLinkClientId(null);
               }}
             >
               <Link2 className="h-3.5 w-3.5 ml-1" />ربط بعميل
@@ -208,6 +208,58 @@ export default function UmrahSubAgents() {
         pageSize={20}
         searchPlaceholder="بحث عن وكيل فرعي..."
       />
+
+      <Dialog
+        open={linkingSubAgent !== null}
+        onOpenChange={(o) => { if (!o) { setLinkingSubAgent(null); setLinkClientId(null); } }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              ربط الوكيل الفرعي «{linkingSubAgent?.name}» بعميل
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              اختر العميل من القائمة. الفوترة على هذا الوكيل لن تعمل قبل الربط.
+            </p>
+            <div>
+              <Label>العميل</Label>
+              <select
+                className="w-full border rounded-md p-2 mt-1"
+                value={linkClientId ?? ""}
+                onChange={(e) => setLinkClientId(e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">— اختر —</option>
+                {clients.map((c: any) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLinkingSubAgent(null)}>إلغاء</Button>
+            <Button
+              disabled={!linkClientId || updateMutation.isPending}
+              onClick={() => {
+                if (!linkingSubAgent || !linkClientId) return;
+                updateMutation.mutate(
+                  { id: linkingSubAgent.id, clientId: linkClientId },
+                  {
+                    onSuccess: () => {
+                      setLinkingSubAgent(null);
+                      setLinkClientId(null);
+                      refetch();
+                    },
+                  }
+                );
+              }}
+            >
+              <Link2 className="h-4 w-4 ml-1" />تأكيد الربط
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageShell>
   );
 }

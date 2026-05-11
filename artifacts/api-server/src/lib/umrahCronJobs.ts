@@ -369,6 +369,51 @@ export async function umrahDailyVisaExpiryAlert(): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
+// C32.5 — daily plan-lifecycle sync (auto-suspend / expire on assignment end)
+// ---------------------------------------------------------------------------
+
+/**
+ * Per spec §ط (تعدد التعيينات):
+ *   - assignment status='terminated' or endDate <= today → plan.status='expired'
+ *   - assignment moved out of Umrah department → plan.status='suspended'
+ *
+ * Touching `routes/employees.ts` to emit a dedicated event would couple
+ * HR to Umrah. Instead, this cron polls daily for orphaned plans and
+ * flips their status through the central engine
+ * (umrahCommissionEngine.transitionPlanForAssignment). Idempotent and
+ * one-way: only `active` plans are reconsidered.
+ */
+export async function umrahDailyPlanLifecycleSync(): Promise<string> {
+  let transitions = 0;
+  for (const c of await listActiveCompanies()) {
+    // Find active plans whose assignment is either terminated or already
+    // past its end date.
+    const expiredCandidates = await rawQuery<{ id: number; assignmentId: number | null; planName: string }>(
+      `SELECT p.id, p."assignmentId", p."planName"
+         FROM employee_commission_plans p
+         JOIN employee_assignments a ON a.id = p."assignmentId"
+        WHERE p."companyId" = $1
+          AND p."deletedAt" IS NULL
+          AND p.status = 'active'
+          AND ( a.status IN ('terminated','ended','rejected')
+                OR (a."endDate" IS NOT NULL AND a."endDate" < CURRENT_DATE) )`,
+      [c.id]
+    );
+    for (const plan of expiredCandidates) {
+      if (plan.assignmentId === null) continue;
+      const { transitionPlanForAssignment } = await import("./umrahCommissionEngine.js");
+      const r = await transitionPlanForAssignment(
+        { companyId: c.id, branchId: null, userId: 0 },
+        plan.assignmentId,
+        "ended"
+      );
+      transitions += r.updated;
+    }
+  }
+  return `Auto-transitioned ${transitions} commission plan(s) on terminated/ended assignments`;
+}
+
+// ---------------------------------------------------------------------------
 // C32 — monthly Umrah financial summary (revenue / cost / margin / penalties)
 // ---------------------------------------------------------------------------
 
@@ -464,4 +509,5 @@ export const UMRAH_CRON_JOBS = [
   { name: "umrah_weekly_agent_performance",description: "C30 — تقرير أداء الوكلاء الفرعيين الأسبوعي", schedule: "0 8 * * 1", handler: umrahWeeklyAgentPerformance },
   { name: "umrah_daily_visa_expiry",       description: "C31 — تنبيه تأشيرات قاربت الانتهاء", schedule: "0 7 * * *", handler: umrahDailyVisaExpiryAlert },
   { name: "umrah_monthly_financial_summary",description: "C32 — الملخص المالي الشهري لمسار العمرة", schedule: "0 8 1 * *", handler: umrahMonthlyFinancialSummary },
+  { name: "umrah_daily_plan_lifecycle_sync", description: "C32.5 — مزامنة دورة حياة خطط العمولة مع تعيينات الموظفين", schedule: "0 1 * * *", handler: umrahDailyPlanLifecycleSync },
 ];

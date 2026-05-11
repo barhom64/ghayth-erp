@@ -12,6 +12,17 @@ import { cn } from "@/lib/utils";
 type FileType = "mutamers" | "vouchers";
 type Step = "upload" | "preview" | "confirmed";
 
+type RowDiff = {
+  rowNumber: number;
+  key: string;
+  changeType: "created" | "updated" | "skipped" | "error";
+  reason?: string;
+  changedFields?: { field: string; oldValue: any; newValue: any }[];
+  errorMessage?: string;
+  hasFinancialImpact?: boolean;
+  existingId?: number;
+};
+
 type PreviewSummary = {
   batchId: number;
   fileType: FileType;
@@ -30,6 +41,7 @@ type PreviewSummary = {
   newGroups: number;
   unlinkedSubAgents: any[];
   errors: any[];
+  sampleDiffs?: RowDiff[];
 };
 
 type ConfirmResult = {
@@ -290,6 +302,74 @@ export default function UmrahImportWizard() {
                       <li key={i}>صف {e.row}: {e.message}</li>
                     ))}
                   </ul>
+                </div>
+              )}
+
+              {preview.sampleDiffs && preview.sampleDiffs.length > 0 && (
+                <div className="mt-4">
+                  <div className="font-medium text-sm mb-2">
+                    تفاصيل التغييرات (أول {Math.min(50, preview.sampleDiffs.length)} صف)
+                  </div>
+                  <div className="border rounded overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="text-right p-2 w-12">صف</th>
+                          <th className="text-right p-2">المفتاح</th>
+                          <th className="text-right p-2 w-20">النوع</th>
+                          <th className="text-right p-2">الحقول المتغيّرة</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {preview.sampleDiffs.slice(0, 50).map((d, i) => (
+                          <tr key={i} className="border-t">
+                            <td className="p-2 text-muted-foreground">{d.rowNumber}</td>
+                            <td className="p-2 font-mono">{d.key}</td>
+                            <td className="p-2">
+                              <span className={cn(
+                                "px-2 py-0.5 rounded text-xs",
+                                d.changeType === "created" && "bg-green-100 text-green-800",
+                                d.changeType === "updated" && "bg-blue-100 text-blue-800",
+                                d.changeType === "skipped" && "bg-slate-100 text-slate-700",
+                                d.changeType === "error" && "bg-red-100 text-red-800"
+                              )}>
+                                {d.changeType === "created" ? "جديد"
+                                  : d.changeType === "updated" ? "محدّث"
+                                  : d.changeType === "skipped" ? "بدون تغيير"
+                                  : "خطأ"}
+                              </span>
+                              {d.hasFinancialImpact && (
+                                <span className="ml-1 text-orange-600 text-[10px]">●مالي</span>
+                              )}
+                            </td>
+                            <td className="p-2">
+                              {d.changeType === "updated" && d.changedFields ? (
+                                <div className="space-y-1">
+                                  {d.changedFields.slice(0, 4).map((f, j) => (
+                                    <div key={j} className="text-[11px]">
+                                      <span className="text-slate-600">{f.field}:</span>
+                                      <span className="text-red-700 line-through ml-1">{String(f.oldValue ?? "—")}</span>
+                                      <span className="text-green-700 mx-1">→</span>
+                                      <span className="text-green-700">{String(f.newValue ?? "—")}</span>
+                                    </div>
+                                  ))}
+                                  {d.changedFields.length > 4 && (
+                                    <div className="text-[10px] text-muted-foreground">
+                                      +{d.changedFields.length - 4} حقل آخر
+                                    </div>
+                                  )}
+                                </div>
+                              ) : d.changeType === "error" ? (
+                                <span className="text-red-700">{d.errorMessage ?? "خطأ"}</span>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </CardContent>
