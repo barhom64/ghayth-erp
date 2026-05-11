@@ -140,6 +140,58 @@ function infoRow(doc: PDFKit.PDFDocument, label: string, value: string, x = 50, 
   doc.font(isValueArabic ? "Arabic" : "Helvetica").fillColor("#111827").text(value || "-");
 }
 
+/**
+ * Render an official_letters row to a printable Arabic PDF. Used by the
+ * Umrah letter dispatcher + any other module that wants to ship the
+ * letter to a printer / attach to an email. Plain content rendering;
+ * the existing PdfOptions header (company name + phone + address) is
+ * pulled from companies + branches.
+ */
+export async function exportOfficialLetterPdf(companyId: number, letterId: number): Promise<Buffer> {
+  const [letter] = await rawQuery<any>(
+    `SELECT l.id, l.type, l.subject, l.content, l.status, l."createdAt",
+            l."sentAt", l."dispatchedVia", l."approvedAt", l."approvedBy",
+            c.name AS "companyName", c.phone, c.address
+       FROM official_letters l
+       LEFT JOIN companies c ON c.id = l."companyId"
+      WHERE l.id = $1 AND l."companyId" = $2`,
+    [letterId, companyId]
+  );
+  if (!letter) throw new NotFoundError("الخطاب غير موجود");
+
+  const doc = createDoc({ title: letter.subject || "خطاب رسمي", companyName: letter.companyName });
+  drawHeader(doc, {
+    title: letter.subject || "خطاب رسمي",
+    companyName: letter.companyName,
+    phone: letter.phone,
+    address: letter.address,
+  });
+
+  doc.moveDown(0.5);
+  doc.font("Arabic").fontSize(12).fillColor("#111827");
+  rtlText(doc, `رقم الخطاب: ${letter.id}`);
+  rtlText(doc, `النوع: ${letter.type ?? "general"}`);
+  rtlText(doc, `التاريخ: ${new Date(letter.createdAt).toISOString().slice(0, 10)}`);
+  doc.moveDown(0.5);
+
+  doc.font("Arabic").fontSize(14).fillColor("#111827");
+  rtlText(doc, letter.subject || "");
+  doc.moveDown(0.5);
+
+  doc.font("Arabic").fontSize(11).fillColor("#1f2937");
+  for (const line of String(letter.content ?? "").split("\n")) {
+    rtlText(doc, line);
+  }
+
+  if (letter.approvedAt) {
+    doc.moveDown(1);
+    doc.font("Arabic").fontSize(10).fillColor("#6b7280");
+    rtlText(doc, `معتمد بتاريخ ${new Date(letter.approvedAt).toISOString().slice(0, 10)}`);
+  }
+
+  return docToBuffer(doc);
+}
+
 export async function exportInvoicePdf(companyId: number, invoiceId: number): Promise<Buffer> {
   const [invoice] = await rawQuery<any>(
     `SELECT i.*, c.name AS "clientName", c.phone AS "clientPhone",
