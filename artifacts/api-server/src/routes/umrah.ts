@@ -34,7 +34,7 @@ import { encryptField, decryptPilgrimRow, blindIndex, SENSITIVE_PILGRIM_FIELDS, 
 // ─────────────────────────────────────────────────────────────────────────────
 async function requireOpenSeason(seasonId: number, companyId: number): Promise<void> {
   const [season] = await rawQuery<{ id: number; status: string }>(
-    `SELECT id, status FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+    `SELECT id, status FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
     [seasonId, companyId]
   );
   if (!season) throw new ValidationError("الموسم غير موجود", { field: "seasonId" });
@@ -363,7 +363,7 @@ router.patch("/seasons/:id", authorize({ feature: "umrah", action: "update" }), 
     const b = zodParse(patchSeasonSchema.safeParse(req.body));
     let originalStatus: string | undefined;
     if (b.status !== undefined) {
-      const [existing] = await rawQuery<any>(`SELECT status FROM umrah_seasons WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+      const [existing] = await rawQuery<any>(`SELECT status FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
       if (!existing) throw new NotFoundError("الموسم غير موجود");
       originalStatus = existing.status;
       if (b.status !== existing.status) {
