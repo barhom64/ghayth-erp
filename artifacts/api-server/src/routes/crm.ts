@@ -971,7 +971,7 @@ router.post("/opportunities/:id/activities", authorize({ feature: "crm.opportuni
   } catch (err) { handleRouteError(err, res, "Create activity error:"); }
 });
 
-router.get("/pipeline", authorize({ feature: "crm", action: "list" }), async (req, res) => {
+router.get("/pipeline", authorize({ feature: "crm.leads", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const stageRows = await rawQuery<any>(

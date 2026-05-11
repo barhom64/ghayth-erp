@@ -693,7 +693,7 @@ router.post("/tickets/:id/csat", authorize({ feature: "support.tickets", action:
   } catch (err) { handleRouteError(err, res, "CSAT error:"); }
 });
 
-router.get("/csat", authorize({ feature: "support", action: "list" }), async (req, res) => {
+router.get("/csat", authorize({ feature: "support.tickets", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -716,7 +716,7 @@ router.get("/csat", authorize({ feature: "support", action: "list" }), async (re
   } catch (err) { handleRouteError(err, res, "CSAT list error:"); }
 });
 
-router.get("/kb", authorize({ feature: "support", action: "list" }), async (req, res) => {
+router.get("/kb", authorize({ feature: "support.tickets", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { q, category } = req.query as any;
@@ -729,7 +729,7 @@ router.get("/kb", authorize({ feature: "support", action: "list" }), async (req,
   } catch (err) { handleRouteError(err, res, "KB list error:"); }
 });
 
-router.get("/kb/:id", authorize({ feature: "support", action: "view" }), async (req, res) => {
+router.get("/kb/:id", authorize({ feature: "support.tickets", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -740,7 +740,7 @@ router.get("/kb/:id", authorize({ feature: "support", action: "view" }), async (
   } catch (err) { handleRouteError(err, res, "KB article error:"); }
 });
 
-router.post("/kb", authorize({ feature: "support", action: "create" }), async (req, res) => {
+router.post("/kb", authorize({ feature: "support.tickets", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createKbSchema.safeParse(req.body)) as any;
@@ -760,7 +760,7 @@ router.post("/kb", authorize({ feature: "support", action: "create" }), async (r
   } catch (err) { handleRouteError(err, res, "KB create error:"); }
 });
 
-router.patch("/kb/:id", authorize({ feature: "support", action: "update" }), async (req, res) => {
+router.patch("/kb/:id", authorize({ feature: "support.tickets", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -786,7 +786,7 @@ router.patch("/kb/:id", authorize({ feature: "support", action: "update" }), asy
   } catch (err) { handleRouteError(err, res, "KB update error:"); }
 });
 
-router.delete("/kb/:id", authorize({ feature: "support", action: "delete" }), async (req, res) => {
+router.delete("/kb/:id", authorize({ feature: "support.tickets", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -810,7 +810,7 @@ router.delete("/kb/:id", authorize({ feature: "support", action: "delete" }), as
 // scope pattern at line 612: validate the article is visible to the
 // caller (own company OR global) before incrementing, and scope the
 // UPDATE the same way.
-router.post("/kb/:id/feedback", authorize({ feature: "support", action: "list" }), async (req, res) => {
+router.post("/kb/:id/feedback", authorize({ feature: "support.tickets", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

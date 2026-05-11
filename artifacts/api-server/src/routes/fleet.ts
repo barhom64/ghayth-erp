@@ -387,7 +387,7 @@ router.post("/vehicles", authorize({ feature: "fleet.vehicles", action: "create"
   } catch (err) { handleRouteError(err, res, "Create vehicle error:"); }
 });
 
-router.get("/drivers", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
+router.get("/drivers", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -406,7 +406,7 @@ router.get("/drivers", authorize({ feature: "fleet", action: "list" }), async (r
   } catch (err) { handleRouteError(err, res, "Fleet drivers error:"); }
 });
 
-router.post("/drivers", authorize({ feature: "fleet", action: "create" }), async (req, res) => {
+router.post("/drivers", authorize({ feature: "fleet.vehicles", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createDriverSchema.safeParse(req.body)) as any;
@@ -710,7 +710,7 @@ router.delete("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "d
   } catch (err) { handleRouteError(err, res, "Delete vehicle error:"); }
 });
 
-router.get("/drivers/:id", authorize({ feature: "fleet", action: "view" }), async (req, res) => {
+router.get("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -720,7 +720,7 @@ router.get("/drivers/:id", authorize({ feature: "fleet", action: "view" }), asyn
   } catch (err) { handleRouteError(err, res, "Get driver error:"); }
 });
 
-router.patch("/drivers/:id", authorize({ feature: "fleet", action: "update" }), async (req, res) => {
+router.patch("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -814,7 +814,7 @@ router.patch("/drivers/:id", authorize({ feature: "fleet", action: "update" }), 
 
 // Drivers fall under the parent "fleet" feature; no dedicated catalog
 // entry yet. Delete checks scope against the drivers table.
-router.delete("/drivers/:id", authorize({ feature: "fleet", action: "delete", resource: { table: "drivers", idParam: "id" } }), async (req, res) => {
+router.delete("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "delete", resource: { table: "drivers", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1734,7 +1734,7 @@ router.get("/alerts", authorize({ feature: "fleet", action: "list" }), async (re
   } catch (err) { handleRouteError(err, res, "Fleet alerts error:"); }
 });
 
-router.get("/fuel-logs", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
+router.get("/fuel-logs", authorize({ feature: "fleet.trips", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { vehicleId } = req.query as any;
@@ -1751,7 +1751,7 @@ router.get("/fuel-logs", authorize({ feature: "fleet", action: "list" }), async 
   } catch (err) { handleRouteError(err, res, "Fleet fuel error:"); }
 });
 
-router.get("/fuel-logs/:id", authorize({ feature: "fleet", action: "view" }), async (req, res) => {
+router.get("/fuel-logs/:id", authorize({ feature: "fleet.trips", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1771,7 +1771,7 @@ router.get("/fuel-logs/:id", authorize({ feature: "fleet", action: "view" }), as
   } catch (err) { handleRouteError(err, res, "Fleet fuel detail error:"); }
 });
 
-router.post("/fuel-logs", authorize({ feature: "fleet", action: "create" }), async (req, res) => {
+router.post("/fuel-logs", authorize({ feature: "fleet.trips", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createFuelLogSchema.safeParse(req.body)) as any;
@@ -1868,7 +1868,7 @@ router.post("/fuel-logs", authorize({ feature: "fleet", action: "create" }), asy
   } catch (err) { handleRouteError(err, res, "Create fuel log error:"); }
 });
 
-router.get("/insurance", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
+router.get("/insurance", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { vehicleId } = req.query as any;
@@ -1885,7 +1885,7 @@ router.get("/insurance", authorize({ feature: "fleet", action: "list" }), async 
   } catch (err) { handleRouteError(err, res, "Fleet insurance error:"); }
 });
 
-router.get("/insurance/:id", authorize({ feature: "fleet", action: "view" }), async (req, res) => {
+router.get("/insurance/:id", authorize({ feature: "fleet.vehicles", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1901,7 +1901,7 @@ router.get("/insurance/:id", authorize({ feature: "fleet", action: "view" }), as
   } catch (err) { handleRouteError(err, res, "Fleet insurance detail error:"); }
 });
 
-router.post("/insurance", authorize({ feature: "fleet", action: "create" }), async (req, res) => {
+router.post("/insurance", authorize({ feature: "fleet.vehicles", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createInsuranceSchema.safeParse(req.body)) as any;
@@ -2269,7 +2269,7 @@ router.delete("/maintenance/:id", authorize({ feature: "fleet.maintenance", acti
   } catch (err) { handleRouteError(err, res, "Delete maintenance error:"); }
 });
 
-router.patch("/fuel-logs/:id", authorize({ feature: "fleet", action: "update" }), async (req, res) => {
+router.patch("/fuel-logs/:id", authorize({ feature: "fleet.trips", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2345,7 +2345,7 @@ router.patch("/fuel-logs/:id", authorize({ feature: "fleet", action: "update" })
   } catch (err) { handleRouteError(err, res, "Update fuel log error:"); }
 });
 
-router.delete("/fuel-logs/:id", authorize({ feature: "fleet", action: "delete" }), async (req, res) => {
+router.delete("/fuel-logs/:id", authorize({ feature: "fleet.trips", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2377,7 +2377,7 @@ router.delete("/fuel-logs/:id", authorize({ feature: "fleet", action: "delete" }
   } catch (err) { handleRouteError(err, res, "Delete fuel log error:"); }
 });
 
-router.patch("/insurance/:id", authorize({ feature: "fleet", action: "update" }), async (req, res) => {
+router.patch("/insurance/:id", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2456,7 +2456,7 @@ router.patch("/insurance/:id", authorize({ feature: "fleet", action: "update" })
   } catch (err) { handleRouteError(err, res, "Update insurance error:"); }
 });
 
-router.delete("/insurance/:id", authorize({ feature: "fleet", action: "delete" }), async (req, res) => {
+router.delete("/insurance/:id", authorize({ feature: "fleet.vehicles", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
