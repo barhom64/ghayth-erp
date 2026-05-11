@@ -326,3 +326,41 @@ SELECT pg_catalog.setval('public.system_settings_id_seq', 10, true);
 
 \unrestrict 2TH4EZfPNHHlpzq6joygm408RgsP6390ntZGiNHFiYbq6mGYKtGZkjAZ7VqRfy9
 
+-- ============================================================
+-- Umrah module seeds — added by migration 092 logic but
+-- duplicated here so a fresh bootstrap (which pre-marks migration
+-- files as applied) still gets the runtime data.
+-- ============================================================
+
+-- pg_dump sets search_path='' so we need to reset it for our seeds.
+SET search_path TO public;
+
+-- 1. The eight umrah.* default settings (system scope = NULL/NULL).
+INSERT INTO public.system_settings (key, value, "dataType")
+SELECT k, v, dt FROM (VALUES
+  ('umrah.overstay_daily_penalty',    '0',     'number'),
+  ('umrah.absconder_penalty',         '2000',  'number'),
+  ('umrah.default_program_duration',  '14',    'number'),
+  ('umrah.import_auto_create_groups', 'true',  'boolean'),
+  ('umrah.import_auto_create_purchase','true', 'boolean'),
+  ('umrah.commission_auto_calculate', 'false', 'boolean'),
+  ('umrah.tier_unit',                 '10000', 'number'),
+  ('umrah.require_agent_linking',     'true',  'boolean')
+) AS d(k, v, dt)
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.system_settings
+   WHERE key = k AND "companyId" IS NULL AND "branchId" IS NULL
+);
+
+-- 2. The current Hijri season (1447 H) per active company.
+INSERT INTO public.umrah_seasons (
+  "companyId", title, "hijriYear", "startDate", "endDate", "isCurrent", status, notes
+)
+SELECT c.id, 'موسم 1447 هـ', 1447, '2025-07-27'::date, '2026-07-16'::date, true, 'open',
+       'موسم نسك 1446-1447 هـ — مُنشأ تلقائيًا'
+FROM public.companies c
+WHERE c.status = 'active'
+  AND NOT EXISTS (
+    SELECT 1 FROM public.umrah_seasons s
+     WHERE s."companyId" = c.id AND s."hijriYear" = 1447 AND s."deletedAt" IS NULL
+  );

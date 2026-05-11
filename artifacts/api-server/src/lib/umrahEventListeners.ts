@@ -256,17 +256,18 @@ export function registerUmrahEventListeners(): void {
       }
       const assignmentId = a.rows[0].id as number;
 
-      // 2. Locate the payroll_run that owns this period (same Hijri
-      //    month/year on the run header). If no run yet → no write;
-      //    when HR generates the run it'll pick up the commission via
-      //    a follow-up sweep (cron C32 + manual recalculate also re-emit
-      //    the event so the listener re-fires).
+      // 2. Locate the payroll_run that owns this period. The central
+      //    payroll_runs table stores period as a `period` text column
+      //    in format "YYYY-MM". We compose the lookup from the Hijri
+      //    month/year (treated as the run's period identifier — HR
+      //    convention in this codebase).
+      const period = `${hijriYear}-${String(hijriMonth).padStart(2, "0")}`;
       const r = await pool.query(
         `SELECT id FROM payroll_runs
-          WHERE "companyId"=$1 AND month=$2 AND year=$3
+          WHERE "companyId"=$1 AND period=$2
             AND status NOT IN ('cancelled','rejected')
           ORDER BY id DESC LIMIT 1`,
-        [companyId, hijriMonth, hijriYear]
+        [companyId, period]
       );
       if (r.rowCount === 0) return;
       const runId = r.rows[0].id as number;
