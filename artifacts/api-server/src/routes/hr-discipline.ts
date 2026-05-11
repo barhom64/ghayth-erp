@@ -8,7 +8,7 @@ import { Router } from "express";
 import { HR_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import {
   handleRouteError,
   NotFoundError,
@@ -150,7 +150,7 @@ router.get("/regulation/:id", authorize({ feature: "hr.discipline", action: "vie
     if (!row) {
       throw new NotFoundError("المادة غير موجودة");
     }
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) {
     handleRouteError(err, res, "Get regulation article error:");
   }
@@ -445,7 +445,7 @@ router.get("/memos", authorize({ feature: "hr.discipline", action: "list" }), as
         LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "List memos error:");
   }
@@ -463,7 +463,7 @@ router.get("/memos/:id", authorize({ feature: "hr.discipline", action: "view" })
         WHERE "memoId" = $1 AND "companyId" = $2 ORDER BY "createdAt" ASC`,
       [id, scope.companyId]
     );
-    res.json({ memo, events });
+    res.json(maskFields(req, { memo, events }));
   } catch (err) {
     handleRouteError(err, res, "Get memo error:");
   }

@@ -1604,7 +1604,7 @@ router.post("/maintenance/:id/cancel", authorize({ feature: "fleet.maintenance",
   } catch (err) { handleRouteError(err, res, "Cancel maintenance error:"); }
 });
 
-router.get("/alerts", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
+router.get("/alerts", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -2494,7 +2494,7 @@ router.delete("/insurance/:id", authorize({ feature: "fleet.vehicles", action: "
   } catch (err) { handleRouteError(err, res, "Delete insurance error:"); }
 });
 
-router.get("/stats", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
+router.get("/stats", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -2521,7 +2521,7 @@ router.get("/stats", authorize({ feature: "fleet", action: "list" }), async (req
 // PREVENTIVE MAINTENANCE PLANS — خطة الصيانة الوقائية
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/preventive-plans", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
+router.get("/preventive-plans", authorize({ feature: "fleet.maintenance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { vehicleId } = req.query as any;
@@ -2540,7 +2540,7 @@ router.get("/preventive-plans", authorize({ feature: "fleet", action: "list" }),
   } catch (err) { handleRouteError(err, res, "Preventive plans error:"); }
 });
 
-router.post("/preventive-plans", authorize({ feature: "fleet", action: "create" }), async (req, res) => {
+router.post("/preventive-plans", authorize({ feature: "fleet.maintenance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createPreventivePlanSchema.safeParse(req.body));
@@ -2613,7 +2613,7 @@ router.post("/preventive-plans", authorize({ feature: "fleet", action: "create" 
   } catch (err) { handleRouteError(err, res, "Create preventive plan error:"); }
 });
 
-router.patch("/preventive-plans/:id", authorize({ feature: "fleet", action: "update" }), async (req, res) => {
+router.patch("/preventive-plans/:id", authorize({ feature: "fleet.maintenance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2691,7 +2691,7 @@ router.patch("/preventive-plans/:id", authorize({ feature: "fleet", action: "upd
 // TRAFFIC VIOLATIONS — مخالفات مرورية
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/traffic-violations", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
+router.get("/traffic-violations", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { vehicleId, driverId } = req.query as any;
@@ -2712,7 +2712,7 @@ router.get("/traffic-violations", authorize({ feature: "fleet", action: "list" }
   } catch (err) { handleRouteError(err, res, "Traffic violations error:"); }
 });
 
-router.get("/traffic-violations/:id", authorize({ feature: "fleet", action: "view" }), async (req, res): Promise<any> => {
+router.get("/traffic-violations/:id", authorize({ feature: "fleet.vehicles", action: "view" }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2729,7 +2729,7 @@ router.get("/traffic-violations/:id", authorize({ feature: "fleet", action: "vie
   } catch (err) { handleRouteError(err, res, "Traffic violation detail error:"); }
 });
 
-router.post("/traffic-violations", authorize({ feature: "fleet", action: "create" }), async (req, res) => {
+router.post("/traffic-violations", authorize({ feature: "fleet.vehicles", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createTrafficViolationSchema.safeParse(req.body));
@@ -2867,7 +2867,7 @@ router.post("/traffic-violations", authorize({ feature: "fleet", action: "create
   } catch (err) { handleRouteError(err, res, "Create traffic violation error:"); }
 });
 
-router.patch("/traffic-violations/:id/pay", authorize({ feature: "fleet", action: "update" }), async (req, res) => {
+router.patch("/traffic-violations/:id/pay", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

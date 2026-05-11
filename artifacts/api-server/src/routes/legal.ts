@@ -982,7 +982,7 @@ router.post("/cases/:caseId/sessions", authorize({ feature: "legal.cases", actio
   } catch (err) { handleRouteError(err, res, "Create session error:"); }
 });
 
-router.get("/stats", authorize({ feature: "legal", action: "list" }), async (req, res) => {
+router.get("/stats", authorize({ feature: "legal.cases", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -1340,7 +1340,7 @@ router.get("/sessions/:id", authorize({ feature: "legal.cases", action: "view" }
   } catch (err) { handleRouteError(err, res, "Legal session detail error:"); }
 });
 
-router.get("/judgments/:id", authorize({ feature: "legal", action: "view" }), async (req, res) => {
+router.get("/judgments/:id", authorize({ feature: "legal.cases", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1356,7 +1356,7 @@ router.get("/judgments/:id", authorize({ feature: "legal", action: "view" }), as
   } catch (err) { handleRouteError(err, res, "Legal judgment detail error:"); }
 });
 
-router.get("/correspondence/:id", authorize({ feature: "legal", action: "view" }), async (req, res) => {
+router.get("/correspondence/:id", authorize({ feature: "legal.cases", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1393,7 +1393,7 @@ router.get("/sessions/upcoming", authorize({ feature: "legal.cases", action: "li
   } catch (err) { handleRouteError(err, res, "Upcoming sessions error:"); }
 });
 
-router.get("/judgments/financial-report", authorize({ feature: "legal", action: "list" }), async (req, res) => {
+router.get("/judgments/financial-report", authorize({ feature: "legal.cases", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -1423,7 +1423,7 @@ router.get("/judgments/financial-report", authorize({ feature: "legal", action: 
   } catch (err) { handleRouteError(err, res, "Judgments financial report error:"); }
 });
 
-router.get("/financial-report", authorize({ feature: "legal", action: "list" }), async (req, res) => {
+router.get("/financial-report", authorize({ feature: "legal.cases", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cases = await rawQuery<any>(
