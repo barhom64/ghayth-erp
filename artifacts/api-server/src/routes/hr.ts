@@ -2337,7 +2337,7 @@ router.get("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "view
     const sanitizedLines = canSeeSalary ? lines : lines.map((l: any) => ({
       id: l.id, runId: l.runId, assignmentId: l.assignmentId, employeeName: l.employeeName,
     }));
-    res.json({
+    res.json(maskFields(req, {
       ...row, month: row.period, totalAmount: canSeeSalary ? Number(row.totalNet) : undefined,
       basicSalary: canSeeSalary ? totalBasic : undefined,
       allowances: canSeeSalary ? totalAllowances : undefined,
@@ -2345,7 +2345,7 @@ router.get("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "view
       netSalary: canSeeSalary ? Number(row.totalNet) : undefined,
       employeeCount: lines.length,
       lines: sanitizedLines,
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Get payroll detail error:"); }
 });
 
