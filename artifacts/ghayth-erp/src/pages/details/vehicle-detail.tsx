@@ -77,7 +77,7 @@ export default function VehicleDetail() {
 
   const { data: vehicle, isLoading, isError, error, refetch } = useApiQuery<any>(["vehicle-detail", id || ""], `/fleet/vehicles/${id}`, !!id);
   const { data: tco } = useApiQuery<any>(["vehicle-tco", id || ""], `/fleet/vehicles/${id}/tco`, !!id);
-  const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("vehicle", id || "");
+  const { hideTabs: registryHideTabs } = useRegistryTabs("vehicle", id || "");
 
   const [editForm, setEditForm] = useState<Record<string, string>>({});
 
@@ -797,7 +797,6 @@ export default function VehicleDetail() {
       updatedAt={vehicle?.updatedAt}
       overview={overview}
       actions={actions}
-      extraTabs={registryExtraTabs}
       hideTabs={[...registryHideTabs, "tasks"]}
     />
   );

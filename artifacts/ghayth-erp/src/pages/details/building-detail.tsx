@@ -25,7 +25,7 @@ export default function BuildingDetail() {
   const id = params?.id;
   const { permissions, roleLevel } = useAppContext();
   const canManage = permissions.canManageProperty || roleLevel >= 50;
-  const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("building", id ?? 0);
+  const { extraTabs, hideTabs } = useRegistryTabs("building", id ?? 0);
 
   const { data: building, isLoading, isError, refetch } = useApiQuery<any>(
     ["building-detail", id || ""],
@@ -195,7 +195,8 @@ export default function BuildingDetail() {
       isLoading={isLoading}
       error={isError ? true : undefined}
       onRetry={refetch}
-      hideTabs={registryHideTabs}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       overview={overview}
       actions={actions}
     />

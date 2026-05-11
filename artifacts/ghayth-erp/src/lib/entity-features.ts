@@ -79,6 +79,7 @@ const FEATURES: Record<string, Partial<EntityFeatures>> = {
   umrah_sales_invoice:{ financialImpact: true },
   umrah_pilgrim:      {},
   umrah_season:       { attachments: false },
+  "umrah-season":     { attachments: false },
   governance_policy:  {},
 
   crm_lead:           {},

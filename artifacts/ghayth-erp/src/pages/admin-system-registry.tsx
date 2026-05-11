@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress";
 import {
   RefreshCw, Database, Layers, Shield, Activity, AlertTriangle,
-  FileText, Zap, BarChart3, CheckCircle2, XCircle, ChevronDown, ChevronUp,
+  Zap, BarChart3, CheckCircle2, XCircle, ChevronDown, ChevronUp,
   Bell, Printer,
 } from "lucide-react";
 
@@ -52,6 +52,8 @@ function categoryLabel(cat: string): string {
     missing_reports: "بدون تقارير",
     missing_print: "بدون طباعة",
     missing_financial_impact: "بدون أثر مالي",
+    approval_without_lifecycle: "اعتماد بدون دورة حياة",
+    print_without_detail: "طباعة بدون صفحة تفصيل",
   };
   return map[cat] ?? cat;
 }
@@ -185,37 +187,37 @@ export default function AdminSystemRegistry() {
             <StatCard label="صلاحية" value={overview.permissions ?? 0} icon={Shield} />
           </div>
 
-          {coverageSummary.totalEntities > 0 && (
+          {coverageSummary.total > 0 && (
             <Card className="border-blue-200 bg-blue-50/50">
               <CardContent className="p-4">
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center text-sm">
                   <div>
                     <p className="text-2xl font-bold text-blue-700">
-                      {coverageSummary.withLifecycle}/{coverageSummary.totalEntities}
+                      {coverageSummary.withLifecycle}/{coverageSummary.total}
                     </p>
                     <p className="text-xs text-gray-600">دورة حياة</p>
                   </div>
                   <div>
                     <p className="text-2xl font-bold text-green-700">
-                      {coverageSummary.withApproval}/{coverageSummary.totalEntities}
+                      {coverageSummary.withApproval}/{coverageSummary.total}
                     </p>
                     <p className="text-xs text-gray-600">سلسلة اعتماد</p>
                   </div>
                   <div>
                     <p className="text-2xl font-bold text-purple-700">
-                      {coverageSummary.withAttachments}/{coverageSummary.totalEntities}
+                      {coverageSummary.withAttachments}/{coverageSummary.total}
                     </p>
                     <p className="text-xs text-gray-600">مرفقات</p>
                   </div>
                   <div>
                     <p className="text-2xl font-bold text-amber-700">
-                      {coverageSummary.withFinancialImpact}/{coverageSummary.totalEntities}
+                      {coverageSummary.withFinancial}/{coverageSummary.total}
                     </p>
                     <p className="text-xs text-gray-600">أثر مالي</p>
                   </div>
                   <div>
                     <p className="text-2xl font-bold text-red-700">
-                      {coverageSummary.withPrint}/{coverageSummary.totalEntities}
+                      {coverageSummary.withPrint}/{coverageSummary.total}
                     </p>
                     <p className="text-xs text-gray-600">طباعة</p>
                   </div>
@@ -312,7 +314,7 @@ export default function AdminSystemRegistry() {
                         {isExpanded ? <ChevronUp className="w-4 h-4 shrink-0" /> : <ChevronDown className="w-4 h-4 shrink-0" />}
                         <span className="font-semibold text-sm">{e.label}</span>
                         <Badge variant="outline" className="font-mono text-[10px]">{e.table}</Badge>
-                        <Badge className="text-[10px] bg-gray-100 text-gray-700">{e.type === "document" ? "مستند" : e.type === "transaction" ? "معاملة" : e.type === "master" ? "بيان رئيسي" : "إعداد"}</Badge>
+                        <Badge className="text-[10px] bg-gray-100 text-gray-700">{e.type === "document" ? "مستند" : e.type === "transaction" ? "معاملة" : e.type === "master" ? "بيان رئيسي" : e.type === "request" ? "طلب" : "إعداد"}</Badge>
                         <div className="flex gap-1 ms-auto">
                           <FeatureDot active={!!e.lifecycle} title="دورة حياة" />
                           <FeatureDot active={!!e.approval} title="اعتماد" />
@@ -336,7 +338,6 @@ export default function AdminSystemRegistry() {
                                 {e.routes.list && <Badge variant="outline" className="font-mono text-[10px]">{e.routes.list}</Badge>}
                                 {e.routes.create && <Badge variant="outline" className="font-mono text-[10px]">{e.routes.create}</Badge>}
                                 {e.routes.detail && <Badge variant="outline" className="font-mono text-[10px]">{e.routes.detail}</Badge>}
-                                {e.routes.api && <Badge variant="outline" className="font-mono text-[10px]">{e.routes.api}</Badge>}
                               </div>
                             </div>
                           )}
@@ -345,8 +346,8 @@ export default function AdminSystemRegistry() {
                               <p className="text-gray-500 text-xs mb-1">دورة الحياة:</p>
                               <div className="flex flex-wrap gap-1">
                                 {e.lifecycle.states.map((s: string) => (
-                                  <Badge key={s} className={s === e.lifecycle.initial ? "bg-blue-100 text-blue-800 text-[10px]" : "bg-gray-100 text-gray-700 text-[10px]"}>
-                                    {s}{s === e.lifecycle.initial ? " (ابتدائي)" : ""}
+                                  <Badge key={s} className={s === e.lifecycle.initialState ? "bg-blue-100 text-blue-800 text-[10px]" : "bg-gray-100 text-gray-700 text-[10px]"}>
+                                    {s}{s === e.lifecycle.initialState ? " (ابتدائي)" : ""}
                                   </Badge>
                                 ))}
                               </div>
@@ -356,10 +357,10 @@ export default function AdminSystemRegistry() {
                             <div>
                               <p className="text-gray-500 text-xs mb-1">سلسلة الاعتماد:</p>
                               <div className="flex gap-1 items-center">
-                                {e.approval.chain.map((c: string, i: number) => (
+                                {e.approval.approverRoles.map((c: string, i: number) => (
                                   <span key={c} className="flex items-center gap-1">
                                     <Badge className="bg-green-100 text-green-800 text-[10px]">{c}</Badge>
-                                    {i < e.approval.chain.length - 1 && <span className="text-gray-400">←</span>}
+                                    {i < e.approval.approverRoles.length - 1 && <span className="text-gray-400">←</span>}
                                   </span>
                                 ))}
                               </div>
