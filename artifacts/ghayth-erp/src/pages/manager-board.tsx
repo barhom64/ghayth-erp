@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { getApprovalEndpoint, getApprovalBadgeClass, buildAllPending } from "@/lib/approval-registry";
+import { getApprovalEndpoint, getApprovalMethod, getApprovalBadgeClass, buildAllPending } from "@/lib/approval-registry";
 
 function formatTimeAgo(timestamp: string): string {
   const now = Date.now();
@@ -57,24 +57,26 @@ export default function ManagerBoard() {
   );
 
   type ApprovalBody = { _type: string; _itemId: number; approved: boolean; reason?: string; notes?: string };
-  const approvalMut = useApiMutation<any, ApprovalBody>(
-    (body) => getApprovalEndpoint(body._type, body._itemId),
-    "PATCH",
-    [["action-center"]],
-    {
-      successMessage: false,
-      onSuccess: (_d, body) => {
-        toast({ title: body.approved ? "تم الاعتماد بنجاح" : "تم الرفض" });
-        refetchAction();
-        const key = `${body._type}-${body._itemId}`;
-        setProcessingIds(prev => { const s = new Set(prev); s.delete(key); return s; });
-      },
-      onError: (_e, body) => {
-        const key = `${body._type}-${body._itemId}`;
-        setProcessingIds(prev => { const s = new Set(prev); s.delete(key); return s; });
-      },
-    }
+  const mutOpts = {
+    successMessage: false as const,
+    onSuccess: (_d: any, body: ApprovalBody) => {
+      toast({ title: body.approved ? "تم الاعتماد بنجاح" : "تم الرفض" });
+      refetchAction();
+      const key = `${body._type}-${body._itemId}`;
+      setProcessingIds(prev => { const s = new Set(prev); s.delete(key); return s; });
+    },
+    onError: (_e: any, body: ApprovalBody) => {
+      const key = `${body._type}-${body._itemId}`;
+      setProcessingIds(prev => { const s = new Set(prev); s.delete(key); return s; });
+    },
+  };
+  const patchMut = useApiMutation<any, ApprovalBody>(
+    (body) => getApprovalEndpoint(body._type, body._itemId), "PATCH", [["action-center"]], mutOpts,
   );
+  const postMut = useApiMutation<any, ApprovalBody>(
+    (body) => getApprovalEndpoint(body._type, body._itemId), "POST", [["action-center"]], mutOpts,
+  );
+  const approvalMut = { mutate: (body: ApprovalBody) => (getApprovalMethod(body._type) === "POST" ? postMut : patchMut).mutate(body) };
 
   if (actionLoading) return <LoadingSpinner />;
   if (actionError) return <ErrorState />;

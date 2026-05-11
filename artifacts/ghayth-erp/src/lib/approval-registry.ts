@@ -3,6 +3,7 @@ export interface ApprovalTypeDef {
   label: string;
   pendingKey: string;
   approveEndpoint: string;
+  method?: "PATCH" | "POST";
   badgeClass: string;
 }
 
@@ -20,11 +21,11 @@ export const APPROVAL_TYPES: ApprovalTypeDef[] = [
   { key: "excuse",         label: "استئذان",     pendingKey: "pendingExcuses",          approveEndpoint: "/hr/excuse-requests/:id/approve",         badgeClass: "bg-sky-100 text-sky-700" },
   { key: "violation",      label: "مخالفة",      pendingKey: "pendingViolations",       approveEndpoint: "/hr/violations/:id/approve",              badgeClass: "bg-red-100 text-red-700" },
   { key: "purchase_order", label: "أمر شراء",    pendingKey: "pendingPurchaseOrders",   approveEndpoint: "/finance/purchase-orders/:id/approve",    badgeClass: "bg-orange-100 text-orange-700" },
-  { key: "training",       label: "تدريب",       pendingKey: "pendingTrainings",        approveEndpoint: "/hr/programs/:id/approve",                badgeClass: "bg-violet-100 text-violet-700" },
-  { key: "maintenance",    label: "صيانة",       pendingKey: "pendingMaintenance",      approveEndpoint: "/property/maintenance-requests/:id/approve", badgeClass: "bg-yellow-100 text-yellow-700" },
+  { key: "training",       label: "تدريب",       pendingKey: "pendingTrainings",        approveEndpoint: "/hr/training/programs/:id/approve",       badgeClass: "bg-violet-100 text-violet-700" },
+  { key: "maintenance",    label: "صيانة",       pendingKey: "pendingMaintenance",      approveEndpoint: "/properties/maintenance-requests/:id/approve", badgeClass: "bg-yellow-100 text-yellow-700" },
   { key: "journal",        label: "قيد يدوي",    pendingKey: "pendingJournals",         approveEndpoint: "/finance/journal-manual/:id/approve",     badgeClass: "bg-lime-100 text-lime-700" },
-  { key: "inventory",      label: "جرد",         pendingKey: "pendingInventory",        approveEndpoint: "/warehouse/inventory-counts/:id/approve", badgeClass: "bg-emerald-100 text-emerald-700" },
-  { key: "workflow",       label: "سير عمل",    pendingKey: "pendingWorkflows",        approveEndpoint: "/workflows/:id/approve",                  badgeClass: "bg-purple-100 text-purple-700" },
+  { key: "inventory",      label: "جرد",         pendingKey: "pendingInventory",        approveEndpoint: "/warehouse/inventory-counts/:id/approve", method: "POST", badgeClass: "bg-emerald-100 text-emerald-700" },
+  { key: "workflow",       label: "سير عمل",    pendingKey: "pendingWorkflows",        approveEndpoint: "/workflows/:id/approve",                  method: "POST", badgeClass: "bg-purple-100 text-purple-700" },
 ];
 
 const byKey = new Map(APPROVAL_TYPES.map((t) => [t.key, t]));
@@ -36,6 +37,10 @@ export function getApprovalEndpoint(type: string, id: number): string {
 
 export function getApprovalLabel(type: string): string {
   return byKey.get(type)?.label ?? type;
+}
+
+export function getApprovalMethod(type: string): "PATCH" | "POST" {
+  return byKey.get(type)?.method ?? "PATCH";
 }
 
 export function getApprovalBadgeClass(type: string): string {
