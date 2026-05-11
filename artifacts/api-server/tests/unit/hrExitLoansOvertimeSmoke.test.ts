@@ -289,7 +289,10 @@ describe("Loan approval flow", () => {
     const endIdx = LOANS_ROUTE.indexOf("router.", idx + 10);
     const section = LOANS_ROUTE.slice(idx, endIdx);
     expect(section).toContain("isLast");
-    expect(section).toContain("loan.installmentCount - 1");
+    // The handler now copies `loan.installmentCount ?? 0` into a local
+    // `installmentCount` const and uses the local in the formula, so the
+    // assertion accepts either spelling.
+    expect(section).toMatch(/(?:loan\.)?installmentCount - 1/);
   });
 
   it("posts GL disbursement entry via hrEngine", () => {

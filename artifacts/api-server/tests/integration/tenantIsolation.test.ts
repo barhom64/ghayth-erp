@@ -59,6 +59,13 @@ const ALLOWLIST: Allow[] = [
       "Refresh-token bootstrap. Runs before req.scope is built; the tenant boundary is the verified refresh token's employeeId, not scope.companyId.",
   },
   {
+    file: "auth.ts",
+    line: 326,
+    table: "employee_assignments",
+    reason:
+      "Same refresh-token bootstrap flow as L296 — a second active-assignment lookup added by a later auth.ts edit. Tenant boundary is still the verified refresh token's employeeId, not scope.companyId.",
+  },
+  {
     file: "hr.ts",
     line: 1702,
     table: "hr_leave_requests",
