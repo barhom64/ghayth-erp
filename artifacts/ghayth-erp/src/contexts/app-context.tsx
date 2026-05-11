@@ -38,6 +38,7 @@ export interface UserRole {
   label: string;
   modules: string[];
   level: number;
+  source?: "legacy" | "v2";
 }
 
 export const roleKeyColors: Record<string, string> = {
