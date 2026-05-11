@@ -214,27 +214,63 @@ function findQuotedIdentifiers(sql) {
   return ids;
 }
 
+// Some routes create their own helper tables on first use via
+// `rawQuery(\`CREATE TABLE IF NOT EXISTS … (…)\`)` instead of a
+// migration. Their columns/tables won't appear in db/schema.sql but
+// they ARE legitimate references everywhere else in the same route.
+// Walk the route sources once up front to harvest those identifiers
+// so the second pass doesn't flag them as drift.
+function harvestInlineDefinitions(bodies, columnsOut, tablesOut) {
+  for (const raw of bodies) {
+    const m = raw.match(
+      /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:public\.)?"?([\w]+)"?\s*\(([\s\S]+?)\)\s*(?:;|$)/i,
+    );
+    if (!m) continue;
+    tablesOut.add(m[1]);
+    const lines = m[2].split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim().replace(/,\s*$/, "");
+      if (!trimmed) continue;
+      if (/^(CONSTRAINT|PRIMARY KEY|FOREIGN KEY|UNIQUE|CHECK)\b/i.test(trimmed)) continue;
+      const quoted = trimmed.match(/^"([^"]+)"/);
+      if (quoted) {
+        columnsOut.add(quoted[1]);
+        continue;
+      }
+      const bare = trimmed.match(/^([a-z_][a-z0-9_]*)\s/i);
+      if (bare) columnsOut.add(bare[1]);
+    }
+  }
+}
+
 async function main() {
   const { columns, tables } = await loadSchemaIdentifiers();
   if (columns.size === 0) {
     console.error(
-      `[audit-schema-drift] ERROR — no columns parsed from ${SCHEMA_FILE}. ` +
+      `[audit-schema-drift] ERROR — no columns parsed from db/schema_pre.sql. ` +
         `Is the schema dump missing or in an unexpected format?`,
     );
     process.exit(2);
   }
 
-  const allowed = new Set([...columns, ...tables, ...BUILTIN_IDENTIFIERS]);
-
   const srcFiles = await walk(API_SRC);
-  const findings = [];
 
+  // Pass 1: collect inline CREATE TABLE definitions from route source.
+  const sources = new Map();
   for (const file of srcFiles) {
     const source = await readFile(file, "utf8");
     if (!source.includes("rawQuery")) continue;
     const bodies = extractRawQueryBodies(source);
     if (bodies.length === 0) continue;
+    sources.set(file, bodies);
+    harvestInlineDefinitions(bodies, columns, tables);
+  }
 
+  const allowed = new Set([...columns, ...tables, ...BUILTIN_IDENTIFIERS]);
+  const findings = [];
+
+  // Pass 2: check identifier references against the combined set.
+  for (const [file, bodies] of sources) {
     const rel = relative(REPO_ROOT, file);
     for (const raw of bodies) {
       const cleaned = sanitiseTemplate(raw);
