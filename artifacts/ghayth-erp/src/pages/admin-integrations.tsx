@@ -1,13 +1,17 @@
 import { useState } from "react";
+import { z } from "zod";
 import { PageShell } from "@/components/page-shell";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import {
+  FormShell,
+  FormTextField,
+  FormTextareaField,
+  FormSelectField,
+  FormGrid,
+} from "@/components/form-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -34,10 +38,32 @@ const CHANNEL_ICONS: Record<string, any> = {
   webhook: Webhook,
 };
 
+// Zod schema enforces JSON validity BEFORE submit (the old flow only
+// caught syntax errors with a try/catch around JSON.parse — and only
+// after the user had clicked the button). `z.string().refine()` runs
+// at validation time so the operator sees the error inline next to
+// the textarea.
+const integrationFormSchema = z.object({
+  name: z.string().trim().min(1, "الاسم مطلوب"),
+  type: z.enum(["email", "sms", "whatsapp", "webhook"]),
+  config: z
+    .string()
+    .refine((s) => {
+      try { JSON.parse(s); return true; } catch { return false; }
+    }, { message: "صيغة JSON غير صالحة" }),
+  status: z.enum(["active", "inactive", "error"]),
+});
+type IntegrationForm = z.infer<typeof integrationFormSchema>;
+const defaultIntegrationForm: IntegrationForm = {
+  name: "",
+  type: "email",
+  config: "{}",
+  status: "inactive",
+};
+
 function IntegrationsList() {
   const { data: intResp, isLoading, isError } = useApiQuery<any>(["admin-integrations"], "/admin/integrations");
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: "", type: "email", config: "{}", status: "inactive" });
   const { toast } = useToast();
   const integrations = asList(intResp);
 
@@ -45,13 +71,7 @@ function IntegrationsList() {
     "/admin/integrations",
     "POST",
     [["admin-integrations"]],
-    {
-      successMessage: "تم إنشاء التكامل",
-      onSuccess: () => {
-        setForm({ name: "", type: "email", config: "{}", status: "inactive" });
-        setShowForm(false);
-      },
-    }
+    { successMessage: "تم إنشاء التكامل" },
   );
   const toggleMut = useApiMutation<any, { id: number; status: string }>(
     (body) => `/admin/integrations/${body.id}`,
@@ -80,11 +100,6 @@ function IntegrationsList() {
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
-  const handleCreate = () => {
-    let parsedConfig = {};
-    try { parsedConfig = JSON.parse(form.config); } catch { toast({ variant: "destructive", title: "خطأ في صيغة الإعدادات" }); return; }
-    createMut.mutate({ ...form, config: parsedConfig });
-  };
   const handleToggleStatus = (id: number, currentStatus: string) => {
     toggleMut.mutate({ id, status: currentStatus === "active" ? "inactive" : "active" });
   };
@@ -101,32 +116,45 @@ function IntegrationsList() {
       </div>
       {showForm && (
         <Card>
-          <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div><Label>الاسم</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="اسم التكامل" /></div>
-            <div><Label>النوع</Label>
-              <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="email">بريد إلكتروني</SelectItem>
-                  <SelectItem value="sms">رسائل نصية</SelectItem>
-                  <SelectItem value="whatsapp">واتساب</SelectItem>
-                  <SelectItem value="webhook">خطاف استدعاء</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="md:col-span-2">
-              <Label>الإعدادات (بصيغة جيسون)</Label>
-              <Textarea
-                className="font-mono text-sm min-h-[100px]"
-                value={form.config}
-                onChange={(e) => setForm({ ...form, config: e.target.value })}
-                placeholder={form.type === "email" ? '{"host":"smtp.gmail.com","port":587,"user":"...","password":"...","from":"..."}' : form.type === "webhook" ? '{"url":"https://...","headers":{}}' : "{}"}
-                dir="ltr"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <Button onClick={handleCreate} disabled={!form.name || createMut.isPending} rateLimitAware>حفظ التكامل</Button>
-            </div>
+          <CardContent className="p-4">
+            <FormShell
+              schema={integrationFormSchema}
+              defaultValues={defaultIntegrationForm}
+              submitLabel="حفظ التكامل"
+              secondaryActions={
+                <Button type="button" size="sm" variant="ghost" onClick={() => setShowForm(false)}>
+                  إلغاء
+                </Button>
+              }
+              onSubmit={async (values, ctx) => {
+                // Schema already guaranteed config is valid JSON; safe to parse.
+                const parsedConfig = JSON.parse(values.config);
+                await createMut.mutateAsync({ ...values, config: parsedConfig });
+                ctx.reset();
+                setShowForm(false);
+              }}
+            >
+              <FormGrid cols={2}>
+                <FormTextField name="name" label="الاسم" placeholder="اسم التكامل" required />
+                <FormSelectField
+                  name="type"
+                  label="النوع"
+                  options={[
+                    { value: "email", label: "بريد إلكتروني" },
+                    { value: "sms", label: "رسائل نصية" },
+                    { value: "whatsapp", label: "واتساب" },
+                    { value: "webhook", label: "خطاف استدعاء" },
+                  ]}
+                />
+                <FormTextareaField
+                  name="config"
+                  label="الإعدادات (بصيغة JSON)"
+                  description='يجب أن تكون JSON صالحًا. مثال للبريد: host, port, user, password, from'
+                  rows={5}
+                  className="md:col-span-2"
+                />
+              </FormGrid>
+            </FormShell>
           </CardContent>
         </Card>
       )}
