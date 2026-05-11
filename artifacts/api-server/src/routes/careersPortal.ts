@@ -6,7 +6,6 @@ import { handleRouteError, ValidationError, NotFoundError, ConflictError, Forbid
 } from "../lib/errorHandler.js";
 import { hashPassword, verifyPassword } from "../lib/auth.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
 import { makeRateLimitStore } from "../lib/rateLimitStore.js";
