@@ -210,7 +210,7 @@ function ActionsMenu({
   const canSubmit = status === "draft" || approvalStatus === "draft";
   const canApprove = approvalStatus === "pending_approval";
   const canReject = approvalStatus === "pending_approval";
-  const canSign = approvalStatus === "approved";
+  const canSign = approvalStatus === "approved" || approvalStatus === "signed";
   const canActivate = approvalStatus === "signed";
   const canTerminate = status === "active";
 

@@ -16,6 +16,20 @@ import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
+import { z } from "zod";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+} from "@/components/ui/alert-dialog";
+import {
+  FormShell,
+  FormNumberField,
+  FormTextareaField,
+  FormGrid,
+} from "@/components/form-shell";
 
 const TYPES: Record<string, string> = {
   move_in: "دخول مستأجر",
@@ -32,6 +46,11 @@ export default function InspectionsPage() {
   const [showForm, setShowForm] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
   const [form, setForm] = useState({ unitId: "", type: "routine", scheduledDate: "", inspectorName: "", conditionRating: "", notes: "" });
+  // Holds the inspection row id we're completing. Closing the dialog
+  // (esc / cancel) sets it back to null without sending the PATCH.
+  // Used to live as two consecutive native prompt() calls — see the
+  // CompleteInspectionDialog below for the migration target.
+  const [completingId, setCompletingId] = useState<number | null>(null);
 
   const { data, isLoading, isError, refetch } = useApiQuery<any>(
     ["inspections", statusFilter],
@@ -53,19 +72,29 @@ export default function InspectionsPage() {
     } catch (e: any) { toast({ title: e.message || "خطأ", variant: "destructive" }); }
   };
 
-  const handleComplete = async (id: number) => {
-    const rating = prompt("تقييم حالة الوحدة (1-5):");
-    const notes = prompt("ملاحظات الفحص:");
+  // PATCH the inspection row to status=completed with the operator-
+  // supplied rating + notes. Validation is in zod (see schema below
+  // in CompleteInspectionDialog) so an out-of-range rating never
+  // reaches the server.
+  const submitCompletion = async (
+    id: number,
+    values: { conditionRating: number; notes: string },
+  ) => {
     try {
-      await apiFetch(`/properties/inspections/${id}`, { method: "PATCH", body: JSON.stringify({
-        status: "completed",
-        inspectionDate: todayLocal(),
-        conditionRating: rating ? Number(rating) : null,
-        notes: notes || null,
-      }) });
+      await apiFetch(`/properties/inspections/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: "completed",
+          inspectionDate: todayLocal(),
+          conditionRating: values.conditionRating,
+          notes: values.notes || null,
+        }),
+      });
       refetch();
       toast({ title: "تم إكمال الفحص" });
-    } catch (e: any) { toast({ title: e.message, variant: "destructive" }); }
+    } catch (e: any) {
+      toast({ title: e.message, variant: "destructive" });
+    }
   };
 
   if (isLoading) return <LoadingSpinner />;
@@ -162,7 +191,7 @@ export default function InspectionsPage() {
                   </div>
                 )}
                 {insp.status === "scheduled" && (
-                  <Button size="sm" onClick={() => handleComplete(insp.id)}>
+                  <Button size="sm" onClick={() => setCompletingId(insp.id)}>
                     <CheckCircle className="w-3.5 h-3.5 me-1" /> إتمام
                   </Button>
                 )}
@@ -171,6 +200,83 @@ export default function InspectionsPage() {
           </Card>
         ))}
       </div>
+
+      <CompleteInspectionDialog
+        open={completingId !== null}
+        onClose={() => setCompletingId(null)}
+        onSubmit={async (values) => {
+          if (completingId == null) return;
+          await submitCompletion(completingId, values);
+          setCompletingId(null);
+        }}
+      />
     </PageShell>
+  );
+}
+
+// ─── Inspection-completion dialog ────────────────────────────────────────────
+// Replaces the back-to-back `prompt("تقييم...")` + `prompt("ملاحظات...")`
+// pair the page used to fire from the "إتمام" button. The native flow
+// blocked the event loop, allowed any string to land in `conditionRating`
+// (we then `Number(...)`-coerced server-side), and showed an OS-default UI
+// that didn't match RTL/dark mode. The dialog uses the shared FormShell so
+// the rating is validated as an integer 1-5 BEFORE the PATCH is sent.
+
+// `z.coerce.number()` because `<input type="number">` + react-hook-form's
+// register() flow values as strings. Coercion turns "3" → 3 before the
+// int/min/max checks run.
+const completionSchema = z.object({
+  conditionRating: z.coerce
+    .number({ invalid_type_error: "أدخل رقمًا صحيحًا" })
+    .int("يجب أن يكون عددًا صحيحًا")
+    .min(1, "أدنى تقييم 1")
+    .max(5, "أعلى تقييم 5"),
+  notes: z.string(),
+});
+type CompletionForm = z.infer<typeof completionSchema>;
+
+function CompleteInspectionDialog(props: {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (values: CompletionForm) => void | Promise<void>;
+}) {
+  // Use the dialog's `open` to mount/unmount the form so FormShell's
+  // defaultValues are reset on each re-open.
+  return (
+    <AlertDialog open={props.open} onOpenChange={(next) => { if (!next) props.onClose(); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>إتمام الفحص</AlertDialogTitle>
+          <AlertDialogDescription>
+            أدخل تقييم حالة الوحدة وأي ملاحظات. التقييم رقم من 1 إلى 5.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {props.open && (
+          <FormShell
+            schema={completionSchema}
+            defaultValues={{ conditionRating: 3 as number, notes: "" }}
+            submitLabel="حفظ وإتمام"
+            secondaryActions={
+              <Button type="button" variant="ghost" onClick={props.onClose}>
+                إلغاء
+              </Button>
+            }
+            onSubmit={async (values) => {
+              await props.onSubmit(values);
+            }}
+          >
+            <FormGrid cols={1}>
+              <FormNumberField
+                name="conditionRating"
+                label="تقييم حالة الوحدة (1-5)"
+                required
+                placeholder="3"
+              />
+              <FormTextareaField name="notes" label="ملاحظات الفحص" rows={3} />
+            </FormGrid>
+          </FormShell>
+        )}
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

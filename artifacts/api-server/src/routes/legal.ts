@@ -8,7 +8,6 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { haversineKm } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded } from "../lib/businessHelpers.js";
@@ -983,7 +982,7 @@ router.post("/cases/:caseId/sessions", authorize({ feature: "legal.cases", actio
   } catch (err) { handleRouteError(err, res, "Create session error:"); }
 });
 
-router.get("/stats", authorize({ feature: "legal", action: "list" }), async (req, res) => {
+router.get("/stats", authorize({ feature: "legal.cases", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -1325,7 +1324,7 @@ router.patch("/cases/:id/financial-risk", authorize({ feature: "legal.cases", ac
   } catch (err) { handleRouteError(err, res, "Financial risk update error:"); }
 });
 
-router.get("/sessions/:id", authorize({ feature: "legal", action: "view" }), async (req, res) => {
+router.get("/sessions/:id", authorize({ feature: "legal.cases", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1341,7 +1340,7 @@ router.get("/sessions/:id", authorize({ feature: "legal", action: "view" }), asy
   } catch (err) { handleRouteError(err, res, "Legal session detail error:"); }
 });
 
-router.get("/judgments/:id", authorize({ feature: "legal", action: "view" }), async (req, res) => {
+router.get("/judgments/:id", authorize({ feature: "legal.cases", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1357,7 +1356,7 @@ router.get("/judgments/:id", authorize({ feature: "legal", action: "view" }), as
   } catch (err) { handleRouteError(err, res, "Legal judgment detail error:"); }
 });
 
-router.get("/correspondence/:id", authorize({ feature: "legal", action: "view" }), async (req, res) => {
+router.get("/correspondence/:id", authorize({ feature: "legal.cases", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1373,7 +1372,7 @@ router.get("/correspondence/:id", authorize({ feature: "legal", action: "view" }
   } catch (err) { handleRouteError(err, res, "Legal correspondence detail error:"); }
 });
 
-router.get("/sessions/upcoming", authorize({ feature: "legal", action: "list" }), async (req, res) => {
+router.get("/sessions/upcoming", authorize({ feature: "legal.cases", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const days = Number(req.query.days) || 14;
@@ -1394,7 +1393,7 @@ router.get("/sessions/upcoming", authorize({ feature: "legal", action: "list" })
   } catch (err) { handleRouteError(err, res, "Upcoming sessions error:"); }
 });
 
-router.get("/judgments/financial-report", authorize({ feature: "legal", action: "list" }), async (req, res) => {
+router.get("/judgments/financial-report", authorize({ feature: "legal.cases", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -1424,7 +1423,7 @@ router.get("/judgments/financial-report", authorize({ feature: "legal", action: 
   } catch (err) { handleRouteError(err, res, "Judgments financial report error:"); }
 });
 
-router.get("/financial-report", authorize({ feature: "legal", action: "list" }), async (req, res) => {
+router.get("/financial-report", authorize({ feature: "legal.cases", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cases = await rawQuery<any>(

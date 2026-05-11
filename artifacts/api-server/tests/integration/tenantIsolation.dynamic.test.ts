@@ -125,4 +125,93 @@ d("Tenant isolation — dynamic (real Postgres)", () => {
       expect(foreign).toEqual([]);
     });
   }
+
+  // ── Cross-tenant write contracts ──
+  // For each write path, token A must not be able to mutate a row that
+  // belongs to company B. The fixture seeds one row per company in
+  // `clients`, `projects`, and `tasks`; the cross-tenant case asks for
+  // the OTHER company's id and we expect 403 / 404 (never 200).
+  // Same-tenant control checks confirm the route works for legitimate
+  // owners — guards against the trivial false-positive of "every write
+  // returns 404, so cross-tenant writes are also 404".
+  const CROSS_TENANT_WRITE_CASES: Array<{
+    method: "delete" | "patch" | "put";
+    path: (fx: any) => string;
+    body?: object;
+    label: string;
+  }> = [
+    {
+      method: "delete",
+      path: (fx) => `/api/clients/${fx.companyB.clientId}`,
+      label: "DELETE /api/clients/:id (foreign client)",
+    },
+    {
+      method: "patch",
+      path: (fx) => `/api/clients/${fx.companyB.clientId}`,
+      body: { name: "hijacked" },
+      label: "PATCH /api/clients/:id (foreign client)",
+    },
+    {
+      method: "delete",
+      path: (fx) => `/api/projects/${fx.companyB.projectId}`,
+      label: "DELETE /api/projects/:id (foreign project)",
+    },
+    {
+      method: "patch",
+      path: (fx) => `/api/projects/${fx.companyB.projectId}`,
+      body: { name: "hijacked" },
+      label: "PATCH /api/projects/:id (foreign project)",
+    },
+    {
+      method: "delete",
+      path: (fx) => `/api/tasks/${fx.companyB.taskId}`,
+      label: "DELETE /api/tasks/:id (foreign task)",
+    },
+    {
+      method: "patch",
+      path: (fx) => `/api/employees/${fx.companyB.employeeId}`,
+      body: { name: "hijacked" },
+      label: "PATCH /api/employees/:id (foreign employee)",
+    },
+    {
+      method: "delete",
+      path: (fx) => `/api/employees/${fx.companyB.employeeId}`,
+      label: "DELETE /api/employees/:id (foreign employee)",
+    },
+    {
+      method: "patch",
+      path: (fx) => `/api/documents/${fx.companyB.documentId}`,
+      body: { title: "hijacked" },
+      label: "PATCH /api/documents/:id (foreign document)",
+    },
+    {
+      method: "delete",
+      path: (fx) => `/api/documents/${fx.companyB.documentId}`,
+      label: "DELETE /api/documents/:id (foreign document)",
+    },
+    {
+      method: "patch",
+      path: (fx) => `/api/requests/${fx.companyB.requestId}`,
+      body: { title: "hijacked" },
+      label: "PATCH /api/requests/:id (foreign request)",
+    },
+    {
+      method: "delete",
+      path: (fx) => `/api/requests/${fx.companyB.requestId}`,
+      label: "DELETE /api/requests/:id (foreign request)",
+    },
+  ];
+
+  for (const c of CROSS_TENANT_WRITE_CASES) {
+    it(`${c.label} — token A must not mutate company B's row`, async () => {
+      const req = (request(app) as any)[c.method](c.path(fx)).set(
+        "Authorization",
+        `Bearer ${fx.tokenA}`
+      );
+      const res = await (c.body ? req.send(c.body) : req);
+      // 200/204 = the mutation went through, which is the leak we're
+      // asserting against. 401/403/404/422 = correctly refused.
+      expect([401, 403, 404, 422]).toContain(res.status);
+    });
+  }
 });

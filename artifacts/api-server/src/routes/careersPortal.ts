@@ -6,7 +6,6 @@ import { handleRouteError, ValidationError, NotFoundError, ConflictError, Forbid
 } from "../lib/errorHandler.js";
 import { hashPassword, verifyPassword } from "../lib/auth.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
 import { makeRateLimitStore } from "../lib/rateLimitStore.js";
@@ -70,7 +69,7 @@ function careersAuth(req: Request, res: Response, next: NextFunction): void {
     return;
   }
   try {
-    const payload: any = jwt.verify(auth.slice(7), SECRET);
+    const payload: any = jwt.verify(auth.slice(7), SECRET, { algorithms: ["HS256"] });
     if (payload.type !== "careers_portal") {
       res.status(401).json({ error: "غير مصرح" });
       return;

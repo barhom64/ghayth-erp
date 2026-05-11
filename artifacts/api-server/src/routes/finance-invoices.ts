@@ -12,7 +12,6 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { requireOwnership } from "../middlewares/contextualRbac.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import {
@@ -159,7 +158,7 @@ const INVOICE_TRANSITIONS: Record<string, readonly string[]> = {
 };
 
 // Impact preview — lets the create form show exactly what will happen
-invoicesRouter.post("/invoices/impact-preview", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+invoicesRouter.post("/invoices/impact-preview", authorize({ feature: "finance.invoices", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(impactPreviewSchema.safeParse(req.body ?? {}));
@@ -248,7 +247,7 @@ invoicesRouter.post("/invoices/impact-preview", authorize({ feature: "finance", 
   }
 });
 
-invoicesRouter.get("/invoices", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+invoicesRouter.get("/invoices", authorize({ feature: "finance.invoices", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status = "", page = "1", limit: lim = "20" } = req.query as any;
@@ -489,7 +488,7 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
   }
 });
 
-invoicesRouter.post("/invoices/:id/send", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+invoicesRouter.post("/invoices/:id/send", authorize({ feature: "finance.invoices", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -643,7 +642,7 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
   }
 });
 
-invoicesRouter.post("/invoices/:id/post", authorize({ feature: "finance", action: "approve" }), requireOwnership({ table: "invoices", checks: ["company", "branch"] }), async (req, res) => {
+invoicesRouter.post("/invoices/:id/post", authorize({ feature: "finance.invoices", action: "approve" }), requireOwnership({ table: "invoices", checks: ["company", "branch"] }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -682,7 +681,7 @@ invoicesRouter.post("/invoices/:id/post", authorize({ feature: "finance", action
   }
 });
 
-invoicesRouter.post("/invoices/:id/payment", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+invoicesRouter.post("/invoices/:id/payment", authorize({ feature: "finance.invoices", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -1044,11 +1043,11 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
   }
 }
 
-invoicesRouter.patch("/invoices/:id/approve", authorize({ feature: "finance", action: "update" }), (req, res) => invoiceApprovalAction(req, res, "approved"));
-invoicesRouter.patch("/invoices/:id/reject", authorize({ feature: "finance", action: "update" }), (req, res) => invoiceApprovalAction(req, res, "rejected"));
-invoicesRouter.patch("/invoices/:id/return", authorize({ feature: "finance", action: "update" }), (req, res) => invoiceApprovalAction(req, res, "returned"));
+invoicesRouter.patch("/invoices/:id/approve", authorize({ feature: "finance.invoices", action: "update" }), (req, res) => invoiceApprovalAction(req, res, "approved"));
+invoicesRouter.patch("/invoices/:id/reject", authorize({ feature: "finance.invoices", action: "update" }), (req, res) => invoiceApprovalAction(req, res, "rejected"));
+invoicesRouter.patch("/invoices/:id/return", authorize({ feature: "finance.invoices", action: "update" }), (req, res) => invoiceApprovalAction(req, res, "returned"));
 
-invoicesRouter.get("/tax/summary", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+invoicesRouter.get("/tax/summary", authorize({ feature: "finance.zatca", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { period } = req.query as any;
@@ -1078,7 +1077,7 @@ invoicesRouter.get("/tax/summary", authorize({ feature: "finance", action: "list
 //   CR 2300 VAT payable
 // ─────────────────────────────────────────────────────────────────────────────
 
-invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.invoices", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -1216,7 +1215,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance",
   }
 });
 
-invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.invoices", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -1338,7 +1337,7 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance", 
   }
 });
 
-invoicesRouter.get("/invoices/:id/memos", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+invoicesRouter.get("/invoices/:id/memos", authorize({ feature: "finance.invoices", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1373,7 +1372,7 @@ invoicesRouter.get("/invoices/:id/memos", authorize({ feature: "finance", action
 // per request. Idempotent per period via ref `BAD-DEBT-{period}`.
 // ─────────────────────────────────────────────────────────────────────────────
 
-invoicesRouter.get("/bad-debt/preview", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+invoicesRouter.get("/bad-debt/preview", authorize({ feature: "finance.collection", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const asOf = (req.query.asOf as string) || todayISO();
@@ -1425,7 +1424,7 @@ invoicesRouter.get("/bad-debt/preview", authorize({ feature: "finance", action: 
   }
 });
 
-invoicesRouter.post("/bad-debt/post", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+invoicesRouter.post("/bad-debt/post", authorize({ feature: "finance.collection", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -1546,7 +1545,7 @@ invoicesRouter.post("/bad-debt/post", authorize({ feature: "finance", action: "c
 //   CR 1200 AR
 // ─────────────────────────────────────────────────────────────────────────────
 
-invoicesRouter.post("/customer-advances", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -1645,7 +1644,7 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance", action
   }
 });
 
-invoicesRouter.post("/customer-advances/:id/apply", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+invoicesRouter.post("/customer-advances/:id/apply", authorize({ feature: "finance.invoices", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -1738,7 +1737,7 @@ invoicesRouter.post("/customer-advances/:id/apply", authorize({ feature: "financ
   }
 });
 
-invoicesRouter.get("/customer-advances", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+invoicesRouter.get("/customer-advances", authorize({ feature: "finance.invoices", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { clientId, status } = req.query as any;
@@ -1843,7 +1842,7 @@ ${opts.stageTitle}
 }
 
 // Preview eligible invoices for dunning
-invoicesRouter.get("/dunning/preview", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+invoicesRouter.get("/dunning/preview", authorize({ feature: "finance.collection", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     await ensureDunningTables();
@@ -1921,7 +1920,7 @@ invoicesRouter.get("/dunning/preview", authorize({ feature: "finance", action: "
 });
 
 // Send dunning letters (record them)
-invoicesRouter.post("/dunning/send", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+invoicesRouter.post("/dunning/send", authorize({ feature: "finance.collection", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -1988,7 +1987,7 @@ invoicesRouter.post("/dunning/send", authorize({ feature: "finance", action: "cr
 });
 
 // History of dunning letters
-invoicesRouter.get("/dunning/history", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+invoicesRouter.get("/dunning/history", authorize({ feature: "finance.collection", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     await ensureDunningTables();
@@ -2014,7 +2013,7 @@ invoicesRouter.get("/dunning/history", authorize({ feature: "finance", action: "
   }
 });
 
-invoicesRouter.get("/tax/declarations", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+invoicesRouter.get("/tax/declarations", authorize({ feature: "finance.zatca", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const thisYear = currentYear();

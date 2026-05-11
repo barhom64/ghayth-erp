@@ -70,6 +70,34 @@ const SAFE_NAMES = new Set([
   // `onlyUnresolved` in admin.ts is a boolean derived from req.query —
   // the ternary only picks between a hardcoded SQL fragment and empty string.
   "onlyUnresolved",
+  // `adapter` (in genericImportEngine.ts) reads `.table` off the hardcoded
+  // ADAPTERS map keyed by an enum (ImportEntity). The table name and column
+  // names never come from user input — entityKeyOrThrow() rejects unknown
+  // keys before the engine is invoked.
+  "adapter",
+  // `setClauses` (in genericImportEngine.ts updateRow) is built from
+  // `Object.keys(fields)` where fields keys come from adapter.fieldTypes
+  // (hardcoded) and adapter.compareFields (hardcoded). No user-provided
+  // identifiers are interpolated.
+  "setClauses",
+  // `cols` (in lib/rbac/authorize.ts) joins `opts.resource.columns` which
+  // is set at route-registration time by trusted developer code (never
+  // user input), or falls back to a hardcoded list of standard scope
+  // columns.
+  "cols",
+  // `sideColCode` (in lib/gl/account-purposes.ts) is a ternary that picks
+  // between two hardcoded column names ('"debitAccountCode"' /
+  // '"creditAccountCode"') based on a `side` enum — no user input reaches
+  // the interpolation.
+  "sideColCode",
+  // `idPlaceholders` (in routes/hr.ts) generates `$2,$3,$4…` placeholder
+  // strings from array indices — no user values are interpolated, just
+  // positional binding markers.
+  "idPlaceholders",
+  // `seasonFilterP` (in routes/umrah.ts) is built the same way as `where`
+  // / `conditions` above: a hardcoded SQL fragment with `$n` parameter
+  // binding for the actual value.
+  "seasonFilterP",
 ]);
 
 // Member expressions like `params.length` or `sets.join(...)` are allowed

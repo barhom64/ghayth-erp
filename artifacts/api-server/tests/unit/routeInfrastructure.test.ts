@@ -87,7 +87,13 @@ describe("Route file consistency", () => {
     const violations: string[] = [];
     for (const file of routeFiles) {
       const source = readFileSync(join(ROUTES_DIR, file), "utf8");
-      if (/from\s+['"]pg['"]/.test(source) || /from\s+['"]node:pg['"]/.test(source)) {
+      // `import type … from "pg"` is erased at compile time and only
+      // brings in TS types (e.g. `pg.PoolClient` for a callback param);
+      // it doesn't pull pg into the runtime bundle, so it doesn't
+      // violate the "use rawdb at runtime" rule. Match runtime imports
+      // only.
+      const runtimeRe = /^\s*import\s+(?!type\b)[^;]*from\s+['"](?:node:)?pg['"]/m;
+      if (runtimeRe.test(source)) {
         violations.push(file);
       }
     }

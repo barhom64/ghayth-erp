@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { handleRouteError } from "../lib/errorHandler.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { todayISO, currentPeriod } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
@@ -69,7 +68,7 @@ router.get("/finance", authorize({ feature: "finance", action: "list" }), async 
       sq1(`SELECT COALESCE(SUM(total), 0) AS "totalRevenue", COALESCE(SUM("paidAmount"), 0) AS "totalPaid", COALESCE(SUM(total - "paidAmount"), 0) AS "outstanding", COUNT(*) AS count, COUNT(*) FILTER (WHERE status = 'overdue') AS overdue, COUNT(*) FILTER (WHERE status = 'paid') AS paid FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
       sq1(`SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count FROM expense_claims WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "createdAt" >= $2`, [cid, monthStart]),
       sq1(`SELECT COALESCE(SUM(total - "paidAmount"), 0) AS amount, COUNT(*) AS count FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status IN ('sent','partial','overdue') AND "dueDate" < CURRENT_DATE`, [cid]),
-      sq1(`SELECT COUNT(*) AS total, 0 AS "avgUsage" FROM budget_lines bl JOIN chart_of_accounts ca ON ca.id = bl."accountId" WHERE ca."companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COALESCE(ROUND(AVG(CASE WHEN b.amount > 0 THEN (COALESCE(b.used,0)::numeric / b.amount) * 100 ELSE 0 END), 0), 0) AS "avgUsage" FROM budgets b WHERE b."companyId" = $1 AND b."deletedAt" IS NULL`, [cid]),
     ]);
 
     const monthlyRevenue = await safeQuery(

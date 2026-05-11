@@ -10,16 +10,17 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import { PageStatusBadge } from "@/components/page-status-badge";
-import { Car, Wrench, Fuel, Shield, Gauge, MapPin, Pencil, Trash2, X, Check, BookOpen, AlertTriangle, XCircle, Info, Banknote, FileText, Clock } from "lucide-react";
+import { Car, Wrench, Fuel, Shield, Gauge, MapPin, Pencil, Trash2, X, Check, BookOpen, AlertTriangle, XCircle, Info, Banknote, FileText } from "lucide-react";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
-import { EntityTimeline } from "@/components/shared/entity-timeline";
+
 import { EntityObligations } from "@/components/shared/entity-obligations";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { CheckSquare } from "lucide-react";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -34,7 +35,6 @@ const TABS = [
   { key: "insurance", label: "التأمين", icon: Shield },
   { key: "tasks", label: "المهام", icon: CheckSquare },
   { key: "finance", label: "المالية", icon: BookOpen },
-  { key: "timeline", label: "السجل الزمني", icon: Clock },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -77,6 +77,7 @@ export default function VehicleDetail() {
 
   const { data: vehicle, isLoading, isError, error, refetch } = useApiQuery<any>(["vehicle-detail", id || ""], `/fleet/vehicles/${id}`, !!id);
   const { data: tco } = useApiQuery<any>(["vehicle-tco", id || ""], `/fleet/vehicles/${id}/tco`, !!id);
+  const { hideTabs: registryHideTabs } = useRegistryTabs("vehicle", id || "");
 
   const [editForm, setEditForm] = useState<Record<string, string>>({});
 
@@ -771,15 +772,6 @@ export default function VehicleDetail() {
         </div>
       )}
 
-      {activeTab === "timeline" && (
-        <Card>
-          <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Clock className="h-5 w-5 text-muted-foreground" /> السجل الزمني</CardTitle></CardHeader>
-          <CardContent>
-            {id && <EntityTimeline entityType="fleet-vehicle" entityId={id} maxItems={20} />}
-          </CardContent>
-        </Card>
-      )}
-
       {id && (
         <EntityObligations entityType="fleet-vehicle,fleet-maintenance,fleet-insurance" entityId={id} hideWhenEmpty />
       )}
@@ -805,7 +797,7 @@ export default function VehicleDetail() {
       updatedAt={vehicle?.updatedAt}
       overview={overview}
       actions={actions}
-      hideTabs={["tasks", "timeline"]}
+      hideTabs={[...registryHideTabs, "tasks"]}
     />
   );
 }

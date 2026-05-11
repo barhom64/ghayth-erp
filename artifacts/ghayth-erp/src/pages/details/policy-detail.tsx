@@ -10,6 +10,7 @@ import { Edit, FileText } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "مسودة",
@@ -31,6 +32,7 @@ export default function PolicyDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/governance/policies/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("policy", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["policy", String(id)],
@@ -223,6 +225,8 @@ export default function PolicyDetail() {
       relatedEntities={relatedEntities}
       entityType="policy"
       entityId={id ?? 0}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       overview={overview}
       isLoading={isLoading}
       error={error}

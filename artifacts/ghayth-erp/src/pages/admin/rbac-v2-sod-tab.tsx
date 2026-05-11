@@ -117,8 +117,8 @@ export function SodRulesTab() {
         </Card>
       )}
 
-      <div className="border rounded">
-        <div className="grid grid-cols-12 gap-2 items-center py-2 px-3 bg-gray-100 border-b text-xs font-semibold text-gray-600">
+      <div className="border rounded overflow-x-auto">
+        <div className="grid grid-cols-12 gap-2 items-center py-2 px-3 bg-gray-100 border-b text-xs font-semibold text-gray-600 min-w-[600px]">
           <div className="col-span-3">القاعدة</div>
           <div className="col-span-5">الإجراءات المتعارضة</div>
           <div className="col-span-1">الشدة</div>
@@ -128,7 +128,7 @@ export function SodRulesTab() {
         {rules.map((r) => {
           const offenders = violationsByRuleId.get(r.id) || [];
           return (
-            <div key={r.id} className="grid grid-cols-12 gap-2 items-center py-2 px-3 border-b last:border-b-0 hover:bg-gray-50">
+            <div key={r.id} className="grid grid-cols-12 gap-2 items-center py-2 px-3 border-b last:border-b-0 hover:bg-gray-50 min-w-[600px]">
               <div className="col-span-3">
                 <p className="text-sm font-medium">{r.label_ar}</p>
                 <p className="text-[10px] text-gray-400 font-mono">{r.rule_key}</p>

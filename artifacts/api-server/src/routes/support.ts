@@ -10,13 +10,100 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { slaDeadlineForPriority, haversineKm, loadBalanceAssign } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, LifecycleError, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import type { ExtraValue } from "../lib/lifecycleEngine.js";
+
+// Local row shapes for support tables.
+
+interface SupportTicketRow {
+  id: number;
+  companyId: number;
+  branchId?: number | null;
+  ref: string;
+  title?: string | null;
+  subject: string;
+  description: string;
+  category?: string | null;
+  priority: string;
+  status: string;
+  channel?: string | null;
+  source?: string | null;
+  clientId?: number | null;
+  contactName?: string | null;
+  contactPhone?: string | null;
+  assigneeId?: number | null;
+  agent?: string | null;
+  assignedAt?: string | null;
+  firstResponseAt?: string | null;
+  slaDeadline?: string | null;
+  resolvedAt?: string | null;
+  closedAt?: string | null;
+  createdBy?: number | null;
+  createdAt: string;
+  updatedAt?: string | null;
+  deletedAt?: string | null;
+}
+
+interface TicketReplyRow {
+  id: number;
+  ticketId: number;
+  authorId?: number | null;
+  authorRole?: string | null;
+  body: string;
+  isInternal?: boolean | null;
+  createdAt: string;
+  deletedAt?: string | null;
+}
+
+interface AgentStatRow {
+  id: number;
+  name: string;
+  openTickets: number | string;
+  resolvedTickets?: number | string;
+  avgResolutionHours?: number | string | null;
+  loadFactor?: number;
+}
+
+interface KbArticleRow {
+  id: number;
+  companyId?: number | null;
+  title: string;
+  body?: string | null;
+  category?: string | null;
+  tags?: unknown;
+  views?: number | null;
+  helpful?: number | null;
+  notHelpful?: number | null;
+  createdBy?: number | null;
+  createdAt: string;
+  updatedAt?: string | null;
+  deletedAt?: string | null;
+}
+
+interface CsatRow {
+  id?: number;
+  ticketId: number;
+  companyId: number;
+  score: number;
+  comment?: string | null;
+  createdAt?: string;
+}
+
+interface AggCountsRow {
+  total: string | number;
+  open: string | number;
+  resolved: string | number;
+  slaBreach: string | number;
+}
+
+interface AvgHoursRow { avgHours: number | string | null }
+interface AvgTotalRow { avg: number | string | null; total: string | number }
+interface AssignmentRow { id: number }
+
 const router = Router();
 
 const createTicketSchema = z.object({
@@ -100,7 +187,7 @@ router.get("/tickets", authorize({ feature: "support.tickets", action: "list" })
     let paramIdx = nextParamIndex;
     if (status) { where += ` AND t.status = $${paramIdx}`; params.push(status); paramIdx++; }
     if (priority) { where += ` AND t.priority = $${paramIdx}`; params.push(priority); paramIdx++; }
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<SupportTicketRow & { clientName?: string | null; assigneeName?: string | null }>(
       `SELECT t.*, cl.name AS "clientName", e.name AS "assigneeName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=t."assigneeId" AND e."deletedAt" IS NULL WHERE ${where} AND t."deletedAt" IS NULL ORDER BY t.id DESC LIMIT 500`,
       params
     );
@@ -117,7 +204,7 @@ router.post("/tickets", authorize({ feature: "support.tickets", action: "create"
   // but nobody was emitting the event from the create handler).
   try {
     const scope = req.scope!;
-    const b = zodParse(createTicketSchema.safeParse(req.body)) as any;
+    const b = zodParse(createTicketSchema.safeParse(req.body));
 
     const title = (b.title ?? b.subject ?? "").toString().trim();
     if (!title) {
@@ -159,7 +246,7 @@ router.post("/tickets", authorize({ feature: "support.tickets", action: "create"
 
     let assigneeId = b.assigneeId || null;
     if (!assigneeId) {
-      const agents = await rawQuery<any>(
+      const agents = await rawQuery<{ id: number; name: string; openTickets: number | string; avgResolution: number | string | null }>(
         `SELECT e.id, e.name,
                 COUNT(st.id) AS "openTickets",
                 COALESCE(
@@ -179,7 +266,7 @@ router.post("/tickets", authorize({ feature: "support.tickets", action: "create"
       if (agents.length > 0) {
         let best = agents[0];
         let bestScore = Infinity;
-        const maxTickets = Math.max(...agents.map((a: any) => Number(a.openTickets) || 0), 1);
+        const maxTickets = Math.max(...agents.map((a) => Number(a.openTickets) || 0), 1);
         for (const agent of agents) {
           const loadScore = (Number(agent.openTickets) || 0) / maxTickets;
           const perfScore = Math.min(Number(agent.avgResolution) || 999, 100) / 100;
@@ -197,10 +284,10 @@ router.post("/tickets", authorize({ feature: "support.tickets", action: "create"
       `INSERT INTO support_tickets ("companyId",ref,title,description,category,priority,status,"clientId","assigneeId","slaDeadline") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [scope.companyId, ref, title, b.description, b.category, priority, 'open', b.clientId ?? null, assigneeId, slaResolutionDeadline]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<SupportTicketRow>(`SELECT * FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     if (assigneeId) {
-      const [assigneeAssignment] = await rawQuery<any>(
+      const [assigneeAssignment] = await rawQuery<AssignmentRow>(
         `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
         [assigneeId, scope.companyId]
       );
@@ -260,7 +347,7 @@ router.post("/tickets", authorize({ feature: "support.tickets", action: "create"
 router.post("/tickets/check-sla", authorize({ feature: "support.tickets", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const breached = await rawQuery<any>(
+    const breached = await rawQuery<SupportTicketRow & { clientName?: string | null }>(
       `SELECT t.*, cl.name AS "clientName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" AND cl."deletedAt" IS NULL WHERE t."companyId"=$1 AND t.status IN ('open','in_progress','field_visit') AND t."slaDeadline" < NOW() AND t."deletedAt" IS NULL`,
       [scope.companyId]
     );
@@ -273,7 +360,7 @@ router.post("/tickets/check-sla", authorize({ feature: "support.tickets", action
         );
         let notifAssignmentId = scope.activeAssignmentId;
         if (ticket.assigneeId) {
-          const [asgn] = await rawQuery<any>(
+          const [asgn] = await rawQuery<AssignmentRow>(
             `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
             [ticket.assigneeId, scope.companyId]
           );
@@ -309,12 +396,12 @@ router.get("/tickets/:id", authorize({ feature: "support.tickets", action: "view
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [ticket] = await rawQuery<any>(
+    const [ticket] = await rawQuery<SupportTicketRow & { clientName?: string | null }>(
       `SELECT t.*, cl.name AS "clientName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" AND cl."deletedAt" IS NULL WHERE t.id=$1 AND t."companyId"=$2 AND t."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
-    const replies = await rawQuery<any>(`SELECT * FROM ticket_replies WHERE "ticketId"=$1 AND "deletedAt" IS NULL ORDER BY "createdAt" LIMIT 500`, [ticket.id]);
+    const replies = await rawQuery<TicketReplyRow>(`SELECT * FROM ticket_replies WHERE "ticketId"=$1 AND "deletedAt" IS NULL ORDER BY "createdAt" LIMIT 500`, [ticket.id]);
 
     const now = new Date();
     const slaDeadline = ticket.slaDeadline ? new Date(ticket.slaDeadline) : null;
@@ -333,7 +420,7 @@ router.post("/tickets/:id/replies", authorize({ feature: "support.tickets", acti
     const b = zodParse(createReplySchema.safeParse(req.body)) as any;
     const ticketId = parseId(req.params.id, "id");
 
-    const [ticket] = await rawQuery<any>(`SELECT id, ref, title, "firstResponseAt", "slaDeadline", priority FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [ticketId, scope.companyId]);
+    const [ticket] = await rawQuery<Pick<SupportTicketRow, "id" | "ref" | "title" | "firstResponseAt" | "slaDeadline" | "priority">>(`SELECT id, ref, title, "firstResponseAt", "slaDeadline", priority FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [ticketId, scope.companyId]);
     if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
 
     let insertId!: number;
@@ -372,7 +459,7 @@ router.post("/tickets/:id/replies", authorize({ feature: "support.tickets", acti
       }
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM ticket_replies WHERE id=$1 AND "deletedAt" IS NULL`, [insertId]);
+    const [row] = await rawQuery<TicketReplyRow>(`SELECT * FROM ticket_replies WHERE id=$1 AND "deletedAt" IS NULL`, [insertId]);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.reply.created", entity: "ticket_replies", entityId: insertId, details: JSON.stringify({ ticketId, isInternal: b.isInternal || false }) }).catch((e) => logger.error(e, "support background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -406,7 +493,7 @@ router.post("/tickets/:id/field-visit", authorize({ feature: "support.tickets", 
 
     if (row.assigneeId) {
       try {
-        const [asgn] = await rawQuery<any>(
+        const [asgn] = await rawQuery<AssignmentRow>(
           `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
           [row.assigneeId, scope.companyId]
         );
@@ -464,7 +551,7 @@ router.patch("/tickets/:id", authorize({ feature: "support.tickets", action: "up
     const b = zodParse(updateTicketSchema.safeParse(req.body));
 
     // Pre-read for transition validation and pre-update state snapshot.
-    const [ticket] = await rawQuery<any>(
+    const [ticket] = await rawQuery<SupportTicketRow>(
       `SELECT * FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [ticketId, scope.companyId]
     );
@@ -554,7 +641,7 @@ router.patch("/tickets/:id", authorize({ feature: "support.tickets", action: "up
 
       if (ticket.clientId) {
         try {
-          const [client] = await rawQuery<any>(
+          const [client] = await rawQuery<{ id: number; name: string; email?: string | null }>(
             `SELECT id, name, email FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
             [ticket.clientId, scope.companyId]
           );
@@ -597,7 +684,7 @@ router.delete("/tickets/:id", authorize({ feature: "support.tickets", action: "d
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(`SELECT id, ref, status FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<Pick<SupportTicketRow, "id" | "ref" | "status">>(`SELECT id, ref, status FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("التذكرة غير موجودة");
     await rawExecute(`UPDATE support_tickets SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
@@ -622,12 +709,21 @@ router.delete("/tickets/:id", authorize({ feature: "support.tickets", action: "d
   } catch (err) { handleRouteError(err, res, "Delete ticket error:"); }
 });
 
-router.get("/replies", authorize({ feature: "support", action: "list" }), async (req, res) => {
+router.get("/replies", authorize({ feature: "support.tickets", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 't."companyId"', disableBranchScope: true });
-    const rows = await rawQuery<any>(
+    interface TicketReplyJoinedRow {
+      id: number;
+      ticketId: string;
+      ticketTitle: string | null;
+      reply: string;
+      agent: string | null;
+      date: string;
+      status: string;
+    }
+    const rows = await rawQuery<TicketReplyJoinedRow>(
       `SELECT tr.id, t.ref AS "ticketId", t.title AS "ticketTitle", tr.message AS reply, tr."authorName" AS agent, tr."createdAt" AS date, t.status
        FROM ticket_replies tr
        JOIN support_tickets t ON t.id = tr."ticketId"
@@ -637,21 +733,21 @@ router.get("/replies", authorize({ feature: "support", action: "list" }), async 
       params
     );
     const total = rows.length;
-    const resolved = rows.filter((r: any) => r.status === 'resolved' || r.status === 'closed').length;
+    const resolved = rows.filter((r) => r.status === 'resolved' || r.status === 'closed').length;
     const pending = total - resolved;
-    const activeAgents = new Set(rows.map((r: any) => r.agent).filter(Boolean)).size;
+    const activeAgents = new Set(rows.map((r) => r.agent).filter(Boolean)).size;
     res.json({ data: rows, total, resolved, pending, activeAgents });
   } catch (err) { handleRouteError(err, res, "Support replies error:"); }
 });
 
-router.get("/stats", authorize({ feature: "support", action: "list" }), async (req, res) => {
+router.get("/stats", authorize({ feature: "support.tickets", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [tickets] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COUNT(*) FILTER (WHERE status='resolved') as resolved, COUNT(*) FILTER (WHERE status IN ('open','in_progress','field_visit') AND "slaDeadline" < NOW()) as "slaBreach" FROM support_tickets WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [avgRes] = await rawQuery<any>(`SELECT AVG(EXTRACT(EPOCH FROM ("resolvedAt"::timestamp - "createdAt"::timestamp))/3600) AS "avgHours" FROM support_tickets WHERE "companyId"=$1 AND status='resolved' AND "resolvedAt" IS NOT NULL AND "deletedAt" IS NULL`, [cid]);
-    const [firstResponse] = await rawQuery<any>(`SELECT AVG(EXTRACT(EPOCH FROM ("firstResponseAt"::timestamp - "createdAt"::timestamp))/3600) AS "avgHours" FROM support_tickets WHERE "companyId"=$1 AND "firstResponseAt" IS NOT NULL AND "deletedAt" IS NULL`, [cid]);
-    const [csat] = await rawQuery<any>(`SELECT AVG(score) AS avg, COUNT(*) AS total FROM ticket_csat_ratings WHERE "companyId"=$1`, [cid]).catch((e) => { logger.error(e, "support query failed"); return [{ avg: null, total: 0 }]; });
+    const [tickets] = await rawQuery<AggCountsRow>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COUNT(*) FILTER (WHERE status='resolved') as resolved, COUNT(*) FILTER (WHERE status IN ('open','in_progress','field_visit') AND "slaDeadline" < NOW()) as "slaBreach" FROM support_tickets WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [avgRes] = await rawQuery<AvgHoursRow>(`SELECT AVG(EXTRACT(EPOCH FROM ("resolvedAt"::timestamp - "createdAt"::timestamp))/3600) AS "avgHours" FROM support_tickets WHERE "companyId"=$1 AND status='resolved' AND "resolvedAt" IS NOT NULL AND "deletedAt" IS NULL`, [cid]);
+    const [firstResponse] = await rawQuery<AvgHoursRow>(`SELECT AVG(EXTRACT(EPOCH FROM ("firstResponseAt"::timestamp - "createdAt"::timestamp))/3600) AS "avgHours" FROM support_tickets WHERE "companyId"=$1 AND "firstResponseAt" IS NOT NULL AND "deletedAt" IS NULL`, [cid]);
+    const [csat] = await rawQuery<AvgTotalRow>(`SELECT AVG(score) AS avg, COUNT(*) AS total FROM ticket_csat_ratings WHERE "companyId"=$1`, [cid]).catch((e) => { logger.error(e, "support query failed"); return [{ avg: null, total: 0 }] as AvgTotalRow[]; });
     res.json({
       totalTickets: Number(tickets.total), openTickets: Number(tickets.open),
       resolvedTickets: Number(tickets.resolved), slaBreach: Number(tickets.slaBreach),
@@ -669,7 +765,7 @@ router.post("/tickets/:id/csat", authorize({ feature: "support.tickets", action:
     const ticketId = parseId(req.params.id, "id");
     const b = zodParse(createCSATSchema.safeParse(req.body)) as any;
     const { score, comment } = b;
-    const [ticket] = await rawQuery<any>(`SELECT id, "assigneeId", status FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [ticketId, scope.companyId]);
+    const [ticket] = await rawQuery<Pick<SupportTicketRow, "id" | "assigneeId" | "status">>(`SELECT id, "assigneeId", status FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [ticketId, scope.companyId]);
     if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
     if (!['resolved', 'closed'].includes(ticket.status)) {
       throw new ConflictError("لا يمكن تقييم تذكرة غير محلولة", {
@@ -688,15 +784,15 @@ router.post("/tickets/:id/csat", authorize({ feature: "support.tickets", action:
       action: "create", entity: "ticket_csat", entityId: ticketId,
       after: { ticketId, score, comment: comment || null },
     }).catch((e) => logger.error(e, "support background task failed"));
-    const [row] = await rawQuery<any>(`SELECT * FROM ticket_csat_ratings WHERE "ticketId"=$1 AND "companyId"=$2`, [ticketId, scope.companyId]);
+    const [row] = await rawQuery<CsatRow>(`SELECT * FROM ticket_csat_ratings WHERE "ticketId"=$1 AND "companyId"=$2`, [ticketId, scope.companyId]);
     res.status(201).json(row || { ticketId, score, comment });
   } catch (err) { handleRouteError(err, res, "CSAT error:"); }
 });
 
-router.get("/csat", authorize({ feature: "support", action: "list" }), async (req, res) => {
+router.get("/csat", authorize({ feature: "support.tickets", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<CsatRow & { ticketRef?: string | null; ticketTitle?: string | null; assigneeName?: string | null }>(
       `SELECT cr.*, t.ref AS "ticketRef", t.title AS "ticketTitle", e.name AS "assigneeName"
        FROM ticket_csat_ratings cr
        LEFT JOIN support_tickets t ON t.id=cr."ticketId" AND t."deletedAt" IS NULL
@@ -704,8 +800,8 @@ router.get("/csat", authorize({ feature: "support", action: "list" }), async (re
        WHERE cr."companyId"=$1 ORDER BY cr."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );
-    const [avg] = await rawQuery<any>(`SELECT AVG(score) AS avg, COUNT(*) AS total FROM ticket_csat_ratings WHERE "companyId"=$1`, [scope.companyId]);
-    const agentStats = await rawQuery<any>(
+    const [avg] = await rawQuery<AvgTotalRow>(`SELECT AVG(score) AS avg, COUNT(*) AS total FROM ticket_csat_ratings WHERE "companyId"=$1`, [scope.companyId]);
+    const agentStats = await rawQuery<AgentStatRow>(
       `SELECT cr."assigneeId", e.name AS "assigneeName", AVG(cr.score) AS avg, COUNT(*) AS total
        FROM ticket_csat_ratings cr LEFT JOIN employees e ON e.id=cr."assigneeId" AND e."deletedAt" IS NULL
        WHERE cr."companyId"=$1 AND cr."assigneeId" IS NOT NULL
@@ -716,31 +812,31 @@ router.get("/csat", authorize({ feature: "support", action: "list" }), async (re
   } catch (err) { handleRouteError(err, res, "CSAT list error:"); }
 });
 
-router.get("/kb", authorize({ feature: "support", action: "list" }), async (req, res) => {
+router.get("/kb", authorize({ feature: "support.tickets", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { q, category } = req.query as any;
     const conditions = [`("companyId"=$1 OR "companyId" IS NULL)`, `status='published'`, `"deletedAt" IS NULL`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (category) { params.push(category); conditions.push(`category=$${params.length}`); }
     if (q) { params.push(`%${q}%`); conditions.push(`(title ILIKE $${params.length} OR content ILIKE $${params.length})`); }
-    const rows = await rawQuery<any>(`SELECT id, title, category, tags, views, helpful, "notHelpful", "createdAt", "updatedAt" FROM kb_articles WHERE ${conditions.join(' AND ')} ORDER BY views DESC LIMIT 500`, params);
+    const rows = await rawQuery<Pick<KbArticleRow, "id" | "title" | "category" | "tags" | "views" | "helpful" | "notHelpful" | "createdAt" | "updatedAt">>(`SELECT id, title, category, tags, views, helpful, "notHelpful", "createdAt", "updatedAt" FROM kb_articles WHERE ${conditions.join(' AND ')} ORDER BY views DESC LIMIT 500`, params);
     res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "KB list error:"); }
 });
 
-router.get("/kb/:id", authorize({ feature: "support", action: "view" }), async (req, res) => {
+router.get("/kb/:id", authorize({ feature: "support.tickets", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<KbArticleRow>(`SELECT * FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المقالة غير موجودة");
     await rawExecute(`UPDATE kb_articles SET views=COALESCE(views,0)+1 WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]).catch((e) => logger.error(e, "support background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "KB article error:"); }
 });
 
-router.post("/kb", authorize({ feature: "support", action: "create" }), async (req, res) => {
+router.post("/kb", authorize({ feature: "support.tickets", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createKbSchema.safeParse(req.body)) as any;
@@ -749,7 +845,7 @@ router.post("/kb", authorize({ feature: "support", action: "create" }), async (r
       `INSERT INTO kb_articles (title, content, category, tags, status, views, helpful, "notHelpful", "companyId", "createdBy") VALUES ($1,$2,$3,$4,'published',0,0,0,$5,$6)`,
       [title, content || '', category || 'general', tags || null, scope.companyId, scope.userId]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<KbArticleRow>(`SELECT * FROM kb_articles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.kb.created", entity: "kb_articles", entityId: insertId, details: JSON.stringify({ title, category: category || 'general' }) }).catch((e) => logger.error(e, "support background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -760,13 +856,13 @@ router.post("/kb", authorize({ feature: "support", action: "create" }), async (r
   } catch (err) { handleRouteError(err, res, "KB create error:"); }
 });
 
-router.patch("/kb/:id", authorize({ feature: "support", action: "update" }), async (req, res) => {
+router.patch("/kb/:id", authorize({ feature: "support.tickets", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(updateKbSchema.safeParse(req.body));
     const sets: string[] = [`"updatedAt"=NOW()`];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
     if (b.content !== undefined) { params.push(b.content); sets.push(`content=$${params.length}`); }
     if (b.category !== undefined) { params.push(b.category); sets.push(`category=$${params.length}`); }
@@ -775,7 +871,7 @@ router.patch("/kb/:id", authorize({ feature: "support", action: "update" }), asy
     params.push(id); params.push(scope.companyId);
     const { affectedRows } = await rawExecute(`UPDATE kb_articles SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     if (!affectedRows) throw new NotFoundError("المقال غير موجود");
-    const [row] = await rawQuery<any>(`SELECT * FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<KbArticleRow>(`SELECT * FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.kb.updated", entity: "kb_articles", entityId: id, details: JSON.stringify({ title: b.title }) }).catch((e) => logger.error(e, "support background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -786,7 +882,7 @@ router.patch("/kb/:id", authorize({ feature: "support", action: "update" }), asy
   } catch (err) { handleRouteError(err, res, "KB update error:"); }
 });
 
-router.delete("/kb/:id", authorize({ feature: "support", action: "delete" }), async (req, res) => {
+router.delete("/kb/:id", authorize({ feature: "support.tickets", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -810,12 +906,12 @@ router.delete("/kb/:id", authorize({ feature: "support", action: "delete" }), as
 // scope pattern at line 612: validate the article is visible to the
 // caller (own company OR global) before incrementing, and scope the
 // UPDATE the same way.
-router.post("/kb/:id/feedback", authorize({ feature: "support", action: "list" }), async (req, res) => {
+router.post("/kb/:id/feedback", authorize({ feature: "support.tickets", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { helpful } = zodParse(kbFeedbackSchema.safeParse(req.body ?? {}));
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<{ id: number }>(
       `SELECT id FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );

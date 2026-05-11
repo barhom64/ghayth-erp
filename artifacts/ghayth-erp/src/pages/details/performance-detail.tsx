@@ -19,6 +19,7 @@ import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 /**
  * PerformanceDetail — unified detail page for a single performance
@@ -78,6 +79,7 @@ export default function PerformanceDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/hr/performance/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("evaluation_cycle", id ?? 0);
 
   const { toast } = useToast();
 
@@ -424,6 +426,8 @@ export default function PerformanceDetail() {
       entityType="performance"
       entityId={id ?? 0}
       overview={overview}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       isLoading={isLoading}
       error={error}
       onRetry={refetch}

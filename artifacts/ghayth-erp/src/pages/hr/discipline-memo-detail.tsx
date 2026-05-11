@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { PromptDialog } from "@/components/shared/prompt-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -13,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Clock, CheckCircle, XCircle, FileText, Ban, Gavel, Scale, Lock, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 import { INCIDENT_LABELS, MEMO_ACTION_LABELS } from "@/lib/hr-type-maps";
 
@@ -27,6 +29,7 @@ interface MemoData {
 export default function DisciplineMemoDetailPage() {
   const [, params] = useRoute("/hr/discipline/memos/:id");
   const id = params?.id;
+  const { extraTabs, hideTabs } = useRegistryTabs("discipline_memo", id ?? "");
   const { data, isLoading, isError } = useApiQuery<MemoData>(
     ["discipline-memo", String(id ?? "")],
     id ? `/hr/discipline/memos/${id}` : null
@@ -43,6 +46,7 @@ export default function DisciplineMemoDetailPage() {
   const [appealReason, setAppealReason] = useState("");
   const [showAppeal, setShowAppeal] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["discipline-memo", id] });
@@ -315,10 +319,7 @@ export default function DisciplineMemoDetailPage() {
             <Button
               variant="outline"
               className="text-red-600"
-              onClick={() => {
-                const reason = prompt("سبب الإلغاء:");
-                if (reason != null) act("/cancel", { reason }, "تم إلغاء المحضر");
-              }}
+              onClick={() => setShowCancelDialog(true)}
               disabled={busy}
             >
               <Ban className="w-4 h-4 me-2" />
@@ -452,23 +453,37 @@ export default function DisciplineMemoDetailPage() {
     </Link>
   );
 
-  return (
-    <DetailPageLayout
-      title={memo?.memoNumber || "المحضر"}
-      subtitle={memo ? `محضر استفسار بشأن ${INCIDENT_LABELS[memo.incidentType] ?? memo.incidentType}` : undefined}
-      backPath="/hr/discipline/memos"
-      backLabel="العودة"
-      status={memo ? { label: memo.status } : undefined}
-      refNumber={memo?.memoNumber}
-      createdAt={memo?.createdAt}
-      updatedAt={memo?.updatedAt}
-      entityType="hr-inquiry-memo"
-      entityId={id ?? ""}
-      isLoading={isLoading}
-      error={isError ? true : undefined}
-     
-      actions={headerActions}
-      overview={overview}
-    />
+    <>
+      <DetailPageLayout
+        title={memo?.memoNumber || "المحضر"}
+        subtitle={memo ? `محضر استفسار بشأن ${INCIDENT_LABELS[memo.incidentType] ?? memo.incidentType}` : undefined}
+        backPath="/hr/discipline/memos"
+        backLabel="العودة"
+        status={memo ? { label: memo.status } : undefined}
+        refNumber={memo?.memoNumber}
+        createdAt={memo?.createdAt}
+        updatedAt={memo?.updatedAt}
+        entityType="hr-inquiry-memo"
+        entityId={id ?? ""}
+        extraTabs={extraTabs}
+        hideTabs={hideTabs}
+        isLoading={isLoading}
+        error={isError ? true : undefined}
+        actions={headerActions}
+        overview={overview}
+      />
+      <PromptDialog
+        open={showCancelDialog}
+        title="سبب إلغاء المحضر"
+        description="يرجى إدخال سبب الإلغاء — يُسجَّل في سجل التدقيق للمحضر."
+        placeholder="اكتب السبب هنا..."
+        confirmLabel="تأكيد الإلغاء"
+        onSubmit={(reason) => {
+          setShowCancelDialog(false);
+          act("/cancel", { reason }, "تم إلغاء المحضر");
+        }}
+        onClose={() => setShowCancelDialog(false)}
+      />
+    </>
   );
 }

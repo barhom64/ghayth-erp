@@ -225,12 +225,42 @@ router.post("/login", loginLimiter, async (req, res) => {
       throw new ForbiddenError("لا يوجد تعيين نشط لهذا المستخدم");
     }
 
-    const userRoles = await rawQuery<any>(
-      `SELECT id, "roleKey", label, modules, level FROM user_roles WHERE "userId" = $1 ORDER BY level DESC`,
-      [user.id]
-    );
-
     const primary = assignments[0];
+
+    // Union legacy `user_roles` with v2 `rbac_user_roles` so the
+    // frontend role-switcher shows every role an admin has been granted
+    // (migration 141 auto-assigns all v2 roles to owners/GMs for testing).
+    // V2 ids are negated to keep React keys unique against legacy ids.
+    const userRoles = await rawQuery<any>(
+      `SELECT id, "roleKey", label, modules, level, source FROM (
+         SELECT id, "roleKey", label, modules, level, 1 AS source_order, 'legacy' AS source
+           FROM user_roles WHERE "userId" = $1
+         UNION ALL
+         SELECT
+           -r.id AS id,
+           r.role_key AS "roleKey",
+           r.label_ar AS label,
+           COALESCE(
+             (SELECT to_jsonb(array_agg(DISTINCT split_part(g.feature_key, '.', 1)))
+                FROM rbac_role_grants g WHERE g.role_id = r.id),
+             '[]'::jsonb
+           ) AS modules,
+           r.level,
+           2 AS source_order,
+           'v2' AS source
+          FROM rbac_user_roles ur
+          JOIN rbac_roles r ON r.id = ur.role_id
+         WHERE ur."userId" = $1 AND ur."companyId" = $2
+           AND r.is_active = TRUE AND r.is_template = FALSE
+           AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+           AND NOT EXISTS (
+             SELECT 1 FROM user_roles ul
+              WHERE ul."userId" = $1 AND ul."roleKey" = r.role_key
+           )
+       ) combined
+       ORDER BY source_order, level DESC`,
+      [user.id, primary.companyId]
+    );
     const token = signToken({
       userId: user.id,
       assignmentId: primary.id,
@@ -251,7 +281,7 @@ router.post("/login", loginLimiter, async (req, res) => {
     setAccessTokenCookie(res, token);
     setRefreshTokenCookie(res, refreshToken);
 
-    emitEvent({ companyId: primary.companyId, branchId: primary.branchId, userId: user.id, action: "auth.login.success", entity: "users", entityId: user.id, details: JSON.stringify({ email, assignmentId: primary.id }) }).catch((e) => logger.error(e, "auth background task failed"));
+    emitEvent({ companyId: primary.companyId, branchId: primary.branchId, userId: user.id, action: "auth.login.success", entity: "users", entityId: user.id, ip: ipAddress || "unknown", details: JSON.stringify({ email, assignmentId: primary.id }) }).catch((e) => logger.error(e, "auth background task failed"));
     res.json({ assignments, userRoles });
   } catch (err) {
     handleRouteError(err, res, "Login error:");
@@ -423,9 +453,36 @@ router.get("/me", authMiddleware, authedUserLimiter, async (req, res) => {
       throw new NotFoundError("المستخدم غير موجود");
     }
 
+    // Union legacy `user_roles` with v2 `rbac_user_roles`. See /login for rationale.
     const userRoles = await rawQuery<any>(
-      `SELECT id, "roleKey", label, modules, level FROM user_roles WHERE "userId" = $1 ORDER BY level DESC`,
-      [scope.userId]
+      `SELECT id, "roleKey", label, modules, level, source FROM (
+         SELECT id, "roleKey", label, modules, level, 1 AS source_order, 'legacy' AS source
+           FROM user_roles WHERE "userId" = $1
+         UNION ALL
+         SELECT
+           -r.id AS id,
+           r.role_key AS "roleKey",
+           r.label_ar AS label,
+           COALESCE(
+             (SELECT to_jsonb(array_agg(DISTINCT split_part(g.feature_key, '.', 1)))
+                FROM rbac_role_grants g WHERE g.role_id = r.id),
+             '[]'::jsonb
+           ) AS modules,
+           r.level,
+           2 AS source_order,
+           'v2' AS source
+          FROM rbac_user_roles ur
+          JOIN rbac_roles r ON r.id = ur.role_id
+         WHERE ur."userId" = $1 AND ur."companyId" = $2
+           AND r.is_active = TRUE AND r.is_template = FALSE
+           AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+           AND NOT EXISTS (
+             SELECT 1 FROM user_roles ul
+              WHERE ul."userId" = $1 AND ul."roleKey" = r.role_key
+           )
+       ) combined
+       ORDER BY source_order, level DESC`,
+      [scope.userId, scope.companyId]
     );
 
     res.json({ ...employee, userRoles });
@@ -447,16 +504,24 @@ router.post("/change-password", authMiddleware, changePasswordLimiter, async (re
     const valid = await verifyPassword(currentPassword, user.passwordHash);
     if (!valid) { throw new ForbiddenError("كلمة المرور الحالية غير صحيحة"); }
     const hashed = await hashPassword(newPassword);
-    const { affectedRows } = await rawExecute(`UPDATE users SET "passwordHash"=$1 WHERE id=$2`, [hashed, scope.userId]);
-    if (!affectedRows) throw new NotFoundError("المستخدم غير موجود");
-    try {
-      await rawExecute(
-        `UPDATE refresh_tokens SET "revokedAt"=NOW() WHERE "userId"=$1 AND "revokedAt" IS NULL`,
-        [scope.userId]
+
+    // Atomic: rotate password AND revoke existing refresh tokens together.
+    // Previously the revoke ran in fire-and-forget try/catch; if it failed
+    // (DB blip mid-request) the password was changed but old tokens stayed
+    // valid — a security regression masked by a "success" response. Wrap
+    // both in a single transaction so they commit or roll back together.
+    await withTransaction(async (client) => {
+      const { rowCount: passwordUpdated } = await client.query(
+        `UPDATE users SET "passwordHash"=$1 WHERE id=$2`,
+        [hashed, scope.userId],
       );
-    } catch (revokeErr) {
-      logger.error({ err: revokeErr, userId: scope.userId }, "Failed to revoke refresh tokens after password change");
-    }
+      if (!passwordUpdated) throw new NotFoundError("المستخدم غير موجود");
+      await client.query(
+        `UPDATE refresh_tokens SET "revokedAt"=NOW() WHERE "userId"=$1 AND "revokedAt" IS NULL`,
+        [scope.userId],
+      );
+    });
+
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "password_change", entity: "users", entityId: scope.userId,

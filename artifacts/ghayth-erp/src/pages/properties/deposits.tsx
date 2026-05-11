@@ -15,11 +15,32 @@ import { PageShell } from "@/components/page-shell";
 import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
+import { z } from "zod";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+} from "@/components/ui/alert-dialog";
+import {
+  FormShell,
+  FormNumberField,
+  FormTextField,
+  FormGrid,
+} from "@/components/form-shell";
 
 export default function DepositsPage() {
   const [showForm, setShowForm] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
   const [form, setForm] = useState({ contractId: "", amount: "", receivedDate: todayLocal(), notes: "" });
+  // Refund dialog state. The pair of prompts that used to fire here
+  // (refundAmount + refundReason) was replaced by RefundDepositDialog
+  // — validation now lives in zod (refundAmount ≤ originalAmount,
+  // > 0) so over-refund attempts can't even submit.
+  const [refundTarget, setRefundTarget] = useState<
+    { id: number; originalAmount: number } | null
+  >(null);
 
   const { data, isLoading, isError, refetch } = useApiQuery<any>(
     ["deposits", statusFilter],
@@ -44,19 +65,24 @@ export default function DepositsPage() {
     } catch (e: any) { toast({ title: e.message || "خطأ", variant: "destructive" }); }
   };
 
-  const handleRefund = async (id: number, originalAmount: number) => {
-    const refundAmount = prompt(`مبلغ الاسترداد (الوديعة الأصلية: ${originalAmount} ر.س):`, String(originalAmount));
-    const reason = prompt("سبب الاسترداد:");
-    if (!refundAmount) return;
+  const submitRefund = async (
+    id: number,
+    values: { refundAmount: number; refundReason: string },
+  ) => {
     try {
-      await apiFetch(`/properties/deposits/${id}/refund`, { method: "PATCH", body: JSON.stringify({
-        refundAmount: Number(refundAmount),
-        refundDate: todayLocal(),
-        refundReason: reason || "إنهاء العقد",
-      }) });
+      await apiFetch(`/properties/deposits/${id}/refund`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          refundAmount: values.refundAmount,
+          refundDate: todayLocal(),
+          refundReason: values.refundReason || "إنهاء العقد",
+        }),
+      });
       refetch();
       toast({ title: "تم استرداد الوديعة" });
-    } catch (e: any) { toast({ title: e.message, variant: "destructive" }); }
+    } catch (e: any) {
+      toast({ title: e.message, variant: "destructive" });
+    }
   };
 
   if (isLoading) return <LoadingSpinner />;
@@ -155,7 +181,7 @@ export default function DepositsPage() {
                   )}
                 </div>
                 {d.status === "held" && (
-                  <Button size="sm" variant="outline" onClick={() => handleRefund(d.id, Number(d.amount))}>
+                  <Button size="sm" variant="outline" onClick={() => setRefundTarget({ id: d.id, originalAmount: Number(d.amount) })}>
                     <RotateCcw className="w-3.5 h-3.5 me-1" /> استرداد
                   </Button>
                 )}
@@ -164,6 +190,84 @@ export default function DepositsPage() {
           </Card>
         ))}
       </div>
+
+      <RefundDepositDialog
+        target={refundTarget}
+        onClose={() => setRefundTarget(null)}
+        onSubmit={async (values) => {
+          if (!refundTarget) return;
+          await submitRefund(refundTarget.id, values);
+          setRefundTarget(null);
+        }}
+      />
     </PageShell>
+  );
+}
+
+// ─── Refund dialog ───────────────────────────────────────────────────────────
+// Replaces the back-to-back prompt(refundAmount) + prompt(reason) pair. The
+// zod schema enforces:
+//   - refundAmount > 0
+//   - refundAmount ≤ originalAmount  (no over-refund)
+// — neither check ran in the native prompt() flow, which would `Number("")`
+// → 0 on cancel and silently round non-numeric strings to NaN.
+
+function refundSchema(originalAmount: number) {
+  return z.object({
+    refundAmount: z.coerce
+      .number({ invalid_type_error: "أدخل رقمًا صحيحًا" })
+      .positive("المبلغ يجب أن يكون أكبر من صفر")
+      .max(originalAmount, `المبلغ لا يتجاوز ${originalAmount} ر.س`),
+    refundReason: z.string(),
+  });
+}
+
+function RefundDepositDialog(props: {
+  target: { id: number; originalAmount: number } | null;
+  onClose: () => void;
+  onSubmit: (values: { refundAmount: number; refundReason: string }) => void | Promise<void>;
+}) {
+  const open = props.target !== null;
+  const original = props.target?.originalAmount ?? 0;
+  const schema = refundSchema(original);
+  return (
+    <AlertDialog open={open} onOpenChange={(next) => { if (!next) props.onClose(); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>استرداد الوديعة</AlertDialogTitle>
+          <AlertDialogDescription>
+            الوديعة الأصلية: {formatCurrency(original)}. أدخل المبلغ المراد استرداده وسبب الاسترداد.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {open && (
+          <FormShell
+            schema={schema}
+            defaultValues={{ refundAmount: original as number, refundReason: "" }}
+            submitLabel="استرداد"
+            secondaryActions={
+              <Button type="button" variant="ghost" onClick={props.onClose}>
+                إلغاء
+              </Button>
+            }
+            onSubmit={async (values) => {
+              await props.onSubmit(values);
+            }}
+          >
+            <FormGrid cols={1}>
+              <FormNumberField
+                name="refundAmount"
+                label="مبلغ الاسترداد"
+                required
+              />
+              <FormTextField
+                name="refundReason"
+                label="سبب الاسترداد"
+                placeholder="إنهاء العقد"
+              />
+            </FormGrid>
+          </FormShell>
+        )}
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

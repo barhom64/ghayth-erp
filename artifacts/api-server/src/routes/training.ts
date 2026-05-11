@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
@@ -10,6 +9,42 @@ import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
+
+// Local row shapes — training_programs / training_enrollments not in
+// @workspace/db Drizzle schema.
+
+interface TrainingProgramRow extends Record<string, unknown> {
+  id: number;
+  companyId: number;
+  title: string;
+  type?: string | null;
+  description?: string | null;
+  provider?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  duration?: number | null;
+  cost?: number | string | null;
+  capacity?: number | null;
+  status: string;
+  createdBy?: number | null;
+  createdAt: string;
+  updatedAt?: string | null;
+  deletedAt?: string | null;
+}
+
+interface TrainingEnrollmentRow extends Record<string, unknown> {
+  id: number;
+  programId: number;
+  employeeId?: number | null;
+  assignmentId?: number | null;
+  status: string;
+  completedAt?: string | null;
+  score?: number | string | null;
+  createdAt: string;
+  updatedAt?: string | null;
+  deletedAt?: string | null;
+  programTitle?: string | null;
+}
 
 const VALID_PROGRAM_TRANSITIONS: Record<string, string[]> = {
   upcoming: ["draft", "active", "cancelled"],
@@ -113,7 +148,7 @@ router.post("/programs", authorize({ feature: "hr.training", action: "create" })
       after: { title, category: category ?? null, startDate: startDate ?? null, endDate: endDate ?? null, capacity: Number(capacity ?? 0) },
     }).catch((e) => logger.error(e, "training background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "training.program.created", entity: "training_programs", entityId: r.insertId, details: JSON.stringify({ title, category }) }).catch((e) => logger.error(e, "training background task failed"));
-    const [row] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    const [row] = await rawQuery<TrainingProgramRow>(`SELECT * FROM training_programs WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
     res.status(201).json(row || { id: r.insertId, title, status: status ?? "upcoming" });
   } catch (err) { handleRouteError(err, res, "Create training program error:"); }
 });
@@ -122,7 +157,7 @@ router.get("/programs/:id", authorize({ feature: "hr.training", action: "view" }
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<TrainingProgramRow>(`SELECT * FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("البرنامج التدريبي غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "training"); }
@@ -133,7 +168,7 @@ router.patch("/programs/:id", authorize({ feature: "hr.training", action: "updat
     const b = zodParse(patchProgramSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(`SELECT id, status FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<{ id: number; status: string }>(`SELECT id, status FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("البرنامج التدريبي غير موجود");
     if (b.status && b.status !== existing.status) {
       const allowed = VALID_PROGRAM_TRANSITIONS[existing.status];
@@ -142,7 +177,7 @@ router.patch("/programs/:id", authorize({ feature: "hr.training", action: "updat
       }
     }
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
     if (b.description !== undefined) { params.push(b.description); sets.push(`description=$${params.length}`); }
     if (b.category !== undefined) { params.push(b.category); sets.push(`category=$${params.length}`); }
@@ -160,7 +195,7 @@ router.patch("/programs/:id", authorize({ feature: "hr.training", action: "updat
       updateWhere += ` AND status=$${params.length}`;
     }
     await rawExecute(`UPDATE training_programs SET ${sets.join(",")} WHERE ${updateWhere} AND "deletedAt" IS NULL`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<TrainingProgramRow>(`SELECT * FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "training_programs", entityId: id,
@@ -238,7 +273,7 @@ router.delete("/programs/:id", authorize({ feature: "hr.training", action: "dele
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(`SELECT id FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<{ id: number }>(`SELECT id FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("البرنامج التدريبي غير موجود");
     await rawExecute(`UPDATE training_programs SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
@@ -256,7 +291,7 @@ router.get("/enrollments", authorize({ feature: "hr.training", action: "list" })
     const scope = req.scope!;
     const { programId } = req.query;
     let where = `tp."companyId"=$1 AND tp."deletedAt" IS NULL`;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (programId) { params.push(programId); where += ` AND e."programId"=$${params.length}`; }
     const rows = await rawQuery(`SELECT e.*, tp.title as "programTitle" FROM training_enrollments e LEFT JOIN training_programs tp ON e."programId"=tp.id WHERE ${where} ORDER BY e."createdAt" DESC LIMIT 500`, params);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -280,7 +315,7 @@ router.post("/enrollments", authorize({ feature: "hr.training", action: "create"
         fix: "اختر موظفاً من القائمة أو أدخل اسمه",
       });
     }
-    const [prog] = await rawQuery<any>(`SELECT id FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [programId, scope.companyId]);
+    const [prog] = await rawQuery<{ id: number }>(`SELECT id FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [programId, scope.companyId]);
     if (!prog) throw new NotFoundError("البرنامج التدريبي غير موجود");
     if (employeeId) {
       const [emp] = await rawQuery<{ id: number }>(
@@ -310,7 +345,7 @@ router.post("/enrollments", authorize({ feature: "hr.training", action: "create"
       after: { programId: Number(programId), employeeId: employeeId ? Number(employeeId) : null, employeeName: employeeName ?? null, status: status ?? "enrolled" },
     }).catch((e) => logger.error(e, "training background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "training.enrollment.created", entity: "training_enrollments", entityId: r.insertId, details: JSON.stringify({ programId, employeeId }) }).catch((e) => logger.error(e, "training background task failed"));
-    const [row] = await rawQuery<any>(`SELECT e.* FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE e.id=$1 AND tp."companyId"=$2`, [r.insertId, scope.companyId]);
+    const [row] = await rawQuery<TrainingEnrollmentRow>(`SELECT e.* FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE e.id=$1 AND tp."companyId"=$2`, [r.insertId, scope.companyId]);
     res.status(201).json(row || { id: r.insertId, programId: Number(programId), employeeId: employeeId ?? null, status: status ?? "enrolled" });
   } catch (err) { handleRouteError(err, res, "Create training enrollment error:"); }
 });
@@ -319,7 +354,7 @@ router.get("/enrollments/:id", authorize({ feature: "hr.training", action: "view
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(`SELECT e.*, tp.title as "programTitle" FROM training_enrollments e LEFT JOIN training_programs tp ON e."programId"=tp.id WHERE e.id=$1 AND tp."companyId"=$2 AND e."deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<TrainingEnrollmentRow>(`SELECT e.*, tp.title as "programTitle" FROM training_enrollments e LEFT JOIN training_programs tp ON e."programId"=tp.id WHERE e.id=$1 AND tp."companyId"=$2 AND e."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("التسجيل غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "training"); }
@@ -330,16 +365,16 @@ router.patch("/enrollments/:id", authorize({ feature: "hr.training", action: "up
     const b = zodParse(patchEnrollmentSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(`SELECT e.id FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE e.id=$1 AND tp."companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<{ id: number }>(`SELECT e.id FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE e.id=$1 AND tp."companyId"=$2`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("التسجيل غير موجود");
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
     if (b.score !== undefined) { params.push(b.score); sets.push(`score=$${params.length}`); }
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id);
     await rawExecute(`UPDATE training_enrollments SET ${sets.join(",")} WHERE id=$${params.length} AND "deletedAt" IS NULL`, params);
-    const [row] = await rawQuery<any>(`SELECT e.* FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE e.id=$1 AND tp."companyId"=$2 AND e."deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<TrainingEnrollmentRow>(`SELECT e.* FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE e.id=$1 AND tp."companyId"=$2 AND e."deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "training_enrollments", entityId: id,
@@ -354,7 +389,7 @@ router.delete("/enrollments/:id", authorize({ feature: "hr.training", action: "d
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(`SELECT e.id, e."programId" FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE e.id=$1 AND tp."companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<{ id: number; programId: number }>(`SELECT e.id, e."programId" FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE e.id=$1 AND tp."companyId"=$2`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("التسجيل غير موجود");
     await withTransaction(async (client) => {
       await client.query(`UPDATE training_enrollments SET "deletedAt" = NOW() WHERE id=$1 AND "deletedAt" IS NULL`, [id]);

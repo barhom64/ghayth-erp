@@ -32,6 +32,7 @@ import { zatcaRetryDrain } from "./zatca/worker.js";
 import { dailyFxRateFetchCron } from "./fx/jobs.js";
 import { fxStalenessCheckCron } from "./fx/staleness-alert.js";
 import { lotExpiryScanCron } from "./inventory/lots.js";
+import { abcMonthlyClassificationCron } from "./inventory/abc-analysis.js";
 import { iqamaDailyAlertCron } from "./saudi-compliance/iqama-cron.js";
 import { saudizationMonthlySnapshotCron } from "./saudi-compliance/saudization-snapshot.js";
 
@@ -2954,7 +2955,7 @@ async function umrahVisaExpiryAlerts(): Promise<string> {
   let alerted = 0;
   for (const c of companies) {
     const expiring = await rawQuery<any>(
-      `SELECT p.id, p."fullName", p."visaNumber", p."visaExpiry", g."groupName"
+      `SELECT p.id, p."fullName", p."visaNumber", p."visaExpiry", g.name AS "groupName"
        FROM umrah_pilgrims p
        LEFT JOIN umrah_groups g ON g.id = p."groupId"
        WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
@@ -3389,6 +3390,7 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "lot_expiry_scan", description: "تحويل الدفعات المنتهية تلقائياً إلى expired", schedule: "0 4 * * *", handler: lotExpiryScanCron },
   { name: "iqama_daily_alert", description: "تنبيه انتهاء الإقامات (90/60/30/14/7/1 يوم)", schedule: "0 7 * * *", handler: iqamaDailyAlertCron },
   { name: "saudization_monthly_snapshot", description: "لقطة شهرية للسعودة (نطاقات)", schedule: "0 2 1 * *", handler: saudizationMonthlySnapshotCron },
+  { name: "abc_monthly_classification", description: "تصنيف ABC الشهري للمنتجات (Pareto)", schedule: "0 3 1 * *", handler: abcMonthlyClassificationCron },
   { name: "sms_queue_worker", description: "معالجة قائمة انتظار الرسائل النصية", schedule: "* * * * *", handler: processSmsQueue },
   { name: "whatsapp_queue_worker", description: "معالجة قائمة انتظار واتساب", schedule: "* * * * *", handler: processWhatsAppQueue },
   { name: "weekly_logs_archiving", description: "أرشفة السجلات القديمة أسبوعياً", schedule: "0 3 * * 0", handler: weeklyLogsArchiving },

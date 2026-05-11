@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EntityObligations } from "@/components/shared/entity-obligations";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 
 const STEP_IMPACTS: Record<string, { icon: string; title: string; description: string; severity: "info" | "warning" | "danger" | "success" }> = {
@@ -179,8 +180,8 @@ function StepImpactPanel({ caseStatus }: { caseStatus: string }) {
     impacts.push({ icon: "💰", title: "حكم بالتعويض أو الغرامة", desc: "يُنشئ تلقائياً التزام مالي في سجل الشركة", type: "danger" });
     impacts.push({ icon: "🔄", title: "التنفيذ يتبع الحكم", desc: "بعد الحكم يمكن الانتقال لمرحلة التنفيذ", type: "info" });
   }
-  if (caseStatus === "closed" || caseStatus === "won" || caseStatus === "lost") {
-    impacts.push({ icon: "📊", title: "تحديث تقرير المخاطر", desc: "ملف القضية يُغلق ويُضاف للسجل القانوني للشركة", type: caseStatus === "won" ? "success" : "danger" });
+  if (caseStatus === "closed") {
+    impacts.push({ icon: "📊", title: "تحديث تقرير المخاطر", desc: "ملف القضية يُغلق ويُضاف للسجل القانوني للشركة", type: "info" });
   }
 
   if (impacts.length === 0) return null;
@@ -218,6 +219,8 @@ export default function LegalCaseDetail() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [showAddSession, setShowAddSession] = useState(false);
+
+  const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("legal_case", Number(id));
 
   const { data: caseData, refetch, isLoading, error } = useApiQuery<any>(["legal-case", id], id ? `/legal/cases/${id}` : null);
 
@@ -440,7 +443,8 @@ export default function LegalCaseDetail() {
       onRetry={refetch}
       actions={actions}
       overview={overview}
-      extraTabs={extraTabs}
+      extraTabs={[...extraTabs, ...registryExtraTabs]}
+      hideTabs={registryHideTabs}
     />
   );
 }

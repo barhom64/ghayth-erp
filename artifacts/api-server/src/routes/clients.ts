@@ -6,9 +6,94 @@ import { createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpe
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { hashPassword } from "../lib/auth.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { logger } from "../lib/logger.js";
+import type { ClientRow, InvoiceRow } from "../lib/dbTypes.js";
+
+// Local row shapes for the projection-style SELECTs in this file. Keeping
+// them next to the route file (rather than in dbTypes.ts) lets us track
+// which columns each list/detail endpoint actually returns to the client.
+
+type ClientListRow = Pick<
+  ClientRow,
+  "id" | "name" | "phone" | "email" | "classification" | "source" | "isBlacklisted" | "createdAt"
+> & { totalRevenue: number | string | null };
+
+type ClientInvoiceRow = Pick<InvoiceRow, "id" | "ref" | "status" | "createdAt" | "dueDate"> & {
+  total: number | string;
+  paidAmount: number | string;
+};
+
+interface ClientOpportunityRow {
+  id: number;
+  title: string;
+  stage: string;
+  value: string | number;
+  probability: number;
+  expectedCloseDate: string | null;
+  status: string;
+}
+
+interface ClientTicketRow {
+  id: number;
+  ref: string;
+  title: string;
+  status: string;
+  priority: string;
+  category: string | null;
+  createdAt: string;
+}
+
+interface ClientProjectRow {
+  id: number;
+  name: string;
+  status: string;
+  budget: string | number;
+  progress: number;
+  startDate: string | null;
+  endDate: string | null;
+}
+
+interface ClientFinancialsRow {
+  totalInvoiced: string | number;
+  totalPaid: string | number;
+  totalOutstanding: string | number;
+  invoiceCount: string | number;
+  paidCount: string | number;
+  overdueCount: string | number;
+}
+
+interface ClientConversationRow {
+  id: number;
+  phone: string;
+  message: string;
+  status: string;
+  createdAt: string;
+  channel: "whatsapp" | "sms";
+}
+
+interface ClientTimelineRow {
+  type: "invoice" | "opportunity" | "ticket" | "project";
+  ref: string;
+  status: string;
+  detail: string;
+  createdAt: string;
+}
+
+interface ClientAttachment {
+  name: string;
+  url: string;
+  type: string;
+}
+
+interface PortalAccountRow {
+  id: number;
+  email: string;
+  isActive: boolean;
+  mustChangePassword: boolean;
+  lastLoginAt?: string | null;
+  createdAt: string;
+}
 
 const createClientSchema = z.object({
   name: z.string().min(1, "اسم العميل مطلوب"),
@@ -74,7 +159,7 @@ router.get("/", authorize({ feature: "crm.clients", action: "list" }), async (re
     params.push(offset);
     const offsetParam = paramIdx++;
 
-    const clients = await rawQuery<any>(
+    const clients = await rawQuery<ClientListRow>(
       `SELECT id, name, phone, email, classification, source,
               "totalRevenue", "isBlacklisted", "createdAt"
        FROM clients
@@ -85,7 +170,7 @@ router.get("/", authorize({ feature: "crm.clients", action: "list" }), async (re
     );
 
     const countParams = params.slice(0, params.length - 2);
-    const [countRow] = await rawQuery<any>(
+    const [countRow] = await rawQuery<{ total: string | number }>(
       `SELECT COUNT(*) AS total FROM clients WHERE ${where}`,
       countParams
     );
@@ -96,7 +181,7 @@ router.get("/", authorize({ feature: "crm.clients", action: "list" }), async (re
   }
 });
 
-router.post("/", authorize({ feature: "crm", action: "create" }), async (req, res) => {
+router.post("/", authorize({ feature: "crm.clients", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const parsed = zodParse(createClientSchema.safeParse(req.body));
@@ -113,32 +198,37 @@ router.post("/", authorize({ feature: "crm", action: "create" }), async (req, re
     } = parsed;
 
     const rawAttachments = Array.isArray(req.body?.attachments) ? req.body.attachments.slice(0, 20) : null;
-    const attachments = rawAttachments ? rawAttachments.map((a: any) => ({ name: String(a?.name ?? ""), url: String(a?.url ?? ""), type: String(a?.type ?? "") })) : null;
+    const attachments: ClientAttachment[] | null = rawAttachments
+      ? rawAttachments.map((a: unknown) => {
+          const obj = (a ?? {}) as Record<string, unknown>;
+          return { name: String(obj.name ?? ""), url: String(obj.url ?? ""), type: String(obj.type ?? "") };
+        })
+      : null;
     let insertedId: number = 0;
-    await withTransaction(async (txClient: any) => {
+    await withTransaction(async (txClient) => {
       if (email) {
-        const { rows: [emailExists] } = await txClient.query(
+        const { rows: [emailExists] } = await txClient.query<{ id: number }>(
           `SELECT id FROM clients WHERE email = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1 FOR UPDATE`,
           [email, scope.companyId]
         );
         if (emailExists) throw new ConflictError("البريد الإلكتروني مستخدم لعميل آخر", { field: "email", fix: "استخدم بريداً إلكترونياً مختلفاً أو ابحث عن العميل الموجود" });
       }
       if (phone) {
-        const { rows: [phoneExists] } = await txClient.query(
+        const { rows: [phoneExists] } = await txClient.query<{ id: number }>(
           `SELECT id FROM clients WHERE phone = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1 FOR UPDATE`,
           [phone, scope.companyId]
         );
         if (phoneExists) throw new ConflictError("رقم الهاتف مستخدم لعميل آخر", { field: "phone", fix: "استخدم رقم هاتف مختلفاً أو ابحث عن العميل الموجود" });
       }
-      const { rows: [newRow] } = await txClient.query(
+      const { rows: [newRow] } = await txClient.query<{ id: number }>(
         `INSERT INTO clients (name, phone, email, classification, source, notes, "type", nationality, language, "companyId", "isBlacklisted", attachments)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, $11) RETURNING id`,
         [String(name).trim(), phone ?? null, email ?? null, classification, source ?? null, notes ?? null, type, nationality ?? null, language, scope.companyId, attachments ? JSON.stringify(attachments) : null]
       );
-      insertedId = newRow.id;
+      insertedId = newRow!.id;
     });
 
-    const [client] = await rawQuery<any>(
+    const [client] = await rawQuery<ClientRow>(
       `SELECT * FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [insertedId, scope.companyId]
     );
@@ -172,7 +262,7 @@ router.get("/:id", authorize({ feature: "crm.clients", action: "view", resource:
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
 
-    const [client] = await rawQuery<any>(
+    const [client] = await rawQuery<ClientRow>(
       `SELECT * FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -182,35 +272,35 @@ router.get("/:id", authorize({ feature: "crm.clients", action: "view", resource:
     }
 
     const [invoices, opportunities, tickets, projects, financials, conversations, timeline] = await Promise.all([
-      rawQuery<any>(
+      rawQuery<ClientInvoiceRow>(
         `SELECT id, ref, status, total, "paidAmount", "dueDate", "createdAt"
          FROM invoices
          WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
          ORDER BY "createdAt" DESC LIMIT 20`,
         [id, scope.companyId]
       ),
-      rawQuery<any>(
+      rawQuery<ClientOpportunityRow>(
         `SELECT id, title, stage, value, probability, "expectedCloseDate", status
          FROM crm_opportunities
          WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
          ORDER BY "createdAt" DESC LIMIT 20`,
         [id, scope.companyId]
       ),
-      rawQuery<any>(
+      rawQuery<ClientTicketRow>(
         `SELECT id, ref, title, status, priority, category, "createdAt"
          FROM support_tickets
          WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
          ORDER BY "createdAt" DESC LIMIT 20`,
         [id, scope.companyId]
       ),
-      rawQuery<any>(
+      rawQuery<ClientProjectRow>(
         `SELECT id, name, status, budget, progress, "startDate", "endDate"
          FROM projects
          WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
          ORDER BY "createdAt" DESC LIMIT 20`,
         [id, scope.companyId]
       ),
-      rawQuery<any>(
+      rawQuery<ClientFinancialsRow>(
         `SELECT
            COALESCE(SUM(total), 0) AS "totalInvoiced",
            COALESCE(SUM("paidAmount"), 0) AS "totalPaid",
@@ -222,7 +312,7 @@ router.get("/:id", authorize({ feature: "crm.clients", action: "view", resource:
          WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
         [id, scope.companyId]
       ),
-      rawQuery<any>(
+      rawQuery<ClientConversationRow>(
         `SELECT wq.id, wq.phone, wq.message, wq.status, wq."createdAt", 'whatsapp' AS channel
          FROM whatsapp_queue wq
          WHERE wq."clientId" = $1 AND wq."companyId" = $2
@@ -232,8 +322,8 @@ router.get("/:id", authorize({ feature: "crm.clients", action: "view", resource:
          WHERE sq."companyId" = $2 AND sq."recipientPhone" = (SELECT phone FROM clients WHERE id = $1 AND "companyId" = $2 LIMIT 1)
          ORDER BY "createdAt" DESC LIMIT 20`,
         [id, scope.companyId]
-      ).catch((e) => { logger.error(e, "clients query failed"); return []; }),
-      rawQuery<any>(
+      ).catch((e) => { logger.error(e, "clients query failed"); return [] as ClientConversationRow[]; }),
+      rawQuery<ClientTimelineRow>(
         `(SELECT 'invoice' AS type, ref AS ref, status, total::text AS detail, "createdAt"
           FROM invoices WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)
          UNION ALL
@@ -251,7 +341,7 @@ router.get("/:id", authorize({ feature: "crm.clients", action: "view", resource:
     ]);
 
     const activeServices = {
-      activeContracts: await rawQuery<any>(
+      activeContracts: await rawQuery<{ id: number; title: string; endDate: string | null }>(
         `SELECT id, title, "endDate" FROM legal_contracts
          WHERE "companyId" = $2 AND status = 'active' AND "deletedAt" IS NULL
            AND ("partyName" = $3 OR id IN (
@@ -260,8 +350,8 @@ router.get("/:id", authorize({ feature: "crm.clients", action: "view", resource:
          LIMIT 10`,
         [id, scope.companyId, client.name]
       ).catch((e) => { logger.error(e, "clients query failed"); return []; }),
-      activeProjects: projects.filter((p: any) => p.status === 'active'),
-      openTickets: tickets.filter((t: any) => t.status === 'open' || t.status === 'in_progress'),
+      activeProjects: projects.filter((p) => p.status === 'active'),
+      openTickets: tickets.filter((t) => t.status === 'open' || t.status === 'in_progress'),
     };
 
     res.json(maskFields(req, {
@@ -280,11 +370,11 @@ router.get("/:id", authorize({ feature: "crm.clients", action: "view", resource:
   }
 });
 
-router.patch("/:id", authorize({ feature: "crm", action: "update" }), async (req, res) => {
+router.patch("/:id", authorize({ feature: "crm.clients", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<{ id: number }>(
       `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -292,7 +382,7 @@ router.patch("/:id", authorize({ feature: "crm", action: "update" }), async (req
 
     const b = zodParse(updateClientSchema.safeParse(req.body));
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.name !== undefined) { params.push(b.name); sets.push(`name = $${params.length}`); }
     if (b.phone !== undefined) { params.push(b.phone); sets.push(`phone = $${params.length}`); }
     if (b.email !== undefined) { params.push(b.email); sets.push(`email = $${params.length}`); }
@@ -304,7 +394,7 @@ router.patch("/:id", authorize({ feature: "crm", action: "update" }), async (req
     params.push(id, scope.companyId);
     const { affectedRows } = await rawExecute(`UPDATE clients SET ${sets.join(",")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL`, params);
     if (!affectedRows) throw new NotFoundError("العميل غير موجود");
-    const [updated] = await rawQuery<any>(`SELECT * FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [updated] = await rawQuery<ClientRow>(`SELECT * FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!updated) throw new NotFoundError("العميل غير موجود");
 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.updated", entity: "clients", entityId: id, details: JSON.stringify({ name: b.name, phone: b.phone, email: b.email, classification: b.classification }) }).catch((e) => logger.error(e, "clients background task failed"));
@@ -316,13 +406,13 @@ router.patch("/:id", authorize({ feature: "crm", action: "update" }), async (req
   }
 });
 
-router.post("/auto-create", authorize({ feature: "crm", action: "create" }), async (req, res) => {
+router.post("/auto-create", authorize({ feature: "crm.clients", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(autoCreateClientSchema.safeParse(req.body ?? {}));
     const { phone, name, source } = b;
 
-    const existing = await rawQuery<any>(
+    const existing = await rawQuery<ClientRow>(
       `SELECT * FROM clients WHERE phone = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
       [phone, scope.companyId]
     );
@@ -341,7 +431,7 @@ router.post("/auto-create", authorize({ feature: "crm", action: "create" }), asy
       [clientName, phone, source, code, scope.companyId]
     );
 
-    const [newClient] = await rawQuery<any>(`SELECT * FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
+    const [newClient] = await rawQuery<ClientRow>(`SELECT * FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     if (!newClient) throw new NotFoundError("فشل في استرجاع العميل");
 
     createAuditLog({
@@ -366,13 +456,13 @@ router.delete("/:id", authorize({ feature: "crm.clients", action: "delete", reso
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<{ id: number }>(
       `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!existing) { throw new NotFoundError("العميل غير موجود"); }
 
-    const [deps] = await rawQuery<any>(
+    const [deps] = await rawQuery<{ invoices: number; opportunities: number; tickets: number }>(
       `SELECT
         (SELECT COUNT(*)::int FROM invoices WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status NOT IN ('cancelled','closed')) AS invoices,
         (SELECT COUNT(*)::int FROM crm_opportunities WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND stage NOT IN ('closed_won','closed_lost')) AS opportunities,
@@ -402,16 +492,16 @@ router.delete("/:id", authorize({ feature: "crm.clients", action: "delete", reso
   }
 });
 
-router.get("/:id/portal-account", authorize({ feature: "crm", action: "list" }), async (req, res) => {
+router.get("/:id/portal-account", authorize({ feature: "crm.clients", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<{ id: number }>(
       `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!existing) { throw new NotFoundError("العميل غير موجود"); }
-    const [account] = await rawQuery<any>(
+    const [account] = await rawQuery<PortalAccountRow>(
       `SELECT id, email, "isActive", "mustChangePassword", "lastLoginAt", "createdAt"
        FROM client_portal_accounts
        WHERE "clientId" = $1 AND "companyId" = $2`,
@@ -423,7 +513,7 @@ router.get("/:id/portal-account", authorize({ feature: "crm", action: "list" }),
   }
 });
 
-router.post("/:id/portal-account", authorize({ feature: "crm", action: "create" }), async (req, res) => {
+router.post("/:id/portal-account", authorize({ feature: "crm.clients", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -438,13 +528,13 @@ router.post("/:id/portal-account", authorize({ feature: "crm", action: "create" 
     }
     const email = rawEmail.trim().toLowerCase();
 
-    const [client] = await rawQuery<any>(
+    const [client] = await rawQuery<{ id: number }>(
       `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!client) { throw new NotFoundError("العميل غير موجود"); }
 
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<{ id: number }>(
       `SELECT id FROM client_portal_accounts WHERE "clientId" = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
@@ -452,7 +542,7 @@ router.post("/:id/portal-account", authorize({ feature: "crm", action: "create" 
       throw new ConflictError("يوجد حساب بوابة لهذا العميل مسبقاً");
     }
 
-    const [emailTaken] = await rawQuery<any>(
+    const [emailTaken] = await rawQuery<{ id: number }>(
       `SELECT id FROM client_portal_accounts WHERE email = $1 AND "companyId" = $2`,
       [email, scope.companyId]
     );
@@ -466,7 +556,7 @@ router.post("/:id/portal-account", authorize({ feature: "crm", action: "create" 
        VALUES ($1, $2, $3, $4, true, true)`,
       [id, scope.companyId, email, passwordHash]
     );
-    const [account] = await rawQuery<any>(
+    const [account] = await rawQuery<PortalAccountRow>(
       `SELECT id, email, "isActive", "mustChangePassword", "createdAt" FROM client_portal_accounts WHERE id = $1 AND "companyId" = $2`,
       [insertId, scope.companyId]
     );
@@ -479,14 +569,14 @@ router.post("/:id/portal-account", authorize({ feature: "crm", action: "create" 
   }
 });
 
-router.patch("/:id/portal-account", authorize({ feature: "crm", action: "update" }), async (req, res) => {
+router.patch("/:id/portal-account", authorize({ feature: "crm.clients", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b3 = zodParse(updatePortalAccountSchema.safeParse(req.body ?? {}));
     const { isActive, password } = b3;
 
-    const [account] = await rawQuery<any>(
+    const [account] = await rawQuery<{ id: number }>(
       `SELECT cpa.id FROM client_portal_accounts cpa
        JOIN clients c ON c.id = cpa."clientId"
        WHERE cpa."clientId" = $1 AND cpa."companyId" = $2`,
@@ -495,7 +585,7 @@ router.patch("/:id/portal-account", authorize({ feature: "crm", action: "update"
     if (!account) { throw new NotFoundError("حساب البوابة غير موجود"); }
 
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
 
     if (isActive !== undefined) {
       params.push(isActive);
@@ -519,7 +609,7 @@ router.patch("/:id/portal-account", authorize({ feature: "crm", action: "update"
       `UPDATE client_portal_accounts SET ${sets.join(",")} WHERE id = $${params.length} AND "companyId" = $${params.length + 1}`,
       [...params, scope.companyId]
     );
-    const [updated] = await rawQuery<any>(
+    const [updated] = await rawQuery<PortalAccountRow>(
       `SELECT id, email, "isActive", "mustChangePassword", "lastLoginAt", "createdAt" FROM client_portal_accounts WHERE id = $1 AND "companyId" = $2`,
       [account.id, scope.companyId]
     );

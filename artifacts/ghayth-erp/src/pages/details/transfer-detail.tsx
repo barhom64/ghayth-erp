@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,10 +11,7 @@ import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { Edit, ArrowLeftRight } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import { EntityDocuments } from "@/components/shared/entity-documents";
-import { ApprovalTimeline } from "@/components/shared/approval-timeline";
-import { EntityComments } from "@/components/shared/entity-comments";
-import { EntityTags } from "@/components/shared/entity-tags";
+
 
 /**
  * TransferDetail — detail page for a single employee transfer.
@@ -50,6 +48,7 @@ export default function TransferDetail() {
   );
 
   const transfer = data;
+  const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("transfer", id ?? 0);
 
   const relatedEntities: RelatedEntity[] = useMemo(() => {
     const out: RelatedEntity[] = [];
@@ -211,11 +210,6 @@ export default function TransferDetail() {
         )}
       </div>
 
-      {id && <ApprovalTimeline entityType="transfer" entityId={id} />}
-      {id && <EntityDocuments entityType="transfer" entityId={id} />}
-
-      {id && <EntityComments entityType="transfer" entityId={id} />}
-      {id && <EntityTags entityType="transfer" entityId={id} />}
     </div>
   );
 
@@ -242,6 +236,8 @@ export default function TransferDetail() {
       entityType="transfer"
       entityId={id ?? 0}
       overview={overview}
+      extraTabs={registryExtraTabs}
+      hideTabs={registryHideTabs}
       isLoading={isLoading}
       error={error}
       onRetry={refetch}

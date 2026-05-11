@@ -11,6 +11,14 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { textColumn, statusColumn, actionsColumn } from "@/components/data-table-presets";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { z } from "zod";
+import {
+  FormShell,
+  FormTextField,
+  FormTextareaField,
+  FormSelectField,
+  FormGrid,
+} from "@/components/form-shell";
 import { Headphones, Plus, Eye, ChevronDown, ChevronUp, AlertTriangle, BookOpen, Star, ThumbsUp, CheckCircle, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
@@ -226,7 +234,6 @@ function KBManagement() {
   const canWrite = roleLevel >= 50;
   const [filters, setFilters] = useFilters();
   const [showNew, setShowNew] = useState(false);
-  const [newForm, setNewForm] = useState({ title: "", content: "", category: "", status: "published" });
 
   const filteredItems = applyFilters(items, filters, { searchFields: ["title", "category"], statusField: "status", dateField: "createdAt" });
 
@@ -265,22 +272,24 @@ function KBManagement() {
     },
   ];
 
-  const createMut = useApiMutation<any, typeof newForm>(
+  // Validation lives in zod now (was: bare `!newForm.title` guard before
+  // submit) — server still re-validates, but the form catches misuse
+  // before round-tripping.
+  const kbSchema = z.object({
+    title: z.string().trim().min(1, "العنوان مطلوب"),
+    category: z.string().trim(),
+    status: z.enum(["published", "draft", "archived"]),
+    content: z.string(),
+  });
+  type KbForm = z.infer<typeof kbSchema>;
+  const kbDefaults: KbForm = { title: "", category: "", status: "published", content: "" };
+
+  const createMut = useApiMutation<any, KbForm>(
     "/support/kb",
     "POST",
     [["support-kb"]],
-    {
-      successMessage: "تم إنشاء المقالة",
-      onSuccess: () => {
-        setShowNew(false);
-        setNewForm({ title: "", content: "", category: "", status: "published" });
-      },
-    }
+    { successMessage: "تم إنشاء المقالة" },
   );
-  const handleCreate = () => {
-    if (!newForm.title) return;
-    createMut.mutate(newForm);
-  };
 
   if (isError) return (
     <PageStateWrapper isLoading={false} error={error} onRetry={() => refetch()}>
@@ -297,29 +306,47 @@ function KBManagement() {
 
       {showNew && (
         <Card className="border-dashed">
-          <CardContent className="p-4 grid grid-cols-2 gap-3">
-            <div className="col-span-2">
-              <label className="text-xs text-gray-500 mb-1 block">العنوان *</label>
-              <input className="w-full border rounded px-2 py-1 text-sm" value={newForm.title} onChange={e => setNewForm(p => ({ ...p, title: e.target.value }))} />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">التصنيف</label>
-              <input className="w-full border rounded px-2 py-1 text-sm" value={newForm.category} onChange={e => setNewForm(p => ({ ...p, category: e.target.value }))} />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">الحالة</label>
-              <select className="w-full border rounded px-2 py-1 text-sm" value={newForm.status} onChange={e => setNewForm(p => ({ ...p, status: e.target.value }))}>
-                <option value="published">منشور</option><option value="draft">مسودة</option><option value="archived">مؤرشف</option>
-              </select>
-            </div>
-            <div className="col-span-2">
-              <label className="text-xs text-gray-500 mb-1 block">المحتوى</label>
-              <textarea className="w-full border rounded px-2 py-1 text-sm" rows={4} value={newForm.content} onChange={e => setNewForm(p => ({ ...p, content: e.target.value }))} />
-            </div>
-            <div className="col-span-2 flex gap-2">
-              <Button size="sm" onClick={handleCreate} rateLimitAware>حفظ</Button>
-              <Button size="sm" variant="ghost" onClick={() => setShowNew(false)}>إلغاء</Button>
-            </div>
+          <CardContent className="p-4">
+            <FormShell
+              schema={kbSchema}
+              defaultValues={kbDefaults}
+              submitLabel="حفظ"
+              secondaryActions={
+                <Button type="button" size="sm" variant="ghost" onClick={() => setShowNew(false)}>
+                  إلغاء
+                </Button>
+              }
+              onSubmit={async (values, ctx) => {
+                await createMut.mutateAsync(values);
+                ctx.reset();
+                setShowNew(false);
+              }}
+            >
+              <FormGrid cols={2}>
+                <FormTextField
+                  name="title"
+                  label="العنوان"
+                  required
+                  className="col-span-2"
+                />
+                <FormTextField name="category" label="التصنيف" />
+                <FormSelectField
+                  name="status"
+                  label="الحالة"
+                  options={[
+                    { value: "published", label: "منشور" },
+                    { value: "draft", label: "مسودة" },
+                    { value: "archived", label: "مؤرشف" },
+                  ]}
+                />
+                <FormTextareaField
+                  name="content"
+                  label="المحتوى"
+                  rows={4}
+                  className="col-span-2"
+                />
+              </FormGrid>
+            </FormShell>
           </CardContent>
         </Card>
       )}

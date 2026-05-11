@@ -145,8 +145,8 @@ export function UserRoleAssignmentTab() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-12 gap-4">
-      <div className="col-span-5">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <div className="lg:col-span-5">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
@@ -189,7 +189,7 @@ export function UserRoleAssignmentTab() {
         </Card>
       </div>
 
-      <div className="col-span-7">
+      <div className="lg:col-span-7 overflow-x-auto">
         {!selectedUser ? (
           <Card>
             <CardContent className="p-12 text-center text-gray-400">

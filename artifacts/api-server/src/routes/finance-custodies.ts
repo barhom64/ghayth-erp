@@ -10,8 +10,7 @@ import { z } from "zod";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import {
   emitEvent,
@@ -134,21 +133,21 @@ custodiesRouter.get("/custodies", authorize({ feature: "finance.custodies", acti
     const totalAmount = enriched.reduce((s: number, r: any) => s + r.amount, 0);
     const totalRemaining = enriched.reduce((s: number, r: any) => s + r.remainingAmount, 0);
     const overdueCount = enriched.filter((r: any) => r.status === "overdue").length;
-    res.json({
+    res.json(maskFields(req, {
       data: enriched,
       summary: {
         total: enriched.length, totalAmount, totalRemaining,
         activeCount: enriched.filter((r: any) => r.status === "active" || r.status === "partial" || r.status === "overdue").length,
         overdueCount, pendingCount: enriched.filter((r: any) => r.status === "pending").length,
       },
-    });
+    }));
   } catch (err) {
     logger.error(err, "Get custodies error:");
     res.json({ data: [], summary: { total: 0, totalAmount: 0, totalRemaining: 0, activeCount: 0, overdueCount: 0, pendingCount: 0 } });
   }
 });
 
-custodiesRouter.get("/custodies/report", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+custodiesRouter.get("/custodies/report", authorize({ feature: "finance.custodies", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -246,7 +245,7 @@ custodiesRouter.get("/custodies/report", authorize({ feature: "finance", action:
   }
 });
 
-custodiesRouter.get("/custodies/summary", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+custodiesRouter.get("/custodies/summary", authorize({ feature: "finance.custodies", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -378,7 +377,7 @@ custodiesRouter.get("/custodies/:id", authorize({ feature: "finance.custodies", 
       })),
     ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    res.json({
+    res.json(maskFields(req, {
       ...custody,
       amount: Number(custody.amount),
       settledAmount,
@@ -387,7 +386,7 @@ custodiesRouter.get("/custodies/:id", authorize({ feature: "finance.custodies", 
       daysOverdue,
       settlements,
       timeline,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Get custody detail error:");
   }
@@ -521,7 +520,7 @@ custodiesRouter.post("/custodies", authorize({ feature: "finance.custodies", act
   }
 });
 
-custodiesRouter.post("/custodies/settle", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+custodiesRouter.post("/custodies/settle", authorize({ feature: "finance.custodies", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -659,7 +658,7 @@ custodiesRouter.post("/custodies/settle", authorize({ feature: "finance", action
   }
 });
 
-custodiesRouter.post("/custodies/:id/settle", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+custodiesRouter.post("/custodies/:id/settle", authorize({ feature: "finance.custodies", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 

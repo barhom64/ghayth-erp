@@ -284,7 +284,7 @@ export default function ContractsCreate() {
                   <SelectContent>
                     <SelectItem value="active">نشط</SelectItem>
                     <SelectItem value="expired">منتهي</SelectItem>
-                    <SelectItem value="terminated">ملغى</SelectItem>
+                    <SelectItem value="cancelled">ملغى</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

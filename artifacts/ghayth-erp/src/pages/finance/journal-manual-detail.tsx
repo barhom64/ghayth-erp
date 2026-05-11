@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const LIFECYCLE_STEPS: ReadonlyArray<{ key: string; label: string }> = [
   { key: "draft",           label: "مسودة" },
@@ -69,6 +70,7 @@ export default function JournalManualDetailPage() {
   const [, params] = useRoute("/finance/journal-manual/:id");
   const id = params?.id || "";
   const { toast } = useToast();
+  const { extraTabs, hideTabs } = useRegistryTabs("journal_entry", id);
   const [reversalOpen, setReversalOpen] = useState(false);
   const [reversalReason, setReversalReason] = useState("");
 
@@ -213,6 +215,8 @@ export default function JournalManualDetailPage() {
         error={isError ? true : undefined}
         onRetry={() => refetch()}
         overview={overview}
+        extraTabs={extraTabs}
+        hideTabs={hideTabs}
         actions={actions}
       />
 
