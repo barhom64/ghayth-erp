@@ -19,6 +19,56 @@ import { emitEvent, createAuditLog, currentPeriod, currentYear, toDateISO, round
 import { pushToDLQ } from "../lib/eventBus.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { logger } from "../lib/logger.js";
+import type { BudgetRow } from "../lib/dbTypes.js";
+
+// Budget rows surface several columns added after the Drizzle MVP schema
+// (status, period, varianceAmount, etc). Source of truth: db/schema.sql.
+type FullBudgetRow = BudgetRow & {
+  status?: string | null;
+  period?: string | null;
+  year?: number | null;
+  varianceAmount?: number | string | null;
+  variancePercentage?: number | string | null;
+  description?: string | null;
+  approvedBy?: number | null;
+  approvedAt?: string | null;
+  rejectedReason?: string | null;
+  createdBy?: number | null;
+  updatedAt?: string | null;
+  deletedAt?: string | null;
+};
+
+interface BudgetWithAccountRow extends FullBudgetRow {
+  accountName?: string | null;
+  costCenterName?: string | null;
+}
+
+interface BudgetRequestRow {
+  id: number;
+  companyId: number;
+  budgetId?: number | null;
+  accountCode?: string | null;
+  requestedAmount: number | string;
+  reason?: string | null;
+  status: string;
+  requestedBy?: number | null;
+  approvedBy?: number | null;
+  createdAt: string;
+}
+
+interface JournalLineRow {
+  id: number;
+  journalId: number;
+  accountCode: string;
+  debit: number | string;
+  credit: number | string;
+  description?: string | null;
+  costCenter?: string | null;
+}
+
+interface CountRow { count: string | number }
+interface SumRow { total: string | number }
+interface ApprovalActionRow { id: number; action: string; actionBy?: number | null; notes?: string | null; createdAt: string }
 
 const createBudgetSchema = z.object({
   accountCode: z.string().min(1, "رمز الحساب مطلوب"),
@@ -67,7 +117,7 @@ budgetRouter.get("/budget", authorize({ feature: "finance.budget", action: "list
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
     const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'b."companyId"', branchColumn: 'b."branchId"', enforceBranchScope: true, softDeleteColumn: 'b."deletedAt"' });
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<BudgetWithAccountRow>(
       `SELECT b.*, coa.name AS "accountName"
        FROM budgets b
        LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = b."companyId" AND coa."deletedAt" IS NULL
@@ -101,7 +151,13 @@ budgetRouter.get("/budget-vs-actual", authorize({ feature: "finance", action: "l
       const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
       endDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
     }
-    const rows = await rawQuery<any>(
+    interface BudgetVsActualRow {
+      accountCode: string;
+      accountName?: string | null;
+      budget: number | string;
+      actual: number | string;
+    }
+    const rows = await rawQuery<BudgetVsActualRow>(
       `SELECT b."accountCode", coa.name AS "accountName",
               SUM(b.amount) AS budget,
               COALESCE(SUM(b.used), 0) AS actual
@@ -150,7 +206,7 @@ budgetRouter.post("/budget", authorize({ feature: "finance.budget", action: "cre
       }).catch((err) => logger.error(err, "[audit] budget.created:"));
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM budgets WHERE id=$1 AND "companyId"=$2`, [insertId || 0, scope.companyId]);
+    const [row] = await rawQuery<FullBudgetRow>(`SELECT * FROM budgets WHERE id=$1 AND "companyId"=$2`, [insertId || 0, scope.companyId]);
     res.status(201).json(row || { id: insertId, accountCode, period, amount: Number(amount), branchId: branchId ?? scope.branchId });
   } catch (err) {
     handleRouteError(err, res, "Create budget error:");
@@ -205,8 +261,8 @@ budgetRouter.patch("/budget/:id", authorize({ feature: "finance.budget", action:
     const id = parseId(req.params.id, "id");
     const b = zodParse(updateBudgetSchema.safeParse(req.body ?? {}));
     const fields: string[] = [];
-    const params: any[] = [];
-    const addField = (col: string, val: any) => { if (val !== undefined) { params.push(val); fields.push(`"${col}" = $${params.length}`); } };
+    const params: unknown[] = [];
+    const addField = (col: string, val: unknown) => { if (val !== undefined) { params.push(val); fields.push(`"${col}" = $${params.length}`); } };
     addField("accountCode", b.accountCode);
     addField("period", b.period);
     addField("amount", b.amount);
@@ -217,7 +273,7 @@ budgetRouter.patch("/budget/:id", authorize({ feature: "finance.budget", action:
       });
     }
     params.push(id); params.push(scope.companyId);
-    const rows = await rawQuery<any>(`UPDATE budgets SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`, params);
+    const rows = await rawQuery<FullBudgetRow>(`UPDATE budgets SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`, params);
     if (rows.length === 0) throw new NotFoundError("الميزانية غير موجودة");
 
     emitEvent({
@@ -248,7 +304,7 @@ budgetRouter.delete("/budget/:id", authorize({ feature: "finance.budget", action
 
     const budgetId = parseId(req.params.id, "id");
 
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<Pick<FullBudgetRow, "id" | "accountCode" | "period" | "amount" | "used">>(
       `SELECT id, "accountCode", period, amount, used FROM budgets WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [budgetId, scope.companyId]
     );
@@ -270,7 +326,7 @@ budgetRouter.delete("/budget/:id", authorize({ feature: "finance.budget", action
       );
     }
 
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<{ id: number }>(
       `UPDATE budgets SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
       [budgetId, scope.companyId]
     );
@@ -351,7 +407,7 @@ budgetRouter.post("/budget/approval-requests", authorize({ feature: "finance", a
     const { accountCode, period, requestedAmount, sourceType, sourceId, reason } = zodParse(createApprovalRequestSchema.safeParse(req.body ?? {}));
     await ensureBudgetApprovalTable();
 
-    const [budget] = await rawQuery<any>(
+    const [budget] = await rawQuery<Pick<FullBudgetRow, "amount" | "used">>(
       `SELECT amount, used FROM budgets WHERE "companyId"=$1 AND "accountCode"=$2 AND period=$3 AND "deletedAt" IS NULL`,
       [scope.companyId, accountCode, period]
     );
@@ -379,7 +435,7 @@ budgetRouter.post("/budget/approval-requests", authorize({ feature: "finance", a
       return;
     }
 
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<BudgetRequestRow>(
       `INSERT INTO budget_approval_requests
        ("companyId","branchId","accountCode",period,"requestedAmount","budgetAmount",
         "utilizationBefore","utilizationAfter","approvalLevel","sourceType","sourceId",reason,"requestedBy")
@@ -419,7 +475,7 @@ budgetRouter.get("/budget/approval-requests", authorize({ feature: "finance", ac
     const scope = req.scope!;
     await ensureBudgetApprovalTable();
     const status = (req.query.status as string) ?? "pending";
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<BudgetRequestRow & { accountName?: string | null }>(
       `SELECT ar.*, coa.name AS "accountName"
        FROM budget_approval_requests ar
        LEFT JOIN chart_of_accounts coa ON coa.code = ar."accountCode" AND coa."companyId" = ar."companyId" AND coa."deletedAt" IS NULL
@@ -443,7 +499,7 @@ budgetRouter.post("/budget/approval-requests/:id/decide", authorize({ feature: "
 
     // Fetch approval level + context to drive business rules that sit
     // outside the lifecycle engine (approval-level role check + reporting).
-    const [request] = await rawQuery<any>(
+    const [request] = await rawQuery<{ id: number; approvalLevel: string; accountCode: string; period: string }>(
       `SELECT id, "approvalLevel", "accountCode", period FROM budget_approval_requests WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [requestId, scope.companyId]
     );
@@ -520,7 +576,14 @@ budgetRouter.get("/budget/variance", authorize({ feature: "finance", action: "li
     const periodStart = `${y}-${String(m).padStart(2, "0")}-01`;
     const periodEnd = toDateISO(new Date(y, m, 0));
 
-    const rows = await rawQuery<any>(
+    interface BudgetVarianceLineRow {
+      accountCode: string;
+      accountName?: string | null;
+      accountType?: string | null;
+      budgetAmount: number | string;
+      actualAmount: number | string;
+    }
+    const rows = await rawQuery<BudgetVarianceLineRow>(
       `SELECT b."accountCode", coa.name AS "accountName", coa.type AS "accountType",
               b.amount AS "budgetAmount",
               COALESCE((
@@ -543,7 +606,7 @@ budgetRouter.get("/budget/variance", authorize({ feature: "finance", action: "li
 
     let totalBudget = 0;
     let totalActual = 0;
-    const lines = rows.map((r: any) => {
+    const lines = rows.map((r) => {
       const budgetAmount = Number(r.budgetAmount);
       // For expense accounts actual = DR - CR (positive = spent). For revenue, invert sign.
       let actualAmount = Number(r.actualAmount);
@@ -588,7 +651,7 @@ budgetRouter.get("/budget/:id", authorize({ feature: "finance.budget", action: "
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [item] = await rawQuery<any>(
+    const [item] = await rawQuery<BudgetWithAccountRow>(
       `SELECT b.*, coa.name AS "accountName"
        FROM budgets b
        LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = b."companyId" AND coa."deletedAt" IS NULL
@@ -609,7 +672,7 @@ budgetRouter.get("/fiscal-periods", authorize({ feature: "finance", action: "lis
     const periods = [];
     for (let m = 1; m <= 12; m++) {
       const period = `${thisYear}-${String(m).padStart(2, "0")}`;
-      const [stats] = await rawQuery<any>(
+      const [stats] = await rawQuery<{ entries: string | number; totalDebit: string | number }>(
         `SELECT COUNT(*) AS entries,
                 COALESCE(SUM(jl.debit), 0) AS "totalDebit"
          FROM journal_entries je
@@ -646,7 +709,7 @@ budgetRouter.post("/fiscal-periods/:period/close", authorize({ feature: "finance
       });
     }
 
-    const pendingJournals = await rawQuery<any>(
+    const pendingJournals = await rawQuery<{ id: number; ref?: string | null; description?: string | null }>(
       `SELECT je.id, je.ref, je.description
        FROM journal_entries je
        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND to_char(je."createdAt", 'YYYY-MM') = $2
@@ -665,7 +728,7 @@ budgetRouter.post("/fiscal-periods/:period/close", authorize({ feature: "finance
       );
     }
 
-    const [debitSum] = await rawQuery<any>(
+    const [debitSum] = await rawQuery<{ totalDebit: string | number; totalCredit: string | number }>(
       `SELECT COALESCE(SUM(jl.debit), 0) AS "totalDebit", COALESCE(SUM(jl.credit), 0) AS "totalCredit"
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id
