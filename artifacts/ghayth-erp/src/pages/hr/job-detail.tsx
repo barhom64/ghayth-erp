@@ -10,6 +10,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { DetailPageLayout, type ExtraTab } from "@/components/shared/detail-page-layout";
 import { formatDateAr } from "@/lib/formatters";
 import { resolveStatus } from "@/components/page-status-badge";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import {
   Briefcase,
   Building2,
@@ -46,6 +47,8 @@ export default function JobDetailPage() {
   const [, navigate] = useLocation();
   const id = params?.id || "";
   const queryClient = useQueryClient();
+
+  const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("job_posting", id);
 
   const { data: job, isLoading, isError, refetch } = useApiQuery<any>(
     ["recruitment-job", id],
@@ -223,7 +226,8 @@ export default function JobDetailPage() {
       onRetry={() => refetch()}
       overview={overview}
       actions={actions}
-      extraTabs={extraTabs}
+      extraTabs={[...extraTabs, ...registryExtraTabs]}
+      hideTabs={registryHideTabs}
       status={job?.status ? { label: resolveStatus(job.status)?.label || job.status, tone: STATUS_TONE_MAP[job.status] ?? "default" } : undefined}
       createdAt={job?.createdAt}
       updatedAt={job?.updatedAt}

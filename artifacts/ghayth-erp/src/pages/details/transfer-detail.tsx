@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,6 +48,7 @@ export default function TransferDetail() {
   );
 
   const transfer = data;
+  const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("transfer", id ?? 0);
 
   const relatedEntities: RelatedEntity[] = useMemo(() => {
     const out: RelatedEntity[] = [];
@@ -234,6 +236,8 @@ export default function TransferDetail() {
       entityType="transfer"
       entityId={id ?? 0}
       overview={overview}
+      extraTabs={registryExtraTabs}
+      hideTabs={registryHideTabs}
       isLoading={isLoading}
       error={error}
       onRetry={refetch}

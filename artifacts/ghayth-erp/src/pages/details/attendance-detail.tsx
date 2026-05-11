@@ -11,6 +11,7 @@ import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
   present: "حاضر",
@@ -40,6 +41,7 @@ export default function AttendanceDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/hr/attendance/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("attendance", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["attendance", String(id)],
@@ -256,6 +258,8 @@ export default function AttendanceDetail() {
       entityType="attendance"
       entityId={id ?? 0}
       overview={overview}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       isLoading={isLoading}
       error={error}
       onRetry={refetch}

@@ -21,6 +21,7 @@ import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { useToast } from "@/hooks/use-toast";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Activity },
@@ -57,6 +58,7 @@ const TIMELINE_ICONS: Record<string, { icon: typeof FileText; color: string; bg:
 export default function ClientDetail() {
   const [, params] = useRoute("/clients/:id");
   const id = params?.id || "";
+  const { hideTabs: registryHideTabs } = useRegistryTabs("client", id ?? "");
   const { data: client, isLoading, isError } = useApiQuery<any>(["client", id], `/clients/${id}`, !!id);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
 
@@ -602,7 +604,7 @@ export default function ClientDetail() {
       isLoading={isLoading}
       error={isError ? new Error("خطأ في تحميل بيانات العميل") : undefined}
       onRetry={() => {}}
-      hideTabs={["tasks"]}
+      hideTabs={[...new Set(["tasks" as const, ...registryHideTabs])]}
       actions={
         <>
           {client && (

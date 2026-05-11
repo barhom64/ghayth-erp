@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { DetailPageLayout, type ExtraTab } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { EntityObligations } from "@/components/shared/entity-obligations";
 import { EntityDocuments } from "@/components/shared/entity-documents";
 import { FinancialTab } from "@/components/shared/financial-tab";
@@ -35,6 +36,7 @@ export default function ContractDetailPage() {
   const [, params] = useRoute("/properties/contracts/:id");
   const [, navigate] = useLocation();
   const id = params?.id || "";
+  const { hideTabs: registryHideTabs } = useRegistryTabs("rental_contract", id ?? "");
   const queryClient = useQueryClient();
 
   const { data: contract, isLoading, isError, refetch } = useApiQuery<any>(
@@ -300,6 +302,7 @@ export default function ContractDetailPage() {
       status={contract?.status ? { label: contract.status, tone: statusTone } : undefined}
       entityType="rental_contract"
       entityId={id}
+      hideTabs={registryHideTabs}
       isLoading={isLoading}
       error={isError ? true : undefined}
       onRetry={() => refetch()}

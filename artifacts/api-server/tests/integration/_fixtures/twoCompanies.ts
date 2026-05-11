@@ -25,6 +25,8 @@ export interface SeededRows {
   clientId: number;
   projectId: number;
   taskId: number;
+  documentId: number;
+  requestId: number;
 }
 
 export interface TenantFixture {
@@ -68,6 +70,8 @@ async function truncateAll(): Promise<void> {
   await rawExecute(
     `TRUNCATE TABLE
        refresh_tokens,
+       requests,
+       documents,
        tasks,
        projects,
        clients,
@@ -131,6 +135,14 @@ async function seedCompany(name: string): Promise<{
      VALUES ($1, $2, 'manual', $3) RETURNING id`,
     [companyId, branchId, `Task of ${name}`]
   );
+  const [{ id: documentId }] = await rawQuery<{ id: number }>(
+    `INSERT INTO documents ("companyId", title) VALUES ($1, $2) RETURNING id`,
+    [companyId, `Document of ${name}`]
+  );
+  const [{ id: requestId }] = await rawQuery<{ id: number }>(
+    `INSERT INTO requests ("companyId", title) VALUES ($1, $2) RETURNING id`,
+    [companyId, `Request of ${name}`]
+  );
 
   return {
     companyId,
@@ -141,6 +153,8 @@ async function seedCompany(name: string): Promise<{
     clientId,
     projectId,
     taskId,
+    documentId,
+    requestId,
   };
 }
 
@@ -164,6 +178,8 @@ export async function setupTwoCompanyFixture(): Promise<TenantFixture> {
       clientId: a.clientId,
       projectId: a.projectId,
       taskId: a.taskId,
+      documentId: a.documentId,
+      requestId: a.requestId,
     },
     companyB: {
       id: b.companyId,
@@ -174,6 +190,8 @@ export async function setupTwoCompanyFixture(): Promise<TenantFixture> {
       clientId: b.clientId,
       projectId: b.projectId,
       taskId: b.taskId,
+      documentId: b.documentId,
+      requestId: b.requestId,
     },
     tokenA,
     tokenB,

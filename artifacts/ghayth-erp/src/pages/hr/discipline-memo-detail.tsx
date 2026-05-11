@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Clock, CheckCircle, XCircle, FileText, Ban, Gavel, Scale, Lock, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 import { INCIDENT_LABELS, MEMO_ACTION_LABELS } from "@/lib/hr-type-maps";
 
@@ -28,6 +29,7 @@ interface MemoData {
 export default function DisciplineMemoDetailPage() {
   const [, params] = useRoute("/hr/discipline/memos/:id");
   const id = params?.id;
+  const { extraTabs, hideTabs } = useRegistryTabs("discipline_memo", id ?? "");
   const { data, isLoading, isError } = useApiQuery<MemoData>(
     ["discipline-memo", String(id ?? "")],
     id ? `/hr/discipline/memos/${id}` : null
@@ -451,7 +453,6 @@ export default function DisciplineMemoDetailPage() {
     </Link>
   );
 
-  return (
     <>
       <DetailPageLayout
         title={memo?.memoNumber || "المحضر"}
@@ -464,6 +465,8 @@ export default function DisciplineMemoDetailPage() {
         updatedAt={memo?.updatedAt}
         entityType="hr-inquiry-memo"
         entityId={id ?? ""}
+        extraTabs={extraTabs}
+        hideTabs={hideTabs}
         isLoading={isLoading}
         error={isError ? true : undefined}
         actions={headerActions}

@@ -3444,6 +3444,55 @@ ALTER SEQUENCE public.budgets_id_seq OWNED BY public.budgets.id;
 
 
 --
+-- Name: budget_approval_requests; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.budget_approval_requests (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "accountCode" character varying(20) NOT NULL,
+    period character varying(7) NOT NULL,
+    "requestedAmount" numeric(18,2) NOT NULL,
+    "budgetAmount" numeric(18,2) NOT NULL,
+    "utilizationBefore" numeric(6,2) NOT NULL,
+    "utilizationAfter" numeric(6,2) NOT NULL,
+    "approvalLevel" character varying(16) NOT NULL,
+    status character varying(16) DEFAULT 'pending'::character varying NOT NULL,
+    "sourceType" character varying(32),
+    "sourceId" integer,
+    reason text,
+    "requestedBy" integer NOT NULL,
+    "requestedAt" timestamp without time zone DEFAULT now(),
+    "updatedAt" timestamp without time zone DEFAULT now(),
+    "deletedAt" timestamp without time zone,
+    "decidedBy" integer,
+    "decidedAt" timestamp without time zone,
+    "decisionNotes" text
+);
+
+
+--
+-- Name: budget_approval_requests_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.budget_approval_requests_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: budget_approval_requests_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.budget_approval_requests_id_seq OWNED BY public.budget_approval_requests.id;
+
+
+--
 -- Name: business_rule_logs; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -12097,7 +12146,8 @@ CREATE TABLE public.requests (
     "closedBy" integer,
     "branchId" integer,
     "outgoingRef" character varying(50),
-    "incomingRef" character varying(50)
+    "incomingRef" character varying(50),
+    "convertedTo" character varying(100)
 );
 
 

@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { handleRouteError } from "../lib/errorHandler.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { todayISO, currentPeriod } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";

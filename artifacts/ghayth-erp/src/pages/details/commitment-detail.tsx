@@ -14,6 +14,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 /**
  * CommitmentDetail — unified detail page for a single financial commitment.
@@ -50,6 +51,7 @@ export default function CommitmentDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/finance/commitments/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("commitment", id ?? 0);
   const { toast } = useToast();
   const [previewAttachment, setPreviewAttachment] = useState<PreviewableAttachment | null>(null);
 
@@ -339,6 +341,8 @@ export default function CommitmentDetail() {
         isLoading={isLoading}
         error={error}
         onRetry={refetch}
+        extraTabs={extraTabs}
+        hideTabs={hideTabs}
         actions={
           <>
             {commitment && (

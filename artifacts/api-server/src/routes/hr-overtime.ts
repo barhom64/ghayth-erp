@@ -8,8 +8,41 @@ import { Router } from "express";
 import { HR_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
+
+// Local row shapes — hr_overtime_requests not in @workspace/db schema.
+
+interface OvertimeRow extends Record<string, unknown> {
+  id: number;
+  companyId: number;
+  branchId?: number | null;
+  assignmentId: number;
+  employeeId?: number | null;
+  requestNumber?: string | null;
+  overtimeDate: string;
+  hours: number | string;
+  rate?: number | string | null;
+  totalAmount?: number | string | null;
+  reason?: string | null;
+  status: string;
+  approvedBy?: number | null;
+  approvedAt?: string | null;
+  rejectedReason?: string | null;
+  createdBy?: number | null;
+  createdAt: string;
+  updatedAt?: string | null;
+  deletedAt?: string | null;
+  employeeName?: string | null;
+}
+
+interface OvertimeStatsRow {
+  total: number | string;
+  pending: number | string;
+  approved: number | string;
+  rejected: number | string;
+  totalHours: number | string;
+  totalAmount: number | string;
+}
 import {
   handleRouteError,
   NotFoundError,
@@ -105,14 +138,14 @@ router.get("/overtime", authorize({ feature: "hr.overtime", action: "list" }), a
     const { status, assignmentId, month } = req.query as any;
 
     let where = `o."companyId" = $1 AND o."deletedAt" IS NULL`;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     let idx = 2;
 
     if (status) { where += ` AND o.status = $${idx}`; params.push(status); idx++; }
     if (assignmentId) { where += ` AND o."assignmentId" = $${idx}`; params.push(Number(assignmentId)); idx++; }
     if (month) { where += ` AND o."payrollPeriod" = $${idx}`; params.push(month); idx++; }
 
-    const data = await rawQuery<any>(
+    const data = await rawQuery<OvertimeRow>(
       `SELECT o.*, e.name AS "employeeName", e."empNumber",
               ea."jobTitle", b.name AS "branchName"
        FROM hr_overtime_requests o
@@ -125,7 +158,7 @@ router.get("/overtime", authorize({ feature: "hr.overtime", action: "list" }), a
       params
     );
 
-    const [stats] = await rawQuery<any>(
+    const [stats] = await rawQuery<OvertimeStatsRow>(
       `SELECT
          COUNT(*) AS total,
          COUNT(*) FILTER (WHERE status = 'pending') AS pending,
@@ -137,7 +170,7 @@ router.get("/overtime", authorize({ feature: "hr.overtime", action: "list" }), a
       [scope.companyId]
     );
 
-    res.json({ data, stats: stats ?? {}, total: data.length });
+    res.json(maskFields(req, { data, stats: stats ?? {}, total: data.length }));
   } catch (err) {
     handleRouteError(err, res, "خطأ في قراءة طلبات الوقت الإضافي");
   }
@@ -150,7 +183,7 @@ router.get("/overtime/my", authorize({ feature: "hr.overtime.my", action: "list"
   try {
     await ensureOvertimeTable();
     const scope = req.scope!;
-    const data = await rawQuery<any>(
+    const data = await rawQuery<OvertimeRow>(
       `SELECT o.*, e.name AS "employeeName"
        FROM hr_overtime_requests o
        JOIN employees e ON e.id = o."employeeId"
@@ -172,7 +205,7 @@ router.get("/overtime/summary", authorize({ feature: "hr.overtime", action: "lis
     await ensureOvertimeTable();
     const scope = req.scope!;
     const period = String(req.query.period || req.query.month || "");
-    const data = await rawQuery<any>(
+    const data = await rawQuery<OvertimeRow>(
       `SELECT o."assignmentId", e.name AS "employeeName", e."empNumber",
               SUM(o.hours) AS "totalHours", SUM(o."totalAmount") AS "totalAmount",
               COUNT(*) AS "requestCount"
@@ -186,7 +219,7 @@ router.get("/overtime/summary", authorize({ feature: "hr.overtime", action: "lis
       [scope.companyId, period]
     );
 
-    const [totals] = await rawQuery<any>(
+    const [totals] = await rawQuery<{ totalHours: number | string; totalAmount: number | string }>(
       `SELECT COALESCE(SUM(hours), 0) AS hours, COALESCE(SUM("totalAmount"), 0) AS amount
        FROM hr_overtime_requests
        WHERE "companyId" = $1 AND "payrollPeriod" = $2 AND status = 'approved' AND "deletedAt" IS NULL`,
@@ -207,7 +240,7 @@ router.get("/overtime/:id", authorize({ feature: "hr.overtime", action: "view" }
     await ensureOvertimeTable();
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [item] = await rawQuery<any>(
+    const [item] = await rawQuery<OvertimeRow>(
       `SELECT o.*, e.name AS "employeeName", e."empNumber",
               ea."jobTitle", ea.salary, b.name AS "branchName"
        FROM hr_overtime_requests o
@@ -218,7 +251,7 @@ router.get("/overtime/:id", authorize({ feature: "hr.overtime", action: "view" }
       [id, scope.companyId]
     );
     if (!item) throw new NotFoundError("طلب الوقت الإضافي غير موجود");
-    res.json(item);
+    res.json(maskFields(req, item));
   } catch (err) {
     handleRouteError(err, res, "خطأ في قراءة تفاصيل الطلب");
   }
@@ -236,7 +269,7 @@ router.post("/overtime", authorize({ feature: "hr.overtime", action: "create" })
     const hours = b.hours;
 
     // جلب بيانات الموظف
-    const [emp] = await rawQuery<any>(
+    const [emp] = await rawQuery<{ salary: number | string | null; employeeId: number; branchId: number | null }>(
       `SELECT ea.salary, ea."employeeId", ea."branchId"
        FROM employee_assignments ea WHERE ea.id = $1 AND ea."companyId" = $2`,
       [b.assignmentId, scope.companyId]
@@ -248,7 +281,7 @@ router.post("/overtime", authorize({ feature: "hr.overtime", action: "create" })
     const totalAmount = roundTo2(hourlyRate * multiplier * hours);
 
     // التحقق من عدم التكرار
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<{ id: number }>(
       `SELECT id FROM hr_overtime_requests
        WHERE "assignmentId" = $1 AND "overtimeDate" = $2
          AND "companyId" = $3 AND "deletedAt" IS NULL AND status != 'rejected'`,
@@ -327,7 +360,7 @@ router.post("/overtime", authorize({ feature: "hr.overtime", action: "create" })
       details: JSON.stringify({ requestNumber, hours, totalAmount, overtimeDate: b.overtimeDate, assignmentId: b.assignmentId }),
     }).catch((e) => logger.error(e, "hr-overtime background task failed"));
 
-    const [row] = await rawQuery<any>(`SELECT * FROM hr_overtime_requests WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<OvertimeRow>(`SELECT * FROM hr_overtime_requests WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json({ ...row, approval: approvalResult ?? { requiresApproval: false } });
   } catch (err) {
     handleRouteError(err, res, "خطأ في إنشاء طلب الوقت الإضافي");
@@ -350,7 +383,7 @@ router.patch("/overtime/:id/approve", authorize({ feature: "hr.overtime", action
       );
     }
 
-    const [item] = await rawQuery<any>(
+    const [item] = await rawQuery<OvertimeRow>(
       `SELECT * FROM hr_overtime_requests WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -464,7 +497,7 @@ router.patch("/overtime/:id/reject", authorize({ feature: "hr.overtime", action:
     }
 
     const b = zodParse(rejectOvertimeSchema.safeParse(req.body));
-    const [item] = await rawQuery<any>(
+    const [item] = await rawQuery<OvertimeRow>(
       `SELECT * FROM hr_overtime_requests WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );

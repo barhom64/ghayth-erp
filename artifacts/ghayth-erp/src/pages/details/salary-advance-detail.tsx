@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,6 +45,7 @@ export default function SalaryAdvanceDetail() {
   );
 
   const item = data;
+  const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("salary_advance", id ?? 0);
   const amount = Number(item?.amount || 0);
   const repaid = Number(item?.repaidAmount || 0);
   const remaining = amount - repaid;
@@ -242,6 +244,8 @@ export default function SalaryAdvanceDetail() {
       entityType="salary-advance"
       entityId={id ?? 0}
       overview={overview}
+      extraTabs={registryExtraTabs}
+      hideTabs={registryHideTabs}
       isLoading={isLoading}
       error={error}
       onRetry={refetch}

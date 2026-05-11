@@ -6,7 +6,6 @@ import { handleRouteError, NotFoundError,
   zodParse,
 } from "../lib/errorHandler.js";
 import { rawQuery } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { emitEvent } from "../lib/businessHelpers.js";
 import {
