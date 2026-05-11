@@ -101,6 +101,14 @@ describe("finance-gl-helpers — operator-facing GL posting endpoints", () => {
     expect(SRC).toContain('glHelpersRouter.get(\n  "/gl-helpers/lot-writeoff/pending"');
   });
 
+  it("registers GET /gl-helpers/fx-revaluation/pending", () => {
+    expect(SRC).toContain('glHelpersRouter.get(\n  "/gl-helpers/fx-revaluation/pending"');
+  });
+
+  it("registers GET /gl-helpers/cycle-count/pending", () => {
+    expect(SRC).toContain('glHelpersRouter.get(\n  "/gl-helpers/cycle-count/pending"');
+  });
+
   it("listing endpoints filter by companyId from scope (cross-tenant safe)", () => {
     // Both listing queries pull `"companyId" = $1` with scope.companyId
     // as the bound param; never reads from query/body.
@@ -134,5 +142,21 @@ describe("finance-gl-helpers — operator-facing GL posting endpoints", () => {
     const section = SRC.slice(idx, idx + 1400);
     expect(section).toContain("status IN ('recalled', 'expired', 'disposed')");
     expect(section).toContain('"deletedAt" IS NULL');
+  });
+
+  it("fx-revaluation listing returns only unposted rows", () => {
+    const idx = SRC.indexOf("/gl-helpers/fx-revaluation/pending");
+    const section = SRC.slice(idx, idx + 1400);
+    expect(section).toContain('"journalEntryId" IS NULL');
+    expect(section).toContain("FROM fx_revaluation_log");
+  });
+
+  it("cycle-count listing returns only approved runs with no posted lines (anti-double-post)", () => {
+    const idx = SRC.indexOf("/gl-helpers/cycle-count/pending");
+    const section = SRC.slice(idx, idx + 1400);
+    expect(section).toContain("cc.status = 'approved'");
+    // The NOT EXISTS subquery is what guarantees we never list a
+    // run that's already been (even partially) posted.
+    expect(section).toMatch(/NOT EXISTS[\s\S]*adjustmentJournalEntryId/);
   });
 });

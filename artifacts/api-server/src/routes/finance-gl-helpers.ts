@@ -129,6 +129,83 @@ glHelpersRouter.get(
   },
 );
 
+/** FX revaluation log rows that haven't been posted to the GL yet. */
+glHelpersRouter.get(
+  "/gl-helpers/fx-revaluation/pending",
+  authorize({ feature: "finance.journal", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const rows = await rawQuery<{
+        id: number;
+        periodId: number;
+        asOfDate: string;
+        functionalCurrency: string;
+        totalGain: string;
+        totalLoss: string;
+        createdAt: string;
+      }>(
+        `SELECT id, "periodId",
+                "asOfDate"::text         AS "asOfDate",
+                "functionalCurrency",
+                "totalGain"::text        AS "totalGain",
+                "totalLoss"::text        AS "totalLoss",
+                "createdAt"::text        AS "createdAt"
+         FROM fx_revaluation_log
+         WHERE "companyId" = $1
+           AND "journalEntryId" IS NULL
+         ORDER BY "asOfDate" DESC, id DESC
+         LIMIT 200`,
+        [scope.companyId],
+      );
+      res.json({ data: rows });
+    } catch (err) {
+      handleRouteError(err, res, "[gl-helpers] fx-revaluation pending list error:");
+    }
+  },
+);
+
+/** Approved cycle counts where no line has been stamped with the
+ *  adjustment journal entry id yet — i.e. the run is ready to post. */
+glHelpersRouter.get(
+  "/gl-helpers/cycle-count/pending",
+  authorize({ feature: "finance.journal", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const rows = await rawQuery<{
+        id: number;
+        warehouseId: number;
+        scheduledDate: string;
+        approvedAt: string | null;
+        lineCount: string;
+      }>(
+        `SELECT cc.id,
+                cc."warehouseId",
+                cc."scheduledDate"::text AS "scheduledDate",
+                cc."approvedAt"::text    AS "approvedAt",
+                (SELECT COUNT(*)::text
+                   FROM warehouse_cycle_count_lines l
+                   WHERE l."cycleCountId" = cc.id) AS "lineCount"
+         FROM warehouse_cycle_counts cc
+         WHERE cc."companyId" = $1
+           AND cc.status = 'approved'
+           AND NOT EXISTS (
+             SELECT 1 FROM warehouse_cycle_count_lines l
+             WHERE l."cycleCountId" = cc.id
+               AND l."adjustmentJournalEntryId" IS NOT NULL
+           )
+         ORDER BY cc."approvedAt" DESC NULLS LAST, cc.id DESC
+         LIMIT 200`,
+        [scope.companyId],
+      );
+      res.json({ data: rows });
+    } catch (err) {
+      handleRouteError(err, res, "[gl-helpers] cycle-count pending list error:");
+    }
+  },
+);
+
 /** Lots in recalled / expired / disposed status with no write-off entry. */
 glHelpersRouter.get(
   "/gl-helpers/lot-writeoff/pending",
