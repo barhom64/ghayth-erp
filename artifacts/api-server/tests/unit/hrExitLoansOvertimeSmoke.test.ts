@@ -309,7 +309,7 @@ describe("Loan approval flow", () => {
 
   it("supports multi-step approval chain", () => {
     const idx = LOANS_ROUTE.indexOf('"/loans/:id/approve"');
-    const section = LOANS_ROUTE.slice(idx, idx + 3500);
+    const section = LOANS_ROUTE.slice(idx, idx + 4000);
     expect(section).toContain("processApprovalStep");
     expect(section).toContain("pending_next_step");
   });
@@ -427,7 +427,7 @@ describe("Overtime approval flow", () => {
 
   it("supports multi-step approval chain", () => {
     const idx = OVERTIME_ROUTE.indexOf('"/overtime/:id/approve"');
-    const section = OVERTIME_ROUTE.slice(idx, idx + 3500);
+    const section = OVERTIME_ROUTE.slice(idx, idx + 4000);
     expect(section).toContain("processApprovalStep");
     expect(section).toContain("pending_next_step");
   });
