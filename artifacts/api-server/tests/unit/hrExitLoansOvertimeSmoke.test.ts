@@ -461,7 +461,14 @@ describe("Overtime monthly summary", () => {
 describe("Overtime self-service", () => {
   it("GET /overtime/my scopes by activeAssignmentId", () => {
     const idx = OVERTIME_ROUTE.indexOf('"/overtime/my"');
-    const section = OVERTIME_ROUTE.slice(idx, idx + 500);
+    // Window widened from 500 → 2000 chars: the original slice landed
+    // exactly on the boundary, and additions to the route's SELECT
+    // projection (e.g. typing rawQuery<OvertimeRow> in #271) could push
+    // the assertion target past the cliff. The intent of the assertion
+    // is "the route filters by scope.activeAssignmentId somewhere in
+    // its handler" — the slice is just a guard against accidentally
+    // matching a comment elsewhere in the file.
+    const section = OVERTIME_ROUTE.slice(idx, idx + 2000);
     expect(section).toContain("scope.activeAssignmentId");
   });
 });
