@@ -453,6 +453,7 @@ export default function DisciplineMemoDetailPage() {
     </Link>
   );
 
+  return (
     <>
       <DetailPageLayout
         title={memo?.memoNumber || "المحضر"}
