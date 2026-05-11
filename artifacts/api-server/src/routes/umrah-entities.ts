@@ -411,7 +411,7 @@ router.get("/pricing", authorize({ feature: "umrah", action: "list" }), async (r
        FROM umrah_pricing p
        LEFT JOIN umrah_agents a ON p."agentId" = a.id
        LEFT JOIN umrah_sub_agents sa ON p."subAgentId" = sa.id
-       LEFT JOIN umrah_seasons s ON p."seasonId" = s.id
+       LEFT JOIN umrah_seasons s ON p."seasonId" = s.id AND s."deletedAt" IS NULL
        WHERE p."companyId" = $1 AND p."deletedAt" IS NULL
        ORDER BY p."validFrom" DESC
        LIMIT 500`,
@@ -527,7 +527,7 @@ router.get("/groups", authorize({ feature: "umrah", action: "list" }), async (re
        FROM umrah_groups g
        LEFT JOIN umrah_agents a ON g."agentId" = a.id
        LEFT JOIN umrah_sub_agents sa ON g."subAgentId" = sa.id
-       LEFT JOIN umrah_seasons s ON g."seasonId" = s.id
+       LEFT JOIN umrah_seasons s ON g."seasonId" = s.id AND s."deletedAt" IS NULL
        WHERE ${where}
        ORDER BY g."createdAt" DESC
        LIMIT 500`,
@@ -565,7 +565,7 @@ router.get("/groups/:id", authorize({ feature: "umrah", action: "view" }), async
        FROM umrah_groups g
        LEFT JOIN umrah_agents a ON g."agentId" = a.id
        LEFT JOIN umrah_sub_agents sa ON g."subAgentId" = sa.id
-       LEFT JOIN umrah_seasons s ON g."seasonId" = s.id
+       LEFT JOIN umrah_seasons s ON g."seasonId" = s.id AND s."deletedAt" IS NULL
        WHERE g.id = $1 AND g."companyId" = $2 AND g."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -835,7 +835,7 @@ router.get("/commission-plans", authorize({ feature: "umrah", action: "list" }),
               s.title AS "seasonTitle",
               (SELECT COUNT(*)::int FROM employee_commission_tiers WHERE "planId" = cp.id) AS "tierCount"
        FROM employee_commission_plans cp
-       LEFT JOIN umrah_seasons s ON cp."seasonId" = s.id
+       LEFT JOIN umrah_seasons s ON cp."seasonId" = s.id AND s."deletedAt" IS NULL
        WHERE cp."companyId" = $1 AND cp."deletedAt" IS NULL
        ORDER BY cp."createdAt" DESC`,
       [scope.companyId]
@@ -851,7 +851,7 @@ router.get("/commission-plans/:id", authorize({ feature: "umrah", action: "view"
     const [plan] = await rawQuery(
       `SELECT cp.*, s.title AS "seasonTitle"
        FROM employee_commission_plans cp
-       LEFT JOIN umrah_seasons s ON cp."seasonId" = s.id
+       LEFT JOIN umrah_seasons s ON cp."seasonId" = s.id AND s."deletedAt" IS NULL
        WHERE cp.id = $1 AND cp."companyId" = $2 AND cp."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
