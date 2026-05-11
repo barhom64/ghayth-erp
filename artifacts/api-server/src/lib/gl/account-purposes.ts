@@ -44,7 +44,11 @@ export type AccountPurpose =
   | "inventory_writeup_gain"
   | "cycle_count_variance_gain"
   | "cycle_count_variance_loss"
-  | "cogs_default";
+  | "cogs_default"
+  // Payroll (Mudad salary booking)
+  | "salary_expense"
+  | "salary_payable"
+  | "salary_deductions_payable";
 
 export type AccountSide = "debit" | "credit";
 
@@ -89,6 +93,9 @@ const FALLBACK_CODE: Record<AccountPurpose, string> = {
   cycle_count_variance_gain:"4620",
   cycle_count_variance_loss:"5620",
   cogs_default:             "5100",
+  salary_expense:           "5200",
+  salary_payable:           "2200",
+  salary_deductions_payable:"2210",
 };
 
 /**
