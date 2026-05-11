@@ -32,6 +32,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { bumpCacheVersion, checkAccess } from "../lib/rbac/authzEngine.js";
 import { invalidateSodCache } from "../lib/rbac/sodEnforcement.js";
+import { createNotification } from "../lib/businessHelpers.js";
 import { FEATURE_CATALOG, FEATURE_INDEX } from "../lib/rbac/featureCatalog.js";
 import { handleRouteError, ValidationError, NotFoundError, parseId, zodParse } from "../lib/errorHandler.js";
 
@@ -1051,6 +1052,38 @@ router.post("/jit/:id/approve", authorize({ feature: "admin.roles", action: "upd
       );
     });
     await bumpCacheVersion(scope.companyId);
+
+    // Notify the requester so they don't have to refresh the JIT page
+    // to find out. We look up their active assignment ID to feed
+    // createNotification (which keys on assignmentId, not userId).
+    void (async () => {
+      const [{ rows: [j] }, asgRes] = await Promise.all([
+        rawQuery<any>(`SELECT "userId", feature_key, action, requested_minutes FROM rbac_jit_requests WHERE id = $1`, [id])
+          .then((rows) => ({ rows })),
+        rawQuery<{ id: number }>(
+          `SELECT ea.id FROM employee_assignments ea
+             JOIN users u ON u."employeeId" = ea."employeeId"
+            WHERE u.id = (SELECT "userId" FROM rbac_jit_requests WHERE id = $1)
+              AND ea."companyId" = $2 AND ea.status = 'active'
+            ORDER BY ea."isPrimary" DESC, ea.id ASC LIMIT 1`,
+          [id, scope.companyId]
+        ),
+      ]).catch(() => [{ rows: [] }, []] as any);
+      const assignmentId = asgRes[0]?.id;
+      if (!assignmentId || !j) return;
+      await createNotification({
+        companyId: scope.companyId,
+        assignmentId,
+        type: "rbac.jit.approved",
+        title: "تم اعتماد طلب الصلاحية المؤقتة",
+        body: `يمكنك الآن استخدام "${j.feature_key}:${j.action}" لمدة ${j.requested_minutes} دقيقة`,
+        priority: "high",
+        refType: "rbac_jit_request",
+        refId: id,
+        actionUrl: "/admin?tab=rbac-jit",
+      });
+    })().catch(() => undefined);
+
     res.json({ ok: true });
   } catch (err) {
     handleRouteError(err, res, "approve JIT");
@@ -1077,6 +1110,32 @@ router.post("/jit/:id/reject", authorize({ feature: "admin.roles", action: "upda
        VALUES (NULL, $1, $2, 'jit.reject', $3, $4)`,
       [scope.companyId, scope.userId, JSON.stringify({ jitId: id }), body.reason || null]
     ).catch(() => undefined);
+
+    // Notify the requester of the rejection.
+    void (async () => {
+      const asgRes = await rawQuery<{ id: number }>(
+        `SELECT ea.id FROM employee_assignments ea
+           JOIN users u ON u."employeeId" = ea."employeeId"
+          WHERE u.id = (SELECT "userId" FROM rbac_jit_requests WHERE id = $1)
+            AND ea."companyId" = $2 AND ea.status = 'active'
+          ORDER BY ea."isPrimary" DESC, ea.id ASC LIMIT 1`,
+        [id, scope.companyId]
+      ).catch(() => [] as { id: number }[]);
+      const assignmentId = asgRes[0]?.id;
+      if (!assignmentId) return;
+      await createNotification({
+        companyId: scope.companyId,
+        assignmentId,
+        type: "rbac.jit.rejected",
+        title: "تم رفض طلب الصلاحية المؤقتة",
+        body: body.reason || "لم يُذكر سبب",
+        priority: "normal",
+        refType: "rbac_jit_request",
+        refId: id,
+        actionUrl: "/admin?tab=rbac-jit",
+      });
+    })().catch(() => undefined);
+
     res.json({ ok: true });
   } catch (err) {
     handleRouteError(err, res, "reject JIT");
