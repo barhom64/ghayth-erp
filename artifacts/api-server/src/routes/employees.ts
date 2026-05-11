@@ -699,7 +699,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
   }
 });
 
-router.get("/onboarding-tasks", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/onboarding-tasks", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { employeeId, status } = req.query as any;
@@ -729,7 +729,7 @@ router.get("/onboarding-tasks", authorize({ feature: "hr", action: "list" }), as
   } catch (err) { logger.error(err, "Onboarding tasks error:"); res.json({ data: [], total: 0 }); }
 });
 
-router.patch("/onboarding-tasks/:id", authorize({ feature: "hr", action: "update" }), async (req, res) => {
+router.patch("/onboarding-tasks/:id", authorize({ feature: "hr.employees", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(patchOnboardingTaskSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -765,7 +765,7 @@ router.patch("/onboarding-tasks/:id", authorize({ feature: "hr", action: "update
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.get("/job-titles", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/job-titles", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     interface JobTitleRow extends Record<string, unknown> {
@@ -781,7 +781,7 @@ router.get("/job-titles", authorize({ feature: "hr", action: "list" }), async (r
   } catch (err) { logger.error(err, "job-titles query failed"); res.json({ data: [], total: 0 }); }
 });
 
-router.get("/documents", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/documents", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     interface EmployeeDocumentRow extends Record<string, unknown> {
@@ -1350,7 +1350,7 @@ router.delete("/:id", authorize({ feature: "hr.employees", action: "delete", res
  * Seed obligations for all existing employees with future expiry dates.
  * Safe to re-run — dedupeKey prevents duplicates.
  */
-router.post("/obligations/seed", authorize({ feature: "hr", action: "update" }), async (req, res) => {
+router.post("/obligations/seed", authorize({ feature: "hr.employees", action: "update" }), async (req, res) => {
   try {
     zodParse(seedObligationsSchema.safeParse(req.body));
     const scope = req.scope!;

@@ -287,8 +287,8 @@ export function RbacV2Tab() {
     <div className="space-y-4">
       {violations.length > 0 && <SodViolationsBanner violations={violations} onPickRole={(rid) => setSelectedRoleId(rid)} />}
 
-      <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-3">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <div className="lg:col-span-3">
           <Card>
             <CardHeader className="pb-2 flex flex-row justify-between items-center">
               <CardTitle className="text-sm">الأدوار ({roles.length})</CardTitle>
@@ -320,7 +320,7 @@ export function RbacV2Tab() {
           </Card>
         </div>
 
-        <div className="col-span-9">
+        <div className="lg:col-span-9 overflow-x-auto">
           {!selectedRole ? (
             <Card>
               <CardContent className="p-12 text-center text-gray-400">

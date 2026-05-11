@@ -3015,7 +3015,7 @@ router.post("/violations", authorize({ feature: "hr.violations", action: "create
   } catch (err) { handleRouteError(err, res, "Create violation error:"); }
 });
 
-router.get("/shifts", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/shifts", authorize({ feature: "hr.attendance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(`SELECT * FROM shifts WHERE "companyId" = $1 AND "deletedAt" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
@@ -3023,7 +3023,7 @@ router.get("/shifts", authorize({ feature: "hr", action: "list" }), async (req, 
   } catch (err) { logger.error(err, "Get shifts error:"); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
 });
 
-router.post("/shifts", authorize({ feature: "hr", action: "create" }), async (req, res) => {
+router.post("/shifts", authorize({ feature: "hr.attendance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const parsed = zodParse(shiftSchema.safeParse(req.body));
@@ -3378,7 +3378,7 @@ router.delete("/approval-chain-definitions/:id", authorize({ feature: "hr.employ
 
 // ─── Generic approval request endpoints ──────────────────────
 
-router.get("/approval-requests", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/approval-requests", authorize({ feature: "hr.organization", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const statusFilter = (req.query.status as string) ?? "pending";
@@ -3395,7 +3395,7 @@ router.get("/approval-requests", authorize({ feature: "hr", action: "list" }), a
   } catch (_e) { logger.error(_e, "approval-requests query failed"); res.json({ data: [], total: 0 }); }
 });
 
-router.patch("/approval-requests/:id/decide", authorize({ feature: "hr", action: "update" }), async (req, res) => {
+router.patch("/approval-requests/:id/decide", authorize({ feature: "hr.organization", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -3731,7 +3731,7 @@ router.patch("/violations/:id/approve", authorize({ feature: "hr.violations", ac
 router.patch("/violations/:id/reject", authorize({ feature: "hr.violations", action: "update" }), (req, res) => violationApprovalAction(req, res, "rejected"));
 router.patch("/violations/:id/return", authorize({ feature: "hr.violations", action: "update" }), (req, res) => violationApprovalAction(req, res, "returned"));
 
-router.patch("/shifts/:id", authorize({ feature: "hr", action: "update", resource: { table: "shifts", idParam: "id" } }), async (req, res) => {
+router.patch("/shifts/:id", authorize({ feature: "hr.attendance", action: "update", resource: { table: "shifts", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -3774,7 +3774,7 @@ router.patch("/shifts/:id", authorize({ feature: "hr", action: "update", resourc
   } catch (err) { handleRouteError(err, res, "Patch shift error:"); }
 });
 
-router.delete("/shifts/:id", authorize({ feature: "hr", action: "delete", resource: { table: "shifts", idParam: "id" } }), async (req, res) => {
+router.delete("/shifts/:id", authorize({ feature: "hr.attendance", action: "delete", resource: { table: "shifts", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -3791,7 +3791,7 @@ router.delete("/shifts/:id", authorize({ feature: "hr", action: "delete", resour
   } catch (err) { handleRouteError(err, res, "Delete shift error:"); }
 });
 
-router.get("/shift-assignments", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/shift-assignments", authorize({ feature: "hr.attendance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -3809,7 +3809,7 @@ router.get("/shift-assignments", authorize({ feature: "hr", action: "list" }), a
   } catch (_e) { logger.error(_e, "shift-assignments query failed"); res.json({ data: [], total: 0 }); }
 });
 
-router.post("/shift-assignments", authorize({ feature: "hr", action: "create" }), async (req, res) => {
+router.post("/shift-assignments", authorize({ feature: "hr.attendance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { assignmentId, shiftId, startDate, endDate } = zodParse(shiftAssignmentSchema.safeParse(req.body));
@@ -3865,7 +3865,7 @@ router.post("/shift-assignments", authorize({ feature: "hr", action: "create" })
   } catch (err) { handleRouteError(err, res, "Create shift assignment error:"); }
 });
 
-router.get("/official-letters", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/official-letters", authorize({ feature: "hr.organization", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -3882,7 +3882,7 @@ router.get("/official-letters", authorize({ feature: "hr", action: "list" }), as
   } catch (_e) { logger.error(_e, "official-letters query failed"); res.json({ data: [], total: 0 }); }
 });
 
-router.post("/official-letters", authorize({ feature: "hr", action: "create" }), async (req, res) => {
+router.post("/official-letters", authorize({ feature: "hr.organization", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { employeeId, type, subject, content, status } = zodParse(officialLetterSchema.safeParse(req.body));
@@ -3970,7 +3970,7 @@ router.post("/official-letters", authorize({ feature: "hr", action: "create" }),
   } catch (err) { handleRouteError(err, res, "Create official letter error:"); }
 });
 
-router.get("/monthly-attendance", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/monthly-attendance", authorize({ feature: "hr.attendance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const month = (req.query.month as string) ?? currentPeriod();
@@ -4482,7 +4482,7 @@ router.delete("/violations/:id", authorize({ feature: "hr.violations", action: "
 });
 
 // ─── Single official letter with letterhead ──────────────
-router.get("/official-letters/:id", authorize({ feature: "hr", action: "view" }), async (req, res) => {
+router.get("/official-letters/:id", authorize({ feature: "hr.organization", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -4510,7 +4510,7 @@ router.get("/official-letters/:id", authorize({ feature: "hr", action: "view" })
 });
 
 // ─── Official letters PATCH/DELETE ──────────────────────
-router.patch("/official-letters/:id", authorize({ feature: "hr", action: "update" }), async (req, res) => {
+router.patch("/official-letters/:id", authorize({ feature: "hr.organization", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     if (!HR_APPROVAL_ROLES.includes(scope.role)) {
@@ -4546,7 +4546,7 @@ router.patch("/official-letters/:id", authorize({ feature: "hr", action: "update
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.delete("/official-letters/:id", authorize({ feature: "hr", action: "delete" }), async (req, res) => {
+router.delete("/official-letters/:id", authorize({ feature: "hr.organization", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     if (!HR_ROLES.includes(scope.role)) {
@@ -4569,7 +4569,7 @@ router.delete("/official-letters/:id", authorize({ feature: "hr", action: "delet
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.patch("/official-letters/:id/approve", authorize({ feature: "hr", action: "update" }), async (req, res) => {
+router.patch("/official-letters/:id/approve", authorize({ feature: "hr.organization", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     if (!HR_APPROVAL_ROLES.includes(scope.role)) {
@@ -4692,7 +4692,7 @@ router.patch("/official-letters/:id/approve", authorize({ feature: "hr", action:
 });
 
 // ─── HR Stats ──────────────────────
-router.get("/stats", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/stats", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const [empCount] = await rawQuery<any>(
@@ -4742,7 +4742,7 @@ router.get("/deductions", authorize({ feature: "hr.payroll.runs", action: "list"
   } catch (_e) { logger.error(_e, "deductions query failed"); res.json({ data: [], total: 0 }); }
 });
 
-router.get("/onboarding-steps", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/onboarding-steps", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(
@@ -4757,7 +4757,7 @@ router.get("/onboarding-steps", authorize({ feature: "hr", action: "list" }), as
   } catch (e) { logger.error(e, "failed to load onboarding steps"); res.json({ data: [] }); }
 });
 
-router.put("/onboarding-steps", authorize({ feature: "hr", action: "update" }), async (req, res) => {
+router.put("/onboarding-steps", authorize({ feature: "hr.employees", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     if (!HR_ROLES.includes(scope.role)) {
@@ -4788,7 +4788,7 @@ router.put("/onboarding-steps", authorize({ feature: "hr", action: "update" }), 
 // IMPACT PREVIEW — preview the effects of HR actions before approval
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.post("/impact-preview/leave", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.post("/impact-preview/leave", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { employeeId, leaveTypeId, startDate, endDate, days } = zodParse(impactPreviewLeaveSchema.safeParse(req.body ?? {}));
@@ -4811,7 +4811,7 @@ router.post("/impact-preview/leave", authorize({ feature: "hr", action: "list" }
   } catch (err) { handleRouteError(err, res, "خطأ في حساب الأثر"); }
 });
 
-router.post("/impact-preview/termination", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.post("/impact-preview/termination", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { employeeId } = zodParse(impactPreviewTerminationSchema.safeParse(req.body ?? {}));
@@ -4833,7 +4833,7 @@ router.post("/impact-preview/termination", authorize({ feature: "hr", action: "l
   } catch (err) { handleRouteError(err, res, "خطأ في حساب الأثر"); }
 });
 
-router.post("/impact-preview/violation", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.post("/impact-preview/violation", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { employeeId, deduction, severity } = zodParse(impactPreviewViolationSchema.safeParse(req.body ?? {}));
@@ -4859,7 +4859,7 @@ router.post("/impact-preview/violation", authorize({ feature: "hr", action: "lis
 // EMPLOYEE OPERATIONAL STATUS — live state calculation
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/employee-status/:employeeId", authorize({ feature: "hr", action: "view" }), async (req, res) => {
+router.get("/employee-status/:employeeId", authorize({ feature: "hr.employees", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { employeeId } = req.params;
@@ -5054,7 +5054,7 @@ async function recomputeSummary(cycleId: number, companyId: number, employeeId: 
 }
 
 // GET /hr/evaluation-cycles — list cycles (scoped by role)
-router.get("/evaluation-cycles", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/evaluation-cycles", authorize({ feature: "hr.performance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { employeeId } = req.query as any;
@@ -5110,7 +5110,7 @@ router.get("/evaluation-cycles", authorize({ feature: "hr", action: "list" }), a
 });
 
 // POST /hr/evaluation-cycles — start a new evaluation cycle (HR only)
-router.post("/evaluation-cycles", authorize({ feature: "hr", action: "create" }), async (req, res): Promise<any> => {
+router.post("/evaluation-cycles", authorize({ feature: "hr.performance", action: "create" }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     if (!isHR(scope)) {
@@ -5194,7 +5194,7 @@ router.post("/evaluation-cycles", authorize({ feature: "hr", action: "create" })
 });
 
 // GET /hr/evaluation-cycles/:id — get cycle details (access-controlled)
-router.get("/evaluation-cycles/:id", authorize({ feature: "hr", action: "view" }), async (req, res): Promise<any> => {
+router.get("/evaluation-cycles/:id", authorize({ feature: "hr.performance", action: "view" }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const cycleId = parseId(req.params.id, "id");
@@ -5294,7 +5294,7 @@ router.get("/evaluation-cycles/:id", authorize({ feature: "hr", action: "view" }
 });
 
 // GET /hr/evaluation-cycles/:id/system-report — get auto-generated report
-router.get("/evaluation-cycles/:id/system-report", authorize({ feature: "hr", action: "list" }), async (req, res): Promise<any> => {
+router.get("/evaluation-cycles/:id/system-report", authorize({ feature: "hr.performance", action: "list" }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const cycleId = parseId(req.params.id, "id");
@@ -5363,7 +5363,7 @@ router.get("/evaluation-cycles/:id/system-report", authorize({ feature: "hr", ac
 
 // POST /hr/evaluation-cycles/:id/peer-evaluation — submit manager/peer review
 // Evaluator identity is derived from the authenticated session (scope.employeeId), NOT the request body
-router.post("/evaluation-cycles/:id/peer-evaluation", authorize({ feature: "hr", action: "create" }), async (req, res): Promise<any> => {
+router.post("/evaluation-cycles/:id/peer-evaluation", authorize({ feature: "hr.performance", action: "create" }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const cycleId = parseId(req.params.id, "id");
@@ -5451,7 +5451,7 @@ router.post("/evaluation-cycles/:id/peer-evaluation", authorize({ feature: "hr",
 });
 
 // POST /hr/evaluation-cycles/:id/upward-review — anonymous upward review (employee rates manager)
-router.post("/evaluation-cycles/:id/upward-review", authorize({ feature: "hr", action: "create" }), async (req, res): Promise<any> => {
+router.post("/evaluation-cycles/:id/upward-review", authorize({ feature: "hr.performance", action: "create" }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const cycleId = parseId(req.params.id, "id");
@@ -5550,7 +5550,7 @@ router.post("/evaluation-cycles/:id/upward-review", authorize({ feature: "hr", a
 });
 
 // GET /hr/evaluation-cycles/:id/summary — get 360 summary
-router.get("/evaluation-cycles/:id/summary", authorize({ feature: "hr", action: "list" }), async (req, res): Promise<any> => {
+router.get("/evaluation-cycles/:id/summary", authorize({ feature: "hr.performance", action: "list" }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const cycleId = parseId(req.params.id, "id");
@@ -5687,7 +5687,7 @@ router.get("/employees/:id/evaluation-history", authorize({ feature: "hr.employe
 });
 
 // GET /hr/upward-reviews/manager/:managerId — aggregated upward reviews for a manager (HR only)
-router.get("/upward-reviews/manager/:managerId", authorize({ feature: "hr", action: "view" }), async (req, res): Promise<any> => {
+router.get("/upward-reviews/manager/:managerId", authorize({ feature: "hr.performance", action: "view" }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const managerId = parseId(req.params.managerId, "managerId");
@@ -5734,7 +5734,7 @@ router.get("/upward-reviews/manager/:managerId", authorize({ feature: "hr", acti
   } catch (err) { handleRouteError(err, res, "خطأ في جلب التقييمات العكسية"); }
 });
 
-router.get("/delegations", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/delegations", authorize({ feature: "hr.organization", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -5752,7 +5752,7 @@ router.get("/delegations", authorize({ feature: "hr", action: "list" }), async (
   } catch (err) { logger.error(err, "delegations query failed"); res.json({ data: [], total: 0 }); }
 });
 
-router.post("/delegations", authorize({ feature: "hr", action: "approve" }), async (req, res) => {
+router.post("/delegations", authorize({ feature: "hr.organization", action: "approve" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { delegateId, scope: delegationScope, reason, startDate, endDate } = zodParse(delegationSchema.safeParse(req.body));
@@ -5812,7 +5812,7 @@ router.post("/delegations", authorize({ feature: "hr", action: "approve" }), asy
 // PUBLIC HOLIDAYS — تقويم الإجازات الرسمية
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/public-holidays", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/public-holidays", authorize({ feature: "hr.organization", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { year } = req.query as any;
@@ -5827,7 +5827,7 @@ router.get("/public-holidays", authorize({ feature: "hr", action: "list" }), asy
   } catch (err) { handleRouteError(err, res, "Public holidays error:"); }
 });
 
-router.post("/public-holidays", authorize({ feature: "hr", action: "create" }), async (req, res) => {
+router.post("/public-holidays", authorize({ feature: "hr.organization", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     if (!HR_ROLES.includes(scope.role)) {
@@ -5853,7 +5853,7 @@ router.post("/public-holidays", authorize({ feature: "hr", action: "create" }), 
   } catch (err) { handleRouteError(err, res, "Create holiday error:"); }
 });
 
-router.patch("/public-holidays/:id", authorize({ feature: "hr", action: "update" }), async (req, res) => {
+router.patch("/public-holidays/:id", authorize({ feature: "hr.organization", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     if (!HR_ROLES.includes(scope.role)) {
@@ -5889,7 +5889,7 @@ router.patch("/public-holidays/:id", authorize({ feature: "hr", action: "update"
 });
 
 // Check if a date is a public holiday
-router.get("/public-holidays/check", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/public-holidays/check", authorize({ feature: "hr.organization", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { date } = req.query as any;
@@ -5902,7 +5902,7 @@ router.get("/public-holidays/check", authorize({ feature: "hr", action: "list" }
   } catch (err) { handleRouteError(err, res, "Check holiday error:"); }
 });
 
-router.delete("/public-holidays/:id", authorize({ feature: "hr", action: "delete" }), async (req, res) => {
+router.delete("/public-holidays/:id", authorize({ feature: "hr.organization", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     if (!HR_ROLES.includes(scope.role)) {
@@ -6463,7 +6463,7 @@ router.get("/gratuity/:employeeId", authorize({ feature: "hr.exit", action: "vie
 // then 1/12 afterwards). Idempotent per period via the JE ref check.
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.post("/accruals/monthly", authorize({ feature: "hr", action: "update" }), async (req, res) => {
+router.post("/accruals/monthly", authorize({ feature: "hr.payroll", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { period } = zodParse(monthlyAccrualsSchema.safeParse(req.body ?? {}));
@@ -6595,7 +6595,7 @@ router.post("/accruals/monthly", authorize({ feature: "hr", action: "update" }),
 });
 
 // Preview accruals without posting
-router.get("/accruals/preview", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/accruals/preview", authorize({ feature: "hr.payroll", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const period = (req.query.period as string) || currentPeriod();
@@ -6914,7 +6914,7 @@ router.get("/expiring-documents", authorize({ feature: "hr.employees", action: "
 // COMPANY DOCUMENTS — وثائق المنشأة (سجل تجاري، رخصة بلدية، غرفة تجارية)
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/company-documents", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/company-documents", authorize({ feature: "hr.organization", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { page = "1", limit: lim = "50" } = req.query as any;
@@ -6934,7 +6934,7 @@ router.get("/company-documents", authorize({ feature: "hr", action: "list" }), a
   } catch (err) { handleRouteError(err, res, "Company documents error:"); }
 });
 
-router.post("/company-documents", authorize({ feature: "hr", action: "create" }), async (req, res) => {
+router.post("/company-documents", authorize({ feature: "hr.organization", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(companyDocumentSchema.safeParse(req.body)) as any;
@@ -6962,7 +6962,7 @@ router.post("/company-documents", authorize({ feature: "hr", action: "create" })
 // EMPLOYEE DOCUMENTS — وثائق الموظف الإضافية (رخصة قيادة، شهادات، إلخ)
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/employee-documents", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/employee-documents", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { employeeId, page = "1", limit: lim = "50" } = req.query as any;
@@ -7005,7 +7005,7 @@ router.get("/employee-documents", authorize({ feature: "hr", action: "list" }), 
   } catch (err) { handleRouteError(err, res, "Employee documents error:"); }
 });
 
-router.post("/employee-documents", authorize({ feature: "hr", action: "create" }), async (req, res) => {
+router.post("/employee-documents", authorize({ feature: "hr.employees", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(employeeDocumentSchema.safeParse(req.body)) as any;
@@ -7034,7 +7034,7 @@ router.post("/employee-documents", authorize({ feature: "hr", action: "create" }
 // Excuse Requests (استئذان خروج مبكر / تأخر)
 // ═══════════════════════════════════════════════════════════════════════════
 
-router.get("/excuse-requests", authorize({ feature: "hr", action: "list" }), async (req, res) => {
+router.get("/excuse-requests", authorize({ feature: "hr.attendance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, month } = req.query as any;
@@ -7059,7 +7059,7 @@ router.get("/excuse-requests", authorize({ feature: "hr", action: "list" }), asy
   } catch (err) { handleRouteError(err, res, "List excuse requests error:"); }
 });
 
-router.get("/excuse-requests/:id", authorize({ feature: "hr", action: "view" }), async (req, res) => {
+router.get("/excuse-requests/:id", authorize({ feature: "hr.attendance", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -7077,7 +7077,7 @@ router.get("/excuse-requests/:id", authorize({ feature: "hr", action: "view" }),
   } catch (err) { handleRouteError(err, res, "Get excuse request detail error:"); }
 });
 
-router.post("/excuse-requests", authorize({ feature: "hr", action: "create" }), async (req, res) => {
+router.post("/excuse-requests", authorize({ feature: "hr.attendance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { assignmentId, excuseDate, excuseType, startTime, endTime, estimatedMinutes, reason } = zodParse(excuseRequestSchema.safeParse(req.body));
@@ -7117,7 +7117,7 @@ router.post("/excuse-requests", authorize({ feature: "hr", action: "create" }), 
   } catch (err) { handleRouteError(err, res, "Create excuse request error:"); }
 });
 
-router.patch("/excuse-requests/:id/approve", authorize({ feature: "hr", action: "update" }), async (req, res) => {
+router.patch("/excuse-requests/:id/approve", authorize({ feature: "hr.attendance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const excuseId = parseId(req.params.id, "id");

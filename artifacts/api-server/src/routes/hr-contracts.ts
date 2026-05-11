@@ -241,7 +241,7 @@ contractsRouter.post("/:id/submit", authorize({ feature: "hr.contracts", action:
 });
 
 // ── Approve contract ──
-contractsRouter.post("/:id/approve", authorize({ feature: "hr", action: "approve" }), async (req, res) => {
+contractsRouter.post("/:id/approve", authorize({ feature: "hr.contracts", action: "approve" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -272,7 +272,7 @@ contractsRouter.post("/:id/approve", authorize({ feature: "hr", action: "approve
 });
 
 // ── Reject contract ──
-contractsRouter.post("/:id/reject", authorize({ feature: "hr", action: "approve" }), async (req, res) => {
+contractsRouter.post("/:id/reject", authorize({ feature: "hr.contracts", action: "approve" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -304,7 +304,7 @@ contractsRouter.post("/:id/reject", authorize({ feature: "hr", action: "approve"
 });
 
 // ─�� Sign by company ──
-contractsRouter.post("/:id/sign-company", authorize({ feature: "hr", action: "approve" }), async (req, res) => {
+contractsRouter.post("/:id/sign-company", authorize({ feature: "hr.contracts", action: "approve" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

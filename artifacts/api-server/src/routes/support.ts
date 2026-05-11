@@ -709,7 +709,7 @@ router.delete("/tickets/:id", authorize({ feature: "support.tickets", action: "d
   } catch (err) { handleRouteError(err, res, "Delete ticket error:"); }
 });
 
-router.get("/replies", authorize({ feature: "support", action: "list" }), async (req, res) => {
+router.get("/replies", authorize({ feature: "support.tickets", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -740,7 +740,7 @@ router.get("/replies", authorize({ feature: "support", action: "list" }), async 
   } catch (err) { handleRouteError(err, res, "Support replies error:"); }
 });
 
-router.get("/stats", authorize({ feature: "support", action: "list" }), async (req, res) => {
+router.get("/stats", authorize({ feature: "support.tickets", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;

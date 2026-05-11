@@ -8,7 +8,7 @@ import { Router } from "express";
 import { HR_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 
 // Local row shapes — hr_overtime_requests not in @workspace/db schema.
 
@@ -170,7 +170,7 @@ router.get("/overtime", authorize({ feature: "hr.overtime", action: "list" }), a
       [scope.companyId]
     );
 
-    res.json({ data, stats: stats ?? {}, total: data.length });
+    res.json(maskFields(req, { data, stats: stats ?? {}, total: data.length }));
   } catch (err) {
     handleRouteError(err, res, "خطأ في قراءة طلبات الوقت الإضافي");
   }
@@ -251,7 +251,7 @@ router.get("/overtime/:id", authorize({ feature: "hr.overtime", action: "view" }
       [id, scope.companyId]
     );
     if (!item) throw new NotFoundError("طلب الوقت الإضافي غير موجود");
-    res.json(item);
+    res.json(maskFields(req, item));
   } catch (err) {
     handleRouteError(err, res, "خطأ في قراءة تفاصيل الطلب");
   }

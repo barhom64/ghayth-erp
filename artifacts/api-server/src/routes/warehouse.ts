@@ -1002,7 +1002,7 @@ router.post("/categories", authorize({ feature: "warehouse.inventory", action: "
   } catch (err) { handleRouteError(err, res, "Create category error:"); }
 });
 
-router.get("/suppliers", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
+router.get("/suppliers", authorize({ feature: "warehouse.inventory", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { page = "1", limit: lim = "50", search, status } = req.query as any;
@@ -1028,7 +1028,7 @@ router.get("/suppliers", authorize({ feature: "warehouse", action: "list" }), as
   } catch (err) { handleRouteError(err, res, "Suppliers error:"); }
 });
 
-router.get("/suppliers/:id", authorize({ feature: "warehouse", action: "view" }), async (req, res) => {
+router.get("/suppliers/:id", authorize({ feature: "warehouse.inventory", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1041,7 +1041,7 @@ router.get("/suppliers/:id", authorize({ feature: "warehouse", action: "view" })
   } catch (err) { handleRouteError(err, res, "Supplier detail error:"); }
 });
 
-router.post("/suppliers", authorize({ feature: "warehouse", action: "create" }), async (req, res) => {
+router.post("/suppliers", authorize({ feature: "warehouse.inventory", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createSupplierSchema.safeParse(req.body));
@@ -1161,7 +1161,7 @@ router.delete("/categories/:id", authorize({ feature: "warehouse.inventory", act
   } catch (err) { handleRouteError(err, res, "Delete category error:"); }
 });
 
-router.patch("/suppliers/:id", authorize({ feature: "warehouse", action: "update" }), async (req, res) => {
+router.patch("/suppliers/:id", authorize({ feature: "warehouse.inventory", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1198,7 +1198,7 @@ router.patch("/suppliers/:id", authorize({ feature: "warehouse", action: "update
   } catch (err) { handleRouteError(err, res, "Update supplier error:"); }
 });
 
-router.delete("/suppliers/:id", authorize({ feature: "warehouse", action: "delete" }), async (req, res) => {
+router.delete("/suppliers/:id", authorize({ feature: "warehouse.inventory", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1223,7 +1223,7 @@ router.delete("/suppliers/:id", authorize({ feature: "warehouse", action: "delet
   } catch (err) { handleRouteError(err, res, "Delete supplier error:"); }
 });
 
-router.get("/stats", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
+router.get("/stats", authorize({ feature: "warehouse.inventory", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
