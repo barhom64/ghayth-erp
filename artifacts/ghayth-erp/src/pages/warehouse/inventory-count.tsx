@@ -16,6 +16,16 @@ import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { KpiGrid } from "@/components/shared/kpi-card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const STATUS_OPTIONS = [
   { value: "draft", label: "مسودة" },
@@ -29,6 +39,11 @@ export default function InventoryCountPage() {
   const [physicalCounts, setPhysicalCounts] = useState<Record<string, string>>({});
   const [form, setForm] = useState({ countDate: new Date().toISOString().split("T")[0], notes: "", warehouseLocation: "" });
   const [filters, setFilters] = useFilters();
+  // Tracks the count being approved. Replaces a native window.confirm()
+  // that blocked the event loop and ignored RTL/dark mode. Approval
+  // is a destructive operation (updates inventory directly) so it
+  // deserves a proper confirmation surface.
+  const [approveTargetId, setApproveTargetId] = useState<number | null>(null);
 
   const { data, refetch } = useApiQuery<any>(["inventory-counts"], "/warehouse/inventory-counts");
   const counts = asList(data?.data || data);
@@ -69,8 +84,7 @@ export default function InventoryCountPage() {
     } catch (e: any) { toast({ title: e.message, variant: "destructive" }); }
   };
 
-  const handleApprove = async (countId: number) => {
-    if (!confirm("اعتماد الجرد وتحديث المخزون تلقائياً؟")) return;
+  const confirmApprove = async (countId: number) => {
     try {
       const res = await apiFetch<any>(`/warehouse/inventory-counts/${countId}/approve`, { method: "POST", body: JSON.stringify({}) });
       if (res?.warning) {
@@ -186,7 +200,7 @@ export default function InventoryCountPage() {
               size="sm"
               variant="outline"
               className="h-7 px-2 text-green-700 hover:bg-green-50"
-              onClick={(e) => { e.stopPropagation(); handleApprove(row.id); }}
+              onClick={(e) => { e.stopPropagation(); setApproveTargetId(row.id); }}
             >
               <CheckCircle className="w-3.5 h-3.5 me-1" /> اعتماد
             </Button>
@@ -394,6 +408,35 @@ export default function InventoryCountPage() {
         renderRowExtras={renderRowExtras}
         onRowClick={(row) => loadItems(row.id)}
       />
+
+      <AlertDialog
+        open={approveTargetId !== null}
+        onOpenChange={(next) => { if (!next) setApproveTargetId(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>اعتماد جلسة الجرد</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيؤدي اعتماد الجرد إلى تحديث رصيد المخزون تلقائيًا وفق العدّ الفعلي.
+              لا يمكن التراجع عن هذا الإجراء.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setApproveTargetId(null)}>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (approveTargetId != null) {
+                  const id = approveTargetId;
+                  setApproveTargetId(null);
+                  confirmApprove(id);
+                }
+              }}
+            >
+              اعتماد
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageShell>
   );
 }
