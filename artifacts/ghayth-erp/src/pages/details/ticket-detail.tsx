@@ -15,6 +15,7 @@ import { ApprovalActions } from "@/components/approval-actions";
 import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 export default function TicketDetail() {
   const [, params] = useRoute("/support/:id");
@@ -25,6 +26,7 @@ export default function TicketDetail() {
   const [newReply, setNewReply] = useState("");
   const [sending, setSending] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("support_ticket", id ?? 0);
 
   const { data: ticket, isLoading, isError, error, refetch } = useApiQuery<any>(["ticket-detail", id || ""], `/support/tickets/${id}`, !!id);
 
@@ -206,6 +208,8 @@ export default function TicketDetail() {
       onRetry={refetch}
       createdAt={ticket?.createdAt}
       updatedAt={ticket?.updatedAt}
+      extraTabs={registryExtraTabs}
+      hideTabs={registryHideTabs}
       overview={overview}
       actions={
         <div className="flex items-center gap-2">

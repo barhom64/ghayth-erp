@@ -10,6 +10,7 @@ import { Edit, Package, AlertTriangle } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 /**
  * WarehouseProductDetail — unified detail page for a single warehouse product.
@@ -39,6 +40,7 @@ export default function WarehouseProductDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/warehouse/products/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("warehouse_product", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["warehouse-product", String(id)],
@@ -266,6 +268,8 @@ export default function WarehouseProductDetail() {
       relatedEntities={relatedEntities}
       entityType="warehouse-product"
       entityId={id ?? 0}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       overview={overview}
       isLoading={isLoading}
       error={error}
