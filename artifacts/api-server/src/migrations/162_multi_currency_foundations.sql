@@ -1,4 +1,4 @@
--- 153_multi_currency_foundations.sql
+-- 162_multi_currency_foundations.sql
 -- Foundations for multi-currency in the GL — Week 1 of the plan in
 -- docs/MULTI_CURRENCY_DESIGN.md. The fx_rates table + invoices/PO
 -- exchangeRate columns already exist (created inline in

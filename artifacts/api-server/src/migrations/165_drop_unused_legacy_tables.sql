@@ -1,4 +1,4 @@
--- 156_drop_unused_legacy_tables.sql
+-- 165_drop_unused_legacy_tables.sql
 -- Drop legacy tables that are not referenced by any code path on origin/main.
 --
 -- Verified 2026-05-09 via: grep across artifacts/api-server/src/,

@@ -1,4 +1,4 @@
--- 152_rbac_v2_role_templates.sql
+-- 161_rbac_v2_role_templates.sql
 --
 -- Seeds 5 useful role templates that companies can clone via the
 -- /rbac/v2/templates/:id/apply endpoint. Templates live as
