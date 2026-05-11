@@ -26,6 +26,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
 import { EntityObligations } from "@/components/shared/entity-obligations";
 import { DetailPageLayout, type DetailStatus } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import {
   useDetailEditDelete,
   DetailActionButtons,
@@ -166,6 +167,8 @@ export default function InvoiceDetailPage() {
   const handleZatcaSubmit = () => {
     zatcaMut.mutate({});
   };
+
+  const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("invoice", id || "");
 
   const editDelete = useDetailEditDelete({
     entityLabel: "الفاتورة",
@@ -637,6 +640,8 @@ export default function InvoiceDetailPage() {
       onRetry={refetch}
       actions={actions}
       overview={overview}
+      extraTabs={registryExtraTabs}
+      hideTabs={registryHideTabs}
     />
   );
 }

@@ -1409,6 +1409,57 @@ router.get("/system-registry/coverage", authorize({ feature: "admin", action: "l
   } catch (err) { handleRouteError(err, res, "Coverage analysis error:"); }
 });
 
+router.get("/system-registry/notifications", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
+  try {
+    const byDomain: Record<string, Array<{ entityId: string; entityLabel: string; notifications: string[] }>> = {};
+    for (const entity of ENTITY_REGISTRY) {
+      if (entity.notifications.length === 0) continue;
+      if (!byDomain[entity.domain]) byDomain[entity.domain] = [];
+      byDomain[entity.domain].push({
+        entityId: entity.id,
+        entityLabel: entity.label,
+        notifications: entity.notifications,
+      });
+    }
+    const totalTypes = ENTITY_REGISTRY.reduce((s, e) => s + e.notifications.length, 0);
+    const entitiesWithNotifications = ENTITY_REGISTRY.filter(e => e.notifications.length > 0).length;
+    res.json({ byDomain, totalTypes, entitiesWithNotifications, totalEntities: ENTITY_REGISTRY.length });
+  } catch (err) { handleRouteError(err, res, "Notification registry error:"); }
+});
+
+router.get("/system-registry/reports", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
+  try {
+    const byDomain: Record<string, Array<{ entityId: string; entityLabel: string; reports: string[] }>> = {};
+    for (const entity of ENTITY_REGISTRY) {
+      if (entity.reports.length === 0) continue;
+      if (!byDomain[entity.domain]) byDomain[entity.domain] = [];
+      byDomain[entity.domain].push({
+        entityId: entity.id,
+        entityLabel: entity.label,
+        reports: entity.reports,
+      });
+    }
+    const totalReports = ENTITY_REGISTRY.reduce((s, e) => s + e.reports.length, 0);
+    const entitiesWithReports = ENTITY_REGISTRY.filter(e => e.reports.length > 0).length;
+    res.json({ byDomain, totalReports, entitiesWithReports, totalEntities: ENTITY_REGISTRY.length });
+  } catch (err) { handleRouteError(err, res, "Report registry error:"); }
+});
+
+router.get("/system-registry/print-templates", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
+  try {
+    const templates = ENTITY_REGISTRY
+      .filter(e => e.print?.hasTemplate)
+      .map(e => ({
+        entityId: e.id,
+        entityLabel: e.label,
+        domain: e.domain,
+        templateKey: e.print!.templateKey,
+        detailRoute: e.routes.detail,
+      }));
+    res.json({ templates, total: templates.length });
+  } catch (err) { handleRouteError(err, res, "Print templates error:"); }
+});
+
 router.get("/system-registry/actions", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;

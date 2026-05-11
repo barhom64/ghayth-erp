@@ -10,6 +10,7 @@ import { Edit, ClipboardCheck } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
   planned: "مخطط",
@@ -52,6 +53,7 @@ export default function AuditDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/governance/audits/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("audit", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["audit", String(id)],
@@ -240,6 +242,8 @@ export default function AuditDetail() {
       isLoading={isLoading}
       error={error}
       onRetry={refetch}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       actions={
         <>
           {audit && (

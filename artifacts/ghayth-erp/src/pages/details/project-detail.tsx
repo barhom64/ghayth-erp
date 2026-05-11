@@ -21,6 +21,7 @@ import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { cn } from "@/lib/utils";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -65,6 +66,7 @@ export default function ProjectDetail() {
   const [showCostForm, setShowCostForm] = useState(false);
   const [costForm, setCostForm] = useState({ description: "", amount: "", category: "labor", costDate: "" });
   const [closingProject, setClosingProject] = useState(false);
+  const { hideTabs: registryHideTabs } = useRegistryTabs("project", id ?? 0);
 
   const { data: project, isLoading, isError, error } = useApiQuery<any>(["project-detail", id || ""], `/projects/${id}`, !!id);
   const { data: risksResp } = useApiQuery<any>(["project-risks", id || ""], `/projects/${id}/risks`, !!id);
@@ -641,6 +643,7 @@ export default function ProjectDetail() {
      
       createdAt={project?.createdAt}
       updatedAt={project?.updatedAt}
+      hideTabs={registryHideTabs}
       overview={overview}
       actions={actions}
     />

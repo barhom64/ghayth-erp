@@ -14,6 +14,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 /**
  * ReceivableDetail — unified detail page for a single accounts-receivable
@@ -92,6 +93,7 @@ export default function ReceivableDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/finance/receivables/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("receivable", id ?? 0);
   const { toast } = useToast();
   const [previewAttachment, setPreviewAttachment] = useState<PreviewableAttachment | null>(null);
 
@@ -385,6 +387,8 @@ export default function ReceivableDetail() {
         relatedEntities={relatedEntities}
         entityType="receivable"
         entityId={id ?? 0}
+        extraTabs={extraTabs}
+        hideTabs={hideTabs}
         overview={overview}
         isLoading={isLoading}
         error={error}

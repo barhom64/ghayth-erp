@@ -23,6 +23,7 @@ import { CheckSquare, BookOpen } from "lucide-react";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const TABS = [
@@ -100,6 +101,7 @@ export default function UnitDetail() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
+  const { hideTabs: registryHideTabs } = useRegistryTabs("property_unit", id ?? 0);
 
   const { data: unit, isLoading, isError, error } = useApiQuery<any>(
     ["unit-detail", id || ""],
@@ -659,6 +661,7 @@ export default function UnitDetail() {
      
       createdAt={unit?.createdAt}
       updatedAt={unit?.updatedAt}
+      hideTabs={registryHideTabs}
       overview={overview}
       actions={actions}
     />

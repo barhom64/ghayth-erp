@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EntityObligations } from "@/components/shared/entity-obligations";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 
 const STEP_IMPACTS: Record<string, { icon: string; title: string; description: string; severity: "info" | "warning" | "danger" | "success" }> = {
@@ -218,6 +219,8 @@ export default function LegalCaseDetail() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [showAddSession, setShowAddSession] = useState(false);
+
+  const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("legal_case", Number(id));
 
   const { data: caseData, refetch, isLoading, error } = useApiQuery<any>(["legal-case", id], id ? `/legal/cases/${id}` : null);
 
@@ -440,7 +443,8 @@ export default function LegalCaseDetail() {
       onRetry={refetch}
       actions={actions}
       overview={overview}
-      extraTabs={extraTabs}
+      extraTabs={[...extraTabs, ...registryExtraTabs]}
+      hideTabs={registryHideTabs}
     />
   );
 }
