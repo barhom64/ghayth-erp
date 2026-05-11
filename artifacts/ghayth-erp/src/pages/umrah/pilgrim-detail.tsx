@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Save, User, Calendar, AlertTriangle } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_OPTIONS = [
   { value: "pending", label: "لم يصل" },
@@ -34,6 +35,7 @@ const STATUS_TONES: Record<string, "success" | "warning" | "info" | "muted" | "d
 export default function PilgrimDetail() {
   const [, params] = useRoute("/umrah/pilgrims/:id");
   const id = params?.id || "";
+  const { extraTabs, hideTabs } = useRegistryTabs("pilgrim", id ?? "");
   const { data, refetch, isLoading, isError } = useApiQuery<any>(["umrah-pilgrim", id], id ? `/umrah/pilgrims/${id}` : null);
   const [newStatus, setNewStatus] = useState("");
   const { toast } = useToast();
@@ -146,6 +148,8 @@ export default function PilgrimDetail() {
       status={data?.status ? { label: STATUS_OPTIONS.find(o => o.value === data.status)?.label || data.status, tone: STATUS_TONES[data.status] || "default" } : undefined}
       entityType="pilgrim"
       entityId={data?.id || id}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       isLoading={isLoading}
       error={isError ? true : undefined}
       onRetry={() => refetch()}

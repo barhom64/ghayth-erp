@@ -90,8 +90,8 @@ const FEATURES: Record<string, Partial<EntityFeatures>> = {
   driver:             {},
   "financial-request":{ financialImpact: true, approval: true },
   "fixed-asset":      { financialImpact: true },
-  legal_judgment:     {},
-  legal_session:      { attachments: false },
+  "legal-judgment":   {},
+  "legal-session":    { attachments: false },
   owner:              {},
   policy:             {},
   "property-maintenance": { financialImpact: true },
@@ -113,6 +113,8 @@ const FEATURES: Record<string, Partial<EntityFeatures>> = {
   "warehouse-supplier":{},
   "project-costing":  { financialImpact: true },
   "evaluation-360":   { attachments: false },
+  "hr-evaluation-360":{ attachments: false },
+  pilgrim:            {},
   transport:          {},
 };
 

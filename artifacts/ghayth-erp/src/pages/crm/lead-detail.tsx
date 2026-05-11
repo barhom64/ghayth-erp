@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { DetailPageLayout, type ExtraTab } from "@/components/shared/detail-page-layout";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import {
   User,
   Phone,
@@ -37,6 +38,7 @@ export default function LeadDetailPage() {
   const [, params] = useRoute("/crm/leads/:id");
   const [, navigate] = useLocation();
   const id = params?.id || "";
+  const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("crm_lead", id ?? "");
   const queryClient = useQueryClient();
 
   const { data: lead, isLoading, isError, refetch } = useApiQuery<any>(
@@ -242,7 +244,8 @@ export default function LeadDetailPage() {
       updatedAt={lead?.updatedAt}
       overview={overview}
       actions={actions}
-      extraTabs={extraTabs}
+      extraTabs={[...extraTabs, ...registryExtraTabs]}
+      hideTabs={registryHideTabs}
     />
   );
 }

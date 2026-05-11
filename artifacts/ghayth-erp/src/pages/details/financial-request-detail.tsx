@@ -13,6 +13,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "مسودة",
@@ -45,6 +46,7 @@ export default function FinancialRequestDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/finance/financial-requests/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("financial-request", id ?? 0);
   const { toast } = useToast();
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
@@ -242,6 +244,8 @@ export default function FinancialRequestDetail() {
       isLoading={isLoading}
       error={error}
       onRetry={refetch}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       actions={
         <>
           <EntityPrintButton

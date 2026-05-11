@@ -15,6 +15,7 @@ import { Edit, Phone, Mail, MapPin, Users, Wallet } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
   active: "نشط",
@@ -36,6 +37,7 @@ export default function UmrahAgentDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/umrah/agents/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("umrah-agent", id ?? 0);
 
   const { data: agent, isLoading, error, refetch } = useApiQuery<any>(
     ["umrah-agent", String(id)],
@@ -223,6 +225,8 @@ export default function UmrahAgentDetail() {
       relatedEntities={relatedEntities}
       entityType="umrah-agent"
       entityId={id ?? 0}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       overview={overview}
       isLoading={isLoading}
       error={error}

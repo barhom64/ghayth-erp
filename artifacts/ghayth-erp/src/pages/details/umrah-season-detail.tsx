@@ -15,6 +15,7 @@ import { Edit, Calendar, Users, TrendingUp } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
   upcoming: "قادم",
@@ -36,6 +37,7 @@ export default function UmrahSeasonDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/umrah/seasons/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("umrah-season", id ?? 0);
 
   const { data: season, isLoading, error, refetch } = useApiQuery<any>(
     ["umrah-season", String(id)],
@@ -203,6 +205,8 @@ export default function UmrahSeasonDetail() {
       updatedAt={season?.updatedAt}
       entityType="umrah-season"
       entityId={id ?? 0}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       overview={overview}
       isLoading={isLoading}
       error={error}

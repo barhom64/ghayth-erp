@@ -10,6 +10,7 @@ import { Edit, Box } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
   active: "نشط",
@@ -39,6 +40,7 @@ export default function FixedAssetDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/finance/fixed-assets/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("fixed-asset", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["fixed-asset", String(id)],
@@ -259,6 +261,8 @@ export default function FixedAssetDetail() {
       isLoading={isLoading}
       error={error}
       onRetry={refetch}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       actions={
         <>
           <EntityPrintButton
