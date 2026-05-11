@@ -9,7 +9,7 @@ import { LOAN_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import {
   handleRouteError,
   NotFoundError,
@@ -162,7 +162,7 @@ router.get("/loans", authorize({ feature: "hr.loans", action: "list" }), async (
       [scope.companyId]
     );
 
-    res.json({ data, stats: stats ?? {}, total: data.length });
+    res.json(maskFields(req, { data, stats: stats ?? {}, total: data.length }));
   } catch (err) {
     handleRouteError(err, res, "خطأ في قراءة السلف");
   }
@@ -216,7 +216,7 @@ router.get("/loans/:id", authorize({ feature: "hr.loans", action: "view" }), asy
       [loan.id, scope.companyId]
     );
 
-    res.json({ ...loan, installments });
+    res.json(maskFields(req, { ...loan, installments }));
   } catch (err) {
     handleRouteError(err, res, "خطأ في قراءة تفاصيل السلفة");
   }

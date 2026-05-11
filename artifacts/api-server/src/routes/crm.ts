@@ -987,7 +987,7 @@ router.get("/pipeline", authorize({ feature: "crm.leads", action: "list" }), asy
   } catch (err) { handleRouteError(err, res, "CRM pipeline error:"); }
 });
 
-router.post("/followup-check", authorize({ feature: "crm", action: "create" }), async (req, res) => {
+router.post("/followup-check", authorize({ feature: "crm.clients", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(followupCheckSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -1056,7 +1056,7 @@ router.post("/followup-check", authorize({ feature: "crm", action: "create" }), 
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.get("/analytics", authorize({ feature: "crm", action: "list" }), async (req, res) => {
+router.get("/analytics", authorize({ feature: "crm.clients", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -1095,7 +1095,7 @@ router.get("/analytics", authorize({ feature: "crm", action: "list" }), async (r
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.get("/stats", authorize({ feature: "crm", action: "list" }), async (req, res) => {
+router.get("/stats", authorize({ feature: "crm.clients", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;

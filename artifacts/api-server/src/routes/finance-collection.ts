@@ -10,7 +10,7 @@ import {
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { pushToDLQ } from "../lib/eventBus.js";
@@ -75,7 +75,7 @@ collectionRouter.get("/collection", authorize({ feature: "finance.collection", a
       };
     });
 
-    res.json(enriched);
+    res.json(maskFields(req, enriched));
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
   }
@@ -196,7 +196,7 @@ collectionRouter.get("/collection/:invoiceId/history", authorize({ feature: "fin
       [invoiceId, scope.companyId]
     );
 
-    res.json(history);
+    res.json(maskFields(req, history));
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
   }

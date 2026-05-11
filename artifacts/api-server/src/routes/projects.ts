@@ -200,7 +200,7 @@ const RISK_TRANSITIONS: Record<string, readonly string[]> = {
 };
 
 // Impact preview — shows exactly what will happen when the project is created
-router.post("/impact-preview", authorize({ feature: "projects", action: "list" }), async (req, res) => {
+router.post("/impact-preview", authorize({ feature: "projects.list", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(impactPreviewSchema.safeParse(req.body ?? {}));
@@ -313,7 +313,7 @@ router.post("/impact-preview", authorize({ feature: "projects", action: "list" }
   }
 });
 
-router.get("/", authorize({ feature: "projects", action: "list" }), async (req, res) => {
+router.get("/", authorize({ feature: "projects.list", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
@@ -390,7 +390,7 @@ function assertProjectMutable(project: any): void {
   }
 }
 
-router.post("/", authorize({ feature: "projects", action: "create" }), async (req, res) => {
+router.post("/", authorize({ feature: "projects.list", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(createProjectSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -582,7 +582,7 @@ router.get("/:id", authorize({ feature: "projects.list", action: "view", resourc
   } catch (err) { handleRouteError(err, res, "Get project error:"); }
 });
 
-router.patch("/:id", authorize({ feature: "projects", action: "update" }), async (req, res) => {
+router.patch("/:id", authorize({ feature: "projects.list", action: "update" }), async (req, res) => {
   try {
     const parsed = zodParse(updateProjectSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -750,7 +750,7 @@ router.delete("/:id", authorize({ feature: "projects.list", action: "delete", re
   } catch (err) { handleRouteError(err, res, "Delete project error:"); }
 });
 
-router.post("/:id/phases", authorize({ feature: "projects", action: "create" }), async (req, res) => {
+router.post("/:id/phases", authorize({ feature: "projects.tasks", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(createPhaseSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -791,7 +791,7 @@ router.post("/:id/phases", authorize({ feature: "projects", action: "create" }),
   } catch (err) { handleRouteError(err, res, "Create phase error:"); }
 });
 
-router.patch("/:id/phases/:phaseId/complete", authorize({ feature: "projects", action: "update" }), async (req, res) => {
+router.patch("/:id/phases/:phaseId/complete", authorize({ feature: "projects.tasks", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const projectId = parseId(req.params.id, "id");
@@ -873,7 +873,7 @@ router.patch("/:id/phases/:phaseId/complete", authorize({ feature: "projects", a
   } catch (err) { handleRouteError(err, res, "Complete phase error:"); }
 });
 
-router.post("/:id/tasks", authorize({ feature: "projects", action: "create" }), async (req, res) => {
+router.post("/:id/tasks", authorize({ feature: "projects.tasks", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(createTaskSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -1000,7 +1000,7 @@ router.post("/:id/tasks", authorize({ feature: "projects", action: "create" }), 
 // auto-billing on done-state, and obligation completion. Re-route
 // through `assertProjectAccess(existingTask.projectId, scope)` so the
 // per-role gates apply.
-router.patch("/tasks/:taskId", authorize({ feature: "projects", action: "update" }), async (req, res) => {
+router.patch("/tasks/:taskId", authorize({ feature: "projects.tasks", action: "update" }), async (req, res) => {
   try {
     const parsed = zodParse(updateTaskSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -1211,7 +1211,7 @@ router.patch("/tasks/:taskId", authorize({ feature: "projects", action: "update"
   } catch (err) { handleRouteError(err, res, "Update project task error:"); }
 });
 
-router.get("/stats/summary", authorize({ feature: "projects", action: "list" }), async (req, res) => {
+router.get("/stats/summary", authorize({ feature: "projects.list", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -1226,7 +1226,7 @@ router.get("/stats/summary", authorize({ feature: "projects", action: "list" }),
   } catch (err) { handleRouteError(err, res, "Projects stats error:"); }
 });
 
-router.get("/stats/overview", authorize({ feature: "projects", action: "list" }), async (req, res) => {
+router.get("/stats/overview", authorize({ feature: "projects.list", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -1323,7 +1323,7 @@ router.get("/stats/overview", authorize({ feature: "projects", action: "list" })
   } catch (err) { handleRouteError(err, res, "Projects overview error:"); }
 });
 
-router.get("/manager/:employeeId/workload", authorize({ feature: "projects", action: "list" }), async (req, res) => {
+router.get("/manager/:employeeId/workload", authorize({ feature: "projects.list", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const employeeId = parseId(req.params.employeeId, "employeeId");
@@ -1376,7 +1376,7 @@ router.get("/manager/:employeeId/workload", authorize({ feature: "projects", act
 // PROJECT MILESTONES — معالم المشروع
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/:id/milestones", authorize({ feature: "projects", action: "list" }), async (req, res) => {
+router.get("/:id/milestones", authorize({ feature: "projects.tasks", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const projectId = parseId(req.params.id, "id");
@@ -1389,7 +1389,7 @@ router.get("/:id/milestones", authorize({ feature: "projects", action: "list" })
   } catch (err) { handleRouteError(err, res, "Milestones error:"); }
 });
 
-router.post("/:id/milestones", authorize({ feature: "projects", action: "create" }), async (req, res) => {
+router.post("/:id/milestones", authorize({ feature: "projects.tasks", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(createMilestoneSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -1467,7 +1467,7 @@ router.post("/:id/milestones", authorize({ feature: "projects", action: "create"
 // driven invoice/delivery workflow on projects they shouldn't touch.
 // Re-route through `assertProjectAccess(existing.projectId, scope)`
 // after the company-scoped lookup so the same role gates apply.
-router.patch("/milestones/:milestoneId", authorize({ feature: "projects", action: "update" }), async (req, res) => {
+router.patch("/milestones/:milestoneId", authorize({ feature: "projects.tasks", action: "update" }), async (req, res) => {
   try {
     const parsed = zodParse(updateMilestoneSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -1543,7 +1543,7 @@ router.patch("/milestones/:milestoneId", authorize({ feature: "projects", action
 // PROJECT RISKS — مخاطر المشروع
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/:id/risks", authorize({ feature: "projects", action: "list" }), async (req, res) => {
+router.get("/:id/risks", authorize({ feature: "projects.tasks", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const projectId = parseId(req.params.id, "id");
@@ -1556,7 +1556,7 @@ router.get("/:id/risks", authorize({ feature: "projects", action: "list" }), asy
   } catch (err) { handleRouteError(err, res, "Project risks error:"); }
 });
 
-router.post("/:id/risks", authorize({ feature: "projects", action: "create" }), async (req, res) => {
+router.post("/:id/risks", authorize({ feature: "projects.tasks", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(createRiskSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -1612,7 +1612,7 @@ router.post("/:id/risks", authorize({ feature: "projects", action: "create" }), 
 // probability / impact / mitigation / status on risks across every
 // project in the company — including projects the caller's role does
 // not have read access to via `assertProjectAccess`.
-router.patch("/risks/:riskId", authorize({ feature: "projects", action: "update" }), async (req, res) => {
+router.patch("/risks/:riskId", authorize({ feature: "projects.tasks", action: "update" }), async (req, res) => {
   try {
     const parsed = zodParse(updateRiskSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -1699,7 +1699,7 @@ router.patch("/risks/:riskId", authorize({ feature: "projects", action: "update"
 // PROJECT RESOURCES — تخصيص موارد المشروع
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/:id/resources", authorize({ feature: "projects", action: "list" }), async (req, res) => {
+router.get("/:id/resources", authorize({ feature: "projects.list", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const projectId = parseId(req.params.id, "id");
@@ -1717,7 +1717,7 @@ router.get("/:id/resources", authorize({ feature: "projects", action: "list" }),
   } catch (err) { handleRouteError(err, res, "Project resources error:"); }
 });
 
-router.post("/:id/resources", authorize({ feature: "projects", action: "create" }), async (req, res) => {
+router.post("/:id/resources", authorize({ feature: "projects.list", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(createResourceSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -1770,7 +1770,7 @@ router.post("/:id/resources", authorize({ feature: "projects", action: "create" 
 // PROJECT COST TRACKING — تتبع التكاليف الفعلية
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/:id/costs", authorize({ feature: "projects", action: "list" }), async (req, res) => {
+router.get("/:id/costs", authorize({ feature: "projects.list", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const projectId = parseId(req.params.id, "id");
@@ -1796,7 +1796,7 @@ router.get("/:id/costs", authorize({ feature: "projects", action: "list" }), asy
   } catch (err) { handleRouteError(err, res, "Project costs error:"); }
 });
 
-router.post("/:id/costs", authorize({ feature: "projects", action: "create" }), async (req, res) => {
+router.post("/:id/costs", authorize({ feature: "projects.list", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(createCostSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -1900,7 +1900,7 @@ router.post("/:id/costs", authorize({ feature: "projects", action: "create" }), 
 // after all costs have been recorded. Idempotent: if the project is already
 // completed, returns without posting a duplicate entry.
 // ─────────────────────────────────────────────────────────────────────────────
-router.post("/:id/close", authorize({ feature: "projects", action: "update" }), async (req, res) => {
+router.post("/:id/close", authorize({ feature: "projects.list", action: "update" }), async (req, res) => {
   try {
     const parsed = zodParse(closeProjectSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -2050,7 +2050,7 @@ router.post("/:id/close", authorize({ feature: "projects", action: "update" }), 
 // GANTT DATA — بيانات مخطط غانت
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/:id/gantt", authorize({ feature: "projects", action: "list" }), async (req, res) => {
+router.get("/:id/gantt", authorize({ feature: "projects.list", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const projectId = parseId(req.params.id, "id");
@@ -2109,7 +2109,7 @@ router.get("/:id/gantt", authorize({ feature: "projects", action: "list" }), asy
 // PROJECT-LINKED LETTERS — المراسلات المرتبطة بالمشروع
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/:id/letters", authorize({ feature: "projects", action: "list" }), async (req, res) => {
+router.get("/:id/letters", authorize({ feature: "projects.list", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const projectId = parseId(req.params.id, "id");
