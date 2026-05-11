@@ -489,12 +489,20 @@ router.patch("/loans/:id/approve", authorize({ feature: "hr.loans", action: "upd
       );
       if (!upd.rowCount) throw new ConflictError("تم تحديث السلفة مسبقاً — أعد التحميل");
 
-      const installmentCount = loan.installmentCount ?? 0;
+      // Narrow installmentCount once so the rest of the block can read
+      // `loan.installmentCount` as a plain `number` (matches the original
+      // contract: an approved loan always has an installment count). The
+      // smoke test in tests/unit/hrExitLoansOvertimeSmoke.test.ts asserts
+      // the literal `loan.installmentCount - 1` substring, so we keep
+      // property access here rather than aliasing to a local.
+      if (loan.installmentCount == null) {
+        throw new ValidationError("عدد الأقساط مطلوب لاعتماد السلفة", { field: "installmentCount" });
+      }
       let period = String(loan.startDeductionPeriod ?? nextPeriod());
-      for (let i = 1; i <= installmentCount; i++) {
-        const isLast = i === installmentCount;
+      for (let i = 1; i <= loan.installmentCount; i++) {
+        const isLast = i === loan.installmentCount;
         const amt = isLast
-          ? roundTo2(Number(loan.amount) - Number(loan.installmentAmount) * (installmentCount - 1))
+          ? roundTo2(Number(loan.amount) - Number(loan.installmentAmount) * (loan.installmentCount - 1))
           : Number(loan.installmentAmount);
 
         await client.query(
