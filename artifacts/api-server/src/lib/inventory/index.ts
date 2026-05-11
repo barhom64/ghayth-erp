@@ -69,3 +69,15 @@ export {
   buildCycleCountEntryInput,
   postCycleCountVarianceJournal,
 } from "./post-cycle-count-journal.js";
+
+// Lot lifecycle write-off → journal entry wiring
+export type {
+  LotWriteoffStatus,
+  LotWriteoffAccounts,
+  PostLotWriteoffOpts,
+  PostLotWriteoffOutcome,
+} from "./post-lot-writeoff-journal.js";
+export {
+  buildLotWriteoffEntryInput,
+  postLotWriteoffJournal,
+} from "./post-lot-writeoff-journal.js";
