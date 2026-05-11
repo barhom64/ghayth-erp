@@ -32,7 +32,7 @@ import {
   calculateAllForCompany,
 } from "../lib/umrahCommissionEngine.js";
 import { logger } from "../lib/logger.js";
-import { exportOfficialLetterPdf } from "../lib/pdfExport.js";
+import { exportOfficialLetterPdf, exportUmrahStatementPdf, exportUmrahDailyRunsheetPdf } from "../lib/pdfExport.js";
 
 const router = Router();
 
@@ -1196,6 +1196,27 @@ router.get("/statements/:subAgentId", authorize({ feature: "umrah", action: "vie
   } catch (err) { handleRouteError(err, res, "Generate statement"); }
 });
 
+// Printable Arabic PDF of the sub-agent statement. Always uses the detailed
+// shape since the summary version aggregates by month and is less useful as
+// a hand-off document. Streams as inline PDF for browser preview + Save.
+router.get("/statements/:subAgentId/pdf", authorize({ feature: "umrah", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { from, to } = req.query as any;
+    const subAgentId = parseId(req.params.subAgentId, "subAgentId");
+    const data = await generateStatement(
+      { companyId: scope.companyId, userId: scope.userId },
+      subAgentId,
+      "detailed",
+      from, to
+    );
+    const pdf = await exportUmrahStatementPdf(scope.companyId, subAgentId, data as any, { from, to });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="umrah-statement-${subAgentId}.pdf"`);
+    res.send(pdf);
+  } catch (err) { handleRouteError(err, res, "Statement PDF"); }
+});
+
 // ============================================================================
 // LETTERS — PDF rendering + dispatch (closes spec §14 dispatch gap)
 // ============================================================================
@@ -1289,6 +1310,54 @@ router.post("/letters/:id/dispatch", authorize({ feature: "umrah", action: "upda
 
     res.json({ id, status: "sent", dispatchedVia: body.dispatchedVia, sentAt: new Date().toISOString() });
   } catch (err) { handleRouteError(err, res, "Letter dispatch"); }
+});
+
+// ============================================================================
+// REPORTS — Daily run-sheet (arrivals + departures + overstays)
+// ============================================================================
+
+// Returns arrivals + departures for `date` (defaults to today, ISO yyyy-mm-dd)
+// + everyone currently overstaying. Used by ops to plan transport / hotel
+// allocations and chase overstays. Same payload also feeds the PDF endpoint.
+async function fetchDailyRunsheet(companyId: number, date: string) {
+  const baseSelect = `
+    SELECT p."nuskNumber", p."fullName", p.nationality,
+           g.name AS "groupName", sa.name AS "subAgentName",
+           p."entryPort", p."entryFlight", p."exitPort", p."exitFlight",
+           p."overstayDays"
+      FROM umrah_pilgrims p
+      LEFT JOIN umrah_groups g ON g.id = p."groupId"
+      LEFT JOIN umrah_sub_agents sa ON sa.id = p."subAgentId"
+     WHERE p."companyId" = $1 AND p."deletedAt" IS NULL`;
+
+  const [arrivals, departures, overstays] = await Promise.all([
+    rawQuery<any>(`${baseSelect} AND p."entryDate" = $2 ORDER BY g.name NULLS LAST, p."fullName"`, [companyId, date]),
+    rawQuery<any>(`${baseSelect} AND p."exitDate" = $2 ORDER BY g.name NULLS LAST, p."fullName"`, [companyId, date]),
+    rawQuery<any>(`${baseSelect} AND p.status IN ('overstayed','violated') AND p."overstayDays" > 0 ORDER BY p."overstayDays" DESC, p."fullName"`, [companyId]),
+  ]);
+
+  return { arrivals, departures, overstays };
+}
+
+router.get("/reports/daily-runsheet", authorize({ feature: "umrah", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const date = String((req.query.date as string) || new Date().toISOString().slice(0, 10));
+    const data = await fetchDailyRunsheet(scope.companyId, date);
+    res.json({ date, ...data });
+  } catch (err) { handleRouteError(err, res, "Daily run-sheet"); }
+});
+
+router.get("/reports/daily-runsheet/pdf", authorize({ feature: "umrah", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const date = String((req.query.date as string) || new Date().toISOString().slice(0, 10));
+    const data = await fetchDailyRunsheet(scope.companyId, date);
+    const pdf = await exportUmrahDailyRunsheetPdf(scope.companyId, date, data as any);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="umrah-runsheet-${date}.pdf"`);
+    res.send(pdf);
+  } catch (err) { handleRouteError(err, res, "Daily run-sheet PDF"); }
 });
 
 // ============================================================================
