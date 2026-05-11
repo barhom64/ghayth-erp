@@ -8,10 +8,78 @@ import { logger } from "../lib/logger.js";
 
 const router = Router();
 
+interface CronJobRow {
+  id: number;
+  name: string;
+  description: string | null;
+  schedule: string;
+  isActive: boolean;
+  lastRunAt: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+interface CronLogRow {
+  id: number;
+  companyId: number;
+  jobId: number;
+  status: string;
+  errorMessage: string | null;
+  durationMs: number | null;
+  createdAt: string;
+}
+
+interface NotificationStatsRow {
+  channel: string;
+  status: string;
+  count: string | number;
+}
+
+interface EventLogRow {
+  id: number;
+  companyId: number;
+  action: string;
+  entity: string | null;
+  entityId: number | null;
+  details: unknown;
+  userId: number | null;
+  createdAt: string;
+}
+
+interface ProactiveRuleRow {
+  id: number;
+  companyId: number;
+  module: string;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+interface AutomationLogRow {
+  id: number;
+  companyId: number;
+  automationType: string;
+  triggerReason: string | null;
+  actionTaken: string | null;
+  createdAt: string;
+}
+
+interface AutomationTotalRow { total: string | number }
+interface AutomationTypeAggRow { automationType: string; count: string | number }
+interface AutomationModuleAggRow { module: string | null; count: string | number }
+interface AutomationRecentRow {
+  automationType: string;
+  triggerReason: string | null;
+  actionTaken: string | null;
+  createdAt: string;
+}
+
 router.get("/cron-jobs", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(`SELECT * FROM cron_jobs ORDER BY name LIMIT 500`, []);
+    const rows = await rawQuery<CronJobRow>(`SELECT * FROM cron_jobs ORDER BY name LIMIT 500`, []);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Cron jobs error:"); }
 });
@@ -22,7 +90,7 @@ router.post("/cron-jobs/:id/toggle", authorize({ feature: "admin", action: "upda
     const id = parseId(req.params.id, "id");
     const { affectedRows } = await rawExecute(`UPDATE cron_jobs SET "isActive" = NOT "isActive" WHERE id=$1`, [id]);
     if (!affectedRows) throw new NotFoundError("المهمة غير موجودة");
-    const [row] = await rawQuery<any>(`SELECT * FROM cron_jobs WHERE id=$1`, [id]);
+    const [row] = await rawQuery<CronJobRow>(`SELECT * FROM cron_jobs WHERE id=$1`, [id]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "cron_jobs", entityId: id, after: { isActive: row?.isActive } }).catch((e) => logger.error(e, "automation background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "automation.cron_job.toggled", entity: "cron_jobs", entityId: id, details: JSON.stringify({ isActive: row?.isActive }) }).catch((e) => logger.error(e, "automation background task failed"));
     res.json(row);
@@ -33,7 +101,7 @@ router.post("/cron-jobs/:id/trigger", authorize({ feature: "admin", action: "upd
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [job] = await rawQuery<any>(`SELECT * FROM cron_jobs WHERE id=$1`, [id]);
+    const [job] = await rawQuery<CronJobRow>(`SELECT * FROM cron_jobs WHERE id=$1`, [id]);
     if (!job) throw new NotFoundError("المهمة غير موجودة");
 
     const result = await triggerJobByName(job.name);
@@ -56,7 +124,7 @@ router.get("/cron-logs", authorize({ feature: "admin", action: "list" }), async 
     const params: any[] = [scope.companyId];
     if (jobId) { params.push(Number(jobId) || 0); conditions.push(`"jobId" = $${params.length}`); }
     const where = conditions.join(" AND ");
-    const rows = await rawQuery<any>(`SELECT * FROM cron_logs WHERE ${where} ORDER BY "createdAt" DESC LIMIT 100`, params);
+    const rows = await rawQuery<CronLogRow>(`SELECT * FROM cron_logs WHERE ${where} ORDER BY "createdAt" DESC LIMIT 100`, params);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Cron logs error:"); }
 });
@@ -65,11 +133,11 @@ router.get("/notification-stats", authorize({ feature: "admin", action: "list" }
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<NotificationStatsRow>(
       `SELECT channel, status, COUNT(*) as count FROM notification_log WHERE "companyId"=$1 GROUP BY channel, status ORDER BY channel`,
       [cid]
     );
-    const [total] = await rawQuery<any>(`SELECT COUNT(*) as total FROM notification_log WHERE "companyId"=$1`, [cid]);
+    const [total] = await rawQuery<AutomationTotalRow>(`SELECT COUNT(*) as total FROM notification_log WHERE "companyId"=$1`, [cid]);
     res.json({ breakdown: rows, total: Number(total?.total || 0) });
   } catch (err) { handleRouteError(err, res, "Notification stats error:"); }
 });
@@ -84,9 +152,9 @@ router.get("/event-logs", authorize({ feature: "admin", action: "list" }), async
     const params: any[] = [scope.companyId];
     if (action) { params.push(action); conditions.push(`action = $${params.length}`); }
     const where = conditions.join(" AND ");
-    const [countRow] = await rawQuery<any>(`SELECT COUNT(*) AS total FROM event_logs WHERE ${where}`, params);
+    const [countRow] = await rawQuery<AutomationTotalRow>(`SELECT COUNT(*) AS total FROM event_logs WHERE ${where}`, params);
     params.push(pageLimit, pageOffset);
-    const rows = await rawQuery<any>(`SELECT * FROM event_logs WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
+    const rows = await rawQuery<EventLogRow>(`SELECT * FROM event_logs WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
     res.json({ data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset });
   } catch (err) { handleRouteError(err, res, "Event logs error:"); }
 });
@@ -94,7 +162,7 @@ router.get("/event-logs", authorize({ feature: "admin", action: "list" }), async
 router.get("/proactive-rules", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<ProactiveRuleRow>(
       `SELECT * FROM proactive_rules WHERE "companyId" = $1 ORDER BY module, name LIMIT 500`,
       [scope.companyId]
     );
@@ -110,7 +178,7 @@ router.post("/proactive-rules/:id/toggle", authorize({ feature: "admin", action:
       `UPDATE proactive_rules SET "isActive" = NOT "isActive" WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
     );
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<ProactiveRuleRow>(
       `SELECT * FROM proactive_rules WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
     );
@@ -132,10 +200,10 @@ router.get("/automation-logs", authorize({ feature: "admin", action: "list" }), 
     const params: any[] = [scope.companyId];
     if (type) { params.push(type); conditions.push(`"automationType" = $${params.length}`); }
     const where = conditions.join(" AND ");
-    const [countRow] = await rawQuery<any>(`SELECT COUNT(*) as total FROM automation_logs WHERE ${where}`, params);
+    const [countRow] = await rawQuery<AutomationTotalRow>(`SELECT COUNT(*) as total FROM automation_logs WHERE ${where}`, params);
     const total = Number(countRow?.total || 0);
     params.push(limit, offset);
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<AutomationLogRow>(
       `SELECT * FROM automation_logs WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
     );
@@ -147,23 +215,23 @@ router.get("/automation-stats", authorize({ feature: "admin", action: "list" }),
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [totalRow] = await rawQuery<any>(
+    const [totalRow] = await rawQuery<AutomationTotalRow>(
       `SELECT COUNT(*) as total FROM automation_logs WHERE "companyId" = $1`,
       [cid]
     );
-    const [todayRow] = await rawQuery<any>(
+    const [todayRow] = await rawQuery<AutomationTotalRow>(
       `SELECT COUNT(*) as total FROM automation_logs WHERE "companyId" = $1 AND "createdAt"::date = CURRENT_DATE`,
       [cid]
     );
-    const [weekRow] = await rawQuery<any>(
+    const [weekRow] = await rawQuery<AutomationTotalRow>(
       `SELECT COUNT(*) as total FROM automation_logs WHERE "companyId" = $1 AND "createdAt" >= CURRENT_DATE - INTERVAL '7 days'`,
       [cid]
     );
-    const byType = await rawQuery<any>(
+    const byType = await rawQuery<AutomationTypeAggRow>(
       `SELECT "automationType", COUNT(*) as count FROM automation_logs WHERE "companyId" = $1 GROUP BY "automationType" ORDER BY count DESC`,
       [cid]
     );
-    const byModule = await rawQuery<any>(
+    const byModule = await rawQuery<AutomationModuleAggRow>(
       `SELECT pr.module, COUNT(al.id) as count
        FROM automation_logs al
        LEFT JOIN proactive_rules pr ON pr.name = al."automationType"
@@ -171,7 +239,7 @@ router.get("/automation-stats", authorize({ feature: "admin", action: "list" }),
        GROUP BY pr.module ORDER BY count DESC`,
       [cid]
     );
-    const recent = await rawQuery<any>(
+    const recent = await rawQuery<AutomationRecentRow>(
       `SELECT "automationType", "triggerReason", "actionTaken", "createdAt"
        FROM automation_logs WHERE "companyId" = $1 ORDER BY "createdAt" DESC LIMIT 5`,
       [cid]

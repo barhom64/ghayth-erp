@@ -60,10 +60,10 @@ const ALLOWLIST: Allow[] = [
   },
   {
     file: "auth.ts",
-    line: 326,
+    line: 409,
     table: "employee_assignments",
     reason:
-      "Same refresh-token bootstrap flow as L296 — a second active-assignment lookup added by a later auth.ts edit. Tenant boundary is still the verified refresh token's employeeId, not scope.companyId.",
+      "Same refresh-token bootstrap flow as L326 — a second active-assignment lookup added by a later auth.ts edit. Tenant boundary is still the verified refresh token's employeeId, not scope.companyId.",
   },
   {
     file: "hr.ts",
