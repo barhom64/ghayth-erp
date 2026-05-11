@@ -5738,11 +5738,11 @@ router.get("/delegations", authorize({ feature: "hr.organization", action: "list
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT d.id, d."fromUserId" AS "delegatorId", d."toUserId" AS "delegateId", d.scope, d.reason, d.status, d."startDate", d."endDate", d."createdAt",
+      `SELECT d.id, d."delegatorId", d."delegateId", d.scope, d.reason, d.status, d."startDate", d."endDate", d."createdAt",
               e1.name AS "delegatorName", e2.name AS "delegateName"
        FROM delegations d
-       LEFT JOIN employees e1 ON e1.id = d."fromUserId"
-       LEFT JOIN employees e2 ON e2.id = d."toUserId"
+       LEFT JOIN employees e1 ON e1.id = d."delegatorId"
+       LEFT JOIN employees e2 ON e2.id = d."delegateId"
        WHERE d."companyId" = $1
        ORDER BY d."createdAt" DESC
        LIMIT 50`,

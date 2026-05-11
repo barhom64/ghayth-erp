@@ -2955,7 +2955,7 @@ async function umrahVisaExpiryAlerts(): Promise<string> {
   let alerted = 0;
   for (const c of companies) {
     const expiring = await rawQuery<any>(
-      `SELECT p.id, p."fullName", p."visaNumber", p."visaExpiry", g."groupName"
+      `SELECT p.id, p."fullName", p."visaNumber", p."visaExpiry", g.name AS "groupName"
        FROM umrah_pilgrims p
        LEFT JOIN umrah_groups g ON g.id = p."groupId"
        WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
