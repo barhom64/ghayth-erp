@@ -14,24 +14,89 @@ const preferencesSchema = z.object({
   enabled: z.boolean().optional(),
 });
 
+// Row shape for the per-user notifications list. Schema source-of-truth
+// is db/schema.sql; @workspace/db Drizzle definitions don't cover this
+// table yet.
+interface NotificationListRow {
+  id: number;
+  type: string;
+  title: string;
+  body?: string | null;
+  priority?: string | null;
+  isRead: boolean;
+  createdAt: string;
+  refType?: string | null;
+  refId?: number | null;
+  actionUrl?: string | null;
+}
+
+// Cursor mode shares the (createdAt, id) keyset pattern documented in
+// docs/CURSOR_PAGINATION.md and first rolled out on /admin/audit-logs.
+interface NotificationCursor { t: string; i: number }
+
+function encodeCursor(c: NotificationCursor): string {
+  return Buffer.from(JSON.stringify(c), "utf8").toString("base64url");
+}
+
+function decodeCursor(s: string): NotificationCursor | null {
+  try {
+    const raw = Buffer.from(s, "base64url").toString("utf8");
+    const obj = JSON.parse(raw) as Partial<NotificationCursor>;
+    if (typeof obj.t !== "string" || typeof obj.i !== "number") return null;
+    if (Number.isNaN(Date.parse(obj.t))) return null;
+    return { t: obj.t, i: obj.i };
+  } catch {
+    return null;
+  }
+}
+
 const router = Router();
 
 router.get("/", authorize({ feature: "notifications", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const page = Math.max(1, Number(req.query.page) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 50));
+    const cursor = typeof req.query.cursor === "string" ? req.query.cursor : undefined;
+
+    // ── Cursor mode (opt-in, non-breaking) ────────────────────────
+    if (cursor) {
+      const decoded = decodeCursor(cursor);
+      if (!decoded) {
+        res.status(400).json({ error: "cursor غير صالح" });
+        return;
+      }
+      const rows = await rawQuery<NotificationListRow>(
+        `SELECT id, type, title, body, priority, "isRead", "createdAt", "refType", "refId", "actionUrl"
+         FROM notifications
+         WHERE "assignmentId" = $1 AND "companyId" = $2
+           AND ("createdAt", id) < ($3::timestamptz, $4)
+         ORDER BY "createdAt" DESC, id DESC
+         LIMIT $5`,
+        [scope.activeAssignmentId, scope.companyId, decoded.t, decoded.i, pageSize + 1],
+      );
+      const hasMore = rows.length > pageSize;
+      const data = hasMore ? rows.slice(0, pageSize) : rows;
+      const last = data[data.length - 1];
+      const nextCursor = hasMore && last
+        ? encodeCursor({ t: String(last.createdAt), i: last.id })
+        : null;
+      res.json({ data, pageSize, cursor: nextCursor, hasMore });
+      return;
+    }
+
+    // ── Legacy page/limit mode ────────────────────────────────────
+    const page = Math.max(1, Number(req.query.page) || 1);
     const offset = (page - 1) * pageSize;
 
     const [[countRow], notifications] = await Promise.all([
       rawQuery<{ count: string }>(`SELECT COUNT(*) AS count FROM notifications WHERE "assignmentId" = $1 AND "companyId" = $2`, [scope.activeAssignmentId, scope.companyId]),
-      rawQuery<any>(
+      rawQuery<NotificationListRow>(
         `SELECT id, type, title, body, priority, "isRead", "createdAt", "refType", "refId", "actionUrl"
          FROM notifications
          WHERE "assignmentId" = $1 AND "companyId" = $2
-         ORDER BY "createdAt" DESC
+         ORDER BY "createdAt" DESC, id DESC
          LIMIT $3 OFFSET $4`,
-        [scope.activeAssignmentId, scope.companyId, pageSize, offset]
+        [scope.activeAssignmentId, scope.companyId, pageSize, offset],
       ),
     ]);
 
