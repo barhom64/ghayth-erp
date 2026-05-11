@@ -10,10 +10,12 @@
  *   - جرد دوري        → approved cycle counts where no line carries
  *                        adjustmentJournalEntryId yet
  *
- * Realised FX is NOT in the queue — its idempotency lives on the
- * caller (the helper doesn't stamp anything back today), so there's
- * no clean "pending" view. Operators trigger it from the invoice
- * settlement workflow directly.
+ * Realised FX renders as a HISTORY tab (not a pending queue): the
+ * realisation event is triggered from the invoice settlement
+ * workflow, not from this dashboard. The history reads from the
+ * `fx_realized_postings` audit table (#270), which now backs the
+ * helper's idempotency — same (invoiceId, paymentDate, settlementRate)
+ * triple is skipped on retry rather than silently double-booked.
  *
  * Each row has a "Post to GL" button that triggers the helper. The
  * outcome (`posted | draft | skipped | noop`) lands in a toast and
@@ -24,7 +26,15 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Send, AlertCircle, PackageX, Coins, RefreshCcw, ClipboardCheck } from "lucide-react";
+import {
+  Send,
+  AlertCircle,
+  PackageX,
+  Coins,
+  RefreshCcw,
+  ClipboardCheck,
+  History,
+} from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -72,6 +82,17 @@ interface CycleCountPendingRow {
   lineCount: string;
 }
 
+interface RealizedFxHistoryRow {
+  id: number;
+  invoiceId: number;
+  paymentDate: string;
+  settlementRate: string;
+  journalEntryId: number;
+  gainLoss: string;
+  postedBy: number | null;
+  postedAt: string;
+}
+
 interface PostOutcome {
   data: {
     status: "posted" | "draft" | "skipped" | "noop";
@@ -88,7 +109,7 @@ function describeOutcome(o: PostOutcome["data"]): string {
   return "تمت المعالجة";
 }
 
-type Tab = "mudad" | "lots" | "fx" | "cycle";
+type Tab = "mudad" | "lots" | "fx" | "cycle" | "realized";
 
 export default function GLPostingQueuePage() {
   const [tab, setTab] = useState<Tab>("mudad");
@@ -108,6 +129,10 @@ export default function GLPostingQueuePage() {
   const cycle = useApiQuery<{ data: CycleCountPendingRow[] }>(
     ["gl-helpers", "cycle-count", "pending"],
     "/finance/gl-helpers/cycle-count/pending",
+  );
+  const realized = useApiQuery<{ data: RealizedFxHistoryRow[] }>(
+    ["gl-helpers", "realized-fx", "history"],
+    "/finance/gl-helpers/realized-fx/history",
   );
 
   const postMudad = useApiMutation<PostOutcome, { id: number }>(
@@ -150,10 +175,16 @@ export default function GLPostingQueuePage() {
     },
   );
 
-  if (mudad.isLoading || lots.isLoading || fx.isLoading || cycle.isLoading) {
+  if (
+    mudad.isLoading || lots.isLoading || fx.isLoading ||
+    cycle.isLoading || realized.isLoading
+  ) {
     return <LoadingSpinner />;
   }
-  if (mudad.isError || lots.isError || fx.isError || cycle.isError) {
+  if (
+    mudad.isError || lots.isError || fx.isError ||
+    cycle.isError || realized.isError
+  ) {
     return <ErrorState />;
   }
 
@@ -161,6 +192,7 @@ export default function GLPostingQueuePage() {
   const lotRows = lots.data?.data ?? [];
   const fxRows = fx.data?.data ?? [];
   const cycleRows = cycle.data?.data ?? [];
+  const realizedRows = realized.data?.data ?? [];
 
   const mudadColumns: DataTableColumn<MudadPendingRow>[] = [
     {
@@ -376,13 +408,69 @@ export default function GLPostingQueuePage() {
     },
   ];
 
+  const realizedColumns: DataTableColumn<RealizedFxHistoryRow>[] = [
+    {
+      key: "id",
+      header: "#",
+      sortable: true,
+      className: "font-mono text-muted-foreground",
+      render: (r) => r.id,
+    },
+    {
+      key: "invoiceId",
+      header: "الفاتورة",
+      sortable: true,
+      className: "font-medium",
+      render: (r) => `#${r.invoiceId}`,
+    },
+    {
+      key: "paymentDate",
+      header: "تاريخ الدفع",
+      sortable: true,
+      className: "font-mono",
+      render: (r) => r.paymentDate,
+    },
+    {
+      key: "settlementRate",
+      header: "سعر التسوية",
+      render: (r) => Number(r.settlementRate).toFixed(6),
+    },
+    {
+      key: "gainLoss",
+      header: "ربح/خسارة",
+      sortable: true,
+      className: "font-semibold",
+      render: (r) => {
+        const v = Number(r.gainLoss);
+        return (
+          <span className={v >= 0 ? "text-emerald-600" : "text-red-600"}>
+            {formatCurrency(v)}
+          </span>
+        );
+      },
+    },
+    {
+      key: "journalEntryId",
+      header: "قيد المحاسبة",
+      sortable: true,
+      className: "font-mono text-blue-600",
+      render: (r) => `#${r.journalEntryId}`,
+    },
+    {
+      key: "postedAt",
+      header: "تاريخ الترحيل",
+      sortable: true,
+      render: (r) => (r.postedAt ?? "").slice(0, 10),
+    },
+  ];
+
   return (
     <PageShell
       title="قائمة الانتظار للترحيل المحاسبي"
       subtitle="السجلات الجاهزة للترحيل إلى الأستاذ العام — Mudad، شطب الدفعات، إعادة تقييم FX، الجرد الدوري"
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "قائمة الترحيل" }]}
     >
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-6">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
             <div className="p-2 bg-blue-50 rounded-lg">
@@ -429,6 +517,17 @@ export default function GLPostingQueuePage() {
         </Card>
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 bg-rose-50 rounded-lg">
+              <History className="h-5 w-5 text-rose-600" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">FX مُحقَّق (سجل)</p>
+              <p className="text-xl font-bold">{realizedRows.length}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
             <div className="p-2 bg-slate-100 rounded-lg">
               <AlertCircle className="h-5 w-5 text-slate-600" />
             </div>
@@ -455,6 +554,9 @@ export default function GLPostingQueuePage() {
           </TabsTrigger>
           <TabsTrigger value="cycle">
             جرد دوري ({cycleRows.length})
+          </TabsTrigger>
+          <TabsTrigger value="realized">
+            FX مُحقَّق ({realizedRows.length})
           </TabsTrigger>
         </TabsList>
 
@@ -501,6 +603,21 @@ export default function GLPostingQueuePage() {
             rowKey={(r) => `cycle-${r.id}`}
             emptyMessage="لا توجد عمليات جرد دوري معتمدة بانتظار الترحيل"
             emptyIcon={<ClipboardCheck className="h-10 w-10 opacity-30" />}
+            pageSize={20}
+            noToolbar
+          />
+        </TabsContent>
+
+        <TabsContent value="realized" className="mt-3">
+          <div className="mb-2 text-xs text-muted-foreground">
+            سجل آخر 200 عملية تحقيق FX. لا يوجد طابور "قيد الانتظار" هنا — يُرحَّل التحقيق من شاشة تسوية الفاتورة مباشرةً.
+          </div>
+          <DataTable
+            columns={realizedColumns}
+            data={realizedRows}
+            rowKey={(r) => `realized-${r.id}`}
+            emptyMessage="لم تُرحَّل أي عملية تحقيق FX بعد"
+            emptyIcon={<History className="h-10 w-10 opacity-30" />}
             pageSize={20}
             noToolbar
           />
