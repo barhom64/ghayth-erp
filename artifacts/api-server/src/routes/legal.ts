@@ -1324,7 +1324,7 @@ router.patch("/cases/:id/financial-risk", authorize({ feature: "legal.cases", ac
   } catch (err) { handleRouteError(err, res, "Financial risk update error:"); }
 });
 
-router.get("/sessions/:id", authorize({ feature: "legal", action: "view" }), async (req, res) => {
+router.get("/sessions/:id", authorize({ feature: "legal.cases", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1372,7 +1372,7 @@ router.get("/correspondence/:id", authorize({ feature: "legal", action: "view" }
   } catch (err) { handleRouteError(err, res, "Legal correspondence detail error:"); }
 });
 
-router.get("/sessions/upcoming", authorize({ feature: "legal", action: "list" }), async (req, res) => {
+router.get("/sessions/upcoming", authorize({ feature: "legal.cases", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const days = Number(req.query.days) || 14;
