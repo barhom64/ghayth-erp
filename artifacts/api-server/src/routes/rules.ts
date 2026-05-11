@@ -4,7 +4,6 @@ import { handleRouteError, ValidationError, NotFoundError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { z } from "zod";

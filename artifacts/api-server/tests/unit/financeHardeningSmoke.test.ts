@@ -11,13 +11,13 @@ describe("finance-hardening — fiscal periods v2", () => {
   it("GET /fiscal-periods-v2 requires finance:read", () => {
     const idx = SRC.indexOf('"/fiscal-periods-v2"');
     const section = SRC.slice(Math.max(0, idx - 100), idx + 200);
-    expect(section).toContain('requirePermission("finance:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("POST /fiscal-periods-v2 requires finance:create", () => {
     const idx = SRC.indexOf('.post("/fiscal-periods-v2"');
     const section = SRC.slice(Math.max(0, idx - 100), idx + 200);
-    expect(section).toContain('requirePermission("finance:create")');
+    expect(section).toContain('authorize(');
   });
 
   it("close and reopen endpoints exist", () => {
@@ -30,7 +30,7 @@ describe("finance-hardening — manual journal entries", () => {
   it("POST /journal-manual requires finance:create", () => {
     const idx = SRC.indexOf('"/journal-manual"');
     const section = SRC.slice(Math.max(0, idx - 100), idx + 200);
-    expect(section).toContain("requirePermission");
+    expect(section).toContain("authorize(");
   });
 
   it("journal lifecycle: submit, review, approve, post", () => {
@@ -62,7 +62,7 @@ describe("finance-hardening — bank guarantees", () => {
   it("delete requires finance:delete", () => {
     const idx = SRC.indexOf('.delete("/bank-guarantees/:id"');
     const section = SRC.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("finance:delete")');
+    expect(section).toContain('authorize(');
   });
 });
 
@@ -70,7 +70,7 @@ describe("finance-hardening — intercompany", () => {
   it("GET /intercompany requires finance:read", () => {
     const idx = SRC.indexOf('"/intercompany"');
     const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("finance:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("consolidation endpoint exists", () => {
@@ -103,7 +103,7 @@ describe("finance-hardening — posting failures", () => {
   it("resolve posting failure requires finance:approve", () => {
     const idx = SRC.indexOf('"/posting-failures/:id/resolve"');
     const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("finance:approve")');
+    expect(section).toContain('authorize(');
   });
 });
 

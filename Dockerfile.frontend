@@ -1,0 +1,67 @@
+# Dockerfile.frontend
+# ----------------------------------------------------------------------------
+# Two-stage build for @workspace/ghayth-erp.
+# Stage 1 produces the static Vite bundle, stage 2 serves it from nginx with
+# /api proxied to the api-server container.
+#
+# Build context MUST be the repo root.
+#
+#   docker build -f Dockerfile.frontend -t ghayth-web .
+#   docker run -p 80:80 -e API_UPSTREAM=http://api:8080 ghayth-web
+#
+# In docker-compose, API_UPSTREAM is set to the api-server service name.
+# ----------------------------------------------------------------------------
+
+# ---- 1. build -------------------------------------------------------------
+FROM node:24-alpine AS build
+
+RUN corepack enable
+
+WORKDIR /app
+
+# Lockfile + workspace manifests first for cache friendliness.
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY artifacts/ghayth-erp/package.json artifacts/ghayth-erp/
+COPY lib/api-client-react/package.json lib/api-client-react/
+COPY lib/api-spec/package.json lib/api-spec/
+COPY lib/api-zod/package.json lib/api-zod/
+COPY lib/object-storage-web/package.json lib/object-storage-web/
+COPY scripts/package.json scripts/
+
+RUN pnpm install --frozen-lockfile
+
+# Source.
+COPY tsconfig.base.json tsconfig.json ./
+COPY lib/ ./lib/
+COPY artifacts/ghayth-erp/ ./artifacts/ghayth-erp/
+
+# Vite expects PORT + BASE_PATH at config-eval time. Build-time values; the
+# runtime image never re-runs vite.
+ENV PORT=5173 \
+    BASE_PATH=/ \
+    NODE_ENV=production
+
+RUN pnpm --filter @workspace/ghayth-erp run build
+
+# ---- 2. runtime (nginx) ---------------------------------------------------
+FROM nginx:1.27-alpine AS runtime
+
+# `envsubst` lets us drop in API_UPSTREAM at container start instead of
+# baking it into the image. Default points at a docker-compose `api` service.
+ENV API_UPSTREAM=http://api:8080
+
+# Static assets.
+COPY --from=build /app/artifacts/ghayth-erp/dist/public /usr/share/nginx/html
+
+# Templated nginx config — entrypoint substitutes ${API_UPSTREAM}.
+COPY deploy/nginx.conf.template /etc/nginx/templates/default.conf.template
+
+# Health endpoint for the orchestrator. nginx already serves this from the
+# config below, so docker just needs to know how to call it.
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+  CMD wget --quiet --tries=1 --spider http://localhost/healthz || exit 1
+
+EXPOSE 80
+
+# nginx:alpine images already use the templating entrypoint and run as root
+# inside the container (workers drop to nginx user). No extra USER needed.

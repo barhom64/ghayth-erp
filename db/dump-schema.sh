@@ -55,23 +55,68 @@ pg_dump \
 
 # Strip Replit-specific noise: extension owner comments, role grants on
 # the public schema, etc. Keeps the dump portable.
+FULL="$(mktemp)"
 grep -v '^-- Dumped' "$TMP" \
   | grep -v '^-- TOC entry' \
   | grep -v '^-- Name: SCHEMA public' \
   | sed '/./,$!d' \
-  > "$OUT"
+  > "$FULL"
 
 rm -f "$TMP"
 
-LINE_COUNT=$(wc -l < "$OUT")
-TABLE_COUNT=$(grep -cE '^CREATE TABLE' "$OUT" || echo 0)
-INDEX_COUNT=$(grep -cE '^CREATE (UNIQUE )?INDEX' "$OUT" || echo 0)
-FK_COUNT=$(grep -cE 'FOREIGN KEY' "$OUT" || echo 0)
+# Split at the last `CREATE TABLE … );` boundary so each half stays under
+# the ~800 KB Replit GitHub-proxy upload limit. db/schema.sql becomes a
+# tiny psql wrapper that `\ir`s both halves; consumers that read the SQL
+# as text (e.g. scripts/src/audit-schema-drift.mjs) read both files and
+# concatenate them.
+LAST_CT=$(grep -n '^CREATE TABLE' "$FULL" | tail -1 | cut -d: -f1)
+END_CT=$(awk -v start="$LAST_CT" 'NR>=start && /^\);$/ {print NR; exit}' "$FULL")
 
-echo "✓ Wrote $OUT"
+if [ -z "$END_CT" ]; then
+  echo "ERROR: could not locate end of last CREATE TABLE block." >&2
+  rm -f "$FULL"
+  exit 2
+fi
+
+PRE="db/schema_pre.sql"
+POST="db/schema_post.sql"
+head -n "$END_CT" "$FULL" > "$PRE"
+tail -n +"$((END_CT + 1))" "$FULL" > "$POST"
+
+cat > "$OUT" <<'WRAP'
+-- db/schema.sql — wrapper that loads the schema in two halves.
+--
+-- The full schema is too large for some upload paths (the Replit GitHub
+-- proxy tops out around 800 KB per file), so the dump is split at the
+-- last `CREATE TABLE` boundary into:
+--
+--   db/schema_pre.sql   — DROP CONSTRAINT/INDEX, DROP TABLE, CREATE TABLE
+--   db/schema_post.sql  — ALTER TABLE … ADD CONSTRAINT (PK/FK), CREATE INDEX
+--
+-- This wrapper uses psql's `\ir` (include-relative) so it works regardless
+-- of the caller's CWD: `psql -f db/schema.sql` resolves both halves
+-- relative to this file's location.
+--
+-- Regenerate with: bash db/dump-schema.sh
+\ir schema_pre.sql
+\ir schema_post.sql
+WRAP
+
+LINE_COUNT=$(wc -l < "$FULL")
+TABLE_COUNT=$(grep -cE '^CREATE TABLE' "$FULL" || echo 0)
+INDEX_COUNT=$(grep -cE '^CREATE (UNIQUE )?INDEX' "$FULL" || echo 0)
+FK_COUNT=$(grep -cE 'FOREIGN KEY' "$FULL" || echo 0)
+PRE_BYTES=$(wc -c < "$PRE")
+POST_BYTES=$(wc -c < "$POST")
+
+rm -f "$FULL"
+
+echo "✓ Wrote $OUT (wrapper) + $PRE + $POST"
 echo "  Lines:        $LINE_COUNT"
 echo "  CREATE TABLE: $TABLE_COUNT"
 echo "  CREATE INDEX: $INDEX_COUNT"
 echo "  FOREIGN KEY:  $FK_COUNT"
+echo "  Pre size:     $PRE_BYTES bytes"
+echo "  Post size:    $POST_BYTES bytes"
 echo
-echo "Next step: review the diff, commit, and push to the Phase 2 branch."
+echo "Next step: review the diff, commit, and push."

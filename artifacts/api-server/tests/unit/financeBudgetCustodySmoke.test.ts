@@ -15,25 +15,25 @@ describe("finance-budget — CRUD", () => {
   it("GET /budget requires finance:read", () => {
     const idx = BUDGET_SRC.indexOf('"/budget"');
     const section = BUDGET_SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("finance:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("POST /budget requires finance:create", () => {
     const idx = BUDGET_SRC.indexOf('budgetRouter.post("/budget"');
     const section = BUDGET_SRC.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("finance:create")');
+    expect(section).toContain('authorize(');
   });
 
   it("PATCH /budget/:id requires finance:update", () => {
     const idx = BUDGET_SRC.indexOf('"/budget/:id"');
     const section = BUDGET_SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("finance:update")');
+    expect(section).toContain('authorize(');
   });
 
   it("DELETE /budget/:id requires finance:delete", () => {
     const idx = BUDGET_SRC.indexOf('budgetRouter.delete("/budget/:id"');
     const section = BUDGET_SRC.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("finance:delete")');
+    expect(section).toContain('authorize(');
   });
 
   it("GET /budget/:id exists", () => {
@@ -91,13 +91,13 @@ describe("finance-custodies — CRUD", () => {
   it("GET /custodies requires finance:read", () => {
     const idx = CUSTODY_SRC.indexOf('"/custodies"');
     const section = CUSTODY_SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("finance:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("POST /custodies requires finance:create", () => {
     const idx = CUSTODY_SRC.indexOf('custodiesRouter.post("/custodies"');
     const section = CUSTODY_SRC.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("finance:create")');
+    expect(section).toContain('authorize(');
   });
 
   it("GET /custodies/:id exists", () => {

@@ -67,43 +67,43 @@ describe("Communications permissions", () => {
   it("GET /log requires communications:read", () => {
     const idx = COMM_ROUTE.indexOf('router.get("/log"');
     const line = COMM_ROUTE.slice(idx, idx + 200);
-    expect(line).toContain('requirePermission("communications:read")');
+    expect(line).toContain('authorize(');
   });
 
   it("POST /send requires communications:write", () => {
     const idx = COMM_ROUTE.indexOf('router.post("/send"');
     const line = COMM_ROUTE.slice(idx, idx + 200);
-    expect(line).toContain('requirePermission("communications:write")');
+    expect(line).toContain('authorize(');
   });
 
   it("PATCH /log/:id requires communications:write", () => {
     const idx = COMM_ROUTE.indexOf('router.patch("/log/:id"');
     const line = COMM_ROUTE.slice(idx, idx + 200);
-    expect(line).toContain('requirePermission("communications:write")');
+    expect(line).toContain('authorize(');
   });
 
   it("DELETE /log/:id requires communications:write", () => {
     const idx = COMM_ROUTE.indexOf('router.delete("/log/:id"');
     const line = COMM_ROUTE.slice(idx, idx + 200);
-    expect(line).toContain('requirePermission("communications:write")');
+    expect(line).toContain('authorize(');
   });
 
   it("GET /stats requires communications:read", () => {
     const idx = COMM_ROUTE.indexOf('router.get("/stats"');
     const line = COMM_ROUTE.slice(idx, idx + 200);
-    expect(line).toContain('requirePermission("communications:read")');
+    expect(line).toContain('authorize(');
   });
 
   it("POST /push/subscribe requires communications:write", () => {
     const idx = COMM_ROUTE.indexOf('router.post("/push/subscribe"');
     const line = COMM_ROUTE.slice(idx, idx + 200);
-    expect(line).toContain('requirePermission("communications:write")');
+    expect(line).toContain('authorize(');
   });
 
   it("POST /push/test requires communications:write", () => {
     const idx = COMM_ROUTE.indexOf('router.post("/push/test"');
     const line = COMM_ROUTE.slice(idx, idx + 200);
-    expect(line).toContain('requirePermission("communications:write")');
+    expect(line).toContain('authorize(');
   });
 });
 

@@ -1,0 +1,92 @@
+# docker-compose.yml
+# ---------------------------------------------------------------------------
+# Local-stack composition for Ghayth ERP. Brings up Postgres + api-server +
+# frontend behind a single host port.
+#
+# Quick start:
+#   cp .env.example .env                                # adjust values
+#   docker compose up --build
+#   open http://localhost                               # frontend
+#
+# To run a one-off command (psql, migrations, etc.):
+#   docker compose exec db psql -U ghayth -d ghayth_erp
+#   docker compose run --rm api node ./dist/index.mjs   # one-shot
+#
+# Caveats:
+#   - This file is for development/staging. Production should use a managed
+#     Postgres (RDS, Cloud SQL, ...) and a real reverse proxy in front.
+#   - The `db` service exposes 5432 on localhost — fine for dev, restrict
+#     in prod.
+#   - REDIS is optional. Uncomment if you want shared rate-limit state.
+# ---------------------------------------------------------------------------
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ghayth_erp}
+      POSTGRES_USER: ${POSTGRES_USER:-ghayth}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ghayth_dev_pw}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # `pg_isready` returns 0 only when the server is accepting connections.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ghayth} -d ${POSTGRES_DB:-ghayth_erp}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api-server
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-ghayth}:${POSTGRES_PASSWORD:-ghayth_dev_pw}@db:5432/${POSTGRES_DB:-ghayth_erp}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 8080
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
+      # Optional secrets — leave empty to disable the feature gracefully.
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:-}
+      SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+      AI_INTEGRATIONS_ANTHROPIC_API_KEY: ${AI_INTEGRATIONS_ANTHROPIC_API_KEY:-}
+      # Run migrations + seed on first boot. Comment out for a clean DB.
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
+    ports:
+      - "8080:8080"
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      API_UPSTREAM: http://api:8080
+    ports:
+      - "80:80"
+
+  # ---- optional ----------------------------------------------------------
+  # redis:
+  #   image: redis:7-alpine
+  #   restart: unless-stopped
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redisdata:/data
+
+volumes:
+  pgdata:
+  # redisdata:

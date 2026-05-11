@@ -179,8 +179,8 @@ function StepImpactPanel({ caseStatus }: { caseStatus: string }) {
     impacts.push({ icon: "💰", title: "حكم بالتعويض أو الغرامة", desc: "يُنشئ تلقائياً التزام مالي في سجل الشركة", type: "danger" });
     impacts.push({ icon: "🔄", title: "التنفيذ يتبع الحكم", desc: "بعد الحكم يمكن الانتقال لمرحلة التنفيذ", type: "info" });
   }
-  if (caseStatus === "closed" || caseStatus === "won" || caseStatus === "lost") {
-    impacts.push({ icon: "📊", title: "تحديث تقرير المخاطر", desc: "ملف القضية يُغلق ويُضاف للسجل القانوني للشركة", type: caseStatus === "won" ? "success" : "danger" });
+  if (caseStatus === "closed") {
+    impacts.push({ icon: "📊", title: "تحديث تقرير المخاطر", desc: "ملف القضية يُغلق ويُضاف للسجل القانوني للشركة", type: "info" });
   }
 
   if (impacts.length === 0) return null;

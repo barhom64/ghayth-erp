@@ -10,10 +10,7 @@ import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { Edit, ArrowLeftRight } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import { EntityDocuments } from "@/components/shared/entity-documents";
-import { ApprovalTimeline } from "@/components/shared/approval-timeline";
-import { EntityComments } from "@/components/shared/entity-comments";
-import { EntityTags } from "@/components/shared/entity-tags";
+
 
 /**
  * TransferDetail — detail page for a single employee transfer.
@@ -211,11 +208,6 @@ export default function TransferDetail() {
         )}
       </div>
 
-      {id && <ApprovalTimeline entityType="transfer" entityId={id} />}
-      {id && <EntityDocuments entityType="transfer" entityId={id} />}
-
-      {id && <EntityComments entityType="transfer" entityId={id} />}
-      {id && <EntityTags entityType="transfer" entityId={id} />}
     </div>
   );
 

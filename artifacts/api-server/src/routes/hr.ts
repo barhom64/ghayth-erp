@@ -10,7 +10,7 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { requirePermission, requireAnyPermission } from "../middlewares/permissionMiddleware.js";
+import { requireAnyPermission } from "../middlewares/permissionMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { requireOwnership } from "../middlewares/contextualRbac.js";
 import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
@@ -2154,11 +2154,11 @@ router.get("/leave-requests/:id/stages", authorize({ feature: "hr.leaves", actio
     const stages = await rawQuery<any>(
       `SELECT las.*, e.name AS "decidedByName"
        FROM leave_approval_stages las
-       LEFT JOIN employee_assignments ea ON ea.id = las."decidedBy"
+       LEFT JOIN employee_assignments ea ON ea.id = las."decidedBy" AND ea."companyId" = $2
        LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE las."leaveRequestId" = $1
        ORDER BY las.stage ASC`,
-      [id]
+      [id, scope.companyId]
     );
 
     // Also get the configured chain steps for context
@@ -2326,14 +2326,14 @@ router.get("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "view
     const lines = await rawQuery<any>(
       `SELECT pl.*, e.name AS "employeeName"
        FROM payroll_lines pl
-       LEFT JOIN employee_assignments ea ON ea.id = pl."assignmentId"
+       LEFT JOIN employee_assignments ea ON ea.id = pl."assignmentId" AND ea."companyId" = $2
        LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL ORDER BY pl.id LIMIT 1000`,
-      [id]
+      [id, scope.companyId]
     );
-    const totalBasic = lines.reduce((s: number, l: any) => s + Number(l.basicSalary || 0), 0);
-    const totalAllowances = lines.reduce((s: number, l: any) => s + Number(l.allowances || 0), 0);
-    const totalDeductions = lines.reduce((s: number, l: any) => s + Number(l.deductions || 0), 0);
+    const totalBasic = lines.reduce((s: number, l: any) => s + Number(l.basic || 0), 0);
+    const totalAllowances = lines.reduce((s: number, l: any) => s + Number(l.housingAllowance || 0) + Number(l.transportAllowance || 0), 0);
+    const totalDeductions = lines.reduce((s: number, l: any) => s + Number(l.gosi || 0) + Number(l.lateDeduction || 0) + Number(l.absenceDeduction || 0) + Number(l.violationDeduction || 0) + Number(l.loanDeduction || 0), 0);
     const sanitizedLines = canSeeSalary ? lines : lines.map((l: any) => ({
       id: l.id, runId: l.runId, assignmentId: l.assignmentId, employeeName: l.employeeName,
     }));
@@ -2364,10 +2364,10 @@ router.get("/payroll/:id/lines", authorize({ feature: "hr.payroll.runs", action:
     const lines = await rawQuery<any>(
       `SELECT pl.*, e.name AS "employeeName", e."empNumber"
        FROM payroll_lines pl
-       JOIN employee_assignments ea ON ea.id = pl."assignmentId"
+       JOIN employee_assignments ea ON ea.id = pl."assignmentId" AND ea."companyId" = $2
        JOIN employees e ON e.id = ea."employeeId"
        WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL ORDER BY e.name LIMIT 1000`,
-      [Number(id)]
+      [Number(id), scope.companyId]
     );
     const data = lines.map((l: any) => ({
       ...l, basic: Number(l.basic), grossSalary: Number(l.grossSalary),
@@ -2810,7 +2810,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
   }
 });
 
-router.post("/payroll/:id/approve", authorize({ feature: "hr.payroll.runs", action: "approve", resource: { table: "payroll_runs", idParam: "id" } }), async (req, res) => {
+router.patch("/payroll/:id/approve", authorize({ feature: "hr.payroll.runs", action: "approve", resource: { table: "payroll_runs", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     if (!PAYROLL_ROLES.includes(scope.role)) {
@@ -5251,9 +5251,9 @@ router.get("/evaluation-cycles/:id", authorize({ feature: "hr.performance", acti
       `SELECT pe.*, e.name AS "evaluatorName", ea."jobTitle" AS "evaluatorTitle"
        FROM peer_evaluations pe
        JOIN employees e ON e.id = pe."evaluatorId"
-       LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
+       LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active' AND ea."companyId" = $2
        WHERE pe."cycleId" = $1`,
-      [cycleId]
+      [cycleId, scope.companyId]
     );
 
     const participants = await rawQuery<any>(

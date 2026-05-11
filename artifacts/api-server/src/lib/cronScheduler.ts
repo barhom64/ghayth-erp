@@ -28,6 +28,13 @@ import { processDueRecurringJournals } from "./recurringJournalProcessor.js";
 import { scanObligations } from "./obligationsEngine.js";
 import { runAutoDetectionAllCompanies } from "./autoViolationEngine.js";
 import { getRedisRateLimitStatus, type RedisRateLimitStatus } from "./rateLimitStore.js";
+import { zatcaRetryDrain } from "./zatca/worker.js";
+import { dailyFxRateFetchCron } from "./fx/jobs.js";
+import { fxStalenessCheckCron } from "./fx/staleness-alert.js";
+import { lotExpiryScanCron } from "./inventory/lots.js";
+import { abcMonthlyClassificationCron } from "./inventory/abc-analysis.js";
+import { iqamaDailyAlertCron } from "./saudi-compliance/iqama-cron.js";
+import { saudizationMonthlySnapshotCron } from "./saudi-compliance/saudization-snapshot.js";
 
 async function getSystemTimezone(): Promise<string> {
   try {
@@ -2518,6 +2525,14 @@ async function weeklyDataCleanup(): Promise<string> {
   ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
   cleaned += oldNotifLogs;
 
+  // user_activity_log fills up fast (every page-view + action gets a row).
+  // 90 days is enough for behavioural-intelligence and proactive analytics;
+  // older rows would only inflate the table without analytical value.
+  const { affectedRows: oldActivityLogs } = await rawExecute(
+    `DELETE FROM user_activity_log WHERE "createdAt" < NOW() - INTERVAL '90 days'`
+  ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
+  cleaned += oldActivityLogs;
+
   try {
     await rawExecute(
       `INSERT INTO audit_archive SELECT * FROM event_logs WHERE "createdAt" < NOW() - INTERVAL '365 days'
@@ -3369,6 +3384,13 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "daily_self_audit", description: "التدقيق الذاتي اليومي — كشف المخالفات والتناقضات", schedule: "0 7 * * *", handler: runSelfAuditAllCompanies },
   { name: "proactive_automation_engine", description: "الأتمتة الاستباقية — إنشاء مهام تلقائية", schedule: "0 7 * * *", handler: runAllProactiveChecks },
   { name: "email_queue_worker", description: "معالجة قائمة انتظار الإيميلات", schedule: "* * * * *", handler: processEmailQueue },
+  { name: "zatca_retry_drain", description: "محاولة إعادة إرسال فواتير ZATCA المعلقة", schedule: "* * * * *", handler: zatcaRetryDrain },
+  { name: "daily_fx_rate_fetch", description: "تحديث أسعار الصرف اليومية من المصادر الرسمية", schedule: "0 5 * * *", handler: dailyFxRateFetchCron },
+  { name: "fx_staleness_check", description: "تنبيه أسعار الصرف القديمة", schedule: "0 6 * * *", handler: fxStalenessCheckCron },
+  { name: "lot_expiry_scan", description: "تحويل الدفعات المنتهية تلقائياً إلى expired", schedule: "0 4 * * *", handler: lotExpiryScanCron },
+  { name: "iqama_daily_alert", description: "تنبيه انتهاء الإقامات (90/60/30/14/7/1 يوم)", schedule: "0 7 * * *", handler: iqamaDailyAlertCron },
+  { name: "saudization_monthly_snapshot", description: "لقطة شهرية للسعودة (نطاقات)", schedule: "0 2 1 * *", handler: saudizationMonthlySnapshotCron },
+  { name: "abc_monthly_classification", description: "تصنيف ABC الشهري للمنتجات (Pareto)", schedule: "0 3 1 * *", handler: abcMonthlyClassificationCron },
   { name: "sms_queue_worker", description: "معالجة قائمة انتظار الرسائل النصية", schedule: "* * * * *", handler: processSmsQueue },
   { name: "whatsapp_queue_worker", description: "معالجة قائمة انتظار واتساب", schedule: "* * * * *", handler: processWhatsAppQueue },
   { name: "weekly_logs_archiving", description: "أرشفة السجلات القديمة أسبوعياً", schedule: "0 3 * * 0", handler: weeklyLogsArchiving },

@@ -8,7 +8,6 @@ import {
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { currentPeriod, currentYear, toDateISO, todayISO, roundTo2 } from "../lib/businessHelpers.js";

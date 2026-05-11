@@ -15,7 +15,6 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
@@ -541,19 +540,19 @@ router.get("/groups", authorize({ feature: "umrah", action: "list" }), async (re
 const createGroupSchema = z.object({
   nuskGroupNumber: z.string().min(1),
   name: z.string().optional(),
-  agentId: z.number().optional(),
-  subAgentId: z.number().optional(),
-  seasonId: z.number(),
-  mutamerCount: z.number().int().min(0).default(0),
-  programDuration: z.number().int().optional(),
+  agentId: z.coerce.number().optional(),
+  subAgentId: z.coerce.number().optional(),
+  seasonId: z.coerce.number(),
+  mutamerCount: z.coerce.number().int().min(0).default(0),
+  programDuration: z.coerce.number().int().optional(),
 });
 
 const patchGroupSchema = z.object({
   name: z.string().optional(),
-  agentId: z.number().optional().nullable(),
-  subAgentId: z.number().optional().nullable(),
-  mutamerCount: z.number().int().min(0).optional(),
-  programDuration: z.number().int().optional(),
+  agentId: z.coerce.number().optional().nullable(),
+  subAgentId: z.coerce.number().optional().nullable(),
+  mutamerCount: z.coerce.number().int().min(0).optional(),
+  programDuration: z.coerce.number().int().optional(),
   status: z.string().optional(),
 });
 
@@ -1046,7 +1045,7 @@ router.get("/import/batches/:id/changes", authorize({ feature: "umrah", action: 
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [batch] = await rawQuery(
-      `SELECT id FROM umrah_import_batches WHERE id = $1 AND "companyId" = $2`,
+      `SELECT id FROM umrah_import_batches WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!batch) throw new NotFoundError("الدفعة غير موجودة");

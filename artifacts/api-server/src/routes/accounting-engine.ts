@@ -5,7 +5,6 @@ import { handleRouteError, NotFoundError, ForbiddenError,
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { logger } from "../lib/logger.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
@@ -310,10 +309,10 @@ router.get("/journal-templates", authorize({ feature: "finance.accounting_engine
       t.lines = await rawQuery<any>(
         `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
          FROM journal_entry_template_lines tl
-         LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId"
+         LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId" AND ca."companyId" = $2
          WHERE tl."templateId" = $1
          ORDER BY tl."sortOrder", tl.id LIMIT 500`,
-        [t.id]
+        [t.id, scope.companyId]
       );
     }
 
@@ -358,9 +357,9 @@ router.post("/journal-templates", authorize({ feature: "finance.accounting_engin
     template.lines = await rawQuery<any>(
       `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
        FROM journal_entry_template_lines tl
-       LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId"
+       LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId" AND ca."companyId" = $2
        WHERE tl."templateId" = $1 ORDER BY tl."sortOrder" LIMIT 500`,
-      [result]
+      [result, scope.companyId]
     );
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "journal_entry_templates", entityId: result, after: template }).catch((e) => logger.error(e, "accounting-engine background task failed"));
@@ -414,9 +413,9 @@ router.put("/journal-templates/:id", authorize({ feature: "finance.accounting_en
     template.lines = await rawQuery<any>(
       `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
        FROM journal_entry_template_lines tl
-       LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId"
+       LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId" AND ca."companyId" = $2
        WHERE tl."templateId" = $1 ORDER BY tl."sortOrder" LIMIT 500`,
-      [id]
+      [id, scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "journal_entry_templates", entityId: id, before: existing, after: template }).catch((e) => logger.error(e, "accounting-engine background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.journal_template.updated", entity: "journal_entry_templates", entityId: id, details: JSON.stringify({ name, operationType: existing.operationType }) }).catch((e) => logger.error(e, "accounting-engine background task failed"));

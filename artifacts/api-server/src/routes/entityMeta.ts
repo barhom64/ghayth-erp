@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError, parseId, zodParse } from "../lib/errorHandler.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";

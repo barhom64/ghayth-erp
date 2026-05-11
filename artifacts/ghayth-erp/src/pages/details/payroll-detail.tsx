@@ -271,7 +271,7 @@ export default function PayrollDetail() {
                 approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
                 rejectBody={(notes) => ({ approved: false, notes })}
                 returnBody={(notes) => ({ approved: "returned", notes })}
-                pendingStatuses={["pending", "draft", "returned"]}
+                pendingStatuses={["pending", "draft", "returned", "pending_approval"]}
                 invalidateKeys={[["payroll"]]}
                 onDone={() => {
                   refetch();

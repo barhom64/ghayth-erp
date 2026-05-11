@@ -70,6 +70,16 @@ const SAFE_NAMES = new Set([
   // `onlyUnresolved` in admin.ts is a boolean derived from req.query —
   // the ternary only picks between a hardcoded SQL fragment and empty string.
   "onlyUnresolved",
+  // `adapter` (in genericImportEngine.ts) reads `.table` off the hardcoded
+  // ADAPTERS map keyed by an enum (ImportEntity). The table name and column
+  // names never come from user input — entityKeyOrThrow() rejects unknown
+  // keys before the engine is invoked.
+  "adapter",
+  // `setClauses` (in genericImportEngine.ts updateRow) is built from
+  // `Object.keys(fields)` where fields keys come from adapter.fieldTypes
+  // (hardcoded) and adapter.compareFields (hardcoded). No user-provided
+  // identifiers are interpolated.
+  "setClauses",
 ]);
 
 // Member expressions like `params.length` or `sets.join(...)` are allowed

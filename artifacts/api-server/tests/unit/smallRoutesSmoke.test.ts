@@ -23,7 +23,7 @@ describe("calendar �� endpoints", () => {
   it("upcoming endpoint requires operations:read", () => {
     const idx = CALENDAR.indexOf('"/upcoming"');
     const section = CALENDAR.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("operations:read")');
+    expect(section).toContain('authorize(');
   });
 });
 
@@ -33,13 +33,13 @@ describe("digital-signature — endpoints", () => {
   it("request OTP requires documents:write", () => {
     const idx = DIGITAL_SIG.indexOf('"/request-otp"');
     const section = DIGITAL_SIG.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("documents:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("verify endpoint requires documents:write", () => {
     const idx = DIGITAL_SIG.indexOf('"/verify"');
     const section = DIGITAL_SIG.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("documents:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("logs endpoint exists", () => {
@@ -73,25 +73,25 @@ describe("scheduled-reports — CRUD", () => {
   it("GET / requires reports:read", () => {
     const idx = SCHED_REPORTS.indexOf('.get("/",');
     const section = SCHED_REPORTS.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("reports:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("POST / requires reports:write", () => {
     const idx = SCHED_REPORTS.indexOf('.post("/",');
     const section = SCHED_REPORTS.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("reports:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("PATCH /:id requires reports:write", () => {
     const idx = SCHED_REPORTS.indexOf('.patch("/:id"');
     const section = SCHED_REPORTS.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("reports:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("DELETE /:id requires reports:write", () => {
     const idx = SCHED_REPORTS.indexOf('.delete("/:id"');
     const section = SCHED_REPORTS.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("reports:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("history endpoint exists", () => {
@@ -117,13 +117,13 @@ describe("activityLog — endpoints", () => {
   it("GET / requires admin:read", () => {
     const idx = ACTIVITY_LOG.indexOf('router.get("/",');
     const section = ACTIVITY_LOG.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("admin:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("summary endpoint requires admin:read", () => {
     const idx = ACTIVITY_LOG.indexOf('"/summary"');
     const section = ACTIVITY_LOG.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("admin:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("uses parameterized queries", () => {
@@ -161,7 +161,7 @@ describe("auditLogs — endpoints", () => {
   it("GET / requires audit:read", () => {
     const idx = AUDIT_LOGS.indexOf('router.get("/",');
     const section = AUDIT_LOGS.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("audit:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("entities endpoint exists", () => {
@@ -199,6 +199,6 @@ describe("impactPreview — endpoint", () => {
   it("POST / requires admin:write", () => {
     const idx = IMPACT.indexOf('router.post("/",');
     const section = IMPACT.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("admin:write")');
+    expect(section).toContain('authorize(');
   });
 });

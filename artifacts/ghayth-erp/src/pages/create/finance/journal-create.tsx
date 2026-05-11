@@ -12,8 +12,9 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
-import { TextField } from "@/components/shared/form-field-wrapper";
+import { TextField, NumberField } from "@/components/shared/form-field-wrapper";
 import { roundMoney, formatCurrency , todayLocal } from "@/lib/formatters";
 
 interface JournalLine {
@@ -42,6 +43,7 @@ export default function JournalCreate() {
 
   const autoNumberRef = useRef(`JE-${Date.now().toString(36).toUpperCase()}`);
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [lines, setLines] = useState<JournalLine[]>([
     { accountCode: "", description: "", debit: "", credit: "", costCenter: "", departmentId: "", projectId: "" },
@@ -65,13 +67,13 @@ export default function JournalCreate() {
   const isBalanced = totalDebit > 0 && Math.abs(totalDebit - totalCredit) < 0.01;
 
   const handleSubmit = async () => {
-    if (!isBalanced) {
-      toast({ variant: "destructive", title: "القيد غير متوازن - يجب أن يتساوى المدين والدائن" });
-      return;
-    }
     const validLines = lines.filter((l) => l.accountCode && (Number(l.debit) > 0 || Number(l.credit) > 0));
-    if (validLines.length < 2) {
-      toast({ variant: "destructive", title: "يجب إدخال بندين على الأقل" });
+    const firstError = validate({
+      balance: !isBalanced ? "القيد غير متوازن - يجب أن يتساوى المدين والدائن" : null,
+      lines: validLines.length < 2 ? "يجب إدخال بندين على الأقل" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -92,6 +94,7 @@ export default function JournalCreate() {
       toast({ title: "تم إضافة القيد بنجاح" });
       setLocation("/finance/journal");
     } catch (err: any) {
+      setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة القيد", description: err?.fix ?? err?.message });
     }
   };
@@ -131,8 +134,8 @@ export default function JournalCreate() {
                     emptyMessage="لا يوجد حسابات"
                   />
                   <Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} placeholder="وصف البند" />
-                  <Input type="number" step="0.01" min="0" value={line.debit} onChange={(e) => updateLine(idx, "debit", e.target.value)} placeholder="0" />
-                  <Input type="number" step="0.01" min="0" value={line.credit} onChange={(e) => updateLine(idx, "credit", e.target.value)} placeholder="0" />
+                  <NumberField label="مدين" value={line.debit} onChange={(v) => updateLine(idx, "debit", v)} placeholder="0" />
+                  <NumberField label="دائن" value={line.credit} onChange={(v) => updateLine(idx, "credit", v)} placeholder="0" />
                   <Button variant="ghost" size="icon" onClick={() => removeLine(idx)} disabled={lines.length <= 2}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                 </div>
                 <div className="grid grid-cols-3 gap-2 ps-1">

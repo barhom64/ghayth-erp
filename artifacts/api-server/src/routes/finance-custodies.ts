@@ -10,7 +10,6 @@ import { z } from "zod";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import {
@@ -439,8 +438,8 @@ custodiesRouter.post("/custodies", authorize({ feature: "finance.custodies", act
     let custodyAccountCode = await financialEngine.resolveAccountCode(scope.companyId, "custody_account", "debit", "1400");
     if (resolvedAssignmentId) {
       const [empRow] = await rawQuery<{ id: number }>(
-        `SELECT e.id FROM employee_assignments ea JOIN employees e ON e.id = ea."employeeId" WHERE ea.id = $1`,
-        [resolvedAssignmentId]
+        `SELECT e.id FROM employee_assignments ea JOIN employees e ON e.id = ea."employeeId" WHERE ea.id = $1 AND ea."companyId" = $2`,
+        [resolvedAssignmentId, scope.companyId]
       );
       if (empRow) {
         custodyEmployeeId = empRow.id;

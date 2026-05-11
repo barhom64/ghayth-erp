@@ -14,6 +14,7 @@ import hrRouter from "./hr.js";
 // no more /finance fallback router.
 import { invoicesRouter } from "./finance-invoices.js";
 import { journalRouter } from "./finance-journal.js";
+import { glHelpersRouter } from "./finance-gl-helpers.js";
 import { purchaseRouter } from "./finance-purchase.js";
 import { reportsRouter } from "./finance-reports.js";
 import { custodiesRouter } from "./finance-custodies.js";
@@ -73,6 +74,7 @@ import clientPortalRouter from "./clientPortal.js";
 import publicDataRouter from "./publicData.js";
 import careersPortalRouter from "./careersPortal.js";
 import { exportRouter } from "./export.js";
+import importRouter from "./import.js";
 import { scheduledReportsRouter } from "./scheduled-reports.js";
 import { govIntegrationsRouter } from "./gov-integrations.js";
 import pdplRouter from "./pdpl.js";
@@ -152,7 +154,7 @@ router.get("/settings/display", async (req, res) => {
       try {
         const jwt = await import("jsonwebtoken");
         const SECRET = process.env.JWT_SECRET;
-        const payload: any = jwt.default.verify(rawToken, SECRET!);
+        const payload: any = jwt.default.verify(rawToken, SECRET!, { algorithms: ["HS256"] });
         if (payload?.companyId && payload?.type !== "client_portal") companyId = payload.companyId;
       } catch (e) { logger.debug(e, "public-settings JWT decode (optional)"); }
     }
@@ -285,6 +287,7 @@ router.use("/hr/recruitment", requireModule("hr"), recruitmentRouter);
 router.use("/finance", financeUserLimiter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), invoicesRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), journalRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), glHelpersRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), purchaseRouter);
 router.use("/finance", requireModule("finance"), reportsRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), custodiesRouter);
@@ -350,6 +353,7 @@ router.use("/umrah", requireModule("operations"), requireGuards("financial"), um
 router.use("/umrah", requireModule("operations"), requireGuards("financial"), umrahEntitiesRouter);
 router.use("/operations-center", requireModule("operations"), requireMinLevel(40), operationsCenterRouter);
 router.use("/export", requireMinLevel(30), exportRouter);
+router.use("/import", requireMinLevel(50), importRouter);
 router.use("/scheduled-reports", requireMinLevel(50), scheduledReportsRouter);
 router.use("/notification-engine", requireModule("notifications"), notificationEngineRouter);
 router.use("/gov-integrations", govIntegrationsRouter);

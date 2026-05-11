@@ -10,10 +10,7 @@ import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { Edit, CalendarDays } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import { EntityDocuments } from "@/components/shared/entity-documents";
-import { ApprovalTimeline } from "@/components/shared/approval-timeline";
-import { EntityComments } from "@/components/shared/entity-comments";
-import { EntityTags } from "@/components/shared/entity-tags";
+
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "معلق",
@@ -227,11 +224,6 @@ export default function LeaveDetail() {
         )}
       </div>
 
-      {id && <ApprovalTimeline entityType="leave" entityId={id} />}
-      {id && <EntityDocuments entityType="leave" entityId={id} />}
-
-      {id && <EntityComments entityType="leave" entityId={id} />}
-      {id && <EntityTags entityType="leave" entityId={id} />}
     </div>
   );
 

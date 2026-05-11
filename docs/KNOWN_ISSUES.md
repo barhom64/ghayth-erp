@@ -2,7 +2,7 @@
 
 This file tracks the open operational and architectural gaps identified during the April–May 2026 system audits. It is the working backlog for Phases 2–8 of the delivery plan described in `README.md`. Each section lists: the gap, the concrete symptom, the target fix, and the affected files (when known).
 
-**Last updated:** 2 May 2026 — reflects 3040 unit tests, 287-table `db/schema.sql` baseline, and completion of all P0–P2 audit items.
+**Last updated:** 9 May 2026 — adds Phase 9 (tenant-isolation freeze). Earlier baseline: 3040 unit tests, 287-table `db/schema.sql`, completion of all P0–P2 audit items.
 
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done.
 
@@ -113,6 +113,53 @@ Each module in `docs/MODULES.md` should get a `docs/blueprints/<module>.md` file
 
 ---
 
+## Phase 9 — Tenant-isolation freeze (May 2026)
+
+A two-week freeze (`docs/freeze/freeze-14-day.md`) was opened on 9 May 2026 to close any remaining cross-tenant leak before production go-live. Day-by-day deliverables:
+
+### Day 1-2 — Static tenant-isolation guard
+
+- [x] **Static scanner shipped.** `artifacts/api-server/tests/integration/tenantIsolation.test.ts` walks every `routes/*.ts` (excluding 4 documented public files), parses every `rawQuery`/`rawExecute` template literal, and fails if a tenant-scoped table is touched without a `companyId` predicate or a tenant-bound surrogate (`scope.activeAssignmentId`, `scope.userId`, etc.). Auto-discovered by vitest, runs in `scripts/guard.sh` step 9. **Initial run flagged 19 candidates; 18 after the auth-bootstrap allowlist.**
+- [x] **Findings register.** Every candidate triaged in `docs/freeze/freeze-day-2-findings.md` with one of five labels (BOOTSTRAP / READ-AFTER-WRITE / SURROGATE-FROM-SCOPED-FETCH / USER-SUPPLIED-NO-TENANT-CHECK / NEEDS-DEEPER-READ).
+
+### Day 3-5 — Defense-in-depth fixes
+
+- [x] **Real cross-tenant write closed.** `properties.ts` `POST /maintenance-requests` no longer accepts a `b.assignedTo` technician id from another company. The handler now validates the id against `scope.companyId` before INSERT, and the downstream JOIN reads also require `t."companyId" = $X`.
+- [x] **HIGH/MEDIUM oracles closed.** `finance-custodies.ts:441` and the two `properties.ts` JOINs now enforce `ea."companyId" = scope.companyId` directly (rather than relying on an upstream validation that a future refactor could remove).
+- [x] **13 additional defense-in-depth predicates added** across `accounting-engine.ts`, `crm.ts`, `employees.ts`, `hr.ts`, `warehouse.ts`. Full disposition table in `docs/freeze/freeze-day-2-findings.md`.
+- [x] **Allowlist trimmed to 3 entries**, each with an explicit reason: refresh-token bootstrap, and a read-after-INSERT pair where the parent `INSERT` enforced `companyId`.
+
+### Day 6-7 — `buildScopedWhere` migration
+
+- [x] **Policy documented.** `docs/freeze/freeze-day-6-7-migration.md` makes the migration boundary explicit: detail queries / aggregations / JOIN predicates / cross-tenant fallbacks / UNION queries are NOT migration candidates. The helper is for LIST endpoints only.
+- [x] **Representative migration shipped.** `auditLogs.ts` GET `/` now uses `buildScopedWhere`, which surfaces the latent benefit of respecting `scope.allowedCompanies` for users assigned to multiple companies.
+- Outstanding LIST endpoints (`documents.ts`, `requests.ts`, `workflows.ts`, `gov-integrations.ts`) tracked for post-freeze cleanup; not blocking the go/no-go decision.
+
+### Day 8-9 — KNOWN_ISSUES.md update (this entry)
+
+- [x] **This Phase 9 section.** Captures every closure and outstanding item from the freeze.
+
+### Day 10-11 — RBAC v2 migration grid (pending)
+
+- [ ] **Add a route × permission table to `docs/RBAC_V2.md`** enumerating all routes and marking which use `authorize()` vs the legacy `requirePermission()`.
+- [ ] **Migrate +100 endpoints** from `requirePermission()` to `authorize()`. Current state: 102/1024 migrated (~10%). The 12 currently-failing test files are downstream of this work — they assert the legacy `requirePermission(...)` string and will pass again as their target route is migrated.
+
+### Day 12-13 — Real-PG dynamic supertest harness (pending)
+
+- [ ] **Spin docker-compose Postgres in CI.** Seed two companies, three users per company, basic chart of accounts.
+- [ ] **30 scenarios.** Each asserts a success path + a cross-tenant fetch that must 404/403. Initial scenarios already sketched in `tests/integration/tenantIsolation.dynamic.test.ts.skip`, including:
+  - `/api/clients`, `/api/employees`, `/api/invoices`, `/api/finance/journal`, `/api/hr/leave-requests`, `/api/finance/budgets`, `/api/suppliers`, `/api/purchase-orders` — list/detail cross-tenant
+  - `POST /api/finance/custodies` with foreign assignmentId → 403
+  - `POST /api/properties/maintenance-requests` with foreign assignedTo → 400/403
+
+### Day 14 — Freeze final report + go/no-go (pending)
+
+- [ ] **Tally**: tests added, leaks fixed, queries migrated, endpoints migrated.
+- [ ] **Decision matrix**: GO if 0 P0 open, ≤ 5 P1 open, all tenant tests green; DELAY otherwise.
+- [ ] **Publish** `.local/tasks/freeze-final-report.md`.
+
+---
+
 ## Deeper operational gaps — status
 
 The first audit flagged 12 structural gaps. Current completion status:
@@ -128,7 +175,7 @@ The first audit flagged 12 structural gaps. Current completion status:
 9. **[x] Stop-system.** `system_stops` table + `systemStopGuard` in `lib/systemGovernor.ts`. Admin API at `POST/GET/PATCH /admin/system-stops`. Checked on every guarded mutation. Migration `116_system_stops.sql`.
 10. **[~] Automation layer.** `rules.ts` exists with schedule-based rules. Event-triggered rule execution via event bus is partial.
 11. **[~] Unified dashboard.** Each module has its own dashboard; exec dashboard (`execDashboard.ts`) aggregates per-module KPIs. Full composable surface is in progress.
-12. **[~] Expansion concerns.** Multi-tenant row-level isolation works. Cron job sharding is partially addressed via `cron_locks` table.
+12. **[~] Expansion concerns.** Multi-tenant row-level isolation works AND is now guarded by a static scanner (`tests/integration/tenantIsolation.test.ts`, see Phase 9) that fails CI on any unscoped raw SQL touching a tenant-scoped table. Cron job sharding is partially addressed via `cron_locks` table. Pending: real-PG dynamic harness on Day 12-13 of the freeze.
 
 ---
 

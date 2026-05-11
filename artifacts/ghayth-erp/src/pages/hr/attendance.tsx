@@ -45,7 +45,8 @@ function monthEndDate(month: string): string {
 
 function PenaltyChain({ record }: { record: any }) {
   const lateMin = record.lateMinutes || 0;
-  const penaltyLevel = record.penaltyLevel || 0;
+  const severityMap: Record<string, number> = { none: 0, verbal: 1, first_written: 2, second_written: 3, deduction: 4, suspension: 5 };
+  const penaltyLevel = severityMap[record.violationSeverity] ?? record.penaltyLevel ?? 0;
   const deduction = record.deductionAmount || 0;
   const overtimeMin = record.overtimeMinutes || 0;
 
