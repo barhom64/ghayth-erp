@@ -289,7 +289,7 @@ describe("Loan approval flow", () => {
     const endIdx = LOANS_ROUTE.indexOf("router.", idx + 10);
     const section = LOANS_ROUTE.slice(idx, endIdx);
     expect(section).toContain("isLast");
-    expect(section).toContain("loan.installmentCount - 1");
+    expect(section).toContain("installmentCount - 1");
   });
 
   it("posts GL disbursement entry via hrEngine", () => {
@@ -461,7 +461,7 @@ describe("Overtime monthly summary", () => {
 describe("Overtime self-service", () => {
   it("GET /overtime/my scopes by activeAssignmentId", () => {
     const idx = OVERTIME_ROUTE.indexOf('"/overtime/my"');
-    const section = OVERTIME_ROUTE.slice(idx, idx + 500);
+    const section = OVERTIME_ROUTE.slice(idx, idx + 600);
     expect(section).toContain("scope.activeAssignmentId");
   });
 });

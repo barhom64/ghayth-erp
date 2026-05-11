@@ -53,7 +53,7 @@ type Allow = { file: string; line: number; table: string; reason: string };
 const ALLOWLIST: Allow[] = [
   {
     file: "auth.ts",
-    line: 296,
+    line: 326,
     table: "employee_assignments",
     reason:
       "Refresh-token bootstrap. Runs before req.scope is built; the tenant boundary is the verified refresh token's employeeId, not scope.companyId.",
