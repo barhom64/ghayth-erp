@@ -159,4 +159,18 @@ describe("finance-gl-helpers — operator-facing GL posting endpoints", () => {
     // run that's already been (even partially) posted.
     expect(section).toMatch(/NOT EXISTS[\s\S]*adjustmentJournalEntryId/);
   });
+
+  it("registers GET /gl-helpers/realized-fx/history (audit-table view)", () => {
+    expect(SRC).toContain('glHelpersRouter.get(\n  "/gl-helpers/realized-fx/history"');
+  });
+
+  it("realized-fx history reads from fx_realized_postings filtered by companyId", () => {
+    const idx = SRC.indexOf("/gl-helpers/realized-fx/history");
+    const section = SRC.slice(idx, idx + 1400);
+    expect(section).toContain("FROM fx_realized_postings");
+    expect(section).toContain('"companyId" = $1');
+    expect(section).toContain("scope.companyId");
+    // Newest events first.
+    expect(section).toMatch(/ORDER BY\s+"postedAt"\s+DESC/);
+  });
 });
