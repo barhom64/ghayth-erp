@@ -8,6 +8,7 @@ import { Building, Plus, X, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from "@/contexts/app-context";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 
 export function BranchesTab() {
   const { refreshFilters } = useAppContext();
@@ -20,6 +21,10 @@ export function BranchesTab() {
   const [deleting, setDeleting] = useState<number | null>(null);
   const [filterCompanyId, setFilterCompanyId] = useState<number | "">( "");
   const [form, setForm] = useState({ name: "", nameEn: "", city: "", phone: "", companyId: "" });
+  // Delete dialog state — replaces window.confirm(). The dialog
+  // surfaces 409 blockers inline if the branch still has assignments,
+  // invoices, or other references that block delete.
+  const [deletingBranch, setDeletingBranch] = useState<{ id: number; name: string } | null>(null);
   const items = asList(data);
   const filteredItems = filterCompanyId
     ? items.filter((b: any) => b.companyId === filterCompanyId)
@@ -73,7 +78,7 @@ export function BranchesTab() {
           <Button variant="ghost" size="sm" onClick={() => handleEdit(r)} title="تعديل"><Pencil className="h-4 w-4" /></Button>
           <Button
             variant="ghost" size="sm"
-            onClick={() => { if (confirm("هل أنت متأكد من حذف هذا الفرع؟ سيؤثر ذلك على جميع البيانات المرتبطة به.")) handleDelete(r.id); }}
+            onClick={() => setDeletingBranch({ id: r.id, name: r.name || "—" })}
             disabled={deleting === r.id}
             title="حذف"
             className="text-red-500 hover:text-red-700"
@@ -217,6 +222,20 @@ export function BranchesTab() {
         searchPlaceholder="بحث في الفروع..."
         emptyMessage="لا توجد فروع"
         pageSize={0}
+      />
+
+      <ConfirmDeleteDialog
+        open={deletingBranch !== null}
+        onOpenChange={(v) => { if (!v) setDeletingBranch(null); }}
+        entity={{
+          type: "branch",
+          id: deletingBranch?.id ?? 0,
+          name: deletingBranch?.name ?? "",
+        }}
+        deletePath={`/settings/branches/${deletingBranch?.id}`}
+        invalidateKeys={[["settings-branches"]]}
+        successMessage="تم الحذف"
+        onDeleted={() => { setDeletingBranch(null); refetch(); refreshFilters(); }}
       />
     </div>
   );

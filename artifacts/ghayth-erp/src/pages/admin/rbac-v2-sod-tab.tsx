@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { ShieldAlert, Plus, Trash2, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -50,6 +51,10 @@ const SEVERITY_COLORS: Record<string, string> = {
 export function SodRulesTab() {
   const { toast } = useToast();
   const [showAdd, setShowAdd] = useState(false);
+  // Replaces window.confirm() — the dialog owns the DELETE call and
+  // surfaces 409 blockers inline if the server refuses (e.g. rules
+  // referenced by active assignments).
+  const [deletingRule, setDeletingRule] = useState<SodRule | null>(null);
 
   const { data: sodData, refetch, isLoading } = useApiQuery<{ rules: SodRule[]; violations: SodViolation[] }>(
     ["rbac-sod"],
@@ -74,15 +79,10 @@ export function SodRulesTab() {
     }
   };
 
-  const remove = async (rule: SodRule) => {
-    if (!confirm(`حذف القاعدة "${rule.label_ar}"؟`)) return;
-    try {
-      await apiFetch(`/rbac/v2/sod/${rule.id}`, { method: "DELETE" });
-      toast({ title: "تم الحذف" });
-      refetch();
-    } catch (err: any) {
-      toast({ title: "فشل الحذف", description: err?.message || "خطأ", variant: "destructive" });
-    }
+  // Open the confirm dialog — the actual DELETE fires from inside
+  // ConfirmDeleteDialog via the deletePath it's handed below.
+  const remove = (rule: SodRule) => {
+    setDeletingRule(rule);
   };
 
   if (isLoading) return <LoadingSpinner />;
@@ -166,6 +166,20 @@ export function SodRulesTab() {
       </div>
 
       <AddSodRuleDialog open={showAdd} onClose={() => setShowAdd(false)} features={features} onCreated={() => refetch()} />
+
+      <ConfirmDeleteDialog
+        open={deletingRule !== null}
+        onOpenChange={(v) => { if (!v) setDeletingRule(null); }}
+        entity={{
+          type: "rbac_sod_rule",
+          id: deletingRule?.id ?? 0,
+          name: deletingRule?.label_ar ?? "",
+        }}
+        deletePath={`/rbac/v2/sod/${deletingRule?.id}`}
+        invalidateKeys={[["rbac-sod"]]}
+        successMessage="تم الحذف"
+        onDeleted={() => { setDeletingRule(null); refetch(); }}
+      />
     </div>
   );
 }
