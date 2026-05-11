@@ -151,7 +151,7 @@ router.patch("/postings/:id", authorize({ feature: "hr.recruitment", action: "up
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = zodParse(updatePostingSchema.safeParse(req.body)) as any;
+    const b = zodParse(updatePostingSchema.safeParse(req.body));
     const sets: string[] = [];
     const params: unknown[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }

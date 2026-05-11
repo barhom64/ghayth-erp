@@ -327,7 +327,7 @@ router.patch("/:id", authorize({ feature: "tasks", action: "update", resource: {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { title, description, type, priority, status, scheduledStart, scheduledEnd, scheduledDate, notes } = zodParse(updateTaskSchema.safeParse(req.body)) as any;
+    const { title, description, type, priority, status, scheduledStart, scheduledEnd, scheduledDate, notes } = zodParse(updateTaskSchema.safeParse(req.body));
     const sets: string[] = [];
     const params: any[] = [];
     let idx = 1;

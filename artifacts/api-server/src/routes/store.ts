@@ -127,7 +127,7 @@ router.patch("/products/:id", authorize({ feature: "store", action: "update" }),
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(`SELECT id FROM store_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المنتج غير موجود");
-    const b = zodParse(updateStoreProductSchema.safeParse(req.body)) as any;
+    const b = zodParse(updateStoreProductSchema.safeParse(req.body));
     const sets: string[] = [];
     const params: any[] = [];
     if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
@@ -264,7 +264,7 @@ router.patch("/orders/:id", authorize({ feature: "store", action: "update" }), a
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = zodParse(updateStoreOrderSchema.safeParse(req.body)) as any;
+    const b = zodParse(updateStoreOrderSchema.safeParse(req.body));
     const sets: string[] = [];
     const params: any[] = [];
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }

@@ -344,7 +344,7 @@ router.get("/seasons/:id", authorize({ feature: "umrah", action: "view" }), asyn
 router.post("/seasons", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = zodParse(createSeasonSchema.safeParse(req.body)) as any;
+    const b = zodParse(createSeasonSchema.safeParse(req.body));
     const rows = await rawQuery(
       `INSERT INTO umrah_seasons ("companyId",title,"startDate","endDate",notes) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
       [scope.companyId, b.title, b.startDate, b.endDate, b.notes]
@@ -441,7 +441,7 @@ router.get("/agents/:id", authorize({ feature: "umrah", action: "view" }), async
 router.post("/agents", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = zodParse(createAgentSchema.safeParse(req.body)) as any;
+    const b = zodParse(createAgentSchema.safeParse(req.body));
     const rows = await rawQuery(
       `INSERT INTO umrah_agents ("companyId",name,"contactPerson",phone,email,country,"profitMargin","contractRef",currency,notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
       [scope.companyId, b.name, b.contactPerson, b.phone, b.email, b.country, b.profitMargin || 0, b.contractRef, b.currency || "SAR", b.notes]
@@ -519,7 +519,7 @@ router.get("/packages", authorize({ feature: "umrah", action: "list" }), async (
 router.post("/packages", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = zodParse(createPackageSchema.safeParse(req.body)) as any;
+    const b = zodParse(createPackageSchema.safeParse(req.body));
     if (b.seasonId) await requireOpenSeason(Number(b.seasonId), scope.companyId);
     const rows = await rawQuery(
       `INSERT INTO umrah_packages ("companyId",name,"seasonId","costPrice","sellPrice","includesTransport","includesHotel","includesMeals","includesZiyarat",duration,description) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
@@ -634,7 +634,7 @@ router.get("/pilgrims", authorize({ feature: "umrah", action: "list" }), async (
 router.post("/pilgrims", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = zodParse(createPilgrimSchema.safeParse(req.body)) as any;
+    const b = zodParse(createPilgrimSchema.safeParse(req.body));
 
     if (!b.fullName || !String(b.fullName).trim()) {
       throw new ValidationError("اسم المعتمر مطلوب", {
@@ -1417,7 +1417,7 @@ router.delete("/transport/:id", authorize({ feature: "umrah", action: "delete" }
 router.post("/transport", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = zodParse(createTransportSchema.safeParse(req.body)) as any;
+    const b = zodParse(createTransportSchema.safeParse(req.body));
     if (b.seasonId) await requireOpenSeason(Number(b.seasonId), scope.companyId);
     if (b.vehicleId) {
       const [vehicle] = await rawQuery<any>(
