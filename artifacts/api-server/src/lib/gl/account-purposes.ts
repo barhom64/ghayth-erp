@@ -39,6 +39,7 @@ export type AccountPurpose =
   | "realized_fx_gain"
   | "realized_fx_loss"
   // Inventory adjustments
+  | "inventory_asset"
   | "inventory_writeoff_loss"
   | "inventory_writeup_gain"
   | "cycle_count_variance_gain"
@@ -82,6 +83,7 @@ const FALLBACK_CODE: Record<AccountPurpose, string> = {
   fx_revaluation_loss:      "5900",
   realized_fx_gain:         "4910",
   realized_fx_loss:         "5910",
+  inventory_asset:          "1400",
   inventory_writeoff_loss:  "5610",
   inventory_writeup_gain:   "4610",
   cycle_count_variance_gain:"4620",
