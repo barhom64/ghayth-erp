@@ -173,6 +173,39 @@ export function registerUmrahEventListeners(): void {
       "normal", `/umrah/violations`);
   });
 
+  // 6b. Sales invoice generated via /umrah/invoices/generate
+  eventBus.on("umrah.sales_invoice.generated", async (payload) => {
+    await logEvent("umrah.sales_invoice.generated", payload);
+    await logAudit("umrah.sales_invoice.generated", { ...payload, action: "create" });
+    const d = typeof payload.details === "string" ? safeParse(payload.details) : (payload.details as any);
+    await notifyManager(payload, "صدرت فاتورة عمرة",
+      `فاتورة ${d?.ref ?? ""} — إجمالي ${d?.total ?? 0} ر.س (${d?.groupCount ?? 0} مجموعة)`,
+      "normal", `/finance/invoices`);
+    await notifyCfo(payload, "فاتورة عمرة جديدة",
+      `فاتورة ${d?.ref ?? ""} — تحتاج متابعة التحصيل`,
+      "normal", `/finance/invoices`);
+  });
+
+  // 6c. NUSK purchase invoice posted into the GL (from voucher import)
+  eventBus.on("umrah.nusk_invoice.created", async (payload) => {
+    await logEvent("umrah.nusk_invoice.created", payload);
+    await logAudit("umrah.nusk_invoice.created", { ...payload, action: "create" });
+    const d = typeof payload.details === "string" ? safeParse(payload.details) : (payload.details as any);
+    await notifyCfo(payload, "فاتورة شراء نسك جديدة",
+      `فاتورة ${d?.nuskInvoiceNumber ?? ""} — تكلفة ${d?.netCost ?? 0} ر.س`,
+      "normal", `/umrah/nusk-invoices`);
+  });
+
+  // 6d. Letter generated (official_letters draft)
+  eventBus.on("umrah.letter.generated", async (payload) => {
+    await logEvent("umrah.letter.generated", payload);
+    await logAudit("umrah.letter.generated", { ...payload, action: "create" });
+    const d = typeof payload.details === "string" ? safeParse(payload.details) : (payload.details as any);
+    await notifyManager(payload, "تم إنشاء خطاب رسمي",
+      `نوع: ${d?.type ?? "general"} — يحتاج مراجعة واعتماد`,
+      "normal", `/umrah/letters/${payload.entityId}`);
+  });
+
   // 6. Sub-agent linked to a client (or re-linked)
   eventBus.on("umrah.agent.linked", async (payload) => {
     await logEvent("umrah.agent.linked", payload);
@@ -182,7 +215,14 @@ export function registerUmrahEventListeners(): void {
       "normal", `/umrah/sub-agents`);
   });
 
-  // 7. Commission calculated (per employee per month)
+  // 7. Commission calculated (per employee per month) — links to HR
+  //    payroll_lines via the existing payroll engine. The listener:
+  //      * finds the matching payroll_run (same year + month + company)
+  //      * inserts a payroll_lines row (or updates if one already exists)
+  //        with the commission as `overtime` (the only allowance bucket
+  //        already in the runtime schema that finance treats as a positive
+  //        adjustment to net salary)
+  //      * back-links the payrollLineId onto the calculation row
   eventBus.on("umrah.commission.calculated", async (payload) => {
     await logEvent("umrah.commission.calculated", payload);
     await logAudit("umrah.commission.calculated", { ...payload, action: "calculate" });
@@ -190,6 +230,90 @@ export function registerUmrahEventListeners(): void {
     await notifyManager(payload, "تم حساب عمولة موظف",
       `الموظف #${d?.employeeId ?? "?"} — شهر ${d?.hijri?.month ?? "?"}/${d?.hijri?.year ?? "?"} — المبلغ النهائي ${d?.finalAmount ?? 0} ر.س`,
       "normal", `/umrah/commission-plans`);
+
+    // Skip payroll write when amount is 0 (excluded months / failed
+    // conditions) — but still keep the audit/notification rows above.
+    if (!d || !Number.isFinite(d.finalAmount) || d.finalAmount <= 0) return;
+
+    try {
+      const companyId = payload.companyId as number;
+      const calcId = payload.entityId as number;
+      const employeeId = d.employeeId as number;
+      const finalAmount = Number(d.finalAmount);
+      const hijriMonth = d.hijri?.month;
+      const hijriYear = d.hijri?.year;
+
+      // 1. Resolve the employee's active assignment.
+      const a = await pool.query(
+        `SELECT id, "branchId" FROM employee_assignments
+          WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active'
+          ORDER BY "isPrimary" DESC, id DESC LIMIT 1`,
+        [employeeId, companyId]
+      );
+      if (a.rowCount === 0) {
+        console.warn(`[UmrahPayroll] no active assignment for employee ${employeeId} — skipping payroll write`);
+        return;
+      }
+      const assignmentId = a.rows[0].id as number;
+
+      // 2. Locate the payroll_run that owns this period (same Hijri
+      //    month/year on the run header). If no run yet → no write;
+      //    when HR generates the run it'll pick up the commission via
+      //    a follow-up sweep (cron C32 + manual recalculate also re-emit
+      //    the event so the listener re-fires).
+      const r = await pool.query(
+        `SELECT id FROM payroll_runs
+          WHERE "companyId"=$1 AND month=$2 AND year=$3
+            AND status NOT IN ('cancelled','rejected')
+          ORDER BY id DESC LIMIT 1`,
+        [companyId, hijriMonth, hijriYear]
+      );
+      if (r.rowCount === 0) return;
+      const runId = r.rows[0].id as number;
+
+      // 3. UPSERT the payroll line — keyed on (runId, assignmentId).
+      const existing = await pool.query(
+        `SELECT id, overtime, "grossSalary", "netSalary"
+           FROM payroll_lines
+          WHERE "runId"=$1 AND "assignmentId"=$2`,
+        [runId, assignmentId]
+      );
+      let payrollLineId: number;
+      if ((existing.rowCount ?? 0) > 0) {
+        const row = existing.rows[0];
+        const newOvertime = Number(row.overtime ?? 0) + finalAmount;
+        const newGross = Number(row.grossSalary ?? 0) + finalAmount;
+        const newNet = Number(row.netSalary ?? 0) + finalAmount;
+        await pool.query(
+          `UPDATE payroll_lines
+              SET overtime=$1, "grossSalary"=$2, "netSalary"=$3
+            WHERE id=$4`,
+          [newOvertime, newGross, newNet, row.id]
+        );
+        payrollLineId = row.id as number;
+      } else {
+        const ins = await pool.query(
+          `INSERT INTO payroll_lines
+             ("runId","assignmentId","employeeId",
+              basic, overtime, "grossSalary", "netSalary",
+              gosi, "gosiEmployer", "lateDeduction", "absenceDeduction",
+              "violationDeduction", "loanDeduction", "overtimeHours")
+           VALUES ($1,$2,$3, 0,$4,$4,$4, 0,0,0,0,0,0,0) RETURNING id`,
+          [runId, assignmentId, employeeId, finalAmount]
+        );
+        payrollLineId = ins.rows[0].id as number;
+      }
+
+      // 4. Back-link onto the calculation row.
+      await pool.query(
+        `UPDATE employee_commission_calculations
+            SET "payrollLineId"=$1, "updatedAt"=NOW()
+          WHERE id=$2`,
+        [payrollLineId, calcId]
+      );
+    } catch (err) {
+      console.error("[UmrahPayroll] payroll line write failed:", err);
+    }
   });
 }
 

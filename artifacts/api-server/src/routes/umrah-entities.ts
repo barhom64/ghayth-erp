@@ -56,6 +56,10 @@ import {
   type CommissionTier,
   type SimulateInput,
 } from "../lib/umrahCommissionEngine.js";
+import {
+  generateUmrahSalesInvoice,
+  type FinanceScope,
+} from "../lib/umrahFinanceLink.js";
 
 const router = Router();
 router.use(authMiddleware);
@@ -1346,6 +1350,413 @@ router.get("/dashboard/overview", requirePermission("umrah:read"), async (req, r
       },
     });
   } catch (err) { handleRouteError(err, res, "Dashboard overview"); }
+});
+
+// ===========================================================================
+// SALES INVOICE GENERATION (§4.2) — central invoices + journal entry
+// ===========================================================================
+
+const generateInvoiceSchema = z.object({
+  subAgentId: z.coerce.number().int().positive(),
+  groupIds: z.array(z.coerce.number().int().positive()).min(1, "اختر مجموعة واحدة على الأقل"),
+  invoiceDate: z.string().optional(),
+  netDays: z.coerce.number().int().nonnegative().optional(),
+  vatRate: z.coerce.number().nonnegative().optional(),
+  pricePerMutamerOverride: z.coerce.number().nonnegative().optional(),
+  notes: z.string().optional().nullable(),
+});
+
+router.post("/invoices/generate", requirePermission("umrah:write"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const body = generateInvoiceSchema.parse(req.body);
+    const financeScope: FinanceScope = {
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? 1,
+      userId: scope.userId,
+      activeAssignmentId: scope.activeAssignmentId ?? scope.userId,
+    };
+    const result = await generateUmrahSalesInvoice(financeScope, body);
+    res.status(201).json(result);
+  } catch (err) { handleRouteError(err, res, "Generate sales invoice"); }
+});
+
+// List the invoices ready to bill (groups settled but not yet centralInvoiceId).
+router.get("/invoices/billable/:subAgentId", requirePermission("umrah:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const subAgentId = idParam.parse(req.params.subAgentId);
+    const rows = await rawQuery<any>(
+      `SELECT g.id, g."nuskGroupNumber", g.name, g."mutamerCount",
+              g."nuskInvoiceNumber", g.status,
+              ( SELECT MIN(m."entryDate") FROM umrah_mutamers m
+                 WHERE m."groupId" = g.id AND m."deletedAt" IS NULL ) AS "earliestEntry",
+              ( SELECT COALESCE(SUM(v."penaltyAmount"),0) FROM umrah_violations v
+                 WHERE v."groupId" = g.id AND v."subAgentId" = $1
+                   AND v.status IN ('detected','open','disputed') ) AS "openPenalties"
+         FROM umrah_groups g
+        WHERE g."companyId"=$2
+          AND g."subAgentId"=$1
+          AND g."deletedAt" IS NULL
+          AND g."centralInvoiceId" IS NULL
+        ORDER BY g."createdAt" ASC`,
+      [subAgentId, scope.companyId]
+    );
+    res.json({ data: rows });
+  } catch (err) { handleRouteError(err, res, "List billable groups"); }
+});
+
+// ===========================================================================
+// CLIENT 360° — Umrah summary tab (§16.1)
+// ===========================================================================
+
+router.get("/clients/:clientId/umrah-summary", requirePermission("umrah:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const clientId = idParam.parse(req.params.clientId);
+
+    const [client] = await rawQuery<any>(
+      `SELECT id, name FROM clients
+        WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [clientId, scope.companyId]
+    );
+    if (!client) throw new NotFoundError("العميل غير موجود");
+
+    const subAgents = await rawQuery<any>(
+      `SELECT id, name, "nuskCode", "agentId", "paymentTerms", "isActive"
+         FROM umrah_sub_agents
+        WHERE "clientId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [clientId, scope.companyId]
+    );
+
+    const groups = subAgents.length === 0 ? [] : await rawQuery<any>(
+      `SELECT g.id, g."nuskGroupNumber", g.name, g."mutamerCount", g.status,
+              g."centralInvoiceId", g."nuskInvoiceNumber", g."createdAt"
+         FROM umrah_groups g
+        WHERE g."companyId"=$1
+          AND g."subAgentId" = ANY($2)
+          AND g."deletedAt" IS NULL
+        ORDER BY g."createdAt" DESC LIMIT 100`,
+      [scope.companyId, subAgents.map((s) => s.id)]
+    );
+
+    const mutamerStats = subAgents.length === 0 ? null : (await rawQuery<any>(
+      `SELECT
+         COUNT(*)::int AS "totalMutamers",
+         COUNT(*) FILTER (WHERE m."isInsideKingdom"=true)::int AS "insideKingdom",
+         COUNT(*) FILTER (WHERE m."overstayDays" > 0 AND m."isInsideKingdom"=true)::int AS "overstays",
+         COUNT(*) FILTER (WHERE m.status='absconded')::int AS "absconders"
+         FROM umrah_mutamers m
+         JOIN umrah_groups g ON g.id = m."groupId"
+        WHERE g."companyId"=$1
+          AND g."subAgentId" = ANY($2)
+          AND m."deletedAt" IS NULL`,
+      [scope.companyId, subAgents.map((s) => s.id)]
+    ))[0];
+
+    const invoices = subAgents.length === 0 ? [] : await rawQuery<any>(
+      `SELECT DISTINCT i.id, i.ref, i.total, i."paidAmount", i.status, i."dueDate", i."createdAt"
+         FROM invoices i
+         JOIN umrah_groups g ON g."centralInvoiceId" = i.id
+        WHERE g."companyId"=$1 AND g."subAgentId" = ANY($2)
+          AND i."deletedAt" IS NULL
+        ORDER BY i."createdAt" DESC LIMIT 50`,
+      [scope.companyId, subAgents.map((s) => s.id)]
+    );
+
+    const violations = subAgents.length === 0 ? [] : await rawQuery<any>(
+      `SELECT id, type, "referenceNumber", "penaltyAmount", status, "createdAt"
+         FROM umrah_violations
+        WHERE "companyId"=$1
+          AND "subAgentId" = ANY($2)
+          AND "deletedAt" IS NULL
+          AND status IN ('detected','open','disputed')
+        ORDER BY "createdAt" DESC LIMIT 50`,
+      [scope.companyId, subAgents.map((s) => s.id)]
+    );
+
+    // Current price (most recent valid pricing row for any of the sub-agents).
+    const currentPrice = subAgents.length === 0 ? null : (await rawQuery<any>(
+      `SELECT "pricePerMutamer", "validFrom", "validTo"
+         FROM umrah_pricing
+        WHERE "companyId"=$1
+          AND "deletedAt" IS NULL
+          AND ( "subAgentId" = ANY($2)
+                OR ("subAgentId" IS NULL AND "agentId" IN (
+                      SELECT "agentId" FROM umrah_sub_agents WHERE id = ANY($2)
+                    )))
+          AND "validFrom" <= CURRENT_DATE
+          AND ("validTo" IS NULL OR "validTo" >= CURRENT_DATE)
+        ORDER BY "subAgentId" NULLS LAST, "validFrom" DESC
+        LIMIT 1`,
+      [scope.companyId, subAgents.map((s) => s.id)]
+    ))[0] ?? null;
+
+    res.json({
+      client,
+      subAgents,
+      stats: mutamerStats ?? { totalMutamers: 0, insideKingdom: 0, overstays: 0, absconders: 0 },
+      groups,
+      invoices,
+      openViolations: violations,
+      currentPrice,
+    });
+  } catch (err) { handleRouteError(err, res, "Client 360 Umrah summary"); }
+});
+
+// ===========================================================================
+// LETTERS (§14) — official_letters generator
+// ===========================================================================
+
+const letterTypeSchema = z.enum([
+  "ministry_intro",         // خطاب تعريف معتمر/مجموعة
+  "overstay_report",        // خطاب تجاوز للجوازات
+  "absconder_report",       // خطاب بلاغ تغيّب
+  "settlement_statement",   // خطاب تسوية مالية
+  "season_closure",         // خطاب إنهاء موسم
+]);
+
+const generateLetterSchema = z.object({
+  type: letterTypeSchema,
+  scope: z.enum(["mutamer", "group", "sub_agent", "season"]),
+  mutamerIds: z.array(z.coerce.number().int().positive()).optional(),
+  groupIds: z.array(z.coerce.number().int().positive()).optional(),
+  subAgentId: z.coerce.number().int().positive().optional(),
+  seasonId: z.coerce.number().int().positive().optional(),
+  recipient: z.string().optional(),
+  additionalNotes: z.string().optional(),
+});
+
+const LETTER_TITLES: Record<string, string> = {
+  ministry_intro: "خطاب تعريف وزارة الحج والعمرة",
+  overstay_report: "خطاب إخطار بمعتمر متجاوز",
+  absconder_report: "خطاب بلاغ تغيّب",
+  settlement_statement: "خطاب تسوية مالية",
+  season_closure: "خطاب إنهاء موسم",
+};
+
+const LETTER_RECIPIENT_DEFAULTS: Record<string, string> = {
+  ministry_intro: "سعادة وكيل وزارة الحج والعمرة",
+  overstay_report: "إدارة الجوازات — قسم العمرة",
+  absconder_report: "إدارة الجوازات — قسم البلاغات",
+  settlement_statement: "الوكيل الخارجي",
+  season_closure: "الوكيل الخارجي",
+};
+
+router.post("/letters/generate", requirePermission("umrah:write"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const body = generateLetterSchema.parse(req.body);
+
+    let mutamers: any[] = [];
+    let groups: any[] = [];
+    let subAgent: any = null;
+    let season: any = null;
+
+    if (body.mutamerIds && body.mutamerIds.length > 0) {
+      mutamers = await rawQuery(
+        `SELECT m.id, m.name, m.nationality, m."passportNumber", m."visaNumber",
+                m."borderNumber", m."mofaNumber", m."entryDate", m."exitDate",
+                m."actualStayDays", m."programDuration", m.status,
+                g."nuskGroupNumber", g.name AS "groupName"
+           FROM umrah_mutamers m
+           LEFT JOIN umrah_groups g ON g.id = m."groupId"
+          WHERE m.id = ANY($1) AND m."companyId"=$2 AND m."deletedAt" IS NULL`,
+        [body.mutamerIds, scope.companyId]
+      );
+    }
+    if (body.groupIds && body.groupIds.length > 0) {
+      groups = await rawQuery(
+        `SELECT g.id, g."nuskGroupNumber", g.name, g."mutamerCount",
+                a.name AS "agentName", s.name AS "subAgentName"
+           FROM umrah_groups g
+           LEFT JOIN umrah_agents a ON a.id = g."agentId"
+           LEFT JOIN umrah_sub_agents s ON s.id = g."subAgentId"
+          WHERE g.id = ANY($1) AND g."companyId"=$2 AND g."deletedAt" IS NULL`,
+        [body.groupIds, scope.companyId]
+      );
+    }
+    if (body.subAgentId) {
+      [subAgent] = await rawQuery<any>(
+        `SELECT id, name, "nuskCode", "clientId" FROM umrah_sub_agents
+          WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [body.subAgentId, scope.companyId]
+      );
+    }
+    if (body.seasonId) {
+      [season] = await rawQuery<any>(
+        `SELECT id, title, "hijriYear" FROM umrah_seasons
+          WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [body.seasonId, scope.companyId]
+      );
+    }
+
+    // Render the body text — RTL, business-formal Arabic. Each section is
+    // a separate paragraph so the user can edit the generated draft.
+    const lines: string[] = [];
+    lines.push(`السلام عليكم ورحمة الله وبركاته،`);
+    lines.push("");
+    if (body.type === "ministry_intro" && mutamers.length > 0) {
+      lines.push(`نفيدكم بأنّ المعتمرين المُدرجة أسماؤهم أدناه يتبعون مؤسستنا (ترخيص رقم 2091) خلال موسم العمرة الجاري:`);
+      lines.push("");
+      lines.push(`الاسم — الجنسية — رقم الجواز — رقم التأشيرة — رقم الحدود`);
+      for (const m of mutamers) {
+        lines.push(`• ${m.name} — ${m.nationality ?? "—"} — جواز ${m.passportNumber ?? "—"} — تأشيرة ${m.visaNumber ?? "—"} — حدود ${m.borderNumber ?? "—"}`);
+      }
+    } else if (body.type === "ministry_intro" && groups.length > 0) {
+      lines.push(`نفيدكم بمجموعات العمرة التالية تحت كفالتنا:`);
+      lines.push("");
+      for (const g of groups) {
+        lines.push(`• مجموعة ${g.nuskGroupNumber} — ${g.name} — ${g.mutamerCount} معتمر — الوكيل ${g.agentName ?? "—"}`);
+      }
+    } else if (body.type === "overstay_report") {
+      lines.push(`نُفيد سعادتكم بأنّ المعتمرين الآتية أسماؤهم قد تجاوزوا المدة المسموح بها:`);
+      lines.push("");
+      const overstayers = mutamers.length > 0 ? mutamers : await rawQuery<any>(
+        `SELECT m.id, m.name, m.nationality, m."passportNumber", m."borderNumber",
+                m."actualStayDays", m."programDuration"
+           FROM umrah_mutamers m
+          WHERE m."companyId"=$1
+            AND m."deletedAt" IS NULL
+            AND m."isInsideKingdom"=true
+            AND m."overstayDays" > 0`,
+        [scope.companyId]
+      );
+      for (const m of overstayers) {
+        const overDays = Math.max(0, Number(m.actualStayDays ?? 0) - Number(m.programDuration ?? 0));
+        lines.push(`• ${m.name} — جواز ${m.passportNumber} — حدود ${m.borderNumber ?? "—"} — تجاوز ${overDays} يوم`);
+      }
+    } else if (body.type === "absconder_report") {
+      const absconders = mutamers.length > 0 ? mutamers : await rawQuery<any>(
+        `SELECT m.id, m.name, m.nationality, m."passportNumber", m."borderNumber",
+                m."entryDate", m."entryPort"
+           FROM umrah_mutamers m
+          WHERE m."companyId"=$1
+            AND m."deletedAt" IS NULL
+            AND m.status='absconded'`,
+        [scope.companyId]
+      );
+      lines.push(`نُبلغكم بتغيّب المعتمرين الآتية بياناتهم — ونرجو التكرّم باتّخاذ الإجراء النظامي اللازم:`);
+      lines.push("");
+      for (const m of absconders) {
+        lines.push(`• ${m.name} — ${m.nationality ?? "—"} — جواز ${m.passportNumber} — حدود ${m.borderNumber ?? "—"} — دخل في ${m.entryDate ? String(m.entryDate).slice(0, 10) : "—"} عبر ${m.entryPort ?? "—"}`);
+      }
+    } else if (body.type === "settlement_statement" && subAgent) {
+      lines.push(`نُحيطكم علماً بكشف التسوية المالية لحساب الوكيل '${subAgent.name}' عن موسم العمرة الحالي.`);
+      const totals = await rawQuery<any>(
+        `SELECT
+            COALESCE(SUM(i.total),0) AS "totalBilled",
+            COALESCE(SUM(i."paidAmount"),0) AS "totalPaid"
+           FROM invoices i
+           JOIN umrah_groups g ON g."centralInvoiceId" = i.id
+          WHERE g."subAgentId"=$1 AND g."companyId"=$2 AND i."deletedAt" IS NULL`,
+        [subAgent.id, scope.companyId]
+      );
+      const t = totals[0] ?? { totalBilled: 0, totalPaid: 0 };
+      lines.push("");
+      lines.push(`إجمالي المفوتر: ${Number(t.totalBilled).toFixed(2)} ر.س`);
+      lines.push(`إجمالي المسدّد: ${Number(t.totalPaid).toFixed(2)} ر.س`);
+      lines.push(`الرصيد المتبقي: ${(Number(t.totalBilled) - Number(t.totalPaid)).toFixed(2)} ر.س`);
+    } else if (body.type === "season_closure" && season) {
+      const stats = await rawQuery<any>(
+        `SELECT
+            COUNT(DISTINCT m.id) AS "totalMutamers",
+            COUNT(DISTINCT g.id) AS "totalGroups",
+            COUNT(*) FILTER (WHERE v.id IS NOT NULL) AS "totalViolations"
+           FROM umrah_groups g
+           LEFT JOIN umrah_mutamers m ON m."groupId" = g.id AND m."deletedAt" IS NULL
+           LEFT JOIN umrah_violations v ON v."groupId" = g.id AND v."deletedAt" IS NULL
+          WHERE g."seasonId"=$1 AND g."companyId"=$2 AND g."deletedAt" IS NULL`,
+        [season.id, scope.companyId]
+      );
+      const s = stats[0] ?? { totalMutamers: 0, totalGroups: 0, totalViolations: 0 };
+      lines.push(`نحيطكم علماً بختام موسم ${season.title}:`);
+      lines.push("");
+      lines.push(`عدد المجموعات: ${s.totalGroups}`);
+      lines.push(`إجمالي المعتمرين: ${s.totalMutamers}`);
+      lines.push(`إجمالي المخالفات: ${s.totalViolations}`);
+    }
+
+    if (body.additionalNotes) {
+      lines.push("");
+      lines.push(body.additionalNotes);
+    }
+    lines.push("");
+    lines.push(`وتقبلوا تحياتنا،`);
+    lines.push(`مؤسسة الدور الحديثة للاستثمار — ترخيص العمرة رقم 2091`);
+    const content = lines.join("\n");
+
+    // Persist via the central official_letters table — same engine used
+    // for HR / legal / contract letters. No new letters table needed.
+    const subject = LETTER_TITLES[body.type];
+    const recipient = body.recipient ?? LETTER_RECIPIENT_DEFAULTS[body.type];
+
+    const ins = await rawExecute(
+      `INSERT INTO official_letters
+         ("companyId", type, subject, content, status, "createdByAssignmentId")
+       VALUES ($1, $2, $3, $4, 'draft', $5) RETURNING id`,
+      [
+        scope.companyId,
+        `umrah_${body.type}`,
+        `${subject} — ${recipient}`,
+        content,
+        scope.activeAssignmentId ?? scope.userId,
+      ]
+    );
+
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "official_letters", entityId: ins.insertId,
+      after: { type: body.type, scope: body.scope, recipient },
+    });
+    await emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? undefined,
+      userId: scope.userId,
+      action: "umrah.letter.generated",
+      entity: "official_letters",
+      entityId: ins.insertId,
+      details: JSON.stringify({ type: body.type, scope: body.scope, recipient }),
+    });
+
+    res.status(201).json({
+      id: ins.insertId,
+      type: body.type,
+      subject,
+      recipient,
+      content,
+      status: "draft",
+    });
+  } catch (err) { handleRouteError(err, res, "Generate letter"); }
+});
+
+router.get("/letters", requirePermission("umrah:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<any>(
+      `SELECT id, type, subject, content, status, "createdAt", "sentAt", "approvedAt"
+         FROM official_letters
+        WHERE "companyId"=$1 AND type LIKE 'umrah_%'
+        ORDER BY "createdAt" DESC LIMIT 200`,
+      [scope.companyId]
+    );
+    res.json({ data: rows });
+  } catch (err) { handleRouteError(err, res, "List umrah letters"); }
+});
+
+router.get("/letters/:id", requirePermission("umrah:read"), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = idParam.parse(req.params.id);
+    const [row] = await rawQuery<any>(
+      `SELECT id, type, subject, content, status, "createdAt", "sentAt", "approvedAt"
+         FROM official_letters
+        WHERE id=$1 AND "companyId"=$2 AND type LIKE 'umrah_%'`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("الخطاب غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Get umrah letter"); }
 });
 
 export default router;

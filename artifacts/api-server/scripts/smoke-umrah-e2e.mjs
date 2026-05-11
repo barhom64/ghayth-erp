@@ -718,7 +718,266 @@ async function main() {
   });
 
   // ───────────────────────────────────────────────────────────────────────
-  await section("§13 CLEANUP", async () => {
+  await section("§13 PHASE-7 FINANCE LINK — purchase journal auto-posted from vouchers", async () => {
+    const journals = await dbRows(
+      `SELECT id, ref, type FROM journal_entries
+        WHERE "companyId"=1 AND "sourceType"='umrah_nusk_invoice'
+          AND "createdAt" > NOW() - INTERVAL '10 minutes'
+        ORDER BY id DESC`
+    );
+    assert(journals.length >= 2, `journal_entries posted for paid NUSK vouchers (got ${journals.length})`);
+    const refsOk = journals.every((j) => j.ref.startsWith("NUSK-"));
+    assert(refsOk, "every purchase journal has NUSK-* ref");
+
+    const linkedInvoices = await dbCount(
+      `SELECT COUNT(*) FROM umrah_nusk_invoices
+        WHERE "companyId"=1 AND "journalEntryId" IS NOT NULL`
+    );
+    assert(linkedInvoices >= 2, `umrah_nusk_invoices back-linked via journalEntryId (got ${linkedInvoices})`);
+
+    const ddBalance = await dbRow(
+      `SELECT SUM(debit) AS total_debit FROM journal_lines
+        JOIN journal_entries je ON je.id = journal_lines."journalId"
+        WHERE je."companyId"=1 AND je."sourceType"='umrah_nusk_invoice'`
+    );
+    const ccBalance = await dbRow(
+      `SELECT SUM(credit) AS total_credit FROM journal_lines
+        JOIN journal_entries je ON je.id = journal_lines."journalId"
+        WHERE je."companyId"=1 AND je."sourceType"='umrah_nusk_invoice'`
+    );
+    assert(Number(ddBalance.total_debit) === Number(ccBalance.total_credit),
+      `purchase journal lines balanced: debit=${ddBalance.total_debit}, credit=${ccBalance.total_credit}`);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  await section("§14 PHASE-7 FINANCE LINK — sales invoice generation", async () => {
+    // The voucher import flipped GRP-A to centralInvoiceId=NULL, status='settled'?
+    // No — settled means already billed. Let me check the actual state.
+    const groupBeforeBilling = await dbRow(
+      `SELECT id, "centralInvoiceId", status FROM umrah_groups
+        WHERE "nuskGroupNumber"='E2E-GRP-A' AND "companyId"=1`
+    );
+    assert(groupBeforeBilling.centralInvoiceId === null,
+      "GRP-A not yet billed (centralInvoiceId is null)");
+
+    // Find the sub-agent that owns GRP-A (it's sub1Id, linked to clientId=1)
+    const subAgentForA = await dbRow(
+      `SELECT g."subAgentId" FROM umrah_groups g
+        WHERE g."nuskGroupNumber"='E2E-GRP-A' AND g."companyId"=1`
+    );
+    const subForBilling = subAgentForA.subAgentId;
+    assert(subForBilling > 0, `GRP-A has sub-agent ${subForBilling}`);
+
+    // Need to attach this sub-agent to the linked client first (it currently
+    // points to E2E-SUB-1, which IS sub1Id linked to clientId=1 — verify)
+    const sub = await dbRow(
+      `SELECT "clientId" FROM umrah_sub_agents WHERE id=$1`,
+      [subForBilling]
+    );
+    assert(sub.clientId === 1, `sub-agent ${subForBilling} linked to clientId=1`);
+
+    // List billable groups for this sub-agent
+    const billable = await api("GET", `/umrah/invoices/billable/${subForBilling}`);
+    assert(billable.data.length >= 1, `billable list returns ≥1 group (got ${billable.data.length})`);
+
+    // The import auto-created an agent (seasonId-bound) that doesn't have
+    // pricing set up. Add pricing now for that agent so the generator
+    // can resolve a unit price.
+    const grpAgent = await dbRow(
+      `SELECT "agentId" FROM umrah_groups WHERE id=$1`, [groupBeforeBilling.id]
+    );
+    await api("POST", "/umrah/pricing", {
+      agentId: grpAgent.agentId, seasonId,
+      pricePerMutamer: 480,
+      validFrom: "2026-01-01", validTo: "2026-12-31",
+    });
+
+    // Generate the sales invoice
+    const gen = await api("POST", "/umrah/invoices/generate", {
+      subAgentId: subForBilling,
+      groupIds: [groupBeforeBilling.id],
+      vatRate: 0,
+      notes: "فاتورة اختبار E2E",
+    });
+    assert(gen.invoiceId > 0, `sales invoice created (id=${gen.invoiceId})`);
+    assert(gen.ref.startsWith("UMR-"), `ref follows UMR-* pattern (got ${gen.ref})`);
+    assert(gen.total > 0, `total > 0 (got ${gen.total})`);
+    assert(gen.groupRefs.includes("E2E-GRP-A"), "groupRefs includes GRP-A");
+    assert(gen.nuskInvoiceRefs.includes("E2E-INV-A"), "nuskInvoiceRefs includes E2E-INV-A");
+    assert(gen.journalEntryId > 0, `journal entry posted (id=${gen.journalEntryId})`);
+
+    // Verify central invoices row created
+    const inv = await dbRow(
+      `SELECT id, "clientId", subtotal, total, status FROM invoices
+        WHERE id=$1 AND "companyId"=1`, [gen.invoiceId]
+    );
+    assert(inv.clientId === 1, "central invoices row created with correct clientId");
+    assert(inv.status === "draft", "invoice status = draft");
+
+    // Verify invoice_lines created (one per group + one per violation if any)
+    const linesCount = await dbCount(
+      `SELECT COUNT(*) FROM invoice_lines WHERE "invoiceId"=$1`,
+      [gen.invoiceId]
+    );
+    assert(linesCount >= 1, `invoice_lines created (count=${linesCount})`);
+
+    // Verify group back-linked
+    const grpAfter = await dbRow(
+      `SELECT "centralInvoiceId", status FROM umrah_groups
+        WHERE id=$1 AND "companyId"=1`, [groupBeforeBilling.id]
+    );
+    assert(grpAfter.centralInvoiceId === gen.invoiceId,
+      `GRP-A.centralInvoiceId = ${gen.invoiceId}`);
+    assert(grpAfter.status === "settled", "GRP-A status flipped to 'settled'");
+
+    // Verify journal entry posted (debit = total, credit = subtotal + vat)
+    const jLines = await dbRows(
+      `SELECT "accountCode", debit, credit FROM journal_lines
+        WHERE "journalId"=$1 ORDER BY "accountCode"`, [gen.journalEntryId]
+    );
+    assert(jLines.length >= 2, `journal lines posted (count=${jLines.length})`);
+    const arLine = jLines.find((l) => l.accountCode === "1200");
+    const revLine = jLines.find((l) => l.accountCode === "4200");
+    assert(arLine && Number(arLine.debit) === gen.total,
+      `AR debit (1200) = total (${gen.total}) — got ${arLine?.debit}`);
+    assert(revLine && Number(revLine.credit) === gen.subtotal,
+      `Revenue credit (4200) = subtotal (${gen.subtotal}) — got ${revLine?.credit}`);
+
+    // Try to re-bill the same group → should fail with 409
+    let alreadyBilledRejected = false;
+    try {
+      await api("POST", "/umrah/invoices/generate", {
+        subAgentId: subForBilling,
+        groupIds: [groupBeforeBilling.id],
+      });
+    } catch (err) {
+      alreadyBilledRejected = err.status === 409 &&
+        JSON.stringify(err.body).includes("مفوترة");
+    }
+    assert(alreadyBilledRejected, "re-billing a settled group is rejected with 409");
+
+    // Try to bill via the unlinked sub-agent → ConflictError (rule #46)
+    // First, find a group on sub2Id and try
+    const unlinkedGroup = await dbRow(
+      `SELECT id FROM umrah_groups
+        WHERE "companyId"=1 AND "subAgentId"=$1 AND "centralInvoiceId" IS NULL
+        LIMIT 1`, [sub2Id]
+    );
+    if (unlinkedGroup) {
+      let unlinkedBlocked = false;
+      try {
+        await api("POST", "/umrah/invoices/generate", {
+          subAgentId: sub2Id,
+          groupIds: [unlinkedGroup.id],
+        });
+      } catch (err) {
+        unlinkedBlocked = err.status === 409 &&
+          JSON.stringify(err.body).includes("غير مربوط");
+      }
+      assert(unlinkedBlocked, "rule #46: unlinked sub-agent can't be invoiced (409 ConflictError)");
+    }
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  await section("§15 PHASE-7 CLIENT 360° — Umrah summary tab", async () => {
+    const summary = await api("GET", "/umrah/clients/1/umrah-summary");
+    assert(summary.client?.id === 1, "client header returned");
+    assert(Array.isArray(summary.subAgents) && summary.subAgents.length >= 1,
+      `sub-agents list returned (count=${summary.subAgents.length})`);
+    assert(typeof summary.stats?.totalMutamers === "number",
+      `stats.totalMutamers = ${summary.stats?.totalMutamers}`);
+    assert(summary.stats.totalMutamers >= 20, "stats reflects imported pilgrims");
+    assert(Array.isArray(summary.groups), "groups array present");
+    assert(Array.isArray(summary.invoices) && summary.invoices.length >= 1,
+      `invoices array has the generated invoice (got ${summary.invoices.length})`);
+    assert(Array.isArray(summary.openViolations), "openViolations array present");
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  await section("§16 PHASE-7 LETTERS — official_letters via central engine", async () => {
+    // Pull a couple of pilgrims to seed the letter
+    const sample = await dbRows(
+      `SELECT id FROM umrah_mutamers WHERE "companyId"=1 LIMIT 3`
+    );
+    const mutamerIds = sample.map((s) => s.id);
+
+    // 1. Ministry intro letter
+    const intro = await api("POST", "/umrah/letters/generate", {
+      type: "ministry_intro",
+      scope: "mutamer",
+      mutamerIds,
+    });
+    assert(intro.id > 0, `ministry_intro letter created (id=${intro.id})`);
+    assert(intro.subject.includes("وزارة الحج"), `subject mentions ministry of haj`);
+    assert(intro.content.includes("ترخيص رقم 2091"), "content contains licence number");
+
+    // 2. Overstay report
+    const overstay = await api("POST", "/umrah/letters/generate", {
+      type: "overstay_report",
+      scope: "mutamer",
+    });
+    assert(overstay.id > 0, `overstay_report letter created (id=${overstay.id})`);
+    assert(overstay.content.includes("تجاوز"), "content mentions overstay");
+
+    // 3. Absconder report
+    const absc = await api("POST", "/umrah/letters/generate", {
+      type: "absconder_report",
+      scope: "mutamer",
+    });
+    assert(absc.id > 0, `absconder_report letter created (id=${absc.id})`);
+    assert(absc.content.includes("تغيّب"), "content mentions absconder");
+
+    // 4. Settlement statement
+    const subForSettle = await dbRow(
+      `SELECT id FROM umrah_sub_agents WHERE "companyId"=1 AND "clientId" IS NOT NULL LIMIT 1`
+    );
+    const settle = await api("POST", "/umrah/letters/generate", {
+      type: "settlement_statement",
+      scope: "sub_agent",
+      subAgentId: subForSettle.id,
+    });
+    assert(settle.id > 0, `settlement_statement letter created (id=${settle.id})`);
+    assert(settle.content.includes("الرصيد المتبقي"), "content has balance breakdown");
+
+    // 5. List letters
+    const list = await api("GET", "/umrah/letters");
+    assert(list.data.length >= 4, `letters list returns ≥4 rows (got ${list.data.length})`);
+    assert(list.data.every((l) => l.type.startsWith("umrah_")), "all listed letters are umrah_*");
+
+    // 6. Detail
+    const detail = await api("GET", `/umrah/letters/${intro.id}`);
+    assert(detail.id === intro.id, "letter detail returned");
+
+    // 7. Verify event_logs — give async listeners a beat to commit.
+    await new Promise((r) => setTimeout(r, 300));
+    const evt = await dbCount(
+      `SELECT COUNT(*) FROM event_logs
+        WHERE action='umrah.letter.generated' AND "createdAt" > NOW() - INTERVAL '5 minutes'`
+    );
+    assert(evt >= 4, `umrah.letter.generated event_logs (count=${evt})`);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  await section("§17 CLEANUP", async () => {
+    // Cleanup order matters: NULL out FK refs first, then delete in
+    // bottom-up dependency order (lines → headers → umrah rows).
+    const c2 = await pool.connect();
+    try {
+      // 1. NULL out FK refs on umrah_* → invoices and journal_entries
+      await c2.query(`UPDATE umrah_groups SET "centralInvoiceId"=NULL WHERE "companyId"=1`);
+      await c2.query(`UPDATE umrah_nusk_invoices SET "journalEntryId"=NULL WHERE "companyId"=1`);
+      await c2.query(`UPDATE umrah_violations SET "linkedInvoiceId"=NULL WHERE "companyId"=1`);
+      // 2. Delete journal lines + entries we posted
+      await c2.query(`DELETE FROM journal_lines WHERE "journalId" IN (
+        SELECT id FROM journal_entries WHERE "companyId"=1 AND ("sourceType"='umrah_nusk_invoice' OR "sourceType"='umrah_sales_invoice')
+      )`);
+      await c2.query(`DELETE FROM journal_entries WHERE "companyId"=1 AND ("sourceType"='umrah_nusk_invoice' OR "sourceType"='umrah_sales_invoice')`);
+      // 3. Delete invoices we created
+      await c2.query(`DELETE FROM invoice_lines WHERE "invoiceId" IN (SELECT id FROM invoices WHERE "companyId"=1 AND ref LIKE 'UMR-%')`);
+      await c2.query(`DELETE FROM invoices WHERE "companyId"=1 AND ref LIKE 'UMR-%'`);
+      // 4. Letters
+      await c2.query(`DELETE FROM official_letters WHERE "companyId"=1 AND type LIKE 'umrah_%'`);
+    } finally { c2.release(); }
     await reset();
     const c = await dbCount(`SELECT COUNT(*) FROM umrah_mutamers WHERE "companyId"=1`);
     assert(c === 0, "cleanup completed (0 mutamers left)");

@@ -31,6 +31,7 @@ import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
 import type { PoolClient } from "pg";
 import { emitEvent } from "./businessHelpers.js";
 import { ValidationError, NotFoundError, ConflictError } from "./errorHandler.js";
+import { recordUmrahPurchaseFromVoucher } from "./umrahFinanceLink.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1656,13 +1657,37 @@ async function applyVouchersBatch(
             );
           }
 
-          // Auto-create purchase invoice if setting allows + voucher is paid.
+          // Auto-post the purchase journal through the central finance
+          // engine (lib/businessHelpers.createJournalEntry → journal_entries
+          // + journal_lines + account balances). Settings can disable.
           if (settings.importAutoCreatePurchase && fresh.nuskStatus === "paid" && fresh.netCost > 0) {
-            // Defer the actual purchase-invoice creation to the finance
-            // service contract (Phase 4 wires the route). For now, leave
-            // purchaseInvoiceId NULL and emit the event so listeners can
-            // pick it up.
-            purchaseInvoicesCreated++;
+            const journalResult = await recordUmrahPurchaseFromVoucher(
+              client,
+              { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+              {
+                id: newId,
+                nuskInvoiceNumber: fresh.nuskInvoiceNumber,
+                netCost: fresh.netCost,
+                nuskStatus: fresh.nuskStatus,
+                journalEntryId: null,
+              }
+            );
+            if (journalResult.created) {
+              purchaseInvoicesCreated++;
+              await emitEvent({
+                companyId: scope.companyId,
+                branchId: scope.branchId ?? undefined,
+                userId: scope.userId,
+                action: "umrah.nusk_invoice.created",
+                entity: "umrah_nusk_invoices",
+                entityId: newId,
+                details: JSON.stringify({
+                  nuskInvoiceNumber: fresh.nuskInvoiceNumber,
+                  netCost: fresh.netCost,
+                  journalEntryId: journalResult.journalEntryId,
+                }),
+              });
+            }
           }
           continue;
         }
