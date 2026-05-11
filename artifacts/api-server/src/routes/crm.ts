@@ -1129,11 +1129,15 @@ router.get("/analytics", authorize({ feature: "crm.clients", action: "list" }), 
     const cid = scope.companyId;
 
     interface ConversionRow { stage: string; count: number; conversionFromPrev: string | null }
+    const stageCounts = await rawQuery<{ stage: string; count: string }>(
+      `SELECT stage, COUNT(*) as count FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage = ANY($2::text[]) GROUP BY stage`,
+      [cid, STAGE_ORDER]
+    );
+    const countMap = new Map(stageCounts.map(r => [r.stage, Number(r.count)]));
     const conversionRates: ConversionRow[] = [];
     let prevCount: number | null = null;
     for (const stage of STAGE_ORDER) {
-      const [row] = await rawQuery<CountRow>(`SELECT COUNT(*) as count FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage=$2`, [cid, stage]);
-      const count = Number(row?.count ?? 0);
+      const count = countMap.get(stage) ?? 0;
       const rate = prevCount !== null && prevCount > 0 ? ((count / prevCount) * 100).toFixed(1) : null;
       conversionRates.push({ stage, count, conversionFromPrev: rate });
       if (!['closed_won', 'closed_lost'].includes(stage)) prevCount = count;
