@@ -241,9 +241,9 @@ router.post("/login", loginLimiter, async (req, res) => {
            r.role_key AS "roleKey",
            r.label_ar AS label,
            COALESCE(
-             (SELECT array_agg(DISTINCT split_part(g.feature_key, '.', 1))
+             (SELECT to_jsonb(array_agg(DISTINCT split_part(g.feature_key, '.', 1)))
                 FROM rbac_role_grants g WHERE g.role_id = r.id),
-             ARRAY[]::text[]
+             '[]'::jsonb
            ) AS modules,
            r.level,
            2 AS source_order,
@@ -464,9 +464,9 @@ router.get("/me", authMiddleware, authedUserLimiter, async (req, res) => {
            r.role_key AS "roleKey",
            r.label_ar AS label,
            COALESCE(
-             (SELECT array_agg(DISTINCT split_part(g.feature_key, '.', 1))
+             (SELECT to_jsonb(array_agg(DISTINCT split_part(g.feature_key, '.', 1)))
                 FROM rbac_role_grants g WHERE g.role_id = r.id),
-             ARRAY[]::text[]
+             '[]'::jsonb
            ) AS modules,
            r.level,
            2 AS source_order,
