@@ -1,0 +1,94 @@
+import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+const SRC = readFileSync(
+  join(
+    import.meta.dirname!,
+    "../../../../artifacts/api-server/src/routes/finance-gl-helpers.ts",
+  ),
+  "utf8",
+);
+const INDEX = readFileSync(
+  join(import.meta.dirname!, "../../../../artifacts/api-server/src/routes/index.ts"),
+  "utf8",
+);
+
+describe("finance-gl-helpers — operator-facing GL posting endpoints", () => {
+  const ENDPOINTS = [
+    "/gl-helpers/fx-revaluation/:revaluationLogId",
+    "/gl-helpers/realized-fx/:invoiceId",
+    "/gl-helpers/cycle-count/:cycleCountId",
+    "/gl-helpers/lot-writeoff/:lotId",
+    "/gl-helpers/mudad-salary/:settlementId",
+  ];
+
+  it.each(ENDPOINTS)("registers POST %s", (path) => {
+    expect(SRC).toContain(`glHelpersRouter.post(\n  "${path}"`);
+  });
+
+  it.each(ENDPOINTS)("guards %s with authorize() finance.journal", (path) => {
+    const idx = SRC.indexOf(`"${path}"`);
+    const section = SRC.slice(idx, idx + 400);
+    expect(section).toMatch(/authorize\(\s*\{\s*feature:\s*"finance\.journal"/);
+  });
+
+  it("router is mounted on /finance with module + financial guards", () => {
+    expect(INDEX).toContain(
+      'router.use("/finance", requireModule("finance"), requireGuards("financial"), glHelpersRouter);',
+    );
+  });
+
+  it("imports each of the 5 GL helpers", () => {
+    expect(SRC).toContain("postFxRevaluationJournal");
+    expect(SRC).toContain("postRealizedFxJournal");
+    expect(SRC).toContain("postCycleCountVarianceJournal");
+    expect(SRC).toContain("postLotWriteoffJournal");
+    expect(SRC).toContain("postMudadSalaryJournal");
+  });
+
+  it("reads companyId from req.scope (cross-tenant safe)", () => {
+    expect(SRC).toContain("companyId: scope.companyId");
+  });
+
+  it("forwards postedBy from scope.userId for audit-trail attribution", () => {
+    expect(SRC).toContain("postedBy: scope.userId");
+  });
+
+  it("realized-fx accepts settlementRate + paymentDate (helper requires both)", () => {
+    expect(SRC).toContain("settlementRate: z.number().positive().finite()");
+    expect(SRC).toMatch(/paymentDate:\s*z\.string\(\)\.regex\(\/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$\//);
+  });
+
+  it("supports asDraft body flag on every endpoint (operator review path)", () => {
+    // baseBody schema = { asDraft?: boolean, description?: string }
+    expect(SRC).toContain("asDraft: z.boolean().optional()");
+    expect(SRC).toContain("description: z.string().max(500).optional()");
+    // Every endpoint forwards body.asDraft into the helper.
+    const asDraftMatches = SRC.match(/asDraft:\s*body\.asDraft/g) ?? [];
+    expect(asDraftMatches.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it("records audit log + emits event after each posting (observability)", () => {
+    expect(SRC).toContain("createAuditLog(");
+    expect(SRC).toContain("emitEvent(");
+    // The 5 distinct action names.
+    expect(SRC).toContain("fx.revaluation.posted");
+    expect(SRC).toContain("fx.realized.posted");
+    expect(SRC).toContain("inventory.cycle_count.posted");
+    expect(SRC).toContain("inventory.lot_writeoff.posted");
+    expect(SRC).toContain("mudad.salary.posted");
+  });
+
+  it("never trusts companyId from the body (must come from scope)", () => {
+    // Anti-pattern guard — operators shouldn't be able to post to a
+    // company they don't have a session for.
+    expect(SRC).not.toMatch(/companyId:\s*req\.body/);
+    expect(SRC).not.toMatch(/companyId:\s*body\.companyId/);
+  });
+
+  it("wraps async work in handleRouteError for uniform error responses", () => {
+    const matches = SRC.match(/handleRouteError\(/g) ?? [];
+    expect(matches.length).toBeGreaterThanOrEqual(5);
+  });
+});

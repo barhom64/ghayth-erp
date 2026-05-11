@@ -14,6 +14,7 @@ import hrRouter from "./hr.js";
 // no more /finance fallback router.
 import { invoicesRouter } from "./finance-invoices.js";
 import { journalRouter } from "./finance-journal.js";
+import { glHelpersRouter } from "./finance-gl-helpers.js";
 import { purchaseRouter } from "./finance-purchase.js";
 import { reportsRouter } from "./finance-reports.js";
 import { custodiesRouter } from "./finance-custodies.js";
@@ -286,6 +287,7 @@ router.use("/hr/recruitment", requireModule("hr"), recruitmentRouter);
 router.use("/finance", financeUserLimiter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), invoicesRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), journalRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), glHelpersRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), purchaseRouter);
 router.use("/finance", requireModule("finance"), reportsRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), custodiesRouter);
