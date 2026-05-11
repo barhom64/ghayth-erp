@@ -91,4 +91,48 @@ describe("finance-gl-helpers — operator-facing GL posting endpoints", () => {
     const matches = SRC.match(/handleRouteError\(/g) ?? [];
     expect(matches.length).toBeGreaterThanOrEqual(5);
   });
+
+  // ── pending-queue listing endpoints (added for the dashboard) ──
+  it("registers GET /gl-helpers/mudad-salary/pending", () => {
+    expect(SRC).toContain('glHelpersRouter.get(\n  "/gl-helpers/mudad-salary/pending"');
+  });
+
+  it("registers GET /gl-helpers/lot-writeoff/pending", () => {
+    expect(SRC).toContain('glHelpersRouter.get(\n  "/gl-helpers/lot-writeoff/pending"');
+  });
+
+  it("listing endpoints filter by companyId from scope (cross-tenant safe)", () => {
+    // Both listing queries pull `"companyId" = $1` with scope.companyId
+    // as the bound param; never reads from query/body.
+    const mudadIdx = SRC.indexOf("/gl-helpers/mudad-salary/pending");
+    const mudadSection = SRC.slice(mudadIdx, mudadIdx + 1400);
+    expect(mudadSection).toContain('"companyId" = $1');
+    expect(mudadSection).toContain("scope.companyId");
+
+    const lotIdx = SRC.indexOf("/gl-helpers/lot-writeoff/pending");
+    const lotSection = SRC.slice(lotIdx, lotIdx + 1400);
+    expect(lotSection).toContain('"companyId" = $1');
+    expect(lotSection).toContain("scope.companyId");
+  });
+
+  it("listing endpoints exclude already-posted rows", () => {
+    // mudad: only `journalEntryId IS NULL`
+    expect(SRC).toMatch(/AND\s+"journalEntryId"\s+IS\s+NULL/);
+    // lot:   only `writeoffJournalEntryId IS NULL`
+    expect(SRC).toMatch(/AND\s+"writeoffJournalEntryId"\s+IS\s+NULL/);
+  });
+
+  it("mudad listing requires status='acknowledged' (helper refuses otherwise)", () => {
+    const idx = SRC.indexOf("/gl-helpers/mudad-salary/pending");
+    const section = SRC.slice(idx, idx + 800);
+    expect(section).toContain("status = 'acknowledged'");
+    expect(section).toContain("type = 'salary'");
+  });
+
+  it("lot listing restricts to writeoff-triggering statuses", () => {
+    const idx = SRC.indexOf("/gl-helpers/lot-writeoff/pending");
+    const section = SRC.slice(idx, idx + 1400);
+    expect(section).toContain("status IN ('recalled', 'expired', 'disposed')");
+    expect(section).toContain('"deletedAt" IS NULL');
+  });
 });

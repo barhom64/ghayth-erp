@@ -35,6 +35,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
+import { rawQuery } from "../lib/rawdb.js";
 
 import { postFxRevaluationJournal } from "../lib/fx/post-revaluation-journal.js";
 import { postRealizedFxJournal } from "../lib/fx/post-realized-journal.js";
@@ -85,6 +86,88 @@ function recordSideEffects(opts: {
     details: JSON.stringify(opts.outcome),
   }).catch((e) => logger.error(e, "[gl-helpers] emitEvent failed"));
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// 0) Pending queues — list source rows that need GL posting. Operators
+//    use these to decide what to post next from the dashboard.
+// ─────────────────────────────────────────────────────────────────────
+
+/** Acknowledged Mudad salary settlements with no journal entry yet. */
+glHelpersRouter.get(
+  "/gl-helpers/mudad-salary/pending",
+  authorize({ feature: "finance.journal", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const rows = await rawQuery<{
+        id: number;
+        employeeId: number;
+        period: string | null;
+        amount: string | null;
+        status: string;
+        submittedAt: string;
+        acknowledgedAt: string | null;
+      }>(
+        `SELECT id, "employeeId", period,
+                amount::text         AS amount,
+                status,
+                "submittedAt"::text   AS "submittedAt",
+                "acknowledgedAt"::text AS "acknowledgedAt"
+         FROM mudad_settlements
+         WHERE "companyId" = $1
+           AND type = 'salary'
+           AND status = 'acknowledged'
+           AND "journalEntryId" IS NULL
+         ORDER BY "acknowledgedAt" DESC NULLS LAST, id DESC
+         LIMIT 200`,
+        [scope.companyId],
+      );
+      res.json({ data: rows });
+    } catch (err) {
+      handleRouteError(err, res, "[gl-helpers] mudad-salary pending list error:");
+    }
+  },
+);
+
+/** Lots in recalled / expired / disposed status with no write-off entry. */
+glHelpersRouter.get(
+  "/gl-helpers/lot-writeoff/pending",
+  authorize({ feature: "finance.journal", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const rows = await rawQuery<{
+        id: number;
+        productId: number;
+        warehouseId: number;
+        lotNumber: string;
+        quantity: string;
+        unitCost: string;
+        status: string;
+        recalledAt: string | null;
+        expiryDate: string | null;
+      }>(
+        `SELECT id, "productId", "warehouseId", "lotNumber",
+                quantity::text  AS quantity,
+                "unitCost"::text AS "unitCost",
+                status,
+                "recalledAt"::text AS "recalledAt",
+                "expiryDate"::text AS "expiryDate"
+         FROM warehouse_stock_lots
+         WHERE "companyId" = $1
+           AND status IN ('recalled', 'expired', 'disposed')
+           AND "writeoffJournalEntryId" IS NULL
+           AND "deletedAt" IS NULL
+         ORDER BY COALESCE("recalledAt", "updatedAt") DESC
+         LIMIT 200`,
+        [scope.companyId],
+      );
+      res.json({ data: rows });
+    } catch (err) {
+      handleRouteError(err, res, "[gl-helpers] lot-writeoff pending list error:");
+    }
+  },
+);
 
 // ─────────────────────────────────────────────────────────────────────
 // 1) FX revaluation — wire fx_revaluation_log → journal entry
