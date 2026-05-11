@@ -461,7 +461,7 @@ router.get("/stats", authorize({ feature: "requests", action: "list" }), async (
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.get("/:id", authorize({ feature: "requests", action: "view", resource: { table: "service_requests", idParam: "id" } }), async (req, res) => {
+router.get("/:id", authorize({ feature: "requests", action: "view", resource: { table: "requests", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -471,7 +471,7 @@ router.get("/:id", authorize({ feature: "requests", action: "view", resource: { 
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.patch("/:id", authorize({ feature: "requests", action: "update", resource: { table: "service_requests", idParam: "id" } }), async (req, res) => {
+router.patch("/:id", authorize({ feature: "requests", action: "update", resource: { table: "requests", idParam: "id" } }), async (req, res) => {
   try {
     const parsed = zodParse(updateRequestSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -592,7 +592,7 @@ router.patch("/:id", authorize({ feature: "requests", action: "update", resource
 
 // RBAC v2: approval action — approval limit applies if configured on
 // the role for requests:approve.
-router.post("/:id/approve", authorize({ feature: "requests", action: "approve", resource: { table: "service_requests", idParam: "id" } }), async (req, res) => {
+router.post("/:id/approve", authorize({ feature: "requests", action: "approve", resource: { table: "requests", idParam: "id" } }), async (req, res) => {
   try {
     const parsed = zodParse(approveRequestSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
@@ -790,7 +790,7 @@ router.get("/:id/actions", authorize({ feature: "requests", action: "list" }), a
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.delete("/:id", authorize({ feature: "requests", action: "delete", resource: { table: "service_requests", idParam: "id" } }), async (req, res) => {
+router.delete("/:id", authorize({ feature: "requests", action: "delete", resource: { table: "requests", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
