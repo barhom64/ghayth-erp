@@ -13,6 +13,7 @@ import { formatDateAr } from "@/lib/formatters";
 import { useSettings } from "@/contexts/settings-context";
 import { useToast } from "@/hooks/use-toast";
 import { LetterheadHeader } from "@/components/print-layout";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import type { BranchLetterhead } from "@/components/print-layout";
 import { useAppContext } from "@/contexts/app-context";
 import { GovIntegrationsTab } from "./settings/gov-integrations-tab";
@@ -115,6 +116,10 @@ function CrudSection({ title, endpoint, queryKey, fields }: {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<Record<string, string>>(() => Object.fromEntries(fields.map((f) => [f.name, ""])));
+  // Replaces window.confirm() for the generic settings-table delete.
+  // The row has no fixed name field — use the first listed field as a
+  // best-effort label, falling back to "—".
+  const [deletingItem, setDeletingItem] = useState<{ id: number; label: string } | null>(null);
   const items = asList(data);
 
   const resetForm = () => {
@@ -198,7 +203,7 @@ function CrudSection({ title, endpoint, queryKey, fields }: {
                 <td className="p-3">
                   <div className="flex gap-1">
                     <Button variant="ghost" size="sm" onClick={() => handleEdit(item)} title="تعديل"><Pencil className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="sm" onClick={() => { if (confirm("هل أنت متأكد من الحذف؟")) handleDelete(item.id); }} disabled={deleting === item.id} title="حذف" className="text-red-500 hover:text-red-700"><Trash2 className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="sm" onClick={() => setDeletingItem({ id: item.id, label: (fields[0] && item[fields[0].name]) || "—" })} disabled={deleting === item.id} title="حذف" className="text-red-500 hover:text-red-700"><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 </td>
               </tr>
@@ -207,6 +212,20 @@ function CrudSection({ title, endpoint, queryKey, fields }: {
           </tbody>
         </table>
       </CardContent></Card>
+
+      <ConfirmDeleteDialog
+        open={deletingItem !== null}
+        onOpenChange={(v) => { if (!v) setDeletingItem(null); }}
+        entity={{
+          type: queryKey,
+          id: deletingItem?.id ?? 0,
+          name: deletingItem?.label ?? "",
+        }}
+        deletePath={`${endpoint}/${deletingItem?.id}`}
+        invalidateKeys={[[queryKey]]}
+        successMessage="تم الحذف"
+        onDeleted={() => { setDeletingItem(null); refetch(); }}
+      />
     </div>
   );
 }

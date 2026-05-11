@@ -9,6 +9,7 @@ import { Building2, Plus, X, Pencil, Trash2, CheckCircle, Zap } from "lucide-rea
 import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from "@/contexts/app-context";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 
 export function CompaniesTab() {
   const { refreshFilters } = useAppContext();
@@ -20,6 +21,9 @@ export function CompaniesTab() {
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ name: "", nameEn: "", taxNumber: "", crNumber: "" });
   const [lastBootstrapOps, setLastBootstrapOps] = useState<string[] | null>(null);
+  // Delete dialog state — replaces window.confirm() for the most
+  // destructive operation in settings.
+  const [deletingCompany, setDeletingCompany] = useState<{ id: number; name: string } | null>(null);
   const items = asList(data);
 
   const companyColumns: DataTableColumn<any>[] = [
@@ -46,7 +50,7 @@ export function CompaniesTab() {
           <Button variant="ghost" size="sm" onClick={() => handleEdit(r)} title="تعديل"><Pencil className="h-4 w-4" /></Button>
           <Button
             variant="ghost" size="sm"
-            onClick={() => { if (confirm("تحذير: حذف الشركة سيؤثر على جميع البيانات المرتبطة بها. هل أنت متأكد؟")) handleDelete(r.id); }}
+            onClick={() => setDeletingCompany({ id: r.id, name: r.name || "—" })}
             disabled={deleting === r.id}
             title="حذف"
             className="text-red-500 hover:text-red-700"
@@ -210,6 +214,20 @@ export function CompaniesTab() {
         searchPlaceholder="بحث في الشركات..."
         emptyMessage="لا توجد شركات مضافة"
         pageSize={0}
+      />
+
+      <ConfirmDeleteDialog
+        open={deletingCompany !== null}
+        onOpenChange={(v) => { if (!v) setDeletingCompany(null); }}
+        entity={{
+          type: "company",
+          id: deletingCompany?.id ?? 0,
+          name: deletingCompany?.name ?? "",
+        }}
+        deletePath={`/settings/companies/${deletingCompany?.id}`}
+        invalidateKeys={[["settings-companies"]]}
+        successMessage="تم الحذف"
+        onDeleted={() => { setDeletingCompany(null); refetch(); refreshFilters(); }}
       />
     </div>
   );

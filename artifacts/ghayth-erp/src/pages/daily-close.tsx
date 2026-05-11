@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { PageShell } from "@/components/page-shell";
 import { todayLocal } from "@/lib/formatters";
 import { useApiQuery, useApiMutation } from "@/lib/api";
@@ -12,6 +13,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function DailyClose() {
   const { scopeQueryString } = useAppContext();
@@ -38,12 +49,12 @@ export default function DailyClose() {
   );
   const isClosing = closeMut.isPending;
 
+  // Two confirmation paths: regular close vs force-close (overrides
+  // incomplete items). Native confirm() blocked the event loop and
+  // gave the operator no visual cue about the force path's danger.
+  const [closeMode, setCloseMode] = useState<null | "normal" | "force">(null);
   const handleClose = (force = false) => {
-    const msg = force
-      ? "ستقوم بالتجاوز القسري وإقفال اليوم رغم وجود بنود غير مكتملة. هل أنت متأكد؟"
-      : "هل أنت متأكد من إقفال اليوم؟ لا يمكن التراجع عن هذا الإجراء.";
-    if (!confirm(msg)) return;
-    closeMut.mutate({ notes: "", force });
+    setCloseMode(force ? "force" : "normal");
   };
 
   if (isLoading) return <LoadingSpinner />;
@@ -168,6 +179,36 @@ export default function DailyClose() {
           )}
         </div>
       )}
+
+      <AlertDialog
+        open={closeMode !== null}
+        onOpenChange={(next) => { if (!next) setCloseMode(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {closeMode === "force" ? "تجاوز قسري — إقفال اليوم" : "إقفال اليوم"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {closeMode === "force"
+                ? "ستقوم بالتجاوز القسري وإقفال اليوم رغم وجود بنود غير مكتملة. لا يمكن التراجع عن هذا الإجراء."
+                : "هل أنت متأكد من إقفال اليوم؟ لا يمكن التراجع عن هذا الإجراء."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setCloseMode(null)}>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const force = closeMode === "force";
+                setCloseMode(null);
+                closeMut.mutate({ notes: "", force });
+              }}
+            >
+              {closeMode === "force" ? "تجاوز وإقفال" : "إقفال اليوم"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageShell>
   );
 }
