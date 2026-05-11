@@ -117,10 +117,40 @@ const FEATURES: Record<string, Partial<EntityFeatures>> = {
   "hr-evaluation-360":{ attachments: false },
   pilgrim:            {},
   transport:          {},
+
+  application:        {},
+  campaign:           {},
+  capa:               {},
+  compliance_action:  { approval: true },
+  contract:           { financialImpact: true, financialEntityType: "contract" },
+  excuse:             { attachments: false, approval: true },
+  expense:            { financialImpact: true, approval: true },
+  finance_custody:    { financialImpact: true, financialEntityType: "employee", approval: true },
+  fleet_vehicle:      { financialImpact: true, financialEntityType: "vehicle" },
+  fuel:               { financialImpact: true },
+  hr_contract:        { financialImpact: true, financialEntityType: "contract", approval: true },
+  hr_inquiry_memo:    { financialImpact: true, approval: true },
+  hr_job:             {},
+  insurance:          { financialImpact: true },
+  kb_article:         {},
+  leave:              { approval: true },
+  maintenance:        { financialImpact: true, approval: true },
+  opportunity:        {},
+  overtime:           { attachments: false, financialImpact: true, approval: true },
+  payroll:            { financialImpact: true, approval: true },
+  performance:        { attachments: false },
+  product:            { financialImpact: true, financialEntityType: "product" },
+  property:           {},
+  store_product:      { financialImpact: true },
+  supplier:           { financialImpact: true },
+  ticket:             {},
+  training:           {},
+  trip:               { attachments: false },
+  unit:               { financialImpact: true, financialEntityType: "property" },
 };
 
 export function getEntityFeatures(entityType: string): EntityFeatures {
-  const overrides = FEATURES[entityType];
+  const overrides = FEATURES[entityType] ?? FEATURES[entityType.replace(/-/g, "_")];
   if (!overrides) return { ...defaults };
   return { ...defaults, ...overrides };
 }
