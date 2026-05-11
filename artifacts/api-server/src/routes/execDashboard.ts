@@ -36,8 +36,10 @@ execDashboardRouter.get("/overview", async (req, res) => {
     requireExec(scope);
     const companyId = scope.companyId;
 
+    // All 12 dashboard sections are independent — run in parallel.
+    const [cashPosition, ar, ap, obligations, slaBreaches, stuckWorkflows, budgetOverages, dunning, expiringContracts, fleetMaintenance, hrDocExpiries, mtd] = await Promise.all([
     // ─── 1. CASH POSITION ─────────────────────────────────────────────────
-    const cashPosition = await safe(async () => {
+    safe(async () => {
       const rows = await rawQuery<any>(
         `SELECT code, name, "currentBalance"
          FROM chart_of_accounts
@@ -47,10 +49,10 @@ execDashboardRouter.get("/overview", async (req, res) => {
       );
       const total = rows.reduce((s: number, r: any) => s + Number(r.currentBalance ?? 0), 0);
       return { total: roundTo2(total), accounts: rows };
-    }, { total: 0, accounts: [] });
+    }, { total: 0, accounts: [] }),
 
     // ─── 2. AR AGING ───────────────────────────────────────────────────────
-    const ar = await safe(async () => {
+    safe(async () => {
       const [sums] = await rawQuery<any>(
         `SELECT
           COALESCE(SUM(total - COALESCE("paidAmount",0)), 0) AS total,
@@ -76,10 +78,10 @@ execDashboardRouter.get("/overview", async (req, res) => {
         d61_90: Number(sums?.b61_90 ?? 0),
         d90_plus: Number(sums?.b90_plus ?? 0),
       };
-    }, { total: 0, current: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90_plus: 0 });
+    }, { total: 0, current: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90_plus: 0 }),
 
     // ─── 3. AP EXPOSURE (open POs) ────────────────────────────────────────
-    const ap = await safe(async () => {
+    safe(async () => {
       const [sums] = await rawQuery<any>(
         `SELECT COALESCE(SUM("totalAmount"), 0) AS total, COUNT(*)::int AS count
          FROM purchase_orders
@@ -87,16 +89,16 @@ execDashboardRouter.get("/overview", async (req, res) => {
         [companyId]
       );
       return { total: Number(sums?.total ?? 0), count: Number(sums?.count ?? 0) };
-    }, { total: 0, count: 0 });
+    }, { total: 0, count: 0 }),
 
     // ─── 4. OBLIGATIONS SUMMARY ───────────────────────────────────────────
-    const obligations = await safe(
+    safe(
       () => obligationSummary(companyId),
       { pending: 0, breached: 0, escalatedL1: 0, escalatedL2: 0, dueIn24h: 0, dueIn7d: 0, byType: {} }
-    );
+    ),
 
     // ─── 5. SLA BREACHES (support + workflow) ─────────────────────────────
-    const slaBreaches = await safe(async () => {
+    safe(async () => {
       const [support] = await rawQuery<any>(
         `SELECT COUNT(*)::int AS n FROM support_tickets
          WHERE "companyId"=$1 AND status='open' AND "deletedAt" IS NULL AND "slaDeadline" < NOW()`,
@@ -112,10 +114,10 @@ execDashboardRouter.get("/overview", async (req, res) => {
         support: Number(support?.n ?? 0),
         workflow: Number(workflow?.n ?? 0),
       };
-    }, { support: 0, workflow: 0 });
+    }, { support: 0, workflow: 0 }),
 
     // ─── 6. STUCK WORKFLOWS (pending >3 days) ─────────────────────────────
-    const stuckWorkflows = await safe(async () => {
+    safe(async () => {
       const [r] = await rawQuery<any>(
         `SELECT COUNT(*)::int AS n FROM workflow_instances
          WHERE "companyId"=$1 AND status IN ('pending','in_review')
@@ -123,10 +125,10 @@ execDashboardRouter.get("/overview", async (req, res) => {
         [companyId]
       );
       return Number(r?.n ?? 0);
-    }, 0);
+    }, 0),
 
     // ─── 7. BUDGET OVERAGES (current month) ───────────────────────────────
-    const budgetOverages = await safe(async () => {
+    safe(async () => {
       const period = currentPeriod();
       const [y, m] = period.split("-").map(Number);
       const periodStart = `${y}-${String(m).padStart(2, "0")}-01`;
@@ -166,10 +168,10 @@ execDashboardRouter.get("/overview", async (req, res) => {
         over100: withPct.filter((r: any) => r.pct > 100).length,
         top5: withPct.slice(0, 5),
       };
-    }, { count: 0, over100: 0, top5: [] });
+    }, { count: 0, over100: 0, top5: [] }),
 
     // ─── 8. DUNNING PIPELINE ──────────────────────────────────────────────
-    const dunning = await safe(async () => {
+    safe(async () => {
       const rows = await rawQuery<any>(
         `SELECT dl.level AS stage, COUNT(DISTINCT i.id)::int AS count,
                 COALESCE(SUM(i.total - COALESCE(i."paidAmount",0)), 0) AS amount
@@ -181,10 +183,10 @@ execDashboardRouter.get("/overview", async (req, res) => {
         [companyId]
       );
       return rows;
-    }, []);
+    }, []),
 
     // ─── 9. PROPERTY CONTRACTS EXPIRING (60 days) ─────────────────────────
-    const expiringContracts = await safe(async () => {
+    safe(async () => {
       const [r] = await rawQuery<any>(
         `SELECT COUNT(*)::int AS n FROM property_contracts
          WHERE "companyId"=$1 AND status='active'
@@ -192,10 +194,10 @@ execDashboardRouter.get("/overview", async (req, res) => {
         [companyId]
       );
       return Number(r?.n ?? 0);
-    }, 0);
+    }, 0),
 
     // ─── 10. FLEET MAINTENANCE DUE (30 days) ──────────────────────────────
-    const fleetMaintenance = await safe(async () => {
+    safe(async () => {
       const [r] = await rawQuery<any>(
         `SELECT COUNT(*)::int AS n FROM fleet_vehicles
          WHERE "companyId"=$1 AND "deletedAt" IS NULL
@@ -204,10 +206,10 @@ execDashboardRouter.get("/overview", async (req, res) => {
         [companyId]
       );
       return Number(r?.n ?? 0);
-    }, 0);
+    }, 0),
 
     // ─── 11. HR DOCUMENT EXPIRIES (30 days) ───────────────────────────────
-    const hrDocExpiries = await safe(async () => {
+    safe(async () => {
       const [r] = await rawQuery<any>(
         `SELECT COUNT(*)::int AS n FROM employees
          WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL
@@ -216,10 +218,10 @@ execDashboardRouter.get("/overview", async (req, res) => {
         [companyId]
       );
       return Number(r?.n ?? 0);
-    }, 0);
+    }, 0),
 
     // ─── 12. MONTH-TO-DATE FINANCIALS ─────────────────────────────────────
-    const mtd = await safe(async () => {
+    safe(async () => {
       const period = currentPeriod();
       const [y, m] = period.split("-").map(Number);
       const start = `${y}-${String(m).padStart(2, "0")}-01`;
@@ -249,7 +251,8 @@ execDashboardRouter.get("/overview", async (req, res) => {
         expense: Number(expense?.v ?? 0),
         net: Number(revenue?.v ?? 0) - Number(expense?.v ?? 0),
       };
-    }, { revenue: 0, expense: 0, net: 0 });
+    }, { revenue: 0, expense: 0, net: 0 }),
+    ]); // end Promise.all
 
     // ─── ROLL-UP RISK SCORE ───────────────────────────────────────────────
     // Composite: 0..100 — higher means more attention needed
