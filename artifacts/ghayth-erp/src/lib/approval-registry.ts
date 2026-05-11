@@ -24,6 +24,7 @@ export const APPROVAL_TYPES: ApprovalTypeDef[] = [
   { key: "maintenance",    label: "صيانة",       pendingKey: "pendingMaintenance",      approveEndpoint: "/property/maintenance-requests/:id/approve", badgeClass: "bg-yellow-100 text-yellow-700" },
   { key: "journal",        label: "قيد يدوي",    pendingKey: "pendingJournals",         approveEndpoint: "/finance/journal-manual/:id/approve",     badgeClass: "bg-lime-100 text-lime-700" },
   { key: "inventory",      label: "جرد",         pendingKey: "pendingInventory",        approveEndpoint: "/warehouse/inventory-counts/:id/approve", badgeClass: "bg-emerald-100 text-emerald-700" },
+  { key: "workflow",       label: "سير عمل",    pendingKey: "pendingWorkflows",        approveEndpoint: "/workflows/:id/approve",                  badgeClass: "bg-purple-100 text-purple-700" },
 ];
 
 const byKey = new Map(APPROVAL_TYPES.map((t) => [t.key, t]));

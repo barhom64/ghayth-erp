@@ -45,7 +45,7 @@ const FEATURES: Record<string, Partial<EntityFeatures>> = {
   budget:             { approval: true },
   custody:            { financialImpact: true, financialEntityType: "employee", approval: true },
   salary_advance:     { attachments: false, financialImpact: true, approval: true },
-  payment_voucher:    { financialImpact: true },
+  payment_voucher:    { financialImpact: true, approval: true },
   vendor:             { financialImpact: true, financialEntityType: "vendor" },
   chart_of_account:   { attachments: false, tags: false, tasks: false },
   recurring_journal:  { attachments: false },
@@ -75,6 +75,11 @@ const FEATURES: Record<string, Partial<EntityFeatures>> = {
   project:            { financialImpact: true, financialEntityType: "project" },
   task:               {},
   document:           {},
+
+  umrah_sales_invoice:{ financialImpact: true },
+  umrah_pilgrim:      {},
+  umrah_season:       { attachments: false },
+  governance_policy:  {},
 };
 
 export function getEntityFeatures(entityType: string): EntityFeatures {

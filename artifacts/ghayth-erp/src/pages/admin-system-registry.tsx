@@ -101,13 +101,13 @@ export default function AdminSystemRegistry() {
   const { data: coverage, isLoading: covLoading } =
     useApiQuery<any>(["system-registry-coverage"], "/admin/system-registry/coverage");
 
-  const { data: notifRegistry } =
+  const { data: notifRegistry, isLoading: notifLoading } =
     useApiQuery<any>(["system-registry-notifications"], "/admin/system-registry/notifications");
 
-  const { data: reportRegistry } =
+  const { data: reportRegistry, isLoading: reportLoading } =
     useApiQuery<any>(["system-registry-reports"], "/admin/system-registry/reports");
 
-  const { data: printRegistry } =
+  const { data: printRegistry, isLoading: printLoading } =
     useApiQuery<any>(["system-registry-print"], "/admin/system-registry/print-templates");
 
   const overview = registry?.overview ?? {};
@@ -511,7 +511,8 @@ export default function AdminSystemRegistry() {
 
             {/* Notifications Tab */}
             <TabsContent value="notifications" className="mt-4 space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {notifLoading ? <div className="text-center text-sm text-gray-500 py-8">جاري التحميل...</div> : <>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <StatCard label="نوع إشعار" value={notifRegistry?.totalTypes ?? 0} icon={Bell} />
                 <StatCard label="كيان مغطى" value={notifRegistry?.entitiesWithNotifications ?? 0} icon={CheckCircle2} />
                 <StatCard label="بلا إشعار" value={(notifRegistry?.totalEntities ?? 0) - (notifRegistry?.entitiesWithNotifications ?? 0)} icon={XCircle} />
@@ -538,11 +539,13 @@ export default function AdminSystemRegistry() {
                   </CardContent>
                 </Card>
               ))}
+              </>}
             </TabsContent>
 
             {/* Reports Tab */}
             <TabsContent value="reports" className="mt-4 space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {reportLoading ? <div className="text-center text-sm text-gray-500 py-8">جاري التحميل...</div> : <>
+              <div className="grid grid-cols-2 gap-3">
                 <StatCard label="تقرير" value={reportRegistry?.totalReports ?? 0} icon={BarChart3} />
                 <StatCard label="كيان مغطى" value={reportRegistry?.entitiesWithReports ?? 0} icon={CheckCircle2} />
               </div>
@@ -568,11 +571,13 @@ export default function AdminSystemRegistry() {
                   </CardContent>
                 </Card>
               ))}
+              </>}
             </TabsContent>
 
             {/* Print Templates Tab */}
             <TabsContent value="print" className="mt-4 space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {printLoading ? <div className="text-center text-sm text-gray-500 py-8">جاري التحميل...</div> : <>
+              <div className="grid grid-cols-2 gap-3">
                 <StatCard label="قالب طباعة" value={printRegistry?.total ?? 0} icon={Printer} />
               </div>
               <Card>
@@ -592,9 +597,13 @@ export default function AdminSystemRegistry() {
                         {t.detailRoute && <span className="text-xs text-gray-400 ms-auto">{t.detailRoute}</span>}
                       </div>
                     ))}
+                    {(printRegistry?.templates ?? []).length === 0 && (
+                      <p className="text-sm text-gray-500 text-center py-4">لا توجد قوالب طباعة مسجلة</p>
+                    )}
                   </div>
                 </CardContent>
               </Card>
+              </>}
             </TabsContent>
 
             {/* Gaps Tab */}
