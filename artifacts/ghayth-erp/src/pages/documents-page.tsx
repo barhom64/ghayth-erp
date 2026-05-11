@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { z } from "zod";
 import { Link } from "wouter";
 import { PageShell } from "@/components/page-shell";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
@@ -8,6 +9,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { FormShell, FormTextField, FormGrid } from "@/components/form-shell";
+
+const folderSchema = z.object({
+  name: z.string().trim().min(1, "الاسم مطلوب"),
+  color: z.string().trim(),
+});
+type FolderForm = z.infer<typeof folderSchema>;
+
+const templateSchema = z.object({
+  name: z.string().trim().min(1, "الاسم مطلوب"),
+  description: z.string().trim(),
+  category: z.string().trim(),
+});
+type TemplateForm = z.infer<typeof templateSchema>;
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -237,22 +252,14 @@ function DocumentsList() {
 function FoldersTab() {
   const { data: foldersResp, isLoading, isError } = useApiQuery<any>(["doc-folders"], "/documents/folders");
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: "", color: "" });
   const items = asList(foldersResp);
 
-  const createMut = useApiMutation<any, { name: string; color: string }>(
+  const createMut = useApiMutation<any, FolderForm>(
     "/documents/folders",
     "POST",
     [["doc-folders"]],
-    {
-      successMessage: "تم إنشاء المجلد",
-      onSuccess: () => {
-        setForm({ name: "", color: "" });
-        setShowForm(false);
-      },
-    }
+    { successMessage: "تم إنشاء المجلد" },
   );
-  const handleCreate = () => createMut.mutate(form);
 
   return (
     <div className="space-y-4">
@@ -263,10 +270,27 @@ function FoldersTab() {
         </Button>
       </div>
       {showForm && (
-        <Card><CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>الاسم</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-          <div><Label>اللون</Label><Input value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} placeholder="#3B82F6" /></div>
-          <div className="md:col-span-2"><Button onClick={handleCreate} disabled={!form.name} rateLimitAware>حفظ</Button></div>
+        <Card><CardContent className="p-4">
+          <FormShell
+            schema={folderSchema}
+            defaultValues={{ name: "", color: "" }}
+            submitLabel="حفظ"
+            secondaryActions={
+              <Button type="button" size="sm" variant="ghost" onClick={() => setShowForm(false)}>
+                إلغاء
+              </Button>
+            }
+            onSubmit={async (values, ctx) => {
+              await createMut.mutateAsync(values);
+              ctx.reset();
+              setShowForm(false);
+            }}
+          >
+            <FormGrid cols={2}>
+              <FormTextField name="name" label="الاسم" required />
+              <FormTextField name="color" label="اللون" placeholder="#3B82F6" />
+            </FormGrid>
+          </FormShell>
         </CardContent></Card>
       )}
       {isLoading ? (
@@ -307,22 +331,14 @@ const templateColumns: DataTableColumn<any>[] = [
 function TemplatesTab() {
   const { data: templatesResp, isLoading } = useApiQuery<any>(["doc-templates"], "/documents/templates");
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: "", description: "", category: "" });
   const items = asList(templatesResp);
 
-  const createMut = useApiMutation<any, { name: string; description: string; category: string }>(
+  const createMut = useApiMutation<any, TemplateForm>(
     "/documents/templates",
     "POST",
     [["doc-templates"]],
-    {
-      successMessage: "تم إنشاء القالب",
-      onSuccess: () => {
-        setForm({ name: "", description: "", category: "" });
-        setShowForm(false);
-      },
-    }
+    { successMessage: "تم إنشاء القالب" },
   );
-  const handleCreate = () => createMut.mutate(form);
 
   return (
     <div className="space-y-4">
@@ -332,11 +348,28 @@ function TemplatesTab() {
         </Button>
       </div>
       {showForm && (
-        <Card><CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>الاسم</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-          <div><Label>التصنيف</Label><Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} /></div>
-          <div className="md:col-span-2"><Label>الوصف</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
-          <div className="md:col-span-2"><Button onClick={handleCreate} disabled={!form.name} rateLimitAware>حفظ</Button></div>
+        <Card><CardContent className="p-4">
+          <FormShell
+            schema={templateSchema}
+            defaultValues={{ name: "", description: "", category: "" }}
+            submitLabel="حفظ"
+            secondaryActions={
+              <Button type="button" size="sm" variant="ghost" onClick={() => setShowForm(false)}>
+                إلغاء
+              </Button>
+            }
+            onSubmit={async (values, ctx) => {
+              await createMut.mutateAsync(values);
+              ctx.reset();
+              setShowForm(false);
+            }}
+          >
+            <FormGrid cols={2}>
+              <FormTextField name="name" label="الاسم" required />
+              <FormTextField name="category" label="التصنيف" />
+              <FormTextField name="description" label="الوصف" className="md:col-span-2" />
+            </FormGrid>
+          </FormShell>
         </CardContent></Card>
       )}
       <DataTable
