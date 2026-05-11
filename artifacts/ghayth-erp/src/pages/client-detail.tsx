@@ -11,13 +11,14 @@ import { Label } from "@/components/ui/label";
 import {
   User, Phone, Mail, FileText, Target, Headphones, FolderKanban,
   Clock, DollarSign, MessageCircle, TrendingUp, AlertTriangle,
-  CheckCircle, Activity, BookOpen, CheckSquare, Globe,
+  CheckCircle, Activity, BookOpen, CheckSquare, Globe, Moon,
 } from "lucide-react";
 import { useRoute } from "wouter";
 import { cn } from "@/lib/utils";
 import { CLASSIFICATIONS } from "@/lib/constants";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { EntityDocuments } from "@/components/shared/entity-documents";
+import { UmrahClientTab } from "@/components/shared/umrah-client-tab";
 import { EntityTimeline } from "@/components/shared/entity-timeline";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
@@ -36,6 +37,7 @@ const TABS = [
   { key: "tickets", label: "التذاكر", icon: Headphones },
   { key: "projects", label: "المشاريع", icon: FolderKanban },
   { key: "conversations", label: "المحادثات", icon: MessageCircle },
+  { key: "umrah", label: "العمرة", icon: Moon },
   { key: "documents", label: "المستندات", icon: FileText },
   { key: "portal", label: "بوابة العميل", icon: Globe },
 ] as const;
@@ -604,6 +606,10 @@ export default function ClientDetail() {
 
       {activeTab === "tasks" && id && (
         <LinkedTasks entityType="client" entityId={id} />
+      )}
+
+      {activeTab === "umrah" && id && (
+        <UmrahClientTab clientId={Number(id)} />
       )}
 
       {activeTab === "documents" && id && (
