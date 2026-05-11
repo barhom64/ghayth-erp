@@ -63,11 +63,21 @@ pnpm --filter @workspace/e2e report
 
 ## CI
 
-Not wired into `pnpm build` on purpose — E2E needs a full stack
-(Postgres + api-server + frontend) which the default CI lane doesn't
-provide. Add a separate job that:
+Wired up in `.github/workflows/e2e.yml`. The workflow:
 
-1. Starts Postgres
-2. Runs migrations
-3. Boots api-server + frontend
-4. Runs `pnpm --filter @workspace/e2e test`
+1. Boots a postgres:16 service container
+2. Loads `db/schema.sql` into it
+3. Builds api-server + frontend
+4. Installs Playwright Chromium
+5. Starts api-server (port 8080) + frontend (port 5173)
+6. Waits for both healthchecks to pass
+7. Runs `pnpm --filter @workspace/e2e test`
+8. Uploads HTML report + server logs on failure
+
+Triggers:
+- **`push: main`** — always
+- **`workflow_dispatch`** — manual via Actions tab
+- **`pull_request` with `e2e` label** — opt-in to keep default PR latency low
+
+Promote to `if: true` (every PR) once the suite stabilises and runtime
+stays under ~5 minutes.

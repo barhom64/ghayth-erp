@@ -21,15 +21,16 @@
  *   relevant accounts, builds + posts the journal entry. Returns
  *   the new journalEntryId.
  *
- * **Idempotency note**: there's no `invoices.realizedFxJournalId`
- * column today. The route handler that calls this is responsible
- * for tracking whether a given invoice has already been realised
- * (e.g. via a `fx_realized_postings` audit table the operator UI
- * lands alongside). Until that arrives, calling this twice for the
- * same invoice + settlement rate just produces a second entry —
- * intentional, so the caller can decide.
+ * **Idempotency**: the helper records every successful posting in
+ * `fx_realized_postings` (migration 148), keyed on the triple
+ * (companyId, invoiceId, paymentDate, settlementRate). A second
+ * call with the same triple returns `skipped`. A call with the SAME
+ * invoice but a DIFFERENT paymentDate or settlementRate posts a
+ * fresh entry — that's the partial-settlement case (an AR invoice
+ * paid in tranches at different rates each legitimately needs its
+ * own realised FX leg).
  */
-import { rawQuery, withTransaction } from "../rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../rawdb.js";
 import { logger } from "../logger.js";
 import {
   buildEntry,
@@ -159,6 +160,27 @@ export async function postRealizedFxJournal(opts: PostRealizedFxOpts): Promise<P
       throw new Error(`postRealizedFxJournal: invoice ${opts.invoiceId} not found`);
     }
 
+    // Idempotency: same (invoiceId, paymentDate, settlementRate)
+    // triple has already been realised — skip cleanly.
+    const [existing] = await rawQuery<{ journalEntryId: number; gainLoss: string }>(
+      `SELECT "journalEntryId",
+              "gainLoss"::text AS "gainLoss"
+       FROM fx_realized_postings
+       WHERE "companyId" = $1
+         AND "invoiceId" = $2
+         AND "paymentDate" = $3::date
+         AND "settlementRate" = $4`,
+      [opts.companyId, opts.invoiceId, opts.paymentDate, opts.settlementRate],
+    );
+    if (existing) {
+      return {
+        status: "skipped",
+        journalEntryId: existing.journalEntryId,
+        gainLoss: Number(existing.gainLoss),
+        reason: "(invoice, paymentDate, settlementRate) already realised; reverse before reposting",
+      };
+    }
+
     const [company] = await rawQuery<{ functionalCurrency: string }>(
       `SELECT "functionalCurrency" FROM companies WHERE id = $1`,
       [opts.companyId],
@@ -226,6 +248,26 @@ export async function postRealizedFxJournal(opts: PostRealizedFxOpts): Promise<P
       status: opts.asDraft ? "draft" : "posted",
     };
     const posted = await postJournalEntry(payload, ctx);
+
+    // Record the realisation event for idempotency + audit. The
+    // unique index on (companyId, invoiceId, paymentDate, settlementRate)
+    // guards against a race where two transactions both pass the
+    // pre-check above.
+    await rawExecute(
+      `INSERT INTO fx_realized_postings
+         ("companyId", "invoiceId", "paymentDate", "settlementRate",
+          "journalEntryId", "gainLoss", "postedBy")
+       VALUES ($1, $2, $3::date, $4, $5, $6, $7)`,
+      [
+        opts.companyId,
+        opts.invoiceId,
+        opts.paymentDate,
+        opts.settlementRate,
+        posted.journalEntryId,
+        computed.gainLoss,
+        opts.postedBy ?? null,
+      ],
+    );
 
     logger.info(
       {

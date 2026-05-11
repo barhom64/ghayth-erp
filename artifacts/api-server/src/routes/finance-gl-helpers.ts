@@ -206,6 +206,46 @@ glHelpersRouter.get(
   },
 );
 
+/** Recent realised-FX postings. Realised FX has no "pending" concept
+ *  (the operator triggers it from the invoice settlement workflow,
+ *  not from a queue), so the dashboard renders a history view of what
+ *  was posted in the last ~200 events for at-a-glance auditing. */
+glHelpersRouter.get(
+  "/gl-helpers/realized-fx/history",
+  authorize({ feature: "finance.journal", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const rows = await rawQuery<{
+        id: number;
+        invoiceId: number;
+        paymentDate: string;
+        settlementRate: string;
+        journalEntryId: number;
+        gainLoss: string;
+        postedBy: number | null;
+        postedAt: string;
+      }>(
+        `SELECT id, "invoiceId",
+                "paymentDate"::text     AS "paymentDate",
+                "settlementRate"::text  AS "settlementRate",
+                "journalEntryId",
+                "gainLoss"::text        AS "gainLoss",
+                "postedBy",
+                "postedAt"::text         AS "postedAt"
+         FROM fx_realized_postings
+         WHERE "companyId" = $1
+         ORDER BY "postedAt" DESC, id DESC
+         LIMIT 200`,
+        [scope.companyId],
+      );
+      res.json({ data: rows });
+    } catch (err) {
+      handleRouteError(err, res, "[gl-helpers] realized-fx history error:");
+    }
+  },
+);
+
 /** Lots in recalled / expired / disposed status with no write-off entry. */
 glHelpersRouter.get(
   "/gl-helpers/lot-writeoff/pending",

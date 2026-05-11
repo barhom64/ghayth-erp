@@ -12146,7 +12146,8 @@ CREATE TABLE public.requests (
     "closedBy" integer,
     "branchId" integer,
     "outgoingRef" character varying(50),
-    "incomingRef" character varying(50)
+    "incomingRef" character varying(50),
+    "convertedTo" character varying(100)
 );
 
 
