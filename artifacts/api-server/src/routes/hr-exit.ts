@@ -9,6 +9,52 @@ import { HR_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authorize } from "../lib/rbac/authorize.js";
+
+// Local row shapes for hr_exit_requests + hr_exit_clearance.
+
+interface ExitRequestRow extends Record<string, unknown> {
+  id: number;
+  companyId: number;
+  branchId?: number | null;
+  assignmentId: number;
+  employeeId?: number | null;
+  exitDate?: string | null;
+  exitType?: string | null;
+  reason?: string | null;
+  status: string;
+  finalSettlement?: number | string | null;
+  unusedLeaveDays?: number | null;
+  unusedLeaveAmount?: number | string | null;
+  outstandingLoans?: number | string | null;
+  endOfServiceBenefit?: number | string | null;
+  approvedBy?: number | null;
+  approvedAt?: string | null;
+  rejectedReason?: string | null;
+  createdBy?: number | null;
+  createdAt: string;
+  updatedAt?: string | null;
+  deletedAt?: string | null;
+  employeeName?: string | null;
+}
+
+interface ClearanceRow {
+  id: number;
+  exitRequestId: number;
+  companyId: number;
+  department: string;
+  status: string;
+  signedBy?: number | null;
+  signedAt?: string | null;
+  notes?: string | null;
+  createdAt: string;
+}
+
+interface ExitStatsAgg {
+  total: number | string;
+  pending: number | string;
+  approved: number | string;
+  completed: number | string;
+}
 import {
   handleRouteError,
   NotFoundError,
@@ -131,12 +177,12 @@ router.get("/exit", authorize({ feature: "hr.exit", action: "list" }), async (re
     const { status } = req.query as any;
 
     let where = `x."companyId" = $1 AND x."deletedAt" IS NULL`;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     let idx = 2;
 
     if (status) { where += ` AND x.status = $${idx}`; params.push(status); idx++; }
 
-    const data = await rawQuery<any>(
+    const data = await rawQuery<ExitRequestRow>(
       `SELECT x.*, e.name AS "employeeName", e."empNumber",
               ea."jobTitle", ea.salary, ea."hireDate", b.name AS "branchName"
        FROM hr_exit_requests x
@@ -149,7 +195,7 @@ router.get("/exit", authorize({ feature: "hr.exit", action: "list" }), async (re
       params
     );
 
-    const [stats] = await rawQuery<any>(
+    const [stats] = await rawQuery<ExitStatsAgg>(
       `SELECT
          COUNT(*) AS total,
          COUNT(*) FILTER (WHERE status = 'pending') AS pending,
@@ -175,7 +221,7 @@ router.get("/exit/:id", authorize({ feature: "hr.exit", action: "view" }), async
     await ensureExitTables();
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [item] = await rawQuery<any>(
+    const [item] = await rawQuery<ExitRequestRow>(
       `SELECT x.*, e.name AS "employeeName", e."empNumber",
               ea."jobTitle", ea.salary, ea."hireDate", b.name AS "branchName"
        FROM hr_exit_requests x
@@ -187,7 +233,7 @@ router.get("/exit/:id", authorize({ feature: "hr.exit", action: "view" }), async
     );
     if (!item) throw new NotFoundError("طلب نهاية الخدمة غير موجود");
 
-    const clearance = await rawQuery<any>(
+    const clearance = await rawQuery<ClearanceRow>(
       `SELECT * FROM hr_exit_clearance
        WHERE "exitRequestId" = $1 AND "companyId" = $2
        ORDER BY id ASC`,
@@ -210,7 +256,7 @@ router.post("/exit", authorize({ feature: "hr.exit", action: "create" }), async 
     const b = zodParse(createExitSchema.safeParse(req.body));
 
     // التحقق من عدم وجود طلب سابق
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<{ id: number }>(
       `SELECT id FROM hr_exit_requests
        WHERE "assignmentId" = $1 AND "companyId" = $2
          AND status NOT IN ('rejected','cancelled') AND "deletedAt" IS NULL`,
@@ -220,7 +266,7 @@ router.post("/exit", authorize({ feature: "hr.exit", action: "create" }), async 
       throw new ConflictError("يوجد طلب نهاية خدمة سابق لهذا الموظف");
     }
 
-    const [emp] = await rawQuery<any>(
+    const [emp] = await rawQuery<{ id: number; salary: number | string | null; hireDate: string | null; employeeId: number; branchId: number | null }>(
       `SELECT ea.salary, ea."employeeId", ea."branchId", ea."hireDate"
        FROM employee_assignments ea WHERE ea.id = $1 AND ea."companyId" = $2`,
       [b.assignmentId, scope.companyId]
@@ -248,22 +294,22 @@ router.post("/exit", authorize({ feature: "hr.exit", action: "create" }), async 
     gratuity = roundTo2(gratuity);
 
     // رصيد الإجازات
-    const [lb] = await rawQuery<any>(
+    const [lb] = await rawQuery<{ balance: number | string | null }>(
       `SELECT COALESCE(SUM(entitled - used - pending + carried), 0) AS balance FROM leave_balances
        WHERE "employeeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $1 LIMIT 1) AND "companyId" = $2`,
       [b.assignmentId, scope.companyId]
-    ).catch((e) => { logger.error(e, "hr exit query failed"); return [{ balance: 0 }]; });
+    ).catch((e) => { logger.error(e, "hr exit query failed"); return [{ balance: 0 }] as { balance: number }[]; });
     const leaveBalance = Number(lb?.balance ?? 0);
     const dailyRate = salary / 30;
     const leaveCompensation = roundTo2(leaveBalance * dailyRate);
 
     // خصم السلف المتبقية
-    const [loans] = await rawQuery<any>(
+    const [loans] = await rawQuery<{ remaining: number | string | null }>(
       `SELECT COALESCE(SUM("remainingAmount"), 0) AS remaining
        FROM hr_employee_loans
        WHERE "assignmentId" = $1 AND "companyId" = $2 AND status IN ('active','approved') AND "deletedAt" IS NULL`,
       [b.assignmentId, scope.companyId]
-    ).catch((e) => { logger.error(e, "hr exit query failed"); return [{ remaining: 0 }]; });
+    ).catch((e) => { logger.error(e, "hr exit query failed"); return [{ remaining: 0 }] as { remaining: number }[]; });
     const loanDeductions = Number(loans?.remaining ?? 0);
     const otherDeductions = Number(b.otherDeductions || 0);
 
@@ -348,7 +394,7 @@ router.post("/exit", authorize({ feature: "hr.exit", action: "create" }), async 
       action: "hr.exit.created", entity: "hr_exit_requests", entityId: insertId,
     });
 
-    const [row] = await rawQuery<any>(`SELECT * FROM hr_exit_requests WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<ExitRequestRow>(`SELECT * FROM hr_exit_requests WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json({ ...row, approval: approvalResult ?? { requiresApproval: false } });
   } catch (err) {
     handleRouteError(err, res, "خطأ في إنشاء طلب نهاية الخدمة");
@@ -374,7 +420,7 @@ router.patch("/exit/:id/approve", authorize({ feature: "hr.exit", action: "updat
       );
     }
 
-    const [item] = await rawQuery<any>(
+    const [item] = await rawQuery<ExitRequestRow>(
       `SELECT * FROM hr_exit_requests WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -476,7 +522,7 @@ router.patch("/exit/clearance/:id", authorize({ feature: "hr.exit", action: "upd
     const id = parseId(req.params.id, "id");
     const b = zodParse(updateClearanceSchema.safeParse(req.body));
 
-    const [item] = await rawQuery<any>(
+    const [item] = await rawQuery<ExitRequestRow>(
       `SELECT * FROM hr_exit_clearance WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
@@ -523,7 +569,7 @@ router.patch("/exit/:id/complete", authorize({ feature: "hr.exit", action: "upda
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     // Pre-check clearance before attempting the transition
-    const [item] = await rawQuery<any>(
+    const [item] = await rawQuery<ExitRequestRow>(
       `SELECT * FROM hr_exit_requests WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -557,7 +603,7 @@ router.patch("/exit/:id/complete", authorize({ feature: "hr.exit", action: "upda
       const { hrEngine } = await import("../lib/engines/index.js");
       hrEngine.postExitSettlementGL(
         { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
-        { id: item.id, employeeId: item.employeeId, eosAmount, remainingLeaveAmount, totalSettlement },
+        { id: item.id, employeeId: item.employeeId ?? 0, eosAmount, remainingLeaveAmount, totalSettlement },
       ).catch((e: unknown) => logger.error(e, "Exit settlement GL error:"));
     }
 
