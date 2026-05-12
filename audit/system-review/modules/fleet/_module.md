@@ -3,13 +3,13 @@
 > الموجة: **2** | عدد الصفحات: **26** | أوراق منشأة: **26**
 
 ## KPIs
-- مشاكل إجمالية: **6** (🔴 1 / ⚠ 1 / ℹ 4)
+- مشاكل إجمالية: **2** (🔴 1 / ⚠ 1 / ℹ 0)
 
 ## الصفحات
 
 | الصفحة | المسار | الكيان | سطور | API calls | أزرار | مشاكل |
 |--------|--------|--------|------|-----------|--------|--------|
-| [/fleet](./fleet.md) | `/fleet` | `fleet` | 519 | 0 | 3 | 2 |
+| [/fleet](./fleet.md) | `/fleet` | `fleet` | 519 | 0 | 3 | 0 |
 | [/fleet/vehicles/create](./fleet-vehicles-create.md) | `/fleet/vehicles/create` | `create` | 159 | 1 | 3 | 0 |
 | [/fleet/drivers](./fleet-drivers.md) | `/fleet/drivers` | `drivers` | 153 | 1 | 2 | 0 |
 | [/fleet/drivers/create](./fleet-drivers-create.md) | `/fleet/drivers/create` | `create` | 160 | 1 | 3 | 0 |
@@ -20,7 +20,7 @@
 | [/fleet/maintenance](./fleet-maintenance.md) | `/fleet/maintenance` | `maintenance` | 93 | 1 | 1 | 0 |
 | [/fleet/maintenance/create](./fleet-maintenance-create.md) | `/fleet/maintenance/create` | `create` | 129 | 1 | 3 | 0 |
 | [/fleet/maintenance/:id](./fleet-maintenance-byid.md) | `/fleet/maintenance/:id` | `:id` | 305 | 0 | 0 | 0 |
-| [/fleet/fuel](./fleet-fuel.md) | `/fleet/fuel` | `fuel` | 65 | 0 | 1 | 1 |
+| [/fleet/fuel](./fleet-fuel.md) | `/fleet/fuel` | `fuel` | 65 | 0 | 1 | 0 |
 | [/fleet/fuel/create](./fleet-fuel-create.md) | `/fleet/fuel/create` | `create` | 102 | 1 | 3 | 0 |
 | [/fleet/fuel/:id](./fleet-fuel-byid.md) | `/fleet/fuel/:id` | `:id` | 239 | 0 | 0 | 0 |
 | [/fleet/insurance](./fleet-insurance.md) | `/fleet/insurance` | `insurance` | 89 | 1 | 1 | 0 |
@@ -34,4 +34,4 @@
 | [/fleet/traffic-violations/:id](./fleet-traffic-violations-byid.md) | `/fleet/traffic-violations/:id` | `:id` | 213 | 0 | 0 | 0 |
 | [/fleet/tco](./fleet-tco.md) | `/fleet/tco` | `tco` | 168 | 1 | 0 | 0 |
 | [/fleet/:id/status](./fleet-byid-status.md) | `/fleet/:id/status` | `status` | 182 | 0 | 3 | 0 |
-| [/fleet/:id](./fleet-byid.md) | `/fleet/:id` | `:id` | 826 | 0 | 7 | 1 |
+| [/fleet/:id](./fleet-byid.md) | `/fleet/:id` | `:id` | 826 | 0 | 7 | 0 |

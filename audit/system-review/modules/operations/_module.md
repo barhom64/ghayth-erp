@@ -3,26 +3,26 @@
 > الموجة: **—** | عدد الصفحات: **39** | أوراق منشأة: **39**
 
 ## KPIs
-- مشاكل إجمالية: **24** (🔴 10 / ⚠ 0 / ℹ 14)
+- مشاكل إجمالية: **10** (🔴 10 / ⚠ 0 / ℹ 0)
 
 ## الصفحات
 
 | الصفحة | المسار | الكيان | سطور | API calls | أزرار | مشاكل |
 |--------|--------|--------|------|-----------|--------|--------|
 | [/obligations](./obligations.md) | `/obligations` | `obligations` | 226 | 1 | 3 | 0 |
-| [/operations-center](./operations-center.md) | `/operations-center` | `operations-center` | 284 | 0 | 4 | 2 |
-| [/daily-close](./daily-close.md) | `/daily-close` | `daily-close` | 215 | 0 | 3 | 1 |
+| [/operations-center](./operations-center.md) | `/operations-center` | `operations-center` | 284 | 0 | 4 | 0 |
+| [/daily-close](./daily-close.md) | `/daily-close` | `daily-close` | 215 | 0 | 3 | 0 |
 | [/projects](./projects.md) | `/projects` | `projects` | 399 | 1 | 7 | 0 |
 | [/projects/create](./projects-create.md) | `/projects/create` | `create` | 146 | 1 | 3 | 0 |
-| [/projects/tasks](./projects-tasks.md) | `/projects/tasks` | `tasks` | 422 | 0 | 10 | 3 |
+| [/projects/tasks](./projects-tasks.md) | `/projects/tasks` | `tasks` | 422 | 0 | 10 | 1 |
 | [/projects/gantt](./projects-gantt.md) | `/projects/gantt` | `gantt` | 182 | 1 | 0 | 0 |
 | [/projects/risks](./projects-risks.md) | `/projects/risks` | `risks` | 287 | 1 | 2 | 2 |
-| [/projects/:id](./projects-byid.md) | `/projects/:id` | `:id` | 734 | 0 | 21 | 6 |
+| [/projects/:id](./projects-byid.md) | `/projects/:id` | `:id` | 734 | 0 | 21 | 1 |
 | [/tasks/create](./tasks-create.md) | `/tasks/create` | `create` | 203 | 1 | 3 | 0 |
 | [/tasks/:id](./tasks-byid.md) | `/tasks/:id` | `:id` | 223 | 0 | 0 | 0 |
-| [/tasks](./tasks.md) | `/tasks` | `tasks` | 422 | 0 | 10 | 3 |
+| [/tasks](./tasks.md) | `/tasks` | `tasks` | 422 | 0 | 10 | 1 |
 | [/umrah](./umrah.md) | `/umrah` | `umrah` | 170 | 1 | 2 | 0 |
-| [/umrah/pilgrims](./umrah-pilgrims.md) | `/umrah/pilgrims` | `pilgrims` | 145 | 0 | 1 | 2 |
+| [/umrah/pilgrims](./umrah-pilgrims.md) | `/umrah/pilgrims` | `pilgrims` | 145 | 0 | 1 | 1 |
 | [/umrah/pilgrims/create](./umrah-pilgrims-create.md) | `/umrah/pilgrims/create` | `create` | 103 | 3 | 3 | 0 |
 | [/umrah/pilgrims/:id](./umrah-pilgrims-byid.md) | `/umrah/pilgrims/:id` | `:id` | 168 | 0 | 1 | 0 |
 | [/umrah/agents](./umrah-agents.md) | `/umrah/agents` | `agents` | 237 | 1 | 7 | 1 |
@@ -45,6 +45,6 @@
 | [/umrah/commission-plans/:id/edit](./umrah-commission-plans-byid-edit.md) | `/umrah/commission-plans/:id/edit` | `edit` | 634 | 0 | 1 | 0 |
 | [/umrah/violations](./umrah-violations.md) | `/umrah/violations` | `violations` | 519 | 0 | 8 | 0 |
 | [/umrah/violations/:id](./umrah-violations-byid.md) | `/umrah/violations/:id` | `:id` | 82 | 0 | 0 | 0 |
-| [/umrah/import](./umrah-import.md) | `/umrah/import` | `import` | 491 | 0 | 5 | 1 |
+| [/umrah/import](./umrah-import.md) | `/umrah/import` | `import` | 491 | 0 | 5 | 0 |
 | [/umrah/daily-runsheet](./umrah-daily-runsheet.md) | `/umrah/daily-runsheet` | `daily-runsheet` | 176 | 1 | 2 | 1 |
 | [/umrah/reconciliation](./umrah-reconciliation.md) | `/umrah/reconciliation` | `reconciliation` | 186 | 1 | 0 | 0 |

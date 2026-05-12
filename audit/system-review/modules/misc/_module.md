@@ -3,7 +3,7 @@
 > الموجة: **4** | عدد الصفحات: **16** | أوراق منشأة: **16**
 
 ## KPIs
-- مشاكل إجمالية: **12** (🔴 1 / ⚠ 4 / ℹ 7)
+- مشاكل إجمالية: **5** (🔴 1 / ⚠ 4 / ℹ 0)
 
 ## الصفحات
 
@@ -19,9 +19,9 @@
 | [/my-documents](./my-documents.md) | `/my-documents` | `my-documents` | 90 | 1 | 2 | 0 |
 | [/my-loans](./my-loans.md) | `/my-loans` | `my-loans` | 122 | 1 | 1 | 0 |
 | [/my-overtime](./my-overtime.md) | `/my-overtime` | `my-overtime` | 128 | 0 | 0 | 0 |
-| [/action-center](./action-center.md) | `/action-center` | `action-center` | 693 | 0 | 10 | 4 |
+| [/action-center](./action-center.md) | `/action-center` | `action-center` | 693 | 0 | 10 | 0 |
 | [/calendar](./calendar.md) | `/calendar` | `calendar` | 310 | 0 | 5 | 0 |
 | [/exec-dashboard](./exec-dashboard.md) | `/exec-dashboard` | `exec-dashboard` | 263 | 1 | 0 | 0 |
-| [/manager-board](./manager-board.md) | `/manager-board` | `manager-board` | 491 | 0 | 7 | 3 |
+| [/manager-board](./manager-board.md) | `/manager-board` | `manager-board` | 491 | 0 | 7 | 0 |
 | [/notifications](./notifications.md) | `/notifications` | `notifications` | 128 | 1 | 1 | 0 |
 | [/activity-log](./activity-log.md) | `/activity-log` | `activity-log` | 515 | 2 | 8 | 1 |

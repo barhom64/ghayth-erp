@@ -92,23 +92,25 @@ for (const r of inv) {
     }
   }
 
-  // Buttons with no onClick and no API call nearby
+  // Orphan buttons: no onClick AND not wrapped in <Link> AND not a form
+  // submit AND the page itself has no API mutations.
+  // A `<Link><Button>` is legitimate navigation, not a dead button.
   for (const btn of b.buttons || []) {
-    if (!btn.onClick && !btn.label) continue;
-    if (!btn.onClick && (b.apiCalls || []).length === 0) {
-      // probably dead button
-      if (btn.label && !/إلغاء|رجوع|إغلاق|Cancel|Close|Back/i.test(btn.label)) {
-        rows.push({
-          module: r.module,
-          page: r.path,
-          severity: "low",
-          category: "orphan-button",
-          evidence: `${b.sourceFile}:${btn.line} "${btn.label}"`,
-        });
-        orphanButtons[r.path] = orphanButtons[r.path] || [];
-        orphanButtons[r.path].push(btn);
-      }
-    }
+    if (!btn.label) continue;
+    if (btn.onClick) continue;
+    if (btn.wrappedByLink) continue;
+    if (btn.isSubmit) continue;
+    if ((b.apiCalls || []).length > 0) continue;
+    if (/إلغاء|رجوع|إغلاق|Cancel|Close|Back/i.test(btn.label)) continue;
+    rows.push({
+      module: r.module,
+      page: r.path,
+      severity: "low",
+      category: "orphan-button",
+      evidence: `${b.sourceFile}:${btn.line} "${btn.label}"`,
+    });
+    orphanButtons[r.path] = orphanButtons[r.path] || [];
+    orphanButtons[r.path].push(btn);
   }
 
   // Hardcoded data

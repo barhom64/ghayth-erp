@@ -57,22 +57,30 @@ function extractApiCalls(src) {
 function extractButtons(src) {
   const lines = src.split(/\r?\n/);
   const buttons = [];
-  // Walk lines; for each line containing <Button, capture the next 60 chars
-  // and look for a text label in the following 3 lines.
   for (let i = 0; i < lines.length; i++) {
     if (!/<Button\b/.test(lines[i])) continue;
     const blob = lines.slice(i, i + 4).join(" ");
-    // text between > and < (label) — naive
+    // Detect `<Link href="...">...<Button>...</Button>...</Link>` so the
+    // button isn't flagged as orphan. Look both backwards (Link opens
+    // before Button) and at href= near a Button asChild pattern.
+    const before = lines.slice(Math.max(0, i - 3), i).join(" ");
+    const wrappedByLink =
+      /<Link\b[^>]*href=/.test(before) ||
+      /<Link\b[^>]*href=/.test(blob) ||
+      /\basChild\b/.test(blob);
     const txtMatch = blob.match(/<Button[^>]*>\s*(?:<[^>]+>\s*)?([^<>{}\n]{2,40}?)\s*</);
     const onClick = blob.match(/onClick=\{([^}]+)\}/);
     const titleAttr = blob.match(/title=["']([^"']+)["']/);
     const ariaLabel = blob.match(/aria-label=["']([^"']+)["']/);
     const disabled = /disabled=\{?true|disabled\s*=\s*\{[^}]+\}/.test(blob);
+    const isSubmit = /type=["']submit["']/.test(blob);
     buttons.push({
       line: i + 1,
       label: (txtMatch && txtMatch[1].trim()) || titleAttr?.[1] || ariaLabel?.[1] || null,
       onClick: onClick ? onClick[1].trim().slice(0, 80) : null,
       disabledHinted: disabled,
+      wrappedByLink,
+      isSubmit,
     });
   }
   return buttons;

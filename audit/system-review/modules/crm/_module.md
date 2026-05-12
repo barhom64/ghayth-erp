@@ -3,13 +3,13 @@
 > الموجة: **3** | عدد الصفحات: **9** | أوراق منشأة: **9**
 
 ## KPIs
-- مشاكل إجمالية: **2** (🔴 1 / ⚠ 0 / ℹ 1)
+- مشاكل إجمالية: **1** (🔴 1 / ⚠ 0 / ℹ 0)
 
 ## الصفحات
 
 | الصفحة | المسار | الكيان | سطور | API calls | أزرار | مشاكل |
 |--------|--------|--------|------|-----------|--------|--------|
-| [/clients](./clients.md) | `/clients` | `clients` | 233 | 0 | 2 | 1 |
+| [/clients](./clients.md) | `/clients` | `clients` | 233 | 0 | 2 | 0 |
 | [/clients/create](./clients-create.md) | `/clients/create` | `create` | 180 | 0 | 3 | 0 |
 | [/clients/:id](./clients-byid.md) | `/clients/:id` | `:id` | 945 | 0 | 4 | 0 |
 | [/crm](./crm.md) | `/crm` | `crm` | 263 | 1 | 2 | 0 |
