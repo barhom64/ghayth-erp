@@ -277,9 +277,11 @@ export default function UmrahViolations() {
       subtitle="رصد المخالفات: تأخر المغادرة، الهروب، وأخرى"
       breadcrumbs={[{ label: "العمرة" }, { label: "المخالفات" }]}
       actions={
-        <Button onClick={openCreate} className="gap-2">
-          <Plus className="h-4 w-4" />
-          مخالفة جديدة
+        <Button asChild className="gap-2">
+          <Link href="/umrah/violations/create">
+            <Plus className="h-4 w-4" />
+            مخالفة جديدة
+          </Link>
         </Button>
       }
     >
