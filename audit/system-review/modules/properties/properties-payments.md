@@ -8,15 +8,14 @@
 - الكومبوننت: `PropertiesPayments`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `payments`
-- سطور الملف: 117
+- سطور الملف: 118
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L44: "(بلا تسمية)"
-- L64: "تسجيل دفعة"
+- L45: "(بلا تسمية)"
 
 ### القراءات (GET)
 _لا قراءات._
@@ -24,13 +23,25 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/properties.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+دفعات إيجار. المرجع: `docs/blueprints/properties-ejar.md`.
+
+| الحركة | الوحدة الهدف | مدخل API | مدخل DB | الحالة |
+|--------|--------------|----------|---------|--------|
+| توليد جدول الأقساط (عند إنشاء العقد) | properties | تلقائي مع `/properties/contracts` POST | `property_payments` (1 صف لكل قسط) | ✅ |
+| تسجيل دفعة من المستأجر | properties | POST `/properties/payments/:id/pay` | `property_payments.paidAt`, `paidAmount` | ✅ |
+| قيد محاسبي عند الدفعة | finance/GL | DR Cash/Bank / CR Rental Revenue (+ VAT إن ينطبق) | `gl_entries`, `gl_lines` | ✅ متوقع — تحقق من `accounting-mappings` |
+| فاتورة ZATCA (للوحدات التجارية) | finance-zatca | اختياري بناءً على `contract.commercial` | `invoices`, `zatca_documents` | ⚠ يعتمد |
+| تحديث رصيد المالك | properties/owners | `owner_balances` يتحدّث بصافي الإيرادات بعد العمولة | `owner_balances_history` | ⚠ تحقق |
+| إشعار للمستأجر (إيصال) | comms | event=`payment_confirmed` | `notifications` | ✅ |
+| إشعار للمالك (دفعة جديدة) | comms | event=`owner_payment_received` | `notifications` | ⚠ |
+| تذكير بالاستحقاق (cron) | comms | cron يقرأ `property_payments.dueDate` ويرسل قبل 3/1 يوم | `notifications` | ✅ |
+| تحويل التأخير → غرامة | properties | `late_fees` policy بناءً على `business_rules` | `late_fee_lines` (إن وُجد) | ⚠ تحقق |
+| Audit log | core | `auditMiddleware` (`/properties`) | `audit_logs` (entity=`property`) | ✅ |
+
+تحقق يدوي:
+- [ ] هل دفعة جزئية تترك الباقي مفتوحاً ويظهر في AR aging؟
+- [ ] هل المرتجعات (security deposit refund) تنشئ قيد عكسي؟
+- [ ] هل ربط الإيجار بـ Ejar الحكومي يُحدّث تلقائياً عند الدفع؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `payments` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

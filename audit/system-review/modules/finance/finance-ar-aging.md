@@ -8,14 +8,14 @@
 - الكومبوننت: `ArAging`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `ar-aging`
-- سطور الملف: 174
+- سطور الملف: 175
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L86: "(بلا تسمية)" → `() => exportCSV(clients, `ar-aging-${asOfDate`
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
 _لا قراءات._
@@ -35,7 +35,7 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `ar-aging` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L34 _(inline-data-array)_: `const BUCKETS = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
 - Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS

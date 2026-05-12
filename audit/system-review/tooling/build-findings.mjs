@@ -129,8 +129,23 @@ for (const r of inv) {
 }
 
 // Modeling gaps
+//
+// Tables that intentionally don't have a direct tenant column. They are
+// either THE tenant itself (`companies`), shared across tenants by design
+// (`employees` — employee identity is global, multi-employer is handled
+// via `employee_assignments`), or inherit tenant via their FK parent
+// (`journal_lines` → journalId → journal_entries.companyId,
+// `approval_chain_steps` → chainId → approval_chains.companyId). Each of
+// these is documented in docs/MODULES.md.
+const TENANT_INTENTIONAL = new Set([
+  "companies",          // the tenant itself
+  "employees",          // global identity; tenant via employee_assignments
+  "journal_lines",      // inherits via journalId → journal_entries
+  "approval_chain_steps", // inherits via chainId → approval_chains
+]);
+
 for (const [name, t] of Object.entries(schema)) {
-  if (!t.audit.tenant) {
+  if (!t.audit.tenant && !TENANT_INTENTIONAL.has(name)) {
     rows.push({
       module: "schema",
       page: name,

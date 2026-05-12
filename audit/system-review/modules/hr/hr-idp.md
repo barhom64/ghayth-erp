@@ -8,7 +8,7 @@
 - الكومبوننت: `IDP`
 - subKey: `performance` | minRoleLevel: —
 - الكيان المستنبط: `idp`
-- سطور الملف: 279
+- سطور الملف: 280
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
@@ -17,8 +17,7 @@
 | _(write)_ | `/hr/idp` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-- L197: "(بلا تسمية)" → `() => setShowForm(true)`
-- L238: "(بلا تسمية)" → `() => setShowForm(false)`
+- L239: "(بلا تسمية)" → `() => setShowForm(false)`
 
 ### القراءات (GET)
 - GET `/hr/idp`
@@ -39,7 +38,7 @@
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `idp` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L92 _(inline-data-array)_: `const kpis = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
 - Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS

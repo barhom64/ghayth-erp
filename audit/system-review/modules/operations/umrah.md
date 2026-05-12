@@ -3,20 +3,19 @@
 ## 1. الميتاداتا
 - المسار: `/umrah`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/dashboard.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:38`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:47`
 - المجموعة: `operations`
 - الكومبوننت: `UmrahDashboard`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `umrah`
-- سطور الملف: 170
+- سطور الملف: 171
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L58: "تحديث الحالات" → `runDaily`
-- L59: "تشغيل الغرامات" → `runPenalties`
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
 - GET `/umrah/seasons`

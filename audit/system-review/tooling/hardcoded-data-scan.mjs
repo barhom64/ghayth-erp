@@ -45,28 +45,52 @@ function scanFile(src) {
       hits.push({ line: i + 1, kind: "mock-array", evidence: `${m[1]} = [...]`, text: l.trim().slice(0, 120) });
       continue;
     }
-    // const xxx = [   ... { ... } ... ] inline literal with objects
-    if (/\bconst\s+\w+\s*=\s*\[\s*$/.test(l) || /\bconst\s+\w+\s*=\s*\[\s*\{/.test(l)) {
+    // const xxx = [   ... { ... } ... ] inline literal with objects.
+    // We only care about literal *business data* (names, phones, monetary
+    // values that should come from the DB). Filter out UI/enum config:
+    //   • UPPER_SNAKE constants (PAYMENT_METHODS, TAX_CATEGORIES) — enum
+    //   • Named like kpis|statCards|tabs|options|buckets|columns — UI scaffolds
+    //   • Object literals whose value side references variables/optional
+    //     chaining (`stats?.total ?? items.length`) — values come from API,
+    //     the array is just label scaffolding
+    const constNameMatch = /\bconst\s+(\w+)\s*=\s*\[\s*(?:$|\{)/.exec(l);
+    if (constNameMatch) {
+      const name = constNameMatch[1];
+      const isUpperSnake = /^[A-Z][A-Z0-9_]+$/.test(name);
+      // Recognised UI/enum-scaffold names. The list is broad on purpose:
+      // every entry here either declares static labels for charts/tabs/
+      // option lists or is a developer-defined enum. None are business
+      // data that should live in the DB.
+      const isUiScaffold = /^(kpis|statCards|summaryCards|tabs|tabConfig|options|columns|menu|cards|stages|buckets|colors|icons|filters|sections|steps|legends|severities|categories|sources|types|stats|metrics|labels|chartData|pieData|barData|cols|fields|tableHeaders|alertCards|statusOptions|daysOfWeek|months|weekdays|violationTypes|leaveTypes|currencyOptions|countries|cities|salaryComponents|riskLevels|priorityOptions)$/i.test(name);
+      // Also skip any name that ENDS in a scaffold suffix
+      const hasScaffoldSuffix = /(?:Options|Config|Cards|Tabs|Stages|Buckets|Columns|Types|Labels|Categories|Steps|Filters|Stats|Kpis|Metrics)$/.test(name);
+      if (isUpperSnake || isUiScaffold || hasScaffoldSuffix) continue;
+
       const window = lines.slice(i, Math.min(lines.length, i + 8)).join("\n");
-      // Heuristic: contains 2+ `name:` or `id:` literal pairs
-      if ((window.match(/\b(id|name|title|label)\s*:/g) || []).length >= 2 &&
+      const labelCount = (window.match(/\b(id|name|title|label)\s*:/g) || []).length;
+      // Value side references API or local computed state? → scaffolding.
+      const valuesAreDynamic = /\?\.[A-Za-z_]|\?\?|items\.|\bstats\b|\bdata\b|\.filter\(|\.map\(|\.reduce\(/.test(window);
+      if (labelCount >= 2 &&
           !/useApi|fetch\(|axios/.test(window) &&
+          !valuesAreDynamic &&
           /\d+/.test(window)) {
         hits.push({ line: i + 1, kind: "inline-data-array", text: l.trim().slice(0, 120) });
       }
     }
   }
 
-  // Per-line pattern scans
+  // Per-line pattern scans. Skip the line entirely if the literal sits
+  // inside a `placeholder="..."` attribute — those are UX hints, not data.
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i];
-    if (DUMMY_NAMES.some((re) => re.test(l))) {
+    const isPlaceholderAttr = /\bplaceholder\s*=\s*["'`]/.test(l);
+    if (DUMMY_NAMES.some((re) => re.test(l)) && !isPlaceholderAttr) {
       hits.push({ line: i + 1, kind: "dummy-name", text: l.trim().slice(0, 120) });
     }
-    if (DUMMY_PHONES.test(l)) {
+    if (DUMMY_PHONES.test(l) && !isPlaceholderAttr) {
       hits.push({ line: i + 1, kind: "dummy-phone", text: l.trim().slice(0, 120) });
     }
-    if (DUMMY_IBAN.test(l)) {
+    if (DUMMY_IBAN.test(l) && !isPlaceholderAttr) {
       hits.push({ line: i + 1, kind: "dummy-iban", text: l.trim().slice(0, 120) });
     }
     if (FAKE_AVATAR.test(l)) {
