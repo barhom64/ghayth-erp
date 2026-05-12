@@ -66,4 +66,18 @@ CREATE TABLE IF NOT EXISTS smart_recommendations (
 
 CREATE INDEX IF NOT EXISTS srec_company_idx ON smart_recommendations ("companyId");
 CREATE INDEX IF NOT EXISTS srec_user_idx ON smart_recommendations ("userId");
-CREATE INDEX IF NOT EXISTS srec_status_idx ON smart_recommendations (status);
+-- Migration 107 later redefines smart_recommendations without the `status`
+-- column. CREATE TABLE IF NOT EXISTS above is a no-op when 107 already
+-- ran (e.g. on a fresh schema_pre.sql reload), so the index would target
+-- a missing column. Guard with a DO block that only adds the index when
+-- the column actually exists. Pre-existing index installations on the
+-- old shape are left alone by the IF NOT EXISTS.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'smart_recommendations' AND column_name = 'status'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS srec_status_idx ON smart_recommendations (status);
+  END IF;
+END $$;

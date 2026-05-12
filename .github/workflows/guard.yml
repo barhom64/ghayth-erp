@@ -59,8 +59,22 @@ jobs:
       JWT_SECRET: ci-only-jwt-secret-thirty-two-chars-aaaaaaaaaaaaaaaa
 
     steps:
+      - name: Diagnostic — confirm job reached runner
+        run: |
+          echo "=== reached runner ==="
+          echo "Job started at: $(date -u +%FT%TZ)"
+          echo "Runner OS: $RUNNER_OS"
+          echo "Workspace: $GITHUB_WORKSPACE"
+          uname -a
+
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Diagnostic — after checkout
+        run: |
+          echo "=== checkout done ==="
+          git log -1 --oneline
+          ls -la | head -10
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
