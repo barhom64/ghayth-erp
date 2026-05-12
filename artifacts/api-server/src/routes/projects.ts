@@ -233,11 +233,11 @@ router.post("/impact-preview", authorize({ feature: "projects.list", action: "li
     }
 
     if (managerId) {
-      const [manager] = await rawQuery<any>(
+      const [manager] = await rawQuery<Record<string, unknown>>(
         `SELECT e.name FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`, [Number(managerId), scope.companyId]
       );
       const [[active]] = await Promise.all([
-        rawQuery<any>(
+        rawQuery<Record<string, unknown>>(
           `SELECT COUNT(*)::int AS c FROM projects
            WHERE "managerId" = $1 AND "companyId" = $2
              AND "deletedAt" IS NULL AND status NOT IN ('completed','cancelled')`,
@@ -335,7 +335,7 @@ router.get("/", authorize({ feature: "projects.list", action: "list" }), async (
       paramIdx++;
     }
 
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT p.*, cl.name AS "clientName", e.name AS "managerName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=p."managerId" AND e."deletedAt" IS NULL WHERE ${where} AND p."deletedAt" IS NULL ORDER BY p.id DESC LIMIT 500`,
       params
     );
@@ -367,7 +367,7 @@ async function assertProjectAccess(projectId: number, scope: any): Promise<any> 
     }
   }
 
-  const [project] = await rawQuery<any>(`SELECT * FROM projects WHERE ${where}`, params);
+  const [project] = await rawQuery<Record<string, unknown>>(`SELECT * FROM projects WHERE ${where}`, params);
   if (!project) {
     throw new NotFoundError("المشروع غير موجود أو غير مصرح بالوصول إليه");
   }
@@ -424,7 +424,7 @@ router.post("/", authorize({ feature: "projects.list", action: "create" }), asyn
       }
     }
     if (b.clientId) {
-      const [cl] = await rawQuery<any>(
+      const [cl] = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM clients WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
         [b.clientId, scope.companyId]
       );
@@ -433,7 +433,7 @@ router.post("/", authorize({ feature: "projects.list", action: "create" }), asyn
       }
     }
     if (b.managerId) {
-      const [emp] = await rawQuery<any>(
+      const [emp] = await rawQuery<Record<string, unknown>>(
         `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`,
         [b.managerId, scope.companyId]
       );
@@ -461,7 +461,7 @@ router.post("/", authorize({ feature: "projects.list", action: "create" }), asyn
       }
     });
 
-    const [row] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -527,14 +527,14 @@ router.get("/:id", authorize({ feature: "projects.list", action: "view", resourc
       }
     }
 
-    const [project] = await rawQuery<any>(`SELECT p.*, cl.name AS "clientName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" AND cl."deletedAt" IS NULL WHERE ${detailWhere}`, detailParams);
+    const [project] = await rawQuery<Record<string, unknown>>(`SELECT p.*, cl.name AS "clientName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" AND cl."deletedAt" IS NULL WHERE ${detailWhere}`, detailParams);
     if (!project) throw new NotFoundError("المشروع غير موجود");
-    const phases = await rawQuery<any>(`SELECT * FROM project_phases WHERE "projectId"=$1 ORDER BY "orderIndex" LIMIT 500`, [project.id]);
-    const tasks = await rawQuery<any>(`SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" AND e."deletedAt" IS NULL WHERE pt."projectId"=$1 AND pt."deletedAt" IS NULL ORDER BY pt."dueDate" LIMIT 500`, [project.id]);
+    const phases = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_phases WHERE "projectId"=$1 ORDER BY "orderIndex" LIMIT 500`, [project.id]);
+    const tasks = await rawQuery<Record<string, unknown>>(`SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" AND e."deletedAt" IS NULL WHERE pt."projectId"=$1 AND pt."deletedAt" IS NULL ORDER BY pt."dueDate" LIMIT 500`, [project.id]);
 
-    let taskDeps: any[] = [];
+    let taskDeps: Record<string, unknown>[] = [];
     if (tasks.length > 0) {
-      taskDeps = await rawQuery<any>(`SELECT * FROM project_task_dependencies WHERE "taskId" IN (${tasks.map((_: any, i: number) => `$${i + 1}`).join(',')}) LIMIT 500`, tasks.map((t: any) => t.id));
+      taskDeps = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_task_dependencies WHERE "taskId" IN (${tasks.map((_: any, i: number) => `$${i + 1}`).join(',')}) LIMIT 500`, tasks.map((t: any) => t.id));
     }
     const taskGraph = tasks.map((t: any) => ({
       id: t.id,
@@ -555,13 +555,13 @@ router.get("/:id", authorize({ feature: "projects.list", action: "view", resourc
     const budgetWarning = budgetUsagePct >= 80;
 
     const today = new Date();
-    const endDate = project.endDate ? new Date(project.endDate) : null;
+    const endDate = project.endDate ? new Date(project.endDate as string) : null;
     const isSlipping = endDate && today > endDate && project.status === 'active';
 
     let delayFinancialImpact = 0;
     if (isSlipping) {
       const delayDays = Math.floor((today.getTime() - endDate!.getTime()) / (1000 * 60 * 60 * 24));
-      const dailyBudget = budget / Math.max(1, Math.round((endDate!.getTime() - new Date(project.startDate).getTime()) / (1000 * 60 * 60 * 24)));
+      const dailyBudget = budget / Math.max(1, Math.round((endDate!.getTime() - new Date(project.startDate as string).getTime()) / (1000 * 60 * 60 * 24)));
       delayFinancialImpact = dailyBudget * delayDays;
     }
 
@@ -595,7 +595,7 @@ router.patch("/:id", authorize({ feature: "projects.list", action: "update" }), 
       findQuery += ` AND "managerId"=$3`;
       findParams.push(scope.employeeId);
     }
-    const [existing] = await rawQuery<any>(findQuery, findParams);
+    const [existing] = await rawQuery<Record<string, unknown>>(findQuery, findParams);
     if (!existing) throw new NotFoundError("المشروع غير موجود");
     const b = parsed;
 
@@ -627,7 +627,7 @@ router.patch("/:id", authorize({ feature: "projects.list", action: "update" }), 
           { field: "status", fix: "استخدم /projects/:id/close لإقفال المشروع بالقيود المحاسبية" }
         );
       }
-      const allowedNext = PROJECT_TRANSITIONS[existing.status] ?? [];
+      const allowedNext = PROJECT_TRANSITIONS[existing.status as string] ?? [];
       if (!allowedNext.includes(b.status)) {
         throw new ConflictError(
           `لا يمكن نقل المشروع من "${existing.status}" إلى "${b.status}"`,
@@ -643,7 +643,7 @@ router.patch("/:id", authorize({ feature: "projects.list", action: "update" }), 
       }
     }
     if (b.managerId !== undefined && b.managerId !== existing.managerId) {
-      const [emp] = await rawQuery<any>(
+      const [emp] = await rawQuery<Record<string, unknown>>(
         `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`,
         [b.managerId, scope.companyId]
       );
@@ -670,7 +670,7 @@ router.patch("/:id", authorize({ feature: "projects.list", action: "update" }), 
     params.push(id); params.push(scope.companyId);
     const { affectedRows } = await rawExecute(`UPDATE projects SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     if (!affectedRows) throw new NotFoundError("المشروع غير موجود");
-    const [row] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -711,10 +711,10 @@ router.delete("/:id", authorize({ feature: "projects.list", action: "delete", re
       findQuery += ` AND "managerId"=$3`;
       findParams.push(scope.employeeId);
     }
-    const [existing] = await rawQuery<any>(findQuery, findParams);
+    const [existing] = await rawQuery<Record<string, unknown>>(findQuery, findParams);
     if (!existing) throw new NotFoundError("المشروع غير موجود");
 
-    if (["active", "in_progress"].includes(existing.status)) {
+    if (["active", "in_progress"].includes(existing.status as string)) {
       throw new ConflictError(
         `لا يمكن حذف مشروع بحالة "${existing.status}"`,
         { field: "status", fix: "ألغِ المشروع أو أقفله عبر /projects/:id/close قبل الحذف" }
@@ -764,7 +764,7 @@ router.post("/:id/phases", authorize({ feature: "projects.tasks", action: "creat
       `INSERT INTO project_phases ("projectId",name,"orderIndex","startDate","endDate") VALUES ($1,$2,$3,$4,$5)`,
       [projectId, b.name.trim(), b.orderIndex || 0, b.startDate || null, b.endDate || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM project_phases WHERE id=$1 AND "projectId"=$2`, [insertId, projectId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_phases WHERE id=$1 AND "projectId"=$2`, [insertId, projectId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -798,11 +798,11 @@ router.patch("/:id/phases/:phaseId/complete", authorize({ feature: "projects.tas
 
     const project = await assertProjectAccess(projectId, scope);
 
-    const [phase] = await rawQuery<any>(`SELECT * FROM project_phases WHERE id=$1 AND "projectId"=$2`, [phaseId, projectId]);
+    const [phase] = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_phases WHERE id=$1 AND "projectId"=$2`, [phaseId, projectId]);
     if (!phase) throw new NotFoundError("المرحلة غير موجودة");
 
     // State machine — phases must be pending or in_progress to complete
-    const allowedNext = PHASE_TRANSITIONS[phase.status ?? "pending"] ?? [];
+    const allowedNext = PHASE_TRANSITIONS[(phase.status as string | undefined) ?? "pending"] ?? [];
     if (!allowedNext.includes("completed")) {
       throw new ConflictError(
         `لا يمكن إكمال مرحلة حالتها "${phase.status ?? "pending"}"`,
@@ -834,7 +834,7 @@ router.patch("/:id/phases/:phaseId/complete", authorize({ feature: "projects.tas
     let milestoneInvoiceCreated = false;
     if (project?.clientId) {
       try {
-        const allPhases = await rawQuery<any>(`SELECT id FROM project_phases WHERE "projectId"=$1`, [projectId]);
+        const allPhases = await rawQuery<Record<string, unknown>>(`SELECT id FROM project_phases WHERE "projectId"=$1`, [projectId]);
         const phaseWeight = allPhases.length > 0 ? 1 / allPhases.length : 0.25;
         const milestoneAmount = Number(project.budget) * phaseWeight;
         const monthNum = currentMonthPadded();
@@ -862,7 +862,7 @@ router.patch("/:id/phases/:phaseId/complete", authorize({ feature: "projects.tas
       }
     }
 
-    const tasks = await rawQuery<any>(`SELECT * FROM project_tasks WHERE "projectId"=$1 AND "deletedAt" IS NULL LIMIT 500`, [projectId]);
+    const tasks = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_tasks WHERE "projectId"=$1 AND "deletedAt" IS NULL LIMIT 500`, [projectId]);
     const doneTasks = tasks.filter((t: any) => t.status === 'done').length;
     const progressPct = tasks.length > 0 ? Math.round((doneTasks / tasks.length) * 100) : 0;
     const { affectedRows } = await rawExecute(`UPDATE projects SET progress=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [progressPct, projectId, scope.companyId]);
@@ -886,7 +886,7 @@ router.post("/:id/tasks", authorize({ feature: "projects.tasks", action: "create
     assertProjectMutable(project);
 
     if (b.assigneeId) {
-      const [emp] = await rawQuery<any>(
+      const [emp] = await rawQuery<Record<string, unknown>>(
         `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`,
         [b.assigneeId, scope.companyId]
       );
@@ -895,7 +895,7 @@ router.post("/:id/tasks", authorize({ feature: "projects.tasks", action: "create
       }
     }
     if (b.phaseId) {
-      const [phase] = await rawQuery<any>(
+      const [phase] = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM project_phases WHERE id=$1 AND "projectId"=$2`,
         [b.phaseId, projectId]
       );
@@ -941,17 +941,17 @@ router.post("/:id/tasks", authorize({ feature: "projects.tasks", action: "create
       }
     });
 
-    const [row] = await rawQuery<any>(`SELECT pt.* FROM project_tasks pt JOIN projects p ON p.id=pt."projectId" WHERE pt.id=$1 AND p."companyId"=$2 AND pt."deletedAt" IS NULL`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT pt.* FROM project_tasks pt JOIN projects p ON p.id=pt."projectId" WHERE pt.id=$1 AND p."companyId"=$2 AND pt."deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     if (b.assigneeId) {
-      const [assigneeAssignment] = await rawQuery<any>(
+      const [assigneeAssignment] = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
         [b.assigneeId, scope.companyId]
       );
       if (assigneeAssignment) {
         createNotification({
           companyId: scope.companyId,
-          assignmentId: assigneeAssignment.id,
+          assignmentId: assigneeAssignment.id as number,
           type: "task_assigned",
           title: "مهمة جديدة مسندة إليك",
           body: `تم إسناد المهمة "${b.title}" إليك — الأولوية: ${b.priority || 'medium'}`,
@@ -1006,14 +1006,14 @@ router.patch("/tasks/:taskId", authorize({ feature: "projects.tasks", action: "u
     const taskId = parseId(req.params.taskId, "taskId");
     const b = parsed;
 
-    const [existingTask] = await rawQuery<any>(
+    const [existingTask] = await rawQuery<Record<string, unknown>>(
       `SELECT pt.* FROM project_tasks pt
        JOIN projects p ON p.id = pt."projectId"
        WHERE pt.id=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL`,
       [taskId, scope.companyId]
     );
     if (!existingTask) throw new NotFoundError("المهمة غير موجودة");
-    await assertProjectAccess(existingTask.projectId, scope);
+    await assertProjectAccess(existingTask.projectId as number, scope);
 
     // State machine for task status transitions
     if (b.status !== undefined && b.status !== existingTask.status) {
@@ -1023,7 +1023,7 @@ router.patch("/tasks/:taskId", authorize({ feature: "projects.tasks", action: "u
           { field: "status", fix: `اختر من: ${TASK_STATUSES.join(", ")}` }
         );
       }
-      const allowedNext = TASK_TRANSITIONS[existingTask.status ?? "todo"] ?? [];
+      const allowedNext = TASK_TRANSITIONS[(existingTask.status as string | undefined) ?? "todo"] ?? [];
       if (!allowedNext.includes(b.status)) {
         throw new ConflictError(
           `لا يمكن نقل المهمة من "${existingTask.status ?? "todo"}" إلى "${b.status}"`,
@@ -1063,7 +1063,7 @@ router.patch("/tasks/:taskId", authorize({ feature: "projects.tasks", action: "u
       const taskRes = await client.query(`SELECT * FROM project_tasks WHERE id=$1 AND "deletedAt" IS NULL`, [taskId]);
       const tsk = taskRes.rows[0];
 
-      let unlocked: any[] = [];
+      let unlocked: Record<string, unknown>[] = [];
       if (b.status === 'done' && tsk?.projectId) {
         const candidateRes = await client.query(
           `SELECT ptd."taskId",
@@ -1148,7 +1148,7 @@ router.patch("/tasks/:taskId", authorize({ feature: "projects.tasks", action: "u
               body: `المهمة "${t.title}" أصبحت جاهزة — جميع المهام المعتمد عليها مكتملة`,
               priority: "normal",
               refType: "project_tasks",
-              refId: t.id,
+              refId: t.id as number,
             }).catch((e) => logger.error(e, "projects background task failed"));
           }
         } catch (e) { logger.error(e, "Unlock notification error:"); }
@@ -1157,7 +1157,7 @@ router.patch("/tasks/:taskId", authorize({ feature: "projects.tasks", action: "u
 
     if (task?.projectId) {
 
-      const [project] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [task.projectId, scope.companyId]);
+      const [project] = await rawQuery<Record<string, unknown>>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [task.projectId, scope.companyId]);
 
       const budget = Number(project?.budget) || 0;
       const spentAmount = Number(project?.spentAmount) || 0;
@@ -1169,22 +1169,22 @@ router.patch("/tasks/:taskId", authorize({ feature: "projects.tasks", action: "u
         );
         if (mgrAsn?.id) {
           createNotification({
-            companyId: project.companyId,
+            companyId: project.companyId as number,
             assignmentId: mgrAsn.id,
             type: "project_budget_warning",
             title: `تحذير الميزانية: ${project.name}`,
             body: `صُرف ${pct}% من ميزانية المشروع (${spentAmount} من ${budget} ريال).`,
             priority: pct >= 100 ? "urgent" : "high",
             refType: "project",
-            refId: project.id,
+            refId: project.id as number,
           }).catch((e) => logger.error(e, "projects background task failed"));
         }
       }
 
-      const endDate = project?.endDate ? new Date(project.endDate) : null;
+      const endDate = project?.endDate ? new Date(project.endDate as string) : null;
       if (endDate && new Date() > endDate && project?.status === 'active' && progressPct < 100 && project?.managerId) {
         const delayDays = Math.floor((Date.now() - endDate.getTime()) / (1000 * 60 * 60 * 24));
-        const projectDuration = Math.max(1, Math.round((endDate.getTime() - new Date(project.startDate).getTime()) / (1000 * 60 * 60 * 24)));
+        const projectDuration = Math.max(1, Math.round((endDate.getTime() - new Date(project.startDate as string).getTime()) / (1000 * 60 * 60 * 24)));
         const dailyBudget = budget / projectDuration;
         const delayImpact = dailyBudget * delayDays;
         const [mgrAsn] = await rawQuery<{ id: number }>(
@@ -1193,14 +1193,14 @@ router.patch("/tasks/:taskId", authorize({ feature: "projects.tasks", action: "u
         );
         if (mgrAsn?.id) {
           createNotification({
-            companyId: project.companyId,
+            companyId: project.companyId as number,
             assignmentId: mgrAsn.id,
             type: "project_overdue",
             title: `تأخر المشروع: ${project.name}`,
             body: `المشروع متأخر ${delayDays} يوم — أثر مالي تقديري: ${delayImpact.toFixed(0)} ريال.`,
             priority: "high",
             refType: "project",
-            refId: project.id,
+            refId: project.id as number,
           }).catch((e) => logger.error(e, "projects background task failed"));
         }
       }
@@ -1214,9 +1214,9 @@ router.get("/stats/summary", authorize({ feature: "projects.list", action: "list
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [projects] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='active') as active, COUNT(*) FILTER (WHERE status='completed') as completed FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [budget] = await rawQuery<any>(`SELECT COALESCE(SUM(budget),0) as "totalBudget", COALESCE(SUM("spentAmount"),0) as "totalSpent" FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [slipping] = await rawQuery<any>(`SELECT COUNT(*) as count FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL AND status='active' AND "endDate" < CURRENT_DATE`, [cid]);
+    const [projects] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='active') as active, COUNT(*) FILTER (WHERE status='completed') as completed FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [budget] = await rawQuery<Record<string, unknown>>(`SELECT COALESCE(SUM(budget),0) as "totalBudget", COALESCE(SUM("spentAmount"),0) as "totalSpent" FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [slipping] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as count FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL AND status='active' AND "endDate" < CURRENT_DATE`, [cid]);
     res.json({
       totalProjects: Number(projects.total), activeProjects: Number(projects.active),
       completedProjects: Number(projects.completed), totalBudget: Number(budget.totalBudget),
@@ -1230,7 +1230,7 @@ router.get("/stats/overview", authorize({ feature: "projects.list", action: "lis
     const scope = req.scope!;
     const cid = scope.companyId;
 
-    const [counts] = await rawQuery<any>(
+    const [counts] = await rawQuery<Record<string, unknown>>(
       `SELECT
          COUNT(*) as total,
          COUNT(*) FILTER (WHERE status IN ('active','in_progress')) as active,
@@ -1243,14 +1243,14 @@ router.get("/stats/overview", authorize({ feature: "projects.list", action: "lis
       [cid]
     );
 
-    const [budget] = await rawQuery<any>(
+    const [budget] = await rawQuery<Record<string, unknown>>(
       `SELECT COALESCE(SUM(budget),0) as "totalBudget",
               COALESCE(SUM("spentAmount"),0) as "totalSpent"
        FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
       [cid]
     );
 
-    const [taskCounts] = await rawQuery<any>(
+    const [taskCounts] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) as total,
               COUNT(*) FILTER (WHERE pt.status='done') as done,
               COUNT(*) FILTER (WHERE pt.status='in_progress') as in_progress,
@@ -1262,7 +1262,7 @@ router.get("/stats/overview", authorize({ feature: "projects.list", action: "lis
       [cid]
     );
 
-    const slippingProjects = await rawQuery<any>(
+    const slippingProjects = await rawQuery<Record<string, unknown>>(
       `SELECT id, name, status, "endDate", progress, budget, "spentAmount",
               (SELECT name FROM employees WHERE id=p."managerId" AND "deletedAt" IS NULL) as "managerName"
        FROM projects p
@@ -1272,7 +1272,7 @@ router.get("/stats/overview", authorize({ feature: "projects.list", action: "lis
       [cid]
     );
 
-    const recentProjects = await rawQuery<any>(
+    const recentProjects = await rawQuery<Record<string, unknown>>(
       `SELECT id, name, status, progress, budget, "spentAmount", "endDate",
               (SELECT name FROM employees WHERE id=p."managerId" AND "deletedAt" IS NULL) as "managerName"
        FROM projects p
@@ -1281,7 +1281,7 @@ router.get("/stats/overview", authorize({ feature: "projects.list", action: "lis
       [cid]
     );
 
-    const upcomingMilestones = await rawQuery<any>(
+    const upcomingMilestones = await rawQuery<Record<string, unknown>>(
       `SELECT pm.id, pm.title, pm."targetDate", pm.status, p.name as "projectName", p.id as "projectId"
        FROM project_milestones pm
        JOIN projects p ON pm."projectId"=p.id
@@ -1292,7 +1292,7 @@ router.get("/stats/overview", authorize({ feature: "projects.list", action: "lis
       [cid]
     );
 
-    const openRisks = await rawQuery<any>(
+    const openRisks = await rawQuery<Record<string, unknown>>(
       `SELECT pr.id, pr.title, pr."riskLevel", pr."riskScore", pr.status, p.name as "projectName", p.id as "projectId"
        FROM project_risks pr
        JOIN projects p ON pr."projectId"=p.id
@@ -1328,7 +1328,7 @@ router.get("/manager/:employeeId/workload", authorize({ feature: "projects.list"
     const employeeId = parseId(req.params.employeeId, "employeeId");
     if (!employeeId) throw new ValidationError("معرّف الموظف مطلوب");
 
-    const [counts] = await rawQuery<any>(
+    const [counts] = await rawQuery<Record<string, unknown>>(
       `SELECT
          COUNT(*) FILTER (WHERE status IN ('active','in_progress')) as active,
          COUNT(*) FILTER (WHERE status='on_hold') as on_hold,
@@ -1340,7 +1340,7 @@ router.get("/manager/:employeeId/workload", authorize({ feature: "projects.list"
       [scope.companyId, employeeId]
     );
 
-    const [taskCounts] = await rawQuery<any>(
+    const [taskCounts] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) as total,
               COUNT(*) FILTER (WHERE pt.status NOT IN ('done','cancelled')) as open,
               COUNT(*) FILTER (WHERE pt.status NOT IN ('done','cancelled') AND pt."dueDate" < CURRENT_DATE) as overdue
@@ -1351,7 +1351,7 @@ router.get("/manager/:employeeId/workload", authorize({ feature: "projects.list"
       [scope.companyId, employeeId]
     );
 
-    const recent = await rawQuery<any>(
+    const recent = await rawQuery<Record<string, unknown>>(
       `SELECT id, name, status, progress, "endDate"
        FROM projects
        WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "managerId"=$2 AND status IN ('active','in_progress','planning')
@@ -1380,7 +1380,7 @@ router.get("/:id/milestones", authorize({ feature: "projects.tasks", action: "li
     const scope = req.scope!;
     const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM project_milestones WHERE "projectId"=$1 AND "companyId"=$2 ORDER BY "targetDate"`,
       [projectId, scope.companyId]
     );
@@ -1449,7 +1449,7 @@ router.post("/:id/milestones", authorize({ feature: "projects.tasks", action: "c
       details: JSON.stringify({ projectId, title: b.title, targetDate: b.targetDate }),
     }).catch((e) => logger.error(e, "projects background task failed"));
 
-    const [row] = await rawQuery<any>(`SELECT * FROM project_milestones WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_milestones WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create milestone error:"); }
 });
@@ -1471,12 +1471,12 @@ router.patch("/milestones/:milestoneId", authorize({ feature: "projects.tasks", 
     const parsed = zodParse(updateMilestoneSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.milestoneId, "milestoneId");
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM project_milestones WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("المعلم غير موجود");
-    await assertProjectAccess(existing.projectId, scope);
+    await assertProjectAccess(existing.projectId as number, scope);
     const b = parsed;
 
     if (b.status !== undefined && b.status !== existing.status) {
@@ -1486,7 +1486,7 @@ router.patch("/milestones/:milestoneId", authorize({ feature: "projects.tasks", 
           { field: "status", fix: `اختر من: ${MILESTONE_STATUSES.join(", ")}` }
         );
       }
-      const allowed = MILESTONE_TRANSITIONS[existing.status ?? "pending"] ?? [];
+      const allowed = MILESTONE_TRANSITIONS[(existing.status as string | undefined) ?? "pending"] ?? [];
       if (!allowed.includes(b.status)) {
         throw new ConflictError(
           `لا يمكن نقل المعلَم من "${existing.status ?? "pending"}" إلى "${b.status}"`,
@@ -1504,7 +1504,7 @@ router.patch("/milestones/:milestoneId", authorize({ feature: "projects.tasks", 
     if (b.status === 'completed' && !b.completedDate) sets.push(`"completedDate"=NOW()`);
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id); params.push(scope.companyId);
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `UPDATE project_milestones SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
       params
     );
@@ -1547,7 +1547,7 @@ router.get("/:id/risks", authorize({ feature: "projects.tasks", action: "list" }
     const scope = req.scope!;
     const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM project_risks WHERE "projectId"=$1 AND "companyId"=$2 ORDER BY (probability * impact) DESC LIMIT 500`,
       [projectId, scope.companyId]
     );
@@ -1580,7 +1580,7 @@ router.post("/:id/risks", authorize({ feature: "projects.tasks", action: "create
        probability, impact, riskScore, riskLevel,
        b.mitigationPlan || null, b.responsibleId || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM project_risks WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_risks WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -1616,12 +1616,12 @@ router.patch("/risks/:riskId", authorize({ feature: "projects.tasks", action: "u
     const parsed = zodParse(updateRiskSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.riskId, "riskId");
-    const [existingRisk] = await rawQuery<any>(
+    const [existingRisk] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM project_risks WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
     );
     if (!existingRisk) throw new NotFoundError("المخاطرة غير موجودة");
-    await assertProjectAccess(existingRisk.projectId, scope);
+    await assertProjectAccess(existingRisk.projectId as number, scope);
     const b = parsed;
 
     if (b.status !== undefined && b.status !== existingRisk.status) {
@@ -1631,7 +1631,7 @@ router.patch("/risks/:riskId", authorize({ feature: "projects.tasks", action: "u
           { field: "status", fix: `اختر من: ${RISK_STATUSES.join(", ")}` }
         );
       }
-      const allowed = RISK_TRANSITIONS[existingRisk.status ?? "open"] ?? [];
+      const allowed = RISK_TRANSITIONS[(existingRisk.status as string | undefined) ?? "open"] ?? [];
       if (!allowed.includes(b.status)) {
         throw new ConflictError(
           `لا يمكن نقل المخاطرة من "${existingRisk.status ?? "open"}" إلى "${b.status}"`,
@@ -1649,7 +1649,7 @@ router.patch("/risks/:riskId", authorize({ feature: "projects.tasks", action: "u
     if (b.impact !== undefined) { params.push(b.impact); sets.push(`impact=$${params.length}`); }
     // Recompute riskScore whenever probability OR impact changes (fetch current values for the missing one)
     if (b.probability !== undefined || b.impact !== undefined) {
-      const [existing] = await rawQuery<any>(
+      const [existing] = await rawQuery<Record<string, unknown>>(
         `SELECT probability, impact FROM project_risks WHERE id=$1 AND "companyId"=$2`,
         [id, scope.companyId]
       );
@@ -1664,7 +1664,7 @@ router.patch("/risks/:riskId", authorize({ feature: "projects.tasks", action: "u
     }
     if (sets.length === 0) { res.json({ success: true }); return; }
     params.push(id); params.push(scope.companyId);
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `UPDATE project_risks SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
       params
     );
@@ -1703,7 +1703,7 @@ router.get("/:id/resources", authorize({ feature: "projects.list", action: "list
     const scope = req.scope!;
     const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT pr.*, e.name AS "employeeName", ea."jobTitle" AS "employeeJobTitle"
        FROM project_resources pr
        LEFT JOIN employees e ON e.id=pr."employeeId" AND e."deletedAt" IS NULL
@@ -1739,7 +1739,7 @@ router.post("/:id/resources", authorize({ feature: "projects.list", action: "cre
        b.role || 'member', b.allocatedHours || 0, b.budgetAllocated || 0,
        b.startDate || null, b.endDate || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM project_resources WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_resources WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -1774,7 +1774,7 @@ router.get("/:id/costs", authorize({ feature: "projects.list", action: "list" })
     const scope = req.scope!;
     const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT pc.*, e.name AS "enteredByName"
        FROM project_costs pc
        LEFT JOIN employees e ON e.id=pc."enteredBy" AND e."deletedAt" IS NULL
@@ -1782,7 +1782,7 @@ router.get("/:id/costs", authorize({ feature: "projects.list", action: "list" })
        ORDER BY pc."costDate" DESC LIMIT 500`,
       [projectId, scope.companyId]
     );
-    const [totals] = await rawQuery<any>(
+    const [totals] = await rawQuery<Record<string, unknown>>(
       `SELECT COALESCE(SUM(amount),0) AS "totalActual" FROM project_costs WHERE "projectId"=$1 AND "companyId"=$2`,
       [projectId, scope.companyId]
     );
@@ -1867,7 +1867,7 @@ router.post("/:id/costs", authorize({ feature: "projects.list", action: "create"
       logger.error(glErr, `[projects-gl] journal entry failed for project cost ${insertId}:`);
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM project_costs WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_costs WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -1906,7 +1906,7 @@ router.post("/:id/close", authorize({ feature: "projects.list", action: "update"
     const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
 
-    const [totals] = await rawQuery<any>(
+    const [totals] = await rawQuery<Record<string, unknown>>(
       `SELECT COALESCE(SUM(amount),0) AS "totalWip"
          FROM project_costs
         WHERE "projectId" = $1 AND "companyId" = $2`,
@@ -1988,12 +1988,12 @@ router.post("/:id/close", authorize({ feature: "projects.list", action: "update"
     // close — same semantics as before).
     try {
       await cancelObligation(scope.companyId, "project", projectId);
-      const msRows = await rawQuery<any>(
+      const msRows = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM project_milestones WHERE "projectId"=$1 AND "companyId"=$2`,
         [projectId, scope.companyId]
       );
       for (const m of msRows) {
-        await cancelObligation(scope.companyId, "project_milestone", m.id).catch((e) => logger.error(e, "projects background task failed"));
+        await cancelObligation(scope.companyId, "project_milestone", m.id as number).catch((e) => logger.error(e, "projects background task failed"));
       }
     } catch (obErr) {
       logger.error(obErr, `[projects] cancel obligations on close failed for project ${projectId}:`);
@@ -2055,20 +2055,20 @@ router.get("/:id/gantt", authorize({ feature: "projects.list", action: "list" })
     const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
 
-    const phases = await rawQuery<any>(
+    const phases = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM project_phases WHERE "projectId"=$1 ORDER BY "orderIndex" LIMIT 500`,
       [projectId]
     );
-    const tasks = await rawQuery<any>(
+    const tasks = await rawQuery<Record<string, unknown>>(
       `SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" AND e."deletedAt" IS NULL WHERE pt."projectId"=$1 ORDER BY pt."startDate","phaseId" LIMIT 500`,
       [projectId]
     );
-    const milestones = await rawQuery<any>(
+    const milestones = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM project_milestones WHERE "projectId"=$1 AND "companyId"=$2 ORDER BY "targetDate"`,
       [projectId, scope.companyId]
     );
     const dependencies = tasks.length > 0
-      ? await rawQuery<any>(
+      ? await rawQuery<Record<string, unknown>>(
           `SELECT * FROM project_task_dependencies WHERE "taskId" IN (${tasks.map((_: any, i: number) => `$${i+1}`).join(',')})`,
           tasks.map((t: any) => t.id)
         )
@@ -2113,7 +2113,7 @@ router.get("/:id/letters", authorize({ feature: "projects.list", action: "list" 
     const scope = req.scope!;
     const projectId = parseId(req.params.id, "id");
     await assertProjectAccess(projectId, scope);
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT l.id, l.subject, l.direction, l.direction AS type, l.status, l."sentAt" AS "letterDate",
               l."senderName" AS "fromEntity", l."recipientName" AS "toEntity", l."createdAt"
        FROM correspondence l
