@@ -134,7 +134,7 @@ export default function UmrahDailyRunsheet() {
           <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1">
             <RefreshCw className="h-4 w-4" /> تحديث
           </Button>
-          <Button onClick={handleExport} className="gap-1">
+          <Button onClick={handleExport} className="gap-1" rateLimitAware>
             <Download className="h-4 w-4" /> تصدير PDF
           </Button>
         </div>
