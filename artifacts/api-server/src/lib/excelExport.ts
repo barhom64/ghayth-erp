@@ -136,12 +136,12 @@ export async function exportInvoicesExcel(companyId: number, startDate?: string,
   const sheet: ExcelSheet = {
     name: "الفواتير",
     headers: ["الرقم المرجعي", "العميل", "الحالة", "قبل الضريبة", "الضريبة", "الإجمالي", "المدفوع", "المتبقي", "تاريخ الإنشاء", "تاريخ الاستحقاق"],
-    rows: invoices.map((i: any) => [
-      i.ref, i.clientName, statusMap[i.status] || i.status,
+    rows: invoices.map((i) => [
+      i.ref as string, i.clientName as string, statusMap[i.status as string] || (i.status as string),
       Number(i.subtotal || 0), Number(i.vatAmount || 0), Number(i.total || 0),
       Number(i.paidAmount || 0), Number(i.remaining || 0),
-      i.createdAt ? new Date(i.createdAt).toLocaleDateString("ar-SA") : "",
-      i.dueDate ? new Date(i.dueDate).toLocaleDateString("ar-SA") : "",
+      i.createdAt ? new Date(i.createdAt as string | Date).toLocaleDateString("ar-SA") : "",
+      i.dueDate ? new Date(i.dueDate as string | Date).toLocaleDateString("ar-SA") : "",
     ]),
     colWidths: [14, 30, 12, 14, 12, 14, 14, 14, 16, 16],
   };
@@ -273,13 +273,13 @@ export async function exportFleetExcel(companyId: number): Promise<Buffer> {
   const vehicleSheet: ExcelSheet = {
     name: "المركبات",
     headers: ["رقم اللوحة", "الماركة", "الموديل", "السنة", "الحالة", "السائق", "الكيلومتر", "الرحلات", "تكلفة الوقود", "طلبات الصيانة", "موعد الصيانة القادم"],
-    rows: vehicles.map((v: any) => [
-      v.plateNumber, v.make, v.model, v.year,
-      statusMap[v.status] || v.status,
-      v.driverName || "", Number(v.currentMileage || 0),
+    rows: vehicles.map((v) => [
+      v.plateNumber as string, v.make as string, v.model as string, v.year as number,
+      statusMap[v.status as string] || (v.status as string),
+      (v.driverName as string | null) || "", Number(v.currentMileage || 0),
       Number(v.totalTrips || 0), Number(v.totalFuelCost || 0),
       Number(v.maintenanceCount || 0),
-      v.nextServiceDate ? new Date(v.nextServiceDate).toLocaleDateString("ar-SA") : "",
+      v.nextServiceDate ? new Date(v.nextServiceDate as string | Date).toLocaleDateString("ar-SA") : "",
     ]),
     colWidths: [14, 12, 12, 8, 14, 20, 12, 10, 14, 12, 18],
   };
@@ -299,11 +299,11 @@ export async function exportFleetExcel(companyId: number): Promise<Buffer> {
   const tripSheet: ExcelSheet = {
     name: "الرحلات",
     headers: ["اللوحة", "السائق", "من", "إلى", "وقت الانطلاق", "وقت الوصول", "المسافة (كم)", "الحالة"],
-    rows: trips.map((t: any) => [
-      t.plateNumber, t.driverName || "", t.fromLocation || "", t.toLocation || "",
-      t.startTime ? new Date(t.startTime).toLocaleString("ar-SA") : "",
-      t.endTime ? new Date(t.endTime).toLocaleString("ar-SA") : "",
-      Number(t.distance || 0), t.status || "",
+    rows: trips.map((t) => [
+      t.plateNumber as string, (t.driverName as string | null) || "", (t.fromLocation as string | null) || "", (t.toLocation as string | null) || "",
+      t.startTime ? new Date(t.startTime as string | Date).toLocaleString("ar-SA") : "",
+      t.endTime ? new Date(t.endTime as string | Date).toLocaleString("ar-SA") : "",
+      Number(t.distance || 0), (t.status as string | null) || "",
     ]),
     colWidths: [12, 20, 20, 20, 18, 18, 12, 12],
   };

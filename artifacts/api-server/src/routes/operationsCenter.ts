@@ -306,7 +306,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
     ]);
     let slaItems: any[] = [
       ...maintSla.map((m: any) => ({ ...m, hoursOverdue: Math.round(Number(m.hoursOverdue ?? 0)), entityLink: "/properties/maintenance" })),
-      ...ticketSla.map((t: any) => ({ ...t, hoursOverdue: Math.round(Number(t.hoursOverdue ?? 0)), entityLink: `/support/${t.id}` })),
+      ...ticketSla.map((t) => ({ ...t, hoursOverdue: Math.round(Number(t.hoursOverdue ?? 0)), entityLink: `/support/${t.id}` })),
       ...approvalSla.map((a: Record<string, unknown>) => ({ ...a, hoursOverdue: Math.round(Number(a.hoursOverdue ?? 0)), entityLink: "/hr/leaves" })),
       ...expenseSla.map((e: any) => ({ ...e, hoursOverdue: Math.round(Number(e.hoursOverdue ?? 0)), entityLink: "/finance/expenses" })),
     ];

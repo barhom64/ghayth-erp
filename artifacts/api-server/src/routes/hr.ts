@@ -1161,7 +1161,7 @@ router.get("/leave-balance", authorize({ feature: "hr.leaves", action: "list" })
     );
 
     if (balancesFromTable.length > 0) {
-      const data = balancesFromTable.map((b: any) => ({
+      const data = balancesFromTable.map((b) => ({
         leaveTypeId: b.leaveTypeId, name: b.name, annualDays: b.entitled,
         maxDays: b.entitled, used: Number(b.used), reserved: Number(b.reserved),
         remaining: Number(b.remaining),
@@ -1183,7 +1183,7 @@ router.get("/leave-balance", authorize({ feature: "hr.leaves", action: "list" })
       [scope.companyId, targetEmployeeId, year]
     );
 
-    const data = balances.map((b: any) => ({
+    const data = balances.map((b) => ({
       ...b, maxDays: Number(b.annualDays ?? 21), used: Number(b.used),
       remaining: Number(b.annualDays ?? 21) - Number(b.used),
     }));
@@ -1935,7 +1935,7 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", ac
     }
 
     // Find the next step after the current one
-    const nextStep = chainSteps.find((s: any) => s.stepOrder > currentStageNum);
+    const nextStep = chainSteps.find((s) => s.stepOrder > currentStageNum);
 
     // Find the appropriate assignee for next step (read-only)
     let nextAssignee: any = null;
@@ -2485,13 +2485,13 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
       [scope.companyId]
     );
     const gosiSettingsMap = new Map(gosiSettings.map((r) => [r.key, r.value]));
-    const gosiComponent = salaryComponents.find((c: any) => c.isGosi && c.type === 'deduction');
+    const gosiComponent = salaryComponents.find((c) => c.isGosi && c.type === 'deduction');
     const GOSI_EMPLOYEE_RATE = gosiComponent && Number(gosiComponent.value) > 0
       ? Number(gosiComponent.value) / 100
       : Number(gosiSettingsMap.get("gosiEmployeeRate") ?? "9.75") / 100;
     const GOSI_EMPLOYER_RATE = Number(gosiSettingsMap.get("gosiEmployerRate") ?? "11.75") / 100;
 
-    const earningComponents = salaryComponents.filter((c: any) => c.type === 'earning' && !c.isGosi);
+    const earningComponents = salaryComponents.filter((c) => c.type === 'earning' && !c.isGosi);
 
     const assignments = await rawQuery<Record<string, unknown>>(
       `SELECT ea.id AS "assignmentId", ea."employeeId", ea.salary, ea."branchId"
@@ -4871,9 +4871,9 @@ router.get("/employees-status", authorize({ feature: "hr.employees", action: "li
 
     const { computeEmployeeOperationalStatus } = await import("../lib/impactPreview.js");
     const statuses = await Promise.all(
-      employees.map(async (emp: any) => {
+      employees.map(async (emp) => {
         try {
-          const s = await computeEmployeeOperationalStatus(scope.companyId, emp.employeeId, emp.assignmentId);
+          const s = await computeEmployeeOperationalStatus(scope.companyId, emp.employeeId as number, emp.assignmentId as number);
           return { employeeId: emp.employeeId, ...s };
         } catch (e) {
           logger.error(e, "failed to compute employee operational status");
@@ -4996,13 +4996,13 @@ async function recomputeSummary(cycleId: number, companyId: number, employeeId: 
   );
 
   const systemScore = sysEval ? Number(sysEval.overallScore) : null;
-  const managerEvals = peerRows.filter((p: any) => p.evaluatorRole === 'manager');
-  const peerEvals = peerRows.filter((p: any) => p.evaluatorRole === 'peer');
+  const managerEvals = peerRows.filter((p) => p.evaluatorRole === 'manager');
+  const peerEvals = peerRows.filter((p) => p.evaluatorRole === 'peer');
   const managerScore = managerEvals.length > 0
-    ? Math.round(managerEvals.reduce((s: number, p: any) => s + Number(p.overallScore), 0) / managerEvals.length)
+    ? Math.round(managerEvals.reduce((s: number, p) => s + Number(p.overallScore), 0) / managerEvals.length)
     : null;
   const peerScore = peerEvals.length > 0
-    ? Math.round(peerEvals.reduce((s: number, p: any) => s + Number(p.overallScore), 0) / peerEvals.length)
+    ? Math.round(peerEvals.reduce((s: number, p) => s + Number(p.overallScore), 0) / peerEvals.length)
     : null;
   const upwardCount = upwardRows.length;
   const upwardAvgScore = upwardCount >= 3
@@ -6608,7 +6608,7 @@ router.get("/accruals/preview", authorize({ feature: "hr.payroll", action: "list
     const DEFAULT_ANNUAL_LEAVE_DAYS = 21;
     let totalLeaveAccrual = 0;
     let totalEosAccrual = 0;
-    const rows = employees.map((emp: any) => {
+    const rows = employees.map((emp) => {
       const salary = Number(emp.salary) || 0;
       const dailyRate = salary / 30;
       const monthlyLeaveDays = DEFAULT_ANNUAL_LEAVE_DAYS / 12;
@@ -6877,10 +6877,10 @@ router.get("/expiring-documents", authorize({ feature: "hr.employees", action: "
     ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
 
     const all = [
-      ...workPermits.map((d: any) => ({ ...d, entityType: 'employee' })),
-      ...iqamas.map((d: any) => ({ ...d, entityType: 'employee' })),
-      ...passports.map((d: any) => ({ ...d, entityType: 'employee' })),
-      ...contracts.map((d: any) => ({ ...d, entityType: 'employee' })),
+      ...workPermits.map((d) => ({ ...d, entityType: 'employee' })),
+      ...iqamas.map((d) => ({ ...d, entityType: 'employee' })),
+      ...passports.map((d) => ({ ...d, entityType: 'employee' })),
+      ...contracts.map((d) => ({ ...d, entityType: 'employee' })),
       ...driverLicenses,
       ...vehicleRegistrations,
       ...vehicleInsurance,

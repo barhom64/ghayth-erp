@@ -975,8 +975,8 @@ financeAlgorithmsRouter.get("/inventory-costing", authorize({ feature: "finance.
       [scope.companyId]
     );
 
-    const totalValue = products.reduce((s: number, p: any) => s + Number(p.stockValue ?? 0), 0);
-    const totalItems = products.reduce((s: number, p: any) => s + Number(p.currentStock ?? 0), 0);
+    const totalValue = products.reduce((s: number, p) => s + Number(p.stockValue ?? 0), 0);
+    const totalItems = products.reduce((s: number, p) => s + Number(p.currentStock ?? 0), 0);
 
     res.json({
       products,
@@ -1271,7 +1271,7 @@ financeAlgorithmsRouter.get("/fx/revaluation/preview", authorize({ feature: "fin
 
     // Find closing rate per currency (latest effectiveDate <= periodEnd with source='period_end' or 'manual')
     const currencies = Array.from(
-      new Set<string>([...openInvoices.map((i: any) => i.currency), ...openPOs.map((p: any) => p.currency)])
+      new Set<string>([...openInvoices.map((i) => i.currency as string), ...openPOs.map((p) => p.currency as string)])
     );
     const rateMap: Record<string, number> = {};
     if (currencies.length > 0) {
@@ -1400,8 +1400,8 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
     );
 
     const currencies = Array.from(new Set<string>([
-      ...openInvoices.map((i: any) => i.currency),
-      ...openPOs.map((p: any) => p.currency),
+      ...openInvoices.map((i) => i.currency as string),
+      ...openPOs.map((p) => p.currency as string),
     ]));
     const rateMap: Record<string, number> = {};
     if (currencies.length > 0) {

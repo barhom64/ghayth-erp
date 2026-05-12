@@ -1419,7 +1419,7 @@ router.post("/inventory-counts/:id/approve", authorize({ feature: "warehouse.inv
     }> = [];
     const glSkipped: Array<{ productId: number; productName?: string; reason: string }> = [];
 
-    const itemsAdjusted = items.filter((i: any) => Number(i.variance) !== 0).length;
+    const itemsAdjusted = items.filter((i) => Number(i.variance) !== 0).length;
 
     await applyTransition({
       entity: "inventory_counts",

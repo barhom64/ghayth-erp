@@ -993,7 +993,7 @@ router.post("/trips", authorize({ feature: "fleet.trips", action: "create" }), a
       if (drivers.length > 0) {
         let best = drivers[0];
         let bestScore = -Infinity;
-        const maxTrips = Math.max(...drivers.map((d: any) => Number(d.tripCount) || 1), 1);
+        const maxTrips = Math.max(...drivers.map((d) => Number(d.tripCount) || 1), 1);
         for (const d of drivers) {
           const tripCount = Number(d.tripCount) || 0;
           const fewestTripsScore = (1 - tripCount / maxTrips) * 0.4;

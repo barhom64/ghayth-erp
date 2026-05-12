@@ -543,7 +543,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
       )
     : [];
 
-  const currentStep = steps.find((s: any) => s.stepOrder === instance.currentStepOrder);
+  const currentStep = steps.find((s) => s.stepOrder === instance.currentStepOrder);
 
   const beforeData = { status: instance.status, currentStepOrder: instance.currentStepOrder };
 

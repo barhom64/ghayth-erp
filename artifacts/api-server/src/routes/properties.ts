@@ -2203,7 +2203,7 @@ router.post("/maintenance-requests", authorize({ feature: "properties.maintenanc
     if (!assignedTechnicianId && technicians.length > 0) {
       let best = technicians[0];
       let bestScore = -Infinity;
-      const maxJobs = Math.max(...technicians.map((t: any) => Number(t.activeJobs) || 0), 1);
+      const maxJobs = Math.max(...technicians.map((t) => Number(t.activeJobs) || 0), 1);
 
       for (const tech of technicians) {
         const activeJobs = Number(tech.activeJobs) || 0;
@@ -2654,7 +2654,7 @@ router.get("/tenants/:id", authorize({ feature: "properties.tenants", action: "v
       throw new NotFoundError("المستأجر غير موجود");
     }
 
-    const contractIds = contracts.map((c: any) => c.id);
+    const contractIds = contracts.map((c) => c.id);
     const payments = contractIds.length > 0
       ? await rawQuery<Record<string, unknown>>(
           `SELECT rp.*, c."tenantName", u."unitNumber" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" LEFT JOIN property_units u ON u.id=c."unitId" WHERE rp."contractId" = ANY($1::int[]) ORDER BY rp."dueDate" DESC LIMIT 500`,
@@ -2662,8 +2662,8 @@ router.get("/tenants/:id", authorize({ feature: "properties.tenants", action: "v
         )
       : [];
 
-    const totalPaid = payments.filter((p: any) => p.status === "paid").reduce((s: number, p: any) => s + Number(p.paidAmount || 0), 0);
-    const overduePayments = payments.filter((p: any) => p.status !== "paid" && new Date(p.dueDate) < new Date());
+    const totalPaid = payments.filter((p) => p.status === "paid").reduce((s: number, p) => s + Number(p.paidAmount || 0), 0);
+    const overduePayments = payments.filter((p) => p.status !== "paid" && new Date(p.dueDate as string | Date) < new Date());
 
     const name = tenantRecord?.name ?? contracts[0]?.tenantName ?? rawId;
     const phone = tenantRecord?.phone ?? contracts[0]?.tenantPhone;
@@ -2682,7 +2682,7 @@ router.get("/tenants/:id", authorize({ feature: "properties.tenants", action: "v
       contracts,
       payments,
       totalPaid,
-      overdueAmount: overduePayments.reduce((s: number, p: any) => s + Number(p.amount || 0) - Number(p.paidAmount || 0), 0),
+      overdueAmount: overduePayments.reduce((s: number, p) => s + Number(p.amount || 0) - Number(p.paidAmount || 0), 0),
     });
   } catch (err) { handleRouteError(err, res, "Tenant detail error:"); }
 });
@@ -3058,7 +3058,7 @@ router.get("/stats", authorize({ feature: "properties.units", action: "list" }),
       criticalMaintenanceTickets: Number(maintenance.criticalTickets || 0),
       occupancyRate,
       collectionRate,
-      buildingPerformance: buildingPerf.map((b: any) => ({
+      buildingPerformance: buildingPerf.map((b) => ({
         ...b,
         totalUnits: Number(b.totalUnits),
         rentedUnits: Number(b.rentedUnits),

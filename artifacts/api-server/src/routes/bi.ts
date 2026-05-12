@@ -856,7 +856,7 @@ router.get("/reports/branch-performance", authorize({ feature: "bi", action: "li
       [cid]
     );
 
-    const branchIds = branches.map((b: any) => b.id);
+    const branchIds = branches.map((b) => b.id);
     const [revenueRows, expenseRows, employeeRows, attRows, ticketRows, satRows] = await Promise.all([
       rawQuery<Record<string, unknown>>(
         `SELECT "branchId", COALESCE(SUM("paidAmount"), 0) AS revenue, COALESCE(SUM(total), 0) AS invoiced, COUNT(*) AS "invoiceCount"

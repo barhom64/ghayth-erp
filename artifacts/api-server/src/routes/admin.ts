@@ -1626,7 +1626,7 @@ router.get("/system-health-checks", authorize({ feature: "admin", action: "list"
       status: staleCrons.length === 0 ? "ok" : "warn",
       detail: staleCrons.length === 0
         ? "all enabled cron jobs ran within 25h"
-        : `${staleCrons.length} stale: ${staleCrons.map((c: any) => c.name).join(", ")}`,
+        : `${staleCrons.length} stale: ${staleCrons.map((c) => c.name).join(", ")}`,
     });
 
     // 4. Failed cron jobs in last 24h

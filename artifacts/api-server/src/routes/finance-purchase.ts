@@ -272,7 +272,7 @@ purchaseRouter.post("/purchase-requests", authorize({ feature: "finance.purchase
     const productIds = Array.from(
       new Set(
         items
-          .map((i: any) => Number(i.productId))
+          .map((i: { productId?: unknown }) => Number(i.productId))
           .filter((id: number) => Number.isFinite(id) && id > 0)
       )
     );
@@ -1001,9 +1001,9 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
     if (pos.length !== poIdNums.length) {
       throw new NotFoundError("بعض أوامر الشراء غير موجودة");
     }
-    const invalid = pos.filter((p: any) => p.status !== "invoice_matched");
+    const invalid = pos.filter((p) => p.status !== "invoice_matched");
     if (invalid.length > 0) {
-      throw new ValidationError(`بعض الأوامر ليست في حالة قابلة للدفع: ${invalid.map((p: any) => p.ref).join(", ")}`);
+      throw new ValidationError(`بعض الأوامر ليست في حالة قابلة للدفع: ${invalid.map((p) => p.ref).join(", ")}`);
     }
 
     const totalPayment = roundTo2(pos.reduce((sum: number, p: any) => sum + Number(p.totalAmount), 0));

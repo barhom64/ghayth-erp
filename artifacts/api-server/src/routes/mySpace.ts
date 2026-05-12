@@ -33,7 +33,7 @@ router.get("/", async (req, res) => {
         [scope.companyId, scope.employeeId, year]
       );
       if (balancesFromTable.length > 0) {
-        leaveBalances = balancesFromTable.map((b: any) => ({
+        leaveBalances = balancesFromTable.map((b) => ({
           leaveTypeId: b.leaveTypeId,
           name: b.name,
           entitled: Number(b.entitled),
@@ -52,7 +52,7 @@ router.get("/", async (req, res) => {
            GROUP BY lt.id, lt.name, lt."annualDays"`,
           [scope.companyId, scope.employeeId, year]
         );
-        leaveBalances = computed.map((b: any) => ({
+        leaveBalances = computed.map((b) => ({
           leaveTypeId: b.leaveTypeId,
           name: b.name,
           entitled: Number(b.entitled ?? 21),

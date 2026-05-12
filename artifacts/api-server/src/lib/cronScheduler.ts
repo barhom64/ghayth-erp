@@ -177,9 +177,9 @@ async function documentExpiryAlerts(): Promise<string> {
       ...docs,
       ...empDocs
         .filter((d: any) => d.expiryDate != null)
-        .map((d: any) => ({
+        .map((d) => ({
           ...d,
-          daysLeft: Math.floor((new Date(d.expiryDate).getTime() - Date.now()) / 86400000),
+          daysLeft: Math.floor((new Date(d.expiryDate as string | Date).getTime() - Date.now()) / 86400000),
           id: null,
         }))
         .filter((d: any) => d.daysLeft >= 0 && d.daysLeft <= 90),
@@ -2973,7 +2973,7 @@ async function umrahOverdueInvoiceEscalation(): Promise<string> {
       await createNotification({
         companyId: c.id, assignmentId: mgr,
         type: "umrah", title: "فواتير عمرة متأخرة",
-        body: `${overdue.length} فاتورة عمرة متأخرة بقيمة إجمالية ${overdue.reduce((s: number, i: any) => s + Number(i.total) - Number(i.paidAmount), 0).toFixed(2)} ر.س`,
+        body: `${overdue.length} فاتورة عمرة متأخرة بقيمة إجمالية ${overdue.reduce((s: number, i) => s + Number(i.total) - Number(i.paidAmount), 0).toFixed(2)} ر.س`,
         priority: "high",
       });
     }
@@ -3037,7 +3037,7 @@ async function umrahVisaExpiryAlerts(): Promise<string> {
       await createNotification({
         companyId: c.id, assignmentId: mgr,
         type: "umrah", title: "تنبيه انتهاء تأشيرات عمرة",
-        body: `${expiring.length} تأشيرة ستنتهي خلال 7 أيام — ${expiring.slice(0, 3).map((p: any) => p.fullName).join("، ")}${expiring.length > 3 ? "..." : ""}`,
+        body: `${expiring.length} تأشيرة ستنتهي خلال 7 أيام — ${expiring.slice(0, 3).map((p) => p.fullName).join("، ")}${expiring.length > 3 ? "..." : ""}`,
         priority: "high",
       });
     }

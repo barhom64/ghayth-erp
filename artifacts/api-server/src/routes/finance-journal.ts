@@ -1274,7 +1274,7 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", authorize({ feature
       `SELECT to_char("startDate", 'YYYY-MM') AS period FROM financial_periods WHERE "companyId" = $1 AND status = 'closed' AND "deletedAt" IS NULL AND EXTRACT(YEAR FROM "startDate") = $2`,
       [scope.companyId, year]
     );
-    const closedSet = new Set(closedPeriods.map((p: any) => p.period));
+    const closedSet = new Set(closedPeriods.map((p) => p.period));
     const missing: string[] = [];
     for (let m = 1; m <= 12; m++) {
       const p = `${year}-${String(m).padStart(2, "0")}`;

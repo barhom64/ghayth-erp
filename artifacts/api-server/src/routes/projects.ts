@@ -536,17 +536,17 @@ router.get("/:id", authorize({ feature: "projects.list", action: "view", resourc
 
     let taskDeps: any[] = [];
     if (tasks.length > 0) {
-      taskDeps = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_task_dependencies WHERE "taskId" IN (${tasks.map((_: any, i: number) => `$${i + 1}`).join(',')}) LIMIT 500`, tasks.map((t: any) => t.id));
+      taskDeps = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_task_dependencies WHERE "taskId" IN (${tasks.map((_: any, i: number) => `$${i + 1}`).join(',')}) LIMIT 500`, tasks.map((t) => t.id));
     }
-    const taskGraph = tasks.map((t: any) => ({
-      id: t.id,
+    const taskGraph = tasks.map((t) => ({
+      id: t.id as number,
       estimatedHours: Number(t.estimatedHours) || 0,
-      dependsOn: taskDeps.filter((d: any) => d.taskId === t.id).map((d: any) => d.dependsOnId),
+      dependsOn: taskDeps.filter((d) => d.taskId === t.id).map((d) => d.dependsOnId as number),
     }));
     const criticalPathHours = tasks.length > 0 ? criticalPathLength(taskGraph) : 0;
 
     const totalTasks = tasks.length;
-    const doneTasks = tasks.filter((t: any) => t.status === 'done').length;
+    const doneTasks = tasks.filter((t) => t.status === 'done').length;
     const progressPct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
     const budget = Number(project.budget) || 0;
@@ -865,7 +865,7 @@ router.patch("/:id/phases/:phaseId/complete", authorize({ feature: "projects.tas
     }
 
     const tasks = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_tasks WHERE "projectId"=$1 AND "deletedAt" IS NULL LIMIT 500`, [projectId]);
-    const doneTasks = tasks.filter((t: any) => t.status === 'done').length;
+    const doneTasks = tasks.filter((t) => t.status === 'done').length;
     const progressPct = tasks.length > 0 ? Math.round((doneTasks / tasks.length) * 100) : 0;
     const { affectedRows } = await rawExecute(`UPDATE projects SET progress=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [progressPct, projectId, scope.companyId]);
     if (!affectedRows) logger.warn({ projectId, progressPct }, "Project progress update matched no rows (possible race condition)");
@@ -1078,7 +1078,7 @@ router.patch("/tasks/:taskId", authorize({ feature: "projects.tasks", action: "u
            HAVING COUNT(*) FILTER (WHERE pt2.status != 'done') = 0`,
           [taskId]
         );
-        const candidateIds = candidateRes.rows.map((d: any) => Number(d.taskId));
+        const candidateIds = candidateRes.rows.map((d) => Number(d.taskId));
         if (candidateIds.length > 0) {
           const unblockRes = await client.query(
             `UPDATE project_tasks SET status='todo'
@@ -1093,7 +1093,7 @@ router.patch("/tasks/:taskId", authorize({ feature: "projects.tasks", action: "u
       let pPct = 0;
       if (tsk?.projectId) {
         const allRes = await client.query(`SELECT status FROM project_tasks WHERE "projectId"=$1 AND "deletedAt" IS NULL LIMIT 500`, [tsk.projectId]);
-        const doneCount = allRes.rows.filter((t: any) => t.status === 'done').length;
+        const doneCount = allRes.rows.filter((t) => t.status === 'done').length;
         pPct = allRes.rows.length > 0 ? Math.round((doneCount / allRes.rows.length) * 100) : 0;
         await client.query(`UPDATE projects SET progress=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [pPct, tsk.projectId, scope.companyId]);
       }
@@ -1126,7 +1126,7 @@ router.patch("/tasks/:taskId", authorize({ feature: "projects.tasks", action: "u
     // Notify assignees of unblocked tasks (fire-and-forget, outside transaction)
     if (unlockedTasks.length > 0) {
       const assigneeIds = Array.from(
-        new Set(unlockedTasks.map((t: any) => t.assigneeId).filter((x: any) => x != null))
+        new Set(unlockedTasks.map((t) => t.assigneeId).filter((x: any) => x != null))
       );
       if (assigneeIds.length > 0) {
         try {
@@ -2082,25 +2082,25 @@ router.get("/:id/gantt", authorize({ feature: "projects.list", action: "list" })
     const dependencies = tasks.length > 0
       ? await rawQuery<Record<string, unknown>>(
           `SELECT * FROM project_task_dependencies WHERE "taskId" IN (${tasks.map((_: any, i: number) => `$${i+1}`).join(',')})`,
-          tasks.map((t: any) => t.id)
+          tasks.map((t) => t.id)
         )
       : [];
 
     // Build gantt rows
     const ganttRows = [
-      ...phases.map((p: any) => ({
+      ...phases.map((p) => ({
         id: `phase-${p.id}`, type: 'phase', title: p.name,
         start: p.startDate, end: p.endDate,
         status: p.status, progress: null,
       })),
-      ...tasks.map((t: any) => ({
+      ...tasks.map((t) => ({
         id: `task-${t.id}`, type: 'task', title: t.title,
         start: t.startDate, end: t.dueDate,
         phaseId: t.phaseId ? `phase-${t.phaseId}` : null,
         status: t.status, progress: t.progress || 0,
         assigneeName: t.assigneeName,
         estimatedHours: t.estimatedHours, actualHours: t.actualHours,
-        dependsOn: dependencies.filter((d: any) => d.taskId === t.id).map((d: any) => `task-${d.dependsOnId}`),
+        dependsOn: dependencies.filter((d: any) => d.taskId === t.id).map((d) => `task-${d.dependsOnId}`),
       })),
       ...milestones.map((m: any) => ({
         id: `ms-${m.id}`, type: 'milestone', title: m.title,

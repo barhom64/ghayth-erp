@@ -306,7 +306,7 @@ router.get("/journal-templates", authorize({ feature: "finance.accounting_engine
     );
 
     if (templates.length > 0) {
-      const templateIds = templates.map((t: any) => t.id);
+      const templateIds = templates.map((t) => t.id);
       const allLines = await rawQuery<Record<string, unknown>>(
         `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
          FROM journal_entry_template_lines tl
