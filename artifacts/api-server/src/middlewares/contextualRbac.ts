@@ -94,7 +94,7 @@ export function requireOwnership(options: OwnershipOptions) {
       }
 
       const safeTable = table.replace(/[^a-zA-Z0-9_]/g, "");
-      const [record] = await rawQuery<any>(
+      const [record] = await rawQuery<Record<string, unknown>>(
         `SELECT ${columns.join(", ")}
          FROM "${safeTable}" WHERE id = $1 LIMIT 1`,
         [recordId]
@@ -120,7 +120,7 @@ export function requireOwnership(options: OwnershipOptions) {
             break;
           case "branch":
             if (record.bid && scope.branchId && record.bid !== scope.branchId
-                && !scope.allowedBranches?.includes(record.bid)) {
+                && !scope.allowedBranches?.includes(record.bid as number)) {
               res.status(403).json({
                 error: "لا يمكنك الوصول لسجلات فرع آخر",
                 code: "OWNERSHIP_DENIED",
@@ -191,7 +191,7 @@ export async function canAct(
   }
 
   const safeTable = resource.table.replace(/[^a-zA-Z0-9_]/g, "");
-  const [record] = await rawQuery<any>(
+  const [record] = await rawQuery<{ companyId: number; branchId: number | null; createdBy: number | null }>(
     `SELECT "companyId", "branchId", "createdBy" FROM "${safeTable}" WHERE id = $1 LIMIT 1`,
     [resource.id],
   );

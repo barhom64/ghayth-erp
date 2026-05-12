@@ -60,7 +60,17 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
 async function buildScope(payload: JWTPayload): Promise<RequestScope> {
   const activeAssignmentId = payload.assignmentId;
 
-  const [assignment] = await rawQuery<any>(
+  interface AssignmentRow {
+    id: number;
+    employeeId: number;
+    companyId: number;
+    branchId: number | null;
+    role: string;
+    jobTitleId: number | null;
+    jobTitle: string | null;
+    userName: string;
+  }
+  const [assignment] = await rawQuery<AssignmentRow>(
     `SELECT ea.id, ea."employeeId", ea."companyId", ea."branchId", ea.role,
             ea."jobTitleId", COALESCE(jt.name, ea."jobTitle") AS "jobTitle",
             COALESCE(e.name, 'مستخدم') AS "userName"
@@ -74,23 +84,24 @@ async function buildScope(payload: JWTPayload): Promise<RequestScope> {
 
   if (!assignment) throw new Error("التعيين غير موجود أو غير نشط");
 
-  const allAssignments = await rawQuery<any>(
+  interface AllAssignmentRow { id: number; companyId: number; branchId: number | null }
+  const allAssignments = await rawQuery<AllAssignmentRow>(
     `SELECT id, "companyId", "branchId" FROM employee_assignments
      WHERE "employeeId" = $1 AND status = 'active'`,
     [assignment.employeeId]
   );
 
-  const allowedCompanies = [...new Set(allAssignments.map((a: any) => a.companyId as number))];
+  const allowedCompanies = [...new Set(allAssignments.map((a) => a.companyId))];
   const allowedBranches = [
     ...new Set(
       allAssignments
-        .map((a: any) => a.branchId as number | null)
+        .map((a) => a.branchId)
         .filter((b): b is number => typeof b === "number"),
     ),
   ];
 
   if (assignment.role === "owner" || assignment.role === "general_manager") {
-    const companyBranches = await rawQuery<any>(
+    const companyBranches = await rawQuery<{ id: number }>(
       `SELECT id FROM branches WHERE "companyId" = ANY($1)`,
       [allowedCompanies]
     );
