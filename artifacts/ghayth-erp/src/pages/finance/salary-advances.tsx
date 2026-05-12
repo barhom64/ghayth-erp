@@ -1,12 +1,13 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  FormShell, FormTextField, FormNumberField, FormSelectField, FormGrid,
+} from "@/components/form-shell";
 import { Banknote, DollarSign, Plus, X, Clock, CheckCircle } from "lucide-react";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -207,8 +208,17 @@ export default function SalaryAdvancesPage() {
   );
 }
 
+const advanceSchema = z.object({
+  employeeName: z.string().trim().min(1, "اسم الموظف مطلوب"),
+  amount: z.coerce.number().positive("المبلغ يجب أن يكون موجبًا"),
+  deductMonths: z.coerce.number().int().positive("عدد الأشهر يجب أن يكون موجبًا"),
+  description: z.string().trim(),
+  sourceAccountCode: z.string(),
+});
+type AdvanceForm = z.infer<typeof advanceSchema>;
+
 function CreateAdvanceForm({ onDone }: { onDone: () => void }) {
-  const createMut = useApiMutation<unknown, any>(
+  const createMut = useApiMutation<unknown, AdvanceForm>(
     "/finance/salary-advances",
     "POST",
     [["salary-advances"]],
@@ -224,21 +234,6 @@ function CreateAdvanceForm({ onDone }: { onDone: () => void }) {
   const sourceAccounts = (accountsData?.data || []).filter(
     (a: any) => a.code?.startsWith("11") || a.code?.startsWith("12"),
   );
-  const [form, setForm] = useState({
-    employeeName: "",
-    amount: "",
-    deductMonths: "1",
-    description: "",
-    sourceAccountCode: "",
-  });
-
-  const handleSubmit = () => {
-    createMut.mutate({
-      ...form,
-      amount: Number(form.amount),
-      deductMonths: Number(form.deductMonths),
-    });
-  };
 
   return (
     <Card>
@@ -246,68 +241,43 @@ function CreateAdvanceForm({ onDone }: { onDone: () => void }) {
         <CardTitle>سلفة جديدة</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div>
-            <Label>اسم الموظف</Label>
-            <Input
-              className="mt-1"
-              value={form.employeeName}
-              onChange={(e) => setForm({ ...form, employeeName: e.target.value })}
+        <FormShell
+          schema={advanceSchema}
+          defaultValues={{
+            employeeName: "",
+            amount: 0,
+            deductMonths: 1,
+            description: "",
+            sourceAccountCode: "",
+          }}
+          submitLabel="حفظ"
+          secondaryActions={
+            <Button type="button" variant="outline" onClick={onDone}>
+              <X className="w-4 h-4 me-1" /> إلغاء
+            </Button>
+          }
+          onSubmit={async (values) => {
+            await createMut.mutateAsync(values);
+          }}
+        >
+          <FormGrid cols={3}>
+            <FormTextField name="employeeName" label="اسم الموظف" required />
+            <FormNumberField name="amount" label="المبلغ" required />
+            <FormNumberField name="deductMonths" label="أشهر الخصم" required />
+            <FormSelectField
+              name="sourceAccountCode"
+              label="مصدر الصرف"
+              options={[
+                { value: "", label: "الخزنة النقدية (1100)" },
+                ...sourceAccounts.map((a: any) => ({
+                  value: a.code,
+                  label: `${a.code} - ${a.name}`,
+                })),
+              ]}
             />
-          </div>
-          <div>
-            <Label>المبلغ</Label>
-            <Input
-              className="mt-1"
-              type="number"
-              value={form.amount}
-              onChange={(e) => setForm({ ...form, amount: e.target.value })}
-            />
-          </div>
-          <div>
-            <Label>أشهر الخصم</Label>
-            <Input
-              className="mt-1"
-              type="number"
-              value={form.deductMonths}
-              onChange={(e) => setForm({ ...form, deductMonths: e.target.value })}
-            />
-          </div>
-          <div>
-            <Label>مصدر الصرف</Label>
-            <Select value={form.sourceAccountCode || "_default"} onValueChange={(v) => setForm({ ...form, sourceAccountCode: v === "_default" ? "" : v })}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="الخزنة النقدية (1100)" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_default">الخزنة النقدية (1100)</SelectItem>
-                {sourceAccounts.map((a: any) => (
-                  <SelectItem key={a.code || a.id} value={a.code}>
-                    {a.code} - {a.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>الوصف</Label>
-            <Input
-              className="mt-1"
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-            />
-          </div>
-        </div>
-        <div className="flex justify-end gap-2 mt-4">
-          <Button variant="outline" onClick={onDone}>
-            إلغاء
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={!form.employeeName || !form.amount || createMut.isPending}
-            rateLimitAware
-          >
-            {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
-          </Button>
-        </div>
+            <FormTextField name="description" label="الوصف" />
+          </FormGrid>
+        </FormShell>
       </CardContent>
     </Card>
   );
