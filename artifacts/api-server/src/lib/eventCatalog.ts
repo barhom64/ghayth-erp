@@ -521,6 +521,73 @@ export const EVENT_CATALOG: EventDefinition[] = [
     consumers: ["legalEngine", "execDashboard"],
     sideEffects: ["notification", "audit"],
   },
+  // ── Events fired by PRs #303 / #305 / #312 — backfilled here so the
+  //    automation rule builder (rulesEngine.ts) lists them as triggers
+  //    and the audit dashboard renders the Arabic label.
+  {
+    name: "umrah.group.split",
+    label: "تقسيم مجموعة عمرة",
+    domain: "umrah",
+    description: "تُصدر عند تقسيم مجموعة لإنشاء مجموعة فرعية بـ N معتمرين",
+    payload: { sourceGroupId: "number", newGroupId: "number", movedCount: "number" },
+    consumers: ["invoicingEngine", "execDashboard"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "umrah.group.merged",
+    label: "دمج مجموعات عمرة",
+    domain: "umrah",
+    description: "تُصدر عند دمج N مجموعات مصدر في مجموعة هدف واحدة",
+    payload: { targetGroupId: "number", mergedSourceIds: "number[]", movedCount: "number" },
+    consumers: ["invoicingEngine", "execDashboard"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "umrah.penalty.created",
+    label: "إنشاء غرامة عمرة",
+    domain: "umrah",
+    description: "تُصدر عند إنشاء غرامة (تجاوز / مخالفة / فقدان وثيقة / تنظيمية)",
+    payload: { penaltyId: "number", pilgrimId: "number", type: "string", amount: "number" },
+    consumers: ["invoicingEngine", "execDashboard", "actionCenter"],
+    sideEffects: ["notification", "audit"],
+  },
+  {
+    name: "umrah.penalty.waived",
+    label: "إعفاء غرامة عمرة",
+    domain: "umrah",
+    description: "تُصدر عند إعفاء غرامة منفردة (قيد عكسي يُرحَّل تلقائياً)",
+    payload: { penaltyId: "number", reason: "string", amount: "number" },
+    consumers: ["invoicingEngine"],
+    sideEffects: ["gl_post", "audit"],
+  },
+  {
+    name: "umrah.penalty.waived_bulk",
+    label: "إعفاء جماعي للغرامات",
+    domain: "umrah",
+    description: "تُصدر مرة واحدة بعد batch إعفاء — تحوي ملخص العدد الناجح + المتجاوز + المبلغ الكلي",
+    payload: { successCount: "number", totalAmount: "number", reason: "string", skipped: "number", errors: "number" },
+    consumers: ["invoicingEngine", "execDashboard"],
+    sideEffects: ["gl_post", "audit"],
+    critical: true,
+  },
+  {
+    name: "umrah.attachment.created",
+    label: "إضافة مرفق عمرة",
+    domain: "umrah",
+    description: "تُصدر عند إضافة وثيقة polymorphic لـ (mutamer / sub_agent / group / nusk_invoice / ...)",
+    payload: { attachmentId: "number", entityType: "string", entityId: "number", type: "string" },
+    consumers: ["execDashboard"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "umrah.letter.dispatched",
+    label: "إرسال خطاب عمرة",
+    domain: "umrah",
+    description: "تُصدر عند تثبيت إرسال خطاب رسمي للجهة (طباعة / بريد / واتساب / يدوي)",
+    payload: { letterId: "number", dispatchedVia: "string", recipient: "string" },
+    consumers: ["correspondence", "execDashboard"],
+    sideEffects: ["notification", "audit"],
+  },
 
   // ─── AUTH ─────────────────────────────────────────────────────────────
   {
