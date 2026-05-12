@@ -5,6 +5,7 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 import { todayISO } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
+import { authorize } from "../lib/rbac/authorize.js";
 
 const router = Router();
 
@@ -19,7 +20,7 @@ function buildFilterNoBranch(scope: any, req: any, opts: { companyColumn?: strin
   return buildScopedWhere(scope, stripped, opts);
 }
 
-router.get("/", async (req, res) => {
+router.get("/", authorize({ feature: "dashboard", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const today = todayISO();
@@ -123,7 +124,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.get("/summary", async (req, res) => {
+router.get("/summary", authorize({ feature: "dashboard", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const today = todayISO();
@@ -172,7 +173,7 @@ router.get("/summary", async (req, res) => {
 });
 
 // Role-specific data for dashboard
-router.get("/role-data", async (req, res) => {
+router.get("/role-data", authorize({ feature: "dashboard", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { where, params } = buildFilter(scope, req);
@@ -249,7 +250,7 @@ router.get("/role-data", async (req, res) => {
   }
 });
 
-router.get("/charts/revenue", async (req, res) => {
+router.get("/charts/revenue", authorize({ feature: "dashboard", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { where, params } = buildFilter(scope, req);
@@ -296,7 +297,7 @@ router.get("/charts/revenue", async (req, res) => {
   }
 });
 
-router.get("/charts/attendance", async (req, res) => {
+router.get("/charts/attendance", authorize({ feature: "dashboard", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { where, params } = buildFilter(scope, req);
@@ -330,7 +331,7 @@ router.get("/charts/attendance", async (req, res) => {
   }
 });
 
-router.get("/charts/departments", async (req, res) => {
+router.get("/charts/departments", authorize({ feature: "dashboard", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { where, params } = buildFilter(scope, req, { companyColumn: 'ea."companyId"', branchColumn: 'ea."branchId"' });
@@ -358,7 +359,7 @@ router.get("/charts/departments", async (req, res) => {
   }
 });
 
-router.get("/charts/recent-events", async (req, res) => {
+router.get("/charts/recent-events", authorize({ feature: "dashboard", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);

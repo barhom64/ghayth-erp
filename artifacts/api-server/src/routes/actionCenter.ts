@@ -5,10 +5,11 @@ import { handleRouteError, ForbiddenError } from "../lib/errorHandler.js";
 import { todayISO } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 import { LEAVE_APPROVAL_ROLES, PAYROLL_ROLES, FINANCE_ROLES, PR_APPROVAL_ROLES, LETTER_APPROVAL_ROLES , ACTION_CENTER_ROLES} from "../lib/rbacCatalog.js";
+import { authorize } from "../lib/rbac/authorize.js";
 
 const router = Router();
 
-router.get("/", async (req, res) => {
+router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
