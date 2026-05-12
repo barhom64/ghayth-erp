@@ -157,6 +157,43 @@ export const EVENT_CATALOG: EventDefinition[] = [
     consumers: ["execDashboard", "fxReporter"],
     sideEffects: ["gl_post", "audit"],
   },
+  {
+    name: "finance.bank_reconciliation.imported",
+    label: "استيراد كشف بنكي",
+    domain: "finance",
+    description: "تُصدر بعد استيراد دفعة سطور من كشف بنكي للمطابقة",
+    payload: { batchId: "string", accountCode: "string", imported: "number" },
+    consumers: ["execDashboard"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "finance.bank_reconciliation.matched",
+    label: "مطابقة بنكية",
+    domain: "finance",
+    description: "تُصدر بعد تنفيذ مطابقة (auto أو manual) لسطور كشف بنكي",
+    payload: { batchId: "string", matched: "number", method: "string" },
+    consumers: ["execDashboard"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "finance.fixed_assets.batch_depreciated",
+    label: "إهلاك دفعة أصول ثابتة",
+    domain: "finance",
+    description: "تُصدر بعد تشغيل الإهلاك الشهري لمجموعة أصول ثابتة",
+    payload: { period: "string", assetsCount: "number", totalDepreciation: "number" },
+    consumers: ["execDashboard"],
+    sideEffects: ["gl_post", "audit"],
+    critical: true,
+  },
+  {
+    name: "finance.rounding_account.configured",
+    label: "إعداد حساب التقريب",
+    domain: "finance",
+    description: "تُصدر عند تعيين أو تغيير حساب التقريب للجرد",
+    payload: { accountCode: "string" },
+    consumers: [],
+    sideEffects: ["audit"],
+  },
 
   // ─── HR ──────────────────────────────────────────────────────────────────
   {

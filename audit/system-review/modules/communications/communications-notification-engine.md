@@ -8,34 +8,21 @@
 - الكومبوننت: `NotificationEngine`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `notification-engine`
-- سطور الملف: 969
+- سطور الملف: 970
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L138: "حفظ" → `saveRule`
-- L139: "(بلا تسمية)" → `() => setEditId(null)`
-- L153: "(بلا تسمية)" → `() => startEdit(rule)`
-- L235: "(بلا تسمية)" → `() => setShowNew(!showNew)`
-- L270: "إنشاء" → `() => setShowNew(false)`
-- L271: "إنشاء" → `createTemplate`
-- L304: "حفظ" → `saveEdit`
-- L305: "(بلا تسمية)" → `() => setEditId(null)`
-- L309: "(بلا تسمية)"
-- L315: "(بلا تسمية)" → `() => deleteTemplate(tId)`
-- L408: "(بلا تسمية)" → `() => setShowNew(!showNew)`
-- L448: "(بلا تسمية)" → `() => removeStep(idx)`
-- L455: "خطوة" → `addStep`
-- L457: "إنشاء" → `() => setShowNew(false)`
-- L458: "إنشاء" → `createChain`
-- L482: "(بلا تسمية)" → `() => deleteChain(chain.id as number)`
-- L561: "(بلا تسمية)" → `() => setShowNew(!showNew)`
-- L593: "إنشاء" → `() => setShowNew(false)`
-- L594: "إنشاء" → `createWebhook`
-- L632: "(بلا تسمية)" → `() => deleteWebhook(wh.id as number)`
-- L894: "حفظ التفضيلات" → `saveAll` 🔒
+- L140: "(بلا تسمية)" → `() => setEditId(null)`
+- L154: "(بلا تسمية)" → `() => startEdit(rule)`
+- L271: "(بلا تسمية)" → `() => setShowNew(false)`
+- L306: "(بلا تسمية)" → `() => setEditId(null)`
+- L449: "(بلا تسمية)" → `() => removeStep(idx)`
+- L456: "خطوة" → `addStep`
+- L458: "(بلا تسمية)" → `() => setShowNew(false)`
+- L594: "(بلا تسمية)" → `() => setShowNew(false)`
 
 ### القراءات (GET)
 - GET `/notification-engine/routing-rules`

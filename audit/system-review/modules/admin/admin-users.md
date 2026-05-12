@@ -8,25 +8,22 @@
 - الكومبوننت: `AdminUsers`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `users`
-- سطور الملف: 548
+- سطور الملف: 549
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L160: "تعديل" → `() => toggleActive(r)`
-- L163: "تعديل" → `() => startEditUser(r)`
-- L166: "إعادة تعيين كلمة المرور" → `() => { setResetUserId(r.id); setResetPassword(""); setCreatedUser(null); setSho`
-- L169: "حذف المستخدم" → `() => { setDeleteConfirmId(r.id); setEditUser(null); setResetUserId(null); setSh`
-- L277: "(بلا تسمية)" → `() => { setShowForm(!showForm); setCreatedUser(null); setEditUser(null); setDele`
-- L306: "(بلا تسمية)" → `() => setShowForm(false)`
-- L351: "(بلا تسمية)" → `() => { setCreatedUser(null); setShowForm(false);`
-- L371: "(بلا تسمية)" → `() => setEditUser(null)`
-- L403: "(بلا تسمية)" → `() => deleteUser(deleteConfirmId)`
-- L404: "(بلا تسمية)" → `() => setDeleteConfirmId(null)`
-- L423: "تأكيد" → `resetUserPassword` 🔒
-- L424: "(بلا تسمية)" → `() => { setResetUserId(null); setResetPassword("");`
+- L164: "تعديل" → `() => startEditUser(r)`
+- L167: "إعادة تعيين كلمة المرور" → `() => { setResetUserId(r.id); setResetPassword(""); setCreatedUser(null); setSho`
+- L278: "(بلا تسمية)" → `() => { setShowForm(!showForm); setCreatedUser(null); setEditUser(null); setDele`
+- L307: "(بلا تسمية)" → `() => setShowForm(false)`
+- L352: "(بلا تسمية)" → `() => { setCreatedUser(null); setShowForm(false);`
+- L372: "(بلا تسمية)" → `() => setEditUser(null)`
+- L405: "(بلا تسمية)" → `() => setDeleteConfirmId(null)`
+- L424: "تأكيد" → `resetUserPassword` 🔒
+- L425: "(بلا تسمية)" → `() => { setResetUserId(null); setResetPassword("");`
 
 ### القراءات (GET)
 - GET `/admin/users`

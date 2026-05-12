@@ -8,7 +8,7 @@
 - الكومبوننت: `Evaluation360Peer`
 - subKey: `performance` | minRoleLevel: —
 - الكيان المستنبط: `peer`
-- سطور الملف: 195
+- سطور الملف: 196
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
@@ -17,9 +17,8 @@
 | _(write)_ | `/hr/evaluation-cycles/:id/peer-evaluation` | POST | ✅ | ✅ | — | — | ✅ | ✅ | ✅ |
 
 ### تفاصيل الأزرار المرئية
-- L92: "عودة"
-- L186: "إلغاء" → `handleSubmit` 🔒
-- L188: "(بلا تسمية)" → `handleSubmit` 🔒
+- L93: "عودة"
+- L187: "إلغاء" → `handleSubmit` 🔒
 
 ### القراءات (GET)
 _لا قراءات._

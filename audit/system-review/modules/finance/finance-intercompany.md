@@ -8,16 +8,14 @@
 - الكومبوننت: `Intercompany`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `intercompany`
-- سطور الملف: 200
+- سطور الملف: 201
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L118: "القوائم الموحدة"
-- L123: "(بلا تسمية)" → `() => setShowCreate(true)`
-- L165: "(بلا تسمية)" → `() => setShowCreate(false)`
+- L166: "(بلا تسمية)" → `() => setShowCreate(false)`
 
 ### القراءات (GET)
 - GET `/finance/intercompany${scopeSuffix}`

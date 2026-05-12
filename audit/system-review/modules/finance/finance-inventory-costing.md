@@ -8,16 +8,16 @@
 - الكومبوننت: `InventoryCosting`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `inventory-costing`
-- سطور الملف: 236
+- سطور الملف: 238
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 | الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
 |------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(write)_ | `/finance/rounding-account/setup` | POST | — | — | — | — | ✅ | ✅ | — |
+| _(write)_ | `/finance/rounding-account/setup` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-- L217: "(بلا تسمية)" → `handleSetupRounding` 🔒
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
 - GET `/finance/inventory-costing`

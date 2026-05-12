@@ -3,25 +3,23 @@
 ## 1. الميتاداتا
 - المسار: `/umrah/agents`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/agents.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:42`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:51`
 - المجموعة: `operations`
 - الكومبوننت: `UmrahAgents`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `agents`
-- سطور الملف: 237
+- سطور الملف: 238
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L121: "(بلا تسمية)" → `() => openEdit(a)`
-- L122: "(بلا تسمية)" → `() => setDeleteId(a.id)`
-- L133: "إضافة وكيل" → `openCreate`
-- L214: "إلغاء" → `closeDialog` 🔒
-- L215: "(بلا تسمية)" → `handleSubmit` 🔒
-- L227: "(بلا تسمية)" → `() => setDeleteId(null)` 🔒
-- L228: "(بلا تسمية)" → `() => deleteMut.mutate({` 🔒
+- L122: "(بلا تسمية)" → `() => openEdit(a)`
+- L123: "(بلا تسمية)" → `() => setDeleteId(a.id)`
+- L215: "إلغاء" → `closeDialog` 🔒
+- L216: "(بلا تسمية)" → `handleSubmit` 🔒
+- L228: "(بلا تسمية)" → `() => setDeleteId(null)` 🔒
 
 ### القراءات (GET)
 - GET `/umrah/agents`
@@ -41,7 +39,7 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `agents` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L104 _(inline-data-array)_: `const kpiCards = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
 - Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS

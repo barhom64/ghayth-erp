@@ -8,18 +8,16 @@
 - الكومبوننت: `Store`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `orders`
-- سطور الملف: 347
+- سطور الملف: 348
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L118: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L127: "(بلا تسمية)" → `() => setShowForm(false)`
-- L214: "(بلا تسمية)"
-- L252: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L261: "(بلا تسمية)" → `() => setShowForm(false)`
+- L128: "(بلا تسمية)" → `() => setShowForm(false)`
+- L215: "(بلا تسمية)"
+- L262: "(بلا تسمية)" → `() => setShowForm(false)`
 
 ### القراءات (GET)
 - GET `/store/products`
@@ -53,7 +51,7 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `orders` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L314 _(inline-data-array)_: `const statCards = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
 - Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS

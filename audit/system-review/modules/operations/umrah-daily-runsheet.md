@@ -3,20 +3,19 @@
 ## 1. الميتاداتا
 - المسار: `/umrah/daily-runsheet`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/daily-runsheet.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:65`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:75`
 - المجموعة: `operations`
 - الكومبوننت: `UmrahDailyRunsheet`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `daily-runsheet`
-- سطور الملف: 176
+- سطور الملف: 177
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L134: "(بلا تسمية)" → `() => refetch()`
-- L137: "تصدير PDF" → `handleExport`
+- L135: "(بلا تسمية)" → `() => refetch()`
 
 ### القراءات (GET)
 _لا قراءات._
@@ -37,7 +36,7 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `daily-runsheet` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L110 _(inline-data-array)_: `const kpis = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
 - Runtime audit: **N/A** — لم يُشغّل بعد لهذا المسار.

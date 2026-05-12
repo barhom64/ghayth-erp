@@ -8,18 +8,16 @@
 - الكومبوننت: `PropertyDeposits`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `deposits`
-- سطور الملف: 292
+- سطور الملف: 293
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L109: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L140: "(بلا تسمية)" → `() => setShowForm(false)`
-- L172: "(بلا تسمية)" → `() => setStatusFilter(v)`
-- L202: "(بلا تسمية)" → `() => setRefundTarget({ id: d.id, originalAmount: Number(d.amount)`
-- L266: "إلغاء" → `props.onClose`
+- L141: "(بلا تسمية)" → `() => setShowForm(false)`
+- L173: "(بلا تسمية)" → `() => setStatusFilter(v)`
+- L267: "إلغاء" → `props.onClose`
 
 ### القراءات (GET)
 - GET `/properties/contracts?status=active&limit=200`

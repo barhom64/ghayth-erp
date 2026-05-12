@@ -3,20 +3,19 @@
 ## 1. الميتاداتا
 - المسار: `/umrah/import/legacy`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/import.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:55`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:64`
 - المجموعة: `operations`
 - الكومبوننت: `UmrahImport`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `legacy`
-- سطور الملف: 263
+- سطور الملف: 264
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L159: "تغيير الملف" → `clearFile`
-- L227: "(بلا تسمية)" → `doImport` 🔒
+- L160: "تغيير الملف" → `clearFile`
 
 ### القراءات (GET)
 - GET `/umrah/seasons`
