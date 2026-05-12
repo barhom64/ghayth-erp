@@ -1353,4 +1353,114 @@ router.get("/alert-fatigue/daily-count", authorize({ feature: "bi", action: "lis
   } catch (err) { handleRouteError(err, res, "Alert fatigue daily count"); }
 });
 
+// ─── Umrah season summary (operations/finance unified report) ────────────────
+//
+// Aggregates the umrah module's per-season metrics into a single BI report.
+// Closes the cross-cutting BI gap: until now /bi/* knew about every module
+// except umrah. The endpoint joins seasons → pilgrims/groups/invoices/penalties
+// in four parallel queries and rolls the result up per-season so the UI can
+// render a single table.
+router.get("/reports/umrah-season-summary", authorize({ feature: "bi", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cid = scope.companyId;
+
+    const seasons = await rawQuery<any>(
+      `SELECT id, title, "hijriYear", "startDate", "endDate", status, "isCurrent"
+         FROM umrah_seasons
+        WHERE "companyId" = $1 AND "deletedAt" IS NULL
+        ORDER BY "hijriYear" DESC, "startDate" DESC NULLS LAST
+        LIMIT 50`,
+      [cid]
+    ).catch((e) => { logger.error(e, "bi umrah seasons query failed"); return []; });
+    const seasonIds: number[] = seasons.map((s: any) => s.id).filter(Boolean);
+
+    if (seasonIds.length === 0) {
+      res.json({ data: [], summary: { totalSeasons: 0 } });
+      return;
+    }
+
+    const [pilgrimStats, salesStats, penaltyStats, groupStats] = await Promise.all([
+      rawQuery<any>(
+        `SELECT "seasonId",
+                COUNT(*)::int                                                  AS total,
+                COUNT(*) FILTER (WHERE status IN ('arrived','active'))::int    AS active,
+                COUNT(*) FILTER (WHERE status = 'departed')::int               AS departed,
+                COUNT(*) FILTER (WHERE COALESCE("overstayDays", 0) > 0)::int   AS overstay,
+                COUNT(*) FILTER (WHERE status = 'violated')::int               AS violated
+           FROM umrah_pilgrims
+          WHERE "companyId" = $1 AND "seasonId" = ANY($2::int[]) AND "deletedAt" IS NULL
+          GROUP BY "seasonId"`,
+        [cid, seasonIds]
+      ).catch((e) => { logger.error(e, "bi umrah pilgrims query failed"); return []; }),
+      rawQuery<any>(
+        `SELECT "seasonId",
+                COALESCE(SUM(total), 0)::numeric(12,2)        AS "invoiced",
+                COALESCE(SUM("paidAmount"), 0)::numeric(12,2) AS "paid",
+                COUNT(*) FILTER (WHERE status IN ('sent','partial','overdue'))::int AS "pendingCount"
+           FROM umrah_sales_invoices
+          WHERE "companyId" = $1 AND "seasonId" = ANY($2::int[])
+            AND "deletedAt" IS NULL AND status != 'cancelled'
+          GROUP BY "seasonId"`,
+        [cid, seasonIds]
+      ).catch((e) => { logger.error(e, "bi umrah invoices query failed"); return []; }),
+      rawQuery<any>(
+        `SELECT "seasonId",
+                COUNT(*)::int                                                   AS total,
+                COUNT(*) FILTER (WHERE status IN ('pending','invoiced'))::int   AS open,
+                COALESCE(SUM(amount) FILTER (WHERE status IN ('pending','invoiced')), 0)::numeric(12,2) AS "openAmount"
+           FROM umrah_penalties
+          WHERE "companyId" = $1 AND "seasonId" = ANY($2::int[])
+          GROUP BY "seasonId"`,
+        [cid, seasonIds]
+      ).catch((e) => { logger.error(e, "bi umrah penalties query failed"); return []; }),
+      rawQuery<any>(
+        `SELECT "seasonId",
+                COUNT(*)::int                                                AS total,
+                COUNT(*) FILTER (WHERE "salesInvoiceId" IS NOT NULL)::int    AS invoiced
+           FROM umrah_groups
+          WHERE "companyId" = $1 AND "seasonId" = ANY($2::int[]) AND "deletedAt" IS NULL
+          GROUP BY "seasonId"`,
+        [cid, seasonIds]
+      ).catch((e) => { logger.error(e, "bi umrah groups query failed"); return []; }),
+    ]);
+
+    const pilgrimsBy = new Map(pilgrimStats.map((r: any) => [r.seasonId, r]));
+    const salesBy    = new Map(salesStats.map((r: any) => [r.seasonId, r]));
+    const penaltyBy  = new Map(penaltyStats.map((r: any) => [r.seasonId, r]));
+    const groupsBy   = new Map(groupStats.map((r: any) => [r.seasonId, r]));
+
+    const data = seasons.map((s: any) => {
+      const p   = pilgrimsBy.get(s.id) || { total: 0, active: 0, departed: 0, overstay: 0, violated: 0 };
+      const sa  = salesBy.get(s.id)    || { invoiced: 0, paid: 0, pendingCount: 0 };
+      const pen = penaltyBy.get(s.id)  || { total: 0, open: 0, openAmount: 0 };
+      const g   = groupsBy.get(s.id)   || { total: 0, invoiced: 0 };
+      return {
+        seasonId: s.id,
+        title: s.title,
+        hijriYear: s.hijriYear,
+        startDate: s.startDate,
+        endDate: s.endDate,
+        status: s.status,
+        isCurrent: s.isCurrent,
+        pilgrims:  { total: Number(p.total), active: Number(p.active), departed: Number(p.departed), overstay: Number(p.overstay), violated: Number(p.violated) },
+        groups:    { total: Number(g.total), invoiced: Number(g.invoiced) },
+        sales:     { invoiced: Number(sa.invoiced), paid: Number(sa.paid), outstanding: Number(sa.invoiced) - Number(sa.paid), pendingCount: Number(sa.pendingCount) },
+        penalties: { total: Number(pen.total), open: Number(pen.open), openAmount: Number(pen.openAmount) },
+      };
+    });
+
+    const summary = {
+      totalSeasons: seasons.length,
+      totalPilgrims: data.reduce((s: number, r: any) => s + r.pilgrims.total, 0),
+      totalInvoiced: data.reduce((s: number, r: any) => s + r.sales.invoiced, 0),
+      totalPaid: data.reduce((s: number, r: any) => s + r.sales.paid, 0),
+      totalOutstanding: data.reduce((s: number, r: any) => s + r.sales.outstanding, 0),
+      totalOverstay: data.reduce((s: number, r: any) => s + r.pilgrims.overstay, 0),
+    };
+
+    res.json({ data, summary });
+  } catch (err) { handleRouteError(err, res, "BI umrah season summary"); }
+});
+
 export default router;
