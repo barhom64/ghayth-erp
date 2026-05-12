@@ -53,24 +53,17 @@ type Allow = { file: string; line: number; table: string; reason: string };
 const ALLOWLIST: Allow[] = [
   {
     file: "auth.ts",
-    line: 328,
+    line: 296,
     table: "employee_assignments",
     reason:
       "Refresh-token bootstrap. Runs before req.scope is built; the tenant boundary is the verified refresh token's employeeId, not scope.companyId.",
   },
   {
     file: "auth.ts",
-    line: 328,
+    line: 326,
     table: "employee_assignments",
     reason:
       "Same refresh-token bootstrap flow as L296 — a second active-assignment lookup added by a later auth.ts edit. Tenant boundary is still the verified refresh token's employeeId, not scope.companyId.",
-  },
-  {
-    file: "auth.ts",
-    line: 411,
-    table: "employee_assignments",
-    reason:
-      "Refresh-token flow — looks up primary assignment by employeeId from verified refresh token. No company context available at this stage; tenant boundary is the token's employeeId.",
   },
   {
     file: "hr.ts",
