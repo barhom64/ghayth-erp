@@ -151,7 +151,7 @@ async function documentExpiryAlerts(): Promise<string> {
   let alerted = 0;
   for (const company of companies) {
     // Scan 90-day window to cover all three alert thresholds (90, 30, 14 days)
-    const docs = await rawQuery<any>(
+    const docs = await rawQuery<Record<string, unknown>>(
       `SELECT ed.id, ed."employeeId", ed."type", ed."expiryDate",
               e.name AS "employeeName",
               (ed."expiryDate"::date - CURRENT_DATE) AS "daysLeft"
@@ -163,7 +163,7 @@ async function documentExpiryAlerts(): Promise<string> {
     );
 
     // Also scan employees' personal documents (iqama, passport, work permit)
-    const empDocs = await rawQuery<any>(
+    const empDocs = await rawQuery<Record<string, unknown>>(
       `SELECT e.id AS "employeeId", e.name AS "employeeName",
               UNNEST(ARRAY['iqama','passport','work_permit']) AS "documentType",
               UNNEST(ARRAY[e."iqamaExpiry", e."passportExpiry", e."workPermitExpiry"]) AS "expiryDate"
@@ -186,7 +186,7 @@ async function documentExpiryAlerts(): Promise<string> {
     ];
 
     // Also scan fixed-term employee contracts (90/30/14 days)
-    const contractDocs = await rawQuery<any>(
+    const contractDocs = await rawQuery<Record<string, unknown>>(
       `SELECT ec.id, ec."employeeId", e.name AS "employeeName", 'employee_contract' AS "documentType",
               ec."endDate" AS "expiryDate",
               (ec."endDate"::date - CURRENT_DATE) AS "daysLeft"
@@ -199,7 +199,7 @@ async function documentExpiryAlerts(): Promise<string> {
     );
 
     // Fleet: driver license, vehicle registration, vehicle insurance expiry
-    const fleetDocs = await rawQuery<any>(
+    const fleetDocs = await rawQuery<Record<string, unknown>>(
       `SELECT fd.id, NULL AS "employeeId", fd.name AS "employeeName",
               'driving_license' AS "documentType", fd."licenseExpiry" AS "expiryDate",
               (fd."licenseExpiry"::date - CURRENT_DATE) AS "daysLeft"
@@ -227,7 +227,7 @@ async function documentExpiryAlerts(): Promise<string> {
     ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [] as any[]; });
 
     // Company documents (commercial registration, municipality license, etc.)
-    const companyDocAlerts = await rawQuery<any>(
+    const companyDocAlerts = await rawQuery<Record<string, unknown>>(
       `SELECT cd.id, NULL AS "employeeId", cd."type" AS "employeeName",
               cd."type", cd."expiryDate",
               (cd."expiryDate"::date - CURRENT_DATE) AS "daysLeft"
@@ -245,7 +245,7 @@ async function documentExpiryAlerts(): Promise<string> {
       ...companyDocAlerts.filter((d: any) => Number(d.daysLeft) >= 0),
     ];
 
-    const [hrAsgn] = await rawQuery<any>(
+    const [hrAsgn] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role IN ('hr_manager','general_manager','owner') AND status = 'active' LIMIT 1`,
       [company.id]
     );
@@ -257,7 +257,7 @@ async function documentExpiryAlerts(): Promise<string> {
         // Notify HR manager
         if (hrAsgn) {
           await createNotification({
-            companyId: company.id, assignmentId: hrAsgn.id,
+            companyId: company.id, assignmentId: hrAsgn.id as number,
             type: "document_expiry", title: `وثيقة تنتهي: ${doc.employeeName}`,
             body: `${doc.documentType} تنتهي خلال ${daysLeft} يوم — ${doc.expiryDate}`,
             priority: daysLeft <= 14 ? "high" : "normal",
@@ -266,13 +266,13 @@ async function documentExpiryAlerts(): Promise<string> {
           alerted++;
         }
         // Also notify the employee directly
-        const [empAsgn] = await rawQuery<any>(
+        const [empAsgn] = await rawQuery<Record<string, unknown>>(
           `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
           [doc.employeeId, company.id]
         );
         if (empAsgn && empAsgn.id !== hrAsgn?.id) {
           await createNotification({
-            companyId: company.id, assignmentId: empAsgn.id,
+            companyId: company.id, assignmentId: empAsgn.id as number,
             type: "document_expiry_employee", title: `وثيقتك تنتهي خلال ${daysLeft} يوم`,
             body: `${doc.documentType} — تاريخ الانتهاء: ${doc.expiryDate}. يرجى تجديدها في أقرب وقت.`,
             priority: daysLeft <= 14 ? "high" : "normal",
@@ -290,7 +290,7 @@ async function contractExpiryAlerts(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let alerted = 0;
   for (const company of companies) {
-    const contracts = await rawQuery<any>(
+    const contracts = await rawQuery<Record<string, unknown>>(
       `SELECT id, title, "partyName", "endDate",
               ("endDate"::date - CURRENT_DATE) AS "daysLeft"
        FROM legal_contracts WHERE "companyId" = $1 AND status = 'active'
@@ -305,7 +305,7 @@ async function contractExpiryAlerts(): Promise<string> {
           `عقد "${c.title}" ينتهي خلال ${daysLeft} يوم`,
           `عقد مع ${c.partyName} — تاريخ الانتهاء: ${c.endDate}`,
           daysLeft <= 14 ? "critical" : "warning",
-          "legal_contract", c.id
+          "legal_contract", c.id as number
         );
         alerted++;
       }
@@ -318,7 +318,7 @@ async function fleetStatusCheck(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let actions = 0;
   for (const company of companies) {
-    const overdueService = await rawQuery<any>(
+    const overdueService = await rawQuery<Record<string, unknown>>(
       `SELECT id, "plateNumber" FROM fleet_vehicles
        WHERE "companyId" = $1 AND "nextServiceDate" IS NOT NULL
          AND "nextServiceDate" < CURRENT_DATE AND status = 'active'`,
@@ -333,7 +333,7 @@ async function fleetStatusCheck(): Promise<string> {
         company.id, "fleet_service_overdue",
         `صيانة متأخرة: ${v.plateNumber}`,
         `المركبة ${v.plateNumber} تجاوزت موعد الصيانة — تم تعليق حالتها`,
-        "warning", "fleet_vehicle", v.id
+        "warning", "fleet_vehicle", v.id as number
       );
       // Persist the preventive-due event in event_logs so audit trail shows
       // the transition, then trigger the in-memory listener that auto-creates
@@ -353,7 +353,7 @@ async function fleetStatusCheck(): Promise<string> {
       actions++;
     }
 
-    const expiredInsurance = await rawQuery<any>(
+    const expiredInsurance = await rawQuery<Record<string, unknown>>(
       `SELECT fi.id, fv."plateNumber", fv.id AS "vehicleId"
        FROM fleet_insurance fi
        JOIN fleet_vehicles fv ON fv.id = fi."vehicleId"
@@ -365,12 +365,12 @@ async function fleetStatusCheck(): Promise<string> {
         company.id, "fleet_insurance_expired",
         `تأمين منتهي: ${ins.plateNumber}`,
         `تأمين المركبة ${ins.plateNumber} انتهت صلاحيته — يرجى التجديد فوراً`,
-        "critical", "fleet_vehicle", ins.vehicleId
+        "critical", "fleet_vehicle", ins.vehicleId as number
       );
       actions++;
     }
 
-    const expiredLicenses = await rawQuery<any>(
+    const expiredLicenses = await rawQuery<Record<string, unknown>>(
       `SELECT id, name FROM fleet_drivers
        WHERE "companyId" = $1 AND "licenseExpiry" IS NOT NULL
          AND "licenseExpiry" < CURRENT_DATE AND status = 'active'`,
@@ -385,7 +385,7 @@ async function fleetStatusCheck(): Promise<string> {
         company.id, "driver_license_expired",
         `رخصة منتهية: ${d.name}`,
         `رخصة السائق ${d.name} انتهت — تم تعليق حالته تلقائياً`,
-        "critical", "fleet_driver", d.id
+        "critical", "fleet_driver", d.id as number
       );
       actions++;
     }
@@ -397,7 +397,7 @@ async function leaveEscalationCheck(): Promise<string> {
   const now = new Date();
   let reminders = 0, warnings = 0, escalations = 0, autoApprovals = 0;
 
-  const pendingStages = await rawQuery<any>(
+  const pendingStages = await rawQuery<Record<string, unknown>>(
     `SELECT las.id, las."leaveRequestId", las.stage, las."requiredRole", las."assignedTo",
             las."createdAt", las."expiresAt", las."reminderSentAt", las."warningSentAt", las."escalatedAt",
             lr."companyId", lr."employeeId", lr.days, lr."startDate", lr."endDate",
@@ -410,7 +410,7 @@ async function leaveEscalationCheck(): Promise<string> {
   );
 
   for (const stage of pendingStages) {
-    const stageCreatedAt = new Date(stage.createdAt);
+    const stageCreatedAt = new Date(stage.createdAt as string | Date);
     const hoursSinceCreation = (now.getTime() - stageCreatedAt.getTime()) / 3600000;
 
     if (hoursSinceCreation >= 28 && !stage.autoApprovedAt) {
@@ -440,7 +440,7 @@ async function leaveEscalationCheck(): Promise<string> {
           );
 
           // 4. Deduct leave balance
-          const year = new Date(stage.startDate).getFullYear();
+          const year = new Date(stage.startDate as string | Date).getFullYear();
           await client.query(
             `UPDATE hr_leave_balances SET used = used + $1, reserved = reserved - $1
              WHERE "employeeId" = $2 AND "companyId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
@@ -463,8 +463,8 @@ async function leaveEscalationCheck(): Promise<string> {
           const assignments = asnRes.rows;
 
           // 7. Insert attendance records and reassign tasks
-          const leaveStart = new Date(stage.startDate);
-          const leaveEnd = new Date(stage.endDate);
+          const leaveStart = new Date(stage.startDate as string | Date);
+          const leaveEnd = new Date(stage.endDate as string | Date);
           const managers: Record<string, any> = {};
           for (const asn of assignments) {
             for (let d = new Date(leaveStart); d <= leaveEnd; d.setDate(d.getDate() + 1)) {
@@ -506,17 +506,17 @@ async function leaveEscalationCheck(): Promise<string> {
         for (const asn of allAssignments) {
           const managerAId = managersByAsn[asn.id];
           createNotification({
-            companyId: asn.companyId, assignmentId: asn.id,
+            companyId: asn.companyId, assignmentId: asn.id as number,
             type: "leave_approved", title: "تمت الموافقة التلقائية على طلب الإجازة",
             body: `تمت الموافقة تلقائياً على إجازة ${stage.leaveTypeName} من ${stage.startDate} إلى ${stage.endDate} بسبب تجاوز المهلة`,
-            priority: "high", refType: "leave_request", refId: stage.leaveRequestId,
+            priority: "high", refType: "leave_request", refId: stage.leaveRequestId as number,
           }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
           if (managerAId) {
             createNotification({
               companyId: asn.companyId, assignmentId: managerAId.id,
               type: "leave_approved", title: "موظف في إجازة معتمدة تلقائياً",
               body: `تمت الموافقة تلقائياً على إجازة موظف من ${stage.startDate} إلى ${stage.endDate}. تم إعادة توزيع المهام.`,
-              priority: "normal", refType: "leave_request", refId: stage.leaveRequestId,
+              priority: "normal", refType: "leave_request", refId: stage.leaveRequestId as number,
             }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
           }
         }
@@ -525,11 +525,11 @@ async function leaveEscalationCheck(): Promise<string> {
         // they see manual approvals. Without this, cron-approved leaves were
         // invisible to every listener that keyed on leave.approved.
         emitEvent({
-          companyId: stage.companyId,
+          companyId: stage.companyId as number,
           userId: null,
           action: "leave.approved",
           entity: "hr_leave_requests",
-          entityId: stage.leaveRequestId,
+          entityId: stage.leaveRequestId as number,
           details: JSON.stringify({
             autoApproved: true,
             reason: "timeout",
@@ -542,16 +542,16 @@ async function leaveEscalationCheck(): Promise<string> {
       }
       autoApprovals++;
     } else if (hoursSinceCreation >= 24 && !stage.escalatedAt) {
-      const [hrAssignment] = await rawQuery<any>(
+      const [hrAssignment] = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role IN ('hr_manager','general_manager','owner') AND status = 'active' ORDER BY CASE role WHEN 'hr_manager' THEN 1 WHEN 'general_manager' THEN 2 ELSE 3 END LIMIT 1`,
         [stage.companyId]
       );
       if (hrAssignment) {
         await createNotification({
-          companyId: stage.companyId, assignmentId: hrAssignment.id,
+          companyId: stage.companyId as number, assignmentId: hrAssignment.id as number,
           type: "leave_escalated", title: "تصعيد طلب إجازة - تجاوز 24 ساعة",
           body: `طلب إجازة رقم ${stage.leaveRequestId} لم يتم البت فيه خلال 24 ساعة. سيتم الموافقة التلقائية خلال 4 ساعات.`,
-          priority: "urgent", refType: "leave_request", refId: stage.leaveRequestId,
+          priority: "urgent", refType: "leave_request", refId: stage.leaveRequestId as number,
         });
       }
       await rawExecute(`UPDATE leave_approval_stages SET "escalatedAt" = NOW() WHERE id = $1`, [stage.id]);
@@ -559,10 +559,10 @@ async function leaveEscalationCheck(): Promise<string> {
     } else if (hoursSinceCreation >= 20 && !stage.warningSentAt) {
       if (stage.assignedTo) {
         await createNotification({
-          companyId: stage.companyId, assignmentId: stage.assignedTo,
+          companyId: stage.companyId as number, assignmentId: stage.assignedTo as number,
           type: "leave_warning", title: "تنبيه عاجل - طلب إجازة ينتظر",
           body: `طلب إجازة رقم ${stage.leaveRequestId} ينتظر منذ 20 ساعة. سيتم التصعيد خلال 4 ساعات.`,
-          priority: "urgent", refType: "leave_request", refId: stage.leaveRequestId,
+          priority: "urgent", refType: "leave_request", refId: stage.leaveRequestId as number,
         });
       }
       await rawExecute(`UPDATE leave_approval_stages SET "warningSentAt" = NOW() WHERE id = $1`, [stage.id]);
@@ -570,10 +570,10 @@ async function leaveEscalationCheck(): Promise<string> {
     } else if (hoursSinceCreation >= 12 && !stage.reminderSentAt) {
       if (stage.assignedTo) {
         await createNotification({
-          companyId: stage.companyId, assignmentId: stage.assignedTo,
+          companyId: stage.companyId as number, assignmentId: stage.assignedTo as number,
           type: "leave_reminder", title: "تذكير - طلب إجازة ينتظر موافقتك",
           body: `طلب إجازة رقم ${stage.leaveRequestId} ينتظر موافقتك منذ 12 ساعة.`,
-          priority: "high", refType: "leave_request", refId: stage.leaveRequestId,
+          priority: "high", refType: "leave_request", refId: stage.leaveRequestId as number,
         });
       }
       await rawExecute(`UPDATE leave_approval_stages SET "reminderSentAt" = NOW() WHERE id = $1`, [stage.id]);
@@ -595,7 +595,7 @@ async function leaveEscalationCheck(): Promise<string> {
  */
 async function leaveReturnToWorkClosure(): Promise<string> {
   let closed = 0;
-  const ended = await rawQuery<any>(
+  const ended = await rawQuery<Record<string, unknown>>(
     `SELECT lr.id, lr."companyId", lr."employeeId", lr."startDate", lr."endDate",
             lr."leaveTypeId", lt.name AS "leaveTypeName"
        FROM hr_leave_requests lr
@@ -621,7 +621,7 @@ async function leaveReturnToWorkClosure(): Promise<string> {
       ).catch((e) => logger.error(e, "[cronScheduler] leave request approval cleanup failed"));
 
       // Find active employee assignment so we can notify the employee.
-      const [asn] = await rawQuery<any>(
+      const [asn] = await rawQuery<Record<string, unknown>>(
         `SELECT id, "branchId" FROM employee_assignments
           WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
         [lv.employeeId, lv.companyId]
@@ -629,38 +629,38 @@ async function leaveReturnToWorkClosure(): Promise<string> {
 
       if (asn) {
         createNotification({
-          companyId: lv.companyId,
-          assignmentId: asn.id,
+          companyId: lv.companyId as number,
+          assignmentId: asn.id as number,
           type: "leave_completed",
           title: "انتهاء فترة الإجازة — مرحباً بعودتك",
           body: `انتهت إجازة ${lv.leaveTypeName} (${lv.startDate} → ${lv.endDate}). يمكنك الآن تسجيل الحضور.`,
           priority: "normal",
           refType: "leave_request",
-          refId: lv.id,
+          refId: lv.id as number,
         }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
 
         // Also nudge the direct manager so staffing dashboards update.
-        const managerAssignmentId = await getManagerAssignmentId(lv.companyId, asn.branchId).catch((e) => { logger.error(e, "[cronScheduler] manager lookup failed"); return null; });
+        const managerAssignmentId = await getManagerAssignmentId(lv.companyId as number, asn.branchId as number).catch((e) => { logger.error(e, "[cronScheduler] manager lookup failed"); return null; });
         if (managerAssignmentId) {
           createNotification({
-            companyId: lv.companyId,
+            companyId: lv.companyId as number,
             assignmentId: managerAssignmentId,
             type: "leave_completed",
             title: "موظف عاد من إجازته",
             body: `عاد الموظف من إجازة ${lv.leaveTypeName} المنتهية ${lv.endDate}.`,
             priority: "low",
             refType: "leave_request",
-            refId: lv.id,
+            refId: lv.id as number,
           }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
         }
       }
 
       emitEvent({
-        companyId: lv.companyId,
+        companyId: lv.companyId as number,
         userId: null,
         action: "leave.completed",
         entity: "hr_leave_requests",
-        entityId: lv.id,
+        entityId: lv.id as number,
         details: JSON.stringify({ leaveTypeId: lv.leaveTypeId, endDate: lv.endDate }),
       }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
 
@@ -681,7 +681,7 @@ async function leaveReturnToWorkClosure(): Promise<string> {
  */
 async function inquiryMemoEscalation(): Promise<string> {
   let advanced = 0;
-  const stuck = await rawQuery<any>(
+  const stuck = await rawQuery<Record<string, unknown>>(
     `SELECT m.id, m."companyId", m."assignmentId", m."branchId", m."memoNumber"
        FROM hr_inquiry_memos m
       WHERE m.status = 'pending_employee'
@@ -713,37 +713,37 @@ async function inquiryMemoEscalation(): Promise<string> {
       // an imposed penalty without ever seeing the 72h window close.
       if (memo.assignmentId) {
         createNotification({
-          companyId: memo.companyId,
-          assignmentId: memo.assignmentId,
+          companyId: memo.companyId as number,
+          assignmentId: memo.assignmentId as number,
           type: "inquiry_memo",
           title: "تجاوز مهلة الرد على محضر الاستفسار",
           body: `انقضت مهلة 72 ساعة على المحضر ${memo.memoNumber} دون رد، وقد اعتُبر عدم الرد رفضاً ضمنياً.`,
           priority: "high",
           refType: "hr_inquiry_memo",
-          refId: memo.id,
+          refId: memo.id as number,
         }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
       }
 
-      const managerAssignmentId = await getManagerAssignmentId(memo.companyId, memo.branchId).catch((e) => { logger.error(e, "[cronScheduler] manager lookup failed"); return null; });
+      const managerAssignmentId = await getManagerAssignmentId(memo.companyId as number, memo.branchId as number).catch((e) => { logger.error(e, "[cronScheduler] manager lookup failed"); return null; });
       if (managerAssignmentId) {
         createNotification({
-          companyId: memo.companyId,
+          companyId: memo.companyId as number,
           assignmentId: managerAssignmentId,
           type: "inquiry_memo",
           title: "محضر استفسار بانتظار توصيتك (تلقائي)",
           body: `المحضر ${memo.memoNumber} تم تمريره تلقائياً لأن الموظف لم يرد خلال 72 ساعة.`,
           priority: "high",
           refType: "hr_inquiry_memo",
-          refId: memo.id,
+          refId: memo.id as number,
         }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
       }
 
       emitEvent({
-        companyId: memo.companyId,
+        companyId: memo.companyId as number,
         userId: null,
         action: "hr.memo.auto_escalated",
         entity: "hr_inquiry_memos",
-        entityId: memo.id,
+        entityId: memo.id as number,
         details: JSON.stringify({ reason: "employee_no_response_72h" }),
       }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
 
@@ -762,7 +762,7 @@ async function reconcileAttendance(): Promise<string> {
   for (const company of companies) {
     // Skip absent-marking if today is a public holiday for this company
     const today = todayISO();
-    const [holiday] = await rawQuery<any>(
+    const [holiday] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM public_holidays WHERE "companyId"=$1 AND $2::date BETWEEN "startDate"::date AND "endDate"::date`,
       [company.id, today]
     );
@@ -787,13 +787,13 @@ async function reconcileAttendance(): Promise<string> {
     total += affectedRows;
 
     if (affectedRows > 0) {
-      const [hrAsgn] = await rawQuery<any>(
+      const [hrAsgn] = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role IN ('hr_manager','general_manager','owner') AND status = 'active' LIMIT 1`,
         [company.id]
       );
       if (hrAsgn) {
         await createNotification({
-          companyId: company.id, assignmentId: hrAsgn.id,
+          companyId: company.id, assignmentId: hrAsgn.id as number,
           type: "attendance_absent",
           title: `${affectedRows} موظف بدون حضور اليوم`,
           body: `تم تسجيل ${affectedRows} سجل غياب تلقائي`,
@@ -820,7 +820,7 @@ async function hourlySlaEscalation(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let escalated = 0;
   for (const company of companies) {
-    const tickets = await rawQuery<any>(
+    const tickets = await rawQuery<Record<string, unknown>>(
       `SELECT id, ref, title, priority, "assigneeId"
        FROM support_tickets
        WHERE "companyId" = $1 AND status IN ('open','in_progress')
@@ -837,7 +837,7 @@ async function hourlySlaEscalation(): Promise<string> {
         company.id, "sla_breach",
         `خرق SLA: ${t.ref}`,
         `التذكرة "${t.title}" (${t.priority}) تجاوزت SLA`,
-        "critical", "support_ticket", t.id
+        "critical", "support_ticket", t.id as number
       );
       escalated++;
     }
@@ -850,22 +850,22 @@ async function hourlyApprovalEscalation(): Promise<string> {
   let reminders = 0, autoApprovals = 0;
   const { refTypeToChainType } = await import("./businessHelpers.js");
 
-  const pendingRequests = await rawQuery<any>(
+  const pendingRequests = await rawQuery<Record<string, unknown>>(
     `SELECT * FROM approval_requests WHERE status = 'pending' ORDER BY "createdAt" ASC`
   );
 
   for (const req of pendingRequests) {
-    const hoursSinceCreation = (now.getTime() - new Date(req.createdAt).getTime()) / 3600000;
-    const expiresAt = req.expiresAt ? new Date(req.expiresAt) : null;
+    const hoursSinceCreation = (now.getTime() - new Date(req.createdAt as string | Date).getTime()) / 3600000;
+    const expiresAt = req.expiresAt ? new Date(req.expiresAt as string | Date) : null;
     const isExpired = expiresAt ? now > expiresAt : hoursSinceCreation >= 48;
 
     if (hoursSinceCreation >= 24 && !req.lastReminderAt) {
       if (req.assignedTo) {
         await createNotification({
-          companyId: req.companyId, assignmentId: req.assignedTo,
+          companyId: req.companyId as number, assignmentId: req.assignedTo as number,
           type: "approval_reminder", title: "تذكير - طلب موافقة ينتظر",
           body: `يوجد طلب موافقة (${req.refType}) ينتظر منذ 24 ساعة`,
-          priority: "high", refType: req.refType, refId: req.refId,
+          priority: "high", refType: req.refType as string, refId: req.refId as number,
         });
       }
       await rawExecute(
@@ -878,7 +878,7 @@ async function hourlyApprovalEscalation(): Promise<string> {
     if (isExpired) {
       let shouldAutoApprove = false;
       if (req.chainId && req.currentStepOrder) {
-        const [currentStep] = await rawQuery<any>(
+        const [currentStep] = await rawQuery<Record<string, unknown>>(
           `SELECT * FROM approval_chain_steps WHERE "chainId" = $1 AND "stepOrder" = $2`,
           [req.chainId, req.currentStepOrder]
         );
@@ -888,8 +888,8 @@ async function hourlyApprovalEscalation(): Promise<string> {
       if (shouldAutoApprove) {
         const { processApprovalStep } = await import("./businessHelpers.js");
         const result = await processApprovalStep({
-          companyId: req.companyId, branchId: req.branchId,
-          refType: req.refType, refId: req.refId,
+          companyId: req.companyId as number, branchId: req.branchId as number,
+          refType: req.refType as string, refId: req.refId as number,
           approved: true, decidedBy: 0,
         });
         // Propagate the approval onto the underlying domain record. The HR
@@ -901,7 +901,7 @@ async function hourlyApprovalEscalation(): Promise<string> {
             purchase_order: { table: "purchase_orders", column: "status" },
             official_letter: { table: "official_letters", column: "status" },
           };
-          const target = entityUpdateMap[req.refType];
+          const target = entityUpdateMap[req.refType as string];
           if (target) {
             await rawExecute(
               `UPDATE ${target.table} SET ${target.column} = 'approved' WHERE id = $1`,
@@ -909,7 +909,7 @@ async function hourlyApprovalEscalation(): Promise<string> {
             ).catch((e) => logger.error(e, "[hourly_escalation] domain update failed:"));
           }
           const journalRefTypes = ["expense", "salary_advance", "custody"];
-          if (journalRefTypes.includes(req.refType)) {
+          if (journalRefTypes.includes(req.refType as string)) {
             await rawExecute(
               `UPDATE journal_entries SET status = 'posted' WHERE id = $1 AND status = 'pending_approval'`,
               [req.refId]
@@ -917,28 +917,28 @@ async function hourlyApprovalEscalation(): Promise<string> {
           }
           // Audit + event so the auto-approval is visible in reports.
           createAuditLog({
-            companyId: req.companyId, branchId: req.branchId, userId: 0,
-            action: "auto_approved", entity: req.refType, entityId: req.refId,
+            companyId: req.companyId as number, branchId: req.branchId as number, userId: 0,
+            action: "auto_approved", entity: req.refType as string, entityId: req.refId as number,
             reason: "Auto-approved on timeout by hourly escalation cron",
           }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
           emitEvent({
-            companyId: req.companyId, userId: 0,
-            action: `${req.refType}.auto_approved`, entity: req.refType, entityId: req.refId,
+            companyId: req.companyId as number, userId: 0,
+            action: `${req.refType}.auto_approved`, entity: req.refType as string, entityId: req.refId as number,
             details: `Auto-approved on timeout after ${Math.round(hoursSinceCreation)}h`,
           }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
         }
         autoApprovals++;
       } else {
-        const [hrAssignment] = await rawQuery<any>(
+        const [hrAssignment] = await rawQuery<Record<string, unknown>>(
           `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role IN ('hr_manager','general_manager','owner') AND status = 'active' LIMIT 1`,
           [req.companyId]
         );
         if (hrAssignment) {
           await createNotification({
-            companyId: req.companyId, assignmentId: hrAssignment.id,
+            companyId: req.companyId as number, assignmentId: hrAssignment.id as number,
             type: "approval_escalated", title: "تصعيد طلب موافقة",
             body: `طلب موافقة (${req.refType}) رقم ${req.refId} تجاوز المهلة`,
-            priority: "urgent", refType: req.refType, refId: req.refId,
+            priority: "urgent", refType: req.refType as string, refId: req.refId as number,
           });
         }
       }
@@ -954,7 +954,7 @@ async function dailyDeductionCheck(): Promise<string> {
   let deductions = 0;
   let memos = 0;
   for (const company of companies) {
-    const absentees = await rawQuery<any>(
+    const absentees = await rawQuery<Record<string, unknown>>(
       `SELECT a."assignmentId", ea."employeeId", ea."branchId", e.name, a.date
        FROM attendance a
        JOIN employee_assignments ea ON ea.id = a."assignmentId"
@@ -1005,9 +1005,9 @@ async function dailyDeductionCheck(): Promise<string> {
 
         const result = await ensureInquiryMemoForViolation({
           companyId: company.id,
-          branchId: a.branchId,
-          assignmentId: a.assignmentId,
-          employeeId: a.employeeId,
+          branchId: a.branchId as number | null,
+          assignmentId: a.assignmentId as number,
+          employeeId: a.employeeId as number,
           violationId,
           incidentType: "absence",
           incidentDate: String(a.date).slice(0, 10),
@@ -1028,7 +1028,7 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let actions = 0;
   for (const company of companies) {
-    const invoices = await rawQuery<any>(
+    const invoices = await rawQuery<Record<string, unknown>>(
       `SELECT i.id, i.ref, i."clientId", i.total, i."paidAmount", i."dueDate",
               c.name AS "clientName", c.phone AS "clientPhone",
               (CURRENT_DATE - i."dueDate"::date) AS "daysOverdue",
@@ -1068,7 +1068,7 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
         `فاتورة متأخرة ${days} يوم: ${inv.ref}`,
         `العميل: ${inv.clientName || 'غير محدد'} — المبلغ: ${inv.total} ريال — المرحلة: ${phase}`,
         days >= 30 ? "critical" : "warning",
-        "invoice", inv.id
+        "invoice", inv.id as number
       );
       actions++;
     }
@@ -1086,7 +1086,7 @@ async function dailyInventoryCheck(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let pos = 0;
   for (const company of companies) {
-    const products = await rawQuery<any>(
+    const products = await rawQuery<Record<string, unknown>>(
       `SELECT id, name, "currentStock", COALESCE("minStock", 0) AS threshold
        FROM warehouse_products
        WHERE "companyId" = $1
@@ -1095,7 +1095,7 @@ async function dailyInventoryCheck(): Promise<string> {
       [company.id]
     );
     for (const p of products) {
-      const existing = await rawQuery<any>(
+      const existing = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM purchase_orders
          WHERE "companyId" = $1 AND title LIKE $2
          AND "createdAt" > NOW() - INTERVAL '7 days' AND status NOT IN ('cancelled','rejected')`,
@@ -1121,7 +1121,7 @@ async function dailyPropertyCheck(): Promise<string> {
   let renewalNotices = 0;
   for (const company of companies) {
     // 1. Alert expiring contracts (≤30 days)
-    const expiring = await rawQuery<any>(
+    const expiring = await rawQuery<Record<string, unknown>>(
       `SELECT rc.id, rc."tenantName", rc."endDate",
               (rc."endDate"::date - CURRENT_DATE) AS "daysLeft",
               rc."autoRenewal", rc."renewalNoticeDays", rc."renewalNoticeSentAt"
@@ -1136,13 +1136,13 @@ async function dailyPropertyCheck(): Promise<string> {
         `عقد إيجار ينتهي: ${c.tenantName}`,
         `ينتهي خلال ${c.daysLeft} يوم — ${c.endDate}`,
         Number(c.daysLeft) <= 7 ? "critical" : "warning",
-        "rental_contract", c.id
+        "rental_contract", c.id as number
       );
       alerted++;
     }
 
     // 2. Send renewal notice at renewalNoticeDays (default 60) before endDate — only once
-    const needsNotice = await rawQuery<any>(
+    const needsNotice = await rawQuery<Record<string, unknown>>(
       `SELECT rc.id, rc."tenantName", rc."endDate"
        FROM rental_contracts rc
        WHERE rc."companyId" = $1 AND rc.status = 'active'
@@ -1156,7 +1156,7 @@ async function dailyPropertyCheck(): Promise<string> {
         company.id, "rental_contract_renewal_notice",
         `تنبيه تجديد عقد: ${c.tenantName}`,
         `يقترب موعد انتهاء العقد (${c.endDate}) — اتخذ قرار التجديد أو الإنهاء`,
-        "warning", "rental_contract", c.id
+        "warning", "rental_contract", c.id as number
       );
       await rawExecute(
         `UPDATE rental_contracts SET "renewalNoticeSentAt"=NOW() WHERE id=$1`, [c.id]
@@ -1172,7 +1172,7 @@ async function dailyPropertyCheck(): Promise<string> {
     }
 
     // 3. Auto-expire contracts whose endDate has passed — mark expired, free the unit, cancel pending rent_payments
-    const expiredContracts = await rawQuery<any>(
+    const expiredContracts = await rawQuery<Record<string, unknown>>(
       `SELECT id, "unitId", "tenantName" FROM rental_contracts
        WHERE "companyId" = $1 AND status = 'active' AND "endDate" < CURRENT_DATE`,
       [company.id]
@@ -1213,7 +1213,7 @@ async function dailyLegalCheck(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let actions = 0;
   for (const company of companies) {
-    const upcoming = await rawQuery<any>(
+    const upcoming = await rawQuery<Record<string, unknown>>(
       `SELECT DISTINCT ON (lc.id)
               lc.id, lc.title, lc."lawyerName", lc.priority,
               ls."nextSessionDate" AS "hearingDate"
@@ -1233,7 +1233,7 @@ async function dailyLegalCheck(): Promise<string> {
         `جلسة قضائية قريبة: ${c.title}`,
         `موعد الجلسة: ${c.hearingDate}${c.lawyerName ? ` — المحامي ${c.lawyerName}` : ''}`,
         c.priority === 'high' ? "critical" : "warning",
-        "legal_case", c.id
+        "legal_case", c.id as number
       );
       actions++;
     }
@@ -1245,7 +1245,7 @@ async function dailyProjectCheck(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let actions = 0;
   for (const company of companies) {
-    const projects = await rawQuery<any>(
+    const projects = await rawQuery<Record<string, unknown>>(
       `SELECT id, name, "endDate", budget, "spentAmount", progress
        FROM projects
        WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status = 'active' AND "endDate" < CURRENT_DATE`,
@@ -1260,7 +1260,7 @@ async function dailyProjectCheck(): Promise<string> {
         `مشروع متأخر: ${p.name}`,
         `تجاوز الموعد المحدد${overBudget ? ` — تجاوز 90% من الميزانية (${Math.round(spent / budget * 100)}%)` : ''}`,
         overBudget ? "critical" : "warning",
-        "project", p.id
+        "project", p.id as number
       );
       actions++;
     }
@@ -1272,7 +1272,7 @@ async function dailyCrmCheck(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let actions = 0;
   for (const company of companies) {
-    const overdue = await rawQuery<any>(
+    const overdue = await rawQuery<Record<string, unknown>>(
       `SELECT ca.id, ca."opportunityId", ca.description, co."assignedTo", co.title AS "oppTitle"
        FROM crm_activities ca
        JOIN crm_opportunities co ON co.id = ca."opportunityId"
@@ -1282,17 +1282,17 @@ async function dailyCrmCheck(): Promise<string> {
     );
     for (const a of overdue) {
       if (!a.assignedTo) continue;
-      const [asgn] = await rawQuery<any>(
+      const [asgn] = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND status = 'active' LIMIT 1`,
         [a.assignedTo]
       );
       if (asgn) {
         await createNotification({
-          companyId: company.id, assignmentId: asgn.id,
+          companyId: company.id, assignmentId: asgn.id as number,
           type: "crm_overdue",
           title: `متابعة CRM متأخرة: ${a.oppTitle}`,
           body: `نشاط متأخر أكثر من 3 أيام`,
-          priority: "high", refType: "crm_opportunities", refId: a.opportunityId,
+          priority: "high", refType: "crm_opportunities", refId: a.opportunityId as number,
         });
         actions++;
       }
@@ -1324,7 +1324,7 @@ async function monthlyRentPenalties(): Promise<string> {
   let penalties = 0;
   let legalHandoffs = 0;
   for (const company of companies) {
-    const overduePayments = await rawQuery<any>(
+    const overduePayments = await rawQuery<Record<string, unknown>>(
       `SELECT rp.id, rp."dueDate", rp.amount, rp."contractId", c."tenantName", c."tenantPhone", c."unitId"
          FROM rent_payments rp
          JOIN rental_contracts c ON c.id = rp."contractId"
@@ -1333,7 +1333,7 @@ async function monthlyRentPenalties(): Promise<string> {
       [company.id]
     );
     for (const p of overduePayments) {
-      const lateDays = Math.floor((Date.now() - new Date(p.dueDate).getTime()) / 86400000);
+      const lateDays = Math.floor((Date.now() - new Date(p.dueDate as string | Date).getTime()) / 86400000);
       let targetStage: string | null = null;
       if (lateDays >= 90) targetStage = 'legal_transfer';
       else if (lateDays >= 60) targetStage = 'penalty_applied';
@@ -1343,7 +1343,7 @@ async function monthlyRentPenalties(): Promise<string> {
       else if (lateDays >= 3) targetStage = 'alert';
       if (!targetStage) continue;
 
-      const existing = await rawQuery<any>(
+      const existing = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM late_rent_actions WHERE "paymentId" = $1 AND phase = $2 LIMIT 1`,
         [p.id, targetStage]
       );
@@ -1425,18 +1425,18 @@ async function monthlyPayrollPrep(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let actions = 0;
   for (const company of companies) {
-    const [hrAsgn] = await rawQuery<any>(
+    const [hrAsgn] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role IN ('hr_manager','general_manager','owner') AND status = 'active' LIMIT 1`,
       [company.id]
     );
     if (hrAsgn) {
-      const [pending] = await rawQuery<any>(
+      const [pending] = await rawQuery<Record<string, unknown>>(
         `SELECT COUNT(*) AS count FROM payroll_runs WHERE "companyId" = $1 AND status = 'draft'`,
         [company.id]
       );
       if (Number(pending?.count) > 0) {
         await createNotification({
-          companyId: company.id, assignmentId: hrAsgn.id,
+          companyId: company.id, assignmentId: hrAsgn.id as number,
           type: "payroll_reminder",
           title: "تذكير: مسير رواتب معلّق",
           body: `يوجد ${pending.count} مسير رواتب بحالة مسودة — يرجى المراجعة قبل نهاية الشهر`,
@@ -1453,13 +1453,13 @@ async function monthlyClosingPrep(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let actions = 0;
   for (const company of companies) {
-    const [ownerAsgn] = await rawQuery<any>(
+    const [ownerAsgn] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role IN ('finance_manager','general_manager','owner') AND status = 'active' LIMIT 1`,
       [company.id]
     );
     if (ownerAsgn) {
       await createNotification({
-        companyId: company.id, assignmentId: ownerAsgn.id,
+        companyId: company.id, assignmentId: ownerAsgn.id as number,
         type: "monthly_closing",
         title: "تذكير: إقفال الشهر",
         body: "يرجى مراجعة القيود المحاسبية وإقفال الفترة المالية",
@@ -1475,7 +1475,7 @@ async function weeklyHrReport(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let sent = 0;
   for (const company of companies) {
-    const [stats] = await rawQuery<any>(
+    const [stats] = await rawQuery<Record<string, unknown>>(
       `SELECT
          COUNT(*) AS total,
          COUNT(*) FILTER (WHERE status = 'active') AS active,
@@ -1483,13 +1483,13 @@ async function weeklyHrReport(): Promise<string> {
        FROM employee_assignments WHERE "companyId" = $1`,
       [company.id]
     );
-    const [hrAsgn] = await rawQuery<any>(
+    const [hrAsgn] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role IN ('hr_manager','general_manager','owner') AND status = 'active' LIMIT 1`,
       [company.id]
     );
     if (hrAsgn) {
       await createNotification({
-        companyId: company.id, assignmentId: hrAsgn.id,
+        companyId: company.id, assignmentId: hrAsgn.id as number,
         type: "weekly_hr_report",
         title: "تقرير HR الأسبوعي",
         body: `إجمالي: ${stats?.total || 0} — نشط: ${stats?.active || 0} — توظيف جديد: ${stats?.newHires || 0}`,
@@ -1505,19 +1505,19 @@ async function weeklyFleetReport(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let sent = 0;
   for (const company of companies) {
-    const [stats] = await rawQuery<any>(
+    const [stats] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS total,
               COUNT(*) FILTER (WHERE status = 'active') AS active
        FROM fleet_vehicles WHERE "companyId" = $1`,
       [company.id]
     );
-    const [mgrAsgn] = await rawQuery<any>(
+    const [mgrAsgn] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role IN ('branch_manager','general_manager','owner') AND status = 'active' LIMIT 1`,
       [company.id]
     );
     if (mgrAsgn) {
       await createNotification({
-        companyId: company.id, assignmentId: mgrAsgn.id,
+        companyId: company.id, assignmentId: mgrAsgn.id as number,
         type: "weekly_fleet_report",
         title: "تقرير الأسطول الأسبوعي",
         body: `إجمالي المركبات: ${stats?.total || 0} — نشطة: ${stats?.active || 0}`,
@@ -1533,7 +1533,7 @@ async function weeklyCrmReport(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let sent = 0;
   for (const company of companies) {
-    const [stats] = await rawQuery<any>(
+    const [stats] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS total,
               COUNT(*) FILTER (WHERE stage = 'closed_won') AS won,
               COALESCE(SUM(value) FILTER (WHERE stage = 'closed_won'), 0) AS "wonValue"
@@ -1541,13 +1541,13 @@ async function weeklyCrmReport(): Promise<string> {
          AND "createdAt" >= CURRENT_DATE - INTERVAL '7 days'`,
       [company.id]
     );
-    const [mgrAsgn] = await rawQuery<any>(
+    const [mgrAsgn] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role IN ('branch_manager','general_manager','owner') AND status = 'active' LIMIT 1`,
       [company.id]
     );
     if (mgrAsgn) {
       await createNotification({
-        companyId: company.id, assignmentId: mgrAsgn.id,
+        companyId: company.id, assignmentId: mgrAsgn.id as number,
         type: "weekly_crm_report",
         title: "تقرير CRM الأسبوعي",
         body: `فرص جديدة: ${stats?.total || 0} — فائزة: ${stats?.won || 0} — قيمة: ${stats?.wonValue || 0} ريال`,
@@ -1563,11 +1563,11 @@ async function weeklyCashFlowCheck(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let alerts = 0;
   for (const company of companies) {
-    const [income] = await rawQuery<any>(
+    const [income] = await rawQuery<Record<string, unknown>>(
       `SELECT COALESCE(SUM("paidAmount"), 0) AS total FROM invoices WHERE "companyId" = $1 AND "createdAt" >= CURRENT_DATE - INTERVAL '7 days'`,
       [company.id]
     );
-    const [expenses] = await rawQuery<any>(
+    const [expenses] = await rawQuery<Record<string, unknown>>(
       `SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE "companyId" = $1 AND "createdAt" >= CURRENT_DATE - INTERVAL '7 days'`,
       [company.id]
     );
@@ -1589,7 +1589,7 @@ async function weeklyPropertyRevenue(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let reports = 0;
   for (const company of companies) {
-    const [stats] = await rawQuery<any>(
+    const [stats] = await rawQuery<Record<string, unknown>>(
       `SELECT COALESCE(SUM(CASE WHEN rp.status = 'paid' THEN rp.amount ELSE 0 END), 0) AS paid,
               COALESCE(SUM(CASE WHEN rp.status IN ('pending','partial') THEN rp.amount ELSE 0 END), 0) AS pending
        FROM rent_payments rp
@@ -1598,13 +1598,13 @@ async function weeklyPropertyRevenue(): Promise<string> {
          AND rp."dueDate" >= CURRENT_DATE - INTERVAL '7 days'`,
       [company.id]
     );
-    const [ownerAsgn] = await rawQuery<any>(
+    const [ownerAsgn] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role IN ('finance_manager','general_manager','owner') AND status = 'active' LIMIT 1`,
       [company.id]
     );
     if (ownerAsgn) {
       await createNotification({
-        companyId: company.id, assignmentId: ownerAsgn.id,
+        companyId: company.id, assignmentId: ownerAsgn.id as number,
         type: "weekly_property_revenue",
         title: "إيرادات عقارية أسبوعية",
         body: `محصّل: ${stats?.paid || 0} — معلّق: ${stats?.pending || 0} ريال`,
@@ -1620,7 +1620,7 @@ async function weeklyClientClassification(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let classified = 0;
   for (const company of companies) {
-    const clients = await rawQuery<any>(
+    const clients = await rawQuery<Record<string, unknown>>(
       `SELECT c.id, c.name, c.classification,
               COALESCE(c."totalRevenue", 0) AS revenue,
               (SELECT MAX(i."createdAt") FROM invoices i WHERE i."clientId" = c.id) AS "lastInvoice"
@@ -1629,7 +1629,7 @@ async function weeklyClientClassification(): Promise<string> {
     );
     for (const client of clients) {
       const rev = Number(client.revenue);
-      const lastInvoice = client.lastInvoice ? new Date(client.lastInvoice) : null;
+      const lastInvoice = client.lastInvoice ? new Date(client.lastInvoice as string | Date) : null;
       const monthsSinceLastInvoice = lastInvoice
         ? (Date.now() - lastInvoice.getTime()) / (30 * 86400000)
         : 999;
@@ -1657,7 +1657,7 @@ async function monthlyInventoryAudit(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let issues = 0;
   for (const company of companies) {
-    const negative = await rawQuery<any>(
+    const negative = await rawQuery<Record<string, unknown>>(
       `SELECT id, name, "currentStock" FROM warehouse_products
        WHERE "companyId" = $1 AND "currentStock" < 0`,
       [company.id]
@@ -1668,7 +1668,7 @@ async function monthlyInventoryAudit(): Promise<string> {
         company.id, "negative_stock",
         `مخزون سالب: ${p.name}`,
         `الكمية: ${p.currentStock} — يرجى المراجعة`,
-        "warning", "warehouse_product", p.id
+        "warning", "warehouse_product", p.id as number
       );
     }
   }
@@ -1680,7 +1680,7 @@ async function yearlyLeaveBalanceRenewal(): Promise<string> {
   const year = currentYear();
   let renewed = 0;
   for (const company of companies) {
-    const balances = await rawQuery<any>(
+    const balances = await rawQuery<Record<string, unknown>>(
       `SELECT DISTINCT lb."employeeId", lb."leaveTypeId", lt.annual
        FROM hr_leave_balances lb
        JOIN hr_leave_types lt ON lt.id = lb."leaveTypeId"
@@ -1709,7 +1709,7 @@ async function dailyNotificationCleanup(): Promise<string> {
 }
 
 async function probationAlertCheck(): Promise<string> {
-  const contracts = await rawQuery<any>(
+  const contracts = await rawQuery<Record<string, unknown>>(
     `SELECT ec.id, ec."companyId", ec."employeeId", ec."assignmentId", ec."probationEndDate",
             e.name AS "employeeName"
      FROM employee_contracts ec
@@ -1720,17 +1720,17 @@ async function probationAlertCheck(): Promise<string> {
 
   let alerted = 0;
   for (const contract of contracts) {
-    const daysLeft = Math.ceil((new Date(contract.probationEndDate).getTime() - Date.now()) / 86400000);
-    const [hrAssignment] = await rawQuery<any>(
+    const daysLeft = Math.ceil((new Date(contract.probationEndDate as string | Date).getTime() - Date.now()) / 86400000);
+    const [hrAssignment] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role IN ('hr_manager','general_manager','owner') AND status = 'active' LIMIT 1`,
       [contract.companyId]
     );
     if (hrAssignment) {
       await createNotification({
-        companyId: contract.companyId, assignmentId: hrAssignment.id,
+        companyId: contract.companyId as number, assignmentId: hrAssignment.id as number,
         type: "probation_alert", title: "تنبيه انتهاء فترة تجربة",
         body: `فترة تجربة الموظف ${contract.employeeName} تنتهي خلال ${daysLeft} يوم. يرجى اتخاذ قرار التثبيت.`,
-        priority: "high", refType: "employee", refId: contract.employeeId,
+        priority: "high", refType: "employee", refId: contract.employeeId as number,
       });
     }
     await rawExecute(
@@ -1756,7 +1756,7 @@ async function probationAlertCheck(): Promise<string> {
  */
 async function retryStuckOfficialLetters(): Promise<string> {
   let retried = 0;
-  const stuck = await rawQuery<any>(
+  const stuck = await rawQuery<Record<string, unknown>>(
     `SELECT id, "companyId", subject, type, "employeeId", status, "approvedAt"
        FROM official_letters
       WHERE status = 'approved'
@@ -1769,7 +1769,7 @@ async function retryStuckOfficialLetters(): Promise<string> {
   for (const letter of stuck) {
     try {
       await emitEvent({
-        companyId: letter.companyId,
+        companyId: letter.companyId as number,
         userId: null,
         action: "hr.letter.approved",
         entity: "official_letter",
@@ -1792,7 +1792,7 @@ async function retryStuckOfficialLetters(): Promise<string> {
 }
 
 async function processEmailQueue(): Promise<string> {
-  const pending = await rawQuery<any>(
+  const pending = await rawQuery<Record<string, unknown>>(
     `SELECT eq.*, i.config AS "smtpSettings"
      FROM email_queue eq
      LEFT JOIN LATERAL (
@@ -1811,7 +1811,7 @@ async function processEmailQueue(): Promise<string> {
 
   for (const email of pending) {
     try {
-      const smtp = email.smtpSettings ?? null;
+      const smtp = (email.smtpSettings as { host?: string; port?: number; secure?: boolean; user?: string; password?: string; from?: string } | null) ?? null;
 
       if (!smtp || !smtp.host) {
         await rawExecute(
@@ -1836,9 +1836,9 @@ async function processEmailQueue(): Promise<string> {
         subject: email.subject,
         html: email.body ?? email.text,
       };
-      const meta = email.metadata ?? null;
+      const meta = (email.metadata as { attachments?: Array<{ filename: string; content: string; contentType: string; encoding?: string }> } | null) ?? null;
       if (meta?.attachments && Array.isArray(meta.attachments) && meta.attachments.length > 0) {
-        mailOptions.attachments = meta.attachments.map((a: { filename: string; content: string; contentType: string; encoding?: string }) => ({
+        mailOptions.attachments = meta.attachments.map((a) => ({
           filename: a.filename,
           content: Buffer.from(a.content, (a.encoding as BufferEncoding | undefined) ?? "base64"),
           contentType: a.contentType,
@@ -1881,7 +1881,7 @@ async function hourlyWorkflowSlaCheck(): Promise<string> {
 }
 
 async function processSmsQueue(): Promise<string> {
-  const pending = await rawQuery<any>(
+  const pending = await rawQuery<Record<string, unknown>>(
     `SELECT sq.*, ss_sid.value AS "accountSid", ss_token.value AS "authToken", ss_from.value AS "fromNumber",
             COALESCE(ss_enabled.value, 'true') AS "channelEnabled"
      FROM sms_queue sq
@@ -1924,9 +1924,9 @@ async function processSmsQueue(): Promise<string> {
             "Content-Type": "application/x-www-form-urlencoded",
           },
           body: new URLSearchParams({
-            To: sms.recipientPhone,
-            From: sms.fromNumber,
-            Body: sms.message,
+            To: sms.recipientPhone as string,
+            From: sms.fromNumber as string,
+            Body: sms.message as string,
           }).toString(),
         }
       );
@@ -1940,7 +1940,7 @@ async function processSmsQueue(): Promise<string> {
         sent++;
       } else {
         const errText = await resp.text();
-        const newCount = (sms.attemptCount ?? 0) + 1;
+        const newCount = (Number(sms.attemptCount) || 0) + 1;
         const newStatus = newCount >= 3 ? "failed" : "pending";
         await rawExecute(
           `UPDATE sms_queue SET status=$1, "errorMessage"=$2, "attemptCount"=$3, "updatedAt"=NOW() WHERE id=$4`,
@@ -1950,7 +1950,7 @@ async function processSmsQueue(): Promise<string> {
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      const newCount = (sms.attemptCount ?? 0) + 1;
+      const newCount = (Number(sms.attemptCount) || 0) + 1;
       const newStatus = newCount >= 3 ? "failed" : "pending";
       await rawExecute(
         `UPDATE sms_queue SET status=$1, "errorMessage"=$2, "attemptCount"=$3, "updatedAt"=NOW() WHERE id=$4`,
@@ -1964,7 +1964,7 @@ async function processSmsQueue(): Promise<string> {
 }
 
 async function processWhatsAppQueue(): Promise<string> {
-  const pending = await rawQuery<any>(
+  const pending = await rawQuery<Record<string, unknown>>(
     `SELECT wq.*, ss_token.value AS "accessToken", ss_phone.value AS "phoneNumberId",
             COALESCE(ss_enabled.value, 'true') AS "channelEnabled"
      FROM whatsapp_queue wq
@@ -2023,7 +2023,7 @@ async function processWhatsAppQueue(): Promise<string> {
         sent++;
       } else {
         const errText = await resp.text();
-        const newCount = (msg.attemptCount ?? 0) + 1;
+        const newCount = (Number(msg.attemptCount) || 0) + 1;
         const newStatus = newCount >= 3 ? "failed" : "pending";
         await rawExecute(
           `UPDATE whatsapp_queue SET status=$1, "errorMessage"=$2, "attemptCount"=$3, "updatedAt"=NOW() WHERE id=$4`,
@@ -2033,7 +2033,7 @@ async function processWhatsAppQueue(): Promise<string> {
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      const newCount = (msg.attemptCount ?? 0) + 1;
+      const newCount = (Number(msg.attemptCount) || 0) + 1;
       const newStatus = newCount >= 3 ? "failed" : "pending";
       await rawExecute(
         `UPDATE whatsapp_queue SET status=$1, "errorMessage"=$2, "attemptCount"=$3, "updatedAt"=NOW() WHERE id=$4`,
@@ -2101,7 +2101,7 @@ async function monthlyAutoDepreciation(): Promise<string> {
   let totalDepreciated = 0;
 
   for (const company of companies) {
-    const assets = await rawQuery<any>(
+    const assets = await rawQuery<Record<string, unknown>>(
       `SELECT fa.* FROM fixed_assets fa
        WHERE fa."companyId" = $1 AND fa.status = 'active'
          AND NOT EXISTS (
@@ -2110,13 +2110,13 @@ async function monthlyAutoDepreciation(): Promise<string> {
       [company.id, period]
     );
 
-    const [systemBranch] = await rawQuery<any>(
+    const [systemBranch] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM branches WHERE "companyId" = $1 LIMIT 1`,
       [company.id]
     );
     const branchId = systemBranch?.id ?? null;
 
-    const [systemUser] = await rawQuery<any>(
+    const [systemUser] = await rawQuery<Record<string, unknown>>(
       `SELECT ea.id FROM employee_assignments ea WHERE ea."companyId" = $1 AND ea.role IN ('finance_manager','general_manager','owner') AND ea.status='active' ORDER BY ea.role='owner' DESC LIMIT 1`,
       [company.id]
     );
@@ -2214,7 +2214,7 @@ async function runScheduledReports(): Promise<string> {
   const dayOfMonth = parseInt(getPart("day"), 10);
   const dayOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(weekdayStr);
 
-  const activeReports = await rawQuery<any>(
+  const activeReports = await rawQuery<Record<string, unknown>>(
     `SELECT * FROM scheduled_reports WHERE "isActive" = true`
   );
 
@@ -2229,8 +2229,8 @@ async function runScheduledReports(): Promise<string> {
     if (!shouldRun) continue;
 
     try {
-      const recipients: string[] = report.recipients || [];
-      const params = report.params || {};
+      const recipients: string[] = (report.recipients as string[] | null) || [];
+      const params = (report.params as { startDate?: string; endDate?: string; period?: string }) || {};
 
       const { exportTrialBalanceExcel, exportIncomeStatementExcel, exportPayrollExcel, exportAttendanceExcel } = await import("./excelExport.js");
       const { exportTrialBalancePdf } = await import("./pdfExport.js");
@@ -2238,19 +2238,19 @@ async function runScheduledReports(): Promise<string> {
       let attachment: { filename: string; content: Buffer; contentType: string } | undefined;
 
       if (report.reportType === "trial-balance") {
-        const buf = await exportTrialBalanceExcel(report.companyId, params.startDate, params.endDate);
+        const buf = await exportTrialBalanceExcel(report.companyId as number, params.startDate, params.endDate);
         attachment = { filename: "trial-balance.xlsx", content: buf, contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
       } else if (report.reportType === "income-statement") {
-        const buf = await exportIncomeStatementExcel(report.companyId, params.startDate, params.endDate);
+        const buf = await exportIncomeStatementExcel(report.companyId as number, params.startDate, params.endDate);
         attachment = { filename: "income-statement.xlsx", content: buf, contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
       } else if (report.reportType === "payroll") {
-        const buf = await exportPayrollExcel(report.companyId, params.period);
+        const buf = await exportPayrollExcel(report.companyId as number, params.period);
         attachment = { filename: "payroll.xlsx", content: buf, contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
       } else if (report.reportType === "attendance") {
-        const buf = await exportAttendanceExcel(report.companyId, params.startDate, params.endDate);
+        const buf = await exportAttendanceExcel(report.companyId as number, params.startDate, params.endDate);
         attachment = { filename: "attendance.xlsx", content: buf, contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
       } else if (report.reportType === "trial-balance-pdf") {
-        const buf = await exportTrialBalancePdf(report.companyId, params.startDate, params.endDate);
+        const buf = await exportTrialBalancePdf(report.companyId as number, params.startDate, params.endDate);
         attachment = { filename: "trial-balance.pdf", content: buf, contentType: "application/pdf" };
       }
 
@@ -2320,13 +2320,13 @@ async function govExpiryAlerts(): Promise<string> {
   let alerted = 0;
 
   for (const company of companies) {
-    const [hrAsgn] = await rawQuery<any>(
+    const [hrAsgn] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role IN ('hr_manager','general_manager','owner') AND status = 'active' ORDER BY CASE role WHEN 'hr_manager' THEN 1 WHEN 'general_manager' THEN 2 ELSE 3 END LIMIT 1`,
       [company.id]
     );
     if (!hrAsgn) continue;
 
-    const expiringEmployees = await rawQuery<any>(
+    const expiringEmployees = await rawQuery<Record<string, unknown>>(
       `SELECT e.id, e.name, e."iqamaNumber", e."iqamaExpiry", e."visaExpiry", e."workPermitExpiry",
               (e."iqamaExpiry"::date - CURRENT_DATE) AS "iqamaDaysLeft",
               (e."visaExpiry"::date - CURRENT_DATE) AS "visaDaysLeft",
@@ -2351,19 +2351,19 @@ async function govExpiryAlerts(): Promise<string> {
       for (const check of checks) {
         if (check.daysLeft <= 30 && check.daysLeft >= 0 && [30, 15, 7, 3, 1].includes(check.daysLeft)) {
           await createNotification({
-            companyId: company.id, assignmentId: hrAsgn.id,
+            companyId: company.id, assignmentId: hrAsgn.id as number,
             type: "gov_expiry_alert",
             title: `${check.label} تنتهي: ${emp.name}`,
             body: `${check.label} الموظف ${emp.name} (${emp.iqamaNumber || "-"}) تنتهي خلال ${check.daysLeft} يوم — يرجى تجديدها عبر نظام مقيم`,
             priority: check.daysLeft <= 7 ? "high" : "normal",
-            refType: "employee", refId: emp.id,
+            refType: "employee", refId: emp.id as number,
           });
           alerted++;
         }
       }
     }
 
-    const expiringVehicles = await rawQuery<any>(
+    const expiringVehicles = await rawQuery<Record<string, unknown>>(
       `SELECT fv.id, fv."plateNumber", fv.make, fv.model,
               (fv."registrationExpiry"::date - CURRENT_DATE) AS "registrationDaysLeft",
               (fv."nextInspectionDate"::date - CURRENT_DATE) AS "inspectionDaysLeft"
@@ -2384,12 +2384,12 @@ async function govExpiryAlerts(): Promise<string> {
       for (const check of checks) {
         if (check.daysLeft <= 30 && check.daysLeft >= 0 && [30, 15, 7, 3, 1].includes(check.daysLeft)) {
           await createNotification({
-            companyId: company.id, assignmentId: hrAsgn.id,
+            companyId: company.id, assignmentId: hrAsgn.id as number,
             type: "gov_expiry_alert",
             title: `${check.label} تنتهي: ${v.plateNumber}`,
             body: `${check.label} للمركبة ${v.plateNumber} (${v.make} ${v.model}) تنتهي خلال ${check.daysLeft} يوم — يرجى التجديد عبر نظام تم`,
             priority: check.daysLeft <= 7 ? "high" : "normal",
-            refType: "fleet_vehicle", refId: v.id,
+            refType: "fleet_vehicle", refId: v.id as number,
           });
           alerted++;
         }
@@ -2404,7 +2404,7 @@ async function vendorContractExpiryAlerts(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let alerted = 0;
   for (const company of companies) {
-    const expiring = await rawQuery<any>(
+    const expiring = await rawQuery<Record<string, unknown>>(
       `SELECT v.id AS "vendorId", v.name AS "vendorName",
               vc."endDate", (vc."endDate"::date - CURRENT_DATE) AS "daysLeft",
               vc.title AS "contractTitle"
@@ -2425,7 +2425,7 @@ async function vendorContractExpiryAlerts(): Promise<string> {
       const daysLeft = Number(c.daysLeft);
       if (![90, 60, 30, 14, 7].some((d) => daysLeft <= d + 2 && daysLeft >= d - 2)) continue;
 
-      const [purchaseAsgn] = await rawQuery<any>(
+      const [purchaseAsgn] = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM employee_assignments WHERE "companyId" = $1
          AND role IN ('finance_manager','general_manager','owner') AND status = 'active' LIMIT 1`,
         [company.id]
@@ -2435,12 +2435,12 @@ async function vendorContractExpiryAlerts(): Promise<string> {
 
       await createNotification({
         companyId: company.id,
-        assignmentId: purchaseAsgn.id,
+        assignmentId: purchaseAsgn.id as number,
         type: "vendor_contract_expiry",
         title: `عقد مورد ينتهي: ${c.vendorName}`,
         body: `عقد "${c.contractTitle}" مع المورد ${c.vendorName} ينتهي خلال ${daysLeft} يوم (${c.endDate}) — يرجى المراجعة والتجديد`,
         priority: daysLeft <= 14 ? "high" : "normal",
-        refType: "vendor", refId: c.vendorId,
+        refType: "vendor", refId: c.vendorId as number,
       });
 
       await rawExecute(
@@ -2458,26 +2458,26 @@ async function dailySystemHealthReport(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let reports = 0;
 
-  const [errorCount] = await rawQuery<any>(
+  const [errorCount] = await rawQuery<Record<string, unknown>>(
     `SELECT COUNT(*) AS cnt FROM cron_logs WHERE status = 'failed' AND "createdAt" > NOW() - INTERVAL '24 hours'`
   ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [{ cnt: 0 }]; });
 
-  const [failedNotifs] = await rawQuery<any>(
+  const [failedNotifs] = await rawQuery<Record<string, unknown>>(
     `SELECT COUNT(*) AS cnt FROM notification_delivery_log WHERE status = 'failed' AND "queuedAt" > NOW() - INTERVAL '24 hours'`
   ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [{ cnt: 0 }]; });
 
-  const [dbSize] = await rawQuery<any>(
+  const [dbSize] = await rawQuery<Record<string, unknown>>(
     `SELECT pg_size_pretty(pg_database_size(current_database())) AS size`
   ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [{ size: 'N/A' }]; });
 
   for (const company of companies) {
-    const [activeUsers] = await rawQuery<any>(
+    const [activeUsers] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(DISTINCT "userId") AS cnt FROM activity_logs
        WHERE "companyId" = $1 AND "createdAt" > NOW() - INTERVAL '24 hours'`,
       [company.id]
     ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [{ cnt: 0 }]; });
 
-    const [techAsgn] = await rawQuery<any>(
+    const [techAsgn] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM employee_assignments WHERE "companyId" = $1
        AND role IN ('general_manager','owner') AND status = 'active' LIMIT 1`,
       [company.id]
@@ -2491,7 +2491,7 @@ async function dailySystemHealthReport(): Promise<string> {
 
     await createNotification({
       companyId: company.id,
-      assignmentId: techAsgn.id,
+      assignmentId: techAsgn.id as number,
       type: "system_health_report",
       title: "تقرير صحة النظام اليومي",
       body: `أخطاء Cron: ${errorCnt} | إشعارات فاشلة: ${failedNotifCnt} | مستخدمون نشطون: ${activeUsersCnt} | حجم قاعدة البيانات: ${dbSize?.size ?? 'N/A'}`,
@@ -2636,7 +2636,7 @@ async function dailyDunningAutoSend(): Promise<string> {
 
       // Find overdue invoices needing dunning
       const today = todayISO();
-      const rows = await rawQuery<any>(
+      const rows = await rawQuery<Record<string, unknown>>(
         `SELECT i.id, i.ref, i."dueDate", i.total, COALESCE(i."paidAmount",0) AS "paidAmount",
                 i."clientId", COALESCE(i."lastDunningStage",0) AS "lastStage", i."lastDunningAt",
                 GREATEST(0, ($1::date - i."dueDate"::date))::int AS "daysPastDue"
@@ -2662,7 +2662,7 @@ async function dailyDunningAutoSend(): Promise<string> {
 
         // Skip if already at this stage within last 24h or already past this stage
         if (Number(r.lastStage) >= stage && r.lastDunningAt) {
-          const hoursSince = (Date.now() - new Date(r.lastDunningAt).getTime()) / 36e5;
+          const hoursSince = (Date.now() - new Date(r.lastDunningAt as string | Date).getTime()) / 36e5;
           if (hoursSince < 24) { totalSkipped++; continue; }
         }
 
@@ -2731,7 +2731,7 @@ async function monthlyFxRevaluationReminder(): Promise<string> {
   for (const c of companies) {
     try {
       // Only remind if company has foreign-currency exposure
-      const [fxExposure] = await rawQuery<any>(
+      const [fxExposure] = await rawQuery<Record<string, unknown>>(
         `SELECT COUNT(*)::int AS n FROM invoices
          WHERE "companyId"=$1 AND currency IS NOT NULL AND currency<>'SAR' AND status NOT IN ('paid','cancelled')`,
         [c.id]
@@ -2780,7 +2780,7 @@ async function dailyBudgetVarianceAlert(): Promise<string> {
       const periodEnd = toDateISO(new Date(y, m, 0));
 
       // Find budgets near or over limit
-      const overBudget = await rawQuery<any>(
+      const overBudget = await rawQuery<Record<string, unknown>>(
         `SELECT b."accountCode", coa.name AS "accountName", b.amount AS "budgetAmount",
                 COALESCE((
                   SELECT SUM(jl.debit - jl.credit)
@@ -2851,7 +2851,7 @@ async function umrahDailyOverstayScan(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
   let detected = 0;
   for (const c of companies) {
-    const overstayed = await rawQuery<any>(
+    const overstayed = await rawQuery<Record<string, unknown>>(
       `SELECT p.id, p."fullName", p."passportNumber", p."groupId", p."subAgentId",
               p."actualStayDays", p."programDuration",
               GREATEST(0, COALESCE(p."actualStayDays",0) - COALESCE(p."programDuration",0)) AS "overDays"
@@ -2913,7 +2913,7 @@ async function umrahDailyAbsconderCheck(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
   let detected = 0;
   for (const c of companies) {
-    const absconders = await rawQuery<any>(
+    const absconders = await rawQuery<Record<string, unknown>>(
       `SELECT p.id, p."fullName", p."passportNumber", p."groupId", p."subAgentId"
        FROM umrah_pilgrims p
        WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
@@ -2952,7 +2952,7 @@ async function umrahOverdueInvoiceEscalation(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
   let escalated = 0;
   for (const c of companies) {
-    const overdue = await rawQuery<any>(
+    const overdue = await rawQuery<Record<string, unknown>>(
       `SELECT si.id, si.ref, si.total, si."paidAmount", si."dueDate", si."subAgentId",
               sa.name AS "subAgentName"
        FROM umrah_sales_invoices si
@@ -2986,7 +2986,7 @@ async function umrahWeeklyAgentPerformance(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
   let reports = 0;
   for (const c of companies) {
-    const stats = await rawQuery<any>(
+    const stats = await rawQuery<Record<string, unknown>>(
       `SELECT sa.id, sa.name,
               COUNT(DISTINCT p.id)::int AS pilgrim_count,
               COUNT(DISTINCT v.id) FILTER (WHERE v.status IN ('detected','open'))::int AS violation_count,
@@ -3021,7 +3021,7 @@ async function umrahVisaExpiryAlerts(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
   let alerted = 0;
   for (const c of companies) {
-    const expiring = await rawQuery<any>(
+    const expiring = await rawQuery<Record<string, unknown>>(
       `SELECT p.id, p."fullName", p."visaNumber", p."visaExpiry", g.name AS "groupName"
        FROM umrah_pilgrims p
        LEFT JOIN umrah_groups g ON g.id = p."groupId"
@@ -3050,7 +3050,7 @@ async function umrahMonthlyFinancialSummary(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
   let sent = 0;
   for (const c of companies) {
-    const summary = await rawQuery<any>(
+    const summary = await rawQuery<Record<string, unknown>>(
       `SELECT
          COUNT(DISTINCT si.id)::int AS invoice_count,
          COALESCE(SUM(si.total), 0)::numeric(12,2) AS total_invoiced,
