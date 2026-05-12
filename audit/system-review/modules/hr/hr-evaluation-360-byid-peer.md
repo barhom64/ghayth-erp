@@ -14,7 +14,7 @@
 ## 2. الأزرار والإجراءات
 | الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
 |------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/hr/evaluation-cycles/${cycleId}/peer-evaluation` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+| _(write)_ | `/hr/evaluation-cycles/:id/peer-evaluation` | POST | ✅ | ✅ | — | — | ✅ | ✅ | ✅ |
 
 ### تفاصيل الأزرار المرئية
 - L92: "عودة"
@@ -42,6 +42,7 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/evaluation-360/:id/peer`)
-- توصية: **TBD**
-- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.
+- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
+- ملاحظة: `unresolved: /api/hr/evaluation-360 → 401`
+- landedUrl: `?`
+- توصية: مغلق

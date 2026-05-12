@@ -39,6 +39,8 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 - ⚠ L47 _(inline-data-array)_: `const kpis = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/shifts`)
-- توصية: **TBD**
-- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.
+- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
+- ملاحظة: `landed=/dashboard expected=/hr/shifts`
+- لقطة: `audit/screenshots/hr_shifts.png`
+- landedUrl: `http://localhost/dashboard`
+- توصية: **يحتاج إصلاح**

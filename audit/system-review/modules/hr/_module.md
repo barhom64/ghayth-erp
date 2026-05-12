@@ -3,7 +3,7 @@
 > الموجة: **1** | عدد الصفحات: **81** | أوراق منشأة: **81**
 
 ## KPIs
-- مشاكل إجمالية: **58** (🔴 31 / ⚠ 6 / ℹ 21)
+- مشاكل إجمالية: **56** (🔴 29 / ⚠ 6 / ℹ 21)
 
 ## الصفحات
 
@@ -72,8 +72,8 @@
 | [/hr/evaluation-360/create](./hr-evaluation-360-create.md) | `/hr/evaluation-360/create` | `create` | 200 | 1 | 4 | 1 |
 | [/hr/evaluation-360/history/:employeeId](./hr-evaluation-360-history-byid.md) | `/hr/evaluation-360/history/:employeeId` | `:employeeId` | 116 | 0 | 2 | 2 |
 | [/hr/evaluation-360](./hr-evaluation-360.md) | `/hr/evaluation-360` | `evaluation-360` | 179 | 1 | 1 | 1 |
-| [/hr/evaluation-360/:id/peer](./hr-evaluation-360-byid-peer.md) | `/hr/evaluation-360/:id/peer` | `peer` | 195 | 1 | 3 | 1 |
-| [/hr/evaluation-360/:id/upward](./hr-evaluation-360-byid-upward.md) | `/hr/evaluation-360/:id/upward` | `upward` | 236 | 1 | 4 | 1 |
+| [/hr/evaluation-360/:id/peer](./hr-evaluation-360-byid-peer.md) | `/hr/evaluation-360/:id/peer` | `peer` | 195 | 1 | 3 | 0 |
+| [/hr/evaluation-360/:id/upward](./hr-evaluation-360-byid-upward.md) | `/hr/evaluation-360/:id/upward` | `upward` | 236 | 1 | 4 | 0 |
 | [/hr/evaluation-360/:id](./hr-evaluation-360-byid.md) | `/hr/evaluation-360/:id` | `:id` | 481 | 0 | 4 | 5 |
 | [/hr/public-holidays](./hr-public-holidays.md) | `/hr/public-holidays` | `public-holidays` | 226 | 0 | 2 | 0 |
 | [/hr/transfers](./hr-transfers.md) | `/hr/transfers` | `transfers` | 298 | 4 | 2 | 0 |

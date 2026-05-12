@@ -43,6 +43,8 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/evaluation-360/create`)
-- توصية: **TBD**
-- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.
+- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
+- ملاحظة: `landed=/dashboard expected=/hr/evaluation-360/create; write POST /api/intelligence/activity → 200`
+- لقطة: `audit/screenshots/hr_evaluation_360_create.png`
+- landedUrl: `http://localhost/dashboard`
+- توصية: **يحتاج إصلاح**

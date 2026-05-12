@@ -42,6 +42,8 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 - ⚠ L52 _(inline-data-array)_: `const kpiCards = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/umrah/invoices`)
-- توصية: **TBD**
-- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.
+- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
+- ملاحظة: `landed=/dashboard expected=/umrah/invoices`
+- لقطة: `audit/screenshots/umrah_invoices.png`
+- landedUrl: `http://localhost/dashboard`
+- توصية: **يحتاج إصلاح**

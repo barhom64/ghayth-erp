@@ -38,6 +38,5 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/`)
+- Runtime audit: **N/A** — لم يُشغّل بعد لهذا المسار.
 - توصية: **TBD**
-- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

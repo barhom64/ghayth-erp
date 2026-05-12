@@ -1,22 +1,6 @@
 # بيانات وهمية ثابتة — Hardcoded Data Findings
 
-إجمالي: **73**
-
-## `/guide/properties` — 5
-
-- _medium_ **hardcoded-dummy-phone** — artifacts/ghayth-erp/src/pages/properties-guide.tsx:429 { name: "أحمد محمد السعيد", phone: "0551234567", id: "1234567890", contracts: "2
-- _medium_ **hardcoded-dummy-phone** — artifacts/ghayth-erp/src/pages/properties-guide.tsx:430 { name: "سارة عبدالله الغامدي", phone: "0557654321", id: "0987654321", contracts
-- _medium_ **hardcoded-dummy-phone** — artifacts/ghayth-erp/src/pages/properties-guide.tsx:431 { name: "خالد إبراهيم العمري", phone: "0501112233", id: "2345678901", contracts:
-- _medium_ **hardcoded-dummy-phone** — artifacts/ghayth-erp/src/pages/properties-guide.tsx:475 { name: "عبدالرحمن الحربي", type: "فرد", phone: "0501234567", buildings: 2, unit
-- _medium_ **hardcoded-dummy-phone** — artifacts/ghayth-erp/src/pages/properties-guide.tsx:477 { name: "فاطمة القحطاني", type: "فرد", phone: "0559876543", buildings: 1, units:
-
-## `/properties/guide` — 5
-
-- _medium_ **hardcoded-dummy-phone** — artifacts/ghayth-erp/src/pages/properties-guide.tsx:429 { name: "أحمد محمد السعيد", phone: "0551234567", id: "1234567890", contracts: "2
-- _medium_ **hardcoded-dummy-phone** — artifacts/ghayth-erp/src/pages/properties-guide.tsx:430 { name: "سارة عبدالله الغامدي", phone: "0557654321", id: "0987654321", contracts
-- _medium_ **hardcoded-dummy-phone** — artifacts/ghayth-erp/src/pages/properties-guide.tsx:431 { name: "خالد إبراهيم العمري", phone: "0501112233", id: "2345678901", contracts:
-- _medium_ **hardcoded-dummy-phone** — artifacts/ghayth-erp/src/pages/properties-guide.tsx:475 { name: "عبدالرحمن الحربي", type: "فرد", phone: "0501234567", buildings: 2, unit
-- _medium_ **hardcoded-dummy-phone** — artifacts/ghayth-erp/src/pages/properties-guide.tsx:477 { name: "فاطمة القحطاني", type: "فرد", phone: "0559876543", buildings: 1, units:
+إجمالي: **63**
 
 ## `/finance/invoices/create` — 2
 

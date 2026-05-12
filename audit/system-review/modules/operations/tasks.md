@@ -47,6 +47,8 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 - ⚠ L24 _(inline-data-array)_: `const statusOptions = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/tasks`)
-- توصية: **TBD**
-- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.
+- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
+- ملاحظة: `landed=/dashboard expected=/tasks`
+- لقطة: `audit/screenshots/tasks.png`
+- landedUrl: `http://localhost/dashboard`
+- توصية: **يحتاج إصلاح**

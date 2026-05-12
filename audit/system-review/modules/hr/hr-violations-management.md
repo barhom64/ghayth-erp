@@ -39,6 +39,8 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/violations/management`)
-- توصية: **TBD**
-- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.
+- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
+- ملاحظة: `landed=/dashboard expected=/hr/violations/management`
+- لقطة: `audit/screenshots/hr_violations_management.png`
+- landedUrl: `http://localhost/dashboard`
+- توصية: **يحتاج إصلاح**

@@ -564,68 +564,6 @@
       }
     ]
   },
-  "/guide/properties": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/properties-guide.tsx",
-    "module": "properties",
-    "hits": [
-      {
-        "line": 429,
-        "kind": "dummy-phone",
-        "text": "{ name: \"أحمد محمد السعيد\", phone: \"0551234567\", id: \"1234567890\", contracts: \"2 نشط\", unit: \"A-101\", paid: \"42,000 ر.س\""
-      },
-      {
-        "line": 430,
-        "kind": "dummy-phone",
-        "text": "{ name: \"سارة عبدالله الغامدي\", phone: \"0557654321\", id: \"0987654321\", contracts: \"1 نشط\", unit: \"B-201\", paid: \"96,000 "
-      },
-      {
-        "line": 431,
-        "kind": "dummy-phone",
-        "text": "{ name: \"خالد إبراهيم العمري\", phone: \"0501112233\", id: \"2345678901\", contracts: \"1 نشط\", unit: \"C-305\", paid: \"28,000 ر"
-      },
-      {
-        "line": 475,
-        "kind": "dummy-phone",
-        "text": "{ name: \"عبدالرحمن الحربي\", type: \"فرد\", phone: \"0501234567\", buildings: 2, units: 20, contracts: 18 },"
-      },
-      {
-        "line": 477,
-        "kind": "dummy-phone",
-        "text": "{ name: \"فاطمة القحطاني\", type: \"فرد\", phone: \"0559876543\", buildings: 1, units: 13, contracts: 13 },"
-      }
-    ]
-  },
-  "/properties/guide": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/properties-guide.tsx",
-    "module": "properties",
-    "hits": [
-      {
-        "line": 429,
-        "kind": "dummy-phone",
-        "text": "{ name: \"أحمد محمد السعيد\", phone: \"0551234567\", id: \"1234567890\", contracts: \"2 نشط\", unit: \"A-101\", paid: \"42,000 ر.س\""
-      },
-      {
-        "line": 430,
-        "kind": "dummy-phone",
-        "text": "{ name: \"سارة عبدالله الغامدي\", phone: \"0557654321\", id: \"0987654321\", contracts: \"1 نشط\", unit: \"B-201\", paid: \"96,000 "
-      },
-      {
-        "line": 431,
-        "kind": "dummy-phone",
-        "text": "{ name: \"خالد إبراهيم العمري\", phone: \"0501112233\", id: \"2345678901\", contracts: \"1 نشط\", unit: \"C-305\", paid: \"28,000 ر"
-      },
-      {
-        "line": 475,
-        "kind": "dummy-phone",
-        "text": "{ name: \"عبدالرحمن الحربي\", type: \"فرد\", phone: \"0501234567\", buildings: 2, units: 20, contracts: 18 },"
-      },
-      {
-        "line": 477,
-        "kind": "dummy-phone",
-        "text": "{ name: \"فاطمة القحطاني\", type: \"فرد\", phone: \"0559876543\", buildings: 1, units: 13, contracts: 13 },"
-      }
-    ]
-  },
   "/requests": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/requests-page.tsx",
     "module": "requests",

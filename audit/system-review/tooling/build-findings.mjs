@@ -20,18 +20,22 @@ const apiAudit = JSON.parse(readFileSync(join(__dirname, "_api-audit.json"), "ut
 const hardcoded = JSON.parse(readFileSync(join(__dirname, "_hardcoded-hits.json"), "utf8"));
 const schema = JSON.parse(readFileSync(join(__dirname, "_schema-by-entity.json"), "utf8"));
 
+// Normalize frontend template-literal placeholders (`${cycleId}`) and
+// express-style params (`:id`, `*filePath`) to a common `:id` form so the
+// frontend's call shape always matches the api-server's declared shape.
+function stripPath(p) {
+  return p
+    .replace(/^\/api/, "")
+    .replace(/\$\{[^}]+\}/g, ":id")
+    .replace(/[:*][a-zA-Z0-9_]+/g, ":id");
+}
+
 const apiIdx = new Map();
 for (const e of apiAudit) {
-  apiIdx.set(`${e.method} ${e.path.replace(/^\/api/, "")}`, e);
+  apiIdx.set(`${e.method} ${stripPath(e.path)}`, e);
 }
 function findEp(method, path) {
-  const norm = path.replace(/^\/api/, "");
-  if (apiIdx.has(`${method} ${norm}`)) return apiIdx.get(`${method} ${norm}`);
-  const stripped = norm.replace(/:[a-zA-Z0-9_]+/g, ":id");
-  for (const [k, v] of apiIdx.entries()) {
-    if (k === `${method} ${stripped}`) return v;
-  }
-  return null;
+  return apiIdx.get(`${method} ${stripPath(path)}`) || null;
 }
 
 const rows = [];

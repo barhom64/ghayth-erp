@@ -38,6 +38,8 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/umrah/commission-plans/new`)
-- توصية: **TBD**
-- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.
+- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
+- ملاحظة: `landed=/dashboard expected=/umrah/commission-plans/new`
+- لقطة: `audit/screenshots/umrah_commission_plans_new.png`
+- landedUrl: `http://localhost/dashboard`
+- توصية: **يحتاج إصلاح**

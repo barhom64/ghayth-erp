@@ -38,6 +38,8 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 - ⚠ L34 _(inline-data-array)_: `const BUCKETS = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/ar-aging`)
-- توصية: **TBD**
-- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.
+- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
+- ملاحظة: `landed=/dashboard expected=/finance/ar-aging`
+- لقطة: `audit/screenshots/finance_ar_aging.png`
+- landedUrl: `http://localhost/dashboard`
+- توصية: **يحتاج إصلاح**

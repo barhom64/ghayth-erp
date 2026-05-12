@@ -3,7 +3,7 @@
 > الموجة: **2** | عدد الصفحات: **30** | أوراق منشأة: **30**
 
 ## KPIs
-- مشاكل إجمالية: **36** (🔴 1 / ⚠ 13 / ℹ 22)
+- مشاكل إجمالية: **26** (🔴 1 / ⚠ 3 / ℹ 22)
 
 ## الصفحات
 
@@ -34,8 +34,8 @@
 | [/properties/inspections](./properties-inspections.md) | `/properties/inspections` | `inspections` | 311 | 1 | 5 | 0 |
 | [/properties/deposits](./properties-deposits.md) | `/properties/deposits` | `deposits` | 292 | 1 | 5 | 0 |
 | [/properties/occupancy-report](./properties-occupancy-report.md) | `/properties/occupancy-report` | `occupancy-report` | 184 | 1 | 0 | 1 |
-| [/guide/properties](./guide-properties.md) | `/guide/properties` | `properties` | 1430 | 0 | 1 | 6 |
-| [/properties/guide](./properties-guide.md) | `/properties/guide` | `guide` | 1430 | 0 | 1 | 6 |
+| [/guide/properties](./guide-properties.md) | `/guide/properties` | `properties` | 1430 | 0 | 1 | 1 |
+| [/properties/guide](./properties-guide.md) | `/properties/guide` | `guide` | 1430 | 0 | 1 | 1 |
 | [/properties/:id/status](./properties-byid-status.md) | `/properties/:id/status` | `status` | 196 | 0 | 3 | 0 |
 | [/properties/:id](./properties-byid.md) | `/properties/:id` | `:id` | 682 | 0 | 1 | 1 |
 | [/properties](./properties.md) | `/properties` | `properties` | 169 | 0 | 2 | 1 |

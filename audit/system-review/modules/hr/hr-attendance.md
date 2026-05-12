@@ -50,6 +50,8 @@ _لا قراءات._
 - ⚠ L133 _(inline-data-array)_: `const kpis = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/attendance`)
-- توصية: **TBD**
-- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.
+- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
+- ملاحظة: `landed=/dashboard expected=/hr/attendance`
+- لقطة: `audit/screenshots/hr_attendance.png`
+- landedUrl: `http://localhost/dashboard`
+- توصية: **يحتاج إصلاح**

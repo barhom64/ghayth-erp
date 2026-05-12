@@ -30,13 +30,23 @@
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/finance.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+الأصول الثابتة + الإهلاك. المرجع: `docs/blueprints/finance-invoices.md` §"Fixed Assets".
+
+| الحركة | الوحدة الهدف | مدخل API | مدخل DB | الحالة |
+|--------|--------------|----------|---------|--------|
+| إضافة أصل + قيد رأسمالي | finance/GL | `finance-algorithms.ts` POST `/fixed-assets` → DR Asset / CR Cash/AP | `fixed_assets`, `gl_entries` | ✅ |
+| إهلاك دفعي شهري (batch) | finance/GL | POST `/fixed-assets/depreciate-all` (cron) → DR Dep Expense / CR Acc Depreciation | `depreciation_schedules`, `gl_entries` | ✅ موجود |
+| ربط بمركبة (fleet) | fleet/vehicles | `vehicles.assetId` → `fixed_assets.id` | ربط ثنائي الاتجاه | ⚠ تحقق |
+| ربط بعقار (properties) | properties | `property_units.assetId` | ⚠ |
+| تخلّص من أصل (disposal) | finance/GL | POST `/fixed-assets/:id/dispose` → DR Acc Dep + Cash / CR Asset + Gain/Loss | `gl_entries`, `fixed_assets.status='disposed'` | ⚠ تحقق |
+| إعادة تقييم (revaluation) | finance/GL | DR/CR Asset & Revaluation Surplus | `revaluation_entries` | ⚠ غير قياسي |
+| تقرير الأصول (asset register) | finance/reports | aggregation | view | ✅ |
+| Audit log | core | `auditMiddleware` | `audit_logs` (entity=`fixed_assets`) | ⚠ missing-audit في FINDINGS لـ `depreciate-all` |
+
+تحقق يدوي:
+- [ ] هل cron الإهلاك الشهري يولّد قيدًا واحدًا batch أم قيد لكل أصل؟
+- [ ] هل تغيير العمر الإنتاجي يعيد حساب الجدول من تاريخ التعديل أم من البداية؟
+- [ ] هل توجد سجلات tracking للأصول (لقطات/QR)؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `fixed-assets` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
@@ -45,6 +55,8 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/fixed-assets`)
-- توصية: **TBD**
-- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.
+- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
+- ملاحظة: `landed=/dashboard expected=/finance/fixed-assets`
+- لقطة: `audit/screenshots/finance_fixed_assets.png`
+- landedUrl: `http://localhost/dashboard`
+- توصية: **يحتاج إصلاح**

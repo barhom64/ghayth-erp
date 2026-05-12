@@ -24,12 +24,18 @@ const apiAudit = JSON.parse(readFileSync(join(__dirname, "_api-audit.json"), "ut
 const hardcoded = JSON.parse(readFileSync(join(__dirname, "_hardcoded-hits.json"), "utf8"));
 const schema = JSON.parse(readFileSync(join(__dirname, "_schema-by-entity.json"), "utf8"));
 
-// Build a method+path → endpoint index for cross-lookup
+// Build a method+path → endpoint index for cross-lookup.
+// Mirrors build-findings.mjs: collapse `${x}`, `:id`, `*filePath` to `:id`
+// so frontend template-literal call sites match server param declarations.
+function normPath(p) {
+  return p
+    .replace(/^\/api/, "")
+    .replace(/\$\{[^}]+\}/g, ":id")
+    .replace(/[:*][a-zA-Z0-9_]+/g, ":id");
+}
 const apiIndex = new Map();
 for (const e of apiAudit) {
-  // Strip "/api" prefix if frontend uses it; api server doesn't have /api prefix
-  const norm = e.path.replace(/^\/api/, "");
-  apiIndex.set(`${e.method} ${norm}`, e);
+  apiIndex.set(`${e.method} ${normPath(e.path)}`, e);
 }
 
 function pageSlug(path) {
@@ -39,18 +45,7 @@ function pageSlug(path) {
 }
 
 function findEndpoint(method, path) {
-  // Frontend often passes paths without /api; api server lacks /api too
-  // Try direct match, then strip /api, then match prefix.
-  const tries = [`${method} ${path}`, `${method} ${path.replace(/^\/api/, "")}`];
-  for (const k of tries) {
-    if (apiIndex.has(k)) return apiIndex.get(k);
-  }
-  // Last resort: ignore :id and match prefix
-  const stripped = path.replace(/:[a-zA-Z0-9_]+/g, ":id").replace(/^\/api/, "");
-  for (const [k, v] of apiIndex.entries()) {
-    if (k.startsWith(`${method} `) && k.endsWith(stripped)) return v;
-  }
-  return null;
+  return apiIndex.get(`${method} ${normPath(path)}`) || null;
 }
 
 function badge(v) {

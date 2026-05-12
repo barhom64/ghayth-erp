@@ -38,6 +38,8 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 - ⚠ L47 _(inline-data-array)_: `const kpis = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/expiring-documents`)
-- توصية: **TBD**
-- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.
+- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
+- ملاحظة: `landed=/dashboard expected=/hr/expiring-documents`
+- لقطة: `audit/screenshots/hr_expiring_documents.png`
+- landedUrl: `http://localhost/dashboard`
+- توصية: **يحتاج إصلاح**

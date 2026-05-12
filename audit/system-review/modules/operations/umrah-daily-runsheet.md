@@ -40,6 +40,5 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 - ⚠ L110 _(inline-data-array)_: `const kpis = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/umrah/daily-runsheet`)
+- Runtime audit: **N/A** — لم يُشغّل بعد لهذا المسار.
 - توصية: **TBD**
-- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

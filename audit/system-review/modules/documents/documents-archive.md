@@ -38,6 +38,8 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 - ⚠ L49 _(inline-data-array)_: `const statCards = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/documents/archive`)
-- توصية: **TBD**
-- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.
+- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
+- ملاحظة: `landed=/dashboard expected=/documents/archive`
+- لقطة: `audit/screenshots/documents_archive.png`
+- landedUrl: `http://localhost/dashboard`
+- توصية: **يحتاج إصلاح**

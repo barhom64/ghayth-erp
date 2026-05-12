@@ -40,6 +40,8 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 - ⚠ L48 _(inline-data-array)_: `const IMPACT_OPTIONS = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/projects/risks`)
-- توصية: **TBD**
-- المشاكل: 2 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.
+- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
+- ملاحظة: `landed=/dashboard expected=/projects/risks`
+- لقطة: `audit/screenshots/projects_risks.png`
+- landedUrl: `http://localhost/dashboard`
+- توصية: **يحتاج إصلاح**

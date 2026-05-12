@@ -41,6 +41,8 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 - ⚠ L109 _(dummy-name)_: `<TextField label="البريد الإلكتروني" type="email" dir="ltr" value={form.email} onChange={v => set("email", v)} placehold`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/properties/tenants/create`)
-- توصية: **TBD**
-- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.
+- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
+- ملاحظة: `landed=/dashboard expected=/properties/tenants/create; write POST /api/intelligence/activity → 200`
+- لقطة: `audit/screenshots/properties_tenants_create.png`
+- landedUrl: `http://localhost/dashboard`
+- توصية: **يحتاج إصلاح**

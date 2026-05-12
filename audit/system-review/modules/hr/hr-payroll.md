@@ -24,13 +24,28 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/hr.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+تشغيل مسير رواتب — هي العملية الأكثر تشعّباً في النظام. المرجع: `docs/blueprints/hr-payroll.md`.
+
+| الحركة | الوحدة الهدف | مدخل API | مدخل DB | الحالة |
+|--------|--------------|----------|---------|--------|
+| تجميع الحضور للفترة | hr/attendance | يقرأ `attendance` لكل موظف في الفترة | aggregation فقط | ✅ |
+| تجميع OT / تأخير / غياب | hr | `hr-overtime.ts` + `attendance.lateMinutes` | يُحسب في `payroll_lines` | ✅ |
+| تطبيق `salary_components` | hr | قراءة `salary_components` (basic, allowances, deductions) | `payroll_lines.components` | ✅ |
+| خصم سلف موظفين | hr/loans | `hr-loans.ts` يخصم القسط الشهري | `hr_loan_installments.paidAt` يُحدّث | ✅ |
+| استقطاع GOSI (التأمينات) | hr | حساب نسبة من `basicSalary` | `payroll_lines` (deduction GOSI) | ⚠ تحقق من النسب |
+| استقطاع ضريبة (إن ينطبق) | hr | حسب الجنسية والعقد | `payroll_lines` (tax) | ⚠ |
+| **قيد محاسبي شامل** | finance/GL | DR Salaries Expense / CR Cash / CR GOSI Payable / CR Loan Receivable | `gl_entries`, `gl_lines` (ذرّي) | ✅ متوقع — تحقق من `accounting-engine` |
+| تصدير WPS (نظام حماية الأجور) | saudi-compliance/wps | `saudi-compliance/wps/formats` → ينشئ ملف SIF/CSV | `wps_submissions` | ✅ موجود في `lib/saudi-compliance/wps` |
+| إرسال Mudad (إن مفعّل) | gov-integrations | `lib/saudi-compliance/mudad` | `mudad_submissions` | ⚠ اختياري |
+| إشعار للموظفين بصدور الراتب | comms | event=`payroll_issued` | `notifications` (actionUrl=`/my-payslip`) | ✅ |
+| Audit log | core | `auditMiddleware` | `audit_logs` (entity=`payroll_runs`) | ✅ |
+
+تحقق يدوي حرج:
+- [ ] هل تشغيل المسير ذرّي بالكامل؟ في حالة فشل GL، هل يُلغى المسير أم يبقى في حالة `pending_posting`؟
+- [ ] هل تشغيل مسير ثانٍ على نفس الفترة يكشف الازدواجية ويُمنع؟
+- [ ] هل تعديل/إلغاء مسير مدفوع يولّد قيد عكسي + إشعار للموظفين؟
+- [ ] هل WPS export يتزامن مع تاريخ القيد المحاسبي أم يصدر منفصلاً؟
+- [ ] هل المسير يقفل تلقائياً عند نهاية الفترة (cron) أم يبقى مفتوحاً يدوياً؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `payroll` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
@@ -39,6 +54,8 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 - ⚠ L57 _(inline-data-array)_: `const kpis = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/payroll`)
-- توصية: **TBD**
-- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.
+- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
+- ملاحظة: `landed=/dashboard expected=/hr/payroll`
+- لقطة: `audit/screenshots/hr_payroll.png`
+- landedUrl: `http://localhost/dashboard`
+- توصية: **يحتاج إصلاح**

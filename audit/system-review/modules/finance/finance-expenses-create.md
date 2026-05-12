@@ -43,6 +43,8 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 - ⚠ L79 _(inline-data-array)_: `const INVOICE_TYPE_CODES = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/expenses/create`)
-- توصية: **TBD**
-- المشاكل: 2 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.
+- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
+- ملاحظة: `landed=/dashboard expected=/finance/expenses/create; write POST /api/intelligence/activity → 200`
+- لقطة: `audit/screenshots/finance_expenses_create.png`
+- landedUrl: `http://localhost/dashboard`
+- توصية: **يحتاج إصلاح**

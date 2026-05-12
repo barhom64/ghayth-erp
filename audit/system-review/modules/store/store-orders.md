@@ -29,13 +29,25 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/store.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+أمر بيع (Sales Order). متاجر بسيطة + B2B.
+
+| الحركة | الوحدة الهدف | مدخل API | مدخل DB | الحالة |
+|--------|--------------|----------|---------|--------|
+| إنشاء أمر + حجز مخزون | store + warehouse | `store.ts` POST `/orders` → `warehouse_products.reservedQty += qty` | `sales_orders`, `sales_order_lines`, `warehouse_products` | ⚠ تحقق من atomicity |
+| إخراج المخزون عند الشحن | warehouse | POST `/orders/:id/ship` → ينشئ `warehouse_movement(type='out')` | `warehouse_movements` | ⚠ |
+| فاتورة بيع → ZATCA | finance/invoices + zatca | يولّد `invoices` تلقائياً + توقيع ZATCA | `invoices`, `zatca_documents` | ⚠ تحقق من التزامن |
+| قيد محاسبي | finance/GL | DR AR (أو Cash) / CR Sales / CR VAT Payable | `gl_entries`, `gl_lines` | ✅ متوقع |
+| تكلفة البضاعة المباعة | finance/GL | DR COGS / CR Inventory (FIFO/AVG layer) | `gl_lines` | ✅ |
+| رصيد العميل | crm/clients | `clients.balance += orderTotal` | `client_balances_history` | ⚠ |
+| إشعار للعميل (تأكيد + شحن) | comms | event=`order_confirmed`, `order_shipped` | `notifications` | ✅ |
+| طلب موافقة (للأوامر الكبيرة/الائتمان) | governance/workflows | `business_rules.sales_credit_limit` | `approval_chains` | ⚠ |
+| Audit log | core | `auditMiddleware` | `audit_logs` (entity=`sales_orders`) | ✅ |
+
+تحقق يدوي:
+- [ ] هل حجز المخزون يُحرر تلقائياً عند إلغاء الأمر؟
+- [ ] هل المرتجعات (returns) تنشئ قيد عكسي + حركة إدخال مخزون؟
+- [ ] هل أمر بيع يتجاوز حد ائتمان العميل يطلق موافقة أم يُمنع؟
+- [ ] هل الأسعار في الأمر مجمّدة وقت الإنشاء أم محسوبة من `products.price` ديناميكياً؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `orders` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
@@ -44,6 +56,8 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 - ⚠ L314 _(inline-data-array)_: `const statCards = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/store/orders`)
-- توصية: **TBD**
-- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.
+- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
+- ملاحظة: `landed=/dashboard expected=/store/orders`
+- لقطة: `audit/screenshots/store_orders.png`
+- landedUrl: `http://localhost/dashboard`
+- توصية: **يحتاج إصلاح**

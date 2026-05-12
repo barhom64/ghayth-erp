@@ -45,6 +45,8 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 - ⚠ L34 _(inline-data-array)_: `const PAYMENT_TERMS_OPTIONS = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/invoices/create`)
-- توصية: **TBD**
-- المشاكل: 2 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.
+- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
+- ملاحظة: `landed=/dashboard expected=/finance/invoices/create; write POST /api/intelligence/activity → 200`
+- لقطة: `audit/screenshots/finance_invoices_create.png`
+- landedUrl: `http://localhost/dashboard`
+- توصية: **يحتاج إصلاح**

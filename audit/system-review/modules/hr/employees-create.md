@@ -44,6 +44,8 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 - ⚠ L23 _(inline-data-array)_: `const OPERATIONS = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/employees/create`)
-- توصية: **TBD**
-- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.
+- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
+- ملاحظة: `landed=/dashboard expected=/employees/create; write POST /api/intelligence/activity → 200`
+- لقطة: `audit/screenshots/employees_create.png`
+- landedUrl: `http://localhost/dashboard`
+- توصية: **يحتاج إصلاح**

@@ -48,6 +48,8 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 - ⚠ L660 _(inline-data-array)_: `const tabConfig = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/module-dashboards`)
-- توصية: **TBD**
-- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.
+- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
+- ملاحظة: `landed=/dashboard expected=/module-dashboards`
+- لقطة: `audit/screenshots/module_dashboards.png`
+- landedUrl: `http://localhost/dashboard`
+- توصية: **يحتاج إصلاح**

@@ -39,6 +39,7 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 - ⚠ L121 _(dummy-iban)_: `<TextField label="رقم الآيبان" dir="ltr" value={form.iban} onChange={v => setForm({ ...form, iban: v })} placeholder="SA`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/properties/owners/:id/edit`)
-- توصية: **TBD**
-- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.
+- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
+- ملاحظة: `unresolved: /api/properties/owners → 401`
+- landedUrl: `?`
+- توصية: مغلق
