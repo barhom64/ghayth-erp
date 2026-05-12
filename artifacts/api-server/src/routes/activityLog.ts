@@ -34,7 +34,7 @@ router.get("/", authorize({ feature: "admin", action: "list" }), async (req, res
 
     let moduleFilter = "";
     let moduleParamIndex = 0;
-    const params: any[] = [cid];
+    const params: unknown[] = [cid];
 
     if (module && typeof module === "string") {
       params.push(module);

@@ -2796,7 +2796,7 @@ async function dailyBudgetVarianceAlert(): Promise<string> {
         [c.id, periodStart, periodEnd, period]
       );
 
-      const overages = overBudget.filter((r: any) => {
+      const overages = overBudget.filter((r: Record<string, unknown>) => {
         const actual = Number(r.actualAmount);
         const budget = Number(r.budgetAmount);
         return budget > 0 && actual > budget * 0.9;
@@ -2816,7 +2816,7 @@ async function dailyBudgetVarianceAlert(): Promise<string> {
 
       const summary = overages
         .slice(0, 5)
-        .map((r: any) => `• ${r.accountName ?? r.accountCode}: ${Math.round((Number(r.actualAmount) / Number(r.budgetAmount)) * 100)}%`)
+        .map((r: Record<string, unknown>) => `• ${r.accountName ?? r.accountCode}: ${Math.round((Number(r.actualAmount) / Number(r.budgetAmount)) * 100)}%`)
         .join("\n");
 
       await createNotification({

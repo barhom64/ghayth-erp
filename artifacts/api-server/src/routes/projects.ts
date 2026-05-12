@@ -656,7 +656,7 @@ router.patch("/:id", authorize({ feature: "projects.list", action: "update" }), 
 
     const tracked = ["name","description","status","budget","startDate","endDate","managerId","spentAmount"] as const;
     const sets: string[] = [`"updatedAt"=NOW()`];
-    const params: any[] = [];
+    const params: unknown[] = [];
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};
     for (const f of tracked) {
@@ -916,7 +916,7 @@ router.post("/:id/tasks", authorize({ feature: "projects.tasks", action: "create
 
       if (Array.isArray(b.dependsOn) && b.dependsOn.length > 0) {
         const valuesSql: string[] = [];
-        const params: any[] = [];
+        const params: unknown[] = [];
         for (const depId of b.dependsOn) {
           const base = params.length;
           valuesSql.push(`($${base + 1},$${base + 2})`);
@@ -1035,7 +1035,7 @@ router.patch("/tasks/:taskId", authorize({ feature: "projects.tasks", action: "u
     }
 
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};
     if (b.status !== undefined && b.status !== existingTask.status) {
@@ -1504,7 +1504,7 @@ router.patch("/milestones/:milestoneId", authorize({ feature: "projects.tasks", 
     }
 
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
     if (b.targetDate !== undefined) { params.push(b.targetDate); sets.push(`"targetDate"=$${params.length}`); }
@@ -1649,7 +1649,7 @@ router.patch("/risks/:riskId", authorize({ feature: "projects.tasks", action: "u
     }
 
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
     if (b.mitigationPlan !== undefined) { params.push(b.mitigationPlan); sets.push(`"mitigationPlan"=$${params.length}`); }

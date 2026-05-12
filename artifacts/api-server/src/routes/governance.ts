@@ -170,7 +170,7 @@ router.get("/policies", authorize({ feature: "governance", action: "list" }), as
     const scope = req.scope!;
     const { status, module: mod } = req.query as any;
     const conditions = [`("companyId"=$1 OR "companyId" IS NULL)`, `"deletedAt" IS NULL`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`status=$${params.length}`); }
     if (mod) {
       params.push(mod);
@@ -232,7 +232,7 @@ router.get("/policies/:id", authorize({ feature: "governance", action: "view" })
       `SELECT module FROM policy_module_links WHERE "policyId"=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
       [row.id, scope.companyId]
     );
-    row.modules = links.map((l: any) => l.module);
+    row.modules = links.map((l: Record<string, unknown>) => l.module);
     const versions = await rawQuery<Record<string, unknown>>(
       `SELECT id, version, title, status, "createdAt" FROM governance_policies WHERE ("parentId"=$1 OR id=$1) AND "deletedAt" IS NULL ORDER BY version DESC`,
       [row.id]
@@ -248,7 +248,7 @@ router.patch("/policies/:id", authorize({ feature: "governance", action: "update
     const id = parseId(req.params.id, "id");
     const b = zodParse(updatePolicySchema.safeParse(req.body));
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
     if (b.description !== undefined) { params.push(b.description); sets.push(`description=$${params.length}`); }
     if (b.category !== undefined) { params.push(b.category); sets.push(`category=$${params.length}`); }
@@ -463,7 +463,7 @@ router.patch("/risks/:id", authorize({ feature: "governance", action: "update" }
     const id = parseId(req.params.id, "id");
     const b = zodParse(updateRiskSchema.safeParse(req.body));
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
     if (b.description !== undefined) { params.push(b.description); sets.push(`description=$${params.length}`); }
     if (b.severity !== undefined) { params.push(b.severity); sets.push(`severity=$${params.length}`); }
@@ -553,7 +553,7 @@ router.patch("/audits/:id", authorize({ feature: "governance", action: "update" 
     const id = parseId(req.params.id, "id");
     const b = zodParse(updateAuditSchema.safeParse(req.body));
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
     if (b.scope !== undefined) { params.push(b.scope); sets.push(`scope=$${params.length}`); }
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
@@ -641,7 +641,7 @@ router.patch("/compliance/:id", authorize({ feature: "governance", action: "upda
     const id = parseId(req.params.id, "id");
     const b = zodParse(updateComplianceSchema.safeParse(req.body));
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.regulation !== undefined) { params.push(b.regulation); sets.push(`regulation=$${params.length}`); }
     if (b.description !== undefined) { params.push(b.description); sets.push(`description=$${params.length}`); }
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
@@ -777,7 +777,7 @@ router.patch("/compliance-actions/:actionId", authorize({ feature: "governance",
     const id = parseId(req.params.actionId, "actionId");
     const b = zodParse(updateComplianceActionSchema.safeParse(req.body ?? {}));
     const sets: string[] = [`"updatedAt"=NOW()`];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
     if (b.regulation !== undefined) { params.push(b.regulation); sets.push(`regulation=$${params.length}`); }
     if (b.owner !== undefined) { params.push(b.owner); sets.push(`owner=$${params.length}`); }
@@ -859,7 +859,7 @@ router.patch("/risks/:id/treatment", authorize({ feature: "governance", action: 
     const id = parseId(req.params.id, "id");
     const b = zodParse(updateRiskTreatmentSchema.safeParse(req.body ?? {}));
     const sets: string[] = [`"updatedAt"=NOW()`];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.treatmentPlan !== undefined) { params.push(b.treatmentPlan); sets.push(`"treatmentPlan"=$${params.length}`); }
     if (b.treatmentOwner !== undefined) { params.push(b.treatmentOwner); sets.push(`"treatmentOwner"=$${params.length}`); }
     if (b.treatmentDueDate !== undefined) { params.push(b.treatmentDueDate); sets.push(`"treatmentDueDate"=$${params.length}`); }
@@ -916,7 +916,7 @@ router.patch("/capa/:id", authorize({ feature: "governance", action: "update" })
     const id = parseId(req.params.id, "id");
     const b = zodParse(updateCapaSchema.safeParse(req.body));
     const sets: string[] = [`"updatedAt"=NOW()`];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.finding !== undefined) { params.push(b.finding); sets.push(`finding=$${params.length}`); }
     if (b.rootCause !== undefined) { params.push(b.rootCause); sets.push(`"rootCause"=$${params.length}`); }
     if (b.correctiveAction !== undefined) { params.push(b.correctiveAction); sets.push(`"correctiveAction"=$${params.length}`); }

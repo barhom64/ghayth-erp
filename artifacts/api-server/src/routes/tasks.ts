@@ -257,7 +257,7 @@ router.get("/:id", authorize({ feature: "tasks", action: "view", resource: { tab
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     let scopeCondition = ` AND t."companyId" = $2`;
-    const params: any[] = [id, scope.companyId];
+    const params: unknown[] = [id, scope.companyId];
     if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager" && scope.role === "employee" && scope.activeAssignmentId) {
       scopeCondition += ` AND t."assignedTo" = $3`;
       params.push(scope.activeAssignmentId);
@@ -389,7 +389,7 @@ router.patch("/:id", authorize({ feature: "tasks", action: "update", resource: {
     const id = parseId(req.params.id, "id");
     const { title, description, type, priority, status, scheduledStart, scheduledEnd, scheduledDate, notes } = zodParse(updateTaskSchema.safeParse(req.body)) as any;
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     let idx = 1;
 
     const addField = (col: string, val: any) => {
@@ -501,7 +501,7 @@ router.delete("/:id", authorize({ feature: "tasks", action: "delete", resource: 
     const [before] = await rawQuery<TaskRow>(`SELECT * FROM tasks WHERE ${beforeWhere}`, beforeParams);
     if (!before) { throw new NotFoundError("المهمة غير موجودة"); }
 
-    const params: any[] = [id, scope.companyId];
+    const params: unknown[] = [id, scope.companyId];
     let whereClause = `id = $1 AND "companyId" = $2`;
 
     if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager" && scope.role === "employee" && scope.activeAssignmentId) {

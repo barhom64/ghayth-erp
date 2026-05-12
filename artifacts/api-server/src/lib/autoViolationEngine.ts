@@ -563,7 +563,7 @@ export async function getDetectionLog(
   const offset = options?.offset ?? 0;
 
   let whereExtra = "";
-  const params: any[] = [companyId];
+  const params: unknown[] = [companyId];
   let paramIdx = 2;
 
   if (options?.fromDate) {

@@ -201,7 +201,7 @@ router.patch("/products/:id", authorize({ feature: "store", action: "update" }),
     if (!existing) throw new NotFoundError("المنتج غير موجود");
     const b = zodParse(updateStoreProductSchema.safeParse(req.body)) as any;
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
     if (b.description !== undefined) { params.push(b.description); sets.push(`description=$${params.length}`); }
     if (b.sku !== undefined) { params.push(b.sku); sets.push(`sku=$${params.length}`); }
@@ -241,7 +241,7 @@ router.get("/orders", authorize({ feature: "store", action: "list" }), async (re
     const scope = req.scope!;
     const { productId, status } = req.query as any;
     let where = `o."companyId"=$1 AND o."deletedAt" IS NULL`;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (productId) {
       params.push(Number(productId));
       where += ` AND o.id IN (SELECT "orderId" FROM store_order_items WHERE "productId"=$${params.length})`;
@@ -338,7 +338,7 @@ router.patch("/orders/:id", authorize({ feature: "store", action: "update" }), a
     const id = parseId(req.params.id, "id");
     const b = zodParse(updateStoreOrderSchema.safeParse(req.body)) as any;
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
     if (b.customerName !== undefined) { params.push(b.customerName); sets.push(`"customerName"=$${params.length}`); }
     if (b.customerPhone !== undefined) { params.push(b.customerPhone); sets.push(`"customerPhone"=$${params.length}`); }

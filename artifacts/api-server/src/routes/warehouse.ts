@@ -461,7 +461,7 @@ router.patch("/products/:id", authorize({ feature: "warehouse.inventory", action
     } else {
       // No status change — plain field update with manual audit/event.
       const sets: string[] = [`"updatedAt"=NOW()`];
-      const params: any[] = [];
+      const params: unknown[] = [];
       for (const f of nonStatusTracked) {
         if (b[f] === undefined) continue;
         if (b[f] === existing[f]) continue;
@@ -632,7 +632,7 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
         if (updates.length > 0) {
           // Single UPDATE ... FROM (VALUES ...) instead of one round-trip per batch.
           const valuesSql: string[] = [];
-          const params: any[] = [];
+          const params: unknown[] = [];
           for (const u of updates) {
             const base = params.length;
             valuesSql.push(`($${base + 1}::int, $${base + 2}::numeric)`);
@@ -809,7 +809,7 @@ async function triggerMinStockPipeline(companyId: number, product: any, userId: 
     `SELECT pri."unitPrice" AS "unitCost" FROM purchase_request_items pri JOIN purchase_requests pr ON pr.id=pri."requestId" WHERE pri."productId"=$1 AND pr."companyId"=$2 ORDER BY pr."createdAt" DESC LIMIT 3`,
     [product.id, companyId]
   );
-  const prices = lastOrders.map((r: any) => Number(r.unitCost)).filter((v: number) => v > 0);
+  const prices = lastOrders.map((r: Record<string, unknown>) => Number(r.unitCost)).filter((v: number) => v > 0);
   const estimatedUnitCost = prices.length > 0 ? movingAverage(prices) : Number(product.costPrice) || 0;
   const reorderQty = Math.max(Number(product.maxStock) - Number(product.currentStock), Number(product.minStock) * 2, 1);
 
@@ -935,7 +935,7 @@ router.get("/categories", authorize({ feature: "warehouse.inventory", action: "l
     const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
 
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     let where = `"companyId"=$1 AND "deletedAt" IS NULL`;
     let paramIdx = 2;
     if (search) { params.push(`%${search}%`); where += ` AND name ILIKE $${paramIdx}`; paramIdx++; }
@@ -1010,7 +1010,7 @@ router.get("/suppliers", authorize({ feature: "warehouse.inventory", action: "li
     const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
 
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     let where = `"companyId"=$1 AND "deletedAt" IS NULL`;
     let paramIdx = 2;
     if (search) { params.push(`%${search}%`); where += ` AND (name ILIKE $${paramIdx} OR "contactPerson" ILIKE $${paramIdx} OR phone ILIKE $${paramIdx})`; paramIdx++; }
@@ -1086,7 +1086,7 @@ router.patch("/categories/:id", authorize({ feature: "warehouse.inventory", acti
     const id = parseId(req.params.id, "id");
     const b = zodParse(patchCategorySchema.safeParse(req.body));
     const fields: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.name !== undefined) { params.push(b.name); fields.push(`name = $${params.length}`); }
     if (b.parentId !== undefined) { params.push(b.parentId); fields.push(`"parentId" = $${params.length}`); }
     if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
@@ -1167,7 +1167,7 @@ router.patch("/suppliers/:id", authorize({ feature: "warehouse.inventory", actio
     const id = parseId(req.params.id, "id");
     const b = zodParse(patchSupplierSchema.safeParse(req.body));
     const fields: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     const addField = (col: string, val: any) => { if (val !== undefined) { params.push(val); fields.push(`"${col}" = $${params.length}`); } };
     addField("name", b.name);
     addField("contactPerson", b.contactPerson);
@@ -1245,7 +1245,7 @@ router.get("/inventory-counts", authorize({ feature: "warehouse.inventory", acti
     const scope = req.scope!;
     const { status } = req.query as any;
     const conditions = [`ic."companyId"=$1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`ic.status=$${params.length}`); }
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT ic.*, e.name AS "conductedByName"

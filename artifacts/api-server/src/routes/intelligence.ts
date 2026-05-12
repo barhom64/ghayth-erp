@@ -84,7 +84,7 @@ router.get("/alerts", authorize({ feature: "admin", action: "list" }), async (re
     const scope = req.scope!;
     const { severity, isRead } = req.query as any;
     const conditions = [`"companyId" = $1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (severity) { params.push(severity); conditions.push(`severity = $${params.length}`); }
     if (isRead !== undefined) { params.push(isRead === 'true'); conditions.push(`"isRead" = $${params.length}`); }
     const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM smart_alerts WHERE ${conditions.join(" AND ")} ORDER BY "createdAt" DESC LIMIT 100`, params);
@@ -137,7 +137,7 @@ router.get("/kpis", authorize({ feature: "admin", action: "list" }), async (req,
     const scope = req.scope!;
     const { employeeId, metricName } = req.query as any;
     const conditions = [`"companyId" = $1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (employeeId) { params.push(Number(employeeId) || 0); conditions.push(`"employeeId" = $${params.length}`); }
     if (metricName) { params.push(metricName); conditions.push(`"metricName" = $${params.length}`); }
     const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM kpi_snapshots WHERE ${conditions.join(" AND ")} ORDER BY "snapshotDate" DESC LIMIT 200`, params);

@@ -80,7 +80,7 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     [groupIds, scope.companyId]
   );
   if (alreadyInvoiced.length > 0) {
-    const refs = alreadyInvoiced.map((r: any) => r.ref).join(", ");
+    const refs = alreadyInvoiced.map((r: Record<string, unknown>) => r.ref).join(", ");
     throw new ConflictError(`بعض المجموعات مفوترة مسبقاً في: ${refs}`);
   }
 
@@ -206,7 +206,7 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     if (lineItems.length > 0) {
       const cols = 8;
       const valuesSql: string[] = [];
-      const params: any[] = [];
+      const params: unknown[] = [];
       for (const li of lineItems) {
         const base = params.length;
         valuesSql.push(`(${Array.from({ length: cols }, (_, i) => `$${base + i + 1}`).join(",")})`);

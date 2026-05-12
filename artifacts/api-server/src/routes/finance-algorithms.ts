@@ -469,10 +469,10 @@ financeAlgorithmsRouter.get("/bank-reconciliation/:batchId", authorize({ feature
       [scope.companyId, batchId]
     );
 
-    const matched = bankRows.filter((r: any) => r.matchStatus === "matched");
-    const unmatched = bankRows.filter((r: any) => r.matchStatus !== "matched");
-    const totalDebits = bankRows.filter((r: any) => r.type === "debit").reduce((s: number, r: any) => s + Number(r.amount), 0);
-    const totalCredits = bankRows.filter((r: any) => r.type === "credit").reduce((s: number, r: any) => s + Number(r.amount), 0);
+    const matched = bankRows.filter((r: Record<string, unknown>) => r.matchStatus === "matched");
+    const unmatched = bankRows.filter((r: Record<string, unknown>) => r.matchStatus !== "matched");
+    const totalDebits = bankRows.filter((r: Record<string, unknown>) => r.type === "debit").reduce((s: number, r: Record<string, unknown>) => s + Number(r.amount), 0);
+    const totalCredits = bankRows.filter((r: Record<string, unknown>) => r.type === "credit").reduce((s: number, r: Record<string, unknown>) => s + Number(r.amount), 0);
 
     res.json({
       batchId,
@@ -531,7 +531,7 @@ financeAlgorithmsRouter.get("/journal-lines/search", authorize({ feature: "finan
     const { accountCode: acc, search, amount, pageSize = "20" } = req.query as any;
 
     let conditions = [`je."companyId"=$1`, `je."deletedAt" IS NULL`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
 
     if (acc) { params.push(acc); conditions.push(`jl."accountCode"=$${params.length}`); }
     if (search) { params.push(`%${search}%`); conditions.push(`(je.ref ILIKE $${params.length} OR je.description ILIKE $${params.length})`); }
@@ -659,7 +659,7 @@ financeAlgorithmsRouter.patch("/fixed-assets/:id", authorize({ feature: "finance
     const id = parseId(req.params.id, "id");
     const b = zodParse(updateFixedAssetSchema.safeParse(req.body ?? {}));
     const sets: string[] = [`"updatedAt"=NOW()`];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.usefulLifeYears !== undefined && b.usefulLifeYears <= 0) {
       throw new ValidationError("العمر الإنتاجي يجب أن يكون أكبر من صفر");
     }
@@ -1194,7 +1194,7 @@ financeAlgorithmsRouter.get("/fx/rates", authorize({ feature: "finance.algorithm
     const scope = req.scope!;
     await ensureFxTables();
     const { from, to, type } = req.query as any;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     let where = `"companyId"=$1 AND "deletedAt" IS NULL`;
     if (from) { params.push(from); where += ` AND "fromCurrency"=$${params.length}`; }
     if (to) { params.push(to); where += ` AND "toCurrency"=$${params.length}`; }

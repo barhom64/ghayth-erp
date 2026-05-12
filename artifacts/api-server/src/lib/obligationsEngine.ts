@@ -163,7 +163,7 @@ export async function markObligationMet(
   obligationType?: ObligationType
 ): Promise<number> {
   await ensureObligationsTable();
-  const params: any[] = [companyId, entityType, entityId];
+  const params: unknown[] = [companyId, entityType, entityId];
   let where = `"companyId"=$1 AND "entityType"=$2 AND "entityId"=$3
                AND status IN ('pending','breached','escalated_l1','escalated_l2')`;
   if (obligationType) {
@@ -190,7 +190,7 @@ export async function cancelObligation(
   obligationType?: ObligationType
 ): Promise<number> {
   await ensureObligationsTable();
-  const params: any[] = [companyId, entityType, entityId];
+  const params: unknown[] = [companyId, entityType, entityId];
   let where = `"companyId"=$1 AND "entityType"=$2 AND "entityId"=$3
                AND status NOT IN ('met','cancelled','closed')`;
   if (obligationType) {
@@ -377,7 +377,7 @@ export interface QueryObligationsInput {
 
 export async function queryObligations(input: QueryObligationsInput): Promise<any[]> {
   await ensureObligationsTable();
-  const params: any[] = [input.companyId];
+  const params: unknown[] = [input.companyId];
   let where = `"companyId" = $1`;
   if (input.entityType) {
     const types = Array.isArray(input.entityType)

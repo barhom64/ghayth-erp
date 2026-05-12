@@ -30,7 +30,7 @@ async function handleLeaveApproval(refId: number, companyId: number, approvedBy?
     [request.employeeId]
   );
 
-  const allCompanyIds = [...new Set(allAssignments.map((a: any) => a.companyId))];
+  const allCompanyIds = [...new Set(allAssignments.map((a: Record<string, unknown>) => a.companyId))];
   for (const cId of allCompanyIds) {
     await rawExecute(
       `UPDATE hr_leave_balances

@@ -289,7 +289,7 @@ router.get("/journal-templates", authorize({ feature: "finance.accounting_engine
     const scope = req.scope!;
     const { operationType } = req.query as any;
     const conditions = [`jt."companyId" = $1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (operationType) {
       params.push(operationType);
       conditions.push(`jt."operationType" = $${params.length}`);
@@ -465,7 +465,7 @@ router.get("/subsidiary-accounts", authorize({ feature: "finance.accounting_engi
     const scope = req.scope!;
     const { entityType, entityId } = req.query as any;
     const conditions = [`sa."companyId" = $1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
 
     if (entityType) { params.push(entityType); conditions.push(`sa."entityType" = $${params.length}`); }
     if (entityId) { params.push(Number(entityId) || 0); conditions.push(`sa."entityId" = $${params.length}`); }

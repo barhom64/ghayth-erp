@@ -529,7 +529,7 @@ router.get("/payslip", async (req, res) => {
   try {
     const scope = req.scope!;
     const { period } = req.query as Record<string, string>;
-    const params: any[] = [scope.activeAssignmentId];
+    const params: unknown[] = [scope.activeAssignmentId];
     let periodFilter = "";
     if (period) {
       params.push(period);
@@ -601,7 +601,7 @@ router.get("/requests", async (req, res) => {
     const { status, type, limit = "50" } = req.query as Record<string, string>;
 
     const conditions: string[] = [`wi."submittedBy" = $1`];
-    const params: any[] = [scope.activeAssignmentId];
+    const params: unknown[] = [scope.activeAssignmentId];
 
     if (status) {
       params.push(status);

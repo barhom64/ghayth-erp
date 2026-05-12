@@ -427,7 +427,7 @@ router.get("/log", authorize({ feature: "communications", action: "list" }), asy
     const pageLimit = Math.min(Number(lim) || 50, 200);
     const pageOffset = Number(off) || 0;
     const conditions = [`"companyId" = $1`, `"deletedAt" IS NULL`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (channel) { params.push(channel); conditions.push(`channel = $${params.length}`); }
     if (direction) { params.push(direction); conditions.push(`direction = $${params.length}`); }
     const where = conditions.join(" AND ");
@@ -483,7 +483,7 @@ router.get("/whatsapp", authorize({ feature: "communications", action: "list" })
     const pageLimit = Math.min(Number(lim) || 50, 200);
     const pageOffset = Number(off) || 0;
     const conditions = [`"companyId" = $1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`status = $${params.length}`); }
     const where = conditions.join(" AND ");
     const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM whatsapp_queue WHERE ${where}`, params);
@@ -500,7 +500,7 @@ router.get("/sms", authorize({ feature: "communications", action: "list" }), asy
     const pageLimit = Math.min(Number(lim) || 50, 200);
     const pageOffset = Number(off) || 0;
     const conditions = [`"companyId" = $1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`status = $${params.length}`); }
     const where = conditions.join(" AND ");
     const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM sms_queue WHERE ${where}`, params);
@@ -529,7 +529,7 @@ router.patch("/log/:id", authorize({ feature: "communications", action: "update"
     const id = parseId(req.params.id, "id");
     const { body, content, subject, direction, status } = parsed;
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     let idx = 1;
     const finalBody = body ?? content;
     if (finalBody !== undefined) { sets.push(`body = $${idx++}`); params.push(finalBody); }

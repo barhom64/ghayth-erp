@@ -256,7 +256,7 @@ router.patch("/users/:id", authorize({ feature: "admin", action: "update" }), as
       if (!empCheck) { throw new ForbiddenError("الموظف لا ينتمي لشركتك"); }
     }
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (isActive !== undefined) { params.push(isActive); sets.push(`"isActive"=$${params.length}`); }
     if (role !== undefined) { params.push(role); sets.push(`role=$${params.length}`); }
     if (employeeId !== undefined) { params.push(employeeId || null); sets.push(`"employeeId"=$${params.length}`); }
@@ -481,7 +481,7 @@ router.get("/predefined-roles", authorize({ feature: "admin", action: "list" }),
       `SELECT "roleKey", label, level, modules FROM custom_roles WHERE "companyId"=$1 ORDER BY level DESC LIMIT 500`,
       [scope.companyId]
     ).catch((e) => { logger.error(e, "admin query failed"); return [] as any[]; });
-    const customRoles = customRows.map((r: any) => ({
+    const customRoles = customRows.map((r: Record<string, unknown>) => ({
       roleKey: r.roleKey,
       label: r.label,
       level: r.level,
@@ -492,7 +492,7 @@ router.get("/predefined-roles", authorize({ feature: "admin", action: "list" }),
       })(),
       isCustom: true,
     }));
-    const existing = new Set(customRoles.map((r: any) => r.roleKey));
+    const existing = new Set(customRoles.map((r: Record<string, unknown>) => r.roleKey));
     const predefined = PREDEFINED_ROLES.filter(r => !existing.has(r.roleKey));
     res.json({ data: [...customRoles, ...predefined] });
   } catch (err) { handleRouteError(err, res, "admin"); }
@@ -637,7 +637,7 @@ router.patch("/integrations/:id", authorize({ feature: "admin", action: "update"
     const id = parseId(req.params.id, "id");
     const b = zodParse(updateIntegrationSchema.safeParse(req.body ?? {}));
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
     if (b.type !== undefined) { params.push(b.type); sets.push(`type=$${params.length}`); }
     if (b.config !== undefined) { params.push(JSON.stringify(b.config)); sets.push(`config=$${params.length}`); }
@@ -734,7 +734,7 @@ router.get("/integration-logs", authorize({ feature: "admin", action: "list" }),
     const pageLimit = Math.min(Number(lim) || 50, 200);
     const pageOffset = Number(off) || 0;
     const conditions = [`"companyId"=$1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (channel) { params.push(channel); conditions.push(`channel=$${params.length}`); }
     if (status) { params.push(status); conditions.push(`status=$${params.length}`); }
     if (integrationId) { params.push(Number(integrationId)); conditions.push(`"integrationId"=$${params.length}`); }
@@ -920,7 +920,7 @@ router.get("/violations-report", authorize({ feature: "admin", action: "list" })
     const pageOffset = Number(off) || 0;
 
     const conditions = [`"companyId"=$1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
 
     if (type) { params.push(type); conditions.push(`type=$${params.length}`); }
     if (priority) { params.push(priority); conditions.push(`priority=$${params.length}`); }
@@ -1040,7 +1040,7 @@ router.get("/security-log", authorize({ feature: "admin", action: "list" }), asy
     const offset = (pageNum - 1) * pageSize;
 
     const conditions = [`sl."companyId" = $1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     let paramIdx = 2;
 
     if (userId) { params.push(Number(userId)); conditions.push(`sl."userId" = $${paramIdx++}`); }
@@ -1101,7 +1101,7 @@ router.get("/role-permissions", authorize({ feature: "admin", action: "list" }),
     const scope = req.scope!;
     const { role } = req.query as any;
     const conditions = [`("companyId" IS NULL OR "companyId" = $1)`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (role) { params.push(role); conditions.push(`"role" = $${params.length}`); }
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT id, role, permission, "companyId", "createdAt" FROM role_permissions WHERE ${conditions.join(" AND ")} ORDER BY role, permission LIMIT 500`,
@@ -1150,7 +1150,7 @@ router.put("/role-permissions/bulk", authorize({ feature: "admin", action: "upda
       await tx.query(`DELETE FROM role_permissions WHERE role=$1 AND "companyId"=$2`, [role, scope.companyId]);
       if (permissions.length > 0) {
         const valuesSql: string[] = [];
-        const params: any[] = [role, scope.companyId];
+        const params: unknown[] = [role, scope.companyId];
         for (const perm of permissions) {
           params.push(perm);
           valuesSql.push(`($1, $${params.length}, $2)`);

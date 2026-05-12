@@ -199,7 +199,7 @@ function buildPortalWhere(
   const cc = opts.clientColumn ?? '"clientId"';
   const mc = opts.companyColumn ?? '"companyId"';
   let where = `${cc} = $1 AND ${mc} = $2`;
-  const params: any[] = [scope.clientId, scope.companyId, ...(opts.extraParams ?? [])];
+  const params: unknown[] = [scope.clientId, scope.companyId, ...(opts.extraParams ?? [])];
   if (opts.extraWhere) where += ` AND ${opts.extraWhere}`;
   return { where, params };
 }
@@ -698,7 +698,7 @@ protectedRouter.get("/kb", withPortalScope(async (req, res) => {
     const scope = req.portalScope;
     const { q, category } = req.query as any;
     const conditions = [`("companyId"=$1 OR "companyId" IS NULL)`, `status='published'`, `"deletedAt" IS NULL`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (category) { params.push(category); conditions.push(`category=$${params.length}`); }
     if (q) { params.push(`%${q}%`); conditions.push(`(title ILIKE $${params.length} OR content ILIKE $${params.length})`); }
     const rows = await rawQuery<KbArticleListRow>(

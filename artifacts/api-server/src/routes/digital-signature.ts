@@ -168,7 +168,7 @@ router.get("/logs", authorize({ feature: "documents", action: "create" }), async
     const scope = (req as any).scope!;
     const { entityType, entityId } = req.query as any;
     const conditions = [`dsl."companyId"=$1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (entityType) { params.push(entityType); conditions.push(`dsl."entityType"=$${params.length}`); }
     if (entityId) { params.push(String(entityId)); conditions.push(`dsl."entityId"=$${params.length}`); }
     const rows = await rawQuery<SignatureLogRow>(

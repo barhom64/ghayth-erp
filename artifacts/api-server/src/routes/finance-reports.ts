@@ -38,7 +38,7 @@ reportsRouter.get("/reports/trial-balance", authorize({ feature: "finance.report
     const scope = req.scope!;
     const { startDate, endDate } = req.query as any;
     let dateFilter = "";
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
     if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
     const rows = await rawQuery<Record<string, unknown>>(
@@ -61,8 +61,8 @@ reportsRouter.get("/reports/trial-balance", authorize({ feature: "finance.report
        ORDER BY coa.code`,
       params
     );
-    const totalDebit = rows.reduce((s: number, r: any) => s + Number(r.totalDebit), 0);
-    const totalCredit = rows.reduce((s: number, r: any) => s + Number(r.totalCredit), 0);
+    const totalDebit = rows.reduce((s: number, r: Record<string, unknown>) => s + Number(r.totalDebit), 0);
+    const totalCredit = rows.reduce((s: number, r: Record<string, unknown>) => s + Number(r.totalCredit), 0);
     const byType: Record<string, { totalDebit: number; totalCredit: number; balance: number }> = {};
     for (const r of rows) {
       const t = r.type as string;
@@ -82,13 +82,13 @@ reportsRouter.get("/reports/income-statement", authorize({ feature: "finance.rep
     const scope = req.scope!;
     const { startDate, endDate } = req.query as any;
     let dateFilter = "";
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
     if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
     const revenues = await rawQuery<Record<string, unknown>>(`SELECT coa.code, coa.name, COALESCE(SUM(fl.credit) - SUM(fl.debit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}) fl ON fl."accountCode" = coa.code WHERE coa."companyId" = $1 AND coa.type = 'revenue' AND coa."deletedAt" IS NULL GROUP BY coa.code, coa.name ORDER BY coa.code LIMIT 500`, params);
     const expenses = await rawQuery<Record<string, unknown>>(`SELECT coa.code, coa.name, COALESCE(SUM(fl.debit) - SUM(fl.credit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}) fl ON fl."accountCode" = coa.code WHERE coa."companyId" = $1 AND coa.type = 'expense' AND coa."deletedAt" IS NULL GROUP BY coa.code, coa.name ORDER BY coa.code LIMIT 500`, params);
-    const totalRevenue = revenues.reduce((s: number, r: any) => s + Number(r.amount), 0);
-    const totalExpenses = expenses.reduce((s: number, r: any) => s + Number(r.amount), 0);
+    const totalRevenue = revenues.reduce((s: number, r: Record<string, unknown>) => s + Number(r.amount), 0);
+    const totalExpenses = expenses.reduce((s: number, r: Record<string, unknown>) => s + Number(r.amount), 0);
     res.json({ revenues, expenses, summary: { totalRevenue, totalExpenses, netIncome: totalRevenue - totalExpenses } });
   } catch (err) {
     handleRouteError(err, res, "Income statement error:");
@@ -100,7 +100,7 @@ reportsRouter.get("/reports/balance-sheet", authorize({ feature: "finance.report
     const scope = req.scope!;
     const { asOfDate } = req.query as any;
     let dateFilter = "";
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (asOfDate) { params.push(asOfDate); dateFilter = ` AND je."createdAt" <= $${params.length}`; }
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT coa.code, coa.name, coa.type,
@@ -116,12 +116,12 @@ reportsRouter.get("/reports/balance-sheet", authorize({ feature: "finance.report
        GROUP BY coa.code, coa.name, coa.type ORDER BY coa.type, coa.code`,
       params
     );
-    const assets = rows.filter((r: any) => r.type === "asset");
-    const liabilities = rows.filter((r: any) => r.type === "liability");
-    const equity = rows.filter((r: any) => r.type === "equity");
-    const totalAssets = assets.reduce((s: number, r: any) => s + Number(r.balance), 0);
-    const totalLiabilities = liabilities.reduce((s: number, r: any) => s + Number(r.balance), 0);
-    const totalEquity = equity.reduce((s: number, r: any) => s + Number(r.balance), 0);
+    const assets = rows.filter((r: Record<string, unknown>) => r.type === "asset");
+    const liabilities = rows.filter((r: Record<string, unknown>) => r.type === "liability");
+    const equity = rows.filter((r: Record<string, unknown>) => r.type === "equity");
+    const totalAssets = assets.reduce((s: number, r: Record<string, unknown>) => s + Number(r.balance), 0);
+    const totalLiabilities = liabilities.reduce((s: number, r: Record<string, unknown>) => s + Number(r.balance), 0);
+    const totalEquity = equity.reduce((s: number, r: Record<string, unknown>) => s + Number(r.balance), 0);
     res.json({ assets, liabilities, equity, summary: { totalAssets, totalLiabilities, totalEquity, isBalanced: Math.abs(totalAssets - totalLiabilities - totalEquity) < 0.01 } });
   } catch (err) {
     handleRouteError(err, res, "Balance sheet error:");
@@ -157,7 +157,7 @@ reportsRouter.get("/reports/cash-flow", authorize({ feature: "finance.reports", 
       [scope.companyId]
     );
     const cashCodes = cashAccountsRows.length > 0
-      ? cashAccountsRows.map((r: any) => r.code)
+      ? cashAccountsRows.map((r: Record<string, unknown>) => r.code)
       : ["1100", "1110"];
 
     // Opening cash balance = sum of all cash JL before startDate
@@ -339,10 +339,10 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", authorize({ featur
       let runningBalance = 0;
       movements = all.map((m: any) => { runningBalance += Number(m.debit) - Number(m.credit); return { ...m, runningBalance }; });
 
-      const totalPayroll = payrollRows.reduce((s: number, r: any) => s + Number(r.debit), 0);
-      const totalAdvances = advanceRows.reduce((s: number, r: any) => s + Number(r.debit), 0);
-      const totalCustodies = custodyRows.reduce((s: number, r: any) => s + Number(r.debit), 0);
-      const totalDeductions = violationRows.reduce((s: number, r: any) => s + Number(r.credit), 0);
+      const totalPayroll = payrollRows.reduce((s: number, r: Record<string, unknown>) => s + Number(r.debit), 0);
+      const totalAdvances = advanceRows.reduce((s: number, r: Record<string, unknown>) => s + Number(r.debit), 0);
+      const totalCustodies = custodyRows.reduce((s: number, r: Record<string, unknown>) => s + Number(r.debit), 0);
+      const totalDeductions = violationRows.reduce((s: number, r: Record<string, unknown>) => s + Number(r.credit), 0);
 
       sections = {
         payroll: { label: "الرواتب", amount: totalPayroll, count: payrollRows.length },
@@ -356,16 +356,16 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", authorize({ featur
       const invoiceRows = await rawQuery<Record<string, unknown>>(`SELECT i.id, i.ref, i.total AS debit, i."paidAmount" AS credit, i."createdAt" AS date, CONCAT('فاتورة ', i.ref) AS description, 'invoice' AS "movementType", i.status FROM invoices i WHERE i."companyId" = $1 AND i."clientId" = $2 AND i."deletedAt" IS NULL ${dateFilter.replace(/"createdAt"/g, 'i."createdAt"')} ORDER BY i."createdAt" ASC LIMIT 500`, [scope.companyId, id, ...dateDates]);
       let runningBalance = 0;
       movements = invoiceRows.map((m: any) => { runningBalance += Number(m.debit) - Number(m.credit); return { ...m, runningBalance }; });
-      const totalInvoiced = invoiceRows.reduce((s: number, r: any) => s + Number(r.debit), 0);
-      const totalPaid = invoiceRows.reduce((s: number, r: any) => s + Number(r.credit), 0);
-      sections = { invoices: { label: "الفواتير", amount: totalInvoiced, count: invoiceRows.length }, payments: { label: "المدفوعات", amount: totalPaid, count: invoiceRows.filter((r: any) => Number(r.credit) > 0).length } };
+      const totalInvoiced = invoiceRows.reduce((s: number, r: Record<string, unknown>) => s + Number(r.debit), 0);
+      const totalPaid = invoiceRows.reduce((s: number, r: Record<string, unknown>) => s + Number(r.credit), 0);
+      sections = { invoices: { label: "الفواتير", amount: totalInvoiced, count: invoiceRows.length }, payments: { label: "المدفوعات", amount: totalPaid, count: invoiceRows.filter((r: Record<string, unknown>) => Number(r.credit) > 0).length } };
 
     } else if (entityType === "supplier") {
       const { filter: dateFilter, extraParams: dateDates } = buildDateFilter(2, startDate, endDate);
       const poRows = await rawQuery<Record<string, unknown>>(`SELECT po.id, po.ref, po."totalAmount" AS debit, 0 AS credit, po."createdAt" AS date, CONCAT('أمر شراء ', po.ref) AS description, 'purchase_order' AS "movementType", po.status FROM purchase_orders po WHERE po."companyId" = $1 AND po."supplierId" = $2 AND po."deletedAt" IS NULL ${dateFilter.replace(/"createdAt"/g, 'po."createdAt"')} ORDER BY po."createdAt" ASC LIMIT 500`, [scope.companyId, id, ...dateDates]);
       let runningBalance = 0;
       movements = poRows.map((m: any) => { runningBalance += Number(m.debit) - Number(m.credit); return { ...m, runningBalance }; });
-      const totalOrdered = poRows.reduce((s: number, r: any) => s + Number(r.debit), 0);
+      const totalOrdered = poRows.reduce((s: number, r: Record<string, unknown>) => s + Number(r.debit), 0);
       sections = { orders: { label: "أوامر الشراء", amount: totalOrdered, count: poRows.length } };
 
     } else if (entityType === "vehicle" || entityType === "property" || entityType === "project") {
@@ -709,8 +709,8 @@ reportsRouter.get("/reports/entity-statement", authorize({ feature: "finance.rep
       );
     }
 
-    const totalDebit = rows.reduce((s: number, r: any) => s + Number(r.debit || 0), 0);
-    const totalCredit = rows.reduce((s: number, r: any) => s + Number(r.credit || 0), 0);
+    const totalDebit = rows.reduce((s: number, r: Record<string, unknown>) => s + Number(r.debit || 0), 0);
+    const totalCredit = rows.reduce((s: number, r: Record<string, unknown>) => s + Number(r.credit || 0), 0);
 
     res.json({ entityName, entityType, rows, summary: { totalDebit, totalCredit, balance: totalDebit - totalCredit, count: rows.length } });
   } catch (err) {
@@ -724,7 +724,7 @@ reportsRouter.get("/reports/custody-advances", authorize({ feature: "finance.rep
     const { startDate, endDate, branchId } = req.query as any;
 
     let dateFilter = "";
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
     if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
     if (branchId) { params.push(branchId); dateFilter += ` AND je."branchId" = $${params.length}`; }
@@ -761,8 +761,8 @@ reportsRouter.get("/reports/custody-advances", authorize({ feature: "finance.rep
       params
     );
 
-    const totalCustodies = custodies.reduce((s: number, r: any) => s + Number(r.amount), 0);
-    const totalAdvances = advances.reduce((s: number, r: any) => s + Number(r.amount), 0);
+    const totalCustodies = custodies.reduce((s: number, r: Record<string, unknown>) => s + Number(r.amount), 0);
+    const totalAdvances = advances.reduce((s: number, r: Record<string, unknown>) => s + Number(r.amount), 0);
 
     res.json({
       custodies, advances,
@@ -783,7 +783,7 @@ reportsRouter.get("/reports/expenses-analysis", authorize({ feature: "finance.re
     const { startDate, endDate, branchId, departmentId, projectId, costCenterId, groupBy = "account" } = req.query as any;
 
     let dateFilter = "";
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
     if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
     if (branchId) { params.push(branchId); dateFilter += ` AND je."branchId" = $${params.length}`; }
@@ -816,7 +816,7 @@ reportsRouter.get("/reports/expenses-analysis", authorize({ feature: "finance.re
       params
     );
 
-    const total = rows.reduce((s: number, r: any) => s + Number(r.amount), 0);
+    const total = rows.reduce((s: number, r: Record<string, unknown>) => s + Number(r.amount), 0);
     res.json({ data: rows, summary: { total, count: rows.length, groupBy } });
   } catch (err) {
     handleRouteError(err, res, "Expenses analysis error:");
@@ -829,7 +829,7 @@ reportsRouter.get("/reports/revenue-analysis", authorize({ feature: "finance.rep
     const { startDate, endDate, branchId } = req.query as any;
 
     let dateFilter = "";
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
     if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
     if (branchId) { params.push(branchId); dateFilter += ` AND je."branchId" = $${params.length}`; }
@@ -861,7 +861,7 @@ reportsRouter.get("/reports/revenue-analysis", authorize({ feature: "finance.rep
       params
     );
 
-    const totalRevenue = byAccount.reduce((s: number, r: any) => s + Number(r.amount), 0);
+    const totalRevenue = byAccount.reduce((s: number, r: Record<string, unknown>) => s + Number(r.amount), 0);
     res.json({ byAccount, byMonth, summary: { totalRevenue, accountCount: byAccount.length } });
   } catch (err) {
     handleRouteError(err, res, "Revenue analysis error:");
@@ -874,7 +874,7 @@ reportsRouter.get("/reports/budget-variance", authorize({ feature: "finance.repo
     const { period, branchId } = req.query as any;
 
     const targetPeriod = period || currentPeriod();
-    const params: any[] = [scope.companyId, targetPeriod];
+    const params: unknown[] = [scope.companyId, targetPeriod];
     const branchFilter = branchId ? ` AND b."branchId" = $${params.length + 1}` : "";
     if (branchId) params.push(branchId);
 
@@ -892,8 +892,8 @@ reportsRouter.get("/reports/budget-variance", authorize({ feature: "finance.repo
       params
     );
 
-    const totalBudget = rows.reduce((s: number, r: any) => s + Number(r.budget || 0), 0);
-    const totalActual = rows.reduce((s: number, r: any) => s + Number(r.actual || 0), 0);
+    const totalBudget = rows.reduce((s: number, r: Record<string, unknown>) => s + Number(r.budget || 0), 0);
+    const totalActual = rows.reduce((s: number, r: Record<string, unknown>) => s + Number(r.actual || 0), 0);
     const totalVariance = totalBudget - totalActual;
 
     res.json({ data: rows, summary: { totalBudget, totalActual, totalVariance, period: targetPeriod } });
@@ -908,7 +908,7 @@ reportsRouter.get("/reports/cash-bank-statement", authorize({ feature: "finance.
     const { startDate, endDate, accountCode = "1100", branchId } = req.query as any;
 
     let dateFilter = "";
-    const params: any[] = [scope.companyId, accountCode];
+    const params: unknown[] = [scope.companyId, accountCode];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
     if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
     if (branchId) { params.push(branchId); dateFilter += ` AND je."branchId" = $${params.length}`; }

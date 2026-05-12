@@ -203,7 +203,7 @@ router.put("/:id", authorize({ feature: "admin", action: "update" }), async (req
     if (!existing) { throw new NotFoundError("التكامل غير موجود"); }
 
     const sets: string[] = [`"updatedAt"=NOW()`];
-    const params: any[] = [];
+    const params: unknown[] = [];
 
     if (config !== undefined) {
       let mergedConfig = config;
@@ -408,7 +408,7 @@ router.get("/links", authorize({ feature: "admin", action: "update" }), async (r
     const scope = req.scope!;
     const { entityType, entityId } = req.query as any;
     const conditions = [`gl."companyId" = $1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
 
     if (entityType) { params.push(entityType); conditions.push(`gl."entityType" = $${params.length}`); }
     if (entityId) { params.push(Number(entityId)); conditions.push(`gl."entityId" = $${params.length}`); }
@@ -483,7 +483,7 @@ router.patch("/links/:id", authorize({ feature: "admin", action: "update" }), as
     if (!existing) { throw new NotFoundError("الربط غير موجود"); }
 
     const sets: string[] = [`"updatedAt"=NOW()`];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (enabled !== undefined) { params.push(!!enabled); sets.push(`enabled=$${params.length}`); }
     if (externalRef !== undefined) { params.push(externalRef); sets.push(`"externalRef"=$${params.length}`); }
     if (syncStatus !== undefined) { params.push(syncStatus); sets.push(`"syncStatus"=$${params.length}`); }

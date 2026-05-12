@@ -107,7 +107,7 @@ router.get("/logs", authorize({ feature: "admin", action: "update" }), async (re
     const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
     const conditions = [`("companyId" IS NULL OR "companyId" = $1)`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
 
     if (ruleId) {
       params.push(Number(ruleId) || 0);
@@ -189,7 +189,7 @@ router.patch("/:id", authorize({ feature: "admin", action: "update" }), async (r
     }
 
     const sets: string[] = [`"updatedAt" = NOW()`];
-    const params: any[] = [];
+    const params: unknown[] = [];
 
     if (b.name !== undefined) { params.push(b.name); sets.push(`name = $${params.length}`); }
     if (b.description !== undefined) { params.push(b.description); sets.push(`description = $${params.length}`); }

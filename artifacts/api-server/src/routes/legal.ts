@@ -166,7 +166,7 @@ router.get("/contracts", authorize({ feature: "legal.contracts", action: "list" 
     const scope = req.scope!;
     const { status } = req.query as any;
     const conditions = [`"companyId" = $1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`status = $${params.length}`); }
     conditions.push(`"deletedAt" IS NULL`);
     const rows = await rawQuery<Record<string, unknown>>(`SELECT *, ("endDate"::date - CURRENT_DATE) AS "daysToExpiry" FROM legal_contracts WHERE ${conditions.join(" AND ")} ORDER BY id DESC LIMIT 500`, params);
@@ -266,7 +266,7 @@ router.get("/contracts/renewal-alerts", authorize({ feature: "legal.contracts", 
       [cid]
     );
 
-    const all = [...alerts90, ...alerts30, ...alerts14].map((r: any) => {
+    const all = [...alerts90, ...alerts30, ...alerts14].map((r: Record<string, unknown>) => {
       const daysLeft = Number(r.daysLeft);
       let severity = 'low';
       if (daysLeft <= 14) severity = 'critical';
@@ -348,7 +348,7 @@ router.patch("/contracts/:id", authorize({ feature: "legal.contracts", action: "
       contractType: '"contractType"', value: "value", startDate: '"startDate"', endDate: '"endDate"', notes: "notes",
     };
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};
     for (const f of tracked) {
@@ -557,7 +557,7 @@ router.get("/cases", authorize({ feature: "legal.cases", action: "list" }), asyn
     const scope = req.scope!;
     const { status } = req.query as any;
     const conditions = [`"companyId" = $1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`status = $${params.length}`); }
     conditions.push(`"deletedAt" IS NULL`);
     const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_cases WHERE ${conditions.join(" AND ")} ORDER BY id DESC LIMIT 500`, params);
@@ -680,7 +680,7 @@ router.patch("/cases/:id", authorize({ feature: "legal.cases", action: "update" 
     }
 
     const sets: string[] = [`"updatedAt"=NOW()`];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
     if (b.priority !== undefined) { params.push(b.priority); sets.push(`priority=$${params.length}`); }
@@ -1232,7 +1232,7 @@ router.patch("/cases/:caseId/judgments/:id", authorize({ feature: "legal.cases",
     }
 
     const sets: string[] = [`"updatedAt"=NOW()`];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.paidAmount !== undefined) { params.push(b.paidAmount); sets.push(`"paidAmount"=$${params.length}`); }
     if (b.verdict !== undefined) { params.push(b.verdict); sets.push(`verdict=$${params.length}`); }
     if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes=$${params.length}`); }
@@ -1387,7 +1387,7 @@ router.get("/sessions/upcoming", authorize({ feature: "legal.cases", action: "li
        ORDER BY ls."sessionDate" ASC`,
       [scope.companyId, days]
     );
-    const alerts = rows.map((r: any) => ({
+    const alerts = rows.map((r: Record<string, unknown>) => ({
       ...r,
       alertLevel: Number(r.daysUntil) <= 1 ? 'critical' : Number(r.daysUntil) <= 7 ? 'high' : 'medium',
     }));

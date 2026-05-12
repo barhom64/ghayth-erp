@@ -505,7 +505,7 @@ router.get("/units", authorize({ feature: "properties.units", action: "list" }),
     const scope = req.scope!;
     const { status, search, buildingId } = req.query as any;
     const conditions = [`u."companyId" = $1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`u.status = $${params.length}`); }
     if (search) { params.push(`%${search}%`); conditions.push(`(u."unitNumber" ILIKE $${params.length} OR u."buildingName" ILIKE $${params.length})`); }
     if (buildingId) {
@@ -743,7 +743,7 @@ router.patch("/units/:id", authorize({ feature: "properties.units", action: "upd
       "buildingId","floor","bedrooms","bathrooms","direction","finishing","branchId",
     ] as const;
     const sets: string[] = [`"updatedAt"=NOW()`];
-    const params: any[] = [];
+    const params: unknown[] = [];
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};
     for (const f of trackedFields) {
@@ -986,7 +986,7 @@ router.get("/contracts", authorize({ feature: "properties.contracts", action: "l
     const scope = req.scope!;
     const { status } = req.query as any;
     const conditions = [`c."companyId" = $1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`c.status = $${params.length}`); }
     conditions.push(`c."deletedAt" IS NULL`);
     const rows = await rawQuery<Record<string, unknown>>(
@@ -1292,7 +1292,7 @@ router.patch("/contracts/:id", authorize({ feature: "properties.contracts", acti
     }
 
     const fields: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};
     const addField = (col: string, val: any) => {
@@ -1726,7 +1726,7 @@ router.patch("/tenants/:id", authorize({ feature: "properties.tenants", action: 
     }
 
     const fields: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};
     const addField = (col: string, val: any) => {
@@ -1844,7 +1844,7 @@ router.get("/payments", authorize({ feature: "properties.payments", action: "lis
     const scope = req.scope!;
     const { status, contractId } = req.query as any;
     const conditions = [`c."companyId" = $1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`rp.status = $${params.length}`); }
     if (contractId) { params.push(Number(contractId)); conditions.push(`rp."contractId" = $${params.length}`); }
     const rows = await rawQuery<Record<string, unknown>>(
@@ -2111,7 +2111,7 @@ router.get("/maintenance-requests", authorize({ feature: "properties.maintenance
     const scope = req.scope!;
     const { status } = req.query as any;
     const conditions = [`mr."companyId" = $1`, `mr."deletedAt" IS NULL`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`mr.status = $${params.length}`); }
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT mr.*, u."unitNumber", u."buildingName", t.name AS "technicianName" FROM maintenance_requests mr LEFT JOIN property_units u ON u.id=mr."unitId" LEFT JOIN technicians t ON t.id=mr."assignedTo" WHERE ${conditions.join(" AND ")} ORDER BY mr.id DESC LIMIT 500`,
@@ -2167,7 +2167,7 @@ router.post("/maintenance-requests", authorize({ feature: "properties.maintenanc
       `SELECT EXTRACT(EPOCH FROM ("completedAt"::timestamp - "createdAt"::timestamp))/86400 AS days FROM maintenance_requests WHERE "unitId"=$1 AND status='completed' AND "completedAt" IS NOT NULL ORDER BY id DESC LIMIT 10`,
       [b.unitId]
     );
-    const responseDays = pastRequests.map((r: any) => Number(r.days)).filter((d: number) => d > 0);
+    const responseDays = pastRequests.map((r: Record<string, unknown>) => Number(r.days)).filter((d: number) => d > 0);
     const avgResponseDays = responseDays.length > 0 ? movingAverage(responseDays) : 5;
     const estimatedDuration = Math.max(1, Math.round(avgResponseDays));
 
@@ -2562,7 +2562,7 @@ router.get("/tenants", authorize({ feature: "properties.tenants", action: "list"
   try {
     const scope = req.scope!;
     const { search } = req.query as any;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     let whereClause = `"companyId"=$1`;
     if (search) { params.push(`%${search}%`); whereClause += ` AND (name ILIKE $${params.length} OR phone ILIKE $${params.length} OR "nationalId" ILIKE $${params.length})`; }
     whereClause += ` AND "deletedAt" IS NULL`;
@@ -2692,7 +2692,7 @@ router.get("/buildings", authorize({ feature: "properties.buildings", action: "l
     const scope = req.scope!;
     const { search } = req.query as any;
     const conditions = [`b."companyId" = $1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (search) { params.push(`%${search}%`); conditions.push(`(b.name ILIKE $${params.length} OR b.address ILIKE $${params.length} OR b.city ILIKE $${params.length})`); }
 
     const rows = await rawQuery<Record<string, unknown>>(
@@ -2831,7 +2831,7 @@ router.patch("/buildings/:id", authorize({ feature: "properties.buildings", acti
       }
     }
     const sets: string[] = [`"updatedAt"=NOW()`];
-    const params: any[] = [];
+    const params: unknown[] = [];
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};
     if (b.name !== undefined && b.name !== existing.name) { params.push(b.name); sets.push(`name=$${params.length}`); before.name = existing.name; after.name = b.name; }
@@ -2940,7 +2940,7 @@ router.get("/maintenance", authorize({ feature: "properties.maintenance", action
     const scope = req.scope!;
     const { status } = req.query as any;
     const conditions = [`mr."companyId" = $1`, `mr."deletedAt" IS NULL`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`mr.status = $${params.length}`); }
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT mr.*, u."unitNumber", u."buildingName" FROM maintenance_requests mr LEFT JOIN property_units u ON u.id=mr."unitId" WHERE ${conditions.join(" AND ")} ORDER BY mr.id DESC LIMIT 500`,
@@ -3095,7 +3095,7 @@ router.patch("/maintenance-requests/:id", authorize({ feature: "properties.maint
       }
     }
 
-    const params: any[] = [];
+    const params: unknown[] = [];
     const sets: string[] = [];
     if (b.status === "completed" && existing.status !== "completed") {
       const validationErrors: string[] = [];
@@ -3270,7 +3270,7 @@ router.get("/owners", authorize({ feature: "properties.owners", action: "list" }
     const scope = req.scope!;
     const { search } = req.query as any;
     const conditions = [`"companyId" = $1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (search) { params.push(`%${search}%`); conditions.push(`(name ILIKE $${params.length} OR "nationalId" ILIKE $${params.length} OR "crNumber" ILIKE $${params.length} OR phone ILIKE $${params.length})`); }
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT o.*,
@@ -3364,7 +3364,7 @@ router.patch("/owners/:id", authorize({ feature: "properties.owners", action: "u
     if (!existing) throw new NotFoundError("المالك غير موجود");
     const b = zodParse(updateOwnerSchema.safeParse(req.body)) as any;
     const fields: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     const addField = (col: string, val: any) => { if (val !== undefined) { params.push(val); fields.push(`"${col}" = $${params.length}`); } };
     addField("ownerType", b.ownerType);
     addField("name", b.name);
@@ -3546,7 +3546,7 @@ router.get("/inspections", authorize({ feature: "properties.maintenance", action
     const scope = req.scope!;
     const { unitId, status } = req.query as any;
     const conditions = [`i."companyId"=$1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (unitId) { params.push(Number(unitId)); conditions.push(`i."unitId"=$${params.length}`); }
     if (status) { params.push(status); conditions.push(`i.status=$${params.length}`); }
     const rows = await rawQuery<Record<string, unknown>>(
@@ -3661,7 +3661,7 @@ router.patch("/inspections/:id", authorize({ feature: "properties.maintenance", 
     } else {
       // Non-status update — keep the simple PATCH path
       const sets: string[] = [`"updatedAt"=NOW()`];
-      const params: any[] = [];
+      const params: unknown[] = [];
       for (const [col, val] of Object.entries(extraFields)) {
         params.push(val);
         sets.push(`"${col}"=$${params.length}`);
@@ -3714,7 +3714,7 @@ router.get("/deposits", authorize({ feature: "properties.payments", action: "lis
     const scope = req.scope!;
     const { status, contractId } = req.query as any;
     const conditions = [`sd."companyId"=$1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`sd.status=$${params.length}`); }
     if (contractId) { params.push(Number(contractId)); conditions.push(`sd."contractId"=$${params.length}`); }
     const rows = await rawQuery<Record<string, unknown>>(
@@ -3876,7 +3876,7 @@ router.get("/occupancy-report", authorize({ feature: "properties.units", action:
     const { buildingId } = req.query as any;
 
     const conditions = [`u."companyId"=$1`, `u."deletedAt" IS NULL`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (buildingId) { const bid = Number(buildingId); if (!Number.isFinite(bid)) throw new ValidationError("buildingId يجب أن يكون رقمًا صحيحًا"); params.push(bid); conditions.push(`u."buildingId"=$${params.length}`); }
 
     const units = await rawQuery<Record<string, unknown>>(

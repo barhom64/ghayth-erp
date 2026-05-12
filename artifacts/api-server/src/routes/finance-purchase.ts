@@ -301,7 +301,7 @@ purchaseRouter.post("/purchase-requests", authorize({ feature: "finance.purchase
 
     if (Array.isArray(items) && items.length > 0) {
       const valuesSql: string[] = [];
-      const params: any[] = [];
+      const params: unknown[] = [];
       for (const item of items) {
         const base = params.length;
         valuesSql.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6})`);
@@ -456,7 +456,7 @@ purchaseRouter.post("/purchase-requests/:id/convert", authorize({ feature: "fina
 
         if (Array.isArray(items) && items.length > 0) {
           const valuesSql: string[] = [];
-          const params: any[] = [];
+          const params: unknown[] = [];
           for (const item of items) {
             const base = params.length;
             valuesSql.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5})`);
@@ -559,7 +559,7 @@ purchaseRouter.post("/purchase-orders", authorize({ feature: "finance.purchase",
 
     if (Array.isArray(items) && items.length > 0) {
       const valuesSql: string[] = [];
-      const params: any[] = [];
+      const params: unknown[] = [];
       for (const item of items) {
         const base = params.length;
         valuesSql.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5})`);
@@ -941,7 +941,7 @@ purchaseRouter.get("/payment-run/pending", authorize({ feature: "finance.purchas
     const scope = req.scope!;
 
     const { cutoffDate, supplierId } = req.query as any;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     let where = `po."companyId" = $1 AND po.status = 'invoice_matched' AND po."deletedAt" IS NULL`;
     if (supplierId) { params.push(Number(supplierId) || 0); where += ` AND po."supplierId" = $${params.length}`; }
     if (cutoffDate) { params.push(cutoffDate); where += ` AND COALESCE(po."expectedDelivery", po."createdAt") <= $${params.length}`; }

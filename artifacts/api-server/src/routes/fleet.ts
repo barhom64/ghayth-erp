@@ -575,7 +575,7 @@ router.patch("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "up
     }
 
     const sets: string[] = [`"updatedAt"=NOW()`];
-    const params: any[] = [];
+    const params: unknown[] = [];
     const trackedFields = ["plateNumber","make","model","year","color","status","fuelType","notes","assignedDriverId","registrationNumber","registrationExpiry","inspectionDate","nextInspectionDate","plateType","sequenceNumber","vinNumber"] as const;
     const colMap: Record<string, string> = {
       plateNumber: '"plateNumber"',
@@ -773,7 +773,7 @@ router.patch("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "upd
       licenseType: '"licenseType"',
     };
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};
     for (const f of trackedFields) {
@@ -1732,7 +1732,7 @@ router.get("/alerts", authorize({ feature: "fleet.vehicles", action: "list" }), 
         message: `تقييم السائق ${d.name} منخفض: ${Number(d.rating).toFixed(1)}/5 — يحتاج مراجعة`,
       });
     }
-    oilDue.forEach((r: any) => alerts.push({ type: 'oil_change_due', severity: 'medium', vehicle: r.plateNumber, message: `تغيير زيت المركبة ${r.plateNumber} مستحق (الكيلومتراج: ${r.currentMileage})` }));
+    oilDue.forEach((r: Record<string, unknown>) => alerts.push({ type: 'oil_change_due', severity: 'medium', vehicle: r.plateNumber, message: `تغيير زيت المركبة ${r.plateNumber} مستحق (الكيلومتراج: ${r.currentMileage})` }));
 
     res.json({ data: alerts, total: alerts.length, page: 1, pageSize: alerts.length });
   } catch (err) { handleRouteError(err, res, "Fleet alerts error:"); }
@@ -2018,7 +2018,7 @@ router.patch("/trips/:id", authorize({ feature: "fleet.trips", action: "update" 
     }
 
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};
     let idx = 1;
@@ -2179,7 +2179,7 @@ router.patch("/maintenance/:id", authorize({ feature: "fleet.maintenance", actio
     }
 
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};
     let idx = 1;
@@ -2301,7 +2301,7 @@ router.patch("/fuel-logs/:id", authorize({ feature: "fleet.trips", action: "upda
     }
 
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};
     let idx = 1;
@@ -2412,7 +2412,7 @@ router.patch("/insurance/:id", authorize({ feature: "fleet.vehicles", action: "u
     }
 
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};
     let idx = 1;
@@ -2525,7 +2525,7 @@ router.get("/preventive-plans", authorize({ feature: "fleet.maintenance", action
     const scope = req.scope!;
     const { vehicleId } = req.query as any;
     const conditions = [`p."companyId"=$1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (vehicleId) { params.push(Number(vehicleId) || 0); conditions.push(`p."vehicleId"=$${params.length}`); }
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT p.*, v."plateNumber", v."currentMileage"
@@ -2618,7 +2618,7 @@ router.patch("/preventive-plans/:id", authorize({ feature: "fleet.maintenance", 
     const id = parseId(req.params.id, "id");
     const b = zodParse(updatePreventivePlanSchema.safeParse(req.body));
     const sets: string[] = [`"updatedAt"=NOW()`];
-    const params: any[] = [];
+    const params: unknown[] = [];
 
     // Fetch existing plan to recompute due values when last service is updated
     const [existing] = await rawQuery<Record<string, unknown>>(
@@ -2695,7 +2695,7 @@ router.get("/traffic-violations", authorize({ feature: "fleet.vehicles", action:
     const scope = req.scope!;
     const { vehicleId, driverId } = req.query as any;
     const conditions = [`tv."companyId"=$1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (vehicleId) { params.push(Number(vehicleId) || 0); conditions.push(`tv."vehicleId"=$${params.length}`); }
     if (driverId) { params.push(Number(driverId) || 0); conditions.push(`tv."driverId"=$${params.length}`); }
     const rows = await rawQuery<Record<string, unknown>>(

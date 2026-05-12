@@ -158,7 +158,7 @@ router.get("/operations/sla-delays", authorize({ feature: "bi", action: "list" }
     const cid = scope.companyId;
     const { from, to, departmentId } = req.query as any;
     const conditions = [`t."companyId" = $1`, `t."deletedAt" IS NULL`];
-    const params: any[] = [cid];
+    const params: unknown[] = [cid];
     if (from) { params.push(from); conditions.push(`t."scheduledDate" >= $${params.length}::date`); }
     if (to) { params.push(to); conditions.push(`t."scheduledDate" <= $${params.length}::date`); }
     if (departmentId) {
@@ -191,7 +191,7 @@ router.get("/operations/rejection-rate", authorize({ feature: "bi", action: "lis
     const cid = scope.companyId;
     const { from, to } = req.query as any;
     const conditions = [`"companyId" = $1`, `"deletedAt" IS NULL`];
-    const params: any[] = [cid];
+    const params: unknown[] = [cid];
     if (from) { params.push(from); conditions.push(`"createdAt" >= $${params.length}::date`); }
     if (to) { params.push(to); conditions.push(`"createdAt" <= $${params.length}::date`); }
 
@@ -217,7 +217,7 @@ router.get("/operations/bottleneck", authorize({ feature: "bi", action: "list" }
     const cid = scope.companyId;
     const { from, to, departmentId } = req.query as any;
     const conditions = [`t."companyId" = $1`, `t."deletedAt" IS NULL`];
-    const params: any[] = [cid];
+    const params: unknown[] = [cid];
     if (from) { params.push(from); conditions.push(`t."createdAt" >= $${params.length}::date`); }
     if (to) { params.push(to); conditions.push(`t."createdAt" <= $${params.length}::date`); }
     if (departmentId) {
@@ -275,7 +275,7 @@ router.get("/operations/employee-productivity", authorize({ feature: "bi", actio
     const cid = scope.companyId;
     const { from, to, departmentId } = req.query as any;
     const conditions = [`t."companyId" = $1`, `t."deletedAt" IS NULL`];
-    const params: any[] = [cid];
+    const params: unknown[] = [cid];
     if (from) { params.push(from); conditions.push(`t."completedAt" >= $${params.length}::date`); }
     if (to) { params.push(to); conditions.push(`t."completedAt" <= $${params.length}::date`); }
     if (departmentId) {
@@ -324,7 +324,7 @@ router.get("/operations/approval-timeliness", authorize({ feature: "bi", action:
     const cid = scope.companyId;
     const { from, to, departmentId } = req.query as any;
     const conditions = [`lr."companyId" = $1`, `lr."deletedAt" IS NULL`];
-    const params: any[] = [cid];
+    const params: unknown[] = [cid];
     if (from) { params.push(from); conditions.push(`lr."createdAt" >= $${params.length}::date`); }
     if (to) { params.push(to); conditions.push(`lr."createdAt" <= $${params.length}::date`); }
     if (departmentId) {
@@ -357,7 +357,7 @@ router.get("/operations/avg-completion-time", authorize({ feature: "bi", action:
     const cid = scope.companyId;
     const { from, to, departmentId } = req.query as any;
     const conditions = [`t."companyId" = $1`, `t."deletedAt" IS NULL`, `t.status = 'completed'`, `t."completedAt" IS NOT NULL`];
-    const params: any[] = [cid];
+    const params: unknown[] = [cid];
     if (from) { params.push(from); conditions.push(`t."completedAt" >= $${params.length}::date`); }
     if (to) { params.push(to); conditions.push(`t."completedAt" <= $${params.length}::date`); }
     if (departmentId) {
@@ -388,7 +388,7 @@ router.get("/operations/trend", authorize({ feature: "bi", action: "list" }), as
     const cid = scope.companyId;
     const { from, to, departmentId } = req.query as any;
     const conditions = [`t."companyId" = $1`, `t."deletedAt" IS NULL`, `t."scheduledDate" >= CURRENT_DATE - INTERVAL '12 weeks'`];
-    const params: any[] = [cid];
+    const params: unknown[] = [cid];
     if (from) { params.push(from); conditions.push(`t."scheduledDate" >= $${params.length}::date`); }
     if (to) { params.push(to); conditions.push(`t."scheduledDate" <= $${params.length}::date`); }
     if (departmentId) {
@@ -900,12 +900,12 @@ router.get("/reports/branch-performance", authorize({ feature: "bi", action: "li
         [cid, branchIds, dateFrom, dateTo]
       ).catch((e) => { logger.error(e, "bi query failed"); return []; }),
     ]);
-    const revMap = new Map(revenueRows.map((r: any) => [r.branchId, r]));
-    const expMap = new Map(expenseRows.map((r: any) => [r.branchId, r]));
-    const empMap = new Map(employeeRows.map((r: any) => [r.branchId, r]));
-    const attMap = new Map(attRows.map((r: any) => [r.branchId, r]));
-    const tickMap = new Map(ticketRows.map((r: any) => [r.branchId, r]));
-    const satMap = new Map(satRows.map((r: any) => [r.branchId, r]));
+    const revMap = new Map(revenueRows.map((r: Record<string, unknown>) => [r.branchId, r]));
+    const expMap = new Map(expenseRows.map((r: Record<string, unknown>) => [r.branchId, r]));
+    const empMap = new Map(employeeRows.map((r: Record<string, unknown>) => [r.branchId, r]));
+    const attMap = new Map(attRows.map((r: Record<string, unknown>) => [r.branchId, r]));
+    const tickMap = new Map(ticketRows.map((r: Record<string, unknown>) => [r.branchId, r]));
+    const satMap = new Map(satRows.map((r: Record<string, unknown>) => [r.branchId, r]));
     const result = branches.map((branch: any) => {
       const rev = Number(revMap.get(branch.id)?.revenue ?? 0);
       const exp = Number(expMap.get(branch.id)?.expenses ?? 0);
@@ -961,7 +961,7 @@ router.get("/reports/vendor-performance", authorize({ feature: "bi", action: "li
       [cid, dateFrom, dateTo]
     ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
-    const data = rows.map((r: any) => {
+    const data = rows.map((r: Record<string, unknown>) => {
       const total = Number(r.totalOrders);
       const delivered = Number(r.deliveredOrders);
       const onTime = Number(r.onTimeDeliveries);
@@ -1019,7 +1019,7 @@ router.get("/reports/fleet-tco", authorize({ feature: "bi", action: "list" }), a
       [cid]
     ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
-    const data = rows.map((r: any) => {
+    const data = rows.map((r: Record<string, unknown>) => {
       const purchasePrice = Number(r.purchasePrice);
       const maintenanceCost = Number(r.maintenanceCost);
       const fuelCost = Number(r.fuelCost);
@@ -1083,7 +1083,7 @@ router.get("/reports/department-leave-balance", authorize({ feature: "bi", actio
       [cid, year]
     ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
-    const data = rows.map((r: any) => {
+    const data = rows.map((r: Record<string, unknown>) => {
       const total = Number(r.totalEmployees);
       const onLeave = Number(r.onLeaveNow);
       const onLeavePct = total > 0 ? Math.round((onLeave / total) * 100) : 0;
@@ -1128,7 +1128,7 @@ router.get("/reports/property-occupancy", authorize({ feature: "bi", action: "li
       [cid]
     ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
-    const data = rows.map((r: any) => {
+    const data = rows.map((r: Record<string, unknown>) => {
       const total = Number(r.totalUnits);
       const occupied = Number(r.occupiedUnits);
       const vacant = Number(r.vacantUnits);
@@ -1214,7 +1214,7 @@ router.get("/ai-insights", authorize({ feature: "bi", action: "list" }), async (
     const pageSize = Math.min(Number(limitParam) || 50, 100);
 
     const conditions = [`sa."companyId" = $1`, `sa."isDismissed" = false`];
-    const params: any[] = [cid];
+    const params: unknown[] = [cid];
 
     if (priority && ["urgent", "warning", "info"].includes(priority)) {
       params.push(priority);

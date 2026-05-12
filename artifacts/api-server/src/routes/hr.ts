@@ -1099,7 +1099,7 @@ router.get("/attendance/today-summary", authorize({ feature: "hr.attendance", ac
        LIMIT 1000`,
       [scope.companyId, today]
     );
-    const data = rows.map((r: any) => ({
+    const data = rows.map((r: Record<string, unknown>) => ({
       ...r,
       status: r.status || (r.checkIn ? "present" : "absent"),
     }));
@@ -2028,7 +2028,7 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", ac
         }
 
         // Balance deduction across ALL companies
-        const allCompanyIds = [...new Set(allAssignments.map((a: any) => a.companyId))];
+        const allCompanyIds = [...new Set(allAssignments.map((a: Record<string, unknown>) => a.companyId))];
         for (const cId of allCompanyIds) {
           await client.query(
             `UPDATE hr_leave_balances
@@ -2297,7 +2297,7 @@ router.get("/payroll", authorize({ feature: "hr.payroll.runs", action: "view" })
        GROUP BY pr.id, e.name ORDER BY pr."createdAt" DESC LIMIT 500`,
       [scope.companyId]
     );
-    const data = runs.map((r: any) => ({
+    const data = runs.map((r: Record<string, unknown>) => ({
       ...r, month: r.period, totalAmount: Number(r.totalNet),
       employeeCount: Number(r.employeeCount),
     }));
@@ -2331,10 +2331,10 @@ router.get("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "view
        WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL ORDER BY pl.id LIMIT 1000`,
       [id, scope.companyId]
     );
-    const totalBasic = lines.reduce((s: number, l: any) => s + Number(l.basic || 0), 0);
-    const totalAllowances = lines.reduce((s: number, l: any) => s + Number(l.housingAllowance || 0) + Number(l.transportAllowance || 0), 0);
-    const totalDeductions = lines.reduce((s: number, l: any) => s + Number(l.gosi || 0) + Number(l.lateDeduction || 0) + Number(l.absenceDeduction || 0) + Number(l.violationDeduction || 0) + Number(l.loanDeduction || 0), 0);
-    const sanitizedLines = canSeeSalary ? lines : lines.map((l: any) => ({
+    const totalBasic = lines.reduce((s: number, l: Record<string, unknown>) => s + Number(l.basic || 0), 0);
+    const totalAllowances = lines.reduce((s: number, l: Record<string, unknown>) => s + Number(l.housingAllowance || 0) + Number(l.transportAllowance || 0), 0);
+    const totalDeductions = lines.reduce((s: number, l: Record<string, unknown>) => s + Number(l.gosi || 0) + Number(l.lateDeduction || 0) + Number(l.absenceDeduction || 0) + Number(l.violationDeduction || 0) + Number(l.loanDeduction || 0), 0);
+    const sanitizedLines = canSeeSalary ? lines : lines.map((l: Record<string, unknown>) => ({
       id: l.id, runId: l.runId, assignmentId: l.assignmentId, employeeName: l.employeeName,
     }));
     res.json(maskFields(req, {
@@ -2369,7 +2369,7 @@ router.get("/payroll/:id/lines", authorize({ feature: "hr.payroll.runs", action:
        WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL ORDER BY e.name LIMIT 1000`,
       [Number(id), scope.companyId]
     );
-    const data = lines.map((l: any) => ({
+    const data = lines.map((l: Record<string, unknown>) => ({
       ...l, basic: Number(l.basic), grossSalary: Number(l.grossSalary),
       gosi: Number(l.gosi), lateDeduction: Number(l.lateDeduction), netSalary: Number(l.netSalary),
     }));
@@ -2667,7 +2667,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
         // Single bulk INSERT instead of one round-trip per employee.
         const COLS_PER_ROW = 16;
         const valuesSql: string[] = [];
-        const params: any[] = [];
+        const params: unknown[] = [];
         for (const l of lines) {
           const base = params.length;
           valuesSql.push(
@@ -2693,7 +2693,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
       );
 
       if (loanRows.length > 0) {
-        const assignmentIdsWithLoans = loanRows.map((r: any) => Number(r.assignmentId));
+        const assignmentIdsWithLoans = loanRows.map((r: Record<string, unknown>) => Number(r.assignmentId));
         await client.query(
           `UPDATE loan_accounts
            SET "remainingAmount" = GREATEST(0, "remainingAmount" - "monthlyInstallment"),
@@ -3643,7 +3643,7 @@ router.patch("/violations/:id", authorize({ feature: "hr.violations", action: "u
     const id = parseId(req.params.id, "id");
     const b = zodParse(violationPatchSchema.safeParse(req.body ?? {}));
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.type !== undefined) { params.push(b.type); sets.push(`type=$${params.length}`); }
     if (b.severity !== undefined) { params.push(b.severity); sets.push(`severity=$${params.length}`); }
     if (b.deduction !== undefined) { params.push(Number(b.deduction)); sets.push(`deduction=$${params.length}`); }
@@ -3716,7 +3716,7 @@ router.patch("/shifts/:id", authorize({ feature: "hr.attendance", action: "updat
     const id = parseId(req.params.id, "id");
     const b = zodParse(shiftPatchSchema.safeParse(req.body ?? {}));
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
     if (b.startTime !== undefined) { params.push(b.startTime); sets.push(`"startTime"=$${params.length}`); }
     if (b.endTime !== undefined) { params.push(b.endTime); sets.push(`"endTime"=$${params.length}`); }
@@ -3979,7 +3979,7 @@ router.patch("/leave-requests/:id", authorize({ feature: "hr.leaves", action: "u
       throw new ValidationError("استخدم نقطة نهاية الموافقة/الرفض المخصصة", { field: "status" });
     }
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     let idx = 1;
     if (status) { sets.push(`status = $${idx++}`); params.push(status); }
     if (reason !== undefined) { sets.push(`reason = $${idx++}`); params.push(reason); }
@@ -4188,9 +4188,9 @@ router.patch("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "up
         [id]
       );
 
-      const totalGross = lines.reduce((s: number, l: any) => s + Number(l.grossSalary ?? l.basic ?? 0), 0);
-      const totalGosiEmployee = lines.reduce((s: number, l: any) => s + Number(l.gosiEmployee ?? 0), 0);
-      const totalGosiEmployer = lines.reduce((s: number, l: any) => s + Number(l.gosiEmployer ?? 0), 0);
+      const totalGross = lines.reduce((s: number, l: Record<string, unknown>) => s + Number(l.grossSalary ?? l.basic ?? 0), 0);
+      const totalGosiEmployee = lines.reduce((s: number, l: Record<string, unknown>) => s + Number(l.gosiEmployee ?? 0), 0);
+      const totalGosiEmployer = lines.reduce((s: number, l: Record<string, unknown>) => s + Number(l.gosiEmployer ?? 0), 0);
       const totalGosiPayable = totalGosiEmployee + totalGosiEmployer;
       const totalBankPayout = Math.max(0, totalNet);
 
@@ -4381,7 +4381,7 @@ router.patch("/performance/:id", authorize({ feature: "hr.performance", action: 
     }
     const { overallScore, score, comments, feedback, status, strengths, improvements, goals } = zodParse(performancePatchSchema.safeParse(req.body ?? {}));
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     let idx = 1;
     const finalScore = overallScore ?? score;
     if (finalScore !== undefined) { sets.push(`"overallScore" = $${idx++}`); params.push(finalScore); }
@@ -4497,7 +4497,7 @@ router.patch("/official-letters/:id", authorize({ feature: "hr.organization", ac
     }
     const { subject, content, status, type } = zodParse(officialLetterPatchSchema.safeParse(req.body ?? {}));
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     let idx = 1;
     if (subject !== undefined) { sets.push(`subject = $${idx++}`); params.push(subject); }
     if (content !== undefined) { sets.push(`content = $${idx++}`); params.push(content); }
@@ -5006,7 +5006,7 @@ async function recomputeSummary(cycleId: number, companyId: number, employeeId: 
     : null;
   const upwardCount = upwardRows.length;
   const upwardAvgScore = upwardCount >= 3
-    ? Math.round(upwardRows.reduce((s: number, r: any) => s + Number(r.overallScore), 0) / upwardCount)
+    ? Math.round(upwardRows.reduce((s: number, r: Record<string, unknown>) => s + Number(r.overallScore), 0) / upwardCount)
     : null;
 
   // Final weighted score
@@ -5124,7 +5124,7 @@ router.post("/evaluation-cycles", authorize({ feature: "hr.performance", action:
         `SELECT DISTINCT "employeeId" FROM employee_assignments WHERE "companyId"=$1 AND "employeeId" IN (${idPlaceholders})`,
         [scope.companyId, ...evalIds]
       );
-      const validIdSet = new Set(validAssignments.map((a: any) => a.employeeId));
+      const validIdSet = new Set(validAssignments.map((a: Record<string, unknown>) => a.employeeId));
       validParticipants = candidateParticipants.filter(p => validIdSet.has(p.evaluatorId));
     }
 
@@ -5799,7 +5799,7 @@ router.get("/public-holidays", authorize({ feature: "hr.organization", action: "
     const scope = req.scope!;
     const { year } = req.query as any;
     const conditions = [`"companyId" = $1`, `"deletedAt" IS NULL`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (year) { params.push(Number(year)); conditions.push(`year = $${params.length}`); }
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM public_holidays WHERE ${conditions.join(" AND ")} ORDER BY "startDate" LIMIT 500`,
@@ -5844,7 +5844,7 @@ router.patch("/public-holidays/:id", authorize({ feature: "hr.organization", act
     const id = parseId(req.params.id, "id");
     const b = zodParse(publicHolidayPatchSchema.safeParse(req.body ?? {}));
     const sets: string[] = [`"updatedAt"=NOW()`];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
     if (b.startDate !== undefined) { params.push(b.startDate); sets.push(`"startDate"=$${params.length}`); }
     if (b.endDate !== undefined) { params.push(b.endDate); sets.push(`"endDate"=$${params.length}`); }
@@ -5913,7 +5913,7 @@ router.get("/transfers", authorize({ feature: "hr.exit", action: "list" }), asyn
     const scope = req.scope!;
     const { status } = req.query as any;
     const conditions = [`t."companyId"=$1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`t.status=$${params.length}`); }
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT t.*, e.name AS "employeeName", e."empNumber",
@@ -6276,7 +6276,7 @@ router.get("/idp", authorize({ feature: "hr.exit", action: "list" }), async (req
     const scope = req.scope!;
     const { employeeId } = req.query as any;
     const conditions = [`idp."companyId"=$1`, `idp."deletedAt" IS NULL`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (employeeId) { params.push(Number(employeeId)); conditions.push(`idp."employeeId"=$${params.length}`); }
     else if (scope.role === "employee" && scope.employeeId) {
       params.push(scope.employeeId); conditions.push(`idp."employeeId"=$${params.length}`);
@@ -6324,7 +6324,7 @@ router.patch("/idp/:id", authorize({ feature: "hr.exit", action: "update" }), as
     const id = parseId(req.params.id, "id");
     const b = zodParse(idpPatchSchema.safeParse(req.body ?? {}));
     const sets: string[] = [`"updatedAt"=NOW()`];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
     if (b.goals !== undefined) { params.push(Array.isArray(b.goals) ? JSON.stringify(b.goals) : b.goals); sets.push(`goals=$${params.length}`); }
     if (b.skills !== undefined) { params.push(Array.isArray(b.skills) ? JSON.stringify(b.skills) : b.skills); sets.push(`skills=$${params.length}`); }
@@ -6954,7 +6954,7 @@ router.get("/employee-documents", authorize({ feature: "hr.employees", action: "
     const offset = (pageNum - 1) * perPage;
 
     let paramIdx = 1;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     paramIdx++;
     const conditions: string[] = [`ed."companyId"=$1`, `ed.status != 'deleted'`];
     if (employeeId) {
@@ -7023,7 +7023,7 @@ router.get("/excuse-requests", authorize({ feature: "hr.attendance", action: "li
     const { status, month } = req.query as any;
     const targetMonth = month || currentPeriod();
     let where = `e."companyId" = $1 AND TO_CHAR(e."excuseDate", 'YYYY-MM') = $2`;
-    const params: any[] = [scope.companyId, targetMonth];
+    const params: unknown[] = [scope.companyId, targetMonth];
     if (status) {
       params.push(status);
       where += ` AND e.status = $${params.length}`;
@@ -7037,7 +7037,7 @@ router.get("/excuse-requests", authorize({ feature: "hr.attendance", action: "li
        ORDER BY e."excuseDate" DESC, e."createdAt" DESC LIMIT 500`,
       params
     );
-    const pending = rows.filter((r: any) => r.status === "pending").length;
+    const pending = rows.filter((r: Record<string, unknown>) => r.status === "pending").length;
     res.json({ data: rows, total: rows.length, pending });
   } catch (err) { handleRouteError(err, res, "List excuse requests error:"); }
 });

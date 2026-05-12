@@ -160,7 +160,7 @@ export async function sendViaIntegration(options: SendOptions): Promise<{ succes
 
 export async function retryFailedMessages(companyId?: number): Promise<{ retried: number; succeeded: number }> {
   const conditions = [`il.status IN ('failed','pending')`, `il."retryAttempt" < COALESCE(i."maxRetries", 3)`];
-  const params: any[] = [];
+  const params: unknown[] = [];
   if (companyId) {
     params.push(companyId);
     conditions.push(`il."companyId"=$${params.length}`);

@@ -242,7 +242,7 @@ router.get("/sub-agents/unlinked", authorize({ feature: "umrah", action: "list" 
     const scope = req.scope!;
     const { seasonId } = req.query as any;
     let where = `sa."companyId" = $1 AND sa."deletedAt" IS NULL AND sa."clientId" IS NULL`;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (seasonId && Number(seasonId)) {
       // Season filter via agent's packages rather than direct column
     }
@@ -273,7 +273,7 @@ router.patch("/sub-agents/:id", authorize({ feature: "umrah", action: "update" }
     const id = parseId(req.params.id, "id");
     const parsed = zodParse(updateSubAgentSchema.safeParse(req.body));
     const b = parsed as Record<string, any>;
-    const params: any[] = [];
+    const params: unknown[] = [];
     const sets: string[] = [];
     for (const key of ["nuskCode","name","agentId","clientId","paymentTerms","defaultPricePerMutamer","phone","email","country","isActive","notes"]) {
       if (b[key] !== undefined) { params.push(b[key]); sets.push(`"${key}"=$${params.length}`); }
@@ -459,7 +459,7 @@ router.patch("/pricing/:id", authorize({ feature: "umrah", action: "update" }), 
     const id = parseId(req.params.id, "id");
     const parsed = zodParse(updatePricingSchema.safeParse(req.body));
     const b = parsed as Record<string, any>;
-    const params: any[] = [];
+    const params: unknown[] = [];
     const sets: string[] = [];
     for (const key of ["subAgentId","agentId","seasonId","pricePerMutamer","includesHotel","includesTransport","validFrom","validTo","notes"]) {
       if (b[key] !== undefined) { params.push(b[key]); sets.push(`"${key}"=$${params.length}`); }
@@ -521,7 +521,7 @@ router.get("/groups", authorize({ feature: "umrah", action: "list" }), async (re
     const scope = req.scope!;
     const { seasonId } = req.query as any;
     let where = `g."companyId" = $1 AND g."deletedAt" IS NULL`;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND g."seasonId" = $${params.length}`; }
     const rows = await rawQuery(
       `SELECT g.*, a.name AS "agentName", sa.name AS "subAgentName", s.title AS "seasonTitle"
@@ -601,7 +601,7 @@ router.patch("/groups/:id", authorize({ feature: "umrah", action: "update" }), a
     const id = parseId(req.params.id, "id");
     const b = zodParse(patchGroupSchema.safeParse(req.body));
     const fieldKeys = ["name", "agentId", "subAgentId", "mutamerCount", "programDuration", "status"] as const;
-    const params: any[] = [];
+    const params: unknown[] = [];
     const sets: string[] = [];
     for (const key of fieldKeys) {
       if (b[key] !== undefined) { params.push(b[key]); sets.push(`"${key}" = $${params.length}`); }
@@ -829,7 +829,7 @@ router.get("/nusk-invoices", authorize({ feature: "umrah", action: "list" }), as
     const scope = req.scope!;
     const { seasonId, groupId } = req.query as any;
     let where = `ni."companyId" = $1 AND ni."deletedAt" IS NULL`;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (groupId) { params.push(groupId); where += ` AND ni."groupId" = $${params.length}`; }
     if (seasonId) {
       params.push(seasonId);
@@ -941,7 +941,7 @@ router.patch("/nusk-invoices/:id", authorize({ feature: "umrah", action: "update
       throw new ConflictError("لا يمكن تعديل فاتورة نسك مدفوعة");
     }
     const fields = ["mutamerCount","groundServices","visaFees","insuranceFees","transportTotal","hotelTotal","additionalServices","netCost","totalAmount","nuskStatus","issueDate","expiryDate"] as const;
-    const params: any[] = [];
+    const params: unknown[] = [];
     const sets: string[] = [];
     for (const key of fields) {
       if ((b as any)[key] !== undefined) { params.push((b as any)[key]); sets.push(`"${key}"=$${params.length}`); }
@@ -1101,7 +1101,7 @@ router.patch("/commission-plans/:id", authorize({ feature: "umrah", action: "upd
     const b = parsed as Record<string, any>;
 
     await withTransaction(async (client) => {
-      const params: any[] = [];
+      const params: unknown[] = [];
       const sets: string[] = [];
       for (const key of [
         "planName","baseSalary","commissionType","percentageRate","fixedAmount",
@@ -1183,7 +1183,7 @@ router.get("/commission-calculations", authorize({ feature: "umrah", action: "li
     const scope = req.scope!;
     const { planId, year, month } = req.query as any;
     let where = `cc."companyId" = $1 AND cc."deletedAt" IS NULL`;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (planId) { params.push(planId); where += ` AND cc."planId" = $${params.length}`; }
     if (year) { params.push(year); where += ` AND cc.year = $${params.length}`; }
     if (month) { params.push(month); where += ` AND cc.month = $${params.length}`; }
@@ -1208,7 +1208,7 @@ router.get("/import/batches", authorize({ feature: "umrah", action: "list" }), a
     const scope = req.scope!;
     const { seasonId } = req.query as any;
     let where = `b."companyId" = $1 AND b."deletedAt" IS NULL`;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND b."seasonId" = $${params.length}`; }
     const rows = await rawQuery(
       `SELECT b.* FROM umrah_import_batches b WHERE ${where} ORDER BY b."createdAt" DESC LIMIT 500`,
@@ -1244,7 +1244,7 @@ router.get("/invoices", authorize({ feature: "umrah", action: "list" }), async (
     const scope = req.scope!;
     const { seasonId, subAgentId, status } = req.query as any;
     let where = `si."companyId" = $1 AND si."deletedAt" IS NULL`;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND si."seasonId" = $${params.length}`; }
     if (subAgentId) { params.push(subAgentId); where += ` AND si."subAgentId" = $${params.length}`; }
     if (status) { params.push(status); where += ` AND si.status = $${params.length}`; }
@@ -1283,7 +1283,7 @@ router.patch("/invoices/:id", authorize({ feature: "umrah", action: "update" }),
     const id = parseId(req.params.id, "id");
     const parsed = zodParse(updateInvoiceSchema.safeParse(req.body));
     const b = parsed as Record<string, any>;
-    const params: any[] = [];
+    const params: unknown[] = [];
     const sets: string[] = [];
     for (const key of ["status","notes","dueDate"]) {
       if (b[key] !== undefined) { params.push(b[key]); sets.push(`"${key}"=$${params.length}`); }
@@ -1315,7 +1315,7 @@ router.get("/payments", authorize({ feature: "umrah", action: "list" }), async (
     const scope = req.scope!;
     const { subAgentId } = req.query as any;
     let where = `p."companyId" = $1 AND p."deletedAt" IS NULL`;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (subAgentId) { params.push(subAgentId); where += ` AND p."subAgentId" = $${params.length}`; }
     const rows = await rawQuery(
       `SELECT p.*, sa.name AS "subAgentName"
@@ -1586,7 +1586,7 @@ router.get("/attachments", authorize({ feature: "umrah", action: "list" }), asyn
     const scope = req.scope!;
     const { entityType, entityId, type } = req.query as Record<string, string | undefined>;
     let where = `"companyId" = $1 AND "deletedAt" IS NULL`;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (entityType) { params.push(entityType); where += ` AND "entityType" = $${params.length}`; }
     if (entityId)   { params.push(Number(entityId)); where += ` AND "entityId" = $${params.length}`; }
     if (type)       { params.push(type); where += ` AND type = $${params.length}`; }

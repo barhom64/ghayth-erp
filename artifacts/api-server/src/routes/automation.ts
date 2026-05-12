@@ -53,7 +53,7 @@ router.get("/cron-logs", authorize({ feature: "admin", action: "list" }), async 
     const scope = req.scope!;
     const { jobId } = req.query as any;
     const conditions: string[] = [`"companyId" = $1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (jobId) { params.push(Number(jobId) || 0); conditions.push(`"jobId" = $${params.length}`); }
     const where = conditions.join(" AND ");
     const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM cron_logs WHERE ${where} ORDER BY "createdAt" DESC LIMIT 100`, params);
@@ -81,7 +81,7 @@ router.get("/event-logs", authorize({ feature: "admin", action: "list" }), async
     const pageLimit = Math.min(Number(lim) || 50, 200);
     const pageOffset = Number(off) || 0;
     const conditions = [`"companyId" = $1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (action) { params.push(action); conditions.push(`action = $${params.length}`); }
     const where = conditions.join(" AND ");
     const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM event_logs WHERE ${where}`, params);
@@ -129,7 +129,7 @@ router.get("/automation-logs", authorize({ feature: "admin", action: "list" }), 
     const limit = Math.min(Number(lim) || 50, 200);
     const offset = (page - 1) * limit;
     const conditions = [`"companyId" = $1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (type) { params.push(type); conditions.push(`"automationType" = $${params.length}`); }
     const where = conditions.join(" AND ");
     const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as total FROM automation_logs WHERE ${where}`, params);
