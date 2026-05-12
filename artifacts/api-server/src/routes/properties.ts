@@ -518,17 +518,18 @@ router.get("/units", authorize({ feature: "properties.units", action: "list" }),
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 100));
     const offset = (page - 1) * limit;
     conditions.push(`u."deletedAt" IS NULL`);
-    const countParams = [...params];
     const limitIdx = params.length + 1;
     const offsetIdx = params.length + 2;
     params.push(limit, offset);
-    const [rows, [countRow]] = await Promise.all([
-      rawQuery<any>(
-        `SELECT u.* FROM property_units u WHERE ${conditions.join(" AND ")} ORDER BY u."buildingName", u."unitNumber" LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
-        params
-      ),
-      rawQuery<any>(`SELECT COUNT(*) as total FROM property_units u WHERE ${conditions.join(" AND ")}`, countParams),
-    ]);
+    const rows = await rawQuery<any>(
+      `SELECT u.* FROM property_units u WHERE ${conditions.join(" AND ")} ORDER BY u."buildingName", u."unitNumber" LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+      params
+    );
+    // Drop the LIMIT/OFFSET params before running the COUNT(*) query so it
+    // still matches the `conditions` WHERE clause.
+    params.pop();
+    params.pop();
+    const [countRow] = await rawQuery<any>(`SELECT COUNT(*) as total FROM property_units u WHERE ${conditions.join(" AND ")}`, params);
     res.json({ data: rows, total: Number(countRow?.total || rows.length), page, pageSize: limit });
   } catch (err) { handleRouteError(err, res, "Property units error:"); }
 });
@@ -1640,61 +1641,59 @@ router.get("/tenants/list", authorize({ feature: "properties.tenants", action: "
       tParams.push(`%${search}%`);
       tConditions.push(`(t.name ILIKE $${tParams.length} OR t.phone ILIKE $${tParams.length} OR t."nationalId" ILIKE $${tParams.length})`);
     }
+    const standaloneRows = await rawQuery<any>(
+      `SELECT
+        t.id,
+        t.name,
+        t.phone,
+        t.email,
+        t."nationalId",
+        t.nationality,
+        COUNT(DISTINCT c.id) AS "totalContracts",
+        COUNT(DISTINCT c.id) FILTER (WHERE c.status='active') AS "activeContracts",
+        MAX(CASE WHEN c.status='active' THEN u."unitNumber" END) AS "currentUnit",
+        COALESCE(SUM(rp."paidAmount"),0) AS "totalPaid",
+        COALESCE(SUM(CASE WHEN rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE THEN rp.amount - rp."paidAmount" ELSE 0 END),0) AS "overdueAmount",
+        t."createdAt"
+       FROM tenants t
+       LEFT JOIN rental_contracts c ON (c."tenantId"=t.id OR c."tenantName"=t.name) AND c."companyId"=$1 AND c."deletedAt" IS NULL
+       LEFT JOIN property_units u ON u.id=c."unitId"
+       LEFT JOIN rent_payments rp ON rp."contractId"=c.id
+       WHERE ${tConditions.join(" AND ")}
+       GROUP BY t.id, t.name, t.phone, t.email, t."nationalId", t.nationality, t."createdAt"
+       ORDER BY t.name
+       LIMIT 500`,
+      tParams
+    );
+
     const conditions = [`c."companyId" = $1`];
     const cParams: any[] = [scope.companyId];
     if (search) { cParams.push(`%${search}%`); conditions.push(`(c."tenantName" ILIKE $${cParams.length} OR c."tenantPhone" ILIKE $${cParams.length} OR c."tenantIdNumber" ILIKE $${cParams.length})`); }
-
-    const [standaloneRows, contractRows] = await Promise.all([
-      rawQuery<any>(
-        `SELECT
-          t.id,
-          t.name,
-          t.phone,
-          t.email,
-          t."nationalId",
-          t.nationality,
-          COUNT(DISTINCT c.id) AS "totalContracts",
-          COUNT(DISTINCT c.id) FILTER (WHERE c.status='active') AS "activeContracts",
-          MAX(CASE WHEN c.status='active' THEN u."unitNumber" END) AS "currentUnit",
-          COALESCE(SUM(rp."paidAmount"),0) AS "totalPaid",
-          COALESCE(SUM(CASE WHEN rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE THEN rp.amount - rp."paidAmount" ELSE 0 END),0) AS "overdueAmount",
-          t."createdAt"
-         FROM tenants t
-         LEFT JOIN rental_contracts c ON (c."tenantId"=t.id OR c."tenantName"=t.name) AND c."companyId"=$1 AND c."deletedAt" IS NULL
-         LEFT JOIN property_units u ON u.id=c."unitId"
-         LEFT JOIN rent_payments rp ON rp."contractId"=c.id
-         WHERE ${tConditions.join(" AND ")}
-         GROUP BY t.id, t.name, t.phone, t.email, t."nationalId", t.nationality, t."createdAt"
-         ORDER BY t.name
-         LIMIT 500`,
-        tParams
-      ),
-      rawQuery<any>(
-        `SELECT
-          CONCAT('c-', ROW_NUMBER() OVER (ORDER BY c."tenantName")) AS id,
-          c."tenantName" AS name,
-          c."tenantPhone" AS phone,
-          c."tenantEmail" AS email,
-          c."tenantIdNumber" AS "nationalId",
-          NULL AS nationality,
-          COUNT(DISTINCT c.id) AS "totalContracts",
-          COUNT(DISTINCT c.id) FILTER (WHERE c.status='active') AS "activeContracts",
-          MAX(CASE WHEN c.status='active' THEN u."unitNumber" END) AS "currentUnit",
-          COALESCE(SUM(rp."paidAmount"),0) AS "totalPaid",
-          COALESCE(SUM(CASE WHEN rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE THEN rp.amount - rp."paidAmount" ELSE 0 END),0) AS "overdueAmount",
-          TRUE AS "contractOnly"
-         FROM rental_contracts c
-         LEFT JOIN property_units u ON u.id=c."unitId"
-         LEFT JOIN rent_payments rp ON rp."contractId"=c.id
-         WHERE ${conditions.join(" AND ")}
-           AND c."tenantName" NOT IN (SELECT name FROM tenants WHERE "companyId"=$1)
-           AND (c."tenantId" IS NULL OR c."tenantId" NOT IN (SELECT id FROM tenants WHERE "companyId"=$1))
-         GROUP BY c."tenantName", c."tenantPhone", c."tenantEmail", c."tenantIdNumber"
-         ORDER BY c."tenantName"
-         LIMIT 500`,
-        cParams
-      ),
-    ]);
+    const contractRows = await rawQuery<any>(
+      `SELECT
+        CONCAT('c-', ROW_NUMBER() OVER (ORDER BY c."tenantName")) AS id,
+        c."tenantName" AS name,
+        c."tenantPhone" AS phone,
+        c."tenantEmail" AS email,
+        c."tenantIdNumber" AS "nationalId",
+        NULL AS nationality,
+        COUNT(DISTINCT c.id) AS "totalContracts",
+        COUNT(DISTINCT c.id) FILTER (WHERE c.status='active') AS "activeContracts",
+        MAX(CASE WHEN c.status='active' THEN u."unitNumber" END) AS "currentUnit",
+        COALESCE(SUM(rp."paidAmount"),0) AS "totalPaid",
+        COALESCE(SUM(CASE WHEN rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE THEN rp.amount - rp."paidAmount" ELSE 0 END),0) AS "overdueAmount",
+        TRUE AS "contractOnly"
+       FROM rental_contracts c
+       LEFT JOIN property_units u ON u.id=c."unitId"
+       LEFT JOIN rent_payments rp ON rp."contractId"=c.id
+       WHERE ${conditions.join(" AND ")}
+         AND c."tenantName" NOT IN (SELECT name FROM tenants WHERE "companyId"=$1)
+         AND (c."tenantId" IS NULL OR c."tenantId" NOT IN (SELECT id FROM tenants WHERE "companyId"=$1))
+       GROUP BY c."tenantName", c."tenantPhone", c."tenantEmail", c."tenantIdNumber"
+       ORDER BY c."tenantName"
+       LIMIT 500`,
+      cParams
+    );
 
     const allRows = [...standaloneRows, ...contractRows];
     res.json({ data: allRows, total: allRows.length });
@@ -1968,7 +1967,7 @@ router.post("/payments/:id/pay", authorize({ feature: "properties.payments", act
   } catch (err) { handleRouteError(err, res, "Record rent payment error:"); }
 });
 
-router.post("/late-rent/escalate", authorize({ feature: "properties.payments", action: "create" }), async (req, res) => {
+router.post("/late-rent/escalate", authorize({ feature: "properties", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -2550,7 +2549,7 @@ router.post("/maintenance-requests/:id/complete", authorize({ feature: "properti
   }
 });
 
-router.get("/technicians", authorize({ feature: "properties.maintenance", action: "list" }), async (req, res) => {
+router.get("/technicians", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(`SELECT * FROM technicians WHERE "companyId"=$1 ORDER BY name LIMIT 500`, [scope.companyId]);
@@ -2992,48 +2991,37 @@ router.post("/maintenance", authorize({ feature: "properties.maintenance", actio
   } catch (err) { handleRouteError(err, res, "Create property maintenance error:"); }
 });
 
-router.get("/stats", authorize({ feature: "properties.units", action: "list" }), async (req, res) => {
+router.get("/stats", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [
-      [units],
-      [contracts],
-      [revenue],
-      [monthlyRevenue],
-      [annualRevenue],
-      [overdue],
-      [maintenance],
-      buildingPerf,
-    ] = await Promise.all([
-      rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='available') as available, COUNT(*) FILTER (WHERE status='rented') as rented, COUNT(*) FILTER (WHERE status='under_maintenance') as "underMaintenance" FROM property_units WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
-      rawQuery<any>(`
-        SELECT
-          COUNT(*) as active,
-          COUNT(*) FILTER (WHERE status='active' AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days') as "expiring30",
-          COUNT(*) FILTER (WHERE status='active' AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '60 days') as "expiring60",
-          COUNT(*) FILTER (WHERE status='active' AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '90 days') as "expiring90"
-        FROM rental_contracts WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
-      rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) as "totalCollected", COALESCE(SUM(amount),0) as "totalExpected" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" WHERE c."companyId"=$1 AND c."deletedAt" IS NULL`, [cid]),
-      rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) as "monthlyCollected", COALESCE(SUM(amount),0) as "monthlyExpected" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND DATE_TRUNC('month',rp."dueDate")=DATE_TRUNC('month',CURRENT_DATE)`, [cid]),
-      rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) as "annualCollected", COALESCE(SUM(amount),0) as "annualExpected" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND DATE_TRUNC('year',rp."dueDate")=DATE_TRUNC('year',CURRENT_DATE)`, [cid]),
-      rawQuery<any>(`SELECT COUNT(*) as count, COALESCE(SUM(amount - "paidAmount"),0) as "overdueAmount" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE`, [cid]),
-      rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status NOT IN ('completed','closed')) as "openTickets", COUNT(*) FILTER (WHERE priority='critical') as "criticalTickets" FROM maintenance_requests WHERE "companyId"=$1`, [cid]),
-      rawQuery<any>(`
-        SELECT b.id, b.name,
-          COUNT(u.id) AS "totalUnits",
-          COUNT(u.id) FILTER (WHERE u.status='rented') AS "rentedUnits",
-          COALESCE(SUM(rp."paidAmount"),0) AS "totalRevenue",
-          COALESCE(SUM(rp.amount),0) AS "totalExpected"
-        FROM property_buildings b
-        LEFT JOIN property_units u ON u."buildingId"=b.id AND u."companyId"=$1
-        LEFT JOIN rental_contracts rc ON rc."unitId"=u.id AND rc."companyId"=$1 AND rc."deletedAt" IS NULL
-        LEFT JOIN rent_payments rp ON rp."contractId"=rc.id
-        WHERE b."companyId"=$1
-        GROUP BY b.id, b.name
-        ORDER BY "totalRevenue" DESC
-      `, [cid]),
-    ]);
+    const [units] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='available') as available, COUNT(*) FILTER (WHERE status='rented') as rented, COUNT(*) FILTER (WHERE status='under_maintenance') as "underMaintenance" FROM property_units WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [contracts] = await rawQuery<any>(`
+      SELECT
+        COUNT(*) as active,
+        COUNT(*) FILTER (WHERE status='active' AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days') as "expiring30",
+        COUNT(*) FILTER (WHERE status='active' AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '60 days') as "expiring60",
+        COUNT(*) FILTER (WHERE status='active' AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '90 days') as "expiring90"
+      FROM rental_contracts WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [revenue] = await rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) as "totalCollected", COALESCE(SUM(amount),0) as "totalExpected" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" WHERE c."companyId"=$1 AND c."deletedAt" IS NULL`, [cid]);
+    const [monthlyRevenue] = await rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) as "monthlyCollected", COALESCE(SUM(amount),0) as "monthlyExpected" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND DATE_TRUNC('month',rp."dueDate")=DATE_TRUNC('month',CURRENT_DATE)`, [cid]);
+    const [annualRevenue] = await rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) as "annualCollected", COALESCE(SUM(amount),0) as "annualExpected" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND DATE_TRUNC('year',rp."dueDate")=DATE_TRUNC('year',CURRENT_DATE)`, [cid]);
+    const [overdue] = await rawQuery<any>(`SELECT COUNT(*) as count, COALESCE(SUM(amount - "paidAmount"),0) as "overdueAmount" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE`, [cid]);
+    const [maintenance] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status NOT IN ('completed','closed')) as "openTickets", COUNT(*) FILTER (WHERE priority='critical') as "criticalTickets" FROM maintenance_requests WHERE "companyId"=$1`, [cid]);
+    const buildingPerf = await rawQuery<any>(`
+      SELECT b.id, b.name,
+        COUNT(u.id) AS "totalUnits",
+        COUNT(u.id) FILTER (WHERE u.status='rented') AS "rentedUnits",
+        COALESCE(SUM(rp."paidAmount"),0) AS "totalRevenue",
+        COALESCE(SUM(rp.amount),0) AS "totalExpected"
+      FROM property_buildings b
+      LEFT JOIN property_units u ON u."buildingId"=b.id AND u."companyId"=$1
+      LEFT JOIN rental_contracts rc ON rc."unitId"=u.id AND rc."companyId"=$1 AND rc."deletedAt" IS NULL
+      LEFT JOIN rent_payments rp ON rp."contractId"=rc.id
+      WHERE b."companyId"=$1
+      GROUP BY b.id, b.name
+      ORDER BY "totalRevenue" DESC
+    `, [cid]);
     const occupancyRate = Number(units.total) > 0 ? Math.round((Number(units.rented) / Number(units.total)) * 100) : 0;
     const collectionRate = Number(revenue.totalExpected) > 0 ? Math.round((Number(revenue.totalCollected) / Number(revenue.totalExpected)) * 100) : 0;
     res.json({
@@ -3208,50 +3196,42 @@ router.patch("/maintenance-requests/:id", authorize({ feature: "properties.maint
   } catch (err) { handleRouteError(err, res, "Update maintenance request error:"); }
 });
 
-router.get("/operations-dashboard", authorize({ feature: "properties.units", action: "list" }), async (req, res) => {
+router.get("/operations-dashboard", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [
-      [unitStats],
-      expiringContracts,
-      overduePayments,
-      openMaintenance,
-      [collectionSummary],
-    ] = await Promise.all([
-      rawQuery<any>(
-        `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='available') as available,
-          COUNT(*) FILTER (WHERE status='rented') as rented,
-          COUNT(*) FILTER (WHERE status='under_maintenance') as maintenance
-         FROM property_units WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]
-      ),
-      rawQuery<any>(
-        `SELECT c.id, c."tenantName", c."endDate", u."unitNumber", u."buildingName"
-         FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId"
-         WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND c.status='active' AND c."endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
-         ORDER BY c."endDate"`, [cid]
-      ),
-      rawQuery<any>(
-        `SELECT rp.id, rp.amount, rp."paidAmount", rp."dueDate", c."tenantName", u."unitNumber"
-         FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId"
-         LEFT JOIN property_units u ON u.id=c."unitId"
-         WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE
-         ORDER BY rp."dueDate" LIMIT 20`, [cid]
-      ),
-      rawQuery<any>(
-        `SELECT mr.id, mr.category, mr.description, mr.priority, mr.status, mr."createdAt", mr."slaDeadline",
-          u."unitNumber", u."buildingName", mr."tenantName"
-         FROM maintenance_requests mr LEFT JOIN property_units u ON u.id=mr."unitId"
-         WHERE mr."companyId"=$1 AND mr.status NOT IN ('completed','closed','rejected')
-         ORDER BY mr.priority DESC, mr."createdAt" LIMIT 20`, [cid]
-      ),
-      rawQuery<any>(
-        `SELECT COALESCE(SUM(amount),0) as expected, COALESCE(SUM("paidAmount"),0) as collected
-         FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId"
-         WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND rp."dueDate" >= date_trunc('month', CURRENT_DATE)
-           AND rp."dueDate" < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'`, [cid]
-      ),
-    ]);
+    const [unitStats] = await rawQuery<any>(
+      `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='available') as available,
+        COUNT(*) FILTER (WHERE status='rented') as rented,
+        COUNT(*) FILTER (WHERE status='under_maintenance') as maintenance
+       FROM property_units WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]
+    );
+    const expiringContracts = await rawQuery<any>(
+      `SELECT c.id, c."tenantName", c."endDate", u."unitNumber", u."buildingName"
+       FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId"
+       WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND c.status='active' AND c."endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
+       ORDER BY c."endDate"`, [cid]
+    );
+    const overduePayments = await rawQuery<any>(
+      `SELECT rp.id, rp.amount, rp."paidAmount", rp."dueDate", c."tenantName", u."unitNumber"
+       FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId"
+       LEFT JOIN property_units u ON u.id=c."unitId"
+       WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE
+       ORDER BY rp."dueDate" LIMIT 20`, [cid]
+    );
+    const openMaintenance = await rawQuery<any>(
+      `SELECT mr.id, mr.category, mr.description, mr.priority, mr.status, mr."createdAt", mr."slaDeadline",
+        u."unitNumber", u."buildingName", mr."tenantName"
+       FROM maintenance_requests mr LEFT JOIN property_units u ON u.id=mr."unitId"
+       WHERE mr."companyId"=$1 AND mr.status NOT IN ('completed','closed','rejected')
+       ORDER BY mr.priority DESC, mr."createdAt" LIMIT 20`, [cid]
+    );
+    const [collectionSummary] = await rawQuery<any>(
+      `SELECT COALESCE(SUM(amount),0) as expected, COALESCE(SUM("paidAmount"),0) as collected
+       FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId"
+       WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND rp."dueDate" >= date_trunc('month', CURRENT_DATE)
+         AND rp."dueDate" < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'`, [cid]
+    );
     res.json({
       units: unitStats,
       expiringContracts,
@@ -3290,11 +3270,9 @@ router.get("/owners/:id", authorize({ feature: "properties.owners", action: "vie
     const id = parseId(req.params.id, "id");
     const [owner] = await rawQuery<any>(`SELECT * FROM property_owners WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!owner) throw new NotFoundError("المالك غير موجود");
-    const [buildings, units, contracts] = await Promise.all([
-      rawQuery<any>(`SELECT * FROM property_buildings WHERE "ownerId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 500`, [id, scope.companyId]),
-      rawQuery<any>(`SELECT * FROM property_units WHERE "ownerId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 500`, [id, scope.companyId]),
-      rawQuery<any>(`SELECT c.*, u."unitNumber", u."buildingName" FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId" WHERE c."ownerId"=$1 AND c."companyId"=$2 AND c."deletedAt" IS NULL ORDER BY c.id DESC LIMIT 500`, [id, scope.companyId]),
-    ]);
+    const buildings = await rawQuery<any>(`SELECT * FROM property_buildings WHERE "ownerId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 500`, [id, scope.companyId]);
+    const units = await rawQuery<any>(`SELECT * FROM property_units WHERE "ownerId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 500`, [id, scope.companyId]);
+    const contracts = await rawQuery<any>(`SELECT c.*, u."unitNumber", u."buildingName" FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId" WHERE c."ownerId"=$1 AND c."companyId"=$2 AND c."deletedAt" IS NULL ORDER BY c.id DESC LIMIT 500`, [id, scope.companyId]);
     res.json({ ...owner, buildings, units, contracts });
   } catch (err) { handleRouteError(err, res, "Owner detail error:"); }
 });
@@ -3541,7 +3519,7 @@ router.post("/contracts/:id/schedule/:installmentId/pay", authorize({ feature: "
 // PROPERTY INSPECTIONS — جدول فحص دوري للوحدات
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/inspections", authorize({ feature: "properties.maintenance", action: "list" }), async (req, res) => {
+router.get("/inspections", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { unitId, status } = req.query as any;
@@ -3562,7 +3540,7 @@ router.get("/inspections", authorize({ feature: "properties.maintenance", action
   } catch (err) { handleRouteError(err, res, "Inspections error:"); }
 });
 
-router.post("/inspections", authorize({ feature: "properties.maintenance", action: "create" }), async (req, res) => {
+router.post("/inspections", authorize({ feature: "properties", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createInspectionSchema.safeParse(req.body)) as any;
@@ -3610,7 +3588,7 @@ router.post("/inspections", authorize({ feature: "properties.maintenance", actio
   } catch (err) { handleRouteError(err, res, "Create inspection error:"); }
 });
 
-router.patch("/inspections/:id", authorize({ feature: "properties.maintenance", action: "update" }), async (req, res) => {
+router.patch("/inspections/:id", authorize({ feature: "properties", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -3709,7 +3687,7 @@ router.patch("/inspections/:id", authorize({ feature: "properties.maintenance", 
 // SECURITY DEPOSITS — ودائع ضمان
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/deposits", authorize({ feature: "properties.payments", action: "list" }), async (req, res) => {
+router.get("/deposits", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, contractId } = req.query as any;
@@ -3731,7 +3709,7 @@ router.get("/deposits", authorize({ feature: "properties.payments", action: "lis
   } catch (err) { handleRouteError(err, res, "Security deposits error:"); }
 });
 
-router.post("/deposits", authorize({ feature: "properties.payments", action: "create" }), async (req, res) => {
+router.post("/deposits", authorize({ feature: "properties", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createDepositSchema.safeParse(req.body)) as any;
@@ -3798,7 +3776,7 @@ router.post("/deposits", authorize({ feature: "properties.payments", action: "cr
   } catch (err) { handleRouteError(err, res, "Create deposit error:"); }
 });
 
-router.patch("/deposits/:id/refund", authorize({ feature: "properties.payments", action: "update" }), async (req, res) => {
+router.patch("/deposits/:id/refund", authorize({ feature: "properties", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -3870,7 +3848,7 @@ router.patch("/deposits/:id/refund", authorize({ feature: "properties.payments",
 // OCCUPANCY REPORT — تقرير الإشغال التفاعلي
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/occupancy-report", authorize({ feature: "properties.units", action: "list" }), async (req, res) => {
+router.get("/occupancy-report", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { buildingId } = req.query as any;
