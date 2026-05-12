@@ -82,7 +82,7 @@ export async function getUsageStats(companyId: number, days: number = 30): Promi
 }> {
   const since = `NOW() - INTERVAL '1 day' * $2`;
 
-  const topPages = await rawQuery<any>(
+  const topPages = await rawQuery<Record<string, unknown>>(
     `SELECT COALESCE(page, path, entity) AS page, COUNT(*)::int AS visits
      FROM user_activity_log
      WHERE "companyId"=$1 AND "createdAt" >= ${since}
@@ -92,7 +92,7 @@ export async function getUsageStats(companyId: number, days: number = 30): Promi
     [companyId, days]
   ).catch((e) => { logger.error(e, "activity tracker query failed"); return []; });
 
-  const peakHours = await rawQuery<any>(
+  const peakHours = await rawQuery<Record<string, unknown>>(
     `SELECT EXTRACT(HOUR FROM "createdAt")::int AS hour, COUNT(*)::int AS count
      FROM user_activity_log
      WHERE "companyId"=$1 AND "createdAt" >= ${since}
@@ -101,7 +101,7 @@ export async function getUsageStats(companyId: number, days: number = 30): Promi
     [companyId, days]
   ).catch((e) => { logger.error(e, "activity tracker query failed"); return []; });
 
-  const topUsers = await rawQuery<any>(
+  const topUsers = await rawQuery<Record<string, unknown>>(
       `SELECT ual."userId", COALESCE(e.name, u.email, 'مستخدم ' || ual."userId") AS name, COUNT(*)::int AS count
        FROM user_activity_log ual
        LEFT JOIN users u ON u.id = ual."userId"
@@ -113,7 +113,7 @@ export async function getUsageStats(companyId: number, days: number = 30): Promi
       [companyId, days]
     ).catch((e) => { logger.error(e, "activity tracker query failed"); return []; });
 
-  const moduleUsage = await rawQuery<any>(
+  const moduleUsage = await rawQuery<Record<string, unknown>>(
     `SELECT COALESCE(entity, 'other') AS module, COUNT(*)::int AS count
      FROM user_activity_log
      WHERE "companyId"=$1 AND "createdAt" >= ${since}
@@ -123,7 +123,7 @@ export async function getUsageStats(companyId: number, days: number = 30): Promi
     [companyId, days]
   ).catch((e) => { logger.error(e, "activity tracker query failed"); return []; });
 
-  const dailyActivity = await rawQuery<any>(
+  const dailyActivity = await rawQuery<Record<string, unknown>>(
     `SELECT "createdAt"::date::text AS date, COUNT(*)::int AS count
      FROM user_activity_log
      WHERE "companyId"=$1 AND "createdAt" >= ${since}
@@ -132,7 +132,7 @@ export async function getUsageStats(companyId: number, days: number = 30): Promi
     [companyId, days]
   ).catch((e) => { logger.error(e, "activity tracker query failed"); return []; });
 
-  const repeatedActions = await rawQuery<any>(
+  const repeatedActions = await rawQuery<Record<string, unknown>>(
       `SELECT ual."userId", COALESCE(e.name, u.email, 'مستخدم ' || ual."userId") AS name,
               entity, method, COUNT(*)::int AS count
        FROM user_activity_log ual
@@ -146,5 +146,12 @@ export async function getUsageStats(companyId: number, days: number = 30): Promi
       [companyId, days]
     ).catch((e) => { logger.error(e, "activity tracker query failed"); return []; });
 
-    return { topPages, peakHours, topUsers, moduleUsage, dailyActivity, repeatedActions };
+    return {
+      topPages: topPages as { page: string; visits: number }[],
+      peakHours: peakHours as { hour: number; count: number }[],
+      topUsers: topUsers as { userId: number; name: string; count: number }[],
+      moduleUsage: moduleUsage as { module: string; count: number }[],
+      dailyActivity: dailyActivity as { date: string; count: number }[],
+      repeatedActions: repeatedActions as { userId: number; name: string; entity: string; method: string; count: number }[],
+    };
 }

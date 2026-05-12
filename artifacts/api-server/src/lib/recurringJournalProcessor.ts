@@ -75,7 +75,7 @@ export async function runRecurringJournal(params: {
 }
 
 export async function processDueRecurringJournals(): Promise<string> {
-  const due = await rawQuery<any>(
+  const due = await rawQuery<Record<string, unknown>>(
     `SELECT * FROM recurring_journals
      WHERE active = TRUE AND "deletedAt" IS NULL AND "nextRunDate" <= CURRENT_DATE`
   );
@@ -83,10 +83,10 @@ export async function processDueRecurringJournals(): Promise<string> {
   let failed = 0;
   for (const r of due) {
     const result = await runRecurringJournal({
-      companyId: r.companyId,
+      companyId: r.companyId as number,
       recurring: r,
       triggeredBy: "scheduler",
-      branchId: r.branchId ?? undefined,
+      branchId: (r.branchId as number | undefined) ?? undefined,
     });
     if (result.success) ok++; else failed++;
   }

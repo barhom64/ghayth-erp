@@ -7,7 +7,7 @@ import { logger } from "../lib/logger.js";
 
 const router = Router();
 
-const safeQuery = async <T = any>(sql: string, params: any[] = [], fallback: T[] = []): Promise<T[]> => {
+const safeQuery = async <T = Record<string, unknown>>(sql: string, params: unknown[] = [], fallback: T[] = []): Promise<T[]> => {
   try {
     return await rawQuery<T>(sql, params);
   } catch (e) {
@@ -16,7 +16,7 @@ const safeQuery = async <T = any>(sql: string, params: any[] = [], fallback: T[]
   }
 };
 
-const sq1 = async (sql: string, params: any[] = [], fb: any = {}): Promise<any> => {
+const sq1 = async (sql: string, params: unknown[] = [], fb: Record<string, unknown> = {}): Promise<Record<string, unknown>> => {
   const rows = await safeQuery(sql, params, [fb]);
   return rows[0] ?? fb;
 };

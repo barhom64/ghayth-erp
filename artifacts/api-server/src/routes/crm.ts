@@ -162,7 +162,7 @@ const STAGE_AUTO_ACTIONS: Record<string, { followUpDays: number; description: st
 router.get("/opportunities", authorize({ feature: "crm.opportunities", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { stage, status } = req.query as any;
+    const { stage, status } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'o."companyId"', disableBranchScope: true });
     let where = baseWhere;

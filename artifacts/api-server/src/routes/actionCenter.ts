@@ -43,7 +43,7 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
       umrahUnlinkedSubAgents, umrahOverstayWithoutPenalty,
       umrahOverdueInvoices, umrahReconAmountDiffs,
     ] = await Promise.all([
-      ifRole(LEAVE_APPROVAL_ROLES, () => rawQuery<any>(
+      ifRole(LEAVE_APPROVAL_ROLES, () => rawQuery<Record<string, unknown>>(
         `SELECT lr.id, e.name AS "employeeName", lt.name AS "leaveType",
                 lr."startDate", lr."endDate", lr.days, lr.status, lr."createdAt"
          FROM hr_leave_requests lr
@@ -59,7 +59,7 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
          ORDER BY lr."createdAt" DESC LIMIT 20`,
         [cc, scope.role, scope.activeAssignmentId]
       ), "pendingLeaves"),
-      ifRole(PAYROLL_ROLES, () => rawQuery<any>(
+      ifRole(PAYROLL_ROLES, () => rawQuery<Record<string, unknown>>(
         `SELECT je.id, je.description AS reason,
                 COALESCE((SELECT SUM(jl.debit) FROM journal_lines jl WHERE jl."journalId" = je.id AND jl.debit > 0), 0) AS amount,
                 ea2.id IS NOT NULL AS "hasAssignment",
@@ -73,7 +73,7 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
          ORDER BY je."createdAt" DESC LIMIT 20`,
         [cc]
       ), "pendingAdvances"),
-      ifRole(FINANCE_ROLES, () => rawQuery<any>(
+      ifRole(FINANCE_ROLES, () => rawQuery<Record<string, unknown>>(
         `SELECT je.id, je.description,
                 COALESCE((SELECT SUM(jl.debit) FROM journal_lines jl WHERE jl."journalId" = je.id AND jl.debit > 0), 0) AS amount,
                 COALESCE(emp.name, je.description) AS "employeeName",
@@ -86,7 +86,7 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
          ORDER BY je."createdAt" DESC LIMIT 20`,
         [cc]
       ), "pendingCustodies"),
-      ifRole(LETTER_APPROVAL_ROLES, () => rawQuery<any>(
+      ifRole(LETTER_APPROVAL_ROLES, () => rawQuery<Record<string, unknown>>(
         `SELECT ol.id, e.name AS "employeeName", ol.type AS "letterType", ol.status, ol."createdAt"
          FROM official_letters ol
          JOIN employees e ON e.id = ol."employeeId"
@@ -94,35 +94,35 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
          ORDER BY ol."createdAt" DESC LIMIT 20`,
         [cc]
       ), "pendingLetters"),
-      ifRole(PR_APPROVAL_ROLES, () => rawQuery<any>(
+      ifRole(PR_APPROVAL_ROLES, () => rawQuery<Record<string, unknown>>(
         `SELECT id, title, status, "createdAt"
          FROM purchase_requests
          WHERE "companyId" = ANY($1::int[]) AND status = 'pending'
          ORDER BY "createdAt" DESC LIMIT 20`,
         [cc]
       ), "pendingPurchases"),
-      ifRole(FINANCE_ROLES, () => rawQuery<any>(
+      ifRole(FINANCE_ROLES, () => rawQuery<Record<string, unknown>>(
         `SELECT id, ref, title, status, "createdAt"
          FROM expense_claims
          WHERE "companyId" = ANY($1::int[]) AND status = 'pending' AND "deletedAt" IS NULL
          ORDER BY "createdAt" DESC LIMIT 20`,
         [cc]
       ), "pendingExpenses"),
-      safe(rawQuery<any>(
+      safe(rawQuery<Record<string, unknown>>(
         `SELECT id, title, "createdAt", "slaDeadline"
          FROM support_tickets
          WHERE "companyId" = ANY($1::int[]) AND "deletedAt" IS NULL AND status = 'open' AND "slaDeadline" < NOW()
          ORDER BY "slaDeadline" ASC LIMIT 10`,
         [cc]
       ), "slaBreached"),
-      safe(rawQuery<any>(
+      safe(rawQuery<Record<string, unknown>>(
         `SELECT n.id, n.title, n.body, n.priority, n."createdAt"
          FROM notifications n
          WHERE n."assignmentId" = $1 AND n."companyId" = ANY($2::int[]) AND n.type IN ('escalation','sla_breach','urgent') AND n."isRead" = false
          ORDER BY n."createdAt" DESC LIMIT 10`,
         [scope.activeAssignmentId, cc]
       ), "escalations"),
-      safe(rawQuery<any>(
+      safe(rawQuery<Record<string, unknown>>(
         `SELECT t.id, t.title, t.status, t.priority, t."scheduledDate",
                 e.name AS "assigneeName"
          FROM tasks t
@@ -135,14 +135,14 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
          LIMIT 15`,
         [...tp, today]
       ), "todayTasks"),
-      safe(rawQuery<any>(
+      safe(rawQuery<Record<string, unknown>>(
         `SELECT id, type, title, body, priority, "createdAt"
          FROM notifications
          WHERE "assignmentId" = $1 AND "companyId" = ANY($2::int[]) AND priority IN ('high','urgent','critical') AND "isRead" = false
          ORDER BY "createdAt" DESC LIMIT 10`,
         [scope.activeAssignmentId, cc]
       ), "criticalAlerts"),
-      ifRole(PAYROLL_ROLES, () => rawQuery<any>(
+      ifRole(PAYROLL_ROLES, () => rawQuery<Record<string, unknown>>(
         `SELECT l.id, l."loanNumber", l."loanType", l.amount, l.status, l."createdAt",
                 e.name AS "employeeName"
          FROM hr_employee_loans l
@@ -152,7 +152,7 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
          ORDER BY l."createdAt" DESC LIMIT 20`,
         [cc]
       ), "pendingLoans"),
-      ifRole(PAYROLL_ROLES, () => rawQuery<any>(
+      ifRole(PAYROLL_ROLES, () => rawQuery<Record<string, unknown>>(
         `SELECT o.id, o."requestNumber", o.hours, o."totalAmount", o.status, o."createdAt",
                 e.name AS "employeeName"
          FROM hr_overtime_requests o
@@ -162,7 +162,7 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
          ORDER BY o."createdAt" DESC LIMIT 20`,
         [cc]
       ), "pendingOvertime"),
-      ifRole(PAYROLL_ROLES, () => rawQuery<any>(
+      ifRole(PAYROLL_ROLES, () => rawQuery<Record<string, unknown>>(
         `SELECT er.id, er."exitType", er.status, er."createdAt",
                 e.name AS "employeeName"
          FROM hr_exit_requests er
@@ -172,7 +172,7 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
          ORDER BY er."createdAt" DESC LIMIT 20`,
         [cc]
       ), "pendingExitRequests"),
-      ifRole(PAYROLL_ROLES, () => rawQuery<any>(
+      ifRole(PAYROLL_ROLES, () => rawQuery<Record<string, unknown>>(
         `SELECT t.id, t.status, t."createdAt",
                 e.name AS "employeeName"
          FROM employee_transfers t
@@ -181,7 +181,7 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
          ORDER BY t."createdAt" DESC LIMIT 20`,
         [cc]
       ), "pendingTransfers"),
-      ifRole(LEAVE_APPROVAL_ROLES, () => rawQuery<any>(
+      ifRole(LEAVE_APPROVAL_ROLES, () => rawQuery<Record<string, unknown>>(
         `SELECT er.id, er."excuseDate", er."excuseType", er.reason, er.status, er."createdAt",
                 e.name AS "employeeName"
          FROM hr_excuse_requests er
@@ -191,7 +191,7 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
          ORDER BY er."createdAt" DESC LIMIT 20`,
         [cc]
       ), "pendingExcuses"),
-      ifRole(PAYROLL_ROLES, () => rawQuery<any>(
+      ifRole(PAYROLL_ROLES, () => rawQuery<Record<string, unknown>>(
         `SELECT dm.id, dm.status, dm."createdAt",
                 e.name AS "employeeName"
          FROM hr_inquiry_memos dm
@@ -201,28 +201,28 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
          ORDER BY dm."createdAt" DESC LIMIT 20`,
         [cc]
       ), "pendingViolations"),
-      ifRole(FINANCE_ROLES, () => rawQuery<any>(
+      ifRole(FINANCE_ROLES, () => rawQuery<Record<string, unknown>>(
         `SELECT id, ref, status, "createdAt"
          FROM purchase_orders
          WHERE "companyId" = ANY($1::int[]) AND status = 'pending_approval' AND "deletedAt" IS NULL
          ORDER BY "createdAt" DESC LIMIT 20`,
         [cc]
       ), "pendingPurchaseOrders"),
-      ifRole(PAYROLL_ROLES, () => rawQuery<any>(
+      ifRole(PAYROLL_ROLES, () => rawQuery<Record<string, unknown>>(
         `SELECT id, name AS title, status, "createdAt"
          FROM training_programs
          WHERE "companyId" = ANY($1::int[]) AND status = 'pending' AND "deletedAt" IS NULL
          ORDER BY "createdAt" DESC LIMIT 20`,
         [cc]
       ), "pendingTrainings"),
-      safe(rawQuery<any>(
+      safe(rawQuery<Record<string, unknown>>(
         `SELECT id, title, status, priority, "createdAt"
          FROM maintenance_requests
          WHERE "companyId" = ANY($1::int[]) AND status = 'pending' AND "deletedAt" IS NULL
          ORDER BY "createdAt" DESC LIMIT 20`,
         [cc]
       ), "pendingMaintenance"),
-      ifRole(FINANCE_ROLES, () => rawQuery<any>(
+      ifRole(FINANCE_ROLES, () => rawQuery<Record<string, unknown>>(
         `SELECT id, ref, description, status, "createdAt"
          FROM journal_entries
          WHERE "companyId" = ANY($1::int[]) AND status = 'pending_approval' AND "deletedAt" IS NULL
@@ -230,14 +230,14 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
          ORDER BY "createdAt" DESC LIMIT 20`,
         [cc]
       ), "pendingJournals"),
-      safe(rawQuery<any>(
+      safe(rawQuery<Record<string, unknown>>(
         `SELECT id, status, "countDate", notes, "createdAt"
          FROM inventory_counts
          WHERE "companyId" = ANY($1::int[]) AND status = 'pending_approval' AND "deletedAt" IS NULL
          ORDER BY "createdAt" DESC LIMIT 20`,
         [cc]
       ), "pendingInventory"),
-      safe(rawQuery<any>(
+      safe(rawQuery<Record<string, unknown>>(
         `SELECT wi.id, wi."requestType", wi.title, wi.status, wi."slaStatus",
                 wi."currentStepOrder", wi."createdAt", wi."submittedBy",
                 e.name AS "submittedByName"

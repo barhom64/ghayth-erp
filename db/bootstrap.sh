@@ -121,6 +121,16 @@ if [ -f "$ALDIYAA_FILE" ]; then
   PGPASSWORD="$DB_PASSWORD" psql "$DSN" -v ON_ERROR_STOP=1 -q -f "$ALDIYAA_FILE"
 fi
 
+# 7d. seed Al-Diyaa company-level defaults that mirror bootstrapCompany():
+#     chart of accounts, role permissions, leave types, shifts, salary
+#     components, and system_settings (settings + violation types +
+#     approval chains + numbering prefixes + penalty ladder).
+ALDIYAA_DEFAULTS_FILE="$REPO_ROOT/db/seed-aldiyaa-company-defaults.sql"
+if [ -f "$ALDIYAA_DEFAULTS_FILE" ]; then
+  echo "  Seeding Al-Diyaa wal-Bayan company defaults (COA, roles, settings)..."
+  PGPASSWORD="$DB_PASSWORD" psql "$DSN" -v ON_ERROR_STOP=1 -q -f "$ALDIYAA_DEFAULTS_FILE"
+fi
+
 # 8. mark every existing migration as applied so runMigrations skips them
 # on the first server boot. Otherwise they'd try to ALTER TABLE on a
 # baseline that already has those columns.

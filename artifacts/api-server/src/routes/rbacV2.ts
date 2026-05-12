@@ -146,7 +146,7 @@ router.patch("/roles/:id", authorize({ feature: "admin.roles", action: "update" 
 
     const fields = ["label_ar", "label_en", "description", "level", "parent_role_id", "color", "is_active"];
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     let idx = 1;
     for (const f of fields) {
       const camel = f.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
@@ -434,7 +434,7 @@ router.patch("/sod/:id", authorize({ feature: "admin.roles", action: "update" })
     const b = zodParse(updateSodSchema.safeParse(req.body));
     const fields = ["label_ar", "feature_a", "action_a", "feature_b", "action_b", "severity", "is_active"];
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     let idx = 1;
     for (const f of fields) {
       const camel = f.replace(/_([a-z])/g, (_, c) => c.toUpperCase()) as keyof typeof b;
@@ -477,7 +477,7 @@ router.get("/users", authorize({ feature: "admin.users", action: "list" }), asyn
   try {
     const scope = req.scope!;
     const search = String(req.query.q || "").trim();
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     let where = `ea."companyId" = $1 AND ea.status = 'active'`;
     if (search) {
       where += ` AND (e.name ILIKE $2 OR u.email ILIKE $2 OR ea."jobTitle" ILIKE $2)`;
@@ -1018,7 +1018,7 @@ router.post("/jit/:id/approve", authorize({ feature: "admin.roles", action: "upd
     const body = jitDecisionSchema.parse(req.body || {});
 
     await withTransaction(async (client) => {
-      const { rows: [j] } = await client.query<any>(
+      const { rows: [j] } = await client.query<Record<string, unknown>>(
         `SELECT * FROM rbac_jit_requests WHERE id = $1 AND "companyId" = $2 FOR UPDATE`,
         [id, scope.companyId]
       );
@@ -1026,7 +1026,7 @@ router.post("/jit/:id/approve", authorize({ feature: "admin.roles", action: "upd
       if (j.status !== "pending") throw new ValidationError(`لا يمكن اعتماد طلب بحالة "${j.status}"`);
       if (j.userId === scope.userId) throw new ValidationError("لا يمكنك اعتماد طلبك");
 
-      const expiresAt = new Date(Date.now() + j.requested_minutes * 60_000);
+      const expiresAt = new Date(Date.now() + Number(j.requested_minutes) * 60_000);
 
       // Insert the time-bound user grant — engine sees it instantly.
       await client.query(

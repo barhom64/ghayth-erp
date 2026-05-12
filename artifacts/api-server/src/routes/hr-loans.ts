@@ -171,7 +171,7 @@ router.get("/loans", authorize({ feature: "hr.loans", action: "list" }), async (
   try {
     await ensureLoanTables();
     const scope = req.scope!;
-    const { status, assignmentId } = req.query as any;
+    const { status, assignmentId } = req.query as Record<string, string | undefined>;
 
     let where = `l."companyId" = $1 AND l."deletedAt" IS NULL`;
     const params: unknown[] = [scope.companyId];

@@ -174,7 +174,7 @@ router.get("/exit", authorize({ feature: "hr.exit", action: "list" }), async (re
   try {
     await ensureExitTables();
     const scope = req.scope!;
-    const { status } = req.query as any;
+    const { status } = req.query as Record<string, string | undefined>;
 
     let where = `x."companyId" = $1 AND x."deletedAt" IS NULL`;
     const params: unknown[] = [scope.companyId];

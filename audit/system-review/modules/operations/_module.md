@@ -1,6 +1,6 @@
 # وحدة `operations` — نظرة عامة
 
-> الموجة: **—** | عدد الصفحات: **42** | أوراق منشأة: **42**
+> الموجة: **—** | عدد الصفحات: **43** | أوراق منشأة: **43**
 
 ## KPIs
 - مشاكل إجمالية: **0** (🔴 0 / ⚠ 0 / ℹ 0)
@@ -39,6 +39,7 @@
 | [/umrah/transport/:id](./umrah-transport-byid.md) | `/umrah/transport/:id` | `:id` | 151 | 0 | 0 | 0 |
 | [/umrah/import/legacy](./umrah-import-legacy.md) | `/umrah/import/legacy` | `legacy` | 264 | 2 | 1 | 0 |
 | [/umrah/sub-agents](./umrah-sub-agents.md) | `/umrah/sub-agents` | `sub-agents` | 387 | 0 | 2 | 0 |
+| [/umrah/sub-agents/:id](./umrah-sub-agents-byid.md) | `/umrah/sub-agents/:id` | `:id` | 202 | 0 | 2 | 0 |
 | [/umrah/pricing](./umrah-pricing.md) | `/umrah/pricing` | `pricing` | 407 | 0 | 2 | 0 |
 | [/umrah/commission-plans](./umrah-commission-plans.md) | `/umrah/commission-plans` | `commission-plans` | 327 | 0 | 2 | 0 |
 | [/umrah/commission-plans/new](./umrah-commission-plans-new.md) | `/umrah/commission-plans/new` | `new` | 629 | 0 | 1 | 0 |

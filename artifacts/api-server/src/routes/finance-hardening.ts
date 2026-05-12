@@ -131,7 +131,7 @@ const createProjectSchema = z.object({
 financeHardeningRouter.get("/fiscal-periods-v2", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT fp.*,
               ea.id AS "closedByAssignmentId",
               e.name AS "closedByName"
@@ -158,7 +158,7 @@ financeHardeningRouter.post("/fiscal-periods-v2", authorize({ feature: "finance.
        VALUES ($1,$2,$3,$4,'open',$5)`,
       [scope.companyId, name, startDate, endDate, notes ?? null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM financial_periods WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM financial_periods WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     emitEvent({
       companyId: scope.companyId,
@@ -194,13 +194,13 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/close", authorize({ feature:
     // Pre-flight: refuse close when the period still has unposted manual
     // journals. The business rule lives here (not in applyTransition) so we
     // can surface a ConflictError with structured `pendingCount` meta.
-    const [period] = await rawQuery<any>(
+    const [period] = await rawQuery<Record<string, unknown>>(
       `SELECT id, name, "startDate", "endDate" FROM financial_periods WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [periodId, scope.companyId]
     );
     if (!period) throw new NotFoundError("الفترة غير موجودة");
 
-    const pendingJournals = await rawQuery<any>(
+    const pendingJournals = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM journal_entries
        WHERE "companyId"=$1 AND "deletedAt" IS NULL
          AND "createdAt"::date BETWEEN $2 AND $3
@@ -224,7 +224,7 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/close", authorize({ feature:
     // status='closed' + audit trail + event_logs + eventBus emission
     // atomically. Any attempt to close an already-closed period is rejected
     // by the engine's fromStates check, not by a hand-written guard.
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "financial_periods",
       id: periodId,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
@@ -263,13 +263,13 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", authorize({ feature
 
     // Fetch only the name for the success message; the engine does the
     // state check and row update.
-    const [period] = await rawQuery<any>(
+    const [period] = await rawQuery<Record<string, unknown>>(
       `SELECT name FROM financial_periods WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [periodId, scope.companyId]
     );
     if (!period) throw new NotFoundError("الفترة غير موجودة");
 
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "financial_periods",
       id: periodId,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
@@ -310,8 +310,8 @@ financeHardeningRouter.post("/journal-manual", authorize({ feature: "finance.har
 
     const { description, lines, costCenter, notes } = zodParse(createManualJournalSchema.safeParse(req.body ?? {}));
 
-    const totalDebit = lines.reduce((s: number, l: any) => s + Number(l.debit ?? 0), 0);
-    const totalCredit = lines.reduce((s: number, l: any) => s + Number(l.credit ?? 0), 0);
+    const totalDebit = lines.reduce((s: number, l) => s + Number(l.debit ?? 0), 0);
+    const totalCredit = lines.reduce((s: number, l) => s + Number(l.credit ?? 0), 0);
     if (Math.abs(totalDebit - totalCredit) > 0.01) {
       throw new ValidationError(
         `القيد غير متوازن: مدين ${totalDebit.toFixed(2)}، دائن ${totalCredit.toFixed(2)}`,
@@ -360,7 +360,7 @@ financeHardeningRouter.post("/journal-manual", authorize({ feature: "finance.har
       after: { ref, totalDebit, lineCount: lines.length, approvalStatus: "draft", isManual: true },
     }).catch((err) => logger.error(err, "[audit] journal.manual_created:"));
 
-    const [createdManualJournal] = await rawQuery<any>(
+    const [createdManualJournal] = await rawQuery<Record<string, unknown>>(
       `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit, 'description', jl.description)) AS lines
        FROM journal_entries je
        LEFT JOIN journal_lines jl ON jl."journalId" = je.id
@@ -377,12 +377,12 @@ financeHardeningRouter.post("/journal-manual", authorize({ feature: "finance.har
 financeHardeningRouter.get("/journal-manual", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { status } = req.query as any;
+    const { status } = req.query as Record<string, string | undefined>;
     const conditions = [`je."companyId"=$1`, `je."isManual"=TRUE`, `je."deletedAt" IS NULL`];
     const params: any[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`je."approvalStatus"=$${params.length}`); }
 
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT je.*, json_agg(jl.*) AS lines,
               e_rev.name AS "reviewedByName",
               e_apr.name AS "approvedByName",
@@ -410,7 +410,7 @@ financeHardeningRouter.get("/journal-manual/:id", authorize({ feature: "finance.
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT je.*, json_agg(jl.*) FILTER (WHERE jl.id IS NOT NULL) AS lines,
               e_cre.name AS "createdByName"
        FROM journal_entries je
@@ -448,13 +448,13 @@ financeHardeningRouter.patch("/journal-manual/:id/submit", authorize({ feature: 
     const journalId = parseId(req.params.id, "id");
 
     // Fetch ref only for the success message; engine does state validation.
-    const [je] = await rawQuery<any>(
+    const [je] = await rawQuery<Record<string, unknown>>(
       `SELECT ref FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`,
       [journalId, scope.companyId]
     );
     if (!je) throw new NotFoundError("القيد غير موجود");
 
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "journal_entries",
       id: journalId,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
@@ -488,7 +488,7 @@ financeHardeningRouter.patch("/journal-manual/:id/review", authorize({ feature: 
     // Fetch createdBy for the "cannot review your own entry" business rule
     // plus ref for the success message. State validation still happens in
     // the engine.
-    const [je] = await rawQuery<any>(
+    const [je] = await rawQuery<Record<string, unknown>>(
       `SELECT ref, "createdBy" FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`,
       [journalId, scope.companyId]
     );
@@ -512,7 +512,7 @@ financeHardeningRouter.patch("/journal-manual/:id/review", authorize({ feature: 
     }
 
     const newStatus = approved ? "approved" : "rejected";
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "journal_entries",
       id: journalId,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
@@ -549,7 +549,7 @@ financeHardeningRouter.patch("/journal-manual/:id/approve", authorize({ feature:
     const journalId = parseId(req.params.id, "id");
     const { approved, notes } = zodParse(approveJournalSchema.safeParse(req.body ?? {}));
 
-    const [je] = await rawQuery<any>(
+    const [je] = await rawQuery<Record<string, unknown>>(
       `SELECT ref FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`,
       [journalId, scope.companyId]
     );
@@ -563,7 +563,7 @@ financeHardeningRouter.patch("/journal-manual/:id/approve", authorize({ feature:
     }
 
     const newStatus = approved ? "approved" : "rejected";
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "journal_entries",
       id: journalId,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
@@ -600,7 +600,7 @@ financeHardeningRouter.patch("/journal-manual/:id/post", authorize({ feature: "f
 
     const journalId = parseId(req.params.id, "id");
 
-    const [je] = await rawQuery<any>(
+    const [je] = await rawQuery<Record<string, unknown>>(
       `SELECT ref FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`,
       [journalId, scope.companyId]
     );
@@ -610,7 +610,7 @@ financeHardeningRouter.patch("/journal-manual/:id/post", authorize({ feature: "f
     // engine drives the approvalStatus transition (gate check + row update),
     // and setExtras carries the mirror write to status and the posting
     // metadata columns. This keeps one atomic UPDATE for the whole flip.
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "journal_entries",
       id: journalId,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
@@ -647,7 +647,7 @@ financeHardeningRouter.patch("/journal-manual/:id/post", authorize({ feature: "f
 financeHardeningRouter.get("/bank-guarantees", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT bg.*,
               (bg."expiryDate"::date - CURRENT_DATE) AS "daysToExpiry",
               CASE
@@ -666,9 +666,9 @@ financeHardeningRouter.get("/bank-guarantees", authorize({ feature: "finance.har
 
     const summary = {
       total: rows.length,
-      totalAmount: rows.filter((r: any) => r.status === 'active').reduce((s: number, r: any) => s + Number(r.amount), 0),
-      expiring30: rows.filter((r: any) => ['expiring_7', 'expiring_14', 'expiring_30'].includes(r.alertStatus)).length,
-      expired: rows.filter((r: any) => r.alertStatus === 'expired').length,
+      totalAmount: rows.filter((r) => r.status === 'active').reduce((s: number, r) => s + Number(r.amount), 0),
+      expiring30: rows.filter((r) => ['expiring_7', 'expiring_14', 'expiring_30'].includes(r.alertStatus as string)).length,
+      expired: rows.filter((r) => r.alertStatus === 'expired').length,
     };
 
     res.json({ data: rows, summary });
@@ -687,7 +687,7 @@ financeHardeningRouter.post("/bank-guarantees", authorize({ feature: "finance.ha
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
       [scope.companyId, branchId ?? scope.branchId, ref, bank, beneficiary, Number(amount), issueDate, expiryDate, guaranteeType ?? "performance", notes ?? null, attachmentUrl ?? null, scope.activeAssignmentId]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM bank_guarantees WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM bank_guarantees WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     emitEvent({
       companyId: scope.companyId,
@@ -732,7 +732,7 @@ financeHardeningRouter.patch("/bank-guarantees/:id", authorize({ feature: "finan
       });
     }
     params.push(Number(id), scope.companyId);
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `UPDATE bank_guarantees SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
@@ -768,7 +768,7 @@ financeHardeningRouter.delete("/bank-guarantees/:id", authorize({ feature: "fina
 
     const guaranteeId = parseId(req.params.id, "id");
 
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<Record<string, unknown>>(
       `SELECT id, ref, bank, status, amount FROM bank_guarantees WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [guaranteeId, scope.companyId]
     );
@@ -789,7 +789,7 @@ financeHardeningRouter.delete("/bank-guarantees/:id", authorize({ feature: "fina
     // Phase 9: bank_guarantees now has a deletedAt column, so DELETE is a
     // soft-delete. Hard-deleting would orphan any paired journal entries
     // that referenced the guarantee by id.
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `UPDATE bank_guarantees SET "deletedAt" = NOW(), "updatedAt" = NOW()
        WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL RETURNING id`,
       [guaranteeId, scope.companyId]
@@ -839,7 +839,7 @@ financeHardeningRouter.post("/bank-guarantees/:id/cancel", authorize({ feature: 
     const guaranteeId = parseId(req.params.id, "id");
     const { reason } = zodParse(cancelBankGuaranteeSchema.safeParse(req.body ?? {}));
 
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<Record<string, unknown>>(
       `SELECT ref, bank, notes FROM bank_guarantees WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [guaranteeId, scope.companyId]
     );
@@ -852,7 +852,7 @@ financeHardeningRouter.post("/bank-guarantees/:id/cancel", authorize({ feature: 
     // notes here and pass it as a plain parameter so the value is
     // parameterised rather than interpolated into raw SQL.
     const combinedNotes = `${existing.notes ?? ""}${existing.notes ? " | " : ""}إلغاء: ${reason}`;
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "bank_guarantees",
       id: guaranteeId,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
@@ -886,7 +886,7 @@ financeHardeningRouter.post("/bank-guarantees/:id/release", authorize({ feature:
     const guaranteeId = parseId(req.params.id, "id");
     const { notes } = zodParse(releaseBankGuaranteeSchema.safeParse(req.body ?? {}));
 
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<Record<string, unknown>>(
       `SELECT ref, bank, notes FROM bank_guarantees WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [guaranteeId, scope.companyId]
     );
@@ -897,7 +897,7 @@ financeHardeningRouter.post("/bank-guarantees/:id/release", authorize({ feature:
     // parameterised value (no raw SQL interpolation).
     const releaseNote = notes ?? "تم التحرير";
     const combinedNotes = `${existing.notes ?? ""}${existing.notes ? " | " : ""}تحرير: ${releaseNote}`;
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "bank_guarantees",
       id: guaranteeId,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
@@ -931,7 +931,7 @@ financeHardeningRouter.post("/bank-guarantees/:id/release", authorize({ feature:
 financeHardeningRouter.get("/intercompany", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT ic.*,
               fc.name AS "fromCompanyName",
               tc.name AS "toCompanyName"
@@ -1044,7 +1044,7 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
       after: { ref, toCompanyId: Number(toCompanyId), amount: Number(amount), txDate },
     }).catch((err) => logger.error(err, "[audit] intercompany.created:"));
 
-    const [createdIntercompany] = await rawQuery<any>(
+    const [createdIntercompany] = await rawQuery<Record<string, unknown>>(
       `SELECT ic.*, fc.name AS "fromCompanyName", tc.name AS "toCompanyName"
        FROM intercompany_transactions ic
        LEFT JOIN companies fc ON fc.id = ic."fromCompanyId"
@@ -1065,7 +1065,7 @@ financeHardeningRouter.get("/intercompany/consolidation", authorize({ feature: "
     const companies = scope.allowedCompanies ?? [scope.companyId];
 
     const [[balanceSheet], intercompanyTotal, byCompany] = await Promise.all([
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT
            COALESCE(SUM(CASE WHEN coa.type='asset' THEN jl.debit - jl.credit ELSE 0 END),0) AS "totalAssets",
            COALESCE(SUM(CASE WHEN coa.type='liability' THEN jl.credit - jl.debit ELSE 0 END),0) AS "totalLiabilities",
@@ -1076,13 +1076,13 @@ financeHardeningRouter.get("/intercompany/consolidation", authorize({ feature: "
          WHERE je."companyId" = ANY($1) AND je."deletedAt" IS NULL AND je.status = 'posted' AND je.type != 'intercompany'`,
         [companies]
       ),
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT SUM(amount) AS total FROM intercompany_transactions
          WHERE ("fromCompanyId" = ANY($1) OR "toCompanyId" = ANY($1))
            AND status='posted' AND "deletedAt" IS NULL`,
         [companies]
       ),
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT je."companyId", c.name AS "companyName",
                 COALESCE(SUM(CASE WHEN coa.type='revenue' THEN jl.credit ELSE 0 END),0) AS revenue,
                 COALESCE(SUM(CASE WHEN coa.type='expense' THEN jl.debit ELSE 0 END),0) AS expenses
@@ -1113,7 +1113,7 @@ financeHardeningRouter.get("/intercompany/consolidation", authorize({ feature: "
 financeHardeningRouter.get("/projects", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT p.*,
               COALESCE(SUM(jl.debit),0) AS "actualCost",
               p.budget - COALESCE(SUM(jl.debit),0) AS "budgetRemaining"
@@ -1143,7 +1143,7 @@ financeHardeningRouter.post("/projects", authorize({ feature: "finance.hardening
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
       [scope.companyId, branchId ?? scope.branchId, projectRef, name, description ?? null, Number(budget ?? 0), startDate ?? null, endDate ?? null, scope.activeAssignmentId]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     emitEvent({
       companyId: scope.companyId,
@@ -1173,7 +1173,7 @@ financeHardeningRouter.get("/projects/:id", authorize({ feature: "finance.harden
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT p.*, COALESCE(p.budget - p."spentAmount", 0) AS "budgetRemaining"
        FROM projects p
        WHERE p.id = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL`,
@@ -1190,10 +1190,10 @@ financeHardeningRouter.get("/projects/:id/costs", authorize({ feature: "finance.
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [project] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [project] = await rawQuery<Record<string, unknown>>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!project) throw new NotFoundError("المشروع غير موجود");
 
-    const costs = await rawQuery<any>(
+    const costs = await rawQuery<Record<string, unknown>>(
       `SELECT je.id, je.ref, je.description, je."createdAt" AS date,
               COALESCE(SUM(jl.debit),0) AS amount,
               je."costCenter", je."operationType"
@@ -1205,9 +1205,9 @@ financeHardeningRouter.get("/projects/:id/costs", authorize({ feature: "finance.
       [id, scope.companyId]
     );
 
-    const totalCost = costs.reduce((s: number, r: any) => s + Number(r.amount), 0);
+    const totalCost = costs.reduce((s: number, r) => s + Number(r.amount), 0);
     const budgetRemaining = Number(project.budget ?? 0) - totalCost;
-    const usagePct = project.budget > 0 ? Math.round((totalCost / project.budget) * 100) : 0;
+    const usagePct = Number(project.budget) > 0 ? Math.round((totalCost / Number(project.budget)) * 100) : 0;
 
     res.json({
       project,
@@ -1227,7 +1227,7 @@ financeHardeningRouter.get("/cash-flow-forecast", authorize({ feature: "finance.
   try {
     const scope = req.scope!;
     const [inflow30, inflow60, inflow90, outflow30, [cashBalance]] = await Promise.all([
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT i.ref, i.total - i."paidAmount" AS expected, i."dueDate", c.name AS "clientName"
          FROM invoices i
          LEFT JOIN clients c ON c.id=i."clientId" AND c."deletedAt" IS NULL
@@ -1237,7 +1237,7 @@ financeHardeningRouter.get("/cash-flow-forecast", authorize({ feature: "finance.
          ORDER BY i."dueDate"`,
         [scope.companyId]
       ),
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT i.ref, i.total - i."paidAmount" AS expected, i."dueDate", c.name AS "clientName"
          FROM invoices i
          LEFT JOIN clients c ON c.id=i."clientId" AND c."deletedAt" IS NULL
@@ -1247,7 +1247,7 @@ financeHardeningRouter.get("/cash-flow-forecast", authorize({ feature: "finance.
          ORDER BY i."dueDate"`,
         [scope.companyId]
       ),
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT i.ref, i.total - i."paidAmount" AS expected, i."dueDate", c.name AS "clientName"
          FROM invoices i
          LEFT JOIN clients c ON c.id=i."clientId" AND c."deletedAt" IS NULL
@@ -1257,7 +1257,7 @@ financeHardeningRouter.get("/cash-flow-forecast", authorize({ feature: "finance.
          ORDER BY i."dueDate"`,
         [scope.companyId]
       ),
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT po.ref, po."totalAmount" AS expected, po."expectedDelivery" AS "dueDate", s.name AS "supplierName", 'purchase_order' AS type
          FROM purchase_orders po
          LEFT JOIN suppliers s ON s.id=po."supplierId"
@@ -1273,7 +1273,7 @@ financeHardeningRouter.get("/cash-flow-forecast", authorize({ feature: "finance.
          GROUP BY 1,3,4,5`,
         [scope.companyId]
       ),
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT COALESCE(SUM(jl.debit) - SUM(jl.credit), 0) AS balance
          FROM journal_lines jl
          JOIN journal_entries je ON je.id=jl."journalId"
@@ -1283,10 +1283,10 @@ financeHardeningRouter.get("/cash-flow-forecast", authorize({ feature: "finance.
     ]);
 
     const currentBalance = Number(cashBalance?.balance ?? 0);
-    const totalInflow30 = inflow30.reduce((s: number, r: any) => s + Number(r.expected), 0);
-    const totalInflow60 = inflow60.reduce((s: number, r: any) => s + Number(r.expected), 0);
-    const totalInflow90 = inflow90.reduce((s: number, r: any) => s + Number(r.expected), 0);
-    const totalOutflow30 = outflow30.reduce((s: number, r: any) => s + Number(r.expected), 0);
+    const totalInflow30 = inflow30.reduce((s: number, r) => s + Number(r.expected), 0);
+    const totalInflow60 = inflow60.reduce((s: number, r) => s + Number(r.expected), 0);
+    const totalInflow90 = inflow90.reduce((s: number, r) => s + Number(r.expected), 0);
+    const totalOutflow30 = outflow30.reduce((s: number, r) => s + Number(r.expected), 0);
 
     res.json({
       currentBalance,
@@ -1310,14 +1310,14 @@ financeHardeningRouter.get("/cash-flow-forecast", authorize({ feature: "finance.
 financeHardeningRouter.get("/cost-center-report", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { startDate, endDate, costCenter } = req.query as any;
+    const { startDate, endDate, costCenter } = req.query as Record<string, string | undefined>;
     const conditions = [`je."companyId"=$1`, `je."deletedAt" IS NULL`, `je.status = 'posted'`, `je."costCenter" IS NOT NULL`];
     const params: any[] = [scope.companyId];
     if (startDate) { params.push(startDate); conditions.push(`je."createdAt"::date >= $${params.length}`); }
     if (endDate) { params.push(endDate); conditions.push(`je."createdAt"::date <= $${params.length}`); }
     if (costCenter) { params.push(costCenter); conditions.push(`je."costCenter"=$${params.length}`); }
 
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT
          je."costCenter",
          COUNT(DISTINCT je.id) AS "entryCount",
@@ -1334,7 +1334,7 @@ financeHardeningRouter.get("/cost-center-report", authorize({ feature: "finance.
       params
     );
 
-    const costCenterDetails = costCenter ? await rawQuery<any>(
+    const costCenterDetails = costCenter ? await rawQuery<Record<string, unknown>>(
       `SELECT je.id, je.ref, je.description, je."createdAt" AS date,
               COALESCE(SUM(jl.debit),0) AS debit, COALESCE(SUM(jl.credit),0) AS credit
        FROM journal_entries je
@@ -1356,7 +1356,7 @@ financeHardeningRouter.get("/posting-failures", authorize({ feature: "finance.ha
   try {
     const scope = req.scope!;
     const resolved = req.query.resolved === "true";
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM financial_posting_failures
        WHERE "companyId" = $1 AND resolved = $2
        ORDER BY "createdAt" DESC LIMIT 100`,

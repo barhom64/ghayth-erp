@@ -102,7 +102,7 @@ export async function loadBalanceAssign(
   requiredSpecialty?: string
 ): Promise<{ employeeId: number; assignmentId: number; score: number } | null> {
   try {
-    const employees = await rawQuery<any>(
+    const employees = await rawQuery<Record<string, unknown>>(
       `SELECT ea.id AS "assignmentId", ea."employeeId", ea.role,
               e.name, e.lat, e.lon,
               3 AS rating,
@@ -118,12 +118,12 @@ export async function loadBalanceAssign(
 
     if (employees.length === 0) return null;
 
-    const resources: Resource[] = employees.map((e: any) => ({
-      id: e.employeeId,
-      workload: e.workload,
+    const resources: Resource[] = employees.map((e) => ({
+      id: e.employeeId as number,
+      workload: e.workload as number,
       lat: e.lat ? Number(e.lat) : undefined,
       lon: e.lon ? Number(e.lon) : undefined,
-      specialty: e.role,
+      specialty: e.role as string,
       rating: Number(e.rating),
     }));
 
@@ -136,10 +136,10 @@ export async function loadBalanceAssign(
 
     if (!selected) return null;
 
-    const emp = employees.find((e: any) => e.employeeId === selected.id);
+    const emp = employees.find((e) => e.employeeId === selected.id);
     return {
       employeeId: selected.id,
-      assignmentId: emp?.assignmentId ?? 0,
+      assignmentId: (emp?.assignmentId as number | undefined) ?? 0,
       score: selected.workload,
     };
   } catch {

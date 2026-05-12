@@ -113,7 +113,7 @@ interface IdRow {
 router.get("/", authorize({ feature: "tasks", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { status = "", date = "" } = req.query as any;
+    const { status = "", date = "" } = req.query as Record<string, string | undefined>;
 
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, {
@@ -142,7 +142,7 @@ router.get("/", authorize({ feature: "tasks", action: "list" }), async (req, res
       paramIdx++;
     }
 
-    const { linkedEntityType, linkedEntityId, includeRelatedMaintenance, relatedUnitId } = req.query as any;
+    const { linkedEntityType, linkedEntityId, includeRelatedMaintenance, relatedUnitId } = req.query as Record<string, string | undefined>;
     if (linkedEntityType && linkedEntityId && includeRelatedMaintenance === "true" && linkedEntityType === "property_unit") {
       where += ` AND ((t."linkedEntityType" = $${paramIdx} AND t."linkedEntityId" = $${paramIdx + 1}) OR (t."linkedEntityType" = 'maintenance_request' AND t."linkedEntityId" IN (SELECT id FROM maintenance_requests WHERE "unitId" = $${paramIdx + 1} AND "companyId" = $${paramIdx + 2})))`;
       params.push(linkedEntityType, Number(linkedEntityId), scope.companyId);
@@ -229,7 +229,7 @@ router.get("/", authorize({ feature: "tasks", action: "list" }), async (req, res
 router.get("/entity-search", authorize({ feature: "tasks", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { type, q } = req.query as any;
+    const { type, q } = req.query as Record<string, string | undefined>;
     if (!type) { res.json({ data: [], total: 0 }); return; }
 
     const searchMap: Record<string, string> = {
@@ -257,7 +257,7 @@ router.get("/:id", authorize({ feature: "tasks", action: "view", resource: { tab
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     let scopeCondition = ` AND t."companyId" = $2`;
-    const params: any[] = [id, scope.companyId];
+    const params: unknown[] = [id, scope.companyId];
     if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager" && scope.role === "employee" && scope.activeAssignmentId) {
       scopeCondition += ` AND t."assignedTo" = $3`;
       params.push(scope.activeAssignmentId);
@@ -387,9 +387,9 @@ router.patch("/:id", authorize({ feature: "tasks", action: "update", resource: {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { title, description, type, priority, status, scheduledStart, scheduledEnd, scheduledDate, notes } = zodParse(updateTaskSchema.safeParse(req.body)) as any;
+    const { title, description, type, priority, status, scheduledStart, scheduledEnd, scheduledDate, notes } = zodParse(updateTaskSchema.safeParse(req.body));
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     let idx = 1;
 
     const addField = (col: string, val: any) => {
@@ -501,7 +501,7 @@ router.delete("/:id", authorize({ feature: "tasks", action: "delete", resource: 
     const [before] = await rawQuery<TaskRow>(`SELECT * FROM tasks WHERE ${beforeWhere}`, beforeParams);
     if (!before) { throw new NotFoundError("المهمة غير موجودة"); }
 
-    const params: any[] = [id, scope.companyId];
+    const params: unknown[] = [id, scope.companyId];
     let whereClause = `id = $1 AND "companyId" = $2`;
 
     if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager" && scope.role === "employee" && scope.activeAssignmentId) {

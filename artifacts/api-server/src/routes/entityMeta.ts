@@ -180,7 +180,7 @@ router.get("/tags-filter/:entityType", authorize({ feature: "projects", action: 
   try {
     const scope = req.scope!;
     const { entityType } = req.params;
-    const { tag } = req.query as any;
+    const { tag } = req.query as Record<string, string | undefined>;
     if (!tag) {
       throw new ValidationError("الوسم مطلوب للفلترة");
     }
@@ -189,7 +189,7 @@ router.get("/tags-filter/:entityType", authorize({ feature: "projects", action: 
        WHERE "entityType" = $1 AND tag = $2 AND "companyId" = $3 LIMIT 1000`,
       [entityType, tag, scope.companyId]
     );
-    res.json({ data: rows.map((r: any) => r.entityId) });
+    res.json({ data: rows.map((r: Record<string, unknown>) => r.entityId) });
   } catch (err) {
     handleRouteError(err, res, "Filter by tag error");
   }

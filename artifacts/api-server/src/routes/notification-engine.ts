@@ -97,7 +97,7 @@ const updateWebhookSchema = z.object({
 
 const router = Router();
 
-router.get("/preferences", authorize({ feature: "notifications", action: "list" }), async (req: Request, res: Response): Promise<any> => {
+router.get("/preferences", authorize({ feature: "notifications", action: "list" }), async (req: Request, res: Response): Promise<void> => {
   try {
     const scope = req.scope;
     if (!scope) throw new ForbiddenError("Unauthorized");
@@ -126,7 +126,7 @@ router.get("/preferences", authorize({ feature: "notifications", action: "list" 
   }
 });
 
-router.put("/preferences", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response): Promise<any> => {
+router.put("/preferences", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response): Promise<void> => {
   try {
     const body = zodParse(updatePreferencesSchema.safeParse(req.body));
     const scope = req.scope;
@@ -199,7 +199,7 @@ router.get("/routing-rules", authorize({ feature: "admin", action: "update" }), 
   }
 });
 
-router.post("/routing-rules", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response): Promise<any> => {
+router.post("/routing-rules", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response): Promise<void> => {
   try {
     const body = zodParse(createRoutingRuleSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -243,7 +243,7 @@ router.post("/routing-rules", authorize({ feature: "admin", action: "update" }),
   }
 });
 
-router.put("/routing-rules/:id", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response): Promise<any> => {
+router.put("/routing-rules/:id", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response): Promise<void> => {
   try {
     const body = zodParse(updateRoutingRuleSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -335,7 +335,7 @@ router.get("/templates", authorize({ feature: "admin", action: "update" }), asyn
   }
 });
 
-router.post("/templates", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response): Promise<any> => {
+router.post("/templates", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response): Promise<void> => {
   try {
     const body = zodParse(createTemplateSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -469,7 +469,7 @@ router.get("/fallback-chains", authorize({ feature: "admin", action: "update" })
   }
 });
 
-router.post("/fallback-chains", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response): Promise<any> => {
+router.post("/fallback-chains", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response): Promise<void> => {
   try {
     const body = zodParse(createFallbackChainSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -503,7 +503,7 @@ router.post("/fallback-chains", authorize({ feature: "admin", action: "update" }
   }
 });
 
-router.put("/fallback-chains/:id", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response): Promise<any> => {
+router.put("/fallback-chains/:id", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response): Promise<void> => {
   try {
     const body = zodParse(updateFallbackChainSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -595,7 +595,7 @@ router.get("/webhooks", authorize({ feature: "admin", action: "update" }), async
   }
 });
 
-router.post("/webhooks", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response): Promise<any> => {
+router.post("/webhooks", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response): Promise<void> => {
   try {
     const body = zodParse(createWebhookSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -643,7 +643,7 @@ router.post("/webhooks", authorize({ feature: "admin", action: "update" }), asyn
   }
 });
 
-router.put("/webhooks/:id", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response): Promise<any> => {
+router.put("/webhooks/:id", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response): Promise<void> => {
   try {
     const body = zodParse(updateWebhookSchema.safeParse(req.body));
     const scope = req.scope!;

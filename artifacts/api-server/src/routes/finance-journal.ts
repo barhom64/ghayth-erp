@@ -590,7 +590,7 @@ journalRouter.patch("/expenses/:id/approve", authorize({ feature: "finance.journ
     // cannot be flipped again without going through a separate re-open
     // flow. The onApply hook writes the approval_actions trail in the
     // same transaction.
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "journal_entries",
       id: expenseId,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
@@ -831,7 +831,7 @@ journalRouter.get("/salary-advances", authorize({ feature: "finance.journal", ac
   try {
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, je.description, COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt" AS date, 'active' AS status FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'SALARY-ADV%' GROUP BY je.id, je.ref, je.description, je."createdAt" ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId]);
-    res.json({ data: rows, summary: { total: rows.length, totalAmount: rows.reduce((s: number, r: any) => s + Number(r.amount), 0) } });
+    res.json({ data: rows, summary: { total: rows.length, totalAmount: rows.reduce((s: number, r) => s + Number(r.amount), 0) } });
   } catch (err) {
     res.json({ data: [], summary: { total: 0, totalAmount: 0 } });
   }
@@ -919,7 +919,7 @@ journalRouter.patch("/salary-advances/:id/approve", authorize({ feature: "financ
     // with the standard `status` column. fromStates allows decisions only
     // when the advance is still pending — approved or rejected advances
     // cannot be re-decided without going through a fresh approval chain.
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "journal_entries",
       id: advanceId,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
@@ -983,8 +983,8 @@ journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "
     if (!description) throw new ValidationError("وصف القيد مطلوب", { field: "description" });
     if (!Array.isArray(lines) || lines.length < 2) throw new ValidationError("القيد يجب أن يحتوي على بندين على الأقل", { field: "lines" });
     for (const l of lines) { l.debit = roundTo2(Number(l.debit) || 0); l.credit = roundTo2(Number(l.credit) || 0); }
-    const totalDebit = roundTo2(lines.reduce((s: number, l: any) => s + l.debit, 0));
-    const totalCredit = roundTo2(lines.reduce((s: number, l: any) => s + l.credit, 0));
+    const totalDebit = roundTo2(lines.reduce((s: number, l) => s + l.debit, 0));
+    const totalCredit = roundTo2(lines.reduce((s: number, l) => s + l.credit, 0));
     if (Math.abs(totalDebit - totalCredit) > 0.01) throw new ValidationError(`القيد غير متوازن: مدين ${totalDebit.toFixed(2)} ≠ دائن ${totalCredit.toFixed(2)}`, { field: "lines", fix: "تأكد من تساوي المدين والدائن" });
 
     await checkFinancialPeriodOpen(scope.companyId, date || new Date().toISOString());
@@ -1093,15 +1093,15 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
       throw new ValidationError("القيد الأصلي لا يحتوي على بنود");
     }
 
-    const reversedLines = originalLines.map((l: any) => ({
-      accountCode: l.accountCode,
+    const reversedLines = originalLines.map((l) => ({
+      accountCode: l.accountCode as string,
       debit: Number(l.credit || 0),
       credit: Number(l.debit || 0),
-      description: l.description,
-      costCenter: l.costCenter,
-      departmentId: l.departmentId,
-      projectId: l.projectId,
-      employeeId: l.employeeId,
+      description: l.description as string | undefined,
+      costCenter: l.costCenter as string | undefined,
+      departmentId: l.departmentId as number | undefined,
+      projectId: l.projectId as number | undefined,
+      employeeId: l.employeeId as number | undefined,
     }));
 
     const newRef = `REV-${original.ref}`;
@@ -1210,8 +1210,8 @@ async function buildYearEndClosingLines(companyId: number, year: number, retaine
     [companyId, startDate, endDate]
   );
 
-  const totalRevenue = revenues.reduce((s: number, r: any) => s + Number(r.balance), 0);
-  const totalExpense = expenses.reduce((s: number, r: any) => s + Number(r.balance), 0);
+  const totalRevenue = revenues.reduce((s: number, r) => s + Number(r.balance), 0);
+  const totalExpense = expenses.reduce((s: number, r) => s + Number(r.balance), 0);
   const netIncome = totalRevenue - totalExpense;
 
   const lines: { accountCode: string; debit: number; credit: number; description?: string }[] = [];
@@ -1274,7 +1274,7 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", authorize({ feature
       `SELECT to_char("startDate", 'YYYY-MM') AS period FROM financial_periods WHERE "companyId" = $1 AND status = 'closed' AND "deletedAt" IS NULL AND EXTRACT(YEAR FROM "startDate") = $2`,
       [scope.companyId, year]
     );
-    const closedSet = new Set(closedPeriods.map((p: any) => p.period));
+    const closedSet = new Set(closedPeriods.map((p) => p.period));
     const missing: string[] = [];
     for (let m = 1; m <= 12; m++) {
       const p = `${year}-${String(m).padStart(2, "0")}`;
@@ -1472,7 +1472,7 @@ async function createOpeningBalanceEntry(params: {
     `SELECT code FROM chart_of_accounts WHERE "companyId" = $1 AND code = ANY($2) AND "deletedAt" IS NULL`,
     [scope.companyId, codes]
   );
-  const known = new Set(accRows.map((a: any) => a.code));
+  const known = new Set(accRows.map((a) => a.code));
   const missing = codes.filter((c) => !known.has(c));
   if (missing.length > 0) {
     return { error: `الحسابات التالية غير موجودة: ${missing.join(", ")}`, status: 400 };

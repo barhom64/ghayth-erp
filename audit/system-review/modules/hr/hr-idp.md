@@ -26,13 +26,27 @@
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/hr.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+Individual Development Plan (IDP). خطة تطوير الموظف السنوية.
+
+| الحركة | الوحدة الهدف | مدخل API | مدخل DB | الحالة |
+|--------|--------------|----------|---------|--------|
+| إنشاء IDP (يدوي أو من performance review) | hr | POST `/hr/idp` | `hr_idp_plans` | ✅ |
+| ربط بأهداف SMART | hr | `idp_goals` per plan | ✅ |
+| ربط بالنقاط الضعيفة من التقييم | hr/performance | `idp_plans.linkedReviewId` → `performance_reviews` | ✅ راجع `hr-performance.md` |
+| ربط ببرامج تدريبية | hr/training | `idp_items.trainingId` → `training_programs` | ✅ |
+| ميزانية التدريب | finance/budget | `idp_plans.budgetAllocated` → `budgets` | ⚠ تحقق |
+| ربط بـ 360 evaluation | hr | راجع `hr-evaluation-360.md` | ⚠ |
+| follow-up + check-ins | hr | `idp_checkins` (شهري) | ✅ |
+| تقييم الإنجاز | hr | عند الإغلاق → نسبة الإكمال | ⚠ |
+| تأثير على التقييم السنوي القادم | hr/performance | feed into `performance_kpis` | ✅ |
+| ربط بـ ترقية محتملة | hr | اقتراح ترقية عند إكمال IDP بنجاح | ⚠ يدوي |
+| إشعارات (الموظف + المدير + HR) | comms | event=`idp_created\|milestone_reached\|due\|completed` | `notifications` | ✅ |
+| Audit log | core | `auditMiddleware` (`/hr/idp` لو مضاف) | `audit_logs` | ⚠ |
+
+تحقق يدوي:
+- [ ] هل IDP بدون تحديث لشهرين متتالين يطلق تنبيه للمدير؟
+- [ ] هل ميزانية تدريب IDP محدودة per employee per year؟
+- [ ] هل IDP إجباري للترقية أم اختياري؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `idp` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
