@@ -9,6 +9,7 @@ import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { useApiQuery, asList } from "@/lib/api";
 import { Car, Users, MapPin, Wrench, Fuel, Plus, Eye, FileCheck, Link2, ShieldAlert } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
@@ -184,7 +185,7 @@ function VehiclesTab() {
             resultCount={filtered?.length}
           />
         </div>
-        {canManage && <Link href="/fleet/vehicles/create"><Button className="gap-2"><Plus className="h-4 w-4" /> إضافة مركبة</Button></Link>}
+        {canManage && <Link href="/fleet/vehicles/create"><GuardedButton perm="fleet:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة مركبة</GuardedButton></Link>}
       </div>
 
       <Card>
@@ -296,7 +297,7 @@ function DriversTab() {
             resultCount={filtered?.length}
           />
         </div>
-        <Link href="/fleet/drivers/create"><Button className="gap-2"><Plus className="h-4 w-4" /> إضافة سائق</Button></Link>
+        <Link href="/fleet/drivers/create"><GuardedButton perm="fleet:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة سائق</GuardedButton></Link>
       </div>
       <Card>
         <CardContent className="pt-6">

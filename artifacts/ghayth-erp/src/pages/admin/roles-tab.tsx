@@ -3,6 +3,7 @@ import { useApiQuery, apiFetch } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { KeyRound, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -83,7 +84,7 @@ export function RolesTab() {
                 {r.roleKey !== "owner" && (
                   editingRole === r.roleKey ? (
                     <div className="flex gap-2">
-                      <Button size="sm" onClick={saveModules} disabled={saving}>{saving ? "جاري الحفظ..." : "حفظ"}</Button>
+                      <GuardedButton perm="admin:create" size="sm" onClick={saveModules} disabled={saving}>{saving ? "جاري الحفظ..." : "حفظ"}</GuardedButton>
                       <Button size="sm" variant="outline" onClick={() => setEditingRole(null)}>إلغاء</Button>
                     </div>
                   ) : (

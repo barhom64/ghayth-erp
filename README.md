@@ -193,15 +193,6 @@ Deep-dive docs live under `docs/`:
 - [`docs/SECRETS_ROTATION.md`](docs/SECRETS_ROTATION.md) — when + how to rotate `JWT_SECRET` / `FIELD_ENCRYPTION_KEY` / `SECRETS_ENCRYPTION_KEY` without data loss.
 - [`docs/DR.md`](docs/DR.md) — disaster recovery: backup/restore procedures, RTO/RPO targets, quarterly restore drill.
 - [`docs/MONITORING.md`](docs/MONITORING.md) — health endpoints, log alerts, database metrics, SIEM forwarding, suggested dashboard.
-
-### Architecture / design docs (vendor-neutral, ready for sprint planning)
-
-- [`docs/ZATCA_PHASE_2_DESIGN.md`](docs/ZATCA_PHASE_2_DESIGN.md) — e-invoicing Phase 2: `EInvoiceProvider` interface + lifecycle state machine, so finance code is decoupled from any specific tax authority.
-- [`docs/MULTI_CURRENCY_DESIGN.md`](docs/MULTI_CURRENCY_DESIGN.md) — IAS 21 functional / presentation currency split, `FxRateProvider` interface, period-end revaluation contract.
-- [`docs/SAUDI_COMPLIANCE_DESIGN.md`](docs/SAUDI_COMPLIANCE_DESIGN.md) — WPS / Mudad / Saudization / Iqama: `PayrollExportProvider` + `WpsFormatProvider` interfaces.
-- [`docs/OBSERVABILITY_DESIGN.md`](docs/OBSERVABILITY_DESIGN.md) — `EventReporter` facade + scrubbing rules + phasing so the vendor (Sentry / Datadog / etc.) can be picked later without touching call sites.
-- [`docs/INVENTORY_ADVANCED_DESIGN.md`](docs/INVENTORY_ADVANCED_DESIGN.md) — lots / serials / FIFO-LIFO-AVG valuation engines.
-
 - [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md) — open operational gaps and technical debt tracked against the system audit.
 - [`docs/AI_GUARDIAN_SETUP.md`](docs/AI_GUARDIAN_SETUP.md) — legacy AI guardian setup (pre-existing).
 

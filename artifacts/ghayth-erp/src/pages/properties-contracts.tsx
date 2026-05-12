@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 const FREQ_LABELS: Record<string, string> = {
   monthly: "شهري", quarterly: "ربع سنوي", semi_annual: "نصف سنوي", annual: "سنوي",
@@ -292,7 +293,7 @@ export default function PropertiesContracts() {
       breadcrumbs={[{ href: "/properties", label: "إدارة الأملاك" }]}
       actions={
         <Link href="/properties/contracts/create">
-          <Button className="gap-2"><Plus className="h-4 w-4" /> إضافة عقد</Button>
+          <GuardedButton perm="property:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة عقد</GuardedButton>
         </Link>
       }
     >

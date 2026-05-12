@@ -36,6 +36,7 @@ import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useToast } from "@/hooks/use-toast";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 const CATEGORIES = [
   { value: "contracts", label: "عقود" },
@@ -134,8 +135,8 @@ function DocumentsList() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <Link href="/documents/upload"><Button className="gap-2"><Upload className="h-4 w-4" /> رفع مستند</Button></Link>
-        <Link href="/documents/create"><Button variant="outline" className="gap-2"><FilePlus className="h-4 w-4" /> إنشاء مستند</Button></Link>
+        <Link href="/documents/upload"><GuardedButton perm="documents:create" className="gap-2"><Upload className="h-4 w-4" /> رفع مستند</GuardedButton></Link>
+        <Link href="/documents/create"><GuardedButton perm="documents:create" variant="outline" className="gap-2"><FilePlus className="h-4 w-4" /> إنشاء مستند</GuardedButton></Link>
         <div className="flex-1" />
         <div className="relative w-64">
           <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -207,14 +208,14 @@ function DocumentsList() {
                         </Button>
                       </Link>
                       {d.status !== "approved" && (
-                        <Button variant="ghost" size="sm" className="gap-1 text-xs text-green-600" onClick={() => handleStatusChange(d.id, "approved")}>
+                        <GuardedButton perm="documents:approve" variant="ghost" size="sm" className="gap-1 text-xs text-green-600" onClick={() => handleStatusChange(d.id, "approved")}>
                           <CheckCircle2 className="h-3.5 w-3.5" /> اعتماد
-                        </Button>
+                        </GuardedButton>
                       )}
                       {d.status !== "cancelled" && d.status !== "draft" && (
-                        <Button variant="ghost" size="sm" className="gap-1 text-xs text-red-600" onClick={() => handleStatusChange(d.id, "cancelled")}>
+                        <GuardedButton perm="documents:delete" variant="ghost" size="sm" className="gap-1 text-xs text-red-600" onClick={() => handleStatusChange(d.id, "cancelled")}>
                           <XCircle className="h-3.5 w-3.5" /> إلغاء
-                        </Button>
+                        </GuardedButton>
                       )}
                       {d.status === "cancelled" && (
                         <Button variant="ghost" size="sm" className="gap-1 text-xs text-gray-600" onClick={() => handleStatusChange(d.id, "draft")}>
@@ -265,9 +266,9 @@ function FoldersTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">المجلدات</h3>
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>
+        <GuardedButton perm="documents:create" size="sm" onClick={() => setShowForm(!showForm)}>
           {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة مجلد</>}
-        </Button>
+        </GuardedButton>
       </div>
       {showForm && (
         <Card><CardContent className="p-4">
@@ -343,9 +344,9 @@ function TemplatesTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4 justify-end">
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>
+        <GuardedButton perm="documents:create" size="sm" onClick={() => setShowForm(!showForm)}>
           {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة قالب</>}
-        </Button>
+        </GuardedButton>
       </div>
       {showForm && (
         <Card><CardContent className="p-4">

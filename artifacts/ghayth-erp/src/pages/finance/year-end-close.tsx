@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -137,7 +138,8 @@ export default function YearEndClosePage() {
               <Calculator className="h-4 w-4 me-1" />
               {previewMut.isPending ? "جاري الحساب..." : "معاينة"}
             </Button>
-            <Button
+            <GuardedButton
+              perm="finance:approve"
               onClick={() => {
                 if (!preview) {
                   toast({ variant: "destructive", title: "قم بالمعاينة أولاً" });
@@ -149,7 +151,7 @@ export default function YearEndClosePage() {
             >
               <CheckCircle className="h-4 w-4 me-1" />
               {confirmMut.isPending ? "جاري الإقفال..." : closed ? "تم الإقفال" : "تأكيد الإقفال"}
-            </Button>
+            </GuardedButton>
           </div>
         </CardContent>
       </Card>

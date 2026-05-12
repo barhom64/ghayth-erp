@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { PlaneTakeoff, PlaneLanding, AlertTriangle, Download, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -134,9 +135,9 @@ export default function UmrahDailyRunsheet() {
           <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1">
             <RefreshCw className="h-4 w-4" /> تحديث
           </Button>
-          <Button onClick={handleExport} className="gap-1" rateLimitAware>
+          <GuardedButton perm="umrah:export" onClick={handleExport} className="gap-1" rateLimitAware>
             <Download className="h-4 w-4" /> تصدير PDF
-          </Button>
+          </GuardedButton>
         </div>
       </header>
 

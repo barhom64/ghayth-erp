@@ -20,7 +20,7 @@ import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
-import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { emitEvent, createAuditLog, initiateApprovalChain } from "../lib/businessHelpers.js";
 import {
   generateSalesInvoice,
   registerPayment,
@@ -235,6 +235,26 @@ router.post("/sub-agents", authorize({ feature: "umrah", action: "create" }), as
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sub_agent.created", entity: "umrah_sub_agents", entityId: rows[0].id, details: JSON.stringify({ name: b.name, nuskCode: b.nuskCode }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create sub-agent"); }
+});
+
+// Single-row sub-agent fetch. Used by the detail page UI to render
+// the full row (same joined columns the list returns) plus the
+// statement / pricing / attachments panels.
+router.get("/sub-agents/:id", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(
+      `SELECT sa.*, a.name AS "agentName", c.name AS "clientName"
+         FROM umrah_sub_agents sa
+         LEFT JOIN umrah_agents a ON sa."agentId" = a.id
+         LEFT JOIN clients c ON sa."clientId" = c.id AND c."deletedAt" IS NULL
+        WHERE sa.id = $1 AND sa."companyId" = $2 AND sa."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("الوكيل الفرعي غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Get sub-agent"); }
 });
 
 router.get("/sub-agents/unlinked", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
@@ -1087,9 +1107,27 @@ router.post("/commission-plans", authorize({ feature: "umrah", action: "create" 
       return plan;
     });
 
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "employee_commission_plans", entityId: result.id, after: { planName: b.planName } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.commission_plan.created", entity: "employee_commission_plans", entityId: result.id, details: JSON.stringify({ planName: b.planName }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    res.status(201).json(result);
+    // Governance hook: route through approval chain when company has
+    // a configured chain for `umrah_commission_plan` matching the base
+    // salary. If no chain matches, requiresApproval comes back false
+    // and the plan is treated as auto-approved (existing behaviour).
+    let approval: { requiresApproval: boolean; chainId: number | null; approvalRequestId: number | null; currentStep: number; totalSteps: number } | null = null;
+    try {
+      approval = await initiateApprovalChain({
+        companyId: scope.companyId,
+        branchId: scope.branchId || 0,
+        chainType: "umrah_commission_plan" as any,
+        refType: "employee_commission_plan",
+        refId: result.id,
+        amount: Number(b.baseSalary || 0),
+      });
+    } catch (e) {
+      logger.error(e, "umrah commission plan approval chain init failed (non-blocking)");
+    }
+
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "employee_commission_plans", entityId: result.id, after: { planName: b.planName, approvalRequired: approval?.requiresApproval ?? false } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.commission_plan.created", entity: "employee_commission_plans", entityId: result.id, details: JSON.stringify({ planName: b.planName, approvalChainId: approval?.chainId ?? null }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    res.status(201).json({ ...result, approval });
   } catch (err) { handleRouteError(err, res, "Create commission plan"); }
 });
 

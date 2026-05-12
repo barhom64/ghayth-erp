@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useApiQuery, asList } from "@/lib/api";
 import { Shield, Plus, FileText, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
@@ -40,7 +41,7 @@ export default function InsurancePage() {
       loading={isLoading}
       actions={
         <Link href="/fleet/insurance/create">
-          <Button className="gap-2"><Plus className="h-4 w-4" /> إضافة تأمين</Button>
+          <GuardedButton perm="fleet:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة تأمين</GuardedButton>
         </Link>
       }
     >

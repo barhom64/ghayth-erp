@@ -6,6 +6,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -194,10 +195,10 @@ export default function IDPPage() {
       subtitle="تخطيط مسارات التطوير والنمو الوظيفي للموظفين"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
-        <Button size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
+        <GuardedButton perm="hr:create" size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
           <Plus className="h-4 w-4" />
           خطة جديدة
-        </Button>
+        </GuardedButton>
       }
     >
       {/* KPI cards */}
