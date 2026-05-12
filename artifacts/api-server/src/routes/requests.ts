@@ -448,12 +448,10 @@ router.get("/stats", authorize({ feature: "requests", action: "list" }), async (
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [[total], [pending], [approved], [types]] = await Promise.all([
-      rawQuery(`SELECT COUNT(*) as count FROM requests WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]),
-      rawQuery(`SELECT COUNT(*) as count FROM requests WHERE status='pending' AND ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]),
-      rawQuery(`SELECT COUNT(*) as count FROM requests WHERE status='approved' AND ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]),
-      rawQuery(`SELECT COUNT(*) as count FROM request_types WHERE "isActive"=true AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]),
-    ]);
+    const [total] = await rawQuery(`SELECT COUNT(*) as count FROM requests WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]);
+    const [pending] = await rawQuery(`SELECT COUNT(*) as count FROM requests WHERE status='pending' AND ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]);
+    const [approved] = await rawQuery(`SELECT COUNT(*) as count FROM requests WHERE status='approved' AND ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]);
+    const [types] = await rawQuery(`SELECT COUNT(*) as count FROM request_types WHERE "isActive"=true AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]);
     res.json({
       totalRequests: Number(total.count),
       pendingRequests: Number(pending.count),
