@@ -1221,7 +1221,7 @@ router.post("/penalties/waive-bulk", authorize({ feature: "umrah", action: "upda
 
     for (const id of body.penaltyIds) {
       try {
-        const [penalty] = await rawQuery<any>(
+        const [penalty] = await rawQuery<Record<string, unknown>>(
           `SELECT pen.*, p."fullName" as "pilgrimName"
              FROM umrah_penalties pen
         LEFT JOIN umrah_pilgrims p ON pen."pilgrimId" = p.id
@@ -1249,7 +1249,7 @@ router.post("/penalties/waive-bulk", authorize({ feature: "umrah", action: "upda
             const { umrahEngine } = await import("../lib/engines/index.js");
             await umrahEngine.postPenaltyWaiverGL(
               { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
-              { id, amount: Number(penalty.amount), pilgrimName: penalty.pilgrimName || "" }
+              { id, amount: Number(penalty.amount), pilgrimName: (penalty.pilgrimName as string | undefined) || "" }
             );
             totalAmount += Number(penalty.amount);
           } catch (e) {

@@ -1506,9 +1506,9 @@ async function fetchDailyRunsheet(companyId: number, date: string) {
      WHERE p."companyId" = $1 AND p."deletedAt" IS NULL`;
 
   const [arrivals, departures, overstays] = await Promise.all([
-    rawQuery<any>(`${baseSelect} AND p."entryDate" = $2 ORDER BY g.name NULLS LAST, p."fullName"`, [companyId, date]),
-    rawQuery<any>(`${baseSelect} AND p."exitDate" = $2 ORDER BY g.name NULLS LAST, p."fullName"`, [companyId, date]),
-    rawQuery<any>(`${baseSelect} AND p.status IN ('overstayed','violated') AND p."overstayDays" > 0 ORDER BY p."overstayDays" DESC, p."fullName"`, [companyId]),
+    rawQuery<Record<string, unknown>>(`${baseSelect} AND p."entryDate" = $2 ORDER BY g.name NULLS LAST, p."fullName"`, [companyId, date]),
+    rawQuery<Record<string, unknown>>(`${baseSelect} AND p."exitDate" = $2 ORDER BY g.name NULLS LAST, p."fullName"`, [companyId, date]),
+    rawQuery<Record<string, unknown>>(`${baseSelect} AND p.status IN ('overstayed','violated') AND p."overstayDays" > 0 ORDER BY p."overstayDays" DESC, p."fullName"`, [companyId]),
   ]);
 
   return { arrivals, departures, overstays };
@@ -1572,7 +1572,7 @@ async function assertAttachmentOwner(companyId: number, entityType: string, enti
   const table = ATTACH_OWNER_TABLE[entityType];
   if (!table) throw new ValidationError("نوع كيان غير مدعوم", { field: "entityType" });
   const safeTable = table.replace(/[^a-zA-Z0-9_]/g, "");
-  const [row] = await rawQuery<any>(
+  const [row] = await rawQuery<Record<string, unknown>>(
     `SELECT id FROM "${safeTable}" WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
     [entityId, companyId]
   );
@@ -1641,7 +1641,7 @@ router.delete("/attachments/:id", authorize({ feature: "umrah", action: "delete"
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM umrah_attachments WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -1680,7 +1680,7 @@ router.get("/reports/reconciliation", authorize({ feature: "umrah", action: "vie
       : { fragment: "", params: [scope.companyId] };
 
     // 1. Amount diff: nusk total vs posted JE total
-    const amountDiffs = await rawQuery<any>(
+    const amountDiffs = await rawQuery<Record<string, unknown>>(
       `SELECT ni.id, ni."nuskInvoiceNumber", ni."totalAmount" AS "fileTotal",
               ni."nuskStatus", ni."purchaseInvoiceId", ni."journalEntryId",
               COALESCE(je_ap.total, 0) AS "postedAp",
@@ -1708,7 +1708,7 @@ router.get("/reports/reconciliation", authorize({ feature: "umrah", action: "vie
     );
 
     // 2. Mutamer count diff: file says X, system has Y in the linked group
-    const countDiffs = await rawQuery<any>(
+    const countDiffs = await rawQuery<Record<string, unknown>>(
       `SELECT ni.id, ni."nuskInvoiceNumber", ni."mutamerCount" AS "fileCount",
               ni."groupId", g.name AS "groupName",
               (SELECT COUNT(*)::int FROM umrah_pilgrims p
@@ -1737,7 +1737,7 @@ router.get("/reports/reconciliation", authorize({ feature: "umrah", action: "vie
     );
 
     // 3. Overstays without a violation row
-    const overstayGaps = await rawQuery<any>(
+    const overstayGaps = await rawQuery<Record<string, unknown>>(
       `SELECT p.id, p."nuskNumber", p."fullName", p."overstayDays", p."groupId",
               g.name AS "groupName", sa.name AS "subAgentName"
          FROM umrah_pilgrims p
