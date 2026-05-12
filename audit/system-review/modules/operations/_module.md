@@ -42,8 +42,8 @@
 | [/umrah/sub-agents/:id](./umrah-sub-agents-byid.md) | `/umrah/sub-agents/:id` | `:id` | 202 | 0 | 2 | 0 |
 | [/umrah/pricing](./umrah-pricing.md) | `/umrah/pricing` | `pricing` | 407 | 0 | 2 | 0 |
 | [/umrah/commission-plans](./umrah-commission-plans.md) | `/umrah/commission-plans` | `commission-plans` | 327 | 0 | 2 | 0 |
-| [/umrah/commission-plans/new](./umrah-commission-plans-new.md) | `/umrah/commission-plans/new` | `new` | 629 | 0 | 1 | 0 |
-| [/umrah/commission-plans/:id/edit](./umrah-commission-plans-byid-edit.md) | `/umrah/commission-plans/:id/edit` | `edit` | 629 | 0 | 1 | 0 |
+| [/umrah/commission-plans/new](./umrah-commission-plans-new.md) | `/umrah/commission-plans/new` | `new` | 641 | 0 | 1 | 0 |
+| [/umrah/commission-plans/:id/edit](./umrah-commission-plans-byid-edit.md) | `/umrah/commission-plans/:id/edit` | `edit` | 641 | 0 | 1 | 0 |
 | [/umrah/violations](./umrah-violations.md) | `/umrah/violations` | `violations` | 522 | 0 | 3 | 0 |
 | [/umrah/violations/create](./umrah-violations-create.md) | `/umrah/violations/create` | `create` | 316 | 1 | 2 | 0 |
 | [/umrah/violations/:id](./umrah-violations-byid.md) | `/umrah/violations/:id` | `:id` | 82 | 0 | 0 | 0 |

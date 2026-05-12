@@ -23,13 +23,27 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/crm.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+تفاصيل lead (عميل محتمل) قبل التحويل لـ opportunity.
+
+| الحركة | الوحدة الهدف | مدخل API | مدخل DB | الحالة |
+|--------|--------------|----------|---------|--------|
+| تسجيل lead | crm | POST `/crm/leads` | `crm_leads` | ✅ |
+| مصدر (source) | crm | `lead.source` (website/referral/event/...) | للـ marketing ROI | ✅ |
+| فرز (qualification) | crm | تحديث `lead.score`, `qualifiedAt` | ✅ |
+| إسناد لمندوب | hr/employees | `lead.assignedTo` → `employees.id` | round-robin أو يدوي | ✅ |
+| متابعة (activities) | crm | `crm_activities.leadId` (calls/emails/meetings) | ✅ |
+| **تحويل lead → opportunity** | crm | POST `/opportunities/from-lead/:id` | `crm_opportunities` + `lead.status='converted'` | ✅ |
+| تحويل lead → client (مباشر) | crm | POST `/clients/from-lead/:id` | `clients` + nullify lead | ✅ |
+| رفض (lost) | crm | PATCH `/leads/:id` status=`lost` مع reason | `lead_lost_reasons` للتحليل | ✅ |
+| تذكير متابعة (cron) | comms | lead لم يُلامَس X أيام → reminder | `notifications` | ⚠ |
+| ربط بـ marketing campaign | marketing | `lead.campaignId` → `marketing_campaigns` | للـ attribution | ✅ |
+| تقرير conversion rate | bi | aggregation per source/rep/campaign | views | ✅ |
+| Audit log | core | يقرأ من `auditMiddleware` لو `/crm/leads` ضمن ENTITY_MAP (حالياً `/crm/opportunities` فقط) | ⚠ تحقق |
+
+تحقق يدوي:
+- [ ] هل lead مكرر (نفس email/phone) يُكتشف ويُدمج آلياً؟
+- [ ] هل إعادة فتح lost lead بعد سنة ممكنة (re-engagement)؟
+- [ ] هل عمر lead في كل stage مرصود (time-in-stage) للـ funnel analysis؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `:id` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
