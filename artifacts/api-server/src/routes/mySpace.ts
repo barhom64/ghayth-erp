@@ -14,16 +14,16 @@ router.get("/", async (req, res) => {
     const year = currentYear();
     const period = today.slice(0, 7);
 
-    const [attendance] = await rawQuery<any>(
+    const [attendance] = await rawQuery<Record<string, unknown>>(
       `SELECT id, date, "checkIn", "checkOut", "lateMinutes", status
        FROM attendance
        WHERE "assignmentId" = $1 AND date = $2 AND "deletedAt" IS NULL`,
       [scope.activeAssignmentId, today]
     ).catch((e) => { logger.error(e, "my-space attendance error:"); return [null]; });
 
-    let leaveBalances: any[] = [];
+    let leaveBalances: Record<string, unknown>[] = [];
     try {
-      const balancesFromTable = await rawQuery<any>(
+      const balancesFromTable = await rawQuery<Record<string, unknown>>(
         `SELECT lb."leaveTypeId", lt.name, lb.entitled, lb.used, lb.reserved, lb.remaining
          FROM hr_leave_balances lb
          JOIN hr_leave_types lt ON lt.id = lb."leaveTypeId"
@@ -39,7 +39,7 @@ router.get("/", async (req, res) => {
           remaining: Number(b.remaining),
         }));
       } else {
-        const computed = await rawQuery<any>(
+        const computed = await rawQuery<Record<string, unknown>>(
           `SELECT lt.id AS "leaveTypeId", lt.name, lt."annualDays" AS entitled,
                   COALESCE(SUM(lr.days) FILTER (
                     WHERE lr.status = 'approved' AND EXTRACT(YEAR FROM lr."startDate") = $3
@@ -62,9 +62,9 @@ router.get("/", async (req, res) => {
       logger.error(e, "my-space leaveBalances error:");
     }
 
-    let openRequests: any[] = [];
+    let openRequests: Record<string, unknown>[] = [];
     try {
-      const leaveReqs = await rawQuery<any>(
+      const leaveReqs = await rawQuery<Record<string, unknown>>(
         `SELECT lr.id, 'leave' AS type, lt.name AS title, lr.status, lr."createdAt"
          FROM hr_leave_requests lr
          JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
@@ -73,9 +73,9 @@ router.get("/", async (req, res) => {
         [scope.employeeId, scope.companyId]
       ).catch((e) => { logger.error(e, "my-space leaveReqs error:"); return []; });
 
-      let advanceReqs: any[] = [];
+      let advanceReqs: Record<string, unknown>[] = [];
       try {
-        advanceReqs = await rawQuery<any>(
+        advanceReqs = await rawQuery<Record<string, unknown>>(
           `SELECT je.id, 'salary_advance' AS type, 'سلفة راتب' AS title, je.status, je."createdAt"
            FROM journal_entries je
            WHERE je."createdBy" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'SALARY-ADV%'
@@ -87,9 +87,9 @@ router.get("/", async (req, res) => {
         logger.error(e, "my-space advanceReqs error:");
       }
 
-      let letterReqs: any[] = [];
+      let letterReqs: Record<string, unknown>[] = [];
       try {
-        letterReqs = await rawQuery<any>(
+        letterReqs = await rawQuery<Record<string, unknown>>(
           `SELECT ol.id, 'letter' AS type, ol.type AS title, ol.status, ol."createdAt"
            FROM official_letters ol
            WHERE ol."employeeId" = $1 AND ol."companyId" = $2 AND ol.status IN ('pending','pending_approval') AND ol."deletedAt" IS NULL
@@ -100,9 +100,9 @@ router.get("/", async (req, res) => {
         logger.error(e, "my-space letterReqs error:");
       }
 
-      let custodyReqs: any[] = [];
+      let custodyReqs: Record<string, unknown>[] = [];
       try {
-        custodyReqs = await rawQuery<any>(
+        custodyReqs = await rawQuery<Record<string, unknown>>(
           `SELECT je.id, 'custody' AS type, je.description AS title, je.status, je."createdAt"
            FROM journal_entries je
            WHERE je."createdBy" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%'
@@ -114,9 +114,9 @@ router.get("/", async (req, res) => {
         logger.error(e, "my-space custodyReqs error:");
       }
 
-      let loanReqs: any[] = [];
+      let loanReqs: Record<string, unknown>[] = [];
       try {
-        loanReqs = await rawQuery<any>(
+        loanReqs = await rawQuery<Record<string, unknown>>(
           `SELECT id, 'loan' AS type, CONCAT('سلفة ', "loanNumber") AS title, status, "createdAt"
            FROM hr_employee_loans
            WHERE "assignmentId" = $1 AND status IN ('pending') AND "deletedAt" IS NULL
@@ -127,9 +127,9 @@ router.get("/", async (req, res) => {
         logger.error(e, "my-space loanReqs error:");
       }
 
-      let overtimeReqs: any[] = [];
+      let overtimeReqs: Record<string, unknown>[] = [];
       try {
-        overtimeReqs = await rawQuery<any>(
+        overtimeReqs = await rawQuery<Record<string, unknown>>(
           `SELECT id, 'overtime' AS type, CONCAT('وقت إضافي ', "requestNumber") AS title, status, "createdAt"
            FROM hr_overtime_requests
            WHERE "assignmentId" = $1 AND status IN ('pending') AND "deletedAt" IS NULL
@@ -140,9 +140,9 @@ router.get("/", async (req, res) => {
         logger.error(e, "my-space overtimeReqs error:");
       }
 
-      let exitReqs: any[] = [];
+      let exitReqs: Record<string, unknown>[] = [];
       try {
-        exitReqs = await rawQuery<any>(
+        exitReqs = await rawQuery<Record<string, unknown>>(
           `SELECT id, 'exit' AS type, CONCAT('نهاية خدمة #', id) AS title, status, "createdAt"
            FROM hr_exit_requests
            WHERE "assignmentId" = $1 AND status = 'pending' AND "deletedAt" IS NULL
@@ -154,15 +154,15 @@ router.get("/", async (req, res) => {
       }
 
       openRequests = [...leaveReqs, ...advanceReqs, ...letterReqs, ...custodyReqs, ...loanReqs, ...overtimeReqs, ...exitReqs]
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        .sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime());
     } catch (e) {
       logger.error(e, "my-space openRequests error:");
     }
 
-    let pendingApprovals: any[] = [];
+    let pendingApprovals: Record<string, unknown>[] = [];
     try {
       if (scope.role !== "employee") {
-        const leaveApprovals = await rawQuery<any>(
+        const leaveApprovals = await rawQuery<Record<string, unknown>>(
           `SELECT lr.id, 'leave' AS type, e.name AS "employeeName", lt.name AS title, lr.status, lr."createdAt"
            FROM hr_leave_requests lr
            JOIN employees e ON e.id = lr."employeeId"
@@ -178,9 +178,9 @@ router.get("/", async (req, res) => {
           [scope.companyId, scope.role, scope.activeAssignmentId]
         ).catch((e) => { logger.error(e, "my-space leaveApprovals error:"); return []; });
 
-        let loanApprovals: any[] = [];
+        let loanApprovals: Record<string, unknown>[] = [];
         try {
-          loanApprovals = await rawQuery<any>(
+          loanApprovals = await rawQuery<Record<string, unknown>>(
             `SELECT l.id, 'loan' AS type, e.name AS "employeeName",
                     CONCAT('سلفة ', l."loanNumber", ' — ', l.amount, ' ر.س') AS title,
                     l.status, l."createdAt"
@@ -192,9 +192,9 @@ router.get("/", async (req, res) => {
           );
         } catch (e) { logger.error(e, "my-space loanApprovals error:"); }
 
-        let overtimeApprovals: any[] = [];
+        let overtimeApprovals: Record<string, unknown>[] = [];
         try {
-          overtimeApprovals = await rawQuery<any>(
+          overtimeApprovals = await rawQuery<Record<string, unknown>>(
             `SELECT o.id, 'overtime' AS type, e.name AS "employeeName",
                     CONCAT('وقت إضافي ', o."requestNumber", ' — ', o.hours, ' ساعة') AS title,
                     o.status, o."createdAt"
@@ -206,9 +206,9 @@ router.get("/", async (req, res) => {
           );
         } catch (e) { logger.error(e, "my-space overtimeApprovals error:"); }
 
-        let exitApprovals: any[] = [];
+        let exitApprovals: Record<string, unknown>[] = [];
         try {
-          exitApprovals = await rawQuery<any>(
+          exitApprovals = await rawQuery<Record<string, unknown>>(
             `SELECT x.id, 'exit' AS type, e.name AS "employeeName",
                     CONCAT('نهاية خدمة #', x.id) AS title,
                     x.status, x."createdAt"
@@ -221,15 +221,15 @@ router.get("/", async (req, res) => {
         } catch (e) { logger.error(e, "my-space exitApprovals error:"); }
 
         pendingApprovals = [...leaveApprovals, ...loanApprovals, ...overtimeApprovals, ...exitApprovals]
-          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          .sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime());
       }
     } catch (e) {
       logger.error(e, "my-space pendingApprovals error:");
     }
 
-    let documents: any[] = [];
+    let documents: Record<string, unknown>[] = [];
     try {
-      documents = await rawQuery<any>(
+      documents = await rawQuery<Record<string, unknown>>(
         `SELECT id, type, name, "expiryDate", "createdAt"
          FROM employee_documents
          WHERE "employeeId" = $1 AND "companyId" = $2
@@ -242,7 +242,7 @@ router.get("/", async (req, res) => {
 
     let lastPayslip: any = null;
     try {
-      const [ps] = await rawQuery<any>(
+      const [ps] = await rawQuery<Record<string, unknown>>(
         `SELECT pl.id, pr.period,
                 pl.basic AS "basicSalary",
                 (COALESCE(pl."housingAllowance",0) + COALESCE(pl."transportAllowance",0) + COALESCE(pl.overtime,0)) AS "totalAllowances",
@@ -260,9 +260,9 @@ router.get("/", async (req, res) => {
       logger.error(e, "my-space lastPayslip error:");
     }
 
-    let todayTasks: any[] = [];
+    let todayTasks: Record<string, unknown>[] = [];
     try {
-      todayTasks = await rawQuery<any>(
+      todayTasks = await rawQuery<Record<string, unknown>>(
         `SELECT id, title, status, priority, "scheduledDate"
          FROM tasks
          WHERE "assignedTo" = $1 AND "scheduledDate" = $2 AND status NOT IN ('completed','cancelled')
@@ -274,9 +274,9 @@ router.get("/", async (req, res) => {
       logger.error(e, "my-space todayTasks error:");
     }
 
-    let notifications: any[] = [];
+    let notifications: Record<string, unknown>[] = [];
     try {
-      notifications = await rawQuery<any>(
+      notifications = await rawQuery<Record<string, unknown>>(
         `SELECT id, type, title, body, priority, "isRead", "createdAt"
          FROM notifications
          WHERE "assignmentId" = $1
@@ -287,9 +287,9 @@ router.get("/", async (req, res) => {
       logger.error(e, "my-space notifications error:");
     }
 
-    let custodies: any[] = [];
+    let custodies: Record<string, unknown>[] = [];
     try {
-      custodies = await rawQuery<any>(
+      custodies = await rawQuery<Record<string, unknown>>(
         `SELECT je.id, je.description,
                 COALESCE((SELECT SUM(jl.debit) FROM journal_lines jl WHERE jl."journalId" = je.id AND jl.debit > 0), 0) AS amount,
                 je.status, je."createdAt"
@@ -303,9 +303,9 @@ router.get("/", async (req, res) => {
       logger.error(e, "my-space custodies error:");
     }
 
-    let violations: any[] = [];
+    let violations: Record<string, unknown>[] = [];
     try {
-      violations = await rawQuery<any>(
+      violations = await rawQuery<Record<string, unknown>>(
         `SELECT id, type, description, severity, deduction, period, "createdAt"
          FROM employee_violations
          WHERE "assignmentId" = $1 AND "deletedAt" IS NULL
@@ -316,9 +316,9 @@ router.get("/", async (req, res) => {
       logger.error(e, "my-space violations error:");
     }
 
-    let activeLoans: any[] = [];
+    let activeLoans: Record<string, unknown>[] = [];
     try {
-      activeLoans = await rawQuery<any>(
+      activeLoans = await rawQuery<Record<string, unknown>>(
         `SELECT id, "loanNumber", "loanType", amount, "remainingAmount",
                 "installmentAmount", "installmentCount", "paidAmount", status, "createdAt"
          FROM hr_employee_loans
@@ -332,7 +332,7 @@ router.get("/", async (req, res) => {
 
     let currentShift: any = null;
     try {
-      const [shiftAssignment] = await rawQuery<any>(
+      const [shiftAssignment] = await rawQuery<Record<string, unknown>>(
         `SELECT s.name, s."startTime", s."endTime", s.days
          FROM employee_shift_assignments esa
          JOIN shifts s ON s.id = esa."shiftId"
@@ -344,7 +344,7 @@ router.get("/", async (req, res) => {
       if (shiftAssignment) {
         currentShift = shiftAssignment;
       } else {
-        const [defaultShift] = await rawQuery<any>(
+        const [defaultShift] = await rawQuery<Record<string, unknown>>(
           `SELECT name, "startTime", "endTime", days FROM shifts
            WHERE "companyId" = $1 AND status = 'active'
            ORDER BY "isDefault" DESC LIMIT 1`,
@@ -358,7 +358,7 @@ router.get("/", async (req, res) => {
 
     let monthlyStats: any = null;
     try {
-      const [ms] = await rawQuery<any>(
+      const [ms] = await rawQuery<Record<string, unknown>>(
         `SELECT "presentDays", "absentDays", "lateDays", "totalLateMinutes", "totalDeduction"
          FROM employee_monthly_attendance
          WHERE "assignmentId" = $1 AND period = $2`,
@@ -369,9 +369,9 @@ router.get("/", async (req, res) => {
       logger.error(e, "my-space monthlyStats error:");
     }
 
-    let recentActions: any[] = [];
+    let recentActions: Record<string, unknown>[] = [];
     try {
-      recentActions = await rawQuery<any>(
+      recentActions = await rawQuery<Record<string, unknown>>(
         `SELECT id, action, entity AS "entityType", "entityId", reason AS description, "createdAt"
          FROM audit_logs
          WHERE "userId" = $1 AND "companyId" = $2
@@ -382,9 +382,9 @@ router.get("/", async (req, res) => {
       logger.error(e, "my-space recentActions error:");
     }
 
-    let performanceReviews: any[] = [];
+    let performanceReviews: Record<string, unknown>[] = [];
     try {
-      performanceReviews = await rawQuery<any>(
+      performanceReviews = await rawQuery<Record<string, unknown>>(
         `SELECT pr.id, pr.period, pr."overallScore", pr.status, e.name AS "reviewerName", pr."createdAt"
          FROM performance_reviews pr
          LEFT JOIN employees e ON e.id = pr."reviewerId"
@@ -396,9 +396,9 @@ router.get("/", async (req, res) => {
       logger.error(e, "my-space performanceReviews error:");
     }
 
-    let overdueItems: any[] = [];
+    let overdueItems: Record<string, unknown>[] = [];
     try {
-      const overdueTasks = await rawQuery<any>(
+      const overdueTasks = await rawQuery<Record<string, unknown>>(
         `SELECT id, title, 'task' AS "itemType", "scheduledDate" AS deadline, status
          FROM tasks
          WHERE "assignedTo" = $1 AND status NOT IN ('completed','cancelled')
@@ -406,7 +406,7 @@ router.get("/", async (req, res) => {
          ORDER BY "scheduledDate" ASC LIMIT 10`,
         [scope.activeAssignmentId, today]
       );
-      const overdueRequests = await rawQuery<any>(
+      const overdueRequests = await rawQuery<Record<string, unknown>>(
         `SELECT lr.id, lt.name AS title, 'leave_request' AS "itemType", lr."createdAt" AS deadline, lr.status
          FROM hr_leave_requests lr
          JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
@@ -420,11 +420,11 @@ router.get("/", async (req, res) => {
       logger.error(e, "my-space overdueItems error:");
     }
 
-    let expiringSoon: any[] = [];
+    let expiringSoon: Record<string, unknown>[] = [];
     try {
       const thirtyDaysLater = new Date();
       thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
-      const expiringDocs = await rawQuery<any>(
+      const expiringDocs = await rawQuery<Record<string, unknown>>(
         `SELECT id, type AS title, 'document' AS "itemType", "expiryDate"
          FROM employee_documents
          WHERE "employeeId" = $1 AND "companyId" = $4 AND "expiryDate" IS NOT NULL
@@ -432,7 +432,7 @@ router.get("/", async (req, res) => {
          ORDER BY "expiryDate" ASC LIMIT 10`,
         [scope.employeeId, today, toDateISO(thirtyDaysLater), scope.companyId]
       ).catch((e) => { logger.error(e, "my space query failed"); return []; });
-      const expiringContracts = await rawQuery<any>(
+      const expiringContracts = await rawQuery<Record<string, unknown>>(
         `SELECT c.id, CONCAT('عقد إيجار - ', pu."unitNumber") AS title, 'contract' AS "itemType", c."endDate" AS "expiryDate"
          FROM rental_contracts c
          JOIN property_units pu ON pu.id = c."unitId"
@@ -441,9 +441,9 @@ router.get("/", async (req, res) => {
          ORDER BY c."endDate" ASC LIMIT 10`,
         [scope.companyId, today, toDateISO(thirtyDaysLater)]
       ).catch((e) => { logger.error(e, "my space query failed"); return []; });
-      let expiringInsurance: any[] = [];
+      let expiringInsurance: Record<string, unknown>[] = [];
       try {
-        expiringInsurance = await rawQuery<any>(
+        expiringInsurance = await rawQuery<Record<string, unknown>>(
           `SELECT fi.id, CONCAT('تأمين - ', fv.make, ' ', fv.model) AS title, 'insurance' AS "itemType",
                   fi."endDate" AS "expiryDate"
            FROM fleet_insurance fi
@@ -454,7 +454,7 @@ router.get("/", async (req, res) => {
         );
       } catch (e) { logger.error(e, "my-space expiringInsurance error:"); }
       expiringSoon = [...expiringDocs, ...expiringContracts, ...expiringInsurance]
-        .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
+        .sort((a, b) => new Date(a.expiryDate as string).getTime() - new Date(b.expiryDate as string).getTime());
     } catch (e) {
       logger.error(e, "my-space expiringSoon error:");
     }
@@ -466,7 +466,7 @@ router.get("/", async (req, res) => {
         let unitsSummary: any = null;
         if (["owner", "branch_manager", "general_manager", "property_manager", "operations_manager"].includes(scope.role)) {
           try {
-            const [us] = await rawQuery<any>(
+            const [us] = await rawQuery<Record<string, unknown>>(
               `SELECT COUNT(*) AS total,
                       COUNT(*) FILTER (WHERE status = 'rented') AS rented,
                       COUNT(*) FILTER (WHERE status = 'available') AS available,
@@ -480,7 +480,7 @@ router.get("/", async (req, res) => {
         let vehiclesSummary: any = null;
         if (["owner", "branch_manager", "general_manager", "fleet_manager", "operations_manager"].includes(scope.role)) {
           try {
-            const [vs] = await rawQuery<any>(
+            const [vs] = await rawQuery<Record<string, unknown>>(
               `SELECT COUNT(*) AS total,
                       COUNT(*) FILTER (WHERE status = 'available') AS available,
                       COUNT(*) FILTER (WHERE status = 'in_use') AS in_use,
@@ -494,7 +494,7 @@ router.get("/", async (req, res) => {
         let casesSummary: any = null;
         if (["owner", "branch_manager", "general_manager", "legal_manager"].includes(scope.role)) {
           try {
-            const [cs] = await rawQuery<any>(
+            const [cs] = await rawQuery<Record<string, unknown>>(
               `SELECT COUNT(*) AS total,
                       COUNT(*) FILTER (WHERE status = 'open') AS open,
                       COUNT(*) FILTER (WHERE status = 'closed') AS closed
@@ -507,7 +507,7 @@ router.get("/", async (req, res) => {
         let hrSummary: any = null;
         if (HR_APPROVAL_ROLES.includes(scope.role)) {
           try {
-            const [hs] = await rawQuery<any>(
+            const [hs] = await rawQuery<Record<string, unknown>>(
               `SELECT COUNT(*) AS total,
                       COUNT(*) FILTER (WHERE ea.status = 'active') AS active,
                       COUNT(*) FILTER (WHERE ea.status = 'inactive' OR ea.status = 'terminated') AS inactive
@@ -521,7 +521,7 @@ router.get("/", async (req, res) => {
         let financeSummary: any = null;
         if (["owner", "branch_manager", "general_manager", "finance_manager"].includes(scope.role)) {
           try {
-            const [fs] = await rawQuery<any>(
+            const [fs] = await rawQuery<Record<string, unknown>>(
               `SELECT COUNT(*) AS total,
                       COUNT(*) FILTER (WHERE status = 'overdue') AS overdue,
                       COUNT(*) FILTER (WHERE status = 'paid') AS paid,
@@ -575,7 +575,7 @@ router.get("/attendance", async (req, res) => {
     const scope = req.scope!;
     const { month } = req.query as Record<string, string>;
     const monthStr = month ?? currentPeriod();
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT a.id, a.date, a."checkIn", a."checkOut", a."lateMinutes", a.status,
               COALESCE(a."overtimeMinutes", 0) AS "overtimeMinutes",
               CASE WHEN a."checkIn" IS NOT NULL AND a."checkOut" IS NOT NULL
@@ -605,7 +605,7 @@ router.get("/attendance", async (req, res) => {
       [scope.activeAssignmentId, monthStr]
     );
 
-    const [monthlyStats] = await rawQuery<any>(
+    const [monthlyStats] = await rawQuery<Record<string, unknown>>(
       `SELECT COALESCE("presentDays", 0) AS "presentDays",
               COALESCE("lateDays", 0) AS "lateDays",
               COALESCE("totalLateMinutes", 0) AS "totalLateMinutes",
@@ -632,7 +632,7 @@ router.get("/payslip", async (req, res) => {
       params.push(period);
       periodFilter = `AND pr.period = $${params.length}`;
     }
-    const [ps] = await rawQuery<any>(
+    const [ps] = await rawQuery<Record<string, unknown>>(
       `SELECT pl.id, pr.period,
               pl.basic AS "baseSalary",
               COALESCE(pl."housingAllowance",0) AS "housingAllowance",
@@ -662,7 +662,7 @@ router.get("/payslip", async (req, res) => {
 router.get("/performance", async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT pr.id, pr.period, pr."overallScore" AS "overallRating", pr.comments AS notes,
               pr.status, pr."createdAt"
        FROM performance_reviews pr
@@ -679,7 +679,7 @@ router.get("/performance", async (req, res) => {
 router.get("/documents", async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT id, type, name AS title, "fileUrl" AS url, "expiryDate", "createdAt"
        FROM employee_documents
        WHERE "employeeId" = $1 AND "companyId" = $2
@@ -710,7 +710,7 @@ router.get("/requests", async (req, res) => {
     }
 
     params.push(Math.min(Number(limit) || 20, 500));
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT wi.id, wi."requestType", wi.title, wi.status, wi."slaStatus",
               wi."currentStepOrder", wi."createdAt", wi."completedAt",
               wi."refTable", wi."refId",
@@ -722,7 +722,7 @@ router.get("/requests", async (req, res) => {
       params
     );
 
-    const leaveRows = await rawQuery<any>(
+    const leaveRows = await rawQuery<Record<string, unknown>>(
       `SELECT lr.id, lt.name AS "leaveTypeName", lr."startDate", lr."endDate", lr.days, lr.status, lr."createdAt"
        FROM hr_leave_requests lr
        JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
