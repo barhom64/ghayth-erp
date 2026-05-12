@@ -3,6 +3,69 @@
 > **هذه معايير 3 مستويات: قبل الدفع Push + قبل فتح PR + قبل الدمج Merge.**
 > لا يكفي نجاح الأوامر محلياً لقبول الدمج؛ يلزم تحقق الحوكمة والصلاحيات والمالية وعزل الشركات والتوثيق.
 
+> ⚠️ **ملاحظة معمارية**: `scripts/_push2.mjs` هو **حل تشغيلي مؤقت** بسبب قيود بيئة Replit على `git push` المباشر، **وليس workflow معماري دائم**. عند انتقال الفريق لبيئة تطوير عادية، يُستبدل بـ `git push` القياسي مع نفس قواعد Branch Protection أدناه.
+
+---
+
+## 🚦 Git Workflow Policy — ممنوع الدفع المباشر إلى `main`
+
+كل تغيير يجب أن يمر بهذه المراحل:
+
+```
+Feature Branch → Pull Request → CI أخضر → Code Review → Merge
+```
+
+### Branch Protection Rules (مفعّلة على `main`)
+
+يجب تفعيل هذه القواعد على GitHub:
+`Settings → Branches → Branch protection rules → Add rule for main`
+
+- ✅ **Require a pull request before merging** (1+ approval)
+- ✅ **Require status checks to pass** (`guard.yml`, `audit-runtime.yml`)
+- ✅ **Require branches to be up to date before merging**
+- ✅ **Dismiss stale pull request approvals when new commits are pushed**
+- ✅ **Do not allow bypassing the above settings** (حتى للأدمن)
+- ✅ **Restrict force pushes** (block)
+- ✅ **Restrict deletions** (block)
+
+### تسمية الفروع (Branch Naming)
+
+```text
+feature/hr-payroll-q3
+fix/tenant-isolation-bi-overview
+refactor/rbac-v2
+docs/zatca-provider-interface
+hotfix/dashboard-sql-ambiguous
+chore/upgrade-drizzle
+```
+
+`<type>` المسموح: `feature`, `fix`, `refactor`, `docs`, `hotfix`, `chore`, `test`, `migration`.
+
+### حدود حجم الـ PR (إرشادية مع استثناء مبرّر)
+
+| نوع PR | الحد الموصى به |
+|---|---|
+| feature | ≤ 20 ملف |
+| refactor | ≤ 30 ملف |
+| hotfix | ≤ 10 ملفات |
+| migration | منفصل قدر الإمكان (PR مستقل) |
+
+> الأصل أن يكون PR صغيراً ومحدّداً. إذا تجاوز الحد، **لا يُرفض تلقائياً** لكن يلزم:
+> 1. توضيح سبب عدم التقسيم في وصف الـ PR.
+> 2. فصل التغييرات في commits واضحة منطقياً.
+> 3. خطة اختبار موسّعة.
+> 4. مراجعة إضافية (2 reviewers بدل 1).
+> 5. عدم خلط أكثر من نوع تغيير (UI + DB + Security + Finance) إلا لضرورة موثّقة.
+
+### ممنوع خلطه في نفس الـ PR
+
+| ❌ خلط ممنوع | السبب |
+|---|---|
+| Security + Performance | يخفي الانحدار الأمني خلف التحسين |
+| Migration + UI | الـ rollback يكسر الواجهة |
+| Refactor + Business logic | يصعب التمييز بين تغيير سلوك ونقل كود |
+| Massive formatting + logic changes | تشويش على الـ diff الحقيقي |
+
 ---
 
 ## 🟢 المستوى الأول — قبل الدفع (Pre-flight Push)
@@ -193,6 +256,58 @@ Task #XXX, closes #YYY
 - [ ] Screenshots مرفقة لو UI.
 - [ ] Migration notes مرفقة لو DB schema.
 - [ ] لا تعارض مع `main` (rebase نظيف).
+
+---
+
+## ✅ Definition of Done — متى تُعتبر المهمة منتهية؟
+
+المهمة **لا تُعتبر مكتملة** إلا إذا حقّقت **كل** النقاط التالية:
+
+### تقنياً
+- [ ] `pnpm typecheck` أخضر (0 errors).
+- [ ] `pnpm run guard` أخضر (6/6 خطوات).
+- [ ] لا `console.log` في كود الخادم — استُعمل `req.log`/`logger`.
+- [ ] لا `any` جديد بدون TODO + تبرير مكتوب.
+- [ ] لا hardcoded permissions — كل الصلاحيات عبر `requirePermission` / `authorize`.
+- [ ] لا schema drift (`pnpm run check:schema-drift` أخضر).
+- [ ] لا ghost rows (`pnpm run check:ghost-rows` أخضر).
+
+### حوكمياً (Governance)
+- [ ] **Tenant isolation pass** — اختبار يثبت أن user من شركة A لا يصل لبيانات شركة B.
+- [ ] **RBAC pass** — كل route فيه auth + authorize + scope.
+- [ ] **Field masking** للبيانات الحساسة (رواتب، أرقام بطاقات، بيانات شخصية مشفّرة).
+
+### مالياً (إن لمس المالية)
+- [ ] **GL test** — قيد محاسبي متوازن (debit = credit).
+- [ ] **Idempotency** — إعادة العملية لا تنتج قيوداً مكرّرة.
+- [ ] **Closed period guard** — لا ترحيل على فترة مغلقة.
+- [ ] **Audit log** — كل عملية مالية مسجّلة في `audit_log`.
+
+### واجهةً (إن لمس UI)
+- [ ] **Screenshots قبل/بعد** مرفقة في PR.
+- [ ] `FormShell + Zod` (لا `useState` يدوي للـ forms).
+- [ ] لا modals للإنشاء/التعديل — صفحة كاملة عبر `<Link>`.
+- [ ] RTL + عربية (`formatDateAr`, `formatNumber`, `formatCurrency`).
+- [ ] Empty/Error states بالعربية مع icons + retry button.
+
+### قاعدة بيانات (إن لمس Schema)
+- [ ] **Migration notes** مرفقة في PR.
+- [ ] Migration قابل للـ rollback (down migration موجود).
+- [ ] لا `CREATE INDEX CONCURRENTLY` داخل transaction.
+
+### اختبارياً
+- [ ] **Smoke test PASS** (`bash scripts/health-check.sh` = 60/60 OK).
+- [ ] لا skipped tests بدون تبرير في PR.
+
+### توثيقياً
+- [ ] `replit.md` محدّث لو تغيّرت Gotchas أو API canonicals.
+- [ ] OpenAPI spec محدّث + `pnpm --filter @workspace/api-spec run generate` نُفّذ.
+- [ ] `SERVICES_INDEX.md` محدّث لو أُضيف/حُذف endpoint.
+
+### مراجعةً
+- [ ] **PR reviewed** بـ ≥1 approval (أو 2 لو تجاوز حدود الحجم).
+- [ ] لا unresolved comments.
+- [ ] CI أخضر بالكامل.
 
 ---
 

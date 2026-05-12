@@ -55,7 +55,7 @@ A comprehensive, full-stack Arabic enterprise resource planning system centraliz
 -   **Monorepo Structure**: pnpm workspaces are used to manage multiple interdependent applications and libraries within a single repository.
 -   **Frontend Routing**: Modular route files using `React.lazy()` ensure efficient code-splitting and improved initial load performance.
 -   **Create/Edit UI**: Operations use standalone full pages instead of popups/modals to provide a consistent and robust user experience, reserving dialogs for read-only previews or confirmations.
--   **GitHub Integration**: Custom GitHub API sync (`scripts/_push2.mjs`) is used for incremental, resumable pushes due to limitations with `git` commands in the environment.
+-   **GitHub Integration**: Custom GitHub API sync is used due to limitations with `git` commands in the environment. Pre-Branch-Protection era used `scripts/_push2.mjs` (direct push to `main`); from 2026-05-12 onward, use `scripts/_pr_push.mjs` (PR flow: branch + push + open PR + wait for `guard` CI + squash-merge + delete branch). See "Pushing after Branch Protection" in Gotchas below.
 -   **Multi-tenancy**: Implemented with a 3-level settings engine (system → company → branch) and multi-filter system.
 
 ## Product
@@ -78,7 +78,18 @@ Ghayth ERP centralizes operations across 28+ modules (HR, Finance, Fleet, Wareho
 
 ## Gotchas
 
--   **GitHub Sync**: `.github/workflows/*` files cannot be pushed via `scripts/_push2.mjs` and must be edited directly on GitHub. Local `git` commands are blocked.
+-   **GitHub Sync**: `.github/workflows/*` files cannot be pushed via `scripts/_push2.mjs` (or `_pr_push.mjs`) and must be edited directly on GitHub. Local `git` commands are blocked.
+-   **Pushing after Branch Protection (2026-05-12+)**: The `main-protection` ruleset (id 16281889, active) on `barhom64/ghayth-erp` requires every change to land via PR with a green `guard` CI check, blocks force-push, blocks deletion, requires linear history, and `current_user_can_bypass: never` (no admin bypass). **`scripts/_push2.mjs` will be rejected by GitHub** against this ruleset (typically a non-2xx on the `PUT /contents` call — exact code/message depends on which rule fires first). Use `scripts/_pr_push.mjs` instead:
+    ```bash
+    node -e 'require("fs").writeFileSync("/tmp/_pr_push_state.json", JSON.stringify({
+      title: "fix: short description",
+      body: "Longer explanation",
+      files: ["path/to/changed1.ts", "path/to/changed2.md"]
+    }))'
+    node scripts/_pr_push.mjs
+    ```
+    The script is **idempotent and resumable** — state is persisted to `/tmp/_pr_push_state.json` after every phase transition (`init → main-resolved → branch-created → files-uploaded → pr-opened → guard-passed → merged → done`), so a SIGKILL'd run can be re-started and a `done` state short-circuits to a no-op. Reuses both open AND closed PRs on the same head branch (re-opens a closed-but-unmerged PR rather than 422-ing on duplicate-head). Polls `guard` every 30s for up to 25 minutes against BOTH the check-runs API (Actions) and the legacy commit-statuses API; aborts the merge if `guard` fails or never reports. Merge call sends the head SHA as an optimistic lock so a concurrent push surfaces as 409 instead of merging the wrong commit. Squash-merges to satisfy the linear-history rule.
+-   **GitHub OAuth dependency**: All push/pull scripts use the Replit GitHub Connector (`@replit/connectors-sdk`). If `listConnections('github')` returns 0, the connector needs to be re-installed/re-authorized: install the Replit GitHub App at `github.com/apps/replit` (select `barhom64/ghayth-erp`), then connect the integration in Replit Workspace → Tools → Integrations → GitHub. Symptoms of a broken connection: Auto-Pull workflow logs show `403 Forbidden` on `/repos/barhom64/ghayth-erp/commits/main`.
 -   **API path canonicals (verified by smoke 2026-05-12, 60/60 PASS)** — the following paths are the *only* ones that exist on the live server. Common wrong guesses (left) → correct path (right):
     -   `/api/hr/employees` ❌ → `/api/hr/employees-status` ✅ (list endpoint)
     -   `/api/hr/leaves` ❌ → `/api/hr/leave-requests` ✅
