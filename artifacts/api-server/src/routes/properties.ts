@@ -1855,7 +1855,7 @@ router.get("/payments", authorize({ feature: "properties.payments", action: "lis
   } catch (err) { handleRouteError(err, res, "Rent payments error:"); }
 });
 
-router.get("/payments/:id", authorize({ feature: "properties.payments", action: "view", resource: { table: "rent_payments", idParam: "id" } }), async (req, res): Promise<any> => {
+router.get("/payments/:id", authorize({ feature: "properties.payments", action: "view", resource: { table: "rent_payments", idParam: "id" } }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
