@@ -337,7 +337,7 @@ router.get("/seasons/:id", authorize({ feature: "umrah", action: "view" }), asyn
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -368,11 +368,11 @@ router.patch("/seasons/:id", authorize({ feature: "umrah", action: "update" }), 
     const b = zodParse(patchSeasonSchema.safeParse(req.body));
     let originalStatus: string | undefined;
     if (b.status !== undefined) {
-      const [existing] = await rawQuery<any>(`SELECT status FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+      const [existing] = await rawQuery<Record<string, unknown>>(`SELECT status FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
       if (!existing) throw new NotFoundError("الموسم غير موجود");
-      originalStatus = existing.status;
+      originalStatus = existing.status as string | undefined;
       if (b.status !== existing.status) {
-        const allowed = SEASON_TRANSITIONS[existing.status] ?? [];
+        const allowed = SEASON_TRANSITIONS[existing.status as string] ?? [];
         if (!allowed.includes(b.status)) {
           throw new ConflictError(
             `لا يمكن نقل الموسم من "${existing.status}" إلى "${b.status}"`,
@@ -465,11 +465,11 @@ router.patch("/agents/:id", authorize({ feature: "umrah", action: "update" }), a
     const b = zodParse(patchAgentSchema.safeParse(req.body));
     let originalAgentStatus: string | undefined;
     if (b.status !== undefined) {
-      const [existing] = await rawQuery<any>(`SELECT status FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+      const [existing] = await rawQuery<Record<string, unknown>>(`SELECT status FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
       if (!existing) throw new NotFoundError("الوكيل غير موجود");
-      originalAgentStatus = existing.status;
+      originalAgentStatus = existing.status as string | undefined;
       if (b.status !== existing.status) {
-        const allowed = AGENT_TRANSITIONS[existing.status] ?? [];
+        const allowed = AGENT_TRANSITIONS[existing.status as string] ?? [];
         if (!allowed.includes(b.status)) {
           throw new ConflictError(
             `لا يمكن نقل حالة الوكيل من "${existing.status}" إلى "${b.status}"`,
@@ -500,9 +500,9 @@ router.delete("/agents/:id", authorize({ feature: "umrah", action: "delete" }), 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(`SELECT id, name FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<Record<string, unknown>>(`SELECT id, name FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("الوكيل غير موجود");
-    const [inUse] = await rawQuery<any>(`SELECT COUNT(*)::int AS c FROM umrah_pilgrims WHERE "agentId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [inUse] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*)::int AS c FROM umrah_pilgrims WHERE "agentId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (Number(inUse?.c) > 0) {
       throw new ConflictError(`لا يمكن حذف الوكيل — مرتبط بـ ${inUse.c} معتمر`);
     }
@@ -817,13 +817,13 @@ router.delete("/pilgrims/:id", authorize({ feature: "umrah", action: "delete" })
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(`SELECT id, "fullName", status FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<Record<string, unknown>>(`SELECT id, "fullName", status FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المعتمر غير موجود");
     const nonDeletableStatuses = ["arrived", "active", "overstayed", "violated"];
-    if (nonDeletableStatuses.includes(existing.status)) {
+    if (nonDeletableStatuses.includes(existing.status as string)) {
       throw new ConflictError(`لا يمكن حذف معتمر في حالة "${existing.status}" — يُسمح فقط بحذف المعتمرين في حالة pending أو cancelled`);
     }
-    const [invoiced] = await rawQuery<any>(`SELECT COUNT(*)::int AS c FROM umrah_penalties WHERE "pilgrimId"=$1 AND "companyId"=$2 AND status='invoiced'`, [id, scope.companyId]);
+    const [invoiced] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*)::int AS c FROM umrah_penalties WHERE "pilgrimId"=$1 AND "companyId"=$2 AND status='invoiced'`, [id, scope.companyId]);
     if (Number(invoiced?.c) > 0) {
       throw new ConflictError("لا يمكن حذف معتمر عليه غرامات مُفوترة");
     }
@@ -840,7 +840,7 @@ router.post("/import/preview", authorize({ feature: "umrah", action: "create" })
     const { seasonId, rows: importRows, fileType } = zodParse(importPreviewSchema.safeParse(req.body));
     const passportHashes = importRows.filter((r: any) => r.passportNumber).map((r: any) => blindIndex(String(r.passportNumber)));
     const existingRows = passportHashes.length > 0
-      ? await rawQuery<any>(`SELECT "passportNumber_hash" FROM umrah_pilgrims WHERE "companyId"=$1 AND "seasonId"=$2 AND "passportNumber_hash" = ANY($3) AND "deletedAt" IS NULL`, [scope.companyId, seasonId, passportHashes])
+      ? await rawQuery<Record<string, unknown>>(`SELECT "passportNumber_hash" FROM umrah_pilgrims WHERE "companyId"=$1 AND "seasonId"=$2 AND "passportNumber_hash" = ANY($3) AND "deletedAt" IS NULL`, [scope.companyId, seasonId, passportHashes])
       : [];
     const existingSet = new Set(existingRows.map((r: any) => r.passportNumber_hash));
     const newRows = importRows.filter((r: any) => r.passportNumber && !existingSet.has(blindIndex(String(r.passportNumber))));
@@ -848,7 +848,7 @@ router.post("/import/preview", authorize({ feature: "umrah", action: "create" })
     const errorRows = importRows.filter((r: any) => !r.passportNumber || !r.fullName);
     const nuskCodes = [...new Set(importRows.map((r: any) => r.nuskCode).filter(Boolean))];
     const linkedAgents = nuskCodes.length > 0
-      ? await rawQuery<any>(`SELECT "nuskCode", name FROM umrah_sub_agents WHERE "companyId"=$1 AND "nuskCode" = ANY($2)`, [scope.companyId, nuskCodes])
+      ? await rawQuery<Record<string, unknown>>(`SELECT "nuskCode", name FROM umrah_sub_agents WHERE "companyId"=$1 AND "nuskCode" = ANY($2)`, [scope.companyId, nuskCodes])
       : [];
     const linkedSet = new Set(linkedAgents.map((a: any) => a.nuskCode));
     const unlinkedSubAgents = nuskCodes.filter((c) => !linkedSet.has(c)).map((c) => ({ nuskCode: c }));
@@ -909,7 +909,7 @@ async function doImport(scope: any, body: { seasonId: number; rows: any[]; fileT
     const batch = importRows.slice(batchStart, batchStart + BATCH_SIZE);
     const passportHashes = batch.filter((r: any) => r.passportNumber).map((r: any) => blindIndex(String(r.passportNumber)));
     const existingRows = passportHashes.length > 0
-      ? await rawQuery<any>(`SELECT id, "passportNumber_hash" FROM umrah_pilgrims WHERE "companyId"=$1 AND "seasonId"=$2 AND "passportNumber_hash" = ANY($3) AND "deletedAt" IS NULL`, [scope.companyId, seasonId, passportHashes])
+      ? await rawQuery<Record<string, unknown>>(`SELECT id, "passportNumber_hash" FROM umrah_pilgrims WHERE "companyId"=$1 AND "seasonId"=$2 AND "passportNumber_hash" = ANY($3) AND "deletedAt" IS NULL`, [scope.companyId, seasonId, passportHashes])
       : [];
     const existingMap = new Map<string, number>(existingRows.map((r: any) => [r.passportNumber_hash, r.id]));
 
@@ -1028,15 +1028,15 @@ router.post("/run-daily-status", authorize({ feature: "umrah", action: "create" 
     const today = todayISO();
 
     const [pendingToArrived, toOverstayed, toDeparted] = await Promise.all([
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT id FROM umrah_pilgrims WHERE "companyId"=$1 AND status='pending' AND "arrivalDate" <= $2 AND ("departureDate" IS NULL OR "departureDate" >= $2) AND "deletedAt" IS NULL`,
         [scope.companyId, today]
       ),
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT id, status FROM umrah_pilgrims WHERE "companyId"=$1 AND status IN ('arrived','active') AND "departureDate" < $2 AND "actualDeparture" IS NULL AND "deletedAt" IS NULL`,
         [scope.companyId, today]
       ),
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT id, status FROM umrah_pilgrims WHERE "companyId"=$1 AND status IN ('arrived','active') AND "actualDeparture" IS NOT NULL AND "actualDeparture" <= $2 AND "deletedAt" IS NULL`,
         [scope.companyId, today]
       ),
@@ -1047,7 +1047,7 @@ router.post("/run-daily-status", authorize({ feature: "umrah", action: "create" 
     for (const p of pendingToArrived) {
       try {
         await applyTransition({
-          entity: "umrah_pilgrims", id: p.id, scope,
+          entity: "umrah_pilgrims", id: p.id as number, scope,
           action: "umrah.pilgrim.arrived",
           fromStates: ["pending"], toState: "arrived",
           setExtras: { actualArrival: today },
@@ -1059,7 +1059,7 @@ router.post("/run-daily-status", authorize({ feature: "umrah", action: "create" 
     for (const p of toOverstayed) {
       try {
         await applyTransition({
-          entity: "umrah_pilgrims", id: p.id, scope,
+          entity: "umrah_pilgrims", id: p.id as number, scope,
           action: "umrah.pilgrim.overstayed",
           fromStates: ["arrived", "active"], toState: "overstayed",
           extraWhere: `"deletedAt" IS NULL`,
@@ -1070,7 +1070,7 @@ router.post("/run-daily-status", authorize({ feature: "umrah", action: "create" 
     for (const p of toDeparted) {
       try {
         await applyTransition({
-          entity: "umrah_pilgrims", id: p.id, scope,
+          entity: "umrah_pilgrims", id: p.id as number, scope,
           action: "umrah.pilgrim.departed",
           fromStates: ["arrived", "active"], toState: "departed",
           extraWhere: `"deletedAt" IS NULL`,
@@ -1159,7 +1159,7 @@ router.get("/penalties/:id", authorize({ feature: "umrah", action: "view" }), as
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT pen.*, p."fullName" AS "pilgrimName", p."passportNumber", a.name AS "agentName"
        FROM umrah_penalties pen
        LEFT JOIN umrah_pilgrims p ON pen."pilgrimId"=p.id
@@ -1177,7 +1177,7 @@ router.patch("/penalties/:id/waive", authorize({ feature: "umrah", action: "upda
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { reason } = zodParse(waivePenaltySchema.safeParse(req.body));
-    const [penalty] = await rawQuery<any>(`SELECT pen.*, p."fullName" as "pilgrimName" FROM umrah_penalties pen LEFT JOIN umrah_pilgrims p ON pen."pilgrimId"=p.id WHERE pen.id=$1 AND pen."companyId"=$2`, [id, scope.companyId]);
+    const [penalty] = await rawQuery<Record<string, unknown>>(`SELECT pen.*, p."fullName" as "pilgrimName" FROM umrah_penalties pen LEFT JOIN umrah_pilgrims p ON pen."pilgrimId"=p.id WHERE pen.id=$1 AND pen."companyId"=$2`, [id, scope.companyId]);
     if (!penalty) throw new NotFoundError("العقوبة غير موجودة");
     await applyTransition({
       entity: "umrah_penalties",
@@ -1195,7 +1195,7 @@ router.patch("/penalties/:id/waive", authorize({ feature: "umrah", action: "upda
         const { umrahEngine } = await import("../lib/engines/index.js");
         await umrahEngine.postPenaltyWaiverGL(
           { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
-          { id, amount: Number(penalty.amount), pilgrimName: penalty.pilgrimName || "" }
+          { id, amount: Number(penalty.amount), pilgrimName: (penalty.pilgrimName as string | null) || "" }
         );
       } catch (e) { logger.error(e, "umrah penalty waiver GL posting failed (non-blocking)"); }
     }
@@ -1225,7 +1225,7 @@ router.post("/penalties/waive-bulk", authorize({ feature: "umrah", action: "upda
 
     for (const id of body.penaltyIds) {
       try {
-        const [penalty] = await rawQuery<any>(
+        const [penalty] = await rawQuery<Record<string, unknown>>(
           `SELECT pen.*, p."fullName" as "pilgrimName"
              FROM umrah_penalties pen
         LEFT JOIN umrah_pilgrims p ON pen."pilgrimId" = p.id
@@ -1253,7 +1253,7 @@ router.post("/penalties/waive-bulk", authorize({ feature: "umrah", action: "upda
             const { umrahEngine } = await import("../lib/engines/index.js");
             await umrahEngine.postPenaltyWaiverGL(
               { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
-              { id, amount: Number(penalty.amount), pilgrimName: penalty.pilgrimName || "" }
+              { id, amount: Number(penalty.amount), pilgrimName: (penalty.pilgrimName as string | null) || "" }
             );
             totalAmount += Number(penalty.amount);
           } catch (e) {
@@ -1288,7 +1288,7 @@ router.post("/agent-invoices/:id/record-payment", authorize({ feature: "umrah", 
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { amount, paymentMethod, reference } = zodParse(recordPaymentSchema.safeParse(req.body));
-    const [invoice] = await rawQuery<any>(`SELECT * FROM umrah_agent_invoices WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [invoice] = await rawQuery<Record<string, unknown>>(`SELECT * FROM umrah_agent_invoices WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
     const paidSoFar = Number(invoice.paidAmount || 0) + Number(amount);
     if (paidSoFar > Number(invoice.total) * 1.001) {
@@ -1320,7 +1320,7 @@ router.post("/agent-invoices/generate", authorize({ feature: "umrah", action: "c
     const { agentId, seasonId } = zodParse(generateInvoiceSchema.safeParse(req.body));
 
     // Idempotency: return existing invoice if one already exists for this agent+season
-    const [existingInvoice] = await rawQuery<any>(
+    const [existingInvoice] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM umrah_agent_invoices WHERE "agentId"=$1 AND "seasonId"=$2 AND "companyId"=$3 AND status <> 'cancelled'`,
       [agentId, seasonId, scope.companyId]
     );
@@ -1486,7 +1486,7 @@ router.delete("/transport/:id", authorize({ feature: "umrah", action: "delete" }
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(`SELECT id, status FROM umrah_transport WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<Record<string, unknown>>(`SELECT id, status FROM umrah_transport WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("رحلة النقل غير موجودة");
     if (existing.status === "in_progress") {
       throw new ConflictError("لا يمكن حذف رحلة قيد التنفيذ");
@@ -1504,7 +1504,7 @@ router.post("/transport", authorize({ feature: "umrah", action: "create" }), asy
     const b = zodParse(createTransportSchema.safeParse(req.body)) as any;
     if (b.seasonId) await requireOpenSeason(Number(b.seasonId), scope.companyId);
     if (b.vehicleId) {
-      const [vehicle] = await rawQuery<any>(
+      const [vehicle] = await rawQuery<Record<string, unknown>>(
         `SELECT id, status FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
         [b.vehicleId, scope.companyId]
       );
@@ -1512,13 +1512,13 @@ router.post("/transport", authorize({ feature: "umrah", action: "create" }), asy
       if (vehicle.status === "maintenance") throw new ConflictError("المركبة قيد الصيانة ولا يمكن تخصيصها");
     }
     if (b.driverId) {
-      const [driver] = await rawQuery<any>(
+      const [driver] = await rawQuery<Record<string, unknown>>(
         `SELECT id, status, "licenseExpiry" FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
         [b.driverId, scope.companyId]
       );
       if (!driver) throw new ValidationError("السائق غير موجود في الأسطول");
       if (driver.status === "inactive") throw new ConflictError("السائق غير نشط ولا يمكن تخصيصه");
-      if (driver.licenseExpiry && new Date(driver.licenseExpiry) < new Date(b.tripDate)) {
+      if (driver.licenseExpiry && new Date(driver.licenseExpiry as string | Date) < new Date(b.tripDate)) {
         throw new ConflictError("رخصة السائق منتهية الصلاحية في تاريخ الرحلة");
       }
     }
@@ -1556,12 +1556,12 @@ router.patch("/transport/:id", authorize({ feature: "umrah", action: "update" })
     const id = parseId(req.params.id, "id");
     const b = zodParse(patchTransportSchema.safeParse(req.body));
     if (b.vehicleId) {
-      const [vehicle] = await rawQuery<any>(`SELECT id, status FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [b.vehicleId, scope.companyId]);
+      const [vehicle] = await rawQuery<Record<string, unknown>>(`SELECT id, status FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [b.vehicleId, scope.companyId]);
       if (!vehicle) throw new ValidationError("المركبة غير موجودة في الأسطول");
       if (vehicle.status === "maintenance") throw new ConflictError("المركبة قيد الصيانة");
     }
     if (b.driverId) {
-      const [driver] = await rawQuery<any>(`SELECT id, status, "licenseExpiry" FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [b.driverId, scope.companyId]);
+      const [driver] = await rawQuery<Record<string, unknown>>(`SELECT id, status, "licenseExpiry" FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [b.driverId, scope.companyId]);
       if (!driver) throw new ValidationError("السائق غير موجود في الأسطول");
       if (driver.status === "inactive") throw new ConflictError("السائق غير نشط");
     }
@@ -1617,13 +1617,13 @@ router.post("/transport/:id/assign-pilgrims", authorize({ feature: "umrah", acti
     const scope = req.scope!;
     const transportId = parseId(req.params.id, "id");
     const { pilgrimIds } = zodParse(assignPilgrimsSchema.safeParse(req.body));
-    const [transport] = await rawQuery<any>(`SELECT * FROM umrah_transport WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [transportId, scope.companyId]);
+    const [transport] = await rawQuery<Record<string, unknown>>(`SELECT * FROM umrah_transport WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [transportId, scope.companyId]);
     if (!transport) throw new NotFoundError("رحلة النقل غير موجودة");
     if (transport.status === "completed" || transport.status === "cancelled") {
       throw new ConflictError("لا يمكن إضافة معتمرين لرحلة مكتملة أو ملغاة");
     }
-    const newCount = (transport.pilgrimCount || 0) + pilgrimIds.length;
-    if (newCount > (transport.capacity || 45)) {
+    const newCount = (Number(transport.pilgrimCount) || 0) + pilgrimIds.length;
+    if (newCount > (Number(transport.capacity) || 45)) {
       throw new ValidationError(`عدد المعتمرين (${newCount}) يتجاوز سعة المركبة (${transport.capacity || 45})`);
     }
     const placeholders = pilgrimIds.map((_: any, i: number) => `$${i + 2}`).join(",");
@@ -1786,11 +1786,11 @@ router.post("/penalties", authorize({ feature: "umrah", action: "create" }), asy
     const b = zodParse(createPenaltySchema.safeParse(req.body));
     if (!b.pilgrimId && !b.agentId) throw new ValidationError("يجب تحديد المعتمر أو الوكيل");
     if (b.pilgrimId) {
-      const [p] = await rawQuery<any>(`SELECT id FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [b.pilgrimId, scope.companyId]);
+      const [p] = await rawQuery<Record<string, unknown>>(`SELECT id FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [b.pilgrimId, scope.companyId]);
       if (!p) throw new NotFoundError("المعتمر غير موجود");
     }
     if (b.agentId) {
-      const [a] = await rawQuery<any>(`SELECT id FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [b.agentId, scope.companyId]);
+      const [a] = await rawQuery<Record<string, unknown>>(`SELECT id FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [b.agentId, scope.companyId]);
       if (!a) throw new NotFoundError("الوكيل غير موجود");
     }
     const rows = await rawQuery(
@@ -1803,17 +1803,17 @@ router.post("/penalties", authorize({ feature: "umrah", action: "create" }), asy
         let pilgrimName = "غير محدد";
         let agentName: string | undefined;
         if (b.pilgrimId) {
-          const [p] = await rawQuery<any>(`SELECT "fullName" FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2`, [b.pilgrimId, scope.companyId]);
-          if (p) pilgrimName = p.fullName;
+          const [p] = await rawQuery<Record<string, unknown>>(`SELECT "fullName" FROM umrah_pilgrims WHERE id=$1 AND "companyId"=$2`, [b.pilgrimId, scope.companyId]);
+          if (p) pilgrimName = p.fullName as string;
         }
         if (b.agentId) {
-          const [a] = await rawQuery<any>(`SELECT name FROM umrah_agents WHERE id=$1 AND "companyId"=$2`, [b.agentId, scope.companyId]);
-          if (a) agentName = a.name;
+          const [a] = await rawQuery<Record<string, unknown>>(`SELECT name FROM umrah_agents WHERE id=$1 AND "companyId"=$2`, [b.agentId, scope.companyId]);
+          if (a) agentName = a.name as string | undefined;
         }
         const { umrahEngine } = await import("../lib/engines/index.js");
         await umrahEngine.postPenaltyGL(
           { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
-          { id: rows[0].id, amount: Number(b.amount), pilgrimName, agentName, type: b.type || "manual" }
+          { id: rows[0].id as number, amount: Number(b.amount), pilgrimName, agentName, type: b.type || "manual" }
         );
       } catch (glErr) {
         logger.error(glErr, "Penalty GL posting failed:");
