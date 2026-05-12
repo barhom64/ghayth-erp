@@ -4,6 +4,7 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarClock, Users, Plus, Sun, Moon, Clock } from "lucide-react";
@@ -110,9 +111,9 @@ export default function ShiftsManagementPage() {
         </TabsContent>
         <TabsContent value="assign">
           <div className="mb-4">
-            <Button size="sm" onClick={() => setShowAssignForm(!showAssignForm)}>
+            <GuardedButton perm="hr:create" size="sm" onClick={() => setShowAssignForm(!showAssignForm)}>
               <Plus className="h-4 w-4 me-1" />{showAssignForm ? "إلغاء" : "تعيين وردية لموظف"}
-            </Button>
+            </GuardedButton>
           </div>
           {showAssignForm && (
             <Card className="mb-4 border-blue-200">

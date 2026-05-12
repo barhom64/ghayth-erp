@@ -12,6 +12,7 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { Clock, AlertTriangle, CheckCircle2, ShieldAlert, Search, RefreshCw, X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { formatDateAr } from "@/lib/formatters";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "معلق",
@@ -116,10 +117,10 @@ export default function ObligationsPage() {
       subtitle="تتبع وإدارة جميع المواعيد النهائية عبر النظام (دفعات، تجديدات، صيانة، جلسات، انتهاء وثائق)"
       breadcrumbs={[{ label: "العمليات" }, { label: "الالتزامات" }]}
       actions={
-        <Button size="sm" variant="outline" className="gap-1" onClick={handleScan} disabled={scanning}>
+        <GuardedButton perm="obligations:create" size="sm" variant="outline" className="gap-1" onClick={handleScan} disabled={scanning}>
           <RefreshCw className={`h-4 w-4 ${scanning ? "animate-spin" : ""}`} />
           {scanning ? "جاري الفحص..." : "فحص المتجاوزات"}
-        </Button>
+        </GuardedButton>
       }
     >
       <KpiGrid items={[
@@ -195,22 +196,24 @@ export default function ObligationsPage() {
                     {(o.status === "pending" || o.status === "breached" ||
                       o.status === "escalated_l1" || o.status === "escalated_l2") && (
                       <div className="flex items-center gap-1 flex-none">
-                        <Button
+                        <GuardedButton
+                          perm="obligations:approve"
                           size="sm"
                           variant="outline"
                           className="gap-1 text-xs h-7"
                           onClick={() => handleAction(o.id, "met")}
                         >
                           <CheckCircle2 className="h-3 w-3" /> ملبى
-                        </Button>
-                        <Button
+                        </GuardedButton>
+                        <GuardedButton
+                          perm="obligations:delete"
                           size="sm"
                           variant="ghost"
                           className="gap-1 text-xs h-7 text-muted-foreground"
                           onClick={() => handleAction(o.id, "cancel")}
                         >
                           <X className="h-3 w-3" /> إلغاء
-                        </Button>
+                        </GuardedButton>
                       </div>
                     )}
                   </div>

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Plus, Building2, Eye, CheckCircle, Star, TrendingUp } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { CLASSIFICATIONS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/formatters";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
@@ -142,10 +143,10 @@ export default function Clients() {
       actions={
         canManage && (
           <Link href="/clients/create">
-            <Button className="gap-2">
+            <GuardedButton perm="clients:create" className="gap-2">
               <Plus className="h-4 w-4" />
               إضافة عميل
-            </Button>
+            </GuardedButton>
           </Link>
         )
       }

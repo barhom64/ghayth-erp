@@ -16,6 +16,7 @@ import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } fro
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 import { LegalTabsNav } from "@/components/shared/legal-tabs-nav";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 export default function Legal() {
   const [tab, setTab] = useState("contracts");
@@ -147,7 +148,7 @@ function ContractsTab() {
             resultCount={filtered.length}
           />
         </div>
-        {canManage && <Link href="/legal/create"><Button className="gap-2"><Plus className="h-4 w-4" /> عقد جديد</Button></Link>}
+        {canManage && <Link href="/legal/create"><GuardedButton perm="legal:create" className="gap-2"><Plus className="h-4 w-4" /> عقد جديد</GuardedButton></Link>}
       </div>
 
       <Card>
@@ -267,7 +268,7 @@ function CasesTab() {
             resultCount={filtered.length}
           />
         </div>
-        <Link href="/legal/cases/create"><Button className="gap-2"><Plus className="h-4 w-4" /> قضية جديدة</Button></Link>
+        <Link href="/legal/cases/create"><GuardedButton perm="legal:create" className="gap-2"><Plus className="h-4 w-4" /> قضية جديدة</GuardedButton></Link>
       </div>
       <Card>
         <CardContent className="pt-6">
