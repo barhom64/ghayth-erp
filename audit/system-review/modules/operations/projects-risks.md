@@ -8,15 +8,14 @@
 - الكومبوننت: `ProjectRisks`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `risks`
-- سطور الملف: 287
+- سطور الملف: 288
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L203: "(بلا تسمية)" → `() => setShowForm(!showForm)` 🔒
-- L228: "(بلا تسمية)" → `() => setShowForm(false)`
+- L229: "(بلا تسمية)" → `() => setShowForm(false)`
 
 ### القراءات (GET)
 - GET `/projects?limit=100`
@@ -36,8 +35,7 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `risks` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L41 _(inline-data-array)_: `const PROBABILITY_OPTIONS = [`
-- ⚠ L48 _(inline-data-array)_: `const IMPACT_OPTIONS = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
 - Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS

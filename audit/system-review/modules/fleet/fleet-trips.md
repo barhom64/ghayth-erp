@@ -8,14 +8,14 @@
 - الكومبوننت: `Trips`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `trips`
-- سطور الملف: 119
+- سطور الملف: 120
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L56: "رحلة جديدة"
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
 - GET `/fleet/trips`
@@ -23,13 +23,25 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/fleet.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+رحلات الأسطول. المرجع: `docs/blueprints/fleet.md`.
+
+| الحركة | الوحدة الهدف | مدخل API | مدخل DB | الحالة |
+|--------|--------------|----------|---------|--------|
+| تسجيل رحلة (يدوي أو من GPS) | fleet | `fleet.ts` POST `/trips` | `fleet_trips` | ✅ |
+| ربط بسائق + مركبة | fleet | `trips.driverId`, `trips.vehicleId` | ✅ |
+| ربط بعميل (إن trip تجاري) | crm | `trips.clientId` → `clients` | لتوليد فاتورة لاحقاً | ⚠ |
+| تكلفة الرحلة (cost/km × distance + وقود + سائق) | fleet/TCO | محسوبة في `vehicle_tco` | ✅ |
+| **قيد محاسبي** (إن رحلة تجارية) | finance/GL | DR AR / CR Revenue-Fleet | `gl_entries`, `gl_lines` | ⚠ تحقق |
+| تحديث odometer للمركبة | fleet | `vehicles.lastOdometerReading` يتحدّث تلقائياً | تنشيط `preventive-maintenance` rules | ✅ |
+| توليد طلب صيانة وقائية تلقائياً | fleet | عند تجاوز عتبة كم/شهر | `maintenance_requests` | ✅ |
+| اعتماد ساعات إضافية للسائق | hr/overtime | `trips.endTime - startTime` خارج دوام عادي | `hr_overtime` | ⚠ تحقق |
+| إشعارات للمشغّل + المدير | comms | event=`trip_started\|trip_completed\|delay` | `notifications` | ⚠ |
+| Audit log | core | `auditMiddleware` (`/fleet/trips`) | `audit_logs` (entity=`trip`) | ✅ |
+
+تحقق يدوي:
+- [ ] هل اعتماد المسار يتطلب موافقة قبل البدء (لرحلات طويلة)؟
+- [ ] هل الانحراف عن المسار المخطط يطلق تنبيه (geofencing)؟
+- [ ] هل وقت الانتظار في الموقع يُحسب كـ overtime؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `trips` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

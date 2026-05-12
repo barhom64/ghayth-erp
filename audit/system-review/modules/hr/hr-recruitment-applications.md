@@ -8,14 +8,14 @@
 - الكومبوننت: `ApplicationList`
 - subKey: `recruitment` | minRoleLevel: —
 - الكيان المستنبط: `applications`
-- سطور الملف: 154
+- سطور الملف: 155
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L121: "إضافة متقدم"
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
 - GET `/hr/recruitment/applications`
@@ -35,7 +35,7 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `applications` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L32 _(inline-data-array)_: `const kpis = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
 - Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS

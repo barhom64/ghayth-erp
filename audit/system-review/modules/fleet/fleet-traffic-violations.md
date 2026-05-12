@@ -8,16 +8,14 @@
 - الكومبوننت: `TrafficViolations`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `traffic-violations`
-- سطور الملف: 287
+- سطور الملف: 288
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L158: "(بلا تسمية)" → `() => handlePay(v.id)`
-- L173: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L212: "(بلا تسمية)" → `() => setShowForm(false)`
+- L213: "(بلا تسمية)" → `() => setShowForm(false)`
 
 ### القراءات (GET)
 - GET `/fleet/traffic-violations`

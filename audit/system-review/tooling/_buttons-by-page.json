@@ -30,18 +30,10 @@
         "path": "/admin/predefined-roles"
       }
     ],
-    "buttonCount": 12,
+    "buttonCount": 9,
     "buttons": [
       {
-        "line": 160,
-        "label": "تعديل",
-        "onClick": "() => toggleActive(r)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 163,
+        "line": 164,
         "label": "تعديل",
         "onClick": "() => startEditUser(r)",
         "disabledHinted": false,
@@ -49,7 +41,7 @@
         "isSubmit": false
       },
       {
-        "line": 166,
+        "line": 167,
         "label": "إعادة تعيين كلمة المرور",
         "onClick": "() => { setResetUserId(r.id); setResetPassword(\"\"); setCreatedUser(null); setSho",
         "disabledHinted": false,
@@ -57,15 +49,7 @@
         "isSubmit": false
       },
       {
-        "line": 169,
-        "label": "حذف المستخدم",
-        "onClick": "() => { setDeleteConfirmId(r.id); setEditUser(null); setResetUserId(null); setSh",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 277,
+        "line": 278,
         "label": null,
         "onClick": "() => { setShowForm(!showForm); setCreatedUser(null); setEditUser(null); setDele",
         "disabledHinted": false,
@@ -73,7 +57,7 @@
         "isSubmit": false
       },
       {
-        "line": 306,
+        "line": 307,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -81,7 +65,7 @@
         "isSubmit": false
       },
       {
-        "line": 351,
+        "line": 352,
         "label": null,
         "onClick": "() => { setCreatedUser(null); setShowForm(false);",
         "disabledHinted": false,
@@ -89,7 +73,7 @@
         "isSubmit": false
       },
       {
-        "line": 371,
+        "line": 372,
         "label": null,
         "onClick": "() => setEditUser(null)",
         "disabledHinted": false,
@@ -97,15 +81,7 @@
         "isSubmit": false
       },
       {
-        "line": 403,
-        "label": null,
-        "onClick": "() => deleteUser(deleteConfirmId)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 404,
+        "line": 405,
         "label": null,
         "onClick": "() => setDeleteConfirmId(null)",
         "disabledHinted": false,
@@ -113,7 +89,7 @@
         "isSubmit": false
       },
       {
-        "line": 423,
+        "line": 424,
         "label": "تأكيد",
         "onClick": "resetUserPassword",
         "disabledHinted": true,
@@ -121,7 +97,7 @@
         "isSubmit": false
       },
       {
-        "line": 424,
+        "line": 425,
         "label": null,
         "onClick": "() => { setResetUserId(null); setResetPassword(\"\");",
         "disabledHinted": false,
@@ -129,7 +105,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 548,
+    "lineCount": 549,
     "crossDomainImports": [
       "lib/api",
       "lib/utils",
@@ -151,18 +127,10 @@
         "path": "/settings/role-modules"
       }
     ],
-    "buttonCount": 6,
+    "buttonCount": 3,
     "buttons": [
       {
-        "line": 218,
-        "label": null,
-        "onClick": "() => setActiveTab(activeTab === \"create\" ? \"modules\" : \"create\")",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 256,
+        "line": 264,
         "label": null,
         "onClick": "saveModules",
         "disabledHinted": true,
@@ -170,7 +138,7 @@
         "isSubmit": false
       },
       {
-        "line": 257,
+        "line": 265,
         "label": null,
         "onClick": "() => setEditingRole(null)",
         "disabledHinted": false,
@@ -178,31 +146,15 @@
         "isSubmit": false
       },
       {
-        "line": 260,
+        "line": 268,
         "label": null,
         "onClick": "() => startEdit(r)",
         "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
-      },
-      {
-        "line": 380,
-        "label": null,
-        "onClick": "createNewRole",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 383,
-        "label": null,
-        "onClick": "() => setNewRole({ roleKey: \"\", label: \"\", level: \"10\", modules: []",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
       }
     ],
-    "lineCount": 393,
+    "lineCount": 412,
     "crossDomainImports": [
       "lib/api",
       "lib/utils",
@@ -219,18 +171,10 @@
         "path": "/audit-logs/entities"
       }
     ],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 172,
-        "label": "تصدير جدولي",
-        "onClick": "exportCSV",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 175,
+        "line": 176,
         "label": null,
         "onClick": "() => refetch()",
         "disabledHinted": false,
@@ -238,7 +182,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 272,
+    "lineCount": 273,
     "crossDomainImports": [
       "lib/api",
       "lib/utils",
@@ -260,66 +204,18 @@
         "path": "/admin/integration-logs"
       }
     ],
-    "buttonCount": 7,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 113,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 125,
+        "line": 126,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
-      },
-      {
-        "line": 192,
-        "label": null,
-        "onClick": "() => handleToggleStatus(intg.id, intg.status)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 195,
-        "label": null,
-        "onClick": "() => handleTest(intg.id)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 198,
-        "label": null,
-        "onClick": "() => handleDelete(intg.id)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 208,
-        "label": null,
-        "onClick": "() => setShowForm(true)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 269,
-        "label": "إعادة المحاولة للفاشلة",
-        "onClick": "handleRetry",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
       }
     ],
-    "lineCount": 310,
+    "lineCount": 311,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters",
@@ -358,18 +254,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin-violations-report.tsx",
     "module": "admin",
     "apiCalls": [],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 158,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 346,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 348,
     "crossDomainImports": [
       "lib/api",
       "lib/utils",
@@ -490,18 +377,10 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin-posting-failures.tsx",
     "module": "admin",
     "apiCalls": [],
-    "buttonCount": 3,
+    "buttonCount": 2,
     "buttons": [
       {
-        "line": 40,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 58,
+        "line": 60,
         "label": null,
         "onClick": "() => setShowResolved(!showResolved)",
         "disabledHinted": false,
@@ -509,7 +388,7 @@
         "isSubmit": false
       },
       {
-        "line": 65,
+        "line": 67,
         "label": null,
         "onClick": "() => refetch()",
         "disabledHinted": false,
@@ -517,7 +396,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 119,
+    "lineCount": 121,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -811,26 +690,10 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/bi-operations.tsx",
     "module": "bi",
     "apiCalls": [],
-    "buttonCount": 3,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 89,
-        "label": null,
-        "onClick": "() => exportChart(chartRef.current, \"sla-delays.png\")",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 470,
-        "label": null,
-        "onClick": "() => window.print()",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 492,
+        "line": 493,
         "label": null,
         "onClick": "() => { setFrom(\"\"); setTo(\"\"); setDepartmentId(\"\");",
         "disabledHinted": false,
@@ -838,7 +701,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 519,
+    "lineCount": 520,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -859,18 +722,9 @@
         "path": "/bi/admin-reports/monthly"
       }
     ],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 355,
-        "label": null,
-        "onClick": "() => window.print()",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 374,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 375,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters",
@@ -887,34 +741,10 @@
         "path": "/communications/stats"
       }
     ],
-    "buttonCount": 6,
+    "buttonCount": 2,
     "buttons": [
       {
-        "line": 139,
-        "label": null,
-        "onClick": "handleSubscribe",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 145,
-        "label": "إرسال تجريبي",
-        "onClick": "handleTest",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 149,
-        "label": "إلغاء الاشتراك",
-        "onClick": "handleUnsubscribe",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 236,
+        "line": 237,
         "label": null,
         "onClick": "() => refetch()",
         "disabledHinted": false,
@@ -922,23 +752,15 @@
         "isSubmit": false
       },
       {
-        "line": 407,
+        "line": 408,
         "label": null,
         "onClick": "() => setShow(!show)",
         "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
-      },
-      {
-        "line": 415,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
       }
     ],
-    "lineCount": 648,
+    "lineCount": 650,
     "crossDomainImports": [
       "lib/formatters",
       "lib/api",
@@ -985,18 +807,10 @@
         "path": "/notification-engine/preferences"
       }
     ],
-    "buttonCount": 21,
+    "buttonCount": 8,
     "buttons": [
       {
-        "line": 138,
-        "label": "حفظ",
-        "onClick": "saveRule",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 139,
+        "line": 140,
         "label": null,
         "onClick": "() => setEditId(null)",
         "disabledHinted": false,
@@ -1004,7 +818,7 @@
         "isSubmit": false
       },
       {
-        "line": 153,
+        "line": 154,
         "label": null,
         "onClick": "() => startEdit(rule)",
         "disabledHinted": false,
@@ -1012,39 +826,15 @@
         "isSubmit": false
       },
       {
-        "line": 235,
+        "line": 271,
         "label": null,
-        "onClick": "() => setShowNew(!showNew)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 270,
-        "label": "إنشاء",
         "onClick": "() => setShowNew(false)",
         "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
       },
       {
-        "line": 271,
-        "label": "إنشاء",
-        "onClick": "createTemplate",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 304,
-        "label": "حفظ",
-        "onClick": "saveEdit",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 305,
+        "line": 306,
         "label": null,
         "onClick": "() => setEditId(null)",
         "disabledHinted": false,
@@ -1052,31 +842,7 @@
         "isSubmit": false
       },
       {
-        "line": 309,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 315,
-        "label": null,
-        "onClick": "() => deleteTemplate(tId)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 408,
-        "label": null,
-        "onClick": "() => setShowNew(!showNew)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 448,
+        "line": 449,
         "label": null,
         "onClick": "() => removeStep(idx)",
         "disabledHinted": false,
@@ -1084,7 +850,7 @@
         "isSubmit": false
       },
       {
-        "line": 455,
+        "line": 456,
         "label": "خطوة",
         "onClick": "addStep",
         "disabledHinted": false,
@@ -1092,40 +858,8 @@
         "isSubmit": false
       },
       {
-        "line": 457,
-        "label": "إنشاء",
-        "onClick": "() => setShowNew(false)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
         "line": 458,
-        "label": "إنشاء",
-        "onClick": "createChain",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 482,
         "label": null,
-        "onClick": "() => deleteChain(chain.id as number)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 561,
-        "label": null,
-        "onClick": "() => setShowNew(!showNew)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 593,
-        "label": "إنشاء",
         "onClick": "() => setShowNew(false)",
         "disabledHinted": false,
         "wrappedByLink": false,
@@ -1133,30 +867,14 @@
       },
       {
         "line": 594,
-        "label": "إنشاء",
-        "onClick": "createWebhook",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 632,
         "label": null,
-        "onClick": "() => deleteWebhook(wh.id as number)",
+        "onClick": "() => setShowNew(false)",
         "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 894,
-        "label": "حفظ التفضيلات",
-        "onClick": "saveAll",
-        "disabledHinted": true,
         "wrappedByLink": false,
         "isSubmit": false
       }
     ],
-    "lineCount": 969,
+    "lineCount": 970,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -1208,26 +926,18 @@
         "path": "/correspondence/stats/summary"
       }
     ],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 162,
+        "line": 163,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
-      },
-      {
-        "line": 192,
-        "label": "مراسلة جديدة",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
       }
     ],
-    "lineCount": 228,
+    "lineCount": 229,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -1301,26 +1011,10 @@
         "path": "/documents/stats"
       }
     ],
-    "buttonCount": 12,
+    "buttonCount": 6,
     "buttons": [
       {
-        "line": 137,
-        "label": "رفع مستند",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 138,
-        "label": "إنشاء مستند",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 200,
+        "line": 201,
         "label": null,
         "onClick": "() => handleDownload(d.id, d.fileName)",
         "disabledHinted": false,
@@ -1328,7 +1022,7 @@
         "isSubmit": false
       },
       {
-        "line": 205,
+        "line": 206,
         "label": "الإصدارات",
         "onClick": null,
         "disabledHinted": false,
@@ -1336,23 +1030,7 @@
         "isSubmit": false
       },
       {
-        "line": 210,
-        "label": null,
-        "onClick": "() => handleStatusChange(d.id, \"approved\")",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 215,
-        "label": null,
-        "onClick": "() => handleStatusChange(d.id, \"cancelled\")",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 220,
+        "line": 221,
         "label": null,
         "onClick": "() => handleStatusChange(d.id, \"draft\")",
         "disabledHinted": false,
@@ -1360,15 +1038,7 @@
         "isSubmit": false
       },
       {
-        "line": 268,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 279,
+        "line": 280,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -1376,7 +1046,7 @@
         "isSubmit": false
       },
       {
-        "line": 304,
+        "line": 305,
         "label": null,
         "onClick": "() => setShowForm(true)",
         "disabledHinted": false,
@@ -1384,15 +1054,7 @@
         "isSubmit": false
       },
       {
-        "line": 346,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 357,
+        "line": 358,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -1400,7 +1062,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 428,
+    "lineCount": 429,
     "crossDomainImports": [
       "lib/api",
       "lib/utils",
@@ -1532,26 +1194,10 @@
         "path": "/documents/stats"
       }
     ],
-    "buttonCount": 12,
+    "buttonCount": 6,
     "buttons": [
       {
-        "line": 137,
-        "label": "رفع مستند",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 138,
-        "label": "إنشاء مستند",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 200,
+        "line": 201,
         "label": null,
         "onClick": "() => handleDownload(d.id, d.fileName)",
         "disabledHinted": false,
@@ -1559,7 +1205,7 @@
         "isSubmit": false
       },
       {
-        "line": 205,
+        "line": 206,
         "label": "الإصدارات",
         "onClick": null,
         "disabledHinted": false,
@@ -1567,23 +1213,7 @@
         "isSubmit": false
       },
       {
-        "line": 210,
-        "label": null,
-        "onClick": "() => handleStatusChange(d.id, \"approved\")",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 215,
-        "label": null,
-        "onClick": "() => handleStatusChange(d.id, \"cancelled\")",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 220,
+        "line": 221,
         "label": null,
         "onClick": "() => handleStatusChange(d.id, \"draft\")",
         "disabledHinted": false,
@@ -1591,15 +1221,7 @@
         "isSubmit": false
       },
       {
-        "line": 268,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 279,
+        "line": 280,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -1607,7 +1229,7 @@
         "isSubmit": false
       },
       {
-        "line": 304,
+        "line": 305,
         "label": null,
         "onClick": "() => setShowForm(true)",
         "disabledHinted": false,
@@ -1615,15 +1237,7 @@
         "isSubmit": false
       },
       {
-        "line": 346,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 357,
+        "line": 358,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -1631,7 +1245,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 428,
+    "lineCount": 429,
     "crossDomainImports": [
       "lib/api",
       "lib/utils",
@@ -1658,10 +1272,10 @@
         "path": "/settings/branches"
       }
     ],
-    "buttonCount": 9,
+    "buttonCount": 4,
     "buttons": [
       {
-        "line": 234,
+        "line": 235,
         "label": null,
         "onClick": "() => { setViewMode(\"list\"); setEditingId(null);",
         "disabledHinted": false,
@@ -1669,7 +1283,7 @@
         "isSubmit": false
       },
       {
-        "line": 240,
+        "line": 241,
         "label": "معاينة",
         "onClick": "handleLivePreview",
         "disabledHinted": true,
@@ -1677,15 +1291,7 @@
         "isSubmit": false
       },
       {
-        "line": 243,
-        "label": "حفظ",
-        "onClick": "handleSave",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 345,
+        "line": 346,
         "label": null,
         "onClick": "() => removeVariable(i)",
         "disabledHinted": false,
@@ -1693,47 +1299,15 @@
         "isSubmit": false
       },
       {
-        "line": 356,
-        "label": "إضافة متغير",
-        "onClick": "addVariable",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 417,
-        "label": null,
-        "onClick": "() => openEditor()",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 476,
+        "line": 477,
         "label": "معاينة",
         "onClick": "() => handlePreview(t)",
         "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
-      },
-      {
-        "line": 479,
-        "label": "تعديل",
-        "onClick": "() => openEditor(t)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 483,
-        "label": "حذف",
-        "onClick": "() => handleDelete(t.id)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
       }
     ],
-    "lineCount": 515,
+    "lineCount": 516,
     "crossDomainImports": [
       "lib/formatters",
       "lib/utils",
@@ -1770,10 +1344,10 @@
         "path": "summary"
       }
     ],
-    "buttonCount": 5,
+    "buttonCount": 4,
     "buttons": [
       {
-        "line": 266,
+        "line": 267,
         "label": "شجرة الحسابات",
         "onClick": null,
         "disabledHinted": false,
@@ -1781,15 +1355,7 @@
         "isSubmit": false
       },
       {
-        "line": 269,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 336,
+        "line": 337,
         "label": "إدارة الفترات",
         "onClick": null,
         "disabledHinted": false,
@@ -1797,7 +1363,7 @@
         "isSubmit": false
       },
       {
-        "line": 358,
+        "line": 359,
         "label": "عرض الكل",
         "onClick": null,
         "disabledHinted": false,
@@ -1805,7 +1371,7 @@
         "isSubmit": false
       },
       {
-        "line": 403,
+        "line": 404,
         "label": "جميع الضمانات",
         "onClick": null,
         "disabledHinted": false,
@@ -1813,7 +1379,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 514,
+    "lineCount": 515,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters",
@@ -2037,26 +1603,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/journal.tsx",
     "module": "finance",
     "apiCalls": [],
-    "buttonCount": 2,
-    "buttons": [
-      {
-        "line": 153,
-        "label": "عكس القيد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 183,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 333,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 335,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -2229,10 +1778,10 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/invoice-detail.tsx",
     "module": "finance",
     "apiCalls": [],
-    "buttonCount": 5,
+    "buttonCount": 2,
     "buttons": [
       {
-        "line": 192,
+        "line": 193,
         "label": "نسخ",
         "onClick": null,
         "disabledHinted": false,
@@ -2240,31 +1789,7 @@
         "isSubmit": false
       },
       {
-        "line": 198,
-        "label": null,
-        "onClick": "() => setShowPayment(!showPayment)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 311,
-        "label": null,
-        "onClick": "handleZatcaSubmit",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 355,
-        "label": null,
-        "onClick": "() => setShowPayment(false)",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": true
-      },
-      {
-        "line": 358,
+        "line": 360,
         "label": null,
         "onClick": "() => setShowPayment(false)",
         "disabledHinted": false,
@@ -2272,7 +1797,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 648,
+    "lineCount": 650,
     "crossDomainImports": [
       "lib/api",
       "lib/branch-utils",
@@ -2442,18 +1967,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/vendors.tsx",
     "module": "finance",
     "apiCalls": [],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 120,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 193,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 194,
     "crossDomainImports": [
       "lib/api"
     ]
@@ -2635,18 +2151,10 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/reports.tsx",
     "module": "finance",
     "apiCalls": [],
-    "buttonCount": 13,
+    "buttonCount": 2,
     "buttons": [
       {
-        "line": 35,
-        "label": null,
-        "onClick": "() => window.print()",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 201,
+        "line": 202,
         "label": null,
         "onClick": "() => setViewMode(\"tree\")",
         "disabledHinted": false,
@@ -2654,95 +2162,15 @@
         "isSubmit": false
       },
       {
-        "line": 202,
+        "line": 203,
         "label": null,
         "onClick": "() => setViewMode(\"flat\")",
         "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
-      },
-      {
-        "line": 206,
-        "label": null,
-        "onClick": "() => exportCSV(rows, [\"code\", \"name\", \"type\", \"totalDebit\", \"totalCredit\", \"bal",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 367,
-        "label": null,
-        "onClick": "() => exportCSV([...revenues.map((r: any) => ({ ...r, section: \"إيرادات\"",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 505,
-        "label": null,
-        "onClick": "() => exportCSV([...assets, ...liabilities, ...equity], [\"code\", \"name\", \"type\",",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 575,
-        "label": null,
-        "onClick": "() => exportCSV([...inflows.map((f: any) => ({ ...f, type: \"وارد\"",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 670,
-        "label": null,
-        "onClick": "() => exportCSV(entries, [\"ref\", \"description\", \"debit\", \"credit\", \"runningBalan",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 728,
-        "label": null,
-        "onClick": "() => exportCSV([...custodies, ...advances], [\"ref\", \"description\", \"amount\", \"e",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 824,
-        "label": null,
-        "onClick": "() => exportCSV(rows, [\"key\", \"label\", \"amount\", \"entryCount\"], \"expenses-analys",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 886,
-        "label": null,
-        "onClick": "() => exportCSV(byAccount, [\"code\", \"name\", \"amount\", \"entryCount\"], \"revenue-an",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 981,
-        "label": null,
-        "onClick": "() => exportCSV(rows, [\"accountCode\", \"accountName\", \"budget\", \"actual\", \"varian",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 1102,
-        "label": null,
-        "onClick": "() => exportCSV(rowsWithBalance, [\"ref\", \"description\", \"debit\", \"credit\", \"runn",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
       }
     ],
-    "lineCount": 1171,
+    "lineCount": 1172,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -2999,18 +2427,10 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/salary-advances.tsx",
     "module": "finance",
     "apiCalls": [],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 141,
-        "label": null,
-        "onClick": "() => setShowForm((v) => !v)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 255,
+        "line": 256,
         "label": "إلغاء",
         "onClick": "onDone",
         "disabledHinted": false,
@@ -3018,7 +2438,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 285,
+    "lineCount": 286,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -3040,34 +2460,18 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/ledger.tsx",
     "module": "finance",
     "apiCalls": [],
-    "buttonCount": 3,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 65,
+        "line": 66,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
         "wrappedByLink": true,
         "isSubmit": false
-      },
-      {
-        "line": 70,
-        "label": null,
-        "onClick": "() => window.print()",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 73,
-        "label": null,
-        "onClick": "() => exportCSV(entries, [\"date\", \"ref\", \"description\", \"debit\", \"credit\", \"runn",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
       }
     ],
-    "lineCount": 173,
+    "lineCount": 174,
     "crossDomainImports": [
       "lib/formatters",
       "lib/api"
@@ -3077,18 +2481,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/ar-aging.tsx",
     "module": "finance",
     "apiCalls": [],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 86,
-        "label": null,
-        "onClick": "() => exportCSV(clients, `ar-aging-${asOfDate",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 174,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 175,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -3098,18 +2493,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/ap-aging.tsx",
     "module": "finance",
     "apiCalls": [],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 86,
-        "label": null,
-        "onClick": "() => exportCSV(suppliers, `ap-aging-${asOfDate",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 164,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 165,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -3140,26 +2526,10 @@
         "path": "/finance/bank-reconciliation"
       }
     ],
-    "buttonCount": 3,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 150,
-        "label": null,
-        "onClick": "() => fileRef.current?.click()",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 210,
-        "label": null,
-        "onClick": "handleAutoMatch",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 243,
+        "line": 244,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -3167,7 +2537,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 287,
+    "lineCount": 288,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -3239,34 +2609,10 @@
         "path": "/finance/fixed-assets"
       }
     ],
-    "buttonCount": 6,
+    "buttonCount": 3,
     "buttons": [
       {
-        "line": 107,
-        "label": "إهلاك دفعي",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 111,
-        "label": null,
-        "onClick": "() => setShowCreate(true)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 141,
-        "label": null,
-        "onClick": "() => { setSelectedAsset(a); setDepResult(null); setShowDepreciate(true);",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 182,
+        "line": 184,
         "label": null,
         "onClick": "() => setShowCreate(false)",
         "disabledHinted": false,
@@ -3274,7 +2620,7 @@
         "isSubmit": false
       },
       {
-        "line": 239,
+        "line": 241,
         "label": null,
         "onClick": "() => { setShowDepreciate(false); setDepResult(null);",
         "disabledHinted": true,
@@ -3282,7 +2628,7 @@
         "isSubmit": false
       },
       {
-        "line": 240,
+        "line": 242,
         "label": null,
         "onClick": "handleDepreciate",
         "disabledHinted": true,
@@ -3290,7 +2636,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 251,
+    "lineCount": 253,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -3362,18 +2708,9 @@
         "path": "/finance/rounding-account"
       }
     ],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 217,
-        "label": null,
-        "onClick": "handleSetupRounding",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 236,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 238,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -3383,18 +2720,10 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/bank-guarantees.tsx",
     "module": "finance",
     "apiCalls": [],
-    "buttonCount": 3,
+    "buttonCount": 2,
     "buttons": [
       {
-        "line": 457,
-        "label": "ضمان جديد",
-        "onClick": "openNew",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 654,
+        "line": 655,
         "label": null,
         "onClick": null,
         "disabledHinted": true,
@@ -3402,7 +2731,7 @@
         "isSubmit": true
       },
       {
-        "line": 665,
+        "line": 666,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -3410,7 +2739,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 761,
+    "lineCount": 762,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters",
@@ -3421,26 +2750,18 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/journal-manual.tsx",
     "module": "finance",
     "apiCalls": [],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 215,
+        "line": 224,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
         "wrappedByLink": true,
         "isSubmit": false
-      },
-      {
-        "line": 298,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
       }
     ],
-    "lineCount": 342,
+    "lineCount": 355,
     "crossDomainImports": [
       "lib/formatters",
       "lib/api",
@@ -3502,18 +2823,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/journal-manual-detail.tsx",
     "module": "finance",
     "apiCalls": [],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 192,
-        "label": null,
-        "onClick": "() => setReversalOpen(true)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 279,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 280,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -3523,42 +2835,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/gl-posting-queue.tsx",
     "module": "finance",
     "apiCalls": [],
-    "buttonCount": 4,
-    "buttons": [
-      {
-        "line": 241,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 297,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 348,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 398,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 629,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 634,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -3579,26 +2858,10 @@
         "path": "/settings/companies${scopeSuffix}"
       }
     ],
-    "buttonCount": 3,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 118,
-        "label": "القوائم الموحدة",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 123,
-        "label": null,
-        "onClick": "() => setShowCreate(true)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 165,
+        "line": 166,
         "label": null,
         "onClick": "() => setShowCreate(false)",
         "disabledHinted": false,
@@ -3606,7 +2869,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 200,
+    "lineCount": 201,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -3658,18 +2921,10 @@
         "path": "/finance/projects${scopeSuffix}"
       }
     ],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 91,
-        "label": null,
-        "onClick": "() => setShowAddCost(true)",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 185,
+        "line": 186,
         "label": null,
         "onClick": "() => setShowAddCost(false)",
         "disabledHinted": false,
@@ -3677,7 +2932,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 217,
+    "lineCount": 218,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -3756,18 +3011,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/opening-balances.tsx",
     "module": "finance",
     "apiCalls": [],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 99,
-        "label": "قيد أرصدة افتتاحية جديد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 146,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 147,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -3838,42 +3084,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/recurring-journals.tsx",
     "module": "finance",
     "apiCalls": [],
-    "buttonCount": 4,
-    "buttons": [
-      {
-        "line": 158,
-        "label": "تنفيذ الآن",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 167,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 176,
-        "label": "حذف",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 198,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 268,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 272,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -3948,26 +3161,18 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/year-end-close.tsx",
     "module": "finance",
     "apiCalls": [],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 136,
+        "line": 137,
         "label": null,
         "onClick": "() => previewMut.mutate({ retainedEarningsAccountCode, force",
         "disabledHinted": true,
         "wrappedByLink": false,
         "isSubmit": false
-      },
-      {
-        "line": 140,
-        "label": null,
-        "onClick": "() => {                 if (!preview) {                   toast({ variant: \"dest",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
       }
     ],
-    "lineCount": 287,
+    "lineCount": 289,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -4038,34 +3243,18 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet.tsx",
     "module": "fleet",
     "apiCalls": [],
-    "buttonCount": 3,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 140,
+        "line": 141,
         "label": null,
         "onClick": "() => setPreviewItem(v)",
         "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
-      },
-      {
-        "line": 187,
-        "label": "إضافة مركبة",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 299,
-        "label": "إضافة سائق",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
       }
     ],
-    "lineCount": 519,
+    "lineCount": 520,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -4123,26 +3312,18 @@
         "path": "/fleet/drivers"
       }
     ],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 72,
+        "line": 73,
         "label": null,
         "onClick": "() => setPreviewDriver(d)",
         "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
-      },
-      {
-        "line": 92,
-        "label": "إضافة سائق",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
       }
     ],
-    "lineCount": 153,
+    "lineCount": 154,
     "crossDomainImports": [
       "lib/api"
     ]
@@ -4217,18 +3398,9 @@
         "path": "/fleet/trips"
       }
     ],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 56,
-        "label": "رحلة جديدة",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 119,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 120,
     "crossDomainImports": [
       "lib/api"
     ]
@@ -4279,26 +3451,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet/trip-detail.tsx",
     "module": "fleet",
     "apiCalls": [],
-    "buttonCount": 2,
-    "buttons": [
-      {
-        "line": 218,
-        "label": null,
-        "onClick": "handleComplete",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 227,
-        "label": null,
-        "onClick": "handleCancel",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 298,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 301,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -4314,18 +3469,9 @@
         "path": "/fleet/maintenance"
       }
     ],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 47,
-        "label": "إضافة صيانة",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 93,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 94,
     "crossDomainImports": [
       "lib/formatters",
       "lib/api"
@@ -4390,18 +3536,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet/fuel.tsx",
     "module": "fleet",
     "apiCalls": [],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 39,
-        "label": "تسجيل تعبئة",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 65,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 66,
     "crossDomainImports": [
       "lib/formatters",
       "lib/api"
@@ -4472,18 +3609,9 @@
         "path": "/fleet/insurance"
       }
     ],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 43,
-        "label": "إضافة تأمين",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 89,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 90,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -4553,18 +3681,9 @@
         "path": "/fleet/alerts"
       }
     ],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 81,
-        "label": "إضافة تنبيه",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 124,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 125,
     "crossDomainImports": [
       "lib/api"
     ]
@@ -4639,18 +3758,10 @@
         "path": "/fleet/vehicles?limit=200"
       }
     ],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 189,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 214,
+        "line": 215,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -4658,7 +3769,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 287,
+    "lineCount": 288,
     "crossDomainImports": [
       "lib/api"
     ]
@@ -4683,26 +3794,10 @@
         "path": "/fleet/drivers?limit=200"
       }
     ],
-    "buttonCount": 3,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 158,
-        "label": null,
-        "onClick": "() => handlePay(v.id)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 173,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 212,
+        "line": 213,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -4710,7 +3805,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 287,
+    "lineCount": 288,
     "crossDomainImports": [
       "lib/api",
       "lib/api"
@@ -5158,18 +4253,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr.tsx",
     "module": "hr",
     "apiCalls": [],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 118,
-        "label": null,
-        "onClick": "() => navigate(\"/employees/create\")",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 317,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 318,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -5179,10 +4265,10 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/employees.tsx",
     "module": "hr",
     "apiCalls": [],
-    "buttonCount": 4,
+    "buttonCount": 3,
     "buttons": [
       {
-        "line": 197,
+        "line": 198,
         "label": null,
         "onClick": "() => setPreviewItem(employee)",
         "disabledHinted": false,
@@ -5190,7 +4276,7 @@
         "isSubmit": false
       },
       {
-        "line": 206,
+        "line": 207,
         "label": "عرض التفاصيل",
         "onClick": null,
         "disabledHinted": false,
@@ -5198,23 +4284,15 @@
         "isSubmit": false
       },
       {
-        "line": 223,
+        "line": 224,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
-      },
-      {
-        "line": 264,
-        "label": "إضافة موظف",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
       }
     ],
-    "lineCount": 359,
+    "lineCount": 360,
     "crossDomainImports": [
       "lib/api",
       "lib/utils",
@@ -5291,10 +4369,10 @@
         "path": "/documents/templates"
       }
     ],
-    "buttonCount": 8,
+    "buttonCount": 6,
     "buttons": [
       {
-        "line": 347,
+        "line": 348,
         "label": null,
         "onClick": "() => setActiveTab(\"attendance\")",
         "disabledHinted": false,
@@ -5302,7 +4380,7 @@
         "isSubmit": false
       },
       {
-        "line": 357,
+        "line": 358,
         "label": null,
         "onClick": "() => setActiveTab(\"leaves\")",
         "disabledHinted": false,
@@ -5310,7 +4388,7 @@
         "isSubmit": false
       },
       {
-        "line": 387,
+        "line": 388,
         "label": null,
         "onClick": "() => setActiveTab(\"tasks\")",
         "disabledHinted": false,
@@ -5318,7 +4396,7 @@
         "isSubmit": false
       },
       {
-        "line": 422,
+        "line": 423,
         "label": null,
         "onClick": "() => setActiveTab(\"payroll\")",
         "disabledHinted": false,
@@ -5326,23 +4404,7 @@
         "isSubmit": false
       },
       {
-        "line": 474,
-        "label": "تعديل",
-        "onClick": "govStartEdit",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 535,
-        "label": "حفظ",
-        "onClick": "govSaveEdit",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 538,
+        "line": 539,
         "label": null,
         "onClick": "() => setGovEditing(false)",
         "disabledHinted": false,
@@ -5350,7 +4412,7 @@
         "isSubmit": false
       },
       {
-        "line": 854,
+        "line": 855,
         "label": null,
         "onClick": "() => setShowPrintMenu(!showPrintMenu)",
         "disabledHinted": false,
@@ -5358,7 +4420,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 963,
+    "lineCount": 964,
     "crossDomainImports": [
       "lib/api",
       "lib/utils",
@@ -5370,34 +4432,18 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/attendance.tsx",
     "module": "hr",
     "apiCalls": [],
-    "buttonCount": 3,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 239,
+        "line": 240,
         "label": "الاستئذانات",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 245,
-        "label": "تسجيل حضور",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 266,
-        "label": "تسجيل حضور",
         "onClick": null,
         "disabledHinted": false,
         "wrappedByLink": true,
         "isSubmit": false
       }
     ],
-    "lineCount": 365,
+    "lineCount": 366,
     "crossDomainImports": [
       "lib/api",
       "lib/utils",
@@ -5508,26 +4554,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/qr-scanner.tsx",
     "module": "hr",
     "apiCalls": [],
-    "buttonCount": 2,
-    "buttons": [
-      {
-        "line": 111,
-        "label": null,
-        "onClick": "handleCheckIn",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 119,
-        "label": null,
-        "onClick": "handleCheckOut",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 152,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 155,
     "crossDomainImports": [
       "lib/formatters",
       "lib/api",
@@ -5538,26 +4567,18 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/leaves.tsx",
     "module": "hr",
     "apiCalls": [],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 187,
+        "line": 188,
         "label": "نسخ الطلب",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 221,
-        "label": "طلب إجازة",
         "onClick": null,
         "disabledHinted": false,
         "wrappedByLink": true,
         "isSubmit": false
       }
     ],
-    "lineCount": 286,
+    "lineCount": 287,
     "crossDomainImports": [
       "lib/formatters",
       "lib/api",
@@ -5686,26 +4707,18 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/payroll.tsx",
     "module": "hr",
     "apiCalls": [],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 100,
+        "line": 101,
         "label": null,
         "onClick": "(e) => { e.stopPropagation(); setSelectedRun(p.id);",
         "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
-      },
-      {
-        "line": 119,
-        "label": "تشغيل مسير رواتب",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
       }
     ],
-    "lineCount": 172,
+    "lineCount": 173,
     "crossDomainImports": [
       "lib/formatters",
       "lib/api"
@@ -5774,18 +4787,10 @@
         "path": "/hr/salary-components"
       }
     ],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 99,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 132,
+        "line": 133,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -5793,7 +4798,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 179,
+    "lineCount": 180,
     "crossDomainImports": [
       "lib/formatters",
       "lib/api",
@@ -5823,18 +4828,9 @@
         "path": "/hr/performance"
       }
     ],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 103,
-        "label": "تقييم جديد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 137,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 138,
     "crossDomainImports": [
       "lib/api",
       "lib/utils"
@@ -5934,18 +4930,9 @@
         "path": "/hr/training/enrollments"
       }
     ],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 117,
-        "label": "إضافة برنامج",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 246,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 247,
     "crossDomainImports": [
       "lib/formatters",
       "lib/api"
@@ -6101,26 +5088,9 @@
         "path": "/hr/recruitment/stats"
       }
     ],
-    "buttonCount": 2,
-    "buttons": [
-      {
-        "line": 171,
-        "label": "وظيفة جديدة",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 174,
-        "label": "إضافة متقدم",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 295,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 296,
     "crossDomainImports": [
       "lib/api",
       "lib/hr-type-maps"
@@ -6224,18 +5194,9 @@
         "path": "/hr/recruitment/applications"
       }
     ],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 121,
-        "label": "إضافة متقدم",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 154,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 155,
     "crossDomainImports": [
       "lib/api",
       "lib/utils",
@@ -6270,26 +5231,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/job-detail.tsx",
     "module": "hr",
     "apiCalls": [],
-    "buttonCount": 2,
-    "buttons": [
-      {
-        "line": 134,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 160,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 246,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 249,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -6299,34 +5243,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/loans.tsx",
     "module": "hr",
     "apiCalls": [],
-    "buttonCount": 3,
-    "buttons": [
-      {
-        "line": 221,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 231,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 257,
-        "label": "طلب سلفة",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 330,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 333,
     "crossDomainImports": [
       "lib/formatters",
       "lib/api",
@@ -6401,34 +5320,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/overtime.tsx",
     "module": "hr",
     "apiCalls": [],
-    "buttonCount": 3,
-    "buttons": [
-      {
-        "line": 200,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 210,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 236,
-        "label": "طلب وقت إضافي",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 306,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 309,
     "crossDomainImports": [
       "lib/formatters",
       "lib/api",
@@ -6512,26 +5406,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/exit-requests.tsx",
     "module": "hr",
     "apiCalls": [],
-    "buttonCount": 2,
-    "buttons": [
-      {
-        "line": 187,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 209,
-        "label": "طلب نهاية خدمة",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 249,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 251,
     "crossDomainImports": [
       "lib/formatters",
       "lib/api",
@@ -6592,18 +5469,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/exit-detail.tsx",
     "module": "hr",
     "apiCalls": [],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 250,
-        "label": null,
-        "onClick": "handleApprove",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 266,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 268,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters",
@@ -6621,10 +5489,10 @@
         "path": "/hr/discipline/stats"
       }
     ],
-    "buttonCount": 5,
+    "buttonCount": 4,
     "buttons": [
       {
-        "line": 134,
+        "line": 135,
         "label": "تشغيل الرصد",
         "onClick": null,
         "disabledHinted": false,
@@ -6632,15 +5500,7 @@
         "isSubmit": false
       },
       {
-        "line": 139,
-        "label": "تسجيل مخالفة",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 231,
+        "line": 232,
         "label": "عرض الكل",
         "onClick": null,
         "disabledHinted": false,
@@ -6648,7 +5508,7 @@
         "isSubmit": false
       },
       {
-        "line": 473,
+        "line": 474,
         "label": "فتح صفحة الرصد التلقائي",
         "onClick": null,
         "disabledHinted": false,
@@ -6656,7 +5516,7 @@
         "isSubmit": false
       },
       {
-        "line": 493,
+        "line": 494,
         "label": "فتح لائحة الانضباط",
         "onClick": null,
         "disabledHinted": false,
@@ -6664,7 +5524,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 502,
+    "lineCount": 503,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters",
@@ -6723,18 +5583,9 @@
         "path": "/hr/violations-stats"
       }
     ],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 73,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 153,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 155,
     "crossDomainImports": [
       "lib/formatters",
       "lib/api",
@@ -6775,10 +5626,10 @@
         "path": "/hr/discipline/auto-detection/summary"
       }
     ],
-    "buttonCount": 3,
+    "buttonCount": 2,
     "buttons": [
       {
-        "line": 225,
+        "line": 226,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -6786,23 +5637,15 @@
         "isSubmit": false
       },
       {
-        "line": 261,
+        "line": 262,
         "label": null,
         "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 270,
-        "label": null,
-        "onClick": "handleRun",
         "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
       }
     ],
-    "lineCount": 597,
+    "lineCount": 599,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters",
@@ -6827,10 +5670,10 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/discipline-regulation.tsx",
     "module": "hr",
     "apiCalls": [],
-    "buttonCount": 4,
+    "buttonCount": 2,
     "buttons": [
       {
-        "line": 153,
+        "line": 159,
         "label": null,
         "onClick": "() => setEditing(a)",
         "disabledHinted": false,
@@ -6838,31 +5681,15 @@
         "isSubmit": false
       },
       {
-        "line": 171,
-        "label": "استنساخ اللائحة الافتراضية",
-        "onClick": "reseedDefaults",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 269,
+        "line": 275,
         "label": null,
         "onClick": "() => setEditing(null)",
         "disabledHinted": true,
         "wrappedByLink": false,
         "isSubmit": false
-      },
-      {
-        "line": 272,
-        "label": null,
-        "onClick": "saveEdit",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
       }
     ],
-    "lineCount": 303,
+    "lineCount": 309,
     "crossDomainImports": [
       "lib/api"
     ]
@@ -6880,42 +5707,10 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/discipline-memo-detail.tsx",
     "module": "hr",
     "apiCalls": [],
-    "buttonCount": 12,
+    "buttonCount": 4,
     "buttons": [
       {
-        "line": 204,
-        "label": null,
-        "onClick": "() => act(\"/justify\", { justification, declined",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 246,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 300,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 319,
-        "label": null,
-        "onClick": "() => setShowCancelDialog(true)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 342,
+        "line": 347,
         "label": null,
         "onClick": "() => setShowAppeal(true)",
         "disabledHinted": false,
@@ -6923,15 +5718,7 @@
         "isSubmit": false
       },
       {
-        "line": 354,
-        "label": null,
-        "onClick": "() => act(\"/appeal\", { reason: appealReason",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 357,
+        "line": 362,
         "label": null,
         "onClick": "() => setShowAppeal(false)",
         "disabledHinted": false,
@@ -6939,31 +5726,7 @@
         "isSubmit": false
       },
       {
-        "line": 381,
-        "label": null,
-        "onClick": "() => act(\"/appeal-decision\", { decision: \"accepted\", comment: \"\"",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 384,
-        "label": null,
-        "onClick": "() => act(\"/appeal-decision\", { decision: \"rejected\", comment: \"\"",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 396,
-        "label": null,
-        "onClick": "() => act(\"/close\", { note: \"إقفال عادي\"",
-        "disabledHinted": true,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 400,
+        "line": 405,
         "label": "إصدار خطاب تأديبي",
         "onClick": null,
         "disabledHinted": false,
@@ -6971,7 +5734,7 @@
         "isSubmit": false
       },
       {
-        "line": 449,
+        "line": 454,
         "label": "خطاب تأديبي",
         "onClick": null,
         "disabledHinted": false,
@@ -6979,7 +5742,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 491,
+    "lineCount": 496,
     "crossDomainImports": [
       "lib/formatters",
       "lib/api",
@@ -7001,18 +5764,9 @@
         "path": "/hr/shift-assignments"
       }
     ],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 77,
-        "label": "إضافة وردية",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 192,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 193,
     "crossDomainImports": [
       "lib/api",
       "lib/utils"
@@ -7086,18 +5840,10 @@
         "path": "/employees?limit=200"
       }
     ],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 113,
-        "label": null,
-        "onClick": "() => setShowAssignForm(!showAssignForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 125,
+        "line": 126,
         "label": null,
         "onClick": "() => setShowAssignForm(false)",
         "disabledHinted": false,
@@ -7105,7 +5851,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 186,
+    "lineCount": 187,
     "crossDomainImports": [
       "lib/api"
     ]
@@ -7147,34 +5893,9 @@
         "path": "/employees?limit=200"
       }
     ],
-    "buttonCount": 3,
-    "buttons": [
-      {
-        "line": 217,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 228,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 239,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 324,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 328,
     "crossDomainImports": [
       "lib/formatters",
       "lib/api",
@@ -7207,25 +5928,19 @@
   "/hr/evaluation-360/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/evaluation-360-create.tsx",
     "module": "hr",
-    "apiCalls": [
-      {
-        "kind": "mutation",
-        "method": "POST",
-        "path": "/hr/evaluation-cycles"
-      }
-    ],
-    "buttonCount": 4,
+    "apiCalls": [],
+    "buttonCount": 3,
     "buttons": [
       {
-        "line": 102,
-        "label": "مسح المسودة",
-        "onClick": "clearDraft",
+        "line": 124,
+        "label": null,
+        "onClick": "() => setLocation(\"/hr/evaluation-360\")",
         "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
       },
       {
-        "line": 163,
+        "line": 188,
         "label": "إضافة",
         "onClick": "addParticipant",
         "disabledHinted": false,
@@ -7233,23 +5948,15 @@
         "isSubmit": false
       },
       {
-        "line": 192,
+        "line": 247,
         "label": null,
-        "onClick": "() => setLocation(\"/hr/evaluation-360\")",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 193,
-        "label": null,
-        "onClick": "handleSave",
-        "disabledHinted": true,
+        "onClick": null,
+        "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
       }
     ],
-    "lineCount": 200,
+    "lineCount": 297,
     "crossDomainImports": [
       "lib/api"
     ]
@@ -7294,18 +6001,9 @@
         "path": "/hr/evaluation-cycles"
       }
     ],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 145,
-        "label": "بدء دورة تقييم",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 179,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 180,
     "crossDomainImports": [
       "lib/api",
       "lib/utils"
@@ -7321,10 +6019,10 @@
         "path": "/hr/evaluation-cycles/${cycleId}/peer-evaluation"
       }
     ],
-    "buttonCount": 3,
+    "buttonCount": 2,
     "buttons": [
       {
-        "line": 92,
+        "line": 93,
         "label": "عودة",
         "onClick": null,
         "disabledHinted": false,
@@ -7332,23 +6030,15 @@
         "isSubmit": false
       },
       {
-        "line": 186,
+        "line": 187,
         "label": "إلغاء",
-        "onClick": "handleSubmit",
-        "disabledHinted": true,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 188,
-        "label": null,
         "onClick": "handleSubmit",
         "disabledHinted": true,
         "wrappedByLink": true,
         "isSubmit": false
       }
     ],
-    "lineCount": 195,
+    "lineCount": 196,
     "crossDomainImports": [
       "lib/api",
       "lib/utils"
@@ -7364,10 +6054,10 @@
         "path": "/hr/evaluation-cycles/${cycleId}/upward-review"
       }
     ],
-    "buttonCount": 4,
+    "buttonCount": 3,
     "buttons": [
       {
-        "line": 114,
+        "line": 115,
         "label": "العودة إلى الدورة",
         "onClick": null,
         "disabledHinted": false,
@@ -7375,7 +6065,7 @@
         "isSubmit": false
       },
       {
-        "line": 127,
+        "line": 128,
         "label": "عودة",
         "onClick": null,
         "disabledHinted": false,
@@ -7383,23 +6073,15 @@
         "isSubmit": false
       },
       {
-        "line": 221,
+        "line": 222,
         "label": "إلغاء",
-        "onClick": "handleSubmit",
+        "onClick": null,
         "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 223,
-        "label": null,
-        "onClick": "handleSubmit",
-        "disabledHinted": true,
         "wrappedByLink": true,
         "isSubmit": false
       }
     ],
-    "lineCount": 236,
+    "lineCount": 238,
     "crossDomainImports": [
       "lib/api",
       "lib/utils"
@@ -7409,42 +6091,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/evaluation-360-detail.tsx",
     "module": "hr",
     "apiCalls": [],
-    "buttonCount": 4,
-    "buttons": [
-      {
-        "line": 156,
-        "label": "إضافة تقييم مدير/زميل",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 159,
-        "label": "تقييم عكسي سري",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 343,
-        "label": "إضافة تقييم",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 417,
-        "label": "إرسال تقييم عكسي سري",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 481,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 482,
     "crossDomainImports": [
       "lib/api",
       "lib/utils"
@@ -7454,18 +6103,10 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/public-holidays.tsx",
     "module": "hr",
     "apiCalls": [],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 123,
-        "label": null,
-        "onClick": "() => { setShowForm(!showForm); setEditingId(null); setFormInitial(defaultHolida",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 141,
+        "line": 142,
         "label": null,
         "onClick": "() => { setShowForm(false); setEditingId(null);",
         "disabledHinted": false,
@@ -7473,7 +6114,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 226,
+    "lineCount": 227,
     "crossDomainImports": [
       "lib/api",
       "lib/hr-type-maps"
@@ -7504,18 +6145,10 @@
         "path": "/settings/branches"
       }
     ],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 206,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 238,
+        "line": 239,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -7523,7 +6156,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 298,
+    "lineCount": 299,
     "crossDomainImports": [
       "lib/api",
       "lib/utils",
@@ -7571,18 +6204,10 @@
         "path": "/employees?status=active&limit=200"
       }
     ],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 197,
-        "label": null,
-        "onClick": "() => setShowForm(true)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 238,
+        "line": 239,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -7590,7 +6215,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 279,
+    "lineCount": 280,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters",
@@ -7647,18 +6272,10 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/contracts.tsx",
     "module": "hr",
     "apiCalls": [],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 148,
-        "label": "عقد جديد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 223,
+        "line": 224,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -7666,7 +6283,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 238,
+    "lineCount": 239,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -7730,10 +6347,10 @@
         "path": "/hr/official-letters"
       }
     ],
-    "buttonCount": 3,
+    "buttonCount": 2,
     "buttons": [
       {
-        "line": 88,
+        "line": 89,
         "label": "معاينة وطباعة",
         "onClick": "() => setPreviewLetter(l)",
         "disabledHinted": false,
@@ -7741,15 +6358,7 @@
         "isSubmit": false
       },
       {
-        "line": 129,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 163,
+        "line": 164,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -7757,7 +6366,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 247,
+    "lineCount": 248,
     "crossDomainImports": [
       "lib/formatters",
       "lib/api",
@@ -7769,18 +6378,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/excuse-requests.tsx",
     "module": "hr",
     "apiCalls": [],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 140,
-        "label": "طلب استئذان",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 197,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 198,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -7866,34 +6466,18 @@
         "path": "/legal/financial-report"
       }
     ],
-    "buttonCount": 3,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 104,
+        "line": 105,
         "label": "نسخ العقد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 150,
-        "label": "عقد جديد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 270,
-        "label": "قضية جديدة",
         "onClick": null,
         "disabledHinted": false,
         "wrappedByLink": true,
         "isSubmit": false
       }
     ],
-    "lineCount": 396,
+    "lineCount": 397,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -7967,34 +6551,18 @@
         "path": "/legal/financial-report"
       }
     ],
-    "buttonCount": 3,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 104,
+        "line": 105,
         "label": "نسخ العقد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 150,
-        "label": "عقد جديد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 270,
-        "label": "قضية جديدة",
         "onClick": null,
         "disabledHinted": false,
         "wrappedByLink": true,
         "isSubmit": false
       }
     ],
-    "lineCount": 396,
+    "lineCount": 397,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -8114,34 +6682,18 @@
         "path": "/legal/financial-report"
       }
     ],
-    "buttonCount": 3,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 104,
+        "line": 105,
         "label": "نسخ العقد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 150,
-        "label": "عقد جديد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 270,
-        "label": "قضية جديدة",
         "onClick": null,
         "disabledHinted": false,
         "wrappedByLink": true,
         "isSubmit": false
       }
     ],
-    "lineCount": 396,
+    "lineCount": 397,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -8193,26 +6745,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/legal-case-detail.tsx",
     "module": "legal",
     "apiCalls": [],
-    "buttonCount": 2,
-    "buttons": [
-      {
-        "line": 280,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 376,
-        "label": null,
-        "onClick": "() => setShowAddSession(!showAddSession)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 544,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 546,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters",
@@ -8244,34 +6779,18 @@
         "path": "/legal/financial-report"
       }
     ],
-    "buttonCount": 3,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 104,
+        "line": 105,
         "label": "نسخ العقد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 150,
-        "label": "عقد جديد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 270,
-        "label": "قضية جديدة",
         "onClick": null,
         "disabledHinted": false,
         "wrappedByLink": true,
         "isSubmit": false
       }
     ],
-    "lineCount": 396,
+    "lineCount": 397,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -8559,18 +7078,9 @@
         "path": "/hr/loans/my"
       }
     ],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 80,
-        "label": "طلب سلفة جديدة",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 122,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 123,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters",
@@ -8594,10 +7104,10 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/action-center.tsx",
     "module": "misc",
     "apiCalls": [],
-    "buttonCount": 10,
+    "buttonCount": 5,
     "buttons": [
       {
-        "line": 359,
+        "line": 360,
         "label": "مساحتي",
         "onClick": null,
         "disabledHinted": false,
@@ -8605,7 +7115,7 @@
         "isSubmit": false
       },
       {
-        "line": 414,
+        "line": 415,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -8613,47 +7123,7 @@
         "isSubmit": false
       },
       {
-        "line": 454,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 463,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 472,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 484,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 493,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 514,
+        "line": 520,
         "label": "عرض الكل في الصفحة المخصصة",
         "onClick": null,
         "disabledHinted": false,
@@ -8661,7 +7131,7 @@
         "isSubmit": false
       },
       {
-        "line": 589,
+        "line": 595,
         "label": "عرض الكل",
         "onClick": null,
         "disabledHinted": false,
@@ -8669,7 +7139,7 @@
         "isSubmit": false
       },
       {
-        "line": 637,
+        "line": 643,
         "label": "عرض الكل",
         "onClick": null,
         "disabledHinted": false,
@@ -8677,7 +7147,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 693,
+    "lineCount": 699,
     "crossDomainImports": [
       "lib/formatters",
       "lib/api",
@@ -8696,34 +7166,9 @@
         "path": "/obligations/summary"
       }
     ],
-    "buttonCount": 3,
-    "buttons": [
-      {
-        "line": 119,
-        "label": null,
-        "onClick": "handleScan",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 198,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 206,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 226,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 229,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -8805,26 +7250,10 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/manager-board.tsx",
     "module": "misc",
     "apiCalls": [],
-    "buttonCount": 7,
+    "buttonCount": 3,
     "buttons": [
       {
-        "line": 177,
-        "label": null,
-        "onClick": "() => doApprove(item)",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 180,
-        "label": null,
-        "onClick": "() => doReject(item)",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 195,
+        "line": 196,
         "label": "مركز القرارات الكامل",
         "onClick": null,
         "disabledHinted": false,
@@ -8832,23 +7261,7 @@
         "isSubmit": false
       },
       {
-        "line": 244,
-        "label": null,
-        "onClick": "() => doApprove(item)",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 248,
-        "label": null,
-        "onClick": "() => doReject(item)",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 268,
+        "line": 269,
         "label": "التفاصيل",
         "onClick": null,
         "disabledHinted": false,
@@ -8856,7 +7269,7 @@
         "isSubmit": false
       },
       {
-        "line": 325,
+        "line": 326,
         "label": "الكل",
         "onClick": null,
         "disabledHinted": false,
@@ -8864,7 +7277,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 491,
+    "lineCount": 492,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters",
@@ -8921,34 +7334,18 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/daily-close.tsx",
     "module": "operations",
     "apiCalls": [],
-    "buttonCount": 3,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 70,
+        "line": 71,
         "label": "مركز العمليات",
         "onClick": null,
         "disabledHinted": false,
         "wrappedByLink": true,
         "isSubmit": false
-      },
-      {
-        "line": 135,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 159,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
       }
     ],
-    "lineCount": 215,
+    "lineCount": 218,
     "crossDomainImports": [
       "lib/formatters",
       "lib/api",
@@ -8959,26 +7356,18 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/clients.tsx",
     "module": "crm",
     "apiCalls": [],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 125,
+        "line": 126,
         "label": null,
         "onClick": "() => setPreviewItem(client)",
         "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
-      },
-      {
-        "line": 145,
-        "label": "إضافة عميل",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
       }
     ],
-    "lineCount": 233,
+    "lineCount": 234,
     "crossDomainImports": [
       "lib/api",
       "lib/constants",
@@ -9025,42 +7414,18 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/client-detail.tsx",
     "module": "crm",
     "apiCalls": [],
-    "buttonCount": 4,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 705,
-        "label": null,
-        "onClick": "() => setShowCreate(true)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 717,
+        "line": 718,
         "label": null,
         "onClick": "() => setShowCreate(false)",
         "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
-      },
-      {
-        "line": 749,
-        "label": null,
-        "onClick": "handleToggleActive",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 770,
-        "label": "تعيين",
-        "onClick": "handleResetPassword",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
       }
     ],
-    "lineCount": 945,
+    "lineCount": 947,
     "crossDomainImports": [
       "lib/api",
       "lib/utils",
@@ -9078,26 +7443,18 @@
         "path": "/crm/pipeline"
       }
     ],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 132,
+        "line": 133,
         "label": null,
         "onClick": "() => setPreviewItem(o)",
         "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
-      },
-      {
-        "line": 180,
-        "label": "فرصة جديدة",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
       }
     ],
-    "lineCount": 263,
+    "lineCount": 264,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -9157,26 +7514,18 @@
         "path": "/crm/pipeline"
       }
     ],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 132,
+        "line": 133,
         "label": null,
         "onClick": "() => setPreviewItem(o)",
         "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
-      },
-      {
-        "line": 180,
-        "label": "فرصة جديدة",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
       }
     ],
-    "lineCount": 263,
+    "lineCount": 264,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -9206,18 +7555,10 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/crm/lead-detail.tsx",
     "module": "crm",
     "apiCalls": [],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 197,
-        "label": "تحويل",
-        "onClick": "handleConvert",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 201,
+        "line": 202,
         "label": null,
         "onClick": "() => navigate(\"/crm/activities\")",
         "disabledHinted": false,
@@ -9225,7 +7566,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 261,
+    "lineCount": 262,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -9304,18 +7645,10 @@
         "path": "/projects/stats/overview"
       }
     ],
-    "buttonCount": 7,
+    "buttonCount": 5,
     "buttons": [
       {
-        "line": 204,
-        "label": "مشروع جديد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 205,
+        "line": 206,
         "label": "مخطط غانت",
         "onClick": null,
         "disabledHinted": false,
@@ -9323,7 +7656,7 @@
         "isSubmit": false
       },
       {
-        "line": 206,
+        "line": 207,
         "label": "إدارة المخاطر",
         "onClick": null,
         "disabledHinted": false,
@@ -9331,7 +7664,7 @@
         "isSubmit": false
       },
       {
-        "line": 207,
+        "line": 208,
         "label": "تكاليف المشاريع",
         "onClick": null,
         "disabledHinted": false,
@@ -9339,7 +7672,7 @@
         "isSubmit": false
       },
       {
-        "line": 208,
+        "line": 209,
         "label": "المهام",
         "onClick": null,
         "disabledHinted": false,
@@ -9347,23 +7680,15 @@
         "isSubmit": false
       },
       {
-        "line": 276,
+        "line": 277,
         "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 382,
-        "label": "مشروع جديد",
         "onClick": null,
         "disabledHinted": false,
         "wrappedByLink": true,
         "isSubmit": false
       }
     ],
-    "lineCount": 399,
+    "lineCount": 400,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -9416,10 +7741,10 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/tasks.tsx",
     "module": "operations",
     "apiCalls": [],
-    "buttonCount": 10,
+    "buttonCount": 9,
     "buttons": [
       {
-        "line": 186,
+        "line": 187,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -9427,7 +7752,7 @@
         "isSubmit": false
       },
       {
-        "line": 196,
+        "line": 197,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -9435,7 +7760,7 @@
         "isSubmit": false
       },
       {
-        "line": 207,
+        "line": 208,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -9443,7 +7768,7 @@
         "isSubmit": false
       },
       {
-        "line": 218,
+        "line": 219,
         "label": "نسخ",
         "onClick": null,
         "disabledHinted": false,
@@ -9451,7 +7776,7 @@
         "isSubmit": false
       },
       {
-        "line": 222,
+        "line": 223,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -9459,7 +7784,7 @@
         "isSubmit": false
       },
       {
-        "line": 231,
+        "line": 232,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -9467,7 +7792,7 @@
         "isSubmit": false
       },
       {
-        "line": 241,
+        "line": 242,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -9475,15 +7800,7 @@
         "isSubmit": false
       },
       {
-        "line": 263,
-        "label": "مهمة جديدة",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 389,
+        "line": 390,
         "label": null,
         "onClick": "saveEdit",
         "disabledHinted": true,
@@ -9491,7 +7808,7 @@
         "isSubmit": false
       },
       {
-        "line": 393,
+        "line": 394,
         "label": "إلغاء",
         "onClick": "cancelEdit",
         "disabledHinted": false,
@@ -9499,7 +7816,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 422,
+    "lineCount": 423,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters",
@@ -9533,18 +7850,10 @@
         "path": "/projects?limit=100"
       }
     ],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 203,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 228,
+        "line": 229,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -9552,7 +7861,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 287,
+    "lineCount": 288,
     "crossDomainImports": [
       "lib/api",
       "lib/api"
@@ -9744,58 +8053,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/warehouse.tsx",
     "module": "warehouse",
     "apiCalls": [],
-    "buttonCount": 6,
-    "buttons": [
-      {
-        "line": 30,
-        "label": "حركة جديدة",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 36,
-        "label": "منتج جديد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 153,
-        "label": "إضافة منتج",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 238,
-        "label": "إضافة حركة",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 298,
-        "label": "تصنيف جديد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 365,
-        "label": "إضافة مورد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 387,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 388,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -10021,58 +8281,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/warehouse.tsx",
     "module": "warehouse",
     "apiCalls": [],
-    "buttonCount": 6,
-    "buttons": [
-      {
-        "line": 30,
-        "label": "حركة جديدة",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 36,
-        "label": "منتج جديد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 153,
-        "label": "إضافة منتج",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 238,
-        "label": "إضافة حركة",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 298,
-        "label": "تصنيف جديد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 365,
-        "label": "إضافة مورد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 387,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 388,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -10082,58 +8293,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/warehouse.tsx",
     "module": "warehouse",
     "apiCalls": [],
-    "buttonCount": 6,
-    "buttons": [
-      {
-        "line": 30,
-        "label": "حركة جديدة",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 36,
-        "label": "منتج جديد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 153,
-        "label": "إضافة منتج",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 238,
-        "label": "إضافة حركة",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 298,
-        "label": "تصنيف جديد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 365,
-        "label": "إضافة مورد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 387,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 388,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -10143,58 +8305,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/warehouse.tsx",
     "module": "warehouse",
     "apiCalls": [],
-    "buttonCount": 6,
-    "buttons": [
-      {
-        "line": 30,
-        "label": "حركة جديدة",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 36,
-        "label": "منتج جديد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 153,
-        "label": "إضافة منتج",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 238,
-        "label": "إضافة حركة",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 298,
-        "label": "تصنيف جديد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 365,
-        "label": "إضافة مورد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 387,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 388,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -10215,10 +8328,10 @@
         "path": "/warehouse/products?limit=500"
       }
     ],
-    "buttonCount": 5,
+    "buttonCount": 2,
     "buttons": [
       {
-        "line": 207,
+        "line": 218,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -10226,31 +8339,7 @@
         "isSubmit": false
       },
       {
-        "line": 216,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 311,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 359,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 388,
+        "line": 391,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -10258,7 +8347,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 459,
+    "lineCount": 462,
     "crossDomainImports": [
       "lib/api",
       "lib/api"
@@ -10409,10 +8498,10 @@
         "path": "/support/csat"
       }
     ],
-    "buttonCount": 4,
+    "buttonCount": 2,
     "buttons": [
       {
-        "line": 106,
+        "line": 107,
         "label": null,
         "onClick": "() => setPreviewItem(t)",
         "disabledHinted": false,
@@ -10420,23 +8509,7 @@
         "isSubmit": false
       },
       {
-        "line": 133,
-        "label": "تذكرة جديدة",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 304,
-        "label": null,
-        "onClick": "() => setShowNew(!showNew)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 315,
+        "line": 316,
         "label": null,
         "onClick": "() => setShowNew(false)",
         "disabledHinted": false,
@@ -10444,7 +8517,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 462,
+    "lineCount": 463,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -10470,26 +8543,18 @@
         "path": "/marketing/campaigns"
       }
     ],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 183,
+        "line": 184,
         "label": null,
         "onClick": "() => setPreviewCampaign(c)",
         "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
-      },
-      {
-        "line": 222,
-        "label": "حملة جديدة",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
       }
     ],
-    "lineCount": 286,
+    "lineCount": 287,
     "crossDomainImports": [
       "lib/api",
       "lib/utils",
@@ -10598,10 +8663,10 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/tasks.tsx",
     "module": "operations",
     "apiCalls": [],
-    "buttonCount": 10,
+    "buttonCount": 9,
     "buttons": [
       {
-        "line": 186,
+        "line": 187,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -10609,7 +8674,7 @@
         "isSubmit": false
       },
       {
-        "line": 196,
+        "line": 197,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -10617,7 +8682,7 @@
         "isSubmit": false
       },
       {
-        "line": 207,
+        "line": 208,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -10625,7 +8690,7 @@
         "isSubmit": false
       },
       {
-        "line": 218,
+        "line": 219,
         "label": "نسخ",
         "onClick": null,
         "disabledHinted": false,
@@ -10633,7 +8698,7 @@
         "isSubmit": false
       },
       {
-        "line": 222,
+        "line": 223,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -10641,7 +8706,7 @@
         "isSubmit": false
       },
       {
-        "line": 231,
+        "line": 232,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -10649,7 +8714,7 @@
         "isSubmit": false
       },
       {
-        "line": 241,
+        "line": 242,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -10657,15 +8722,7 @@
         "isSubmit": false
       },
       {
-        "line": 263,
-        "label": "مهمة جديدة",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 389,
+        "line": 390,
         "label": null,
         "onClick": "saveEdit",
         "disabledHinted": true,
@@ -10673,7 +8730,7 @@
         "isSubmit": false
       },
       {
-        "line": 393,
+        "line": 394,
         "label": "إلغاء",
         "onClick": "cancelEdit",
         "disabledHinted": false,
@@ -10681,7 +8738,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 422,
+    "lineCount": 423,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters",
@@ -10758,18 +8815,10 @@
         "path": "/intelligence/recommendations"
       }
     ],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 141,
-        "label": "تحديث التحليل",
-        "onClick": "handleRecalculate",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 489,
+        "line": 490,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -10777,7 +8826,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 509,
+    "lineCount": 510,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters",
@@ -10804,18 +8853,9 @@
         "path": "/automation/automation-stats"
       }
     ],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 112,
-        "label": null,
-        "onClick": "() => handleTrigger(j.id)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 293,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 294,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters",
@@ -10983,11 +9023,6 @@
     "module": "bi",
     "apiCalls": [
       {
-        "kind": "mutation",
-        "method": "POST",
-        "path": "/scheduled-reports"
-      },
-      {
         "kind": "query",
         "method": "GET",
         "path": "/scheduled-reports"
@@ -10998,42 +9033,18 @@
         "path": "/scheduled-reports/history"
       }
     ],
-    "buttonCount": 4,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 89,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 140,
-        "label": null,
-        "onClick": "handleSubmit",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 144,
+        "line": 125,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
-      },
-      {
-        "line": 253,
-        "label": null,
-        "onClick": "handleDelete",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
       }
     ],
-    "lineCount": 262,
+    "lineCount": 290,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters",
@@ -11044,26 +9055,10 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/properties-dashboard.tsx",
     "module": "properties",
     "apiCalls": [],
-    "buttonCount": 7,
+    "buttonCount": 5,
     "buttons": [
       {
-        "line": 159,
-        "label": "مبنى جديد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 164,
-        "label": "وحدة جديدة",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 239,
+        "line": 240,
         "label": "عرض العقود",
         "onClick": null,
         "disabledHinted": false,
@@ -11071,7 +9066,7 @@
         "isSubmit": false
       },
       {
-        "line": 255,
+        "line": 256,
         "label": "عرض الكل",
         "onClick": null,
         "disabledHinted": false,
@@ -11079,7 +9074,7 @@
         "isSubmit": false
       },
       {
-        "line": 270,
+        "line": 271,
         "label": "طلب صيانة جديد",
         "onClick": null,
         "disabledHinted": false,
@@ -11087,7 +9082,7 @@
         "isSubmit": false
       },
       {
-        "line": 315,
+        "line": 316,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -11095,7 +9090,7 @@
         "isSubmit": false
       },
       {
-        "line": 333,
+        "line": 334,
         "label": "عرض الكل",
         "onClick": null,
         "disabledHinted": false,
@@ -11103,7 +9098,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 382,
+    "lineCount": 383,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters",
@@ -11186,10 +9181,10 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/properties-buildings.tsx",
     "module": "properties",
     "apiCalls": [],
-    "buttonCount": 3,
+    "buttonCount": 2,
     "buttons": [
       {
-        "line": 177,
+        "line": 178,
         "label": "عرض",
         "onClick": null,
         "disabledHinted": false,
@@ -11197,23 +9192,15 @@
         "isSubmit": false
       },
       {
-        "line": 183,
+        "line": 184,
         "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 202,
-        "label": "إضافة مبنى",
         "onClick": null,
         "disabledHinted": false,
         "wrappedByLink": true,
         "isSubmit": false
       }
     ],
-    "lineCount": 232,
+    "lineCount": 233,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters",
@@ -11281,26 +9268,18 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/properties-tenants.tsx",
     "module": "properties",
     "apiCalls": [],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 109,
+        "line": 110,
         "label": "ملف",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 135,
-        "label": "مستأجر جديد",
         "onClick": null,
         "disabledHinted": false,
         "wrappedByLink": true,
         "isSubmit": false
       }
     ],
-    "lineCount": 213,
+    "lineCount": 214,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -11346,26 +9325,18 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/properties/owners-edit.tsx",
     "module": "properties",
     "apiCalls": [],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 150,
+        "line": 116,
         "label": null,
         "onClick": "() => setLocation(\"/properties/owners\")",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 151,
-        "label": null,
-        "onClick": "handleSave",
-        "disabledHinted": true,
+        "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
       }
     ],
-    "lineCount": 158,
+    "lineCount": 193,
     "crossDomainImports": [
       "lib/api"
     ]
@@ -11386,10 +9357,10 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/properties-owners.tsx",
     "module": "properties",
     "apiCalls": [],
-    "buttonCount": 3,
+    "buttonCount": 2,
     "buttons": [
       {
-        "line": 101,
+        "line": 102,
         "label": "تعديل",
         "onClick": null,
         "disabledHinted": false,
@@ -11397,23 +9368,15 @@
         "isSubmit": false
       },
       {
-        "line": 105,
+        "line": 106,
         "label": null,
         "onClick": "() => setDeletingOwner({ id: o.id, name: o.name || \"—\"",
         "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
-      },
-      {
-        "line": 122,
-        "label": "إضافة مالك",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
       }
     ],
-    "lineCount": 181,
+    "lineCount": 182,
     "crossDomainImports": [
       "lib/api"
     ]
@@ -11512,26 +9475,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/properties/contract-detail.tsx",
     "module": "properties",
     "apiCalls": [],
-    "buttonCount": 2,
-    "buttons": [
-      {
-        "line": 236,
-        "label": "تجديد",
-        "onClick": "handleRenew",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 240,
-        "label": "إنهاء",
-        "onClick": "handleTerminate",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 326,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 327,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -11541,26 +9487,18 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/properties-contracts.tsx",
     "module": "properties",
     "apiCalls": [],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 104,
+        "line": 105,
         "label": "تسجيل دفع",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 295,
-        "label": "إضافة عقد",
         "onClick": null,
         "disabledHinted": false,
         "wrappedByLink": true,
         "isSubmit": false
       }
     ],
-    "lineCount": 372,
+    "lineCount": 373,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -11626,26 +9564,18 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/properties-payments.tsx",
     "module": "properties",
     "apiCalls": [],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 44,
+        "line": 45,
         "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 64,
-        "label": "تسجيل دفعة",
         "onClick": null,
         "disabledHinted": false,
         "wrappedByLink": true,
         "isSubmit": false
       }
     ],
-    "lineCount": 117,
+    "lineCount": 118,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -11715,18 +9645,9 @@
         "path": "/properties/maintenance-requests"
       }
     ],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 63,
-        "label": "طلب صيانة جديد",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 111,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 112,
     "crossDomainImports": [
       "lib/api"
     ]
@@ -11794,18 +9715,10 @@
         "path": "/properties/units?limit=200"
       }
     ],
-    "buttonCount": 5,
+    "buttonCount": 3,
     "buttons": [
       {
-        "line": 126,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 148,
+        "line": 149,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -11813,7 +9726,7 @@
         "isSubmit": false
       },
       {
-        "line": 187,
+        "line": 188,
         "label": null,
         "onClick": "() => setStatusFilter(s)",
         "disabledHinted": false,
@@ -11821,15 +9734,7 @@
         "isSubmit": false
       },
       {
-        "line": 222,
-        "label": null,
-        "onClick": "() => setCompletingId(insp.id)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 288,
+        "line": 289,
         "label": "إلغاء",
         "onClick": "props.onClose",
         "disabledHinted": false,
@@ -11837,7 +9742,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 311,
+    "lineCount": 312,
     "crossDomainImports": [
       "lib/formatters",
       "lib/api",
@@ -11854,18 +9759,10 @@
         "path": "/properties/contracts?status=active&limit=200"
       }
     ],
-    "buttonCount": 5,
+    "buttonCount": 3,
     "buttons": [
       {
-        "line": 109,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 140,
+        "line": 141,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -11873,7 +9770,7 @@
         "isSubmit": false
       },
       {
-        "line": 172,
+        "line": 173,
         "label": null,
         "onClick": "() => setStatusFilter(v)",
         "disabledHinted": false,
@@ -11881,15 +9778,7 @@
         "isSubmit": false
       },
       {
-        "line": 202,
-        "label": null,
-        "onClick": "() => setRefundTarget({ id: d.id, originalAmount: Number(d.amount)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 266,
+        "line": 267,
         "label": "إلغاء",
         "onClick": "props.onClose",
         "disabledHinted": false,
@@ -11897,7 +9786,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 292,
+    "lineCount": 293,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters",
@@ -12027,26 +9916,18 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/properties.tsx",
     "module": "properties",
     "apiCalls": [],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 74,
+        "line": 75,
         "label": null,
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
-        "line": 101,
-        "label": "إضافة وحدة",
         "onClick": null,
         "disabledHinted": false,
         "wrappedByLink": true,
         "isSubmit": false
       }
     ],
-    "lineCount": 169,
+    "lineCount": 170,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -12082,10 +9963,10 @@
         "path": "/requests/stats"
       }
     ],
-    "buttonCount": 8,
+    "buttonCount": 5,
     "buttons": [
       {
-        "line": 134,
+        "line": 135,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -12093,15 +9974,7 @@
         "isSubmit": false
       },
       {
-        "line": 428,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 478,
+        "line": 479,
         "label": null,
         "onClick": "() => { setFilterStatus(\"\"); setFilterType(\"\"); setFilterDateFrom(\"\"); setFilter",
         "disabledHinted": false,
@@ -12109,7 +9982,7 @@
         "isSubmit": false
       },
       {
-        "line": 497,
+        "line": 498,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -12117,15 +9990,7 @@
         "isSubmit": false
       },
       {
-        "line": 563,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 572,
+        "line": 573,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -12133,15 +9998,7 @@
         "isSubmit": false
       },
       {
-        "line": 623,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 632,
+        "line": 633,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -12149,7 +10006,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 707,
+    "lineCount": 708,
     "crossDomainImports": [
       "lib/api",
       "lib/utils"
@@ -12221,10 +10078,10 @@
         "path": "/requests/stats"
       }
     ],
-    "buttonCount": 8,
+    "buttonCount": 5,
     "buttons": [
       {
-        "line": 134,
+        "line": 135,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -12232,15 +10089,7 @@
         "isSubmit": false
       },
       {
-        "line": 428,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 478,
+        "line": 479,
         "label": null,
         "onClick": "() => { setFilterStatus(\"\"); setFilterType(\"\"); setFilterDateFrom(\"\"); setFilter",
         "disabledHinted": false,
@@ -12248,7 +10097,7 @@
         "isSubmit": false
       },
       {
-        "line": 497,
+        "line": 498,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -12256,15 +10105,7 @@
         "isSubmit": false
       },
       {
-        "line": 563,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 572,
+        "line": 573,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -12272,15 +10113,7 @@
         "isSubmit": false
       },
       {
-        "line": 623,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 632,
+        "line": 633,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -12288,7 +10121,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 707,
+    "lineCount": 708,
     "crossDomainImports": [
       "lib/api",
       "lib/utils"
@@ -12360,10 +10193,10 @@
         "path": "/requests/stats"
       }
     ],
-    "buttonCount": 8,
+    "buttonCount": 5,
     "buttons": [
       {
-        "line": 134,
+        "line": 135,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -12371,15 +10204,7 @@
         "isSubmit": false
       },
       {
-        "line": 428,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 478,
+        "line": 479,
         "label": null,
         "onClick": "() => { setFilterStatus(\"\"); setFilterType(\"\"); setFilterDateFrom(\"\"); setFilter",
         "disabledHinted": false,
@@ -12387,7 +10212,7 @@
         "isSubmit": false
       },
       {
-        "line": 497,
+        "line": 498,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -12395,15 +10220,7 @@
         "isSubmit": false
       },
       {
-        "line": 563,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 572,
+        "line": 573,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -12411,15 +10228,7 @@
         "isSubmit": false
       },
       {
-        "line": 623,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 632,
+        "line": 633,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -12427,7 +10236,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 707,
+    "lineCount": 708,
     "crossDomainImports": [
       "lib/api",
       "lib/utils"
@@ -12466,10 +10275,10 @@
         "path": "/settings/audit-log"
       }
     ],
-    "buttonCount": 5,
+    "buttonCount": 3,
     "buttons": [
       {
-        "line": 106,
+        "line": 243,
         "label": null,
         "onClick": "handleSave",
         "disabledHinted": true,
@@ -12477,23 +10286,7 @@
         "isSubmit": false
       },
       {
-        "line": 186,
-        "label": null,
-        "onClick": "() => { if (showForm) resetForm(); else setShowForm(true);",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 193,
-        "label": null,
-        "onClick": "handleSave",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 205,
+        "line": 255,
         "label": "تعديل",
         "onClick": "() => handleEdit(item)",
         "disabledHinted": true,
@@ -12501,7 +10294,7 @@
         "isSubmit": false
       },
       {
-        "line": 206,
+        "line": 256,
         "label": "حذف",
         "onClick": "() => setDeletingItem({ id: item.id, label: (fields[0] && item[fields[0].name]) ",
         "disabledHinted": true,
@@ -12509,7 +10302,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 352,
+    "lineCount": 402,
     "crossDomainImports": [
       "lib/api",
       "lib/utils",
@@ -12531,10 +10324,10 @@
         "path": "/settings/audit-log"
       }
     ],
-    "buttonCount": 5,
+    "buttonCount": 3,
     "buttons": [
       {
-        "line": 106,
+        "line": 243,
         "label": null,
         "onClick": "handleSave",
         "disabledHinted": true,
@@ -12542,23 +10335,7 @@
         "isSubmit": false
       },
       {
-        "line": 186,
-        "label": null,
-        "onClick": "() => { if (showForm) resetForm(); else setShowForm(true);",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 193,
-        "label": null,
-        "onClick": "handleSave",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 205,
+        "line": 255,
         "label": "تعديل",
         "onClick": "() => handleEdit(item)",
         "disabledHinted": true,
@@ -12566,7 +10343,7 @@
         "isSubmit": false
       },
       {
-        "line": 206,
+        "line": 256,
         "label": "حذف",
         "onClick": "() => setDeletingItem({ id: item.id, label: (fields[0] && item[fields[0].name]) ",
         "disabledHinted": true,
@@ -12574,7 +10351,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 352,
+    "lineCount": 402,
     "crossDomainImports": [
       "lib/api",
       "lib/utils",
@@ -12596,10 +10373,10 @@
         "path": "/settings/audit-log"
       }
     ],
-    "buttonCount": 5,
+    "buttonCount": 3,
     "buttons": [
       {
-        "line": 106,
+        "line": 243,
         "label": null,
         "onClick": "handleSave",
         "disabledHinted": true,
@@ -12607,23 +10384,7 @@
         "isSubmit": false
       },
       {
-        "line": 186,
-        "label": null,
-        "onClick": "() => { if (showForm) resetForm(); else setShowForm(true);",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 193,
-        "label": null,
-        "onClick": "handleSave",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 205,
+        "line": 255,
         "label": "تعديل",
         "onClick": "() => handleEdit(item)",
         "disabledHinted": true,
@@ -12631,7 +10392,7 @@
         "isSubmit": false
       },
       {
-        "line": 206,
+        "line": 256,
         "label": "حذف",
         "onClick": "() => setDeletingItem({ id: item.id, label: (fields[0] && item[fields[0].name]) ",
         "disabledHinted": true,
@@ -12639,7 +10400,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 352,
+    "lineCount": 402,
     "crossDomainImports": [
       "lib/api",
       "lib/utils",
@@ -12661,10 +10422,10 @@
         "path": "/settings/audit-log"
       }
     ],
-    "buttonCount": 5,
+    "buttonCount": 3,
     "buttons": [
       {
-        "line": 106,
+        "line": 243,
         "label": null,
         "onClick": "handleSave",
         "disabledHinted": true,
@@ -12672,23 +10433,7 @@
         "isSubmit": false
       },
       {
-        "line": 186,
-        "label": null,
-        "onClick": "() => { if (showForm) resetForm(); else setShowForm(true);",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 193,
-        "label": null,
-        "onClick": "handleSave",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 205,
+        "line": 255,
         "label": "تعديل",
         "onClick": "() => handleEdit(item)",
         "disabledHinted": true,
@@ -12696,7 +10441,7 @@
         "isSubmit": false
       },
       {
-        "line": 206,
+        "line": 256,
         "label": "حذف",
         "onClick": "() => setDeletingItem({ id: item.id, label: (fields[0] && item[fields[0].name]) ",
         "disabledHinted": true,
@@ -12704,7 +10449,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 352,
+    "lineCount": 402,
     "crossDomainImports": [
       "lib/api",
       "lib/utils",
@@ -12726,10 +10471,10 @@
         "path": "/settings/audit-log"
       }
     ],
-    "buttonCount": 5,
+    "buttonCount": 3,
     "buttons": [
       {
-        "line": 106,
+        "line": 243,
         "label": null,
         "onClick": "handleSave",
         "disabledHinted": true,
@@ -12737,23 +10482,7 @@
         "isSubmit": false
       },
       {
-        "line": 186,
-        "label": null,
-        "onClick": "() => { if (showForm) resetForm(); else setShowForm(true);",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 193,
-        "label": null,
-        "onClick": "handleSave",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 205,
+        "line": 255,
         "label": "تعديل",
         "onClick": "() => handleEdit(item)",
         "disabledHinted": true,
@@ -12761,7 +10490,7 @@
         "isSubmit": false
       },
       {
-        "line": 206,
+        "line": 256,
         "label": "حذف",
         "onClick": "() => setDeletingItem({ id: item.id, label: (fields[0] && item[fields[0].name]) ",
         "disabledHinted": true,
@@ -12769,7 +10498,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 352,
+    "lineCount": 402,
     "crossDomainImports": [
       "lib/api",
       "lib/utils",
@@ -12780,34 +10509,18 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/settings-rules.tsx",
     "module": "settings",
     "apiCalls": [],
-    "buttonCount": 3,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 165,
+        "line": 166,
         "label": null,
         "onClick": "() => setExpanded(!expanded)",
         "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
-      },
-      {
-        "line": 168,
-        "label": null,
-        "onClick": "onToggle",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 172,
-        "label": null,
-        "onClick": "onDelete",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
       }
     ],
-    "lineCount": 475,
+    "lineCount": 476,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters",
@@ -12834,18 +10547,10 @@
         "path": "/store/stats"
       }
     ],
-    "buttonCount": 5,
+    "buttonCount": 3,
     "buttons": [
       {
-        "line": 118,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 127,
+        "line": 128,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -12853,7 +10558,7 @@
         "isSubmit": false
       },
       {
-        "line": 214,
+        "line": 215,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -12861,15 +10566,7 @@
         "isSubmit": false
       },
       {
-        "line": 252,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 261,
+        "line": 262,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -12877,7 +10574,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 347,
+    "lineCount": 348,
     "crossDomainImports": [
       "lib/api",
       "lib/utils",
@@ -12952,18 +10649,10 @@
         "path": "/store/stats"
       }
     ],
-    "buttonCount": 5,
+    "buttonCount": 3,
     "buttons": [
       {
-        "line": 118,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 127,
+        "line": 128,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -12971,7 +10660,7 @@
         "isSubmit": false
       },
       {
-        "line": 214,
+        "line": 215,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -12979,15 +10668,7 @@
         "isSubmit": false
       },
       {
-        "line": 252,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 261,
+        "line": 262,
         "label": null,
         "onClick": "() => setShowForm(false)",
         "disabledHinted": false,
@@ -12995,7 +10676,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 347,
+    "lineCount": 348,
     "crossDomainImports": [
       "lib/api",
       "lib/utils",
@@ -13078,26 +10759,9 @@
         "path": "/umrah/seasons"
       }
     ],
-    "buttonCount": 2,
-    "buttons": [
-      {
-        "line": 58,
-        "label": "تحديث الحالات",
-        "onClick": "runDaily",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 59,
-        "label": "تشغيل الغرامات",
-        "onClick": "runPenalties",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 170,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 171,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -13107,18 +10771,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/pilgrims.tsx",
     "module": "operations",
     "apiCalls": [],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 81,
-        "label": "إضافة معتمر",
-        "onClick": null,
-        "disabledHinted": false,
-        "wrappedByLink": true,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 145,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 146,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters",
@@ -13145,10 +10800,10 @@
         "path": "/umrah/packages"
       }
     ],
-    "buttonCount": 3,
+    "buttonCount": 2,
     "buttons": [
       {
-        "line": 47,
+        "line": 48,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -13156,23 +10811,15 @@
         "isSubmit": false
       },
       {
-        "line": 95,
-        "label": "إلغاء",
-        "onClick": "save",
-        "disabledHinted": true,
-        "wrappedByLink": true,
-        "isSubmit": false
-      },
-      {
         "line": 96,
-        "label": null,
+        "label": "إلغاء",
         "onClick": "save",
         "disabledHinted": true,
         "wrappedByLink": true,
         "isSubmit": false
       }
     ],
-    "lineCount": 103,
+    "lineCount": 104,
     "crossDomainImports": [
       "lib/api"
     ]
@@ -13181,18 +10828,9 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/pilgrim-detail.tsx",
     "module": "operations",
     "apiCalls": [],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 141,
-        "label": "تحديث",
-        "onClick": "updateStatus",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 168,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 169,
     "crossDomainImports": [
       "lib/formatters",
       "lib/api"
@@ -13208,10 +10846,10 @@
         "path": "/umrah/agents"
       }
     ],
-    "buttonCount": 7,
+    "buttonCount": 5,
     "buttons": [
       {
-        "line": 121,
+        "line": 122,
         "label": null,
         "onClick": "() => openEdit(a)",
         "disabledHinted": false,
@@ -13219,7 +10857,7 @@
         "isSubmit": false
       },
       {
-        "line": 122,
+        "line": 123,
         "label": null,
         "onClick": "() => setDeleteId(a.id)",
         "disabledHinted": false,
@@ -13227,15 +10865,7 @@
         "isSubmit": false
       },
       {
-        "line": 133,
-        "label": "إضافة وكيل",
-        "onClick": "openCreate",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 214,
+        "line": 215,
         "label": "إلغاء",
         "onClick": "closeDialog",
         "disabledHinted": true,
@@ -13243,7 +10873,7 @@
         "isSubmit": false
       },
       {
-        "line": 215,
+        "line": 216,
         "label": null,
         "onClick": "handleSubmit",
         "disabledHinted": true,
@@ -13251,23 +10881,15 @@
         "isSubmit": false
       },
       {
-        "line": 227,
+        "line": 228,
         "label": null,
         "onClick": "() => setDeleteId(null)",
         "disabledHinted": true,
         "wrappedByLink": false,
         "isSubmit": false
-      },
-      {
-        "line": 228,
-        "label": null,
-        "onClick": "() => deleteMut.mutate({",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
       }
     ],
-    "lineCount": 237,
+    "lineCount": 238,
     "crossDomainImports": [
       "lib/api",
       "lib/utils"
@@ -13279,7 +10901,7 @@
     "apiCalls": [],
     "buttonCount": 0,
     "buttons": [],
-    "lineCount": 251,
+    "lineCount": 253,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -13295,10 +10917,10 @@
         "path": "/umrah/seasons"
       }
     ],
-    "buttonCount": 4,
+    "buttonCount": 3,
     "buttons": [
       {
-        "line": 54,
+        "line": 55,
         "label": null,
         "onClick": "(e) => { e.stopPropagation(); closeSeason(r.id);",
         "disabledHinted": false,
@@ -13306,15 +10928,7 @@
         "isSubmit": false
       },
       {
-        "line": 65,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 82,
+        "line": 83,
         "label": "حفظ",
         "onClick": "() => setShowForm(false)",
         "disabledHinted": true,
@@ -13322,7 +10936,7 @@
         "isSubmit": false
       },
       {
-        "line": 83,
+        "line": 84,
         "label": "حفظ",
         "onClick": "save",
         "disabledHinted": true,
@@ -13330,7 +10944,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 93,
+    "lineCount": 94,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -13342,7 +10956,7 @@
     "apiCalls": [],
     "buttonCount": 0,
     "buttons": [],
-    "lineCount": 231,
+    "lineCount": 233,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -13361,7 +10975,7 @@
     "buttonCount": 2,
     "buttons": [
       {
-        "line": 78,
+        "line": 109,
         "label": null,
         "onClick": "(e) => handleWaive(e, p.id)",
         "disabledHinted": false,
@@ -13369,15 +10983,15 @@
         "isSubmit": false
       },
       {
-        "line": 89,
-        "label": "تشغيل محرك الغرامات",
-        "onClick": "runPenaltyEngine",
+        "line": 146,
+        "label": null,
+        "onClick": "() => setBulkOpen(true)",
         "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
       }
     ],
-    "lineCount": 142,
+    "lineCount": 243,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters",
@@ -13416,18 +11030,9 @@
         "path": "/umrah/seasons"
       }
     ],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 100,
-        "label": "إنشاء فاتورة",
-        "onClick": "generate",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      }
-    ],
-    "lineCount": 146,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 147,
     "crossDomainImports": [
       "lib/formatters",
       "lib/api",
@@ -13440,7 +11045,7 @@
     "apiCalls": [],
     "buttonCount": 0,
     "buttons": [],
-    "lineCount": 334,
+    "lineCount": 336,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -13461,10 +11066,10 @@
         "path": "/umrah/seasons"
       }
     ],
-    "buttonCount": 7,
+    "buttonCount": 5,
     "buttons": [
       {
-        "line": 144,
+        "line": 145,
         "label": null,
         "onClick": "() => openEdit(r)",
         "disabledHinted": false,
@@ -13472,7 +11077,7 @@
         "isSubmit": false
       },
       {
-        "line": 145,
+        "line": 146,
         "label": null,
         "onClick": "() => setDeleteId(r.id)",
         "disabledHinted": false,
@@ -13480,15 +11085,7 @@
         "isSubmit": false
       },
       {
-        "line": 159,
-        "label": "إضافة باقة",
-        "onClick": "openCreate",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 220,
+        "line": 221,
         "label": "إلغاء",
         "onClick": "closeDialog",
         "disabledHinted": true,
@@ -13496,7 +11093,7 @@
         "isSubmit": false
       },
       {
-        "line": 221,
+        "line": 222,
         "label": null,
         "onClick": "handleSubmit",
         "disabledHinted": true,
@@ -13504,23 +11101,15 @@
         "isSubmit": false
       },
       {
-        "line": 233,
+        "line": 234,
         "label": null,
         "onClick": "() => setDeleteId(null)",
         "disabledHinted": true,
         "wrappedByLink": false,
         "isSubmit": false
-      },
-      {
-        "line": 234,
-        "label": null,
-        "onClick": "() => deleteMut.mutate({",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
       }
     ],
-    "lineCount": 243,
+    "lineCount": 244,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -13548,18 +11137,10 @@
         "path": "/umrah/transport"
       }
     ],
-    "buttonCount": 3,
+    "buttonCount": 2,
     "buttons": [
       {
-        "line": 83,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 96,
+        "line": 97,
         "label": "حفظ",
         "onClick": "() => { setShowForm(false); setForm({",
         "disabledHinted": true,
@@ -13567,7 +11148,7 @@
         "isSubmit": false
       },
       {
-        "line": 97,
+        "line": 98,
         "label": "حفظ",
         "onClick": "save",
         "disabledHinted": true,
@@ -13575,7 +11156,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 112,
+    "lineCount": 113,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -13608,26 +11189,18 @@
         "path": "/umrah/import-logs"
       }
     ],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 159,
+        "line": 160,
         "label": "تغيير الملف",
         "onClick": "clearFile",
         "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
-      },
-      {
-        "line": 227,
-        "label": null,
-        "onClick": "doImport",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
       }
     ],
-    "lineCount": 263,
+    "lineCount": 264,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -13727,7 +11300,7 @@
     "buttonCount": 1,
     "buttons": [
       {
-        "line": 192,
+        "line": 210,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -13735,7 +11308,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 634,
+    "lineCount": 629,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -13748,7 +11321,7 @@
     "buttonCount": 1,
     "buttons": [
       {
-        "line": 192,
+        "line": 210,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -13756,7 +11329,7 @@
         "isSubmit": false
       }
     ],
-    "lineCount": 634,
+    "lineCount": 629,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -13766,10 +11339,10 @@
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/violations.tsx",
     "module": "operations",
     "apiCalls": [],
-    "buttonCount": 8,
+    "buttonCount": 3,
     "buttons": [
       {
-        "line": 254,
+        "line": 255,
         "label": null,
         "onClick": null,
         "disabledHinted": false,
@@ -13777,31 +11350,7 @@
         "isSubmit": false
       },
       {
-        "line": 259,
-        "label": null,
-        "onClick": "() => openEdit(v)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 263,
-        "label": null,
-        "onClick": "() => setDeleteId(v.id)",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 280,
-        "label": "مخالفة جديدة",
-        "onClick": "openCreate",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 493,
+        "line": 496,
         "label": null,
         "onClick": "() => setEditing(null)",
         "disabledHinted": true,
@@ -13809,33 +11358,53 @@
         "isSubmit": false
       },
       {
-        "line": 494,
-        "label": null,
-        "onClick": "handleSave",
-        "disabledHinted": true,
-        "wrappedByLink": false,
-        "isSubmit": false
-      },
-      {
-        "line": 509,
+        "line": 512,
         "label": null,
         "onClick": "() => setDeleteId(null)",
         "disabledHinted": true,
         "wrappedByLink": false,
         "isSubmit": false
+      }
+    ],
+    "lineCount": 522,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters"
+    ]
+  },
+  "/umrah/violations/create": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/violation-create.tsx",
+    "module": "operations",
+    "apiCalls": [
+      {
+        "kind": "mutation",
+        "method": "POST",
+        "path": "/umrah/violations"
+      }
+    ],
+    "buttonCount": 2,
+    "buttons": [
+      {
+        "line": 98,
+        "label": null,
+        "onClick": null,
+        "disabledHinted": false,
+        "wrappedByLink": false,
+        "isSubmit": false
       },
       {
-        "line": 510,
+        "line": 219,
         "label": null,
-        "onClick": "() => deleteMut.mutate({",
-        "disabledHinted": true,
+        "onClick": "() => setLocation(\"/umrah/violations\")",
+        "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
       }
     ],
-    "lineCount": 519,
+    "lineCount": 316,
     "crossDomainImports": [
       "lib/api",
+      "lib/utils",
       "lib/formatters"
     ]
   },
@@ -13914,26 +11483,18 @@
         "path": "/api/umrah/reports/daily-runsheet/pdf?date=${date}"
       }
     ],
-    "buttonCount": 2,
+    "buttonCount": 1,
     "buttons": [
       {
-        "line": 134,
+        "line": 135,
         "label": null,
         "onClick": "() => refetch()",
         "disabledHinted": false,
         "wrappedByLink": false,
         "isSubmit": false
-      },
-      {
-        "line": 137,
-        "label": "تصدير PDF",
-        "onClick": "handleExport",
-        "disabledHinted": false,
-        "wrappedByLink": false,
-        "isSubmit": false
       }
     ],
-    "lineCount": 176,
+    "lineCount": 177,
     "crossDomainImports": [
       "lib/api"
     ]
@@ -13951,6 +11512,39 @@
     "buttonCount": 0,
     "buttons": [],
     "lineCount": 186,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters"
+    ]
+  },
+  "/umrah/groups": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/groups.tsx",
+    "module": "operations",
+    "apiCalls": [],
+    "buttonCount": 1,
+    "buttons": [
+      {
+        "line": 160,
+        "label": null,
+        "onClick": null,
+        "disabledHinted": false,
+        "wrappedByLink": false,
+        "isSubmit": false
+      }
+    ],
+    "lineCount": 313,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters"
+    ]
+  },
+  "/umrah/attachments": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/attachments.tsx",
+    "module": "operations",
+    "apiCalls": [],
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 185,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
