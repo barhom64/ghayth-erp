@@ -32,6 +32,7 @@ import { apiFetch, useApiQuery } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { NotificationDropdown } from "@/components/notification-dropdown";
 import { PolicyBanner } from "@/components/policy-banner";
+import { RateLimitFallbackBanner } from "@/components/rate-limit-fallback-banner";
 import { useKeyboardShortcuts, usePropertyKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 // CommandPalette is only mounted when the user opens it (Cmd+K or the
 // header button). Lazy-load it so its ~345 lines + icons don't ship in
@@ -366,7 +367,9 @@ const allNavSections: NavSection[] = [
       ]},
       { label: "مدير النظام", path: "/admin", icon: Shield, module: "admin", minRoleLevel: 90, children: [
         { label: "المستخدمين", path: "/admin/users", icon: Users },
-        { label: "الأدوار والصلاحيات", path: "/admin/roles", icon: KeyRound },
+        { label: "الأدوار والصلاحيات (v2)", path: "/admin", icon: KeyRound },
+        { label: "مصفوفة الأدوار", path: "/admin/rbac-matrix", icon: Shield },
+        { label: "الأدوار (الكلاسيكي)", path: "/admin/roles", icon: KeyRound },
         { label: "مركز التكاملات", path: "/admin/integrations", icon: Mail },
         { label: "مركز المراقبة", path: "/admin/monitoring", icon: Activity },
         { label: "تقرير المخالفات", path: "/admin/violations-report", icon: AlertTriangle },
@@ -1136,14 +1139,19 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                     const isActive = selectedRole?.roleKey === role.roleKey;
                     return (
                       <DropdownMenuItem
-                        key={role.roleKey}
+                        key={`${role.source ?? "legacy"}:${role.roleKey}`}
                         onClick={() => setSelectedRoleKey(role.roleKey)}
                         className={isActive ? "bg-purple-50" : ""}
                       >
                         <Shield className="h-4 w-4 me-2" style={{ color }} />
-                        <span style={{ color: isActive ? color : undefined }}>
+                        <span className="flex-1" style={{ color: isActive ? color : undefined }}>
                           {role.label}
                         </span>
+                        {role.source === "v2" && (
+                          <span className="ms-2 text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-mono">
+                            v2
+                          </span>
+                        )}
                       </DropdownMenuItem>
                     );
                   })}
@@ -1309,6 +1317,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
         </header>
 
         {buildBreadcrumbs()}
+        <RateLimitFallbackBanner />
         <PolicyBanner currentPath={location} />
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-8">

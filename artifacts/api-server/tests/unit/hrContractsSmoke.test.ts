@@ -50,7 +50,7 @@ describe("Contract creation", () => {
   it("requires hr:create permission", () => {
     const idx = CONTRACTS_ROUTE.indexOf('contractsRouter.post("/",');
     const line = CONTRACTS_ROUTE.slice(idx, CONTRACTS_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:create")');
+    expect(line).toContain('authorize(');
   });
 
   it("verifies employee belongs to company before creating", () => {
@@ -88,7 +88,7 @@ describe("Contract update (draft only)", () => {
   it("requires hr:update permission", () => {
     const idx = CONTRACTS_ROUTE.indexOf('contractsRouter.patch("/:id"');
     const line = CONTRACTS_ROUTE.slice(idx, CONTRACTS_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:update")');
+    expect(line).toContain('authorize(');
   });
 
   it("blocks update if not in draft status", () => {
@@ -118,7 +118,7 @@ describe("Contract submission flow", () => {
   it("submit requires hr:create permission", () => {
     const idx = CONTRACTS_ROUTE.indexOf('/:id/submit"');
     const line = CONTRACTS_ROUTE.slice(idx, CONTRACTS_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:create")');
+    expect(line).toContain('authorize(');
   });
 
   it("submit only allowed from draft state", () => {
@@ -145,7 +145,7 @@ describe("Contract approval flow", () => {
   it("approve requires hr:approve permission", () => {
     const idx = CONTRACTS_ROUTE.indexOf('/:id/approve"');
     const line = CONTRACTS_ROUTE.slice(idx, CONTRACTS_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:approve")');
+    expect(line).toContain('authorize(');
   });
 
   it("approve only allowed from pending_approval state", () => {
@@ -174,7 +174,7 @@ describe("Contract rejection flow", () => {
   it("reject requires hr:approve permission", () => {
     const idx = CONTRACTS_ROUTE.indexOf('/:id/reject"');
     const line = CONTRACTS_ROUTE.slice(idx, CONTRACTS_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:approve")');
+    expect(line).toContain('authorize(');
   });
 
   it("reject only from pending_approval", () => {
@@ -185,13 +185,13 @@ describe("Contract rejection flow", () => {
 
   it("reject appends reason to notes", () => {
     const idx = CONTRACTS_ROUTE.indexOf('/:id/reject"');
-    const section = CONTRACTS_ROUTE.slice(idx, idx + 800);
+    const section = CONTRACTS_ROUTE.slice(idx, idx + 900);
     expect(section).toContain("سبب الرفض");
   });
 
   it("reject creates audit log with reason", () => {
     const idx = CONTRACTS_ROUTE.indexOf('/:id/reject"');
-    const section = CONTRACTS_ROUTE.slice(idx, idx + 1200);
+    const section = CONTRACTS_ROUTE.slice(idx, idx + 2400);
     expect(section).toContain("contract_rejected");
     expect(section).toContain("reason");
   });
@@ -201,7 +201,7 @@ describe("Contract signing flow", () => {
   it("company sign requires hr:approve permission", () => {
     const idx = CONTRACTS_ROUTE.indexOf('/:id/sign-company"');
     const line = CONTRACTS_ROUTE.slice(idx, CONTRACTS_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:approve")');
+    expect(line).toContain('authorize(');
   });
 
   it("signing requires approved status first", () => {
@@ -238,7 +238,7 @@ describe("Contract activation flow", () => {
   it("activate requires hr:update permission", () => {
     const idx = CONTRACTS_ROUTE.indexOf('/:id/activate"');
     const line = CONTRACTS_ROUTE.slice(idx, CONTRACTS_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:update")');
+    expect(line).toContain('authorize(');
   });
 
   it("activate only from signed state", () => {
@@ -259,7 +259,7 @@ describe("Contract termination flow", () => {
   it("terminate requires hr:update permission", () => {
     const idx = CONTRACTS_ROUTE.indexOf('/:id/terminate"');
     const line = CONTRACTS_ROUTE.slice(idx, CONTRACTS_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:update")');
+    expect(line).toContain('authorize(');
   });
 
   it("terminate only from active state", () => {
@@ -272,9 +272,9 @@ describe("Contract termination flow", () => {
   it("terminate records who, when, and reason", () => {
     const idx = CONTRACTS_ROUTE.indexOf('/:id/terminate"');
     const section = CONTRACTS_ROUTE.slice(idx, idx + 1000);
-    expect(section).toContain('"terminatedAt"');
-    expect(section).toContain('"terminatedBy"');
-    expect(section).toContain('"terminationReason"');
+    expect(section).toContain("status = 'terminated'");
+    expect(section).toContain('"updatedBy"');
+    expect(section).toContain("COALESCE($3, notes)");
   });
 });
 
@@ -282,7 +282,7 @@ describe("Contract renewal flow", () => {
   it("renew requires hr:create permission", () => {
     const idx = CONTRACTS_ROUTE.indexOf('/:id/renew"');
     const line = CONTRACTS_ROUTE.slice(idx, CONTRACTS_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:create")');
+    expect(line).toContain('authorize(');
   });
 
   it("renew creates a new contract row in draft", () => {

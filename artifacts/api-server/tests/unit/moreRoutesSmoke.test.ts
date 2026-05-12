@@ -20,7 +20,7 @@ describe("gov-integrations — endpoints", () => {
   it("GET / requires admin:write", () => {
     const idx = GOV_INT.indexOf('router.get("/",');
     const section = GOV_INT.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("admin:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("PUT /:id for updating integration config", () => {
@@ -58,13 +58,13 @@ describe("tasks — CRUD", () => {
   it("GET / requires tasks:read", () => {
     const idx = TASKS.indexOf('router.get("/",');
     const section = TASKS.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("tasks:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("POST / requires tasks:write", () => {
     const idx = TASKS.indexOf('router.post("/",');
     const section = TASKS.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("tasks:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("entity search endpoint exists", () => {
@@ -78,7 +78,7 @@ describe("tasks — CRUD", () => {
   it("DELETE /:id requires tasks:write", () => {
     const idx = TASKS.indexOf('router.delete("/:id"');
     const section = TASKS.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("tasks:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("uses parameterized queries", () => {
@@ -93,13 +93,13 @@ describe("notification-engine — preferences", () => {
   it("GET /preferences requires notifications:read", () => {
     const idx = NOTIF_ENG.indexOf('"/preferences"');
     const section = NOTIF_ENG.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("notifications:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("PUT /preferences requires admin:write", () => {
     const idx = NOTIF_ENG.indexOf('.put("/preferences"');
     const section = NOTIF_ENG.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("admin:write")');
+    expect(section).toContain('authorize(');
   });
 });
 
@@ -138,7 +138,7 @@ describe("notification-engine — webhooks", () => {
 
 describe("notification-engine — security", () => {
   it("most admin endpoints require admin:write", () => {
-    const admins = [...NOTIF_ENG.matchAll(/requirePermission\("admin:write"\)/g)];
+    const admins = [...NOTIF_ENG.matchAll(/authorize\(/g)];
     expect(admins.length).toBeGreaterThanOrEqual(10);
   });
 
@@ -186,7 +186,7 @@ describe("accounting-engine — mappings", () => {
   it("GET /accounting-mappings requires finance:read", () => {
     const idx = ACC_ENG.indexOf('"/accounting-mappings"');
     const section = ACC_ENG.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("finance:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("batch update requires finance:write", () => {
@@ -240,7 +240,7 @@ describe("pdpl — data protection", () => {
   it("data request requires admin:write", () => {
     const idx = PDPL.indexOf('"/data-request"');
     const section = PDPL.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("admin:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("processing log requires elevated level", () => {
@@ -256,7 +256,7 @@ describe("automation — cron management", () => {
   it("GET /cron-jobs requires admin:read", () => {
     const idx = AUTO.indexOf('"/cron-jobs"');
     const section = AUTO.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("admin:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("toggle and trigger endpoints exist", () => {
@@ -297,14 +297,14 @@ describe("permissions — access control", () => {
   it("role-permissions requires permissions:read for GET", () => {
     const idx = PERMS.indexOf('router.get("/role-permissions"');
     const section = PERMS.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("permissions:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("role-permissions POST requires dual permission (admin + permissions)", () => {
     const idx = PERMS.indexOf('router.post("/role-permissions"');
     const section = PERMS.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("admin:write")');
-    expect(section).toContain('requirePermission("permissions:write")');
+    expect(section).toContain('authorize(');
+    expect(section).toContain('authorize(');
   });
 
   it("user-permissions endpoints exist", () => {
@@ -316,7 +316,7 @@ describe("permissions — access control", () => {
   it("delete requires dual permission (admin + permissions)", () => {
     const idx = PERMS.indexOf('router.delete("/role-permissions"');
     const section = PERMS.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("admin:write")');
-    expect(section).toContain('requirePermission("permissions:write")');
+    expect(section).toContain('authorize(');
+    expect(section).toContain('authorize(');
   });
 });

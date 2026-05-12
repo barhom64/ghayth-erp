@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 // Phase A — HR performance on unified primitives.
@@ -91,7 +92,7 @@ export default function PerformancePage() {
   ];
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   return (
     <PageShell
@@ -100,7 +101,7 @@ export default function PerformancePage() {
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
         <Link href="/hr/performance/create">
-          <Button size="sm"><Plus className="h-4 w-4 me-1" />تقييم جديد</Button>
+          <GuardedButton perm="hr:create" size="sm"><Plus className="h-4 w-4 me-1" />تقييم جديد</GuardedButton>
         </Link>
       }
     >

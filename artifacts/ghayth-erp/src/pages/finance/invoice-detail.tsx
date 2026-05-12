@@ -3,6 +3,7 @@ import { useRoute, Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@/components/print-layout";
@@ -26,6 +27,12 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
 import { EntityObligations } from "@/components/shared/entity-obligations";
 import { DetailPageLayout, type DetailStatus } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
 
 /**
@@ -162,9 +169,26 @@ export default function InvoiceDetailPage() {
     zatcaMut.mutate({});
   };
 
+  const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("invoice", id || "");
+
+  const editDelete = useDetailEditDelete({
+    entityLabel: "الفاتورة",
+    patchPath: `/finance/invoices/${id}`,
+    deletePath: `/finance/invoices/${id}`,
+    listPath: "/finance/invoices",
+    initialValues: invoice,
+    fields: [
+      { key: "notes", label: "ملاحظات" },
+      { key: "dueDate", label: "تاريخ الاستحقاق" },
+    ],
+    invalidateKeys: [["invoice", String(id)], ["invoices"]],
+    onSaved: () => refetch(),
+  });
+
   // --- Action buttons for the header ---
   const actions = (
     <div className="flex items-center gap-2">
+      <DetailActionButtons hook={editDelete} />
       <Link href={`/finance/invoices/create?copyFrom=${id}`}>
         <Button variant="outline" size="sm" className="gap-1">
           <Copy className="h-4 w-4" />
@@ -172,10 +196,10 @@ export default function InvoiceDetailPage() {
         </Button>
       </Link>
       {invoice && remaining > 0 && (
-        <Button variant="outline" size="sm" onClick={() => setShowPayment(!showPayment)}>
+        <GuardedButton perm="finance:create" variant="outline" size="sm" onClick={() => setShowPayment(!showPayment)}>
           <Banknote className="h-4 w-4 me-1" />
           تسجيل دفعة
-        </Button>
+        </GuardedButton>
       )}
       {invoice && (
         <>
@@ -199,6 +223,7 @@ export default function InvoiceDetailPage() {
   // --- Overview content (main tab) ---
   const overview = invoice ? (
     <div className="space-y-4">
+      <InlineEditCard hook={editDelete} />
       {/* Visible payment lifecycle strip */}
       <Card className="border-0 shadow-sm">
         <CardContent className="p-4">
@@ -284,10 +309,12 @@ export default function InvoiceDetailPage() {
                     />
                   )}
                   {canRetry && (
-                    <Button
+                    <GuardedButton
+                      perm="finance:approve"
                       size="sm"
                       onClick={handleZatcaSubmit}
                       disabled={zatcaMut.isPending}
+                      rateLimitAware
                       className="gap-1"
                     >
                       <Send className="h-4 w-4" />
@@ -296,7 +323,7 @@ export default function InvoiceDetailPage() {
                         : isFailed
                           ? "إعادة الإرسال"
                           : "إرسال للهيئة"}
-                    </Button>
+                    </GuardedButton>
                   )}
                 </div>
               </div>
@@ -327,9 +354,9 @@ export default function InvoiceDetailPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button type="submit" disabled={paymentMut.isPending}>
+              <GuardedButton perm="finance:create" type="submit" disabled={paymentMut.isPending} rateLimitAware>
                 {paymentMut.isPending ? "جاري التسجيل..." : "تسجيل"}
-              </Button>
+              </GuardedButton>
               <Button type="button" variant="outline" onClick={() => setShowPayment(false)}>
                 إلغاء
               </Button>
@@ -402,7 +429,7 @@ export default function InvoiceDetailPage() {
         </CardContent>
       </Card>
 
-      {invoice.status === "pending" && (
+      {invoice.status === "draft" && (
         <Card>
           <CardHeader><CardTitle>إجراءات الاعتماد</CardTitle></CardHeader>
           <CardContent>
@@ -615,6 +642,8 @@ export default function InvoiceDetailPage() {
       onRetry={refetch}
       actions={actions}
       overview={overview}
+      extraTabs={registryExtraTabs}
+      hideTabs={registryHideTabs}
     />
   );
 }

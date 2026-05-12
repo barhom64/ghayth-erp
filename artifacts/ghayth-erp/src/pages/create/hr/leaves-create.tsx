@@ -63,12 +63,12 @@ export default function LeavesCreate() {
   }, [form.startDate, form.endDate]);
 
   if (leaveTypesQ.isLoading || loadingEmp) return <LoadingSpinner />;
-  if (leaveTypesQ.isError || errorEmp) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (leaveTypesQ.isError || errorEmp) return <ErrorState />;
 
   const selectedType = leaveTypes.find((lt: any) => String(lt.id) === form.leaveTypeId);
 
   const selectedBalance = balances.find((b: any) =>
-    String(b.leaveTypeId) === form.leaveTypeId || b.type === selectedType?.name
+    String(b.leaveTypeId) === form.leaveTypeId || b.name === selectedType?.name
   );
 
   const handleSubmit = () => {
@@ -93,6 +93,7 @@ export default function LeavesCreate() {
         reason: form.reason,
         reliefOfficer: form.reliefOfficer || undefined,
         contactDuringLeave: form.contactDuringLeave || undefined,
+        documentUrl: attachments.length > 0 ? attachments[0].dataUrl : undefined,
       },
       {
         onSuccess: () => {
@@ -127,9 +128,9 @@ export default function LeavesCreate() {
             {balances.slice(0, 4).map((b: any) => (
               <Card key={b.id || b.type} className={`border ${String(b.leaveTypeId) === form.leaveTypeId ? "border-blue-300 bg-blue-50/50 ring-1 ring-blue-200" : "border-gray-100"}`}>
                 <CardContent className="p-3 text-center">
-                  <p className="text-xs text-muted-foreground">{b.typeName || b.type || "إجازة"}</p>
+                  <p className="text-xs text-muted-foreground">{b.name || b.typeName || b.type || "إجازة"}</p>
                   <p className="text-xl font-bold mt-1">{b.remaining ?? b.balance ?? 0}</p>
-                  <p className="text-[10px] text-muted-foreground">من {b.total ?? b.entitled ?? 0} يوم</p>
+                  <p className="text-[10px] text-muted-foreground">من {b.annualDays ?? b.total ?? b.entitled ?? 0} يوم</p>
                 </CardContent>
               </Card>
             ))}
@@ -211,7 +212,7 @@ export default function LeavesCreate() {
 
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/hr/leaves")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={!form.leaveTypeId || !form.startDate || !form.endDate || createMut.isPending} size="lg">
+        <Button onClick={handleSubmit} disabled={!form.leaveTypeId || !form.startDate || !form.endDate || createMut.isPending} size="lg" rateLimitAware>
           {createMut.isPending ? "جاري الإرسال..." : "إرسال الطلب"}
         </Button>
       </div>

@@ -1,6 +1,12 @@
 import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Truck, Users, DollarSign } from "lucide-react";
@@ -44,8 +50,9 @@ const pilgrimColumns: DataTableColumn<any>[] = [
 export default function UmrahTransportDetail() {
   const [, params] = useRoute("/umrah/transport/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("transport", id ?? 0);
 
-  const { data, isLoading, isError } = useApiQuery<any>(
+  const { data, isLoading, isError, refetch } = useApiQuery<any>(
     ["umrah-transport-detail", String(id)],
     id ? `/umrah/transport/${id}` : null
   );
@@ -54,8 +61,25 @@ export default function UmrahTransportDetail() {
 
   const st = STATUS_MAP[item?.status] || { label: item?.status || "—", tone: "default" as const };
 
+  const editDelete = useDetailEditDelete({
+    entityLabel: "رحلة النقل",
+    patchPath: `/umrah/transport/${id}`,
+    deletePath: `/umrah/transport/${id}`,
+    listPath: "/umrah/transport",
+    initialValues: item,
+    fields: [
+      { key: "fromLocation", label: "من" },
+      { key: "toLocation", label: "إلى" },
+      { key: "capacity", label: "السعة", type: "number" },
+      { key: "cost", label: "التكلفة", type: "number" },
+    ],
+    invalidateKeys: [["umrah-transport", String(id)], ["umrah-transport"]],
+    onSaved: () => refetch(),
+  });
+
   const overview = item ? (
     <div className="space-y-4">
+      <InlineEditCard hook={editDelete} />
       <KpiGrid items={[
         { label: "من", value: item.fromLocation || "—", icon: MapPin, color: "text-blue-600 bg-blue-50", size: "sm" },
         { label: "إلى", value: item.toLocation || "—", icon: MapPin, color: "text-green-600 bg-green-50", size: "sm" },
@@ -108,12 +132,19 @@ export default function UmrahTransportDetail() {
       status={item ? { label: st.label, tone: st.tone } : undefined}
       entityType="transport"
       entityId={id || 0}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       isLoading={isLoading}
       error={isError ? true : undefined}
-      onRetry={() => window.location.reload()}
+     
       createdAt={item?.createdAt}
       overview={overview}
-      actions={item ? <Badge className="text-sm px-3 py-1">{st.label}</Badge> : undefined}
+      actions={
+        <DetailActionButtons
+          hook={editDelete}
+          extra={item ? <Badge className="text-sm px-3 py-1">{st.label}</Badge> : null}
+        />
+      }
     />
   );
 }

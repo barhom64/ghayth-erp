@@ -10,7 +10,7 @@ import {
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { haversineKm } from "../lib/algorithms.js";
 import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -131,9 +131,12 @@ const createTripSchema = z.object({
   toLng: z.coerce.number().optional(),
   distance: z.coerce.number().optional(),
   startTime: z.string().optional(),
+  endTime: z.string().optional(),
   notes: z.string().optional(),
   fuelPricePerLiter: z.coerce.number().optional(),
   driverFare: z.coerce.number().optional(),
+  cost: z.coerce.number().optional(),
+  status: z.string().optional(),
 });
 
 const completeTripSchema = z.object({
@@ -279,7 +282,7 @@ const DRIVER_TRANSITIONS: Record<string, readonly string[]> = {
   suspended:  ["off_duty", "available"],
 };
 
-router.get("/vehicles", requirePermission("fleet:read"), async (req, res) => {
+router.get("/vehicles", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, search } = req.query as any;
@@ -294,7 +297,7 @@ router.get("/vehicles", requirePermission("fleet:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Fleet vehicles error:"); }
 });
 
-router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => {
+router.post("/vehicles", authorize({ feature: "fleet.vehicles", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createVehicleSchema.safeParse(req.body)) as any;
@@ -383,16 +386,21 @@ router.post("/vehicles", requirePermission("fleet:create"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "Create vehicle error:"); }
 });
 
-router.get("/drivers", requirePermission("fleet:read"), async (req, res) => {
+router.get("/drivers", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    const { search, status } = req.query as any;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'd."companyId"', branchColumn: 'd."branchId"', enforceBranchScope: true });
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'd."companyId"' });
+    let where = baseWhere;
+    let paramIdx = nextParamIndex;
+    if (search) { params.push(`%${search}%`); where += ` AND (d.name ILIKE $${paramIdx} OR d.phone ILIKE $${paramIdx} OR d."licenseNumber" ILIKE $${paramIdx})`; paramIdx++; }
+    if (status) { where += ` AND d.status = $${paramIdx}`; params.push(status); paramIdx++; }
     const rows = await rawQuery<any>(
       `SELECT d.*, e.name AS "employeeName", e."empNumber" AS "employeeNumber",
               ea."jobTitle" AS "employeeJobTitle"
        FROM fleet_drivers d
-       LEFT JOIN employees e ON e.id = d."employeeId"
+       LEFT JOIN employees e ON e.id = d."employeeId" AND e."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
        WHERE ${where} AND d."deletedAt" IS NULL
        ORDER BY d.name LIMIT 500`,
@@ -402,7 +410,7 @@ router.get("/drivers", requirePermission("fleet:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Fleet drivers error:"); }
 });
 
-router.post("/drivers", requirePermission("fleet:create"), async (req, res) => {
+router.post("/drivers", authorize({ feature: "fleet.vehicles", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createDriverSchema.safeParse(req.body)) as any;
@@ -429,11 +437,11 @@ router.post("/drivers", requirePermission("fleet:create"), async (req, res) => {
       throw new ConflictError("رقم الرخصة مسجل مسبقاً لسائق آخر", { field: "licenseNumber", fix: "استخدم رقم رخصة صحيح أو راجع السجل الموجود" });
     }
 
-    // FK pre-check on employeeId if provided
+    // FK pre-check on employeeId if provided (verify employee belongs to same company)
     if (b.employeeId !== undefined && b.employeeId !== null && b.employeeId !== "") {
       const [emp] = await rawQuery<any>(
-        `SELECT id FROM employees WHERE id=$1 AND "deletedAt" IS NULL`,
-        [b.employeeId]
+        `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`,
+        [b.employeeId, scope.companyId]
       );
       if (!emp) {
         throw new ValidationError("الموظف المرتبط غير موجود", { field: "employeeId", fix: "اختر موظفاً مسجلاً في النظام أو اترك الحقل فارغاً" });
@@ -467,7 +475,9 @@ router.post("/drivers", requirePermission("fleet:create"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create driver error:"); }
 });
 
-router.get("/vehicles/:id", requirePermission("fleet:read"), async (req, res) => {
+// RBAC v2: vehicle detail with scope check + maskFields. Branch-scoped
+// roles see only their branch's vehicles.
+router.get("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "view", resource: { table: "vehicles", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const vehicleId = parseId(req.params.id, "id");
@@ -500,7 +510,7 @@ router.get("/vehicles/:id", requirePermission("fleet:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Get vehicle error:"); }
 });
 
-router.get("/vehicles/:id/impact-preview", requirePermission("fleet:read"), async (req, res) => {
+router.get("/vehicles/:id/impact-preview", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -513,7 +523,7 @@ router.get("/vehicles/:id/impact-preview", requirePermission("fleet:read"), asyn
   } catch (err) { handleRouteError(err, res, "Vehicle impact preview error:"); }
 });
 
-router.patch("/vehicles/:id", requirePermission("fleet:update"), async (req, res) => {
+router.patch("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -605,7 +615,8 @@ router.patch("/vehicles/:id", requirePermission("fleet:update"), async (req, res
     }
 
     params.push(id, scope.companyId);
-    await rawExecute(`UPDATE fleet_vehicles SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    const { affectedRows } = await rawExecute(`UPDATE fleet_vehicles SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود");
 
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
@@ -651,7 +662,7 @@ router.patch("/vehicles/:id", requirePermission("fleet:update"), async (req, res
   } catch (err) { handleRouteError(err, res, "Update vehicle error:"); }
 });
 
-router.delete("/vehicles/:id", requirePermission("fleet:delete"), async (req, res) => {
+router.delete("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "delete", resource: { table: "vehicles", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -679,7 +690,8 @@ router.delete("/vehicles/:id", requirePermission("fleet:delete"), async (req, re
       throw new ConflictError("لا يمكن حذف المركبة — توجد صيانة قيد التنفيذ", { field: "status", fix: "أكمل أو ألغِ سجل الصيانة قبل حذف المركبة" });
     }
 
-    await rawExecute(`UPDATE fleet_vehicles SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE fleet_vehicles SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود");
 
     emitEvent({
       companyId: scope.companyId,
@@ -702,7 +714,7 @@ router.delete("/vehicles/:id", requirePermission("fleet:delete"), async (req, re
   } catch (err) { handleRouteError(err, res, "Delete vehicle error:"); }
 });
 
-router.get("/drivers/:id", requirePermission("fleet:read"), async (req, res) => {
+router.get("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -712,7 +724,7 @@ router.get("/drivers/:id", requirePermission("fleet:read"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "Get driver error:"); }
 });
 
-router.patch("/drivers/:id", requirePermission("fleet:update"), async (req, res) => {
+router.patch("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -774,7 +786,8 @@ router.patch("/drivers/:id", requirePermission("fleet:update"), async (req, res)
     }
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id);
-    await rawExecute(`UPDATE fleet_drivers SET ${sets.join(",")} WHERE id=$${params.length} AND "companyId"=$${params.length + 1}`, [...params, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE fleet_drivers SET ${sets.join(",")} WHERE id=$${params.length} AND "companyId"=$${params.length + 1} AND "deletedAt" IS NULL`, [...params, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود");
     const [row] = await rawQuery<any>(`SELECT * FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
@@ -803,7 +816,9 @@ router.patch("/drivers/:id", requirePermission("fleet:update"), async (req, res)
   } catch (err) { handleRouteError(err, res, "Update driver error:"); }
 });
 
-router.delete("/drivers/:id", requirePermission("fleet:delete"), async (req, res) => {
+// Drivers fall under the parent "fleet" feature; no dedicated catalog
+// entry yet. Delete checks scope against the drivers table.
+router.delete("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "delete", resource: { table: "drivers", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -821,7 +836,8 @@ router.delete("/drivers/:id", requirePermission("fleet:delete"), async (req, res
       throw new ConflictError("لا يمكن حذف السائق — توجد رحلة نشطة مسندة إليه", { field: "status", fix: "أنهِ أو ألغِ الرحلة النشطة قبل حذف السائق" });
     }
 
-    await rawExecute(`UPDATE fleet_drivers SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE fleet_drivers SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود");
 
     emitEvent({
       companyId: scope.companyId,
@@ -844,15 +860,16 @@ router.delete("/drivers/:id", requirePermission("fleet:delete"), async (req, res
   } catch (err) { handleRouteError(err, res, "Delete driver error:"); }
 });
 
-router.get("/trips", requirePermission("fleet:read"), async (req, res) => {
+router.get("/trips", authorize({ feature: "fleet.trips", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { status } = req.query as any;
+    const { status, search } = req.query as any;
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 't."companyId"', branchColumn: 't."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (status) { where += ` AND t.status = $${paramIdx}`; params.push(status); paramIdx++; }
+    if (search) { params.push(`%${search}%`); where += ` AND (v."plateNumber" ILIKE $${paramIdx} OR d.name ILIKE $${paramIdx})`; paramIdx++; }
     const rows = await rawQuery<any>(
       `SELECT t.*, t."fromLocation" AS origin, t."toLocation" AS destination, t."startTime" AS "tripDate",
               v."plateNumber", v."plateNumber" AS "vehiclePlate", d.name AS "driverName"
@@ -863,7 +880,9 @@ router.get("/trips", requirePermission("fleet:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Fleet trips error:"); }
 });
 
-router.get("/trips/:id", requirePermission("fleet:read"), async (req, res) => {
+// RBAC v2: trip detail. Drivers can have scope=self via fleet.trips.my
+// (self-service) for their own trips; managers via fleet.trips at branch.
+router.get("/trips/:id", authorize({ feature: "fleet.trips", action: "view", resource: { table: "trips", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const tripId = parseId(req.params.id, "id");
@@ -871,8 +890,8 @@ router.get("/trips/:id", requirePermission("fleet:read"), async (req, res) => {
       `SELECT t.*, t."fromLocation" AS origin, t."toLocation" AS destination, t."startTime" AS "tripDate",
               v."plateNumber", v."plateNumber" AS "vehiclePlate", d.name AS "driverName"
        FROM fleet_trips t
-       LEFT JOIN fleet_vehicles v ON v.id = t."vehicleId"
-       LEFT JOIN fleet_drivers d ON d.id = t."driverId"
+       LEFT JOIN fleet_vehicles v ON v.id = t."vehicleId" AND v."deletedAt" IS NULL
+       LEFT JOIN fleet_drivers d ON d.id = t."driverId" AND d."deletedAt" IS NULL
        WHERE t.id = $1 AND t."companyId" = $2 AND t."deletedAt" IS NULL`,
       [tripId, scope.companyId]
     );
@@ -881,7 +900,7 @@ router.get("/trips/:id", requirePermission("fleet:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Get trip error:"); }
 });
 
-router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
+router.post("/trips", authorize({ feature: "fleet.trips", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createTripSchema.safeParse(req.body));
@@ -889,7 +908,7 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
     if (b.vehicleId) {
       const [vehicle] = await rawQuery<any>(
         `SELECT v.id, v."assignedDriverId", v.status,
-                (SELECT MAX(fi."endDate") FROM fleet_insurance fi WHERE fi."vehicleId" = v.id) AS "insuranceEnd"
+                (SELECT MAX(fi."endDate") FROM fleet_insurance fi WHERE fi."vehicleId" = v.id AND fi."companyId" = v."companyId" AND fi."deletedAt" IS NULL) AS "insuranceEnd"
          FROM fleet_vehicles v WHERE v.id = $1 AND v."companyId" = $2 AND v."deletedAt" IS NULL`,
         [b.vehicleId, scope.companyId]
       );
@@ -932,8 +951,8 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
     if (!selectedVehicleId) {
       const vehicles = await rawQuery<any>(
         `SELECT v.*,
-                (SELECT COUNT(*) FROM fleet_trips WHERE "vehicleId"=v.id AND status='completed') AS "tripCount",
-                (SELECT MAX("endDate") FROM fleet_insurance WHERE "vehicleId"=v.id) AS "insuranceEnd"
+                (SELECT COUNT(*) FROM fleet_trips WHERE "vehicleId"=v.id AND status='completed' AND "deletedAt" IS NULL) AS "tripCount",
+                (SELECT MAX("endDate") FROM fleet_insurance WHERE "vehicleId"=v.id AND "companyId"=v."companyId" AND "deletedAt" IS NULL) AS "insuranceEnd"
          FROM fleet_vehicles v
          WHERE v."companyId"=$1 AND v.status='available' AND v."deletedAt" IS NULL
          ORDER BY v.id LIMIT 20`,
@@ -961,8 +980,8 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
     if (!selectedDriverId) {
       const drivers = await rawQuery<any>(
         `SELECT d.*,
-                (SELECT COUNT(*) FROM fleet_trips WHERE "driverId"=d.id AND status='completed') AS "tripCount",
-                (SELECT COUNT(*) FROM fleet_trips WHERE "driverId"=d.id AND status='in_progress') AS "activeTrips",
+                (SELECT COUNT(*) FROM fleet_trips WHERE "driverId"=d.id AND status='completed' AND "deletedAt" IS NULL) AS "tripCount",
+                (SELECT COUNT(*) FROM fleet_trips WHERE "driverId"=d.id AND status='in_progress' AND "deletedAt" IS NULL) AS "activeTrips",
                 COALESCE(d.rating, 3) AS "driverRating"
          FROM fleet_drivers d
          WHERE d."companyId"=$1 AND d.status='available'
@@ -1003,7 +1022,7 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
     if (selectedVehicleId && !b.vehicleId) {
       const [autoVehicle] = await rawQuery<any>(
         `SELECT v.id,
-                (SELECT MAX(fi."endDate") FROM fleet_insurance fi WHERE fi."vehicleId" = v.id) AS "insuranceEnd"
+                (SELECT MAX(fi."endDate") FROM fleet_insurance fi WHERE fi."vehicleId" = v.id AND fi."companyId" = v."companyId" AND fi."deletedAt" IS NULL) AS "insuranceEnd"
          FROM fleet_vehicles v WHERE v.id = $1 AND v."companyId" = $2 AND v."deletedAt" IS NULL`,
         [selectedVehicleId, scope.companyId]
       );
@@ -1028,6 +1047,11 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
       });
     }
 
+    if (b.clientId) {
+      const [cl] = await rawQuery<{ id: number }>(`SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`, [b.clientId, scope.companyId]);
+      if (!cl) throw new ValidationError("العميل غير موجود", { field: "clientId", fix: "اختر عميلاً من قائمة العملاء." });
+    }
+
     const fuelPricePerLiter = b.fuelPricePerLiter || 2.5;
     const fuelEfficiency = 10;
     const estimatedFuelCost = (estimatedDistanceKm / fuelEfficiency) * fuelPricePerLiter;
@@ -1043,10 +1067,12 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
       const tripId = tripResult.rows[0]?.id;
 
       if (selectedVehicleId) {
-        await client.query(`UPDATE fleet_vehicles SET status='in_use', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='available'`, [selectedVehicleId, scope.companyId]);
+        const vResult = await client.query(`UPDATE fleet_vehicles SET status='in_use', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='available' AND "deletedAt" IS NULL`, [selectedVehicleId, scope.companyId]);
+        if (!vResult.rowCount) throw new NotFoundError("المركبة غير موجودة أو حالتها غير مناسبة");
       }
       if (selectedDriverId) {
-        await client.query(`UPDATE fleet_drivers SET status='on_trip' WHERE id=$1 AND "companyId"=$2 AND status='available'`, [selectedDriverId, scope.companyId]);
+        const dResult = await client.query(`UPDATE fleet_drivers SET status='on_trip' WHERE id=$1 AND "companyId"=$2 AND status='available' AND "deletedAt" IS NULL`, [selectedDriverId, scope.companyId]);
+        if (!dResult.rowCount) throw new NotFoundError("السائق غير موجود أو حالته غير مناسبة");
       }
 
       return tripId;
@@ -1056,8 +1082,8 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
       try {
         const [driverEmp] = await rawQuery<any>(
           `SELECT d."employeeId", ea.id AS "assignmentId" FROM fleet_drivers d
-           LEFT JOIN employee_assignments ea ON ea."employeeId"=d."employeeId" AND ea.status='active'
-           WHERE d.id=$1 AND d."deletedAt" IS NULL`, [selectedDriverId]);
+           LEFT JOIN employee_assignments ea ON ea."employeeId"=d."employeeId" AND ea.status='active' AND ea."companyId"=$2
+           WHERE d.id=$1 AND d."companyId"=$2 AND d."deletedAt" IS NULL`, [selectedDriverId, scope.companyId]);
         if (driverEmp?.assignmentId) {
           createNotification({
             companyId: scope.companyId,
@@ -1081,7 +1107,7 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
       after: { vehicleId: selectedVehicleId, driverId: selectedDriverId, distance: estimatedDistanceKm, cost: totalEstimatedCost },
     }).catch((e) => logger.error(e, "fleet background task failed"));
 
-    const [row] = await rawQuery<any>(`SELECT * FROM fleet_trips WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_trips WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fleet.trip.created", entity: "fleet_trips", entityId: insertId,
@@ -1096,13 +1122,13 @@ router.post("/trips", requirePermission("fleet:create"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create trip error:"); }
 });
 
-router.post("/trips/:id/complete", requirePermission("fleet:update"), async (req, res) => {
+router.post("/trips/:id/complete", authorize({ feature: "fleet.trips", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const tripId = parseId(req.params.id, "id");
     const b = zodParse(completeTripSchema.safeParse(req.body));
 
-    const [trip] = await rawQuery<any>(`SELECT * FROM fleet_trips WHERE id=$1 AND "companyId"=$2`, [tripId, scope.companyId]);
+    const [trip] = await rawQuery<any>(`SELECT * FROM fleet_trips WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [tripId, scope.companyId]);
     if (!trip) throw new NotFoundError("الرحلة غير موجودة");
     if (trip.status === "completed") {
       throw new ValidationError("الرحلة مكتملة بالفعل", {
@@ -1137,10 +1163,12 @@ router.post("/trips/:id/complete", requirePermission("fleet:update"), async (req
       setExtras: { endTime: { raw: "NOW()" }, distance: actualDistanceKm, cost: totalCost },
       onApply: async (_row, client) => {
         if (trip.vehicleId) {
-          await client.query(`UPDATE fleet_vehicles SET status='available', "currentMileage"="currentMileage"+$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND status='in_use'`, [actualDistanceKm, trip.vehicleId, scope.companyId]);
+          const vRes = await client.query(`UPDATE fleet_vehicles SET status='available', "currentMileage"="currentMileage"+$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND status='in_use' AND "deletedAt" IS NULL`, [actualDistanceKm, trip.vehicleId, scope.companyId]);
+          if (!vRes.rowCount) logger.warn({ vehicleId: trip.vehicleId }, "trip complete: vehicle status reset affected 0 rows");
         }
         if (trip.driverId) {
-          await client.query(`UPDATE fleet_drivers SET status='available', "totalTrips"=COALESCE("totalTrips",0)+1 WHERE id=$1 AND "companyId"=$2 AND status='on_trip'`, [trip.driverId, scope.companyId]);
+          const dRes = await client.query(`UPDATE fleet_drivers SET status='available', "totalTrips"=COALESCE("totalTrips",0)+1 WHERE id=$1 AND "companyId"=$2 AND status='on_trip' AND "deletedAt" IS NULL`, [trip.driverId, scope.companyId]);
+          if (!dRes.rowCount) logger.warn({ driverId: trip.driverId }, "trip complete: driver status reset affected 0 rows");
         }
       },
     });
@@ -1177,7 +1205,7 @@ router.post("/trips/:id/complete", requirePermission("fleet:update"), async (req
       details: JSON.stringify({ status: "completed", distance: actualDistanceKm, cost: totalCost, fuelCost: actualFuelCost, driverFare, depreciation, journalEntryId }),
     }).catch((e) => logger.error(e, "fleet background task failed"));
 
-    const [updated] = await rawQuery<any>(`SELECT * FROM fleet_trips WHERE id=$1 AND "companyId"=$2`, [tripId, scope.companyId]);
+    const [updated] = await rawQuery<any>(`SELECT * FROM fleet_trips WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [tripId, scope.companyId]);
     res.json({
       ...updated,
       event: 'fleet.trip.completed',
@@ -1188,7 +1216,7 @@ router.post("/trips/:id/complete", requirePermission("fleet:update"), async (req
 });
 
 /** Cancel a trip — frees vehicle+driver via the lifecycle engine, no cost posted */
-router.post("/trips/:id/cancel", requirePermission("fleet:update"), async (req, res) => {
+router.post("/trips/:id/cancel", authorize({ feature: "fleet.trips", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const tripId = parseId(req.params.id, "id");
@@ -1218,13 +1246,13 @@ router.post("/trips/:id/cancel", requirePermission("fleet:update"), async (req, 
         // Release vehicle and driver so the resources come back to the pool.
         if (row.vehicleId) {
           await client.query(
-            `UPDATE fleet_vehicles SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='in_use'`,
+            `UPDATE fleet_vehicles SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='in_use' AND "deletedAt" IS NULL`,
             [row.vehicleId, scope.companyId]
           );
         }
         if (row.driverId) {
           await client.query(
-            `UPDATE fleet_drivers SET status='available' WHERE id=$1 AND "companyId"=$2 AND status='on_trip'`,
+            `UPDATE fleet_drivers SET status='available' WHERE id=$1 AND "companyId"=$2 AND status='on_trip' AND "deletedAt" IS NULL`,
             [row.driverId, scope.companyId]
           );
         }
@@ -1250,7 +1278,7 @@ router.post("/trips/:id/cancel", requirePermission("fleet:update"), async (req, 
   }
 });
 
-router.post("/trips/:id/waypoints", requirePermission("fleet:update"), async (req, res) => {
+router.post("/trips/:id/waypoints", authorize({ feature: "fleet.trips", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const tripId = parseId(req.params.id, "id");
@@ -1269,34 +1297,37 @@ router.post("/trips/:id/waypoints", requirePermission("fleet:update"), async (re
       throw new ValidationError("إحداثيات النقطة مطلوبة", { field: "lat", fix: "أرسل lat و lon (أو latitude و longitude) في جسم الطلب" });
     }
     const { insertId } = await rawExecute(
-      `INSERT INTO fleet_gps_tracking ("vehicleId","driverId",latitude,longitude,speed,"recordedAt") VALUES ($1,$2,$3,$4,$5,NOW())`,
-      [trip.vehicleId, trip.driverId, lat, lon, b.speed || 0]
+      `INSERT INTO fleet_gps_tracking ("vehicleId","driverId",latitude,longitude,speed,"recordedAt","companyId") VALUES ($1,$2,$3,$4,$5,NOW(),$6)`,
+      [trip.vehicleId, trip.driverId, lat, lon, b.speed || 0, scope.companyId]
     );
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "fleet.trip.waypoint_added", entity: "fleet_trip_waypoints", entityId: insertId,
+      action: "fleet.trip.waypoint_added", entity: "fleet_gps_tracking", entityId: insertId,
       details: JSON.stringify({ tripId, lat, lon }),
     }).catch((e) => logger.error(e, "fleet background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "create", entity: "fleet_trip_waypoints", entityId: insertId,
+      action: "create", entity: "fleet_gps_tracking", entityId: insertId,
       after: { tripId, lat, lon, speed: b.speed || 0 },
     }).catch((e) => logger.error(e, "fleet background task failed"));
 
-    res.status(201).json({ id: insertId, tripId, lat, lon });
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_gps_tracking WHERE id=$1`, [insertId]);
+    res.status(201).json(row || { id: insertId, tripId, lat, lon });
   } catch (err) { handleRouteError(err, res, "Waypoint error:"); }
 });
 
-router.get("/maintenance", requirePermission("fleet:read"), async (req, res) => {
+router.get("/maintenance", authorize({ feature: "fleet.maintenance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { vehicleId } = req.query as any;
+    const { vehicleId, search, status } = req.query as any;
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'm."companyId"', branchColumn: 'm."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (vehicleId) { where += ` AND m."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId) || 0); paramIdx++; }
+    if (search) { params.push(`%${search}%`); where += ` AND (v."plateNumber" ILIKE $${paramIdx} OR m.description ILIKE $${paramIdx})`; paramIdx++; }
+    if (status) { where += ` AND m.status = $${paramIdx}`; params.push(status); paramIdx++; }
     const rows = await rawQuery<any>(
       `SELECT m.*, m.type AS "maintenanceType", m.cost AS amount,
               m."serviceDate" AS "scheduledDate", m."serviceDate" AS date,
@@ -1304,14 +1335,14 @@ router.get("/maintenance", requirePermission("fleet:read"), async (req, res) => 
               m."performedBy" AS workshop,
               v."plateNumber", v."plateNumber" AS "vehiclePlateNumber", v."plateNumber" AS "vehiclePlate",
               v.make AS "vehicleMake", v.model AS "vehicleModel"
-       FROM fleet_maintenance m LEFT JOIN fleet_vehicles v ON v.id=m."vehicleId" WHERE ${where} AND m."deletedAt" IS NULL ORDER BY m.id DESC LIMIT 500`,
+       FROM fleet_maintenance m LEFT JOIN fleet_vehicles v ON v.id=m."vehicleId" AND v."deletedAt" IS NULL WHERE ${where} AND m."deletedAt" IS NULL ORDER BY m.id DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Fleet maintenance error:"); }
 });
 
-router.get("/maintenance/:id", requirePermission("fleet:read"), async (req, res): Promise<any> => {
+router.get("/maintenance/:id", authorize({ feature: "fleet.maintenance", action: "view" }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1324,7 +1355,7 @@ router.get("/maintenance/:id", requirePermission("fleet:read"), async (req, res)
               v."plateNumber", v."plateNumber" AS "vehiclePlateNumber",
               v.make AS "vehicleMake", v.model AS "vehicleModel"
        FROM fleet_maintenance m
-       LEFT JOIN fleet_vehicles v ON v.id=m."vehicleId"
+       LEFT JOIN fleet_vehicles v ON v.id=m."vehicleId" AND v."deletedAt" IS NULL
        WHERE m.id = $1 AND m."companyId" = $2 AND m."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -1333,7 +1364,7 @@ router.get("/maintenance/:id", requirePermission("fleet:read"), async (req, res)
   } catch (err) { handleRouteError(err, res, "Fleet maintenance detail error:"); }
 });
 
-router.post("/maintenance", requirePermission("fleet:create"), async (req, res) => {
+router.post("/maintenance", authorize({ feature: "fleet.maintenance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createMaintenanceSchema.safeParse(req.body)) as any;
@@ -1351,7 +1382,7 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
     }
 
     const mechanics = await rawQuery<any>(
-      `SELECT e.* FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active' WHERE e.status='active' ORDER BY e.id LIMIT 5`,
+      `SELECT e.* FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active' WHERE e.status='active' AND e."deletedAt" IS NULL ORDER BY e.id LIMIT 5`,
       [scope.companyId]
     );
     const assignedMechanic = b.performedBy || (mechanics[0]?.name ?? null);
@@ -1368,7 +1399,7 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
       const maintId = maintResult.rows[0]?.id;
 
       if (b.vehicleId) {
-        await client.query(`UPDATE fleet_vehicles SET status='maintenance', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='available'`, [b.vehicleId, scope.companyId]);
+        await client.query(`UPDATE fleet_vehicles SET status='maintenance', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='available' AND "deletedAt" IS NULL`, [b.vehicleId, scope.companyId]);
       }
 
       return maintId;
@@ -1381,7 +1412,7 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
       ).catch((e: unknown) => logger.error(e, "Fleet warehouse deduction error:"));
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     // Emit the creation event so listeners write audit + event_logs in one place.
     emitEvent({
@@ -1401,7 +1432,7 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
     }).catch((e) => logger.error(e, "fleet background task failed"));
 
     if (b.type && ["breakdown", "emergency"].includes(b.type)) {
-      const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1 AND "deletedAt" IS NULL`, [b.vehicleId]);
+      const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [b.vehicleId, scope.companyId]);
       emitEvent({
         companyId: scope.companyId, branchId: scope.branchId ?? 0, userId: scope.userId,
         action: "fleet.vehicle.breakdown", entity: "fleet_vehicles", entityId: b.vehicleId,
@@ -1413,7 +1444,7 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
     try {
       const serviceDate = new Date(b.serviceDate || new Date().toISOString());
       if (serviceDate > new Date()) {
-        const [veh] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1 AND "deletedAt" IS NULL`, [b.vehicleId]);
+        const [veh] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [b.vehicleId, scope.companyId]);
         await registerObligation({
           companyId: scope.companyId,
           branchId: scope.branchId ?? null,
@@ -1439,12 +1470,12 @@ router.post("/maintenance", requirePermission("fleet:create"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "Create maintenance error:"); }
 });
 
-router.post("/maintenance/:id/complete", requirePermission("fleet:update"), async (req, res) => {
+router.post("/maintenance/:id/complete", authorize({ feature: "fleet.maintenance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(completeMaintenanceSchema.safeParse(req.body));
-    const [m] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [m] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!m) throw new NotFoundError("سجل الصيانة غير موجود");
     if (m.status === "completed") {
       throw new ValidationError("سجل الصيانة مكتمل بالفعل", {
@@ -1469,14 +1500,14 @@ router.post("/maintenance/:id/complete", requirePermission("fleet:update"), asyn
       setExtras: { cost: finalCost },
       onApply: async (_row, client) => {
         if (m.vehicleId) {
-          await client.query(`UPDATE fleet_vehicles SET status='available', "lastMaintenanceDate"=NOW(), "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='maintenance'`, [m.vehicleId, scope.companyId]);
+          await client.query(`UPDATE fleet_vehicles SET status='available', "lastMaintenanceDate"=NOW(), "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='maintenance' AND "deletedAt" IS NULL`, [m.vehicleId, scope.companyId]);
         }
       },
     });
 
     // Auto journal entry for maintenance cost
     if (finalCost > 0) {
-      const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1 AND "deletedAt" IS NULL`, [m.vehicleId]);
+      const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [m.vehicleId, scope.companyId]);
       const plateLabel = vehicle?.plateNumber ? ` / ${vehicle.plateNumber}` : "";
       const { fleetEngine } = await import("../lib/engines/index.js");
       await fleetEngine.postMaintenanceGL(
@@ -1489,7 +1520,7 @@ router.post("/maintenance/:id/complete", requirePermission("fleet:update"), asyn
     try {
       await markObligationMet(scope.companyId, "fleet_maintenance", id, "maintenance");
       if (m.nextServiceDate) {
-        const [veh] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1 AND "deletedAt" IS NULL`, [m.vehicleId]);
+        const [veh] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [m.vehicleId, scope.companyId]);
         const nextDate = new Date(m.nextServiceDate);
         await registerObligation({
           companyId: scope.companyId,
@@ -1525,12 +1556,12 @@ router.post("/maintenance/:id/complete", requirePermission("fleet:update"), asyn
 });
 
 /** Cancel a maintenance job — frees vehicle, no cost posted */
-router.post("/maintenance/:id/cancel", requirePermission("fleet:update"), async (req, res) => {
+router.post("/maintenance/:id/cancel", authorize({ feature: "fleet.maintenance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(cancelMaintenanceSchema.safeParse(req.body ?? {}));
-    const [m] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [m] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!m) throw new NotFoundError("سجل الصيانة غير موجود");
     if (m.status === "completed") {
       throw new ValidationError("لا يمكن إلغاء صيانة مكتملة", {
@@ -1556,7 +1587,7 @@ router.post("/maintenance/:id/cancel", requirePermission("fleet:update"), async 
       setExtras: { description: `${(m as any).description || ""} | إلغاء: ${b.reason}`.trim() },
       onApply: async (_row, client) => {
         if (m.vehicleId) {
-          await client.query(`UPDATE fleet_vehicles SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='maintenance'`, [m.vehicleId, scope.companyId]);
+          await client.query(`UPDATE fleet_vehicles SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='maintenance' AND "deletedAt" IS NULL`, [m.vehicleId, scope.companyId]);
         }
       },
     });
@@ -1568,12 +1599,12 @@ router.post("/maintenance/:id/cancel", requirePermission("fleet:update"), async 
       after: { status: "cancelled", reason: b.reason },
     }).catch((e) => logger.error(e, "fleet background task failed"));
 
-    const [updated] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [updated] = await rawQuery<any>(`SELECT * FROM fleet_maintenance WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json({ ...updated, event: "fleet.maintenance.cancelled" });
   } catch (err) { handleRouteError(err, res, "Cancel maintenance error:"); }
 });
 
-router.get("/alerts", requirePermission("fleet:read"), async (req, res) => {
+router.get("/alerts", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -1586,13 +1617,67 @@ router.get("/alerts", requirePermission("fleet:read"), async (req, res) => {
     const in30Days = new Date(today); in30Days.setDate(today.getDate() + 30);
     const in90Days = new Date(today); in90Days.setDate(today.getDate() + 90);
 
-    const allInsurance = await rawQuery<any>(
-      `SELECT v."plateNumber", i."endDate", i.type AS "insuranceType",
-              (i."endDate"::date - CURRENT_DATE) AS "daysLeft"
-       FROM fleet_insurance i JOIN fleet_vehicles v ON v.id=i."vehicleId" AND v."deletedAt" IS NULL
-       WHERE i."companyId"=$1 AND i."deletedAt" IS NULL AND i."endDate" BETWEEN $2 AND $3`,
-      [cid, todayStr, toDateISO(in90Days)]
-    );
+    const in90Str = toDateISO(in90Days);
+    const [allInsurance, expiringLicenses, speedAlerts, abnormalFuel, frequentBreakdowns, lowRatingDrivers, oilDue] = await Promise.all([
+      rawQuery<any>(
+        `SELECT v."plateNumber", i."endDate", i.type AS "insuranceType",
+                (i."endDate"::date - CURRENT_DATE) AS "daysLeft"
+         FROM fleet_insurance i JOIN fleet_vehicles v ON v.id=i."vehicleId" AND v."deletedAt" IS NULL
+         WHERE i."companyId"=$1 AND i."deletedAt" IS NULL AND i."endDate" BETWEEN $2 AND $3`,
+        [cid, todayStr, in90Str]
+      ),
+      rawQuery<any>(
+        `SELECT d.name, d."licenseExpiry", d."licenseNumber",
+                (d."licenseExpiry"::date - CURRENT_DATE) AS "daysLeft"
+         FROM fleet_drivers d
+         WHERE d."companyId"=$1 AND d."licenseExpiry" IS NOT NULL
+           AND d."deletedAt" IS NULL
+           AND d."licenseExpiry" BETWEEN $2 AND $3`,
+        [cid, todayStr, in90Str]
+      ),
+      rawQuery<any>(
+        `SELECT g.speed, g.latitude, g.longitude, g."recordedAt",
+                v."plateNumber", d.name AS "driverName"
+         FROM fleet_gps_tracking g
+         LEFT JOIN fleet_vehicles v ON v.id=g."vehicleId" AND v."companyId"=$1 AND v."deletedAt" IS NULL
+         LEFT JOIN fleet_drivers d ON d.id=g."driverId" AND d."companyId"=$1 AND d."deletedAt" IS NULL
+         WHERE g.speed > 120 AND g."recordedAt" > NOW() - INTERVAL '24 hours'
+           AND v."companyId" = $1
+         ORDER BY g."recordedAt" DESC LIMIT 50`,
+        [cid]
+      ),
+      rawQuery<any>(
+        `SELECT v."plateNumber", v.id AS "vehicleId",
+                AVG(f.liters) AS "avgLiters",
+                MAX(f.liters) AS "maxLiters"
+         FROM fleet_fuel_logs f
+         JOIN fleet_vehicles v ON v.id=f."vehicleId" AND v."deletedAt" IS NULL
+         WHERE f."companyId"=$1 AND f."fuelDate" > CURRENT_DATE - INTERVAL '30 days'
+         GROUP BY v.id, v."plateNumber"
+         HAVING MAX(f.liters) > AVG(f.liters) * 1.2`,
+        [cid]
+      ),
+      rawQuery<any>(
+        `SELECT v."plateNumber", v.id AS "vehicleId", COUNT(m.id) AS "breakdownCount"
+         FROM fleet_maintenance m
+         JOIN fleet_vehicles v ON v.id=m."vehicleId" AND v."deletedAt" IS NULL
+         WHERE m."companyId"=$1 AND m."serviceDate" > CURRENT_DATE - INTERVAL '30 days'
+           AND m.type IN ('breakdown','emergency','repair')
+         GROUP BY v.id, v."plateNumber"
+         HAVING COUNT(m.id) >= 3`,
+        [cid]
+      ),
+      rawQuery<any>(
+        `SELECT d.name, d.rating, d.id FROM fleet_drivers d
+         WHERE d."companyId"=$1 AND d.rating IS NOT NULL AND d.rating < 3 AND d."deletedAt" IS NULL
+         LIMIT 500`,
+        [cid]
+      ),
+      rawQuery<any>(
+        `SELECT v."plateNumber", v."currentMileage", m."mileageAtService" FROM fleet_vehicles v LEFT JOIN fleet_maintenance m ON m.id=(SELECT id FROM fleet_maintenance WHERE "vehicleId"=v.id AND type='oil_change' ORDER BY "mileageAtService" DESC LIMIT 1) WHERE v."companyId"=$1 AND v."deletedAt" IS NULL AND (v."currentMileage" - COALESCE(m."mileageAtService",0)) >= 5000`,
+        [cid]
+      ),
+    ]);
     for (const r of allInsurance) {
       const daysLeft = Number(r.daysLeft);
       let severity: string;
@@ -1609,16 +1694,6 @@ router.get("/alerts", requirePermission("fleet:read"), async (req, res) => {
           : `تأمين المركبة ${r.plateNumber} ينتهي خلال ${daysLeft} يوم`,
       });
     }
-
-    const expiringLicenses = await rawQuery<any>(
-      `SELECT d.name, d."licenseExpiry", d."licenseNumber",
-              (d."licenseExpiry"::date - CURRENT_DATE) AS "daysLeft"
-       FROM fleet_drivers d
-       WHERE d."companyId"=$1 AND d."licenseExpiry" IS NOT NULL
-         AND d."deletedAt" IS NULL
-         AND d."licenseExpiry" BETWEEN $2 AND $3`,
-      [cid, todayStr, toDateISO(in90Days)]
-    );
     for (const d of expiringLicenses) {
       const daysLeft = Number(d.daysLeft);
       let severity = daysLeft <= 7 ? 'critical' : daysLeft <= 14 ? 'high' : daysLeft <= 30 ? 'medium' : 'low';
@@ -1628,18 +1703,6 @@ router.get("/alerts", requirePermission("fleet:read"), async (req, res) => {
         message: `رخصة السائق ${d.name} تنتهي خلال ${daysLeft} يوم`,
       });
     }
-
-    const speedAlerts = await rawQuery<any>(
-      `SELECT g.speed, g.latitude, g.longitude, g."recordedAt",
-              v."plateNumber", d.name AS "driverName"
-       FROM fleet_gps_tracking g
-       LEFT JOIN fleet_vehicles v ON v.id=g."vehicleId" AND v."companyId"=$1
-       LEFT JOIN fleet_drivers d ON d.id=g."driverId" AND d."companyId"=$1
-       WHERE g.speed > 120 AND g."recordedAt" > NOW() - INTERVAL '24 hours'
-         AND v."companyId" = $1
-       ORDER BY g."recordedAt" DESC LIMIT 50`,
-      [scope.companyId]
-    );
     for (const s of speedAlerts) {
       alerts.push({
         type: 'speed_violation', severity: 'high',
@@ -1648,18 +1711,6 @@ router.get("/alerts", requirePermission("fleet:read"), async (req, res) => {
         message: `تجاوز سرعة: ${s.driverName || 'غير معروف'} — ${s.speed} كم/س (المركبة ${s.plateNumber || 'غير محدد'})`,
       });
     }
-
-    const abnormalFuel = await rawQuery<any>(
-      `SELECT v."plateNumber", v.id AS "vehicleId",
-              AVG(f.liters) AS "avgLiters",
-              MAX(f.liters) AS "maxLiters"
-       FROM fleet_fuel_logs f
-       JOIN fleet_vehicles v ON v.id=f."vehicleId"
-       WHERE f."companyId"=$1 AND f."fuelDate" > CURRENT_DATE - INTERVAL '30 days'
-       GROUP BY v.id, v."plateNumber"
-       HAVING MAX(f.liters) > AVG(f.liters) * 1.2`,
-      [cid]
-    );
     for (const r of abnormalFuel) {
       alerts.push({
         type: 'abnormal_fuel', severity: 'medium', vehicle: r.plateNumber,
@@ -1667,17 +1718,6 @@ router.get("/alerts", requirePermission("fleet:read"), async (req, res) => {
         message: `وقود غير طبيعي: المركبة ${r.plateNumber} — أقصى ${Number(r.maxLiters).toFixed(1)} لتر (المتوسط ${Number(r.avgLiters).toFixed(1)}) تجاوز 120%`,
       });
     }
-
-    const frequentBreakdowns = await rawQuery<any>(
-      `SELECT v."plateNumber", v.id AS "vehicleId", COUNT(m.id) AS "breakdownCount"
-       FROM fleet_maintenance m
-       JOIN fleet_vehicles v ON v.id=m."vehicleId"
-       WHERE m."companyId"=$1 AND m."serviceDate" > CURRENT_DATE - INTERVAL '30 days'
-         AND m.type IN ('breakdown','emergency','repair')
-       GROUP BY v.id, v."plateNumber"
-       HAVING COUNT(m.id) >= 3`,
-      [cid]
-    );
     for (const r of frequentBreakdowns) {
       alerts.push({
         type: 'frequent_breakdowns', severity: 'high', vehicle: r.plateNumber,
@@ -1685,12 +1725,6 @@ router.get("/alerts", requirePermission("fleet:read"), async (req, res) => {
         message: `المركبة ${r.plateNumber} تعطلت ${r.breakdownCount} مرات خلال الشهر — يُنصح بالاستبعاد`,
       });
     }
-
-    const lowRatingDrivers = await rawQuery<any>(
-      `SELECT d.name, d.rating, d.id FROM fleet_drivers d
-       WHERE d."companyId"=$1 AND d.rating IS NOT NULL AND d.rating < 3 AND d."deletedAt" IS NULL`,
-      [cid]
-    );
     for (const d of lowRatingDrivers) {
       alerts.push({
         type: 'low_driver_rating', severity: 'medium', driver: d.name,
@@ -1698,35 +1732,32 @@ router.get("/alerts", requirePermission("fleet:read"), async (req, res) => {
         message: `تقييم السائق ${d.name} منخفض: ${Number(d.rating).toFixed(1)}/5 — يحتاج مراجعة`,
       });
     }
-
-    const oilDue = await rawQuery<any>(
-      `SELECT v."plateNumber", v."currentMileage", m."mileageAtService" FROM fleet_vehicles v LEFT JOIN fleet_maintenance m ON m.id=(SELECT id FROM fleet_maintenance WHERE "vehicleId"=v.id AND type='oil_change' ORDER BY "mileageAtService" DESC LIMIT 1) WHERE v."companyId"=$1 AND v."deletedAt" IS NULL AND (v."currentMileage" - COALESCE(m."mileageAtService",0)) >= 5000`,
-      [cid]
-    );
     oilDue.forEach((r: any) => alerts.push({ type: 'oil_change_due', severity: 'medium', vehicle: r.plateNumber, message: `تغيير زيت المركبة ${r.plateNumber} مستحق (الكيلومتراج: ${r.currentMileage})` }));
 
     res.json({ data: alerts, total: alerts.length, page: 1, pageSize: alerts.length });
   } catch (err) { handleRouteError(err, res, "Fleet alerts error:"); }
 });
 
-router.get("/fuel-logs", requirePermission("fleet:read"), async (req, res) => {
+router.get("/fuel-logs", authorize({ feature: "fleet.trips", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { vehicleId } = req.query as any;
+    const { vehicleId, search, status } = req.query as any;
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'f."companyId"', branchColumn: 'f."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (vehicleId) { where += ` AND f."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId) || 0); paramIdx++; }
+    if (search) { params.push(`%${search}%`); where += ` AND (v."plateNumber" ILIKE $${paramIdx} OR f."stationName" ILIKE $${paramIdx})`; paramIdx++; }
+    if (status) { where += ` AND f.status = $${paramIdx}`; params.push(status); paramIdx++; }
     const rows = await rawQuery<any>(
-      `SELECT f.*, f.liters AS quantity, f."totalCost" AS cost, f."mileageAtFuel" AS mileage, f."stationName" AS station, f."fuelDate" AS date, v."plateNumber", v."plateNumber" AS "vehiclePlate" FROM fleet_fuel_logs f LEFT JOIN fleet_vehicles v ON v.id=f."vehicleId" WHERE ${where} AND f."deletedAt" IS NULL ORDER BY f.id DESC LIMIT 1000`,
+      `SELECT f.*, f.liters AS quantity, f."totalCost" AS cost, f."mileageAtFuel" AS mileage, f."stationName" AS station, f."fuelDate" AS date, v."plateNumber", v."plateNumber" AS "vehiclePlate" FROM fleet_fuel_logs f LEFT JOIN fleet_vehicles v ON v.id=f."vehicleId" AND v."deletedAt" IS NULL WHERE ${where} AND f."deletedAt" IS NULL ORDER BY f.id DESC LIMIT 1000`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Fleet fuel error:"); }
 });
 
-router.get("/fuel-logs/:id", requirePermission("fleet:read"), async (req, res) => {
+router.get("/fuel-logs/:id", authorize({ feature: "fleet.trips", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1736,8 +1767,8 @@ router.get("/fuel-logs/:id", requirePermission("fleet:read"), async (req, res) =
               v."plateNumber", v.make AS "vehicleMake", v.model AS "vehicleModel",
               d.name AS "driverName"
        FROM fleet_fuel_logs f
-       LEFT JOIN fleet_vehicles v ON v.id=f."vehicleId"
-       LEFT JOIN fleet_drivers d ON d.id=f."driverId"
+       LEFT JOIN fleet_vehicles v ON v.id=f."vehicleId" AND v."deletedAt" IS NULL
+       LEFT JOIN fleet_drivers d ON d.id=f."driverId" AND d."deletedAt" IS NULL
        WHERE f.id = $1 AND f."companyId" = $2 AND f."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -1746,7 +1777,7 @@ router.get("/fuel-logs/:id", requirePermission("fleet:read"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "Fleet fuel detail error:"); }
 });
 
-router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) => {
+router.post("/fuel-logs", authorize({ feature: "fleet.trips", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createFuelLogSchema.safeParse(req.body)) as any;
@@ -1817,7 +1848,7 @@ router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) =>
 
     // Auto journal entry for fuel cost
     if (totalCost > 0) {
-      const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1 AND "deletedAt" IS NULL`, [resolvedVehicleId]);
+      const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [resolvedVehicleId, scope.companyId]);
       const plateLabel = vehicle?.plateNumber ? ` / ${vehicle.plateNumber}` : "";
       const { fleetEngine } = await import("../lib/engines/index.js");
       await fleetEngine.postFuelExpenseGL(
@@ -1826,7 +1857,7 @@ router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) =>
       ).catch((e: unknown) => logger.error(e, "Fuel GL failed:"));
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM fleet_fuel_logs WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_fuel_logs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fleet.fuel_log.created", entity: "fleet_fuel_logs", entityId: insertId,
@@ -1843,7 +1874,7 @@ router.post("/fuel-logs", requirePermission("fleet:create"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Create fuel log error:"); }
 });
 
-router.get("/insurance", requirePermission("fleet:read"), async (req, res) => {
+router.get("/insurance", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { vehicleId } = req.query as any;
@@ -1853,22 +1884,22 @@ router.get("/insurance", requirePermission("fleet:read"), async (req, res) => {
     let paramIdx = nextParamIndex;
     if (vehicleId) { where += ` AND i."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId) || 0); paramIdx++; }
     const rows = await rawQuery<any>(
-      `SELECT i.*, v."plateNumber" FROM fleet_insurance i LEFT JOIN fleet_vehicles v ON v.id=i."vehicleId" WHERE ${where} ORDER BY i."endDate" ASC LIMIT 500`,
+      `SELECT i.*, v."plateNumber" FROM fleet_insurance i LEFT JOIN fleet_vehicles v ON v.id=i."vehicleId" AND v."deletedAt" IS NULL WHERE ${where} AND i."deletedAt" IS NULL ORDER BY i."endDate" ASC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Fleet insurance error:"); }
 });
 
-router.get("/insurance/:id", requirePermission("fleet:read"), async (req, res) => {
+router.get("/insurance/:id", authorize({ feature: "fleet.vehicles", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
       `SELECT i.*, v."plateNumber", v.make AS "vehicleMake", v.model AS "vehicleModel"
        FROM fleet_insurance i
-       LEFT JOIN fleet_vehicles v ON v.id=i."vehicleId"
-       WHERE i.id = $1 AND i."companyId" = $2`,
+       LEFT JOIN fleet_vehicles v ON v.id=i."vehicleId" AND v."deletedAt" IS NULL
+       WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("سجل التأمين غير موجود");
@@ -1876,7 +1907,7 @@ router.get("/insurance/:id", requirePermission("fleet:read"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "Fleet insurance detail error:"); }
 });
 
-router.post("/insurance", requirePermission("fleet:create"), async (req, res) => {
+router.post("/insurance", authorize({ feature: "fleet.vehicles", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createInsuranceSchema.safeParse(req.body)) as any;
@@ -1909,7 +1940,7 @@ router.post("/insurance", requirePermission("fleet:create"), async (req, res) =>
 
     // Auto journal entry for insurance premium
     if (premium > 0) {
-      const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1 AND "deletedAt" IS NULL`, [b.vehicleId]);
+      const [vehicle] = await rawQuery<any>(`SELECT "plateNumber" FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [b.vehicleId, scope.companyId]);
       const plateLabel = vehicle?.plateNumber ? ` / ${vehicle.plateNumber}` : "";
       const insuranceType = b.type || b.insuranceType || 'comprehensive';
       const insuranceTypeLabel = insuranceType === 'comprehensive' ? 'شامل' : insuranceType === 'third_party' ? 'طرف ثالث' : insuranceType;
@@ -1920,7 +1951,7 @@ router.post("/insurance", requirePermission("fleet:create"), async (req, res) =>
       ).catch((e: unknown) => logger.error(e, "Insurance GL failed:"));
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM fleet_insurance WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_insurance WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fleet.insurance.created", entity: "fleet_insurance", entityId: insertId,
@@ -1937,7 +1968,7 @@ router.post("/insurance", requirePermission("fleet:create"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Create insurance error:"); }
 });
 
-router.patch("/trips/:id", requirePermission("fleet:update"), async (req, res) => {
+router.patch("/trips/:id", authorize({ feature: "fleet.trips", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2016,7 +2047,7 @@ router.patch("/trips/:id", requirePermission("fleet:update"), async (req, res) =
     }
     params.push(id, scope.companyId);
     const [row] = await rawQuery<any>(
-      `UPDATE fleet_trips SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
+      `UPDATE fleet_trips SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
     if (!row) throw new NotFoundError("الرحلة غير موجودة");
@@ -2047,7 +2078,7 @@ router.patch("/trips/:id", requirePermission("fleet:update"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "Update trip error:"); }
 });
 
-router.delete("/trips/:id", requirePermission("fleet:delete"), async (req, res) => {
+router.delete("/trips/:id", authorize({ feature: "fleet.trips", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2059,23 +2090,24 @@ router.delete("/trips/:id", requirePermission("fleet:delete"), async (req, res) 
     if (existing.status === "in_progress") {
       throw new ConflictError("لا يمكن حذف رحلة قيد التنفيذ", { field: "status", fix: "ألغِ الرحلة عبر /trips/:id/cancel أو أكملها قبل الحذف" });
     }
-    await rawExecute(`UPDATE fleet_trips SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await withTransaction(async (client) => {
+      await client.query(`UPDATE fleet_trips SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
 
-    // Release vehicle and driver if trip was scheduled/planned (not yet started)
-    if (["scheduled", "planned"].includes(existing.status)) {
-      if (existing.vehicleId) {
-        await rawExecute(
-          `UPDATE fleet_vehicles SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status IN ('in_use','on_trip')`,
-          [existing.vehicleId, scope.companyId]
-        );
+      if (["scheduled", "planned"].includes(existing.status)) {
+        if (existing.vehicleId) {
+          await client.query(
+            `UPDATE fleet_vehicles SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status IN ('in_use','on_trip') AND "deletedAt" IS NULL`,
+            [existing.vehicleId, scope.companyId]
+          );
+        }
+        if (existing.driverId) {
+          await client.query(
+            `UPDATE fleet_drivers SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='on_trip' AND "deletedAt" IS NULL`,
+            [existing.driverId, scope.companyId]
+          );
+        }
       }
-      if (existing.driverId) {
-        await rawExecute(
-          `UPDATE fleet_drivers SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='on_trip'`,
-          [existing.driverId, scope.companyId]
-        );
-      }
-    }
+    });
 
     emitEvent({
       companyId: scope.companyId,
@@ -2098,7 +2130,7 @@ router.delete("/trips/:id", requirePermission("fleet:delete"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "Delete trip error:"); }
 });
 
-router.patch("/maintenance/:id", requirePermission("fleet:update"), async (req, res) => {
+router.patch("/maintenance/:id", authorize({ feature: "fleet.maintenance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2168,7 +2200,7 @@ router.patch("/maintenance/:id", requirePermission("fleet:update"), async (req, 
     }
     params.push(id, scope.companyId);
     const [row] = await rawQuery<any>(
-      `UPDATE fleet_maintenance SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
+      `UPDATE fleet_maintenance SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
     if (!row) throw new NotFoundError("سجل الصيانة غير موجود");
@@ -2199,7 +2231,7 @@ router.patch("/maintenance/:id", requirePermission("fleet:update"), async (req, 
   } catch (err) { handleRouteError(err, res, "Update maintenance error:"); }
 });
 
-router.delete("/maintenance/:id", requirePermission("fleet:delete"), async (req, res) => {
+router.delete("/maintenance/:id", authorize({ feature: "fleet.maintenance", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2211,15 +2243,16 @@ router.delete("/maintenance/:id", requirePermission("fleet:delete"), async (req,
     if (existing.status === "in_progress") {
       throw new ConflictError("لا يمكن حذف صيانة قيد التنفيذ", { field: "status", fix: "ألغِ الصيانة عبر /maintenance/:id/cancel أو أكملها قبل الحذف" });
     }
-    await rawExecute(`UPDATE fleet_maintenance SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    await withTransaction(async (client) => {
+      await client.query(`UPDATE fleet_maintenance SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
 
-    // Release the vehicle if it was held for this maintenance record
-    if (existing.vehicleId) {
-      await rawExecute(
-        `UPDATE fleet_vehicles SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='maintenance'`,
-        [existing.vehicleId, scope.companyId]
-      );
-    }
+      if (existing.vehicleId) {
+        await client.query(
+          `UPDATE fleet_vehicles SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='maintenance' AND "deletedAt" IS NULL`,
+          [existing.vehicleId, scope.companyId]
+        );
+      }
+    });
 
     emitEvent({
       companyId: scope.companyId,
@@ -2242,7 +2275,7 @@ router.delete("/maintenance/:id", requirePermission("fleet:delete"), async (req,
   } catch (err) { handleRouteError(err, res, "Delete maintenance error:"); }
 });
 
-router.patch("/fuel-logs/:id", requirePermission("fleet:update"), async (req, res) => {
+router.patch("/fuel-logs/:id", authorize({ feature: "fleet.trips", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2293,7 +2326,7 @@ router.patch("/fuel-logs/:id", requirePermission("fleet:update"), async (req, re
     }
     params.push(id, scope.companyId);
     const [row] = await rawQuery<any>(
-      `UPDATE fleet_fuel_logs SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
+      `UPDATE fleet_fuel_logs SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
     if (!row) throw new NotFoundError("سجل الوقود غير موجود");
@@ -2318,7 +2351,7 @@ router.patch("/fuel-logs/:id", requirePermission("fleet:update"), async (req, re
   } catch (err) { handleRouteError(err, res, "Update fuel log error:"); }
 });
 
-router.delete("/fuel-logs/:id", requirePermission("fleet:delete"), async (req, res) => {
+router.delete("/fuel-logs/:id", authorize({ feature: "fleet.trips", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2327,7 +2360,8 @@ router.delete("/fuel-logs/:id", requirePermission("fleet:delete"), async (req, r
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("سجل الوقود غير موجود");
-    await rawExecute(`UPDATE fleet_fuel_logs SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE fleet_fuel_logs SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود");
 
     emitEvent({
       companyId: scope.companyId,
@@ -2349,12 +2383,12 @@ router.delete("/fuel-logs/:id", requirePermission("fleet:delete"), async (req, r
   } catch (err) { handleRouteError(err, res, "Delete fuel log error:"); }
 });
 
-router.patch("/insurance/:id", requirePermission("fleet:update"), async (req, res) => {
+router.patch("/insurance/:id", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
-      `SELECT * FROM fleet_insurance WHERE id=$1 AND "companyId"=$2`,
+      `SELECT * FROM fleet_insurance WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("سجل التأمين غير موجود");
@@ -2403,7 +2437,7 @@ router.patch("/insurance/:id", requirePermission("fleet:update"), async (req, re
     }
     params.push(id, scope.companyId);
     const [row] = await rawQuery<any>(
-      `UPDATE fleet_insurance SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
+      `UPDATE fleet_insurance SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
     if (!row) throw new NotFoundError("سجل التأمين غير موجود");
@@ -2428,13 +2462,14 @@ router.patch("/insurance/:id", requirePermission("fleet:update"), async (req, re
   } catch (err) { handleRouteError(err, res, "Update insurance error:"); }
 });
 
-router.delete("/insurance/:id", requirePermission("fleet:delete"), async (req, res) => {
+router.delete("/insurance/:id", authorize({ feature: "fleet.vehicles", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(`SELECT id FROM fleet_insurance WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT id FROM fleet_insurance WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("سجل التأمين غير موجود");
-    await rawExecute(`UPDATE fleet_insurance SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE fleet_insurance SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود");
 
     emitEvent({
       companyId: scope.companyId,
@@ -2456,17 +2491,19 @@ router.delete("/insurance/:id", requirePermission("fleet:delete"), async (req, r
   } catch (err) { handleRouteError(err, res, "Delete insurance error:"); }
 });
 
-router.get("/stats", requirePermission("fleet:read"), async (req, res) => {
+router.get("/stats", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [vehicles] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='available') as available, COUNT(*) FILTER (WHERE status='in_use') as "inUse", COUNT(*) FILTER (WHERE status='maintenance') as "inMaintenance" FROM fleet_vehicles WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [trips] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='completed') as completed FROM fleet_trips WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [fuel] = await rawQuery<any>(`SELECT COALESCE(SUM("totalCost"),0) as "totalFuelCost" FROM fleet_fuel_logs WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [insurance] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_insurance WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [maintenance] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_maintenance WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [drivers] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_drivers WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [alerts] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_maintenance WHERE "companyId"=$1 AND status='in_progress' AND "deletedAt" IS NULL`, [cid]);
+    const [[vehicles], [trips], [fuel], [insurance], [maintenance], [drivers], [alerts]] = await Promise.all([
+      rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='available') as available, COUNT(*) FILTER (WHERE status='in_use') as "inUse", COUNT(*) FILTER (WHERE status='maintenance') as "inMaintenance" FROM fleet_vehicles WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='completed') as completed FROM fleet_trips WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COALESCE(SUM("totalCost"),0) as "totalFuelCost" FROM fleet_fuel_logs WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_insurance WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_maintenance WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_drivers WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_maintenance WHERE "companyId"=$1 AND status='in_progress' AND "deletedAt" IS NULL`, [cid]),
+    ]);
     res.json({
       totalVehicles: Number(vehicles.total), availableVehicles: Number(vehicles.available),
       inUseVehicles: Number(vehicles.inUse), inMaintenanceVehicles: Number(vehicles.inMaintenance),
@@ -2483,7 +2520,7 @@ router.get("/stats", requirePermission("fleet:read"), async (req, res) => {
 // PREVENTIVE MAINTENANCE PLANS — خطة الصيانة الوقائية
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/preventive-plans", requirePermission("fleet:read"), async (req, res) => {
+router.get("/preventive-plans", authorize({ feature: "fleet.maintenance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { vehicleId } = req.query as any;
@@ -2493,8 +2530,8 @@ router.get("/preventive-plans", requirePermission("fleet:read"), async (req, res
     const rows = await rawQuery<any>(
       `SELECT p.*, v."plateNumber", v."currentMileage"
        FROM fleet_preventive_plans p
-       JOIN fleet_vehicles v ON v.id=p."vehicleId"
-       WHERE ${conditions.join(" AND ")}
+       JOIN fleet_vehicles v ON v.id=p."vehicleId" AND v."deletedAt" IS NULL
+       WHERE ${conditions.join(" AND ")} AND p."deletedAt" IS NULL
        ORDER BY p."nextServiceDate" ASC LIMIT 500`,
       params
     );
@@ -2502,7 +2539,7 @@ router.get("/preventive-plans", requirePermission("fleet:read"), async (req, res
   } catch (err) { handleRouteError(err, res, "Preventive plans error:"); }
 });
 
-router.post("/preventive-plans", requirePermission("fleet:create"), async (req, res) => {
+router.post("/preventive-plans", authorize({ feature: "fleet.maintenance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createPreventivePlanSchema.safeParse(req.body));
@@ -2575,7 +2612,7 @@ router.post("/preventive-plans", requirePermission("fleet:create"), async (req, 
   } catch (err) { handleRouteError(err, res, "Create preventive plan error:"); }
 });
 
-router.patch("/preventive-plans/:id", requirePermission("fleet:update"), async (req, res) => {
+router.patch("/preventive-plans/:id", authorize({ feature: "fleet.maintenance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2586,8 +2623,8 @@ router.patch("/preventive-plans/:id", requirePermission("fleet:update"), async (
     // Fetch existing plan to recompute due values when last service is updated
     const [existing] = await rawQuery<any>(
       `SELECT p.*, v."currentMileage" FROM fleet_preventive_plans p
-       JOIN fleet_vehicles v ON v.id=p."vehicleId"
-       WHERE p.id=$1 AND p."companyId"=$2`,
+       JOIN fleet_vehicles v ON v.id=p."vehicleId" AND v."deletedAt" IS NULL
+       WHERE p.id=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("الخطة غير موجودة");
@@ -2621,7 +2658,7 @@ router.patch("/preventive-plans/:id", requirePermission("fleet:update"), async (
     if (sets.length === 1) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<any>(
-      `UPDATE fleet_preventive_plans SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
+      `UPDATE fleet_preventive_plans SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
     if (!rows[0]) throw new NotFoundError("الخطة غير موجودة");
@@ -2653,7 +2690,7 @@ router.patch("/preventive-plans/:id", requirePermission("fleet:update"), async (
 // TRAFFIC VIOLATIONS — مخالفات مرورية
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/traffic-violations", requirePermission("fleet:read"), async (req, res) => {
+router.get("/traffic-violations", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { vehicleId, driverId } = req.query as any;
@@ -2674,7 +2711,7 @@ router.get("/traffic-violations", requirePermission("fleet:read"), async (req, r
   } catch (err) { handleRouteError(err, res, "Traffic violations error:"); }
 });
 
-router.get("/traffic-violations/:id", requirePermission("fleet:read"), async (req, res): Promise<any> => {
+router.get("/traffic-violations/:id", authorize({ feature: "fleet.vehicles", action: "view" }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2691,7 +2728,7 @@ router.get("/traffic-violations/:id", requirePermission("fleet:read"), async (re
   } catch (err) { handleRouteError(err, res, "Traffic violation detail error:"); }
 });
 
-router.post("/traffic-violations", requirePermission("fleet:create"), async (req, res) => {
+router.post("/traffic-violations", authorize({ feature: "fleet.vehicles", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createTrafficViolationSchema.safeParse(req.body));
@@ -2824,17 +2861,17 @@ router.post("/traffic-violations", requirePermission("fleet:create"), async (req
       details: `${b.violationType} — ${fineAmount} ﷼ — ${liability === 'driver' ? 'على السائق' : 'على الشركة'}`,
     }).catch((e) => logger.error(e, "fleet background task failed"));
 
-    const [row] = await rawQuery<any>(`SELECT * FROM fleet_traffic_violations WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_traffic_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     res.status(201).json({ ...row, journalEntryId, liability });
   } catch (err) { handleRouteError(err, res, "Create traffic violation error:"); }
 });
 
-router.patch("/traffic-violations/:id/pay", requirePermission("fleet:update"), async (req, res) => {
+router.patch("/traffic-violations/:id/pay", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<any>(
-      `SELECT * FROM fleet_traffic_violations WHERE id=$1 AND "companyId"=$2`,
+      `SELECT * FROM fleet_traffic_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("المخالفة غير موجودة");
@@ -2891,7 +2928,7 @@ router.patch("/traffic-violations/:id/pay", requirePermission("fleet:update"), a
     }).catch((e) => logger.error(e, "fleet background task failed"));
 
 
-    const [row] = await rawQuery<any>(`SELECT * FROM fleet_traffic_violations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM fleet_traffic_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Pay violation error:"); }
 });
@@ -2900,14 +2937,14 @@ router.patch("/traffic-violations/:id/pay", requirePermission("fleet:update"), a
 // TCO ANALYSIS — تحليل التكلفة الكلية للمركبة
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/vehicles/:id/tco", requirePermission("fleet:read"), async (req, res) => {
+router.get("/vehicles/:id/tco", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const vehicleId = parseId(req.params.id, "id");
 
     const [vehicle] = await rawQuery<any>(
       `SELECT v.*, d.name AS "driverName"
-       FROM fleet_vehicles v LEFT JOIN fleet_drivers d ON d.id=v."assignedDriverId"
+       FROM fleet_vehicles v LEFT JOIN fleet_drivers d ON d.id=v."assignedDriverId" AND d."deletedAt" IS NULL
        WHERE v.id=$1 AND v."companyId"=$2 AND v."deletedAt" IS NULL`,
       [vehicleId, scope.companyId]
     );
@@ -2916,25 +2953,25 @@ router.get("/vehicles/:id/tco", requirePermission("fleet:read"), async (req, res
     const [fuelCost] = await rawQuery<any>(
       `SELECT COALESCE(SUM("totalCost"),0) AS total, COALESCE(SUM(liters),0) AS liters,
               COALESCE(SUM(CASE WHEN "mileageAtFuel" IS NOT NULL THEN "totalCost" ELSE 0 END),0) AS "withMileage"
-       FROM fleet_fuel_logs WHERE "vehicleId"=$1`,
-      [vehicleId]
+       FROM fleet_fuel_logs WHERE "vehicleId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [vehicleId, scope.companyId]
     );
     const [maintenanceCost] = await rawQuery<any>(
-      `SELECT COALESCE(SUM(cost),0) AS total FROM fleet_maintenance WHERE "vehicleId"=$1 AND "deletedAt" IS NULL`,
-      [vehicleId]
+      `SELECT COALESCE(SUM(cost),0) AS total FROM fleet_maintenance WHERE "vehicleId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [vehicleId, scope.companyId]
     );
     const [insuranceCost] = await rawQuery<any>(
-      `SELECT COALESCE(SUM(premium),0) AS total FROM fleet_insurance WHERE "vehicleId"=$1`,
-      [vehicleId]
+      `SELECT COALESCE(SUM(premium),0) AS total FROM fleet_insurance WHERE "vehicleId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [vehicleId, scope.companyId]
     );
     const [tripRevenue] = await rawQuery<any>(
       `SELECT COALESCE(SUM(cost),0) AS revenue, COUNT(*) AS trips,
               COALESCE(SUM(distance),0) AS "totalKm"
-       FROM fleet_trips WHERE "vehicleId"=$1 AND status='completed'`,
-      [vehicleId]
+       FROM fleet_trips WHERE "vehicleId"=$1 AND "companyId"=$2 AND status='completed' AND "deletedAt" IS NULL`,
+      [vehicleId, scope.companyId]
     );
     const [trafficFines] = await rawQuery<any>(
-      `SELECT COALESCE(SUM("fineAmount"),0) AS total FROM fleet_traffic_violations WHERE "vehicleId"=$1 AND "companyId"=$2`,
+      `SELECT COALESCE(SUM("fineAmount"),0) AS total FROM fleet_traffic_violations WHERE "vehicleId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [vehicleId, scope.companyId]
     );
 

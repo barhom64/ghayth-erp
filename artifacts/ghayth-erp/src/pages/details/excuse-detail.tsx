@@ -7,13 +7,13 @@ import { EntityPrintButton, type PrintSection } from "@/components/shared/entity
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
-import { EntityDocuments } from "@/components/shared/entity-documents";
-import { ApprovalTimeline } from "@/components/shared/approval-timeline";
+
 import { Edit, Clock } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "معلق",
@@ -33,6 +33,7 @@ export default function ExcuseDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/hr/excuse-requests/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("excuse_request", id ?? 0);
   const { toast } = useToast();
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
@@ -207,18 +208,6 @@ export default function ExcuseDetail() {
         )}
       </div>
 
-      {/* Documents */}
-      {id && (
-        <EntityDocuments entityType="excuse" entityId={id} />
-      )}
-
-      {/* Approval Timeline */}
-      {id && (
-        <ApprovalTimeline entityType="excuse" entityId={id} />
-      )}
-
-      {id && <EntityComments entityType="excuse" entityId={id} />}
-      {id && <EntityTags entityType="excuse" entityId={id} />}
     </div>
   );
 
@@ -241,6 +230,8 @@ export default function ExcuseDetail() {
       entityType="excuse"
       entityId={id ?? 0}
       overview={overview}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       isLoading={isLoading}
       error={error}
       onRetry={refetch}

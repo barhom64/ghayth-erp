@@ -1,13 +1,33 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
+
+// Local row shape for cost_centers (not in @workspace/db schema yet).
+interface CostCenterRow {
+  id: number;
+  companyId: number;
+  code?: string | null;
+  name: string;
+  type: string;
+  parentId?: number | null;
+  relatedEntityType?: string | null;
+  relatedEntityId?: number | null;
+  allocatedAmount?: number | string | null;
+  status: string;
+  createdAt: string;
+  updatedAt?: string | null;
+}
+
+interface CostCenterListRow extends CostCenterRow {
+  relatedEntityName?: string | null;
+}
 
 const router = Router();
 
@@ -34,32 +54,33 @@ const updateCostCenterSchema = z.object({
   status: z.string().optional(),
 });
 
-router.get("/cost-centers", requirePermission("finance:read"), async (req, res) => {
+router.get("/cost-centers", authorize({ feature: "finance.cost_centers", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<CostCenterListRow>(
       `SELECT cc.*,
-              CASE WHEN cc."relatedEntityType" = 'project' THEN (SELECT name FROM projects WHERE id = cc."relatedEntityId" AND "companyId" = $1 LIMIT 1)
-                   WHEN cc."relatedEntityType" = 'vehicle' THEN (SELECT "plateNumber" FROM fleet_vehicles WHERE id = cc."relatedEntityId" AND "companyId" = $1 LIMIT 1)
-                   WHEN cc."relatedEntityType" = 'employee' THEN (SELECT e.name FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id WHERE e.id = cc."relatedEntityId" AND ea."companyId" = $1 LIMIT 1)
+              CASE WHEN cc."relatedEntityType" = 'project' THEN (SELECT name FROM projects WHERE id = cc."relatedEntityId" AND "companyId" = $1 AND "deletedAt" IS NULL LIMIT 1)
+                   WHEN cc."relatedEntityType" = 'vehicle' THEN (SELECT "plateNumber" FROM fleet_vehicles WHERE id = cc."relatedEntityId" AND "companyId" = $1 AND "deletedAt" IS NULL LIMIT 1)
+                   WHEN cc."relatedEntityType" = 'employee' THEN (SELECT e.name FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id WHERE e.id = cc."relatedEntityId" AND ea."companyId" = $1 AND e."deletedAt" IS NULL LIMIT 1)
                    WHEN cc."relatedEntityType" = 'department' THEN (SELECT name FROM departments WHERE id = cc."relatedEntityId" AND "companyId" = $1 LIMIT 1)
                    WHEN cc."relatedEntityType" = 'branch' THEN (SELECT name FROM branches WHERE id = cc."relatedEntityId" AND "companyId" = $1 LIMIT 1)
                    ELSE NULL
               END AS "relatedEntityName"
        FROM cost_centers cc
        WHERE cc."companyId" = $1 AND cc.status != 'deleted'
-       ORDER BY cc.code, cc.name`,
+       ORDER BY cc.code, cc.name
+       LIMIT 1000`,
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "List cost centers error"); }
 });
 
-router.get("/cost-centers/:id", requirePermission("finance:read"), async (req, res) => {
+router.get("/cost-centers/:id", authorize({ feature: "finance.cost_centers", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<CostCenterRow>(
       `SELECT * FROM cost_centers WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
@@ -68,21 +89,21 @@ router.get("/cost-centers/:id", requirePermission("finance:read"), async (req, r
   } catch (err) { handleRouteError(err, res, "Get cost center error"); }
 });
 
-router.post("/cost-centers", requirePermission("finance:create"), async (req, res) => {
+router.post("/cost-centers", authorize({ feature: "finance.cost_centers", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const parsed = zodParse(createCostCenterSchema.safeParse(req.body));
     const { code, name, type, parentId, relatedEntityType, relatedEntityId, allocatedAmount } = parsed;
 
     const [existing] = code
-      ? await rawQuery<any>(
+      ? await rawQuery<{ id: number }>(
           `SELECT id FROM cost_centers WHERE "companyId" = $1 AND code = $2 AND status != 'deleted'`,
           [scope.companyId, code]
         )
       : [];
     if (existing) throw new ValidationError("رمز مركز التكلفة مستخدم بالفعل", { field: "code" });
 
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<CostCenterRow>(
       `INSERT INTO cost_centers ("companyId", code, name, type, "parentId", "relatedEntityType", "relatedEntityId", "allocatedAmount")
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        ON CONFLICT ("companyId", code) DO NOTHING
@@ -97,11 +118,11 @@ router.post("/cost-centers", requirePermission("finance:create"), async (req, re
   } catch (err) { handleRouteError(err, res, "Create cost center error"); }
 });
 
-router.patch("/cost-centers/:id", requirePermission("finance:update"), async (req, res) => {
+router.patch("/cost-centers/:id", authorize({ feature: "finance.cost_centers", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<CostCenterRow>(
       `SELECT * FROM cost_centers WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
@@ -110,7 +131,7 @@ router.patch("/cost-centers/:id", requirePermission("finance:update"), async (re
     const parsed = zodParse(updateCostCenterSchema.safeParse(req.body));
     const { name, code, type, parentId, allocatedAmount, status } = parsed;
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     let idx = 1;
 
     if (name !== undefined) { sets.push(`name = $${idx++}`); params.push(name); }
@@ -124,7 +145,7 @@ router.patch("/cost-centers/:id", requirePermission("finance:update"), async (re
     if (sets.length <= 1) throw new ValidationError("لا توجد بيانات للتحديث");
 
     params.push(id, scope.companyId);
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<CostCenterRow>(
       `UPDATE cost_centers SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
       params
     );
@@ -135,7 +156,7 @@ router.patch("/cost-centers/:id", requirePermission("finance:update"), async (re
   } catch (err) { handleRouteError(err, res, "Update cost center error"); }
 });
 
-router.delete("/cost-centers/:id", requirePermission("finance:delete"), async (req, res) => {
+router.delete("/cost-centers/:id", authorize({ feature: "finance.cost_centers", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

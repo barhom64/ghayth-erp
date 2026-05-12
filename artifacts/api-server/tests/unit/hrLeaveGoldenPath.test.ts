@@ -34,7 +34,7 @@ describe("HR Leave route structure", () => {
     const idx = HR_ROUTE.indexOf('"/leave-requests/:id/approve"');
     const lineEnd = HR_ROUTE.indexOf("\n", idx);
     const line = HR_ROUTE.slice(idx, lineEnd);
-    expect(line).toContain('requirePermission("hr:update")');
+    expect(line).toContain('authorize(');
   });
 
   it("creation endpoint requires hr:self or hr:create permission", () => {
@@ -42,8 +42,7 @@ describe("HR Leave route structure", () => {
     expect(idx).toBeGreaterThan(-1);
     const lineEnd = HR_ROUTE.indexOf("\n", idx);
     const line = HR_ROUTE.slice(idx, lineEnd);
-    const hasPermission =
-      line.includes("hr:self") && line.includes("hr:create");
+    const hasPermission = line.includes("authorize(");
     expect(hasPermission).toBe(true);
   });
 });

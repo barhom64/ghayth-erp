@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
 import { handleRouteError, ValidationError , zodParse } from "../lib/errorHandler.js";
 import { logger } from "../lib/logger.js";
@@ -23,6 +23,27 @@ const verifySignatureSchema = z.object({
 
 const router = Router();
 
+interface OtpRecordRow {
+  id: number;
+}
+
+interface SignatureLogRow {
+  id: number;
+  companyId: number;
+  userId: number | null;
+  documentId: string | null;
+  entityType: string;
+  entityId: string;
+  action: string;
+  signatureRef: string;
+  ipAddress: string | null;
+  deviceFingerprint: string | null;
+  userAgent: string | null;
+  otpRef: number | null;
+  createdAt: string;
+  userName: string | null;
+}
+
 function generateOTP(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
@@ -44,7 +65,7 @@ function getClientIP(req: Request): string {
   return req.socket?.remoteAddress || req.ip || "unknown";
 }
 
-router.post("/request-otp", requirePermission("documents:write"), async (req, res: Response) => {
+router.post("/request-otp", authorize({ feature: "documents", action: "create" }), async (req, res: Response) => {
   try {
     const body = zodParse(requestOtpSchema.safeParse(req.body));
     const scope = (req as any).scope!;
@@ -84,7 +105,7 @@ router.post("/request-otp", requirePermission("documents:write"), async (req, re
   }
 });
 
-router.post("/verify", requirePermission("documents:write"), async (req, res: Response) => {
+router.post("/verify", authorize({ feature: "documents", action: "create" }), async (req, res: Response) => {
   try {
     const body = zodParse(verifySignatureSchema.safeParse(req.body));
     const scope = (req as any).scope!;
@@ -97,8 +118,8 @@ router.post("/verify", requirePermission("documents:write"), async (req, res: Re
     const deviceFingerprint = getDeviceFingerprint(req);
     const userAgent = req.headers["user-agent"] || "";
 
-    const [record] = await rawQuery<any>(
-      `SELECT * FROM digital_signature_otps WHERE "companyId"=$1 AND "userId"=$2 AND "entityType"=$3 AND "entityId"=$4 AND action=$5 AND otp=$6 AND used=false AND "expiresAt" > NOW() ORDER BY "createdAt" DESC LIMIT 1`,
+    const [record] = await rawQuery<OtpRecordRow>(
+      `SELECT id FROM digital_signature_otps WHERE "companyId"=$1 AND "userId"=$2 AND "entityType"=$3 AND "entityId"=$4 AND action=$5 AND otp=$6 AND used=false AND "expiresAt" > NOW() ORDER BY "createdAt" DESC LIMIT 1`,
       [scope.companyId, scope.userId, entityType, String(entityId), action, String(otp)]
     );
 
@@ -106,13 +127,14 @@ router.post("/verify", requirePermission("documents:write"), async (req, res: Re
       throw new ValidationError("رمز التحقق غير صحيح أو منتهي الصلاحية");
     }
 
-    await rawExecute(`UPDATE digital_signature_otps SET used=true, "usedAt"=NOW() WHERE id=$1`, [record.id]);
-
     const signatureRef = generateTimeRef("SIG");
-    await rawExecute(
-      `INSERT INTO digital_signature_logs ("companyId","userId","documentId","entityType","entityId",action,"signatureRef","ipAddress","deviceFingerprint","userAgent","otpRef") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [scope.companyId, scope.userId, String(entityId), entityType, String(entityId), action, signatureRef, ip, deviceFingerprint, userAgent, record.id]
-    );
+    await withTransaction(async (client) => {
+      await client.query(`UPDATE digital_signature_otps SET used=true, "usedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [record.id, scope.companyId]);
+      await client.query(
+        `INSERT INTO digital_signature_logs ("companyId","userId","documentId","entityType","entityId",action,"signatureRef","ipAddress","deviceFingerprint","userAgent","otpRef") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [scope.companyId, scope.userId, String(entityId), entityType, String(entityId), action, signatureRef, ip, deviceFingerprint, userAgent, record.id]
+      );
+    });
 
     createAuditLog({
       companyId: scope.companyId,
@@ -141,7 +163,7 @@ router.post("/verify", requirePermission("documents:write"), async (req, res: Re
   }
 });
 
-router.get("/logs", requirePermission("documents:write"), async (req, res: Response) => {
+router.get("/logs", authorize({ feature: "documents", action: "create" }), async (req, res: Response) => {
   try {
     const scope = (req as any).scope!;
     const { entityType, entityId } = req.query as any;
@@ -149,8 +171,8 @@ router.get("/logs", requirePermission("documents:write"), async (req, res: Respo
     const params: any[] = [scope.companyId];
     if (entityType) { params.push(entityType); conditions.push(`dsl."entityType"=$${params.length}`); }
     if (entityId) { params.push(String(entityId)); conditions.push(`dsl."entityId"=$${params.length}`); }
-    const rows = await rawQuery<any>(
-      `SELECT dsl.*, e.name AS "userName" FROM digital_signature_logs dsl LEFT JOIN employees e ON e.id=dsl."userId" WHERE ${conditions.join(" AND ")} ORDER BY dsl."createdAt" DESC LIMIT 100`,
+    const rows = await rawQuery<SignatureLogRow>(
+      `SELECT dsl.*, e.name AS "userName" FROM digital_signature_logs dsl LEFT JOIN users u ON u.id=dsl."userId" LEFT JOIN employees e ON e.id=u."employeeId" WHERE ${conditions.join(" AND ")} ORDER BY dsl."createdAt" DESC LIMIT 100`,
       params
     );
     res.json({ data: rows, total: rows.length });

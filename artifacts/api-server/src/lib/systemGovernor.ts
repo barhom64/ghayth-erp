@@ -56,7 +56,8 @@ const trialLimitsGuard: GuardFn = async (companyId, context) => {
   if (context?.entity === "employees") {
     const [count] = await rawQuery<{ cnt: number }>(
       `SELECT COUNT(*)::int AS cnt FROM employees
-       WHERE id IN (SELECT "employeeId" FROM employee_assignments WHERE "companyId" = $1 AND status = 'active')`,
+       WHERE id IN (SELECT "employeeId" FROM employee_assignments WHERE "companyId" = $1 AND status = 'active')
+         AND "deletedAt" IS NULL`,
       [companyId]
     );
     if (count && count.cnt >= 25) {

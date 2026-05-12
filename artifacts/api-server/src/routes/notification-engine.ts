@@ -7,7 +7,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { getDeliveryStats } from "../lib/notificationEngine.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 
@@ -97,7 +97,7 @@ const updateWebhookSchema = z.object({
 
 const router = Router();
 
-router.get("/preferences", requirePermission("notifications:read"), async (req: Request, res: Response): Promise<any> => {
+router.get("/preferences", authorize({ feature: "notifications", action: "list" }), async (req: Request, res: Response): Promise<any> => {
   try {
     const scope = req.scope;
     if (!scope) throw new ForbiddenError("Unauthorized");
@@ -126,7 +126,7 @@ router.get("/preferences", requirePermission("notifications:read"), async (req: 
   }
 });
 
-router.put("/preferences", requirePermission("admin:write"), async (req: Request, res: Response): Promise<any> => {
+router.put("/preferences", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response): Promise<any> => {
   try {
     const body = zodParse(updatePreferencesSchema.safeParse(req.body));
     const scope = req.scope;
@@ -182,7 +182,7 @@ router.put("/preferences", requirePermission("admin:write"), async (req: Request
   }
 });
 
-router.get("/routing-rules", requirePermission("admin:write"), async (req: Request, res: Response) => {
+router.get("/routing-rules", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(
@@ -199,7 +199,7 @@ router.get("/routing-rules", requirePermission("admin:write"), async (req: Reque
   }
 });
 
-router.post("/routing-rules", requirePermission("admin:write"), async (req: Request, res: Response): Promise<any> => {
+router.post("/routing-rules", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response): Promise<any> => {
   try {
     const body = zodParse(createRoutingRuleSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -243,7 +243,7 @@ router.post("/routing-rules", requirePermission("admin:write"), async (req: Requ
   }
 });
 
-router.put("/routing-rules/:id", requirePermission("admin:write"), async (req: Request, res: Response): Promise<any> => {
+router.put("/routing-rules/:id", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response): Promise<any> => {
   try {
     const body = zodParse(updateRoutingRuleSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -284,7 +284,7 @@ router.put("/routing-rules/:id", requirePermission("admin:write"), async (req: R
   }
 });
 
-router.delete("/routing-rules/:id", requirePermission("admin:write"), async (req: Request, res: Response) => {
+router.delete("/routing-rules/:id", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -318,7 +318,7 @@ router.delete("/routing-rules/:id", requirePermission("admin:write"), async (req
   }
 });
 
-router.get("/templates", requirePermission("admin:write"), async (req: Request, res: Response) => {
+router.get("/templates", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(
@@ -335,7 +335,7 @@ router.get("/templates", requirePermission("admin:write"), async (req: Request, 
   }
 });
 
-router.post("/templates", requirePermission("admin:write"), async (req: Request, res: Response): Promise<any> => {
+router.post("/templates", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response): Promise<any> => {
   try {
     const body = zodParse(createTemplateSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -379,7 +379,7 @@ router.post("/templates", requirePermission("admin:write"), async (req: Request,
   }
 });
 
-router.put("/templates/:id", requirePermission("admin:write"), async (req: Request, res: Response) => {
+router.put("/templates/:id", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response) => {
   try {
     const body = zodParse(updateTemplateSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -419,7 +419,7 @@ router.put("/templates/:id", requirePermission("admin:write"), async (req: Reque
   }
 });
 
-router.delete("/templates/:id", requirePermission("admin:write"), async (req: Request, res: Response) => {
+router.delete("/templates/:id", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -453,7 +453,7 @@ router.delete("/templates/:id", requirePermission("admin:write"), async (req: Re
   }
 });
 
-router.get("/fallback-chains", requirePermission("admin:write"), async (req: Request, res: Response) => {
+router.get("/fallback-chains", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(
@@ -469,7 +469,7 @@ router.get("/fallback-chains", requirePermission("admin:write"), async (req: Req
   }
 });
 
-router.post("/fallback-chains", requirePermission("admin:write"), async (req: Request, res: Response): Promise<any> => {
+router.post("/fallback-chains", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response): Promise<any> => {
   try {
     const body = zodParse(createFallbackChainSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -503,7 +503,7 @@ router.post("/fallback-chains", requirePermission("admin:write"), async (req: Re
   }
 });
 
-router.put("/fallback-chains/:id", requirePermission("admin:write"), async (req: Request, res: Response): Promise<any> => {
+router.put("/fallback-chains/:id", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response): Promise<any> => {
   try {
     const body = zodParse(updateFallbackChainSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -543,7 +543,7 @@ router.put("/fallback-chains/:id", requirePermission("admin:write"), async (req:
   }
 });
 
-router.delete("/fallback-chains/:id", requirePermission("admin:write"), async (req: Request, res: Response) => {
+router.delete("/fallback-chains/:id", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -577,25 +577,25 @@ router.delete("/fallback-chains/:id", requirePermission("admin:write"), async (r
   }
 });
 
-router.get("/webhooks", requirePermission("admin:write"), async (req: Request, res: Response) => {
+router.get("/webhooks", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT id, name, url, events, headers, "isActive",
+      `SELECT id, name, url, secret, events, headers, "isActive",
               "lastSuccessAt", "lastFailureAt", "lastError", "failCount", "updatedAt"
        FROM notification_webhooks
        WHERE "companyId" = $1
        ORDER BY name`,
       [scope.companyId]
     );
-    const masked = rows.map((r) => ({ ...r, secret: r.secret ? "__configured__" : null }));
+    const masked = rows.map((r) => ({ ...r, secret: r.secret ? "__configured__" : null, headers: r.headers ? "__configured__" : null }));
     res.json({ data: masked });
   } catch (err) {
     handleRouteError(err, res, "Notification engine error:");
   }
 });
 
-router.post("/webhooks", requirePermission("admin:write"), async (req: Request, res: Response): Promise<any> => {
+router.post("/webhooks", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response): Promise<any> => {
   try {
     const body = zodParse(createWebhookSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -643,7 +643,7 @@ router.post("/webhooks", requirePermission("admin:write"), async (req: Request, 
   }
 });
 
-router.put("/webhooks/:id", requirePermission("admin:write"), async (req: Request, res: Response): Promise<any> => {
+router.put("/webhooks/:id", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response): Promise<any> => {
   try {
     const body = zodParse(updateWebhookSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -706,7 +706,7 @@ router.put("/webhooks/:id", requirePermission("admin:write"), async (req: Reques
   }
 });
 
-router.delete("/webhooks/:id", requirePermission("admin:write"), async (req: Request, res: Response) => {
+router.delete("/webhooks/:id", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -740,7 +740,7 @@ router.delete("/webhooks/:id", requirePermission("admin:write"), async (req: Req
   }
 });
 
-router.get("/delivery-stats", requirePermission("admin:write"), async (req: Request, res: Response) => {
+router.get("/delivery-stats", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const days = parseInt(req.query.days as string) || 30;
@@ -751,7 +751,7 @@ router.get("/delivery-stats", requirePermission("admin:write"), async (req: Requ
   }
 });
 
-router.get("/delivery-log", requirePermission("admin:write"), async (req: Request, res: Response) => {
+router.get("/delivery-log", authorize({ feature: "admin", action: "update" }), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const page = parseInt(req.query.page as string) || 1;

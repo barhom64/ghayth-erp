@@ -46,7 +46,7 @@ export default function SupportReplies() {
   ];
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const columns: DataTableColumn<any>[] = [
     { key: "ticketId", header: "رقم التذكرة", sortable: true, searchable: true, render: (r: any) => <span className="font-mono text-xs">{r.ticketId}</span> },

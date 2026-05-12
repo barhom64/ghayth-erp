@@ -8,6 +8,7 @@ import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/a
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { ErrorState } from "@/components/shared/loading-error-states";
 import { Building2, Home, Plus, Eye, Pencil, TrendingUp, CheckCircle } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { formatCurrency } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
 import { cn } from "@/lib/utils";
@@ -36,7 +37,7 @@ export default function PropertiesBuildings() {
   );
   const buildings = asList(buildingsResp);
 
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const filtered = applyFilters(buildings, filters, {
     searchFields: ["name", "address", "city"],
@@ -199,9 +200,9 @@ export default function PropertiesBuildings() {
       actions={
         canManage ? (
           <Link href="/properties/buildings/create">
-            <Button size="sm" className="gap-1.5">
+            <GuardedButton perm="property:create" size="sm" className="gap-1.5">
               <Plus className="h-4 w-4" /> إضافة مبنى
-            </Button>
+            </GuardedButton>
           </Link>
         ) : undefined
       }

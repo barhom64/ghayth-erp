@@ -1,5 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
+import { notifyRateLimited, RateLimitError } from "@/lib/rate-limit-toast";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +44,7 @@ interface EntityDocumentsProps {
 }
 
 export function EntityDocuments({ entityType, entityId, title = "المستندات المرتبطة" }: EntityDocumentsProps) {
+  const { toast } = useToast();
   const { data: docsResp, refetch } = useApiQuery<any>(
     ["entity-docs", entityType, String(entityId)],
     `/documents?entity=${entityType}&entityId=${entityId}`,
@@ -55,6 +58,9 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
       const res = await fetch(`${BASE}/api/documents/${docId}/download`, {
         credentials: "include",
       });
+      if (res.status === 429) {
+        throw new RateLimitError(notifyRateLimited(res));
+      }
       if (!res.ok) throw new Error("فشل التنزيل");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -66,7 +72,11 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
       a.remove();
       URL.revokeObjectURL(url);
     } catch (err: any) {
-      alert(err.message);
+      if (err instanceof RateLimitError) {
+        // notifyRateLimited already showed the debounced rate-limit toast.
+        return;
+      }
+      toast({ variant: "destructive", title: "فشل التنزيل", description: err.message });
     }
   };
 
@@ -145,6 +155,7 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
 }
 
 function UploadEntityDocDialog({ entityType, entityId, onSuccess }: { entityType: string; entityId: number | string; onSuccess: () => void }) {
+  const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -161,6 +172,9 @@ function UploadEntityDocDialog({ entityType, entityId, onSuccess }: { entityType
         credentials: "include",
         body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
       });
+      if (urlRes.status === 429) {
+        throw new RateLimitError(notifyRateLimited(urlRes));
+      }
       if (!urlRes.ok) throw new Error("فشل الرفع");
       const { uploadURL, objectPath } = await urlRes.json();
       await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
@@ -184,11 +198,15 @@ function UploadEntityDocDialog({ entityType, entityId, onSuccess }: { entityType
       setForm({ title: "", description: "", category: "" });
       onSuccess();
     } catch (err: any) {
-      alert(err.message || "حدث خطأ");
+      if (err instanceof RateLimitError) {
+        // notifyRateLimited already showed the debounced rate-limit toast.
+        return;
+      }
+      toast({ variant: "destructive", title: "فشل رفع المستند", description: err.message || "حدث خطأ" });
     } finally {
       setUploading(false);
     }
-  }, [file, form, entityType, entityId, onSuccess]);
+  }, [file, form, entityType, entityId, onSuccess, toast]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -241,7 +259,7 @@ function UploadEntityDocDialog({ entityType, entityId, onSuccess }: { entityType
               <input ref={inputRef} type="file" className="hidden" onChange={(e) => { if (e.target.files?.[0]) setFile(e.target.files[0]); e.target.value = ""; }} />
             </div>
           </div>
-          <Button onClick={handleUpload} disabled={!form.title || !file || uploading} className="w-full">
+          <Button onClick={handleUpload} disabled={!form.title || !file || uploading} className="w-full" rateLimitAware>
             {uploading ? "جاري الرفع..." : "رفع"}
           </Button>
         </div>

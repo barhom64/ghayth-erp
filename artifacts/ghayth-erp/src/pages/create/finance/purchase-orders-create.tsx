@@ -3,7 +3,6 @@ import { useLocation, useSearch } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -16,7 +15,7 @@ import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zon
 import { CostCenterSelect, SupplierSelect, BranchSelect } from "@/components/shared/entity-selects";
 import { useAppContext } from "@/contexts/app-context";
 import { SupplierContextCard } from "@/components/shared/supplier-context-card";
-import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 
 const DRAFT_KEY = "finance_purchase_orders_create";
@@ -58,7 +57,7 @@ export default function PurchaseOrdersCreate() {
   }, [copySource, copied, setForm]);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const addItem = () => setItems([...items, { productId: "", quantity: "1", unitPrice: "" }]);
   const removeItem = (idx: number) => setItems(items.filter((_, i) => i !== idx));
@@ -168,8 +167,8 @@ export default function PurchaseOrdersCreate() {
                 </SelectContent>
               </Select>
             </div>
-            <div><Label className="text-xs">الكمية</Label><Input type="number" min="1" value={item.quantity} onChange={(e) => updateItem(idx, "quantity", e.target.value)} /></div>
-            <div><Label className="text-xs">سعر الوحدة</Label><Input type="number" step="0.01" min="0" value={item.unitPrice} onChange={(e) => updateItem(idx, "unitPrice", e.target.value)} /></div>
+            <NumberField label="الكمية" value={item.quantity} onChange={(v) => updateItem(idx, "quantity", v)} placeholder="1" />
+            <NumberField label="سعر الوحدة" value={item.unitPrice} onChange={(v) => updateItem(idx, "unitPrice", v)} placeholder="0.00" />
             <Button type="button" variant="destructive" size="sm" onClick={() => removeItem(idx)} disabled={items.length <= 1}>حذف</Button>
           </div>
         ))}
@@ -198,7 +197,7 @@ export default function PurchaseOrdersCreate() {
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/finance/purchase-orders")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
         </Button>
       </div>

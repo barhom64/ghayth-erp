@@ -76,7 +76,7 @@ export function FinancialTab({ entityType, entityId, sections }: FinancialTabPro
         <div className="flex gap-2 items-center flex-wrap">
           <DatePicker value={startDate} onChange={setStartDate} className="w-36" />
           <DatePicker value={endDate} onChange={setEndDate} className="w-36" />
-          <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={!movements.length}>
+          <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={!movements.length} rateLimitAware>
             <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
           </Button>
         </div>

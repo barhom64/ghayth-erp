@@ -1,29 +1,56 @@
 import { useState } from "react";
+import { z } from "zod";
 import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ShoppingCart, Package, Plus, X, DollarSign, Eye } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { StoreTabsNav } from "@/components/shared/store-tabs-nav";
+import { FormShell, FormTextField, FormNumberField, FormGrid } from "@/components/form-shell";
+
+// Coerced numeric fields — the old form tracked them as strings and
+// Number()-coerced at submit. zod handles both checks (numeric + non-
+// negative) before the request leaves the page.
+const productSchema = z.object({
+  name: z.string().trim().min(1, "الاسم مطلوب"),
+  sku: z.string().trim(),
+  category: z.string().trim(),
+  price: z.coerce.number().min(0, "السعر يجب أن يكون 0 أو أكثر"),
+  costPrice: z.coerce.number().min(0, "سعر التكلفة يجب أن يكون 0 أو أكثر"),
+  quantity: z.coerce.number().int().min(0, "الكمية يجب أن تكون 0 أو أكثر"),
+});
+type ProductForm = z.infer<typeof productSchema>;
+const defaultProductForm: ProductForm = {
+  name: "", sku: "", category: "", price: 0, costPrice: 0, quantity: 0,
+};
+
+const orderSchema = z.object({
+  customerName: z.string().trim().min(1, "اسم العميل مطلوب"),
+  customerPhone: z.string().trim(),
+  totalAmount: z.coerce.number().min(0, "المبلغ يجب أن يكون 0 أو أكثر"),
+  notes: z.string().trim(),
+});
+type OrderForm = z.infer<typeof orderSchema>;
+const defaultOrderForm: OrderForm = {
+  customerName: "", customerPhone: "", totalAmount: 0, notes: "",
+};
 
 function ProductsTab() {
   const [, navigate] = useLocation();
   const { data: productsResp, isLoading, isError, error, refetch } = useApiQuery<any>(
     ["store-products"], "/store/products"
   );
-  const createMut = useApiMutation<unknown, Record<string, string | number>>("/store/products", "POST", [["store-products"]]);
+  const createMut = useApiMutation<unknown, ProductForm>("/store/products", "POST", [["store-products"]]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: "", sku: "", price: "", costPrice: "", quantity: "", category: "" });
   const items = asList(productsResp);
   const [filters, setFilters] = useFilters();
   const filteredProducts = applyFilters(items, filters, {
@@ -32,12 +59,6 @@ function ProductsTab() {
     dateField: "",
   });
   const pageSize = 20;
-
-  const handleSubmit = async () => {
-    await createMut.mutateAsync({ ...form, price: Number(form.price), costPrice: Number(form.costPrice), quantity: Number(form.quantity) });
-    setForm({ name: "", sku: "", price: "", costPrice: "", quantity: "", category: "" });
-    setShowForm(false); refetch();
-  };
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/store/products",
@@ -95,17 +116,35 @@ function ProductsTab() {
             resultCount={filteredProducts.length}
           />
         </div>
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>{showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة منتج</>}</Button>
+        <GuardedButton perm="store:create" size="sm" onClick={() => setShowForm(!showForm)}>{showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة منتج</>}</GuardedButton>
       </div>
       {showForm && (
-        <Card><CardContent className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div><Label>الاسم</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-          <div><Label>رمز المنتج</Label><Input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} /></div>
-          <div><Label>التصنيف</Label><Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} /></div>
-          <div><Label>السعر</Label><Input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></div>
-          <div><Label>سعر التكلفة</Label><Input type="number" value={form.costPrice} onChange={(e) => setForm({ ...form, costPrice: e.target.value })} /></div>
-          <div><Label>الكمية</Label><Input type="number" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></div>
-          <div className="md:col-span-3"><Button onClick={handleSubmit} disabled={!form.name || createMut.isPending} rateLimitAware>حفظ</Button></div>
+        <Card><CardContent className="p-4">
+          <FormShell
+            schema={productSchema}
+            defaultValues={defaultProductForm}
+            submitLabel="حفظ"
+            secondaryActions={
+              <Button type="button" size="sm" variant="ghost" onClick={() => setShowForm(false)}>
+                إلغاء
+              </Button>
+            }
+            onSubmit={async (values, ctx) => {
+              await createMut.mutateAsync(values);
+              ctx.reset();
+              setShowForm(false);
+              refetch();
+            }}
+          >
+            <FormGrid cols={3}>
+              <FormTextField name="name" label="الاسم" required />
+              <FormTextField name="sku" label="رمز المنتج" />
+              <FormTextField name="category" label="التصنيف" />
+              <FormNumberField name="price" label="السعر" required />
+              <FormNumberField name="costPrice" label="سعر التكلفة" required />
+              <FormNumberField name="quantity" label="الكمية" required />
+            </FormGrid>
+          </FormShell>
         </CardContent></Card>
       )}
       <Card>
@@ -139,9 +178,8 @@ function OrdersTab() {
   const { data: ordersResp, isLoading, isError, error, refetch } = useApiQuery<any>(
     ["store-orders"], "/store/orders"
   );
-  const createMut = useApiMutation<unknown, Record<string, string | number>>("/store/orders", "POST", [["store-orders"]]);
+  const createMut = useApiMutation<unknown, OrderForm>("/store/orders", "POST", [["store-orders"]]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ customerName: "", customerPhone: "", totalAmount: "", notes: "" });
   const items = asList(ordersResp);
   const [filters, setFilters] = useFilters();
   const filteredOrders = applyFilters(items, filters, {
@@ -149,12 +187,6 @@ function OrdersTab() {
     statusField: "status",
     dateField: "",
   });
-
-  const handleSubmit = async () => {
-    await createMut.mutateAsync({ ...form, totalAmount: Number(form.totalAmount) });
-    setForm({ customerName: "", customerPhone: "", totalAmount: "", notes: "" });
-    setShowForm(false); refetch();
-  };
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/store/orders",
@@ -218,15 +250,33 @@ function OrdersTab() {
             resultCount={filteredOrders.length}
           />
         </div>
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>{showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />طلب جديد</>}</Button>
+        <GuardedButton perm="store:create" size="sm" onClick={() => setShowForm(!showForm)}>{showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />طلب جديد</>}</GuardedButton>
       </div>
       {showForm && (
-        <Card><CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>اسم العميل</Label><Input value={form.customerName} onChange={(e) => setForm({ ...form, customerName: e.target.value })} /></div>
-          <div><Label>الهاتف</Label><Input value={form.customerPhone} onChange={(e) => setForm({ ...form, customerPhone: e.target.value })} /></div>
-          <div><Label>المبلغ الإجمالي</Label><Input type="number" value={form.totalAmount} onChange={(e) => setForm({ ...form, totalAmount: e.target.value })} /></div>
-          <div><Label>ملاحظات</Label><Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
-          <div className="md:col-span-2"><Button onClick={handleSubmit} disabled={!form.customerName || createMut.isPending} rateLimitAware>حفظ</Button></div>
+        <Card><CardContent className="p-4">
+          <FormShell
+            schema={orderSchema}
+            defaultValues={defaultOrderForm}
+            submitLabel="حفظ"
+            secondaryActions={
+              <Button type="button" size="sm" variant="ghost" onClick={() => setShowForm(false)}>
+                إلغاء
+              </Button>
+            }
+            onSubmit={async (values, ctx) => {
+              await createMut.mutateAsync(values);
+              ctx.reset();
+              setShowForm(false);
+              refetch();
+            }}
+          >
+            <FormGrid cols={2}>
+              <FormTextField name="customerName" label="اسم العميل" required />
+              <FormTextField name="customerPhone" label="الهاتف" />
+              <FormNumberField name="totalAmount" label="المبلغ الإجمالي" required />
+              <FormTextField name="notes" label="ملاحظات" />
+            </FormGrid>
+          </FormShell>
         </CardContent></Card>
       )}
       <Card>
@@ -259,7 +309,7 @@ export default function StorePage() {
   const { data: stats, isLoading, isError } = useApiQuery<any>(["store-stats"], "/store/stats");
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const s = stats || {};
   const statCards = [

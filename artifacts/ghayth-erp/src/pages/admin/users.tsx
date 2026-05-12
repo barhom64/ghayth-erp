@@ -1,10 +1,39 @@
 import { useState } from "react";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { z } from "zod";
+import { useApiQuery, apiFetch, isRateLimitedError } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import {
+  FormShell, FormEmailField, FormTextField, FormSelectField, FormGrid,
+} from "@/components/form-shell";
+
+// Same schema as users-tab.tsx (#301) — both pages create users with
+// the same payload shape. Email is validated client-side now;
+// the old `if (!form.email)` accepted "x" as a valid email.
+const newUserSchema = z.object({
+  email: z.string().email("بريد إلكتروني غير صالح"),
+  role: z.string().min(1, "اختر دورًا"),
+  password: z.string(),
+  employeeId: z.string(),
+});
+type NewUserForm = z.infer<typeof newUserSchema>;
+const defaultNewUser: NewUserForm = {
+  email: "", role: "employee", password: "", employeeId: "",
+};
+
+// Edit form — PATCH semantics. `role` is required (server treats
+// blank as "no change"), `employeeId` may be blank ("unlink") or a
+// numeric string. Both fields are seeded from the row via the
+// FormShell key={editUser.id} remount trick.
+const editUserSchema = z.object({
+  role: z.string().min(1, "اختر دورًا"),
+  employeeId: z.string(),
+});
+type EditUserForm = z.infer<typeof editUserSchema>;
 import {
   Shield, Plus, X, CheckCircle, KeySquare, Eye, EyeOff, ToggleLeft, ToggleRight,
   Search, Users, Trash2, Edit2, ShieldAlert, AlertCircle,
@@ -39,17 +68,14 @@ export default function AdminUsersPage() {
   const { data, isLoading, isError, refetch } = useApiQuery<any>(["admin-users"], "/admin/users");
   const { data: employeesData } = useApiQuery<any>(["employees-list-admin"], "/employees?limit=200");
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ email: "", role: "employee", password: "", employeeId: "" });
   const [createdUser, setCreatedUser] = useState<any>(null);
   const [resetUserId, setResetUserId] = useState<number | null>(null);
   const [resetPassword, setResetPassword] = useState("");
   const [showResetPw, setShowResetPw] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [editUser, setEditUser] = useState<any>(null);
-  const [editForm, setEditForm] = useState({ email: "", role: "", employeeId: "" });
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
 
   const items: any[] = data?.data || [];
@@ -132,43 +158,39 @@ export default function AdminUsersPage() {
       header: "إجراءات",
       render: (r: any) => (
         <div className="flex gap-1">
-          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" title={r.isActive ? "تعليق الحساب" : "تفعيل الحساب"} onClick={() => toggleActive(r)}>
+          <GuardedButton perm="admin:delete" variant="ghost" size="sm" className="h-7 text-xs gap-1" title={r.isActive ? "تعليق الحساب" : "تفعيل الحساب"} onClick={() => toggleActive(r)}>
             {r.isActive ? <ToggleRight className="h-4 w-4 text-green-500" /> : <ToggleLeft className="h-4 w-4 text-gray-400" />}
-          </Button>
+          </GuardedButton>
           <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-blue-600" title="تعديل" onClick={() => startEditUser(r)}>
             <Edit2 className="h-3.5 w-3.5" />
           </Button>
           <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-orange-600" title="إعادة تعيين كلمة المرور" onClick={() => { setResetUserId(r.id); setResetPassword(""); setCreatedUser(null); setShowForm(false); setEditUser(null); setDeleteConfirmId(null); }}>
             <KeySquare className="h-3.5 w-3.5" />
           </Button>
-          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-red-600" title="حذف المستخدم" onClick={() => { setDeleteConfirmId(r.id); setEditUser(null); setResetUserId(null); setShowForm(false); }}>
+          <GuardedButton perm="admin:delete" variant="ghost" size="sm" className="h-7 text-xs gap-1 text-red-600" title="حذف المستخدم" onClick={() => { setDeleteConfirmId(r.id); setEditUser(null); setResetUserId(null); setShowForm(false); }}>
             <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          </GuardedButton>
         </div>
       ),
     },
   ];
 
-  const createUser = async () => {
-    if (!form.email) { toast({ variant: "destructive", title: "البريد الإلكتروني مطلوب" }); return; }
-    setSubmitting(true);
+  const createUser = async (values: NewUserForm) => {
     try {
       const result = await apiFetch("/admin/users", {
         method: "POST",
         body: JSON.stringify({
-          email: form.email,
-          role: form.role,
-          password: form.password || undefined,
-          employeeId: form.employeeId ? Number(form.employeeId) : undefined,
+          email: values.email,
+          role: values.role,
+          password: values.password || undefined,
+          employeeId: values.employeeId ? Number(values.employeeId) : undefined,
         }),
       });
       setCreatedUser(result);
-      setForm({ email: "", role: "employee", password: "", employeeId: "" });
       refetch();
     } catch (e: any) {
       toast({ variant: "destructive", title: e.message || "فشل في إنشاء المستخدم" });
     }
-    setSubmitting(false);
   };
 
   const toggleActive = async (u: any) => {
@@ -195,25 +217,29 @@ export default function AdminUsersPage() {
       });
       toast({ title: "تم إعادة تعيين كلمة المرور بنجاح" });
       setResetUserId(null); setResetPassword("");
-    } catch {
+    } catch (err) {
+      // The shared apiFetch already shows a debounced rate-limit toast on
+      // 429, so swallow it here to avoid a duplicate generic error toast.
+      if (isRateLimitedError(err)) return;
       toast({ variant: "destructive", title: "فشل في إعادة تعيين كلمة المرور" });
     }
   };
 
   const startEditUser = (u: any) => {
     setEditUser(u);
-    setEditForm({ email: u.email, role: u.role, employeeId: u.employeeId ? String(u.employeeId) : "" });
     setResetUserId(null); setShowForm(false); setDeleteConfirmId(null);
   };
 
-  const saveEdit = async () => {
+  const saveEdit = async (values: EditUserForm) => {
     if (!editUser) return;
     try {
       await apiFetch(`/admin/users/${editUser.id}`, {
         method: "PATCH",
         body: JSON.stringify({
-          role: editForm.role !== editUser.role ? editForm.role : undefined,
-          employeeId: editForm.employeeId ? Number(editForm.employeeId) : undefined,
+          // Partial update: only send role when it actually changed
+          // (preserves the original semantics from the useState form).
+          role: values.role !== editUser.role ? values.role : undefined,
+          employeeId: values.employeeId ? Number(values.employeeId) : undefined,
         }),
       });
       toast({ title: "تم تحديث بيانات المستخدم" });
@@ -273,38 +299,34 @@ export default function AdminUsersPage() {
       {showForm && !createdUser && (
         <Card><CardContent className="p-4 space-y-4">
           <h3 className="font-semibold text-base">إنشاء حساب مستخدم جديد</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="md:col-span-2">
-              <Label>البريد الإلكتروني <span className="text-red-500">*</span></Label>
-              <Input className="mt-1" type="email" dir="ltr" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="user@company.com" />
-            </div>
-            <div>
-              <Label>الدور الوظيفي</Label>
-              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {ROLE_OPTIONS.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>ربط بموظف (اختياري)</Label>
-              <Select value={form.employeeId || "_none"} onValueChange={(v) => setForm({ ...form, employeeId: v === "_none" ? "" : v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_none">— بدون ربط —</SelectItem>
-                  {employees.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.name} ({e.empNumber})</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>كلمة المرور (اختياري - ستُنشأ تلقائياً)</Label>
-              <Input className="mt-1" type="password" dir="ltr" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="اتركها فارغة للإنشاء التلقائي" />
-            </div>
-          </div>
-          <Button onClick={createUser} disabled={!form.email || submitting}>
-            {submitting ? "جاري الإنشاء..." : "إنشاء حساب"}
-          </Button>
+          <FormShell
+            schema={newUserSchema}
+            defaultValues={defaultNewUser}
+            submitLabel="إنشاء حساب"
+            secondaryActions={
+              <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>
+                إلغاء
+              </Button>
+            }
+            onSubmit={async (values, ctx) => {
+              await createUser(values);
+              ctx.reset();
+            }}
+          >
+            <FormGrid cols={2}>
+              <FormEmailField name="email" label="البريد الإلكتروني" required className="md:col-span-2" placeholder="user@company.com" />
+              <FormSelectField name="role" label="الدور الوظيفي" options={ROLE_OPTIONS} />
+              <FormSelectField
+                name="employeeId"
+                label="ربط بموظف (اختياري)"
+                options={[
+                  { value: "", label: "— بدون ربط —" },
+                  ...employees.map((e: any) => ({ value: String(e.id), label: `${e.name} (${e.empNumber})` })),
+                ]}
+              />
+              <FormTextField name="password" label="كلمة المرور (اختياري - ستُنشأ تلقائياً)" type="password" placeholder="اتركها فارغة للإنشاء التلقائي" />
+            </FormGrid>
+          </FormShell>
         </CardContent></Card>
       )}
 
@@ -338,31 +360,35 @@ export default function AdminUsersPage() {
             <h4 className="font-semibold text-blue-800 flex items-center gap-2">
               <Edit2 className="h-5 w-5" />تعديل بيانات المستخدم — {editUser.email}
             </h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <Label className="text-xs">الدور الوظيفي</Label>
-                <Select value={editForm.role} onValueChange={(v) => setEditForm({ ...editForm, role: v })}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {ROLE_OPTIONS.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-xs">ربط بموظف</Label>
-                <Select value={editForm.employeeId || "_none"} onValueChange={(v) => setEditForm({ ...editForm, employeeId: v === "_none" ? "" : v })}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_none">— بدون ربط —</SelectItem>
-                    {employees.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.name} ({e.empNumber})</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button size="sm" onClick={saveEdit}>حفظ التعديلات</Button>
-              <Button size="sm" variant="outline" onClick={() => setEditUser(null)}>إلغاء</Button>
-            </div>
+            <FormShell
+              key={editUser.id}
+              schema={editUserSchema}
+              defaultValues={{
+                role: editUser.role || "",
+                employeeId: editUser.employeeId ? String(editUser.employeeId) : "",
+              }}
+              submitLabel="حفظ التعديلات"
+              secondaryActions={
+                <Button type="button" variant="outline" onClick={() => setEditUser(null)}>
+                  إلغاء
+                </Button>
+              }
+              onSubmit={async (values) => {
+                await saveEdit(values);
+              }}
+            >
+              <FormGrid cols={3}>
+                <FormSelectField name="role" label="الدور الوظيفي" options={ROLE_OPTIONS} />
+                <FormSelectField
+                  name="employeeId"
+                  label="ربط بموظف"
+                  options={[
+                    { value: "", label: "— بدون ربط —" },
+                    ...employees.map((e: any) => ({ value: String(e.id), label: `${e.name} (${e.empNumber})` })),
+                  ]}
+                />
+              </FormGrid>
+            </FormShell>
           </CardContent>
         </Card>
       )}
@@ -375,7 +401,7 @@ export default function AdminUsersPage() {
             </h4>
             <p className="text-sm text-red-700">سيتم تعطيل هذا المستخدم وإلغاء صلاحياته في شركتك. يمكن إعادة تفعيله لاحقاً.</p>
             <div className="flex gap-2">
-              <Button size="sm" variant="destructive" onClick={() => deleteUser(deleteConfirmId)}>تعطيل</Button>
+              <GuardedButton perm="admin:delete" size="sm" variant="destructive" onClick={() => deleteUser(deleteConfirmId)}>تعطيل</GuardedButton>
               <Button size="sm" variant="outline" onClick={() => setDeleteConfirmId(null)}>إلغاء</Button>
             </div>
           </CardContent>
@@ -407,7 +433,7 @@ export default function AdminUsersPage() {
         data={filtered}
         isLoading={isLoading}
         isError={isError}
-        onRetry={() => window.location.reload()}
+       
         emptyMessage="لا يوجد مستخدمين"
         pageSize={0}
         searchPlaceholder="بحث بالبريد أو الاسم..."

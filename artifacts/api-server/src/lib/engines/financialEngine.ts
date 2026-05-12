@@ -173,11 +173,16 @@ class FinancialEngineImpl implements DomainEngine {
   async updateJournalStatus(
     journalId: number,
     newStatus: "posted" | "rejected",
-    requiredCurrentStatus = "pending_approval"
+    requiredCurrentStatus = "pending_approval",
+    companyId?: number
   ): Promise<{ updated: boolean }> {
     const { affectedRows } = await rawExecute(
-      `UPDATE journal_entries SET status = $1 WHERE id = $2 AND status = $3`,
-      [newStatus, journalId, requiredCurrentStatus]
+      companyId != null
+        ? `UPDATE journal_entries SET status = $1 WHERE id = $2 AND status = $3 AND "companyId" = $4`
+        : `UPDATE journal_entries SET status = $1 WHERE id = $2 AND status = $3`,
+      companyId != null
+        ? [newStatus, journalId, requiredCurrentStatus, companyId]
+        : [newStatus, journalId, requiredCurrentStatus]
     );
     return { updated: affectedRows > 0 };
   }
@@ -202,8 +207,8 @@ class FinancialEngineImpl implements DomainEngine {
     const newStatus = newPaid >= Number(rows[0].total) ? "paid" : "partial";
 
     await rawExecute(
-      `UPDATE invoices SET "paidAmount"=$1, status=$2, "updatedAt"=NOW() WHERE id=$3`,
-      [newPaid, newStatus, params.invoiceId]
+      `UPDATE invoices SET "paidAmount"=$1, status=$2, "updatedAt"=NOW() WHERE id=$3 AND "companyId"=$4`,
+      [newPaid, newStatus, params.invoiceId, params.companyId]
     );
     await rawExecute(
       `INSERT INTO invoice_payments ("invoiceId","companyId","clientId",amount,method,"transactionRef","paidAt",source) VALUES ($1,$2,$3,$4,$5,$6,NOW(),$7) ON CONFLICT DO NOTHING`,
@@ -220,7 +225,7 @@ class FinancialEngineImpl implements DomainEngine {
     requestedBy: number;
   }): Promise<{ insertId: number }> {
     const { insertId } = await rawExecute(
-      `INSERT INTO purchase_orders ("companyId", ref, description, status, "requestedBy", "createdAt") VALUES ($1, $2, $3, 'draft', $4, NOW())`,
+      `INSERT INTO purchase_orders ("companyId", ref, notes, status, "createdBy", "createdAt") VALUES ($1, $2, $3, 'draft', $4, NOW())`,
       [params.companyId, params.ref, params.description, params.requestedBy]
     );
     return { insertId };

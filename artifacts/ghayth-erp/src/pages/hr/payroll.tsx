@@ -5,6 +5,7 @@ import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 // Phase A — HR payroll list on unified primitives.
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -105,7 +106,7 @@ export default function PayrollPage() {
   ];
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   return (
     <PageShell
@@ -116,7 +117,7 @@ export default function PayrollPage() {
         <div className="flex gap-2">
           <ExportButton endpoint="/export/excel/payroll" filename="payroll.xlsx" type="excel" label="تصدير Excel" />
           <Link href="/hr/payroll/create">
-            <Button size="sm"><Plus className="h-4 w-4 me-1" />تشغيل مسير رواتب</Button>
+            <GuardedButton perm="hr:create" size="sm"><Plus className="h-4 w-4 me-1" />تشغيل مسير رواتب</GuardedButton>
           </Link>
         </div>
       }

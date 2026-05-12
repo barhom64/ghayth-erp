@@ -3,6 +3,7 @@ import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { DatePicker } from "@/components/ui/date-picker";
 import { DataTable, DataTableColumn } from "@/components/ui/data-table";
@@ -49,7 +50,7 @@ export default function ArAgingPage() {
   );
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const clients = (data?.clients || []) as any[];
   const summary = data?.summary || {};
@@ -83,9 +84,9 @@ export default function ArAgingPage() {
       actions={
         <>
           <DatePicker value={asOfDate} onChange={setAsOfDate} className="w-44" placeholder="تاريخ التقرير" />
-          <Button variant="outline" size="sm" onClick={() => exportCSV(clients, `ar-aging-${asOfDate}.csv`)}>
+          <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV(clients, `ar-aging-${asOfDate}.csv`)}>
             <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
-          </Button>
+          </GuardedButton>
         </>
       }
     >

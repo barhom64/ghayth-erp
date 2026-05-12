@@ -47,7 +47,7 @@ export default function LoansCreate() {
   );
 
   if (employeesQ.isLoading) return <LoadingSpinner />;
-  if (employeesQ.isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (employeesQ.isError) return <ErrorState />;
 
   const salary = Number(selectedEmployee?.salary || selectedEmployee?.basicSalary || 0);
   const maxLoan = salary * 3;
@@ -221,7 +221,7 @@ export default function LoansCreate() {
 
         {/* أزرار الإرسال */}
         <div className="flex items-center gap-3 pt-4 border-t">
-          <Button type="submit" disabled={createMut.isPending} className="gap-1.5">
+          <Button type="submit" disabled={createMut.isPending} className="gap-1.5" rateLimitAware>
             <Banknote className="h-4 w-4" />
             {createMut.isPending ? "جاري الإرسال..." : "إرسال طلب السلفة"}
           </Button>

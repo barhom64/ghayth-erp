@@ -34,7 +34,9 @@ class ProjectsEngineImpl implements DomainEngine {
     if (srcType === "ap" || srcType === "vendor" || srcType === "supplier" || srcType === "invoice")
       creditFallback = "2100";
     else if (srcType === "inventory" || srcType === "material" || srcType === "materials" || srcType === "stock")
-      creditFallback = "1300";
+      // Task #190 fix: 1300 doesn't exist in the seeded chart_of_accounts.
+      // 1150 ("المخزون") is the canonical inventory asset code.
+      creditFallback = "1151";
 
     const [debitCode, creditCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "project_wip", "debit", "1350"),
@@ -125,7 +127,8 @@ class ProjectsEngineImpl implements DomainEngine {
       `UPDATE project_tasks SET "assigneeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $1)
        WHERE "assigneeId" = (SELECT "employeeId" FROM employee_assignments WHERE id = $2)
          AND status NOT IN ('completed','cancelled')
-         AND ("dueDate" IS NULL OR "dueDate" BETWEEN $3 AND $4)`,
+         AND ("dueDate" IS NULL OR "dueDate" BETWEEN $3 AND $4)
+         AND "deletedAt" IS NULL`,
       [params.toEmployeeQuery.id, params.fromEmployeeQuery.id, params.startDate, params.endDate]
     ).catch((e) => logger.error(e, "project task reassignment failed"));
   }

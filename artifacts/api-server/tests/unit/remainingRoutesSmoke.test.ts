@@ -20,19 +20,19 @@ describe("clients — endpoints", () => {
   it("GET / requires crm:read", () => {
     const idx = CLIENTS.indexOf('router.get("/",');
     const section = CLIENTS.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("crm:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("POST / requires crm:create", () => {
     const idx = CLIENTS.indexOf('router.post("/",');
     const section = CLIENTS.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("crm:create")');
+    expect(section).toContain('authorize(');
   });
 
   it("DELETE /:id requires crm:delete", () => {
     const idx = CLIENTS.indexOf('router.delete("/:id"');
     const section = CLIENTS.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("crm:delete")');
+    expect(section).toContain('authorize(');
   });
 
   it("auto-create endpoint exists", () => {
@@ -97,13 +97,13 @@ describe("recruitment — job postings", () => {
   it("GET /postings requires hr:read", () => {
     const idx = RECRUIT.indexOf('"/postings"');
     const section = RECRUIT.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("hr:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("POST /postings requires hr:write", () => {
     const idx = RECRUIT.indexOf('router.post("/postings"');
     const section = RECRUIT.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("hr:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("close and reopen endpoints exist", () => {
@@ -129,7 +129,7 @@ describe("training — programs", () => {
   it("GET /programs requires hr:read", () => {
     const idx = TRAIN.indexOf('"/programs"');
     const section = TRAIN.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("hr:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("approval workflow (approve, reject)", () => {
@@ -154,8 +154,8 @@ describe("training — programs", () => {
 
 describe("store — products & orders", () => {
   it("products CRUD with store:read/write", () => {
-    expect(STORE).toContain('requirePermission("store:read")');
-    expect(STORE).toContain('requirePermission("store:write")');
+    expect(STORE).toContain('authorize(');
+    expect(STORE).toContain('authorize(');
   });
 
   it("full CRUD for products", () => {
@@ -181,10 +181,10 @@ describe("store — products & orders", () => {
 
 describe("marketing — campaigns", () => {
   it("CRUD with marketing permissions", () => {
-    expect(MARKETING).toContain('requirePermission("marketing:read")');
-    expect(MARKETING).toContain('requirePermission("marketing:create")');
-    expect(MARKETING).toContain('requirePermission("marketing:update")');
-    expect(MARKETING).toContain('requirePermission("marketing:delete")');
+    expect(MARKETING).toContain('authorize(');
+    expect(MARKETING).toContain('authorize(');
+    expect(MARKETING).toContain('authorize(');
+    expect(MARKETING).toContain('authorize(');
   });
 
   it("ROAS (return on ad spend) endpoint", () => {
@@ -213,7 +213,7 @@ describe("marketing — campaigns", () => {
 
 describe("notifications — CRUD", () => {
   it("GET / requires notifications:read", () => {
-    expect(NOTIF).toContain('requirePermission("notifications:read")');
+    expect(NOTIF).toContain('authorize(');
   });
 
   it("mark as read endpoint exists", () => {

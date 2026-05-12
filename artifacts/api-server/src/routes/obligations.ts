@@ -6,7 +6,7 @@ import { handleRouteError, NotFoundError,
   zodParse,
 } from "../lib/errorHandler.js";
 import { rawQuery } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { emitEvent } from "../lib/businessHelpers.js";
 import {
   ensureObligationsTable,
@@ -23,6 +23,30 @@ import { logger } from "../lib/logger.js";
 
 export const obligationsRouter = Router();
 obligationsRouter.use(authMiddleware);
+
+interface ObligationRow {
+  id: number;
+  companyId: number;
+  branchId: number | null;
+  entityType: string;
+  entityId: number;
+  obligationType: string;
+  title: string;
+  status: string;
+  dueAt: string;
+  metAt: string | null;
+  assignedTo: number | null;
+  escalationSteps: unknown;
+  metadata: unknown;
+  dedupeKey: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+interface ObligationStatusRow {
+  id: number;
+  status: string;
+}
 
 const createObligationSchema = z.object({
   entityType: z.string().min(1, "نوع الكيان مطلوب"),
@@ -43,7 +67,7 @@ const entityActionSchema = z.object({
 });
 
 // List obligations (filtered)
-obligationsRouter.get("/", requirePermission("operations:read"), async (req, res) => {
+obligationsRouter.get("/", authorize({ feature: "projects", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId, status, assignedTo, dueBefore, dueAfter, limit } = req.query as any;
@@ -66,7 +90,7 @@ obligationsRouter.get("/", requirePermission("operations:read"), async (req, res
   }
 });
 
-obligationsRouter.get("/summary", requirePermission("operations:read"), async (req, res) => {
+obligationsRouter.get("/summary", authorize({ feature: "projects", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const summary = await obligationSummary(scope.companyId);
@@ -77,7 +101,7 @@ obligationsRouter.get("/summary", requirePermission("operations:read"), async (r
 });
 
 // Manually create an obligation (useful for ad-hoc reminders)
-obligationsRouter.post("/", requirePermission("operations:write"), async (req, res) => {
+obligationsRouter.post("/", authorize({ feature: "projects", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId, obligationType, title, dueAt, assignedTo, escalationSteps, metadata, dedupeKey } = zodParse(createObligationSchema.safeParse(req.body));
@@ -95,19 +119,20 @@ obligationsRouter.post("/", requirePermission("operations:write"), async (req, r
       dedupeKey,
     });
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "obligation.created", entity: "obligations", entityId: id, details: JSON.stringify({ entityType, entityId, obligationType, title, dueAt }) }).catch((e) => logger.error(e, "obligations background task failed"));
-    res.status(201).json({ id });
+    const [row] = await rawQuery<ObligationRow>(`SELECT * FROM obligations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    res.status(201).json(row || { id });
   } catch (err) {
     handleRouteError(err, res, "Create obligation error:");
   }
 });
 
 // Mark as met (called when underlying event happens)
-obligationsRouter.post("/:id/met", requirePermission("operations:write"), async (req, res) => {
+obligationsRouter.post("/:id/met", authorize({ feature: "projects", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     await ensureObligationsTable();
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<ObligationStatusRow>(
       `UPDATE obligations SET status='met', "metAt"=NOW(), "updatedAt"=NOW()
        WHERE id=$1 AND "companyId"=$2 AND status = 'pending' RETURNING id, status`,
       [id, scope.companyId]
@@ -121,7 +146,7 @@ obligationsRouter.post("/:id/met", requirePermission("operations:write"), async 
 });
 
 // Mark as met by entity (used internally by event handlers)
-obligationsRouter.post("/met-by-entity", requirePermission("operations:write"), async (req, res) => {
+obligationsRouter.post("/met-by-entity", authorize({ feature: "projects", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId, obligationType } = zodParse(entityActionSchema.safeParse(req.body));
@@ -138,12 +163,12 @@ obligationsRouter.post("/met-by-entity", requirePermission("operations:write"), 
   }
 });
 
-obligationsRouter.post("/:id/cancel", requirePermission("operations:write"), async (req, res) => {
+obligationsRouter.post("/:id/cancel", authorize({ feature: "projects", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     await ensureObligationsTable();
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<ObligationStatusRow>(
       `UPDATE obligations SET status='cancelled', "updatedAt"=NOW()
        WHERE id=$1 AND "companyId"=$2 AND status = 'pending' RETURNING id, status`,
       [id, scope.companyId]
@@ -156,7 +181,7 @@ obligationsRouter.post("/:id/cancel", requirePermission("operations:write"), asy
   }
 });
 
-obligationsRouter.post("/cancel-by-entity", requirePermission("operations:write"), async (req, res) => {
+obligationsRouter.post("/cancel-by-entity", authorize({ feature: "projects", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId, obligationType } = zodParse(entityActionSchema.safeParse(req.body));
@@ -174,7 +199,7 @@ obligationsRouter.post("/cancel-by-entity", requirePermission("operations:write"
 });
 
 // Manual trigger for the scanner (normally runs via cron)
-obligationsRouter.post("/scan", requirePermission("operations:create"), async (req, res) => {
+obligationsRouter.post("/scan", authorize({ feature: "projects", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const result = await scanObligations(scope.companyId);

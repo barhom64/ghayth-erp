@@ -21,7 +21,7 @@ export default function MyDocuments() {
   const { data, isLoading, isError } = useApiQuery<any>(["my-documents"], "/my-space/documents");
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const documents: any[] = data?.data ?? [];
 

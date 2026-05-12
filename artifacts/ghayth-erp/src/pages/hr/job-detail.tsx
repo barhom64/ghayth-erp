@@ -6,10 +6,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { DetailPageLayout, type ExtraTab } from "@/components/shared/detail-page-layout";
 import { formatDateAr } from "@/lib/formatters";
 import { resolveStatus } from "@/components/page-status-badge";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import {
   Briefcase,
   Building2,
@@ -46,6 +48,8 @@ export default function JobDetailPage() {
   const [, navigate] = useLocation();
   const id = params?.id || "";
   const queryClient = useQueryClient();
+
+  const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("job_posting", id);
 
   const { data: job, isLoading, isError, refetch } = useApiQuery<any>(
     ["recruitment-job", id],
@@ -128,7 +132,8 @@ export default function JobDetailPage() {
   const actions = (
     <>
       {isClosed ? (
-        <Button
+        <GuardedButton
+          perm="hr:create"
           size="sm"
           variant="default"
           className="gap-1"
@@ -152,9 +157,10 @@ export default function JobDetailPage() {
         >
           <RotateCcw className="h-4 w-4" />
           إعادة فتح
-        </Button>
+        </GuardedButton>
       ) : (
-        <Button
+        <GuardedButton
+          perm="hr:create"
           size="sm"
           variant="outline"
           className="gap-1"
@@ -178,7 +184,7 @@ export default function JobDetailPage() {
         >
           <XCircle className="h-4 w-4" />
           إغلاق
-        </Button>
+        </GuardedButton>
       )}
     </>
   );
@@ -223,7 +229,8 @@ export default function JobDetailPage() {
       onRetry={() => refetch()}
       overview={overview}
       actions={actions}
-      extraTabs={extraTabs}
+      extraTabs={[...extraTabs, ...registryExtraTabs]}
+      hideTabs={registryHideTabs}
       status={job?.status ? { label: resolveStatus(job.status)?.label || job.status, tone: STATUS_TONE_MAP[job.status] ?? "default" } : undefined}
       createdAt={job?.createdAt}
       updatedAt={job?.updatedAt}

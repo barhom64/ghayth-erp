@@ -1,12 +1,15 @@
 import { useState, useRef, useCallback } from "react";
 import { useRoute } from "wouter";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
+import { notifyRateLimited, RateLimitError } from "@/lib/rate-limit-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Upload, FileText, Save } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { cn } from "@/lib/utils";
 import { CreatePageLayout } from "@/components/create-page-layout";
 import { TextField } from "@/components/shared/form-field-wrapper";
@@ -35,10 +38,18 @@ export default function VersionUploadPage() {
 
   const [uploading, setUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
-  const [notes, setNotes] = useState("");
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("documents_version_upload", { notes: "" });
+  const { fieldErrors, validate } = useFieldErrors();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleUploadVersion = useCallback(async () => {
+    const firstError = validate({
+      file: !file ? "يرجى اختيار ملف للرفع" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
+      return;
+    }
     if (!file || !docId) return;
     setUploading(true);
     try {
@@ -48,6 +59,9 @@ export default function VersionUploadPage() {
         credentials: "include",
         body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
       });
+      if (urlRes.status === 429) {
+        throw new RateLimitError(notifyRateLimited(urlRes));
+      }
       if (!urlRes.ok) throw new Error("فشل في الحصول على رابط الرفع");
       const { uploadURL, objectPath } = await urlRes.json();
       const putRes = await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
@@ -60,20 +74,25 @@ export default function VersionUploadPage() {
           fileSize: file.size,
           mimeType: file.type,
           storageKey: objectPath,
-          notes,
+          notes: form.notes,
         }),
       });
 
       toast({ title: "تم رفع الإصدار بنجاح" });
       setFile(null);
-      setNotes("");
+      clearDraft();
       refetch();
     } catch (err: any) {
+      if (err instanceof RateLimitError) {
+        // notifyRateLimited already showed the debounced rate-limit toast.
+        setUploading(false);
+        return;
+      }
       toast({ variant: "destructive", title: err.message || "حدث خطأ" });
     } finally {
       setUploading(false);
     }
-  }, [file, notes, docId, refetch, toast]);
+  }, [file, form.notes, docId, refetch, toast, validate, clearDraft]);
 
   return (
     <CreatePageLayout
@@ -81,6 +100,12 @@ export default function VersionUploadPage() {
       subtitle="عرض ورفع إصدارات جديدة"
       backPath="/documents"
     >
+      {hasDraft && (
+        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+          <span>تم استعادة مسودة محفوظة سابقاً</span>
+          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+        </div>
+      )}
       <div className="space-y-6">
         <div>
           <h3 className="flex items-center gap-2 text-lg font-semibold mb-3">
@@ -104,8 +129,8 @@ export default function VersionUploadPage() {
               )}
               <input ref={inputRef} type="file" className="hidden" onChange={(e) => { if (e.target.files?.[0]) setFile(e.target.files[0]); e.target.value = ""; }} />
             </div>
-            <TextField label="ملاحظات (اختياري)" value={notes} onChange={setNotes} placeholder="وصف التغييرات في هذا الإصدار" />
-            <Button onClick={handleUploadVersion} disabled={!file || uploading} className="gap-2">
+            <TextField label="ملاحظات (اختياري)" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} placeholder="وصف التغييرات في هذا الإصدار" />
+            <Button onClick={handleUploadVersion} disabled={!file || uploading} className="gap-2" rateLimitAware>
               <Save className="h-4 w-4" /> {uploading ? "جاري الرفع..." : "رفع الإصدار"}
             </Button>
           </div>

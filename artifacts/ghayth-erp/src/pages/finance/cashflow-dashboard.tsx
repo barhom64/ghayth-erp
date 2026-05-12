@@ -47,7 +47,7 @@ export default function CashflowDashboard() {
 
   const { data: invoicesData } = useApiQuery<any>(
     ["finance-invoices-pending"],
-    `/finance/invoices?status=pending&limit=5${qstr ? "&" + scopeQueryString : ""}`
+    `/finance/invoices?status=draft&limit=5${qstr ? "&" + scopeQueryString : ""}`
   );
 
   const { data: expensesData } = useApiQuery<any>(
@@ -59,14 +59,14 @@ export default function CashflowDashboard() {
   const isError = summaryError || budgetError;
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const summary = summaryData?.data || summaryData || {};
   const budget = budgetData?.data || budgetData || {};
   const pendingInvoices: any[] = invoicesData?.data || [];
   const recentExpenses: any[] = expensesData?.data || [];
 
-  const totalIncome = Number(summary.totalIncome || summary.income || 0);
+  const totalIncome = Number(summary.totalRevenue || summary.totalPaid || summary.totalIncome || 0);
   const totalExpenses = Number(summary.totalExpenses || summary.expenses || 0);
   const netCashflow = totalIncome - totalExpenses;
   const isPositive = netCashflow >= 0;

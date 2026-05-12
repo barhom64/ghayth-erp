@@ -83,7 +83,7 @@ export default function ContractsCreate() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   if (loadingU || loadingT || loadingO) return <LoadingSpinner />;
-  if (errorU || errorT || errorO) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (errorU || errorT || errorO) return <ErrorState />;
 
   const set = (field: string, value: any) => {
     setIsDirty(true);
@@ -284,7 +284,7 @@ export default function ContractsCreate() {
                   <SelectContent>
                     <SelectItem value="active">نشط</SelectItem>
                     <SelectItem value="expired">منتهي</SelectItem>
-                    <SelectItem value="terminated">ملغى</SelectItem>
+                    <SelectItem value="cancelled">ملغى</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -531,7 +531,7 @@ export default function ContractsCreate() {
 
         <div className="flex justify-end gap-3 pt-6">
           <Button variant="outline" onClick={() => setLocation("/properties/contracts")}>إلغاء</Button>
-          <Button onClick={handleSubmit} disabled={createMut.isPending}>
+          <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>
             {createMut.isPending ? "جاري الحفظ..." : "حفظ العقد"}
           </Button>
         </div>

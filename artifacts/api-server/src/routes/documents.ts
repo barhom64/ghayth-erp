@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { Readable } from "stream";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
@@ -11,6 +11,88 @@ import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, Confl
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
 import { APPROVE_ROLES } from "../lib/rbacCatalog.js";
+
+// Local row shapes for the documents tables. Not in @workspace/db schema.
+
+// Columns not explicitly typed here arrive as `unknown` from rawQuery; the
+// signature `[k: string]: unknown` keeps backward compatibility for callers
+// that read ad-hoc fields, while the listed fields preserve their concrete
+// type for the hot paths in this file (download, template fill, etc).
+interface DocumentRow {
+  id: number;
+  companyId?: number | null;
+  branchId?: number | null;
+  title: string;
+  description?: string | null;
+  type?: string | null;
+  category?: string | null;
+  status: string;
+  department?: string | null;
+  folder?: string | null;
+  fileUrl?: string | null;
+  fileName?: string | null;
+  fileSize?: number | null;
+  mimeType?: string | null;
+  storageKey?: string | null;
+  currentVersion?: number | null;
+  uploadedBy?: number | null;
+  approvedBy?: number | null;
+  approvedAt?: string | null;
+  rejectedReason?: string | null;
+  createdAt: string;
+  updatedAt?: string | null;
+  deletedAt?: string | null;
+  [k: string]: unknown;
+}
+
+interface DocumentFolderRow {
+  id: number;
+  companyId: number;
+  name: string;
+  parentId?: number | null;
+  description?: string | null;
+  createdAt: string;
+  updatedAt?: string | null;
+  deletedAt?: string | null;
+}
+
+interface DocumentTemplateRow extends Record<string, unknown> {
+  id: number;
+  companyId?: number | null;
+  name: string;
+  category?: string | null;
+  type?: string | null;
+  body?: string | null;
+  variables?: unknown;
+  createdAt: string;
+  updatedAt?: string | null;
+  deletedAt?: string | null;
+}
+
+interface EmployeeContext extends Record<string, unknown> {
+  id: number;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+}
+
+interface InvoiceContext extends Record<string, unknown> {
+  id: number;
+  ref?: string | null;
+  total: number | string;
+  status: string;
+}
+
+interface CompanyContext extends Record<string, unknown> {
+  id: number;
+  name: string;
+}
+
+interface BranchContext extends Record<string, unknown> {
+  id: number;
+  name: string;
+  companyId: number;
+}
 
 /* ── Zod Schemas ────────────────────────────────────────────── */
 
@@ -108,7 +190,7 @@ const router = Router();
 
 const objectStorageService = new ObjectStorageService();
 
-router.get("/", requirePermission("documents:read"), async (req: Request, res: Response) => {
+router.get("/", authorize({ feature: "documents", action: "list" }), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const { entity, entityId, category, status: docStatus } = req.query;
@@ -127,7 +209,7 @@ router.get("/", requirePermission("documents:read"), async (req: Request, res: R
     }
 
     let where = `WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
 
     if (category) {
       params.push(category);
@@ -143,7 +225,7 @@ router.get("/", requirePermission("documents:read"), async (req: Request, res: R
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.post("/", requirePermission("documents:create"), async (req: Request, res: Response) => {
+router.post("/", authorize({ feature: "documents", action: "create" }), async (req: Request, res: Response) => {
   try {
     const body = zodParse(createDocumentSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -173,11 +255,12 @@ router.post("/", requirePermission("documents:create"), async (req: Request, res
       entityId: r.insertId,
       details: JSON.stringify({ title, type: type || "document" }),
     }).catch((e) => logger.error(e, "documents background task failed"));
-    res.status(201).json({ id: r.insertId, title, type, department });
+    const [row] = await rawQuery<DocumentRow>(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId, title, type, department });
   } catch (err) { handleRouteError(err, res, "Create document error:"); }
 });
 
-router.post("/upload", requirePermission("documents:create"), async (req: Request, res: Response) => {
+router.post("/upload", authorize({ feature: "documents", action: "create" }), async (req: Request, res: Response) => {
   try {
     const body = zodParse(uploadDocumentSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -192,29 +275,31 @@ router.post("/upload", requirePermission("documents:create"), async (req: Reques
       }
     }
 
-    const r = await rawExecute(
-      `INSERT INTO documents (title, description, "fileName", "fileSize", "mimeType", category, status, "storageKey", "currentVersion", "uploadedBy", "companyId")
-       VALUES ($1,$2,$3,$4,$5,$6,'draft',$7,1,$8,$9)`,
-      [title, description, fileName, fileSize, mimeType, category || null, storageKey, scope.userId, scope.companyId]
-    );
+    let docId!: number;
+    await withTransaction(async (client) => {
+      const r = await client.query(
+        `INSERT INTO documents (title, description, "fileName", "fileSize", "mimeType", category, status, "storageKey", "currentVersion", "uploadedBy", "companyId")
+         VALUES ($1,$2,$3,$4,$5,$6,'draft',$7,1,$8,$9) RETURNING id`,
+        [title, description, fileName, fileSize, mimeType, category || null, storageKey, scope.userId, scope.companyId]
+      );
+      docId = r.rows[0].id;
 
-    const docId = r.insertId;
+      await client.query(
+        `INSERT INTO document_versions ("documentId", "versionNumber", "fileName", "fileSize", "mimeType", "storageKey", "uploadedBy")
+         VALUES ($1, 1, $2, $3, $4, $5, $6)`,
+        [docId, fileName, fileSize, mimeType, storageKey, scope.userId]
+      );
 
-    await rawExecute(
-      `INSERT INTO document_versions ("documentId", "versionNumber", "fileName", "fileSize", "mimeType", "storageKey", "uploadedBy")
-       VALUES ($1, 1, $2, $3, $4, $5, $6)`,
-      [docId, fileName, fileSize, mimeType, storageKey, scope.userId]
-    );
-
-    if (entityLinks && Array.isArray(entityLinks)) {
-      for (const link of entityLinks) {
-        await rawExecute(
-          `INSERT INTO document_entity_links ("documentId", "entityType", "entityId") VALUES ($1, $2, $3)
-           ON CONFLICT ("documentId", "entityType", "entityId") DO NOTHING`,
-          [docId, link.entityType, link.entityId]
-        );
+      if (entityLinks && Array.isArray(entityLinks)) {
+        for (const link of entityLinks) {
+          await client.query(
+            `INSERT INTO document_entity_links ("documentId", "entityType", "entityId") VALUES ($1, $2, $3)
+             ON CONFLICT ("documentId", "entityType", "entityId") DO NOTHING`,
+            [docId, link.entityType, link.entityId]
+          );
+        }
       }
-    }
+    });
 
     const [doc] = await rawQuery(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [docId, scope.companyId]);
     createAuditLog({
@@ -234,11 +319,11 @@ router.post("/upload", requirePermission("documents:create"), async (req: Reques
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.get("/:id/download", requirePermission("documents:download"), async (req: Request, res: Response) => {
+router.get("/:id/download", authorize({ feature: "documents", action: "export" }), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [doc] = await rawQuery<any>(
+    const [doc] = await rawQuery<DocumentRow>(
       `SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -275,11 +360,11 @@ router.get("/:id/download", requirePermission("documents:download"), async (req:
 // Used by the frontend <AttachmentPreview> component for side-panel preview
 // without leaving the current page. Same scope + permission checks as
 // /download, but skips the attachment header so browsers embed the content.
-router.get("/:id/preview", requirePermission("documents:download"), async (req: Request, res: Response) => {
+router.get("/:id/preview", authorize({ feature: "documents", action: "export" }), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [doc] = await rawQuery<any>(
+    const [doc] = await rawQuery<DocumentRow>(
       `SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -320,14 +405,14 @@ router.get("/:id/preview", requirePermission("documents:download"), async (req: 
 // precheck and the UPDATE to caller's company only; new versions of
 // global/system documents must be created as company-owned documents
 // via the regular create flow, not by mutating shared rows.
-router.post("/:id/versions", requirePermission("documents:create"), async (req: Request, res: Response) => {
+router.post("/:id/versions", authorize({ feature: "documents", action: "create" }), async (req: Request, res: Response) => {
   try {
     const body = zodParse(createVersionSchema.safeParse(req.body));
     const scope = req.scope!;
     const docId = parseId(req.params.id, "id");
     const { fileName, fileSize, mimeType, storageKey, notes } = body;
 
-    const [doc] = await rawQuery<any>(
+    const [doc] = await rawQuery<DocumentRow>(
       `SELECT * FROM documents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [docId, scope.companyId]
     );
@@ -335,16 +420,18 @@ router.post("/:id/versions", requirePermission("documents:create"), async (req: 
 
     const newVersion = (doc.currentVersion || 1) + 1;
 
-    await rawExecute(
-      `INSERT INTO document_versions ("documentId", "versionNumber", "fileName", "fileSize", "mimeType", "storageKey", "uploadedBy", notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [docId, newVersion, fileName, fileSize, mimeType, storageKey, scope.userId, notes || null]
-    );
+    await withTransaction(async (client) => {
+      await client.query(
+        `INSERT INTO document_versions ("documentId", "versionNumber", "fileName", "fileSize", "mimeType", "storageKey", "uploadedBy", notes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [docId, newVersion, fileName, fileSize, mimeType, storageKey, scope.userId, notes || null]
+      );
 
-    await rawExecute(
-      `UPDATE documents SET "currentVersion"=$1, "fileName"=$2, "fileSize"=$3, "mimeType"=$4, "storageKey"=$5, "updatedAt"=NOW() WHERE id=$6 AND "companyId"=$7`,
-      [newVersion, fileName, fileSize, mimeType, storageKey, docId, scope.companyId]
-    );
+      await client.query(
+        `UPDATE documents SET "currentVersion"=$1, "fileName"=$2, "fileSize"=$3, "mimeType"=$4, "storageKey"=$5, "updatedAt"=NOW() WHERE id=$6 AND "companyId"=$7 AND "deletedAt" IS NULL`,
+        [newVersion, fileName, fileSize, mimeType, storageKey, docId, scope.companyId]
+      );
+    });
 
     const [updated] = await rawQuery(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [docId, scope.companyId]);
     if (!updated) throw new NotFoundError("فشل في استرجاع المستند");
@@ -365,11 +452,11 @@ router.post("/:id/versions", requirePermission("documents:create"), async (req: 
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.get("/:id/versions", requirePermission("documents:read"), async (req: Request, res: Response) => {
+router.get("/:id/versions", authorize({ feature: "documents", action: "list" }), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const docId = parseId(req.params.id, "id");
-    const [doc] = await rawQuery<any>(
+    const [doc] = await rawQuery<{ id: number }>(
       `SELECT id FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
       [docId, scope.companyId]
     );
@@ -383,7 +470,7 @@ router.get("/:id/versions", requirePermission("documents:read"), async (req: Req
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.patch("/:id/status", requirePermission("documents:update"), async (req: Request, res: Response) => {
+router.patch("/:id/status", authorize({ feature: "documents", action: "update" }), async (req: Request, res: Response) => {
   try {
     const body = zodParse(updateStatusSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -394,11 +481,11 @@ router.patch("/:id/status", requirePermission("documents:update"), async (req: R
       throw new ForbiddenError("ليس لديك صلاحية اعتماد المستندات");
     }
 
-    const [beforeDoc] = await rawQuery<any>(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [docId, scope.companyId]);
+    const [beforeDoc] = await rawQuery<DocumentRow>(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [docId, scope.companyId]);
     if (!beforeDoc) throw new NotFoundError("المستند غير موجود");
 
     const result = await rawExecute(
-      `UPDATE documents SET status=$1, "updatedAt"=NOW() WHERE id=$2 AND ("companyId"=$3 OR "companyId" IS NULL) AND status != $1`,
+      `UPDATE documents SET status=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND status != $1 AND "deletedAt" IS NULL`,
       [status, docId, scope.companyId]
     );
     if (result.affectedRows === 0 && beforeDoc.status === status) throw new ConflictError("المستند في هذه الحالة مسبقاً");
@@ -434,14 +521,14 @@ router.patch("/:id/status", requirePermission("documents:update"), async (req: R
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.post("/:id/entity-links", requirePermission("documents:update"), async (req: Request, res: Response) => {
+router.post("/:id/entity-links", authorize({ feature: "documents", action: "update" }), async (req: Request, res: Response) => {
   try {
     const body = zodParse(createEntityLinkSchema.safeParse(req.body));
     const scope = req.scope!;
     const { entityType, entityId } = body;
     const docId = parseId(req.params.id, "id");
 
-    const [doc] = await rawQuery<any>(
+    const [doc] = await rawQuery<{ id: number }>(
       `SELECT id FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
       [docId, scope.companyId]
     );
@@ -469,12 +556,12 @@ router.post("/:id/entity-links", requirePermission("documents:update"), async (r
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.get("/:id/entity-links", requirePermission("documents:read"), async (req: Request, res: Response) => {
+router.get("/:id/entity-links", authorize({ feature: "documents", action: "list" }), async (req: Request, res: Response) => {
   try {
     const scope = req.scope!;
     const docId = parseId(req.params.id, "id");
 
-    const [doc] = await rawQuery<any>(
+    const [doc] = await rawQuery<{ id: number }>(
       `SELECT id FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
       [docId, scope.companyId]
     );
@@ -488,7 +575,7 @@ router.get("/:id/entity-links", requirePermission("documents:read"), async (req:
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.get("/folders", requirePermission("documents:read"), async (req, res) => {
+router.get("/folders", authorize({ feature: "documents", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM document_folders WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
@@ -496,7 +583,7 @@ router.get("/folders", requirePermission("documents:read"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.post("/folders", requirePermission("documents:create"), async (req, res) => {
+router.post("/folders", authorize({ feature: "documents", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(createFolderSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -536,14 +623,15 @@ router.post("/folders", requirePermission("documents:create"), async (req, res) 
       entityId: r.insertId,
       details: JSON.stringify({ name }),
     }).catch((e) => logger.error(e, "documents background task failed"));
-    res.status(201).json({ id: r.insertId, name, parentId: parentId ? Number(parentId) : null });
+    const [row] = await rawQuery<DocumentFolderRow>(`SELECT * FROM document_folders WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId, name, parentId: parentId ? Number(parentId) : null });
   } catch (err) { handleRouteError(err, res, "Create folder error:"); }
 });
 
-router.get("/templates", requirePermission("documents:read"), async (req, res) => {
+router.get("/templates", authorize({ feature: "documents", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<DocumentTemplateRow>(
       `SELECT * FROM document_templates WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`,
       [scope.companyId]
     );
@@ -551,17 +639,17 @@ router.get("/templates", requirePermission("documents:read"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.get("/templates/:id", requirePermission("documents:read"), async (req, res) => {
+router.get("/templates/:id", authorize({ feature: "documents", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
+    const [row] = await rawQuery<DocumentTemplateRow>(`SELECT * FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("القالب غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.post("/templates", requirePermission("documents:create"), async (req, res) => {
+router.post("/templates", authorize({ feature: "documents", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(createTemplateSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -595,7 +683,8 @@ router.post("/templates", requirePermission("documents:create"), async (req, res
       entityId: r.insertId,
       details: JSON.stringify({ name, type: type || "letter" }),
     }).catch((e) => logger.error(e, "documents background task failed"));
-    res.status(201).json({ id: r.insertId, name, type: type || "letter" });
+    const [row] = await rawQuery<DocumentTemplateRow>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId, name, type: type || "letter" });
   } catch (err) { handleRouteError(err, res, "Create template error:"); }
 });
 
@@ -614,20 +703,20 @@ router.post("/templates", requirePermission("documents:create"), async (req, res
 // guard to "must own the template" (companyId IS NULL is always
 // rejected, regardless of isDefault) and scope the actual UPDATE /
 // DELETE / SELECT-back to the caller's company.
-router.put("/templates/:id", requirePermission("documents:update"), async (req, res) => {
+router.put("/templates/:id", authorize({ feature: "documents", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(updateTemplateSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     if (isNaN(id) || id <= 0) throw new ValidationError("معرف القالب غير صالح");
     const { name, description, content, category, type, variables, htmlContent, branchId, signatureUrl, isActive } = body;
-    const [existing] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<DocumentTemplateRow>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("القالب غير موجود");
     await rawExecute(
-      `UPDATE document_templates SET name=$1, description=$2, content=$3, category=$4, "type"=$5, "variables"=$6, "htmlContent"=$7, "branchId"=$8, "signatureUrl"=$9, "isActive"=$10, "updatedAt"=NOW() WHERE id=$11 AND "companyId"=$12`,
+      `UPDATE document_templates SET name=$1, description=$2, content=$3, category=$4, "type"=$5, "variables"=$6, "htmlContent"=$7, "branchId"=$8, "signatureUrl"=$9, "isActive"=$10, "updatedAt"=NOW() WHERE id=$11 AND "companyId"=$12 AND "deletedAt" IS NULL`,
       [name, description, content, category, type, JSON.stringify(variables || []), htmlContent, branchId || null, signatureUrl || null, isActive !== false, id, scope.companyId]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery<DocumentTemplateRow>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "document_templates", entityId: id,
@@ -642,17 +731,18 @@ router.put("/templates/:id", requirePermission("documents:update"), async (req, 
       details: JSON.stringify({ name }),
     }).catch((e) => logger.error(e, "documents background task failed"));
     res.json(row);
-  } catch (e: any) { handleRouteError(e, res, "Update document template error"); }
+  } catch (e) { handleRouteError(e, res, "Update document template error"); }
 });
 
-router.delete("/templates/:id", requirePermission("documents:delete"), async (req, res) => {
+router.delete("/templates/:id", authorize({ feature: "documents", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     if (isNaN(id) || id <= 0) throw new ValidationError("معرف القالب غير صالح");
-    const [existing] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<DocumentTemplateRow>(`SELECT * FROM document_templates WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("القالب غير موجود");
-    await rawExecute(`UPDATE document_templates SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE document_templates SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود");
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "delete", entity: "document_templates", entityId: id,
@@ -666,7 +756,7 @@ router.delete("/templates/:id", requirePermission("documents:delete"), async (re
       entityId: id,
     }).catch((e) => logger.error(e, "documents background task failed"));
     res.json({ message: "تم حذف القالب بنجاح" });
-  } catch (e: any) { handleRouteError(e, res, "Delete document template error"); }
+  } catch (e) { handleRouteError(e, res, "Delete document template error"); }
 });
 
 function escapeHtml(str: string): string {
@@ -678,13 +768,13 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function fillTemplate(htmlContent: string, data: Record<string, any>): string {
+function fillTemplate(htmlContent: string, data: Record<string, unknown>): string {
   return htmlContent.replace(/\{\{(\w+(?:\.\w+)*)\}\}/g, (match, key) => {
     const parts = key.split(".");
-    let value: any = data;
+    let value: unknown = data;
     for (const part of parts) {
       if (value == null) return match;
-      value = value[part];
+      value = (value as Record<string, unknown>)[part];
     }
     return value != null ? escapeHtml(String(value)) : match;
   });
@@ -700,11 +790,11 @@ function buildDateContext() {
   return { today: todayGregorian, todayHijri };
 }
 
-router.post("/templates/:id/generate", requirePermission("documents:read"), async (req, res) => {
+router.post("/templates/:id/generate", authorize({ feature: "documents", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [template] = await rawQuery<any>(`SELECT * FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
+    const [template] = await rawQuery<DocumentTemplateRow>(`SELECT * FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!template) throw new NotFoundError("القالب غير موجود");
 
     const generateBody = zodParse(generateTemplateSchema.safeParse(req.body));
@@ -722,14 +812,35 @@ router.post("/templates/:id/generate", requirePermission("documents:read"), asyn
       // assignment so we only ever fetch employees the caller's company
       // actually employs (matches the invoice branch below which already
       // filters by `i."companyId"=$2`).
-      const [emp] = await rawQuery<any>(`
-        SELECT e.*, d.name as "departmentName", b.name as "branchName"
+      interface EmployeeWithContractRow extends Record<string, unknown> {
+        id: number;
+        name: string;
+        empNumber?: string | null;
+        nationalId?: string | null;
+        nationality?: string | null;
+        phone?: string | null;
+        email?: string | null;
+        status?: string | null;
+        jobTitle?: string | null;
+        hireDate?: string | null;
+        endDate?: string | null;
+        departmentName?: string | null;
+        branchName?: string | null;
+        salary?: number | string | null;
+        housingAllowance?: number | string | null;
+        transportAllowance?: number | string | null;
+      }
+      const [emp] = await rawQuery<EmployeeWithContractRow>(`
+        SELECT e.*, ea."jobTitle", ea."hireDate", ea."endDate",
+               ec.salary, ec."housingAllowance", ec."transportAllowance",
+               d.name as "departmentName", b.name as "branchName"
         FROM employees e
         JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active' AND ea."companyId" = $2
+        LEFT JOIN employee_contracts ec ON ec."assignmentId" = ea.id AND ec."deletedAt" IS NULL AND ec.status = 'active'
         LEFT JOIN departments d ON d.id = ea."departmentId"
         LEFT JOIN branches b ON b.id = ea."branchId"
         WHERE e.id=$1
-        LIMIT 1
+        ORDER BY ea."hireDate" DESC LIMIT 1
       `, [Number(entityId), scope.companyId]);
       if (emp) {
         entityData.employee = {
@@ -739,7 +850,7 @@ router.post("/templates/:id/generate", requirePermission("documents:read"), asyn
           departmentName: emp.departmentName || "",
           branchName: emp.branchName || "",
           nationality: emp.nationality || "",
-          idNumber: emp.idNumber || "",
+          idNumber: emp.nationalId || "",
           phone: emp.phone || "",
           email: emp.email || "",
           hireDate: emp.hireDate ? new Date(emp.hireDate).toLocaleDateString("ar-SA") : "",
@@ -756,7 +867,15 @@ router.post("/templates/:id/generate", requirePermission("documents:read"), asyn
     }
 
     if (entityType === "invoice" && entityId) {
-      const [inv] = await rawQuery<any>(`
+      interface InvoiceWithClientRow extends Record<string, unknown> {
+        id: number;
+        ref?: string | null;
+        total: number | string;
+        clientName?: string | null;
+        clientEmail?: string | null;
+        clientPhone?: string | null;
+      }
+      const [inv] = await rawQuery<InvoiceWithClientRow>(`
         SELECT i.*, c.name as "clientName", c.email as "clientEmail", c.phone as "clientPhone"
         FROM invoices i
         LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
@@ -774,14 +893,14 @@ router.post("/templates/:id/generate", requirePermission("documents:read"), asyn
           subtotal: Number(inv.subtotal || inv.total || 0),
           vat: Number(inv.vatAmount || 0),
           total: Number(inv.total || 0),
-          validUntil: inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("ar-SA") : "",
+          validUntil: inv.dueDate ? new Date(String(inv.dueDate)).toLocaleDateString("ar-SA") : "",
           notes: inv.notes || "",
           items: "",
         };
       }
     }
 
-    const [company] = await rawQuery<any>(`SELECT * FROM companies WHERE id=$1`, [scope.companyId]);
+    const [company] = await rawQuery<CompanyContext>(`SELECT * FROM companies WHERE id=$1`, [scope.companyId]);
     entityData.company = { name: company?.name || "", nameEn: company?.nameEn || "" };
     entityData.date = buildDateContext();
 
@@ -797,13 +916,13 @@ router.post("/templates/:id/generate", requirePermission("documents:read"), asyn
       }
     }
 
-    const htmlContent = template.htmlContent || template.content || "";
+    const htmlContent = String(template.htmlContent || template.content || "");
     const filledHtml = fillTemplate(htmlContent, entityData);
 
     let branchData = null;
     const branchId = template.branchId || scope.branchId;
     if (branchId) {
-      const [branch] = await rawQuery<any>(`SELECT * FROM branches WHERE id=$1 AND "companyId"=$2`, [branchId, scope.companyId]);
+      const [branch] = await rawQuery<BranchContext>(`SELECT * FROM branches WHERE id=$1 AND "companyId"=$2`, [branchId, scope.companyId]);
       if (branch) {
         branchData = {
           name: branch.name,
@@ -845,11 +964,11 @@ router.post("/templates/:id/generate", requirePermission("documents:read"), asyn
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.get("/templates/:id/variables", requirePermission("documents:read"), async (req, res) => {
+router.get("/templates/:id/variables", authorize({ feature: "documents", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [template] = await rawQuery<any>(`SELECT variables FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
+    const [template] = await rawQuery<{ variables: unknown }>(`SELECT variables FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!template) throw new NotFoundError("القالب غير موجود");
     let variables = [];
     try { variables = typeof template.variables === "string" ? JSON.parse(template.variables) : (template.variables || []); } catch (e) { logger.warn(e, "failed to parse template variables JSON"); variables = []; }
@@ -857,15 +976,17 @@ router.get("/templates/:id/variables", requirePermission("documents:read"), asyn
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.get("/stats", requirePermission("documents:read"), async (req, res) => {
+router.get("/stats", authorize({ feature: "documents", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [docs] = await rawQuery(`SELECT COUNT(*) as count FROM documents WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]);
-    const [folders] = await rawQuery(`SELECT COUNT(*) as count FROM document_folders WHERE "companyId"=$1 OR "companyId" IS NULL`, [cid]);
-    const [templates] = await rawQuery(`SELECT COUNT(*) as count FROM document_templates WHERE "companyId"=$1 OR "companyId" IS NULL`, [cid]);
-    const [drafts] = await rawQuery(`SELECT COUNT(*) as count FROM documents WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL AND status='draft'`, [cid]);
-    const [approved] = await rawQuery(`SELECT COUNT(*) as count FROM documents WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL AND status='approved'`, [cid]);
+    const [[docs], [folders], [templates], [drafts], [approved]] = await Promise.all([
+      rawQuery(`SELECT COUNT(*) as count FROM documents WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]),
+      rawQuery(`SELECT COUNT(*) as count FROM document_folders WHERE "companyId"=$1 OR "companyId" IS NULL`, [cid]),
+      rawQuery(`SELECT COUNT(*) as count FROM document_templates WHERE "companyId"=$1 OR "companyId" IS NULL`, [cid]),
+      rawQuery(`SELECT COUNT(*) as count FROM documents WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL AND status='draft'`, [cid]),
+      rawQuery(`SELECT COUNT(*) as count FROM documents WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL AND status='approved'`, [cid]),
+    ]);
     res.json({
       totalDocuments: Number(docs.count),
       totalFolders: Number(folders.count),
@@ -876,23 +997,23 @@ router.get("/stats", requirePermission("documents:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.get("/:id", requirePermission("documents:read"), async (req, res) => {
+router.get("/:id", authorize({ feature: "documents", action: "view", resource: { table: "documents", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<DocumentRow>(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المستند غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.patch("/:id", requirePermission("documents:update"), async (req, res) => {
+router.patch("/:id", authorize({ feature: "documents", action: "update" }), async (req, res) => {
   try {
     const b = zodParse(patchDocumentSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
     if (b.description !== undefined) { params.push(b.description); sets.push(`description=$${params.length}`); }
     if (b.category !== undefined) { params.push(b.category); sets.push(`category=$${params.length}`); }
@@ -902,9 +1023,9 @@ router.patch("/:id", requirePermission("documents:update"), async (req, res) => 
     if (b.tags !== undefined) { params.push(b.tags); sets.push(`tags=$${params.length}`); }
     if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     params.push(id); params.push(scope.companyId);
-    const result = await rawExecute(`UPDATE documents SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    const result = await rawExecute(`UPDATE documents SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     if (result.affectedRows === 0) throw new NotFoundError("المستند غير موجود");
-    const [row] = await rawQuery<any>(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<DocumentRow>(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "documents", entityId: id,
@@ -921,7 +1042,7 @@ router.patch("/:id", requirePermission("documents:update"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
-router.delete("/:id", requirePermission("documents:delete"), async (req, res) => {
+router.delete("/:id", authorize({ feature: "documents", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

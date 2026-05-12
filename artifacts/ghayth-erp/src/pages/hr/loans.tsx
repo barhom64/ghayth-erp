@@ -2,6 +2,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -19,6 +20,8 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { LOAN_TYPES, LOAN_STATUS } from "@/lib/hr-type-maps";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PromptDialog } from "@/components/shared/prompt-dialog";
+import { useState } from "react";
 
 const STATUS_OPTIONS = Object.entries(LOAN_STATUS).map(([value, { label }]) => ({ value, label }));
 
@@ -27,6 +30,7 @@ export default function LoansPage() {
   const [filters, setFilters] = useFilters();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [rejectingId, setRejectingId] = useState<number | null>(null);
 
   const { data, isLoading, isError } = useApiQuery<{ data: any[]; stats: any; total: number }>(
     ["hr-loans"],
@@ -47,8 +51,12 @@ export default function LoansPage() {
     await approveMut.mutateAsync({ __url: `/hr/loans/${id}/approve` } as any);
     queryClient.invalidateQueries({ queryKey: ["hr-loans"] });
   };
-  const handleReject = async (id: number) => {
-    const reason = window.prompt("سبب الرفض (اختياري):");
+  const handleReject = (id: number) => setRejectingId(id);
+
+  const submitRejection = async (reason: string) => {
+    if (rejectingId === null) return;
+    const id = rejectingId;
+    setRejectingId(null);
     await rejectMut.mutateAsync({ __url: `/hr/loans/${id}/reject`, reason } as any);
     queryClient.invalidateQueries({ queryKey: ["hr-loans"] });
   };
@@ -211,7 +219,8 @@ export default function LoansPage() {
         if (v.status !== "pending") return null;
         return (
           <div className="flex items-center gap-1">
-            <Button
+            <GuardedButton
+              perm="hr:approve"
               size="sm"
               variant="ghost"
               className="h-7 px-2 text-green-700 hover:bg-green-50"
@@ -220,8 +229,9 @@ export default function LoansPage() {
             >
               <CheckCircle className="h-3.5 w-3.5 ml-1" />
               اعتماد
-            </Button>
-            <Button
+            </GuardedButton>
+            <GuardedButton
+              perm="hr:approve"
               size="sm"
               variant="ghost"
               className="h-7 px-2 text-red-700 hover:bg-red-50"
@@ -230,7 +240,7 @@ export default function LoansPage() {
             >
               <XCircle className="h-3.5 w-3.5 ml-1" />
               رفض
-            </Button>
+            </GuardedButton>
           </div>
         );
       },
@@ -247,10 +257,10 @@ export default function LoansPage() {
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
         <Link href="/hr/loans/create">
-          <Button size="sm" className="gap-1.5">
+          <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
             <Plus className="h-4 w-4" />
             طلب سلفة
-          </Button>
+          </GuardedButton>
         </Link>
       }
     >
@@ -307,6 +317,15 @@ export default function LoansPage() {
         emptyMessage="لا توجد سلف — قدّم طلب سلفة جديدة للبدء"
         pageSize={20}
         onRowClick={(item) => navigate(`/hr/loans/${item.id}`)}
+      />
+      <PromptDialog
+        open={rejectingId !== null}
+        title="رفض طلب السلفة"
+        description="يمكنك إضافة سبب الرفض (اختياري)."
+        optional
+        confirmLabel="تأكيد الرفض"
+        onSubmit={submitRejection}
+        onClose={() => setRejectingId(null)}
       />
     </PageShell>
   );

@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { formatNumber } from "@/lib/formatters";
 import { useChartExport } from "./shared";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 export function OverviewTab() {
   const { data, isLoading, isError } = useApiQuery<any>(["bi-overview"], "/bi/overview");
@@ -26,16 +27,16 @@ export function OverviewTab() {
     { label: "الإيرادات", value: `${formatNumber(((d.totalRevenue || 0) / 1000))}K`, icon: DollarSign, color: "text-indigo-600 bg-indigo-50" },
   ];
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">نظرة عامة</h1>
-        <Button variant="outline" size="sm" className="gap-2" onClick={() => exportChart(chartRef.current, "dashboard-overview.png")}>
+        <GuardedButton perm="bi:export" variant="outline" size="sm" className="gap-2" onClick={() => exportChart(chartRef.current, "dashboard-overview.png")}>
           <Download className="h-4 w-4" />
           تصدير كصورة
-        </Button>
+        </GuardedButton>
       </div>
       <div ref={chartRef} className="grid grid-cols-2 md:grid-cols-4 gap-4 p-2">
         {stats.map((s) => (

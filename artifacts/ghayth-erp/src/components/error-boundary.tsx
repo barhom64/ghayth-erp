@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { captureException } from "@/lib/observability";
 
 interface Props {
   children: ReactNode;
@@ -20,7 +21,13 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("[ErrorBoundary]", error, errorInfo);
+    // Route to the central observability boundary. Today this is a
+    // structured console.error; when ops wires up Sentry (or another
+    // vendor) the boundary above is the only file that has to change.
+    captureException(error, {
+      tags: { source: "react-error-boundary" },
+      extra: { componentStack: errorInfo.componentStack },
+    });
   }
 
   render() {

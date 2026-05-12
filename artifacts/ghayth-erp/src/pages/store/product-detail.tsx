@@ -14,7 +14,6 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
   Package,
   Activity,
-  ArrowUpDown,
   ShoppingCart,
   ShoppingBag,
   FolderOpen,
@@ -39,14 +38,6 @@ export default function ProductDetailPage() {
     !!id
   );
 
-  // Stock movements filtered by product
-  const { data: movementsResp } = useApiQuery<any>(
-    ["product-movements", id],
-    id ? `/warehouse/movements?productId=${id}` : null,
-    !!id
-  );
-  const movements: any[] = movementsResp?.data || [];
-
   // Sales history filtered by product
   const { data: ordersResp } = useApiQuery<any>(
     ["product-orders", id],
@@ -70,13 +61,6 @@ export default function ProductDetailPage() {
   const revenue30d = sales
     .filter((s) => new Date(s.createdAt || 0).getTime() >= thirtyDaysAgo)
     .reduce((sum, s) => sum + (Number(s.totalAmount) || 0), 0);
-
-  const movementsColumns: DataTableColumn<any>[] = [
-    { key: "id", header: "#", sortable: true, render: (r) => <span className="font-mono text-xs">{r.id}</span> },
-    { key: "date", header: "التاريخ", sortable: true, render: (r) => formatDateAr(r.date || r.createdAt) },
-    { key: "type", header: "النوع", sortable: true, render: (r) => <Badge variant="outline">{r.type || r.movementType || "-"}</Badge> },
-    { key: "quantity", header: "الكمية", sortable: true, render: (r) => r.quantity || 0 },
-  ];
 
   const salesColumns: DataTableColumn<any>[] = [
     { key: "orderNumber", header: "رقم الطلب", sortable: true, render: (r) => <span className="font-mono text-xs">{r.orderNumber || `#${r.id}`}</span> },
@@ -123,18 +107,6 @@ export default function ProductDetailPage() {
 
   const tabs: EntityTab[] = [
     { key: "overview", label: "نظرة عامة", icon: Activity, content: overviewContent },
-    {
-      key: "movements",
-      label: "حركة المخزون",
-      icon: ArrowUpDown,
-      badge: movements.length || undefined,
-      content: () =>
-        movements.length === 0 ? (
-          emptyMsg("لا توجد حركات مخزون لهذا المنتج")
-        ) : (
-          <DataTable columns={movementsColumns} data={movements} pageSize={10} emptyMessage="لا توجد حركات" noToolbar />
-        ),
-    },
     {
       key: "sales",
       label: "المبيعات",

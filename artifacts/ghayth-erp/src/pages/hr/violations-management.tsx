@@ -3,6 +3,7 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -30,7 +31,7 @@ export default function ViolationsManagementPage() {
   const [filters, setFilters] = useFilters();
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const filtered = applyFilters(items, filters, { searchFields: ["employeeName"], statusField: "status", dateField: "createdAt" });
 
@@ -70,7 +71,8 @@ export default function ViolationsManagementPage() {
       header: "إجراء",
       render: (v) => (
         v.status === "active" ? (
-          <Button
+          <GuardedButton
+            perm="hr:approve"
             size="sm"
             variant="outline"
             className="text-xs"
@@ -78,7 +80,7 @@ export default function ViolationsManagementPage() {
             disabled={resolvingId === v.id}
           >
             <Shield className="h-3 w-3 me-1" />{resolvingId === v.id ? "..." : "حل"}
-          </Button>
+          </GuardedButton>
         ) : null
       ),
     },

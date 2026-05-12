@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Upload } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -126,7 +127,7 @@ export default function UmrahImport() {
   };
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   return (
     <div className="space-y-6">
@@ -224,10 +225,10 @@ export default function UmrahImport() {
           )}
 
           <div className="flex gap-3">
-            <Button onClick={doImport} disabled={!seasonId || validRows.length === 0 || importing} className="gap-2">
+            <GuardedButton perm="umrah:create" onClick={doImport} disabled={!seasonId || validRows.length === 0 || importing} className="gap-2">
               {importing ? <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" /> : <Upload className="h-4 w-4" />}
               {importing ? "جاري الاستيراد..." : `استيراد ${validRows.length} صف`}
-            </Button>
+            </GuardedButton>
           </div>
 
           {result && (

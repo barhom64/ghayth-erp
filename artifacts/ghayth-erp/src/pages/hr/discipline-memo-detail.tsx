@@ -5,7 +5,9 @@ import { useApiQuery, apiFetch, buildErrorToast } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
+import { PromptDialog } from "@/components/shared/prompt-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -13,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Clock, CheckCircle, XCircle, FileText, Ban, Gavel, Scale, Lock, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 import { INCIDENT_LABELS, MEMO_ACTION_LABELS } from "@/lib/hr-type-maps";
 
@@ -27,6 +30,7 @@ interface MemoData {
 export default function DisciplineMemoDetailPage() {
   const [, params] = useRoute("/hr/discipline/memos/:id");
   const id = params?.id;
+  const { extraTabs, hideTabs } = useRegistryTabs("discipline_memo", id ?? "");
   const { data, isLoading, isError } = useApiQuery<MemoData>(
     ["discipline-memo", String(id ?? "")],
     id ? `/hr/discipline/memos/${id}` : null
@@ -43,6 +47,7 @@ export default function DisciplineMemoDetailPage() {
   const [appealReason, setAppealReason] = useState("");
   const [showAppeal, setShowAppeal] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["discipline-memo", id] });
@@ -197,12 +202,13 @@ export default function DisciplineMemoDetailPage() {
               />
               أرفض تقديم تبرير
             </label>
-            <Button
+            <GuardedButton
+              perm="hr:create"
               onClick={() => act("/justify", { justification, declined }, "تم إرسال التبرير")}
               disabled={busy || (!justification && !declined)}
             >
               إرسال التبرير
-            </Button>
+            </GuardedButton>
           </CardContent>
         </Card>
       )}
@@ -239,7 +245,8 @@ export default function DisciplineMemoDetailPage() {
                 rows={3}
               />
             </div>
-            <Button
+            <GuardedButton
+              perm="hr:approve"
               onClick={() =>
                 act(
                   "/manager-recommendation",
@@ -250,7 +257,7 @@ export default function DisciplineMemoDetailPage() {
               disabled={busy}
             >
               إرسال التوصية
-            </Button>
+            </GuardedButton>
           </CardContent>
         </Card>
       )}
@@ -293,7 +300,8 @@ export default function DisciplineMemoDetailPage() {
                 rows={3}
               />
             </div>
-            <Button
+            <GuardedButton
+              perm="hr:approve"
               onClick={() =>
                 act(
                   "/gm-decision",
@@ -304,7 +312,7 @@ export default function DisciplineMemoDetailPage() {
               disabled={busy}
             >
               اعتماد القرار
-            </Button>
+            </GuardedButton>
           </CardContent>
         </Card>
       )}
@@ -312,18 +320,16 @@ export default function DisciplineMemoDetailPage() {
       {!["approved", "rejected", "cancelled", "closed", "appeal_pending", "appeal_accepted"].includes(memo.status) && (
         <Card>
           <CardContent className="pt-6">
-            <Button
+            <GuardedButton
+              perm="hr:delete"
               variant="outline"
               className="text-red-600"
-              onClick={() => {
-                const reason = prompt("سبب الإلغاء:");
-                if (reason != null) act("/cancel", { reason }, "تم إلغاء المحضر");
-              }}
+              onClick={() => setShowCancelDialog(true)}
               disabled={busy}
             >
               <Ban className="w-4 h-4 me-2" />
               إلغاء المحضر
-            </Button>
+            </GuardedButton>
           </CardContent>
         </Card>
       )}
@@ -350,9 +356,9 @@ export default function DisciplineMemoDetailPage() {
                   rows={4}
                 />
                 <div className="flex gap-2">
-                  <Button onClick={() => act("/appeal", { reason: appealReason }, "تم تقديم الاستئناف")} disabled={busy || !appealReason.trim()}>
+                  <GuardedButton perm="hr:create" onClick={() => act("/appeal", { reason: appealReason }, "تم تقديم الاستئناف")} disabled={busy || !appealReason.trim()}>
                     إرسال الاستئناف
-                  </Button>
+                  </GuardedButton>
                   <Button variant="outline" onClick={() => setShowAppeal(false)}>إلغاء</Button>
                 </div>
               </>
@@ -377,12 +383,12 @@ export default function DisciplineMemoDetailPage() {
               </div>
             )}
             <div className="flex gap-2">
-              <Button className="bg-green-600 hover:bg-green-700" disabled={busy} onClick={() => act("/appeal-decision", { decision: "accepted", comment: "" }, "تم قبول الاستئناف")}>
+              <GuardedButton perm="hr:approve" className="bg-green-600 hover:bg-green-700" disabled={busy} onClick={() => act("/appeal-decision", { decision: "accepted", comment: "" }, "تم قبول الاستئناف")}>
                 قبول الاستئناف
-              </Button>
-              <Button variant="destructive" disabled={busy} onClick={() => act("/appeal-decision", { decision: "rejected", comment: "" }, "تم رفض الاستئناف")}>
+              </GuardedButton>
+              <GuardedButton perm="hr:delete" variant="destructive" disabled={busy} onClick={() => act("/appeal-decision", { decision: "rejected", comment: "" }, "تم رفض الاستئناف")}>
                 رفض الاستئناف
-              </Button>
+              </GuardedButton>
             </div>
           </CardContent>
         </Card>
@@ -392,9 +398,9 @@ export default function DisciplineMemoDetailPage() {
       {["approved", "rejected", "appeal_accepted", "cancelled"].includes(memo.status) && memo.status !== "closed" && (
         <Card>
           <CardContent className="pt-6 flex items-center gap-3 flex-wrap">
-            <Button variant="outline" onClick={() => act("/close", { note: "إقفال عادي" }, "تم إقفال المحضر")} disabled={busy}>
+            <GuardedButton perm="hr:approve" variant="outline" onClick={() => act("/close", { note: "إقفال عادي" }, "تم إقفال المحضر")} disabled={busy}>
               <Lock className="w-4 h-4 me-2" /> إقفال المحضر
-            </Button>
+            </GuardedButton>
             <Link href={`/communications/letters/create?relatedType=discipline_memo&relatedId=${memo.id}&subject=${encodeURIComponent(`إخطار تأديبي — ${memo.memoNumber}`)}`}>
               <Button variant="outline">
                 <Mail className="w-4 h-4 me-2" /> إصدار خطاب تأديبي
@@ -453,22 +459,37 @@ export default function DisciplineMemoDetailPage() {
   );
 
   return (
-    <DetailPageLayout
-      title={memo?.memoNumber || "المحضر"}
-      subtitle={memo ? `محضر استفسار بشأن ${INCIDENT_LABELS[memo.incidentType] ?? memo.incidentType}` : undefined}
-      backPath="/hr/discipline/memos"
-      backLabel="العودة"
-      status={memo ? { label: memo.status } : undefined}
-      refNumber={memo?.memoNumber}
-      createdAt={memo?.createdAt}
-      updatedAt={memo?.updatedAt}
-      entityType="hr-inquiry-memo"
-      entityId={id ?? ""}
-      isLoading={isLoading}
-      error={isError ? true : undefined}
-      onRetry={() => window.location.reload()}
-      actions={headerActions}
-      overview={overview}
-    />
+    <>
+      <DetailPageLayout
+        title={memo?.memoNumber || "المحضر"}
+        subtitle={memo ? `محضر استفسار بشأن ${INCIDENT_LABELS[memo.incidentType] ?? memo.incidentType}` : undefined}
+        backPath="/hr/discipline/memos"
+        backLabel="العودة"
+        status={memo ? { label: memo.status } : undefined}
+        refNumber={memo?.memoNumber}
+        createdAt={memo?.createdAt}
+        updatedAt={memo?.updatedAt}
+        entityType="hr-inquiry-memo"
+        entityId={id ?? ""}
+        extraTabs={extraTabs}
+        hideTabs={hideTabs}
+        isLoading={isLoading}
+        error={isError ? true : undefined}
+        actions={headerActions}
+        overview={overview}
+      />
+      <PromptDialog
+        open={showCancelDialog}
+        title="سبب إلغاء المحضر"
+        description="يرجى إدخال سبب الإلغاء — يُسجَّل في سجل التدقيق للمحضر."
+        placeholder="اكتب السبب هنا..."
+        confirmLabel="تأكيد الإلغاء"
+        onSubmit={(reason) => {
+          setShowCancelDialog(false);
+          act("/cancel", { reason }, "تم إلغاء المحضر");
+        }}
+        onClose={() => setShowCancelDialog(false)}
+      />
+    </>
   );
 }

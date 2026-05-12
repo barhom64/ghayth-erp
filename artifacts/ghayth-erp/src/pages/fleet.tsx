@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,10 +9,11 @@ import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { useApiQuery, asList } from "@/lib/api";
 import { Car, Users, MapPin, Wrench, Fuel, Plus, Eye, FileCheck, Link2, ShieldAlert } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
+import { AdvancedFilters, useFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { useAppContext } from "@/contexts/app-context";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
@@ -52,19 +53,17 @@ function VehiclesTab() {
   const [page, setPage] = useState(1);
   const [previewItem, setPreviewItem] = useState<any>(null);
   const [filters, setFilters] = useFilters();
+  useEffect(() => { setPage(1); }, [filters.search, filters.status]);
   const pageSize = 20;
   const canManage = permissions.canManageFleet;
+  const filterParams = `&search=${encodeURIComponent(filters.search || "")}&status=${encodeURIComponent(filters.status || "")}`;
   const { data: vehiclesResp, isLoading, isError, error, refetch } = useApiQuery<any>(
-    ["fleet-vehicles", String(page), scopeQueryString], `/fleet/vehicles?page=${page}&limit=${pageSize}${scopeSuffix}`
+    ["fleet-vehicles", String(page), filters.search, filters.status, scopeQueryString], `/fleet/vehicles?page=${page}&limit=${pageSize}${scopeSuffix}${filterParams}`
   );
   const vehicles = asList(vehiclesResp);
   const total = vehiclesResp?.total || vehicles.length;
 
-  const filtered = applyFilters(vehicles, filters, {
-    searchFields: ["plateNumber", "make", "model", "driverName"],
-    statusField: "status",
-    dateField: "",
-  });
+  const filtered = vehicles;
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/fleet/vehicles",
@@ -77,7 +76,7 @@ function VehiclesTab() {
     { key: "make", label: "الشركة المصنعة" },
     { key: "model", label: "الموديل" },
     { key: "color", label: "اللون" },
-    { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "available", label: "متاحة" }, { value: "in_use", label: "قيد الاستخدام" }, { value: "maintenance", label: "في الصيانة" }] },
+    { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "available", label: "متاحة" }, { value: "in_use", label: "قيد الاستخدام" }, { value: "maintenance", label: "في الصيانة" }, { value: "out_of_service", label: "خارج الخدمة" }] },
   ];
 
   const previewFields: PreviewField[] = [
@@ -168,6 +167,7 @@ function VehiclesTab() {
                 { value: "available", label: "متاحة" },
                 { value: "in_use", label: "قيد الاستخدام" },
                 { value: "maintenance", label: "في الصيانة" },
+                { value: "out_of_service", label: "خارج الخدمة" },
               ],
               showDateRange: true,
             }}
@@ -185,7 +185,7 @@ function VehiclesTab() {
             resultCount={filtered?.length}
           />
         </div>
-        {canManage && <Link href="/fleet/vehicles/create"><Button className="gap-2"><Plus className="h-4 w-4" /> إضافة مركبة</Button></Link>}
+        {canManage && <Link href="/fleet/vehicles/create"><GuardedButton perm="fleet:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة مركبة</GuardedButton></Link>}
       </div>
 
       <Card>
@@ -226,14 +226,13 @@ function VehiclesTab() {
 function DriversTab() {
   const { permissions, scopeQueryString } = useAppContext();
   const canManage = permissions.canManageFleet;
-  const { data: driversResp, isLoading, isError, error, refetch } = useApiQuery<any>(["fleet-drivers", scopeQueryString], `/fleet/drivers${scopeQueryString ? `?${scopeQueryString}` : ""}`);
-  const drivers = asList(driversResp);
   const [filters, setFilters] = useFilters();
+  const scopePrefix = scopeQueryString ? `${scopeQueryString}&` : "";
+  const filterParams = `?${scopePrefix}search=${encodeURIComponent(filters.search || "")}&status=${encodeURIComponent(filters.status || "")}`;
+  const { data: driversResp, isLoading, isError, error, refetch } = useApiQuery<any>(["fleet-drivers", filters.search, filters.status, scopeQueryString], `/fleet/drivers${filterParams}`);
+  const drivers = asList(driversResp);
 
-  const filtered = applyFilters(drivers, filters, {
-    searchFields: ["name", "phone", "licenseNumber"],
-    statusField: "status",
-  });
+  const filtered = drivers;
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
     endpoint: "/fleet/drivers",
@@ -245,7 +244,7 @@ function DriversTab() {
     { key: "name", label: "الاسم" },
     { key: "phone", label: "الهاتف" },
     { key: "licenseNumber", label: "رقم الرخصة" },
-    { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "active", label: "نشط" }, { value: "inactive", label: "غير نشط" }] },
+    { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "available", label: "متاح" }, { value: "on_trip", label: "في رحلة" }, { value: "off_duty", label: "خارج الخدمة" }, { value: "suspended", label: "موقف" }] },
   ];
 
   const columns: DataTableColumn<any>[] = [
@@ -262,7 +261,7 @@ function DriversTab() {
         <div onClick={(e) => e.stopPropagation()}>
           <RowActions
             canEdit={canManage}
-            onEdit={() => startEdit(d.id, { name: d.name, phone: d.phone || "", licenseNumber: d.licenseNumber || "", status: d.status || "active" })}
+            onEdit={() => startEdit(d.id, { name: d.name, phone: d.phone || "", licenseNumber: d.licenseNumber || "", status: d.status || "available" })}
             onDelete={() => startDelete(d.id)}
           />
         </div>
@@ -278,8 +277,10 @@ function DriversTab() {
             config={{
               searchPlaceholder: "بحث بالاسم أو الهاتف أو الرخصة...",
               statuses: [
-                { value: "active", label: "نشط" },
-                { value: "inactive", label: "غير نشط" },
+                { value: "available", label: "متاح" },
+                { value: "on_trip", label: "في رحلة" },
+                { value: "off_duty", label: "خارج الخدمة" },
+                { value: "suspended", label: "موقف" },
               ],
               showDateRange: false,
             }}
@@ -296,7 +297,7 @@ function DriversTab() {
             resultCount={filtered?.length}
           />
         </div>
-        <Link href="/fleet/drivers/create"><Button className="gap-2"><Plus className="h-4 w-4" /> إضافة سائق</Button></Link>
+        <Link href="/fleet/drivers/create"><GuardedButton perm="fleet:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة سائق</GuardedButton></Link>
       </div>
       <Card>
         <CardContent className="pt-6">
@@ -330,18 +331,16 @@ function TripsTab() {
   const [, navigate] = useLocation();
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useFilters();
+  useEffect(() => { setPage(1); }, [filters.search, filters.status]);
   const pageSize = 20;
+  const filterParams = `&search=${encodeURIComponent(filters.search || "")}&status=${encodeURIComponent(filters.status || "")}`;
   const { data: tripsResp, isLoading, isError, error, refetch } = useApiQuery<any>(
-    ["fleet-trips", String(page)], `/fleet/trips?page=${page}&limit=${pageSize}`
+    ["fleet-trips", String(page), filters.search, filters.status], `/fleet/trips?page=${page}&limit=${pageSize}${filterParams}`
   );
   const trips = asList(tripsResp);
   const total = tripsResp?.total || trips.length;
 
-  const filtered = applyFilters(trips, filters, {
-    searchFields: ["plateNumber", "driverName"],
-    statusField: "status",
-    dateField: "",
-  });
+  const filtered = trips;
 
   const columns: DataTableColumn<any>[] = [
     { key: "plateNumber", header: "المركبة", sortable: true, render: (t) => t.plateNumber || "-" },
@@ -403,15 +402,12 @@ function TripsTab() {
 }
 
 function MaintenanceTab() {
-  const { data: maintResp, isLoading, isError, error, refetch } = useApiQuery<any>(["fleet-maintenance"], "/fleet/maintenance");
-  const records = asList(maintResp);
   const [filters, setFilters] = useFilters();
+  const filterParams = `?search=${encodeURIComponent(filters.search || "")}&status=${encodeURIComponent(filters.status || "")}`;
+  const { data: maintResp, isLoading, isError, error, refetch } = useApiQuery<any>(["fleet-maintenance", filters.search, filters.status], `/fleet/maintenance${filterParams}`);
+  const records = asList(maintResp);
 
-  const filtered = applyFilters(records, filters, {
-    searchFields: ["plateNumber", "description"],
-    statusField: "status",
-    dateField: "",
-  });
+  const filtered = records;
 
   const columns: DataTableColumn<any>[] = [
     { key: "plateNumber", header: "المركبة", sortable: true, render: (r) => r.plateNumber || "-" },
@@ -467,14 +463,12 @@ function MaintenanceTab() {
 }
 
 function FuelTab() {
-  const { data: fuelResp, isLoading, isError, error, refetch } = useApiQuery<any>(["fleet-fuel"], "/fleet/fuel-logs");
-  const logs = asList(fuelResp);
   const [filters, setFilters] = useFilters();
+  const filterParams = `?search=${encodeURIComponent(filters.search || "")}&status=${encodeURIComponent(filters.status || "")}`;
+  const { data: fuelResp, isLoading, isError, error, refetch } = useApiQuery<any>(["fleet-fuel", filters.search, filters.status], `/fleet/fuel-logs${filterParams}`);
+  const logs = asList(fuelResp);
 
-  const filtered = applyFilters(logs, filters, {
-    searchFields: ["plateNumber", "stationName"],
-    dateField: "",
-  });
+  const filtered = logs;
 
   const columns: DataTableColumn<any>[] = [
     { key: "plateNumber", header: "المركبة", sortable: true, render: (l) => l.plateNumber || "-" },

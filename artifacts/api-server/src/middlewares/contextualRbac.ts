@@ -119,7 +119,8 @@ export function requireOwnership(options: OwnershipOptions) {
             }
             break;
           case "branch":
-            if (record.bid && scope.branchId && record.bid !== scope.branchId) {
+            if (record.bid && scope.branchId && record.bid !== scope.branchId
+                && !scope.allowedBranches?.includes(record.bid)) {
               res.status(403).json({
                 error: "لا يمكنك الوصول لسجلات فرع آخر",
                 code: "OWNERSHIP_DENIED",
@@ -154,11 +155,7 @@ export function requireOwnership(options: OwnershipOptions) {
       next();
     } catch (err) {
       logger.error(err, "[ContextualRBAC] Ownership check error:");
-      // Fail open — if the ownership lookup itself errors (e.g. column
-      // doesn't exist) we let downstream handlers proceed so we don't
-      // accidentally lock users out of an endpoint. The error is logged
-      // above for investigation.
-      next();
+      res.status(500).json({ error: "خطأ في التحقق من الصلاحيات" });
     }
   };
 }

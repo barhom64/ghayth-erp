@@ -2,6 +2,7 @@ import { useParams } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DetailPageLayout, type DetailStatus } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Wallet, Calendar, DollarSign, CheckCircle } from "lucide-react";
@@ -43,6 +44,7 @@ export default function LoanDetail() {
   const { id } = useParams<{ id: string }>();
   const { data, isLoading, isError } = useApiQuery<any>(["hr-loan-detail", id], id ? `/hr/loans/${id}` : null);
   const loan = data?.data ?? data;
+  const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("loan", id || "");
 
   const st = LOAN_STATUS[loan?.status] ?? { label: loan?.status ?? "—", color: "bg-gray-100 text-gray-600" };
   const statusObj: DetailStatus = {
@@ -198,7 +200,8 @@ export default function LoanDetail() {
       entityId={Number(id)}
       isLoading={isLoading}
       error={isError ? true : undefined}
-      onRetry={() => window.location.reload()}
+      extraTabs={registryExtraTabs}
+      hideTabs={registryHideTabs}
       overview={overview}
       actions={
         <Badge className={cn("text-sm px-3 py-1", st.color)}>{st.label}</Badge>

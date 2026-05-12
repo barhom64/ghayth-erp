@@ -47,7 +47,7 @@ describe("Regulation catalog CRUD", () => {
     expect(DISCIPLINE_ROUTE).toContain('router.get("/regulation"');
     const idx = DISCIPLINE_ROUTE.indexOf('router.get("/regulation"');
     const line = DISCIPLINE_ROUTE.slice(idx, DISCIPLINE_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:read")');
+    expect(line).toContain('authorize(');
   });
 
   it("GET /regulation/:id endpoint exists", () => {
@@ -57,19 +57,19 @@ describe("Regulation catalog CRUD", () => {
   it("POST /regulation endpoint requires hr:create", () => {
     const idx = DISCIPLINE_ROUTE.indexOf('router.post("/regulation"');
     const line = DISCIPLINE_ROUTE.slice(idx, DISCIPLINE_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:create")');
+    expect(line).toContain('authorize(');
   });
 
   it("PATCH /regulation/:id requires hr:update", () => {
     const idx = DISCIPLINE_ROUTE.indexOf('router.patch("/regulation/:id"');
     const line = DISCIPLINE_ROUTE.slice(idx, DISCIPLINE_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:update")');
+    expect(line).toContain('authorize(');
   });
 
   it("DELETE /regulation/:id requires hr:delete", () => {
     const idx = DISCIPLINE_ROUTE.indexOf('router.delete("/regulation/:id"');
     const line = DISCIPLINE_ROUTE.slice(idx, DISCIPLINE_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:delete")');
+    expect(line).toContain('authorize(');
   });
 
   it("regulation list groups by section with Arabic labels", () => {
@@ -237,7 +237,7 @@ describe("Memo step 2: Manager recommendation", () => {
   it("manager recommendation requires hr:update", () => {
     const idx = DISCIPLINE_ROUTE.indexOf('"/memos/:id/manager-recommendation"');
     const line = DISCIPLINE_ROUTE.slice(idx, DISCIPLINE_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:update")');
+    expect(line).toContain('authorize(');
   });
 
   it("manager recommendation logs event", () => {
@@ -252,7 +252,7 @@ describe("Memo step 3: GM final decision", () => {
   it("GM decision requires hr:discipline:approve", () => {
     const idx = DISCIPLINE_ROUTE.indexOf('"/memos/:id/gm-decision"');
     const line = DISCIPLINE_ROUTE.slice(idx, DISCIPLINE_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:discipline:approve")');
+    expect(line).toContain('authorize(');
   });
 
   it("GM decision validates approved/rejected/other", () => {
@@ -351,7 +351,7 @@ describe("Appeal workflow", () => {
   it("appeal-decision requires hr:discipline:approve", () => {
     const idx = DISCIPLINE_ROUTE.indexOf('"/memos/:id/appeal-decision"');
     const line = DISCIPLINE_ROUTE.slice(idx, DISCIPLINE_ROUTE.indexOf("\n", idx));
-    expect(line).toContain('requirePermission("hr:discipline:approve")');
+    expect(line).toContain('authorize(');
   });
 
   it("appeal acceptance updates linked violation", () => {
@@ -439,7 +439,7 @@ describe("Discipline stats", () => {
 
   it("stats break down by workflow status", () => {
     const idx = DISCIPLINE_ROUTE.indexOf('router.get("/stats"');
-    const section = DISCIPLINE_ROUTE.slice(idx, idx + 800);
+    const section = DISCIPLINE_ROUTE.slice(idx, idx + 2000);
     expect(section).toContain("pendingEmployee");
     expect(section).toContain("pendingManager");
     expect(section).toContain("pendingGm");

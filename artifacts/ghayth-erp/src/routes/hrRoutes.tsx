@@ -35,6 +35,7 @@ const ViolationDetail = lazy(() => import("@/pages/hr/violation-detail"));
 const ViolationsCreate = lazy(() => import("@/pages/create/hr/violations-create"));
 const Shifts = lazy(() => import("@/pages/hr/shifts"));
 const ShiftsCreate = lazy(() => import("@/pages/create/hr/shifts-create"));
+const ShiftDetail = lazy(() => import("@/pages/details/shift-detail"));
 
 const EmployeeProfile = lazy(() => import("@/pages/hr/employee-profile"));
 const AttendanceReports = lazy(() => import("@/pages/hr/attendance-reports"));
@@ -139,6 +140,7 @@ export const hrRoutes = [
   { path: "/hr/shifts", component: Shifts, subKey: "shifts" },
   { path: "/hr/shifts/create", component: ShiftsCreate, subKey: "shifts" },
   { path: "/hr/shifts/management", component: ShiftsManagement, subKey: "shifts" },
+  { path: "/hr/shifts/:id", component: ShiftDetail, subKey: "shifts" },
   { path: "/hr/employee-profile/:id", component: EmployeeProfile, subKey: "employees" },
   { path: "/hr/employee-activation", component: EmployeeActivation, subKey: "employees" },
   { path: "/hr/onboarding-review", component: OnboardingReview, subKey: "employees" },

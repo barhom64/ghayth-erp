@@ -2,6 +2,8 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
+import { buildScopedWhere } from "../lib/scopedQuery.js";
 import { handleRouteError, NotFoundError,
   parseId,
   zodParse,
@@ -98,7 +100,7 @@ const slaDefinitionSchema = z.object({
 
 const router = Router();
 
-router.post("/submit", requirePermission("admin:write"), async (req, res) => {
+router.post("/submit", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(submitSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -122,7 +124,7 @@ router.post("/submit", requirePermission("admin:write"), async (req, res) => {
   }
 });
 
-router.post("/:id/approve", requirePermission("admin:write"), async (req, res) => {
+router.post("/:id/approve", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(approveSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -143,7 +145,7 @@ router.post("/:id/approve", requirePermission("admin:write"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "Workflow approve error:"); }
 });
 
-router.post("/:id/reject", requirePermission("admin:write"), async (req, res) => {
+router.post("/:id/reject", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(rejectSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -163,7 +165,7 @@ router.post("/:id/reject", requirePermission("admin:write"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Workflow reject error:"); }
 });
 
-router.post("/:id/refer", requirePermission("admin:write"), async (req, res) => {
+router.post("/:id/refer", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(referSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -186,7 +188,7 @@ router.post("/:id/refer", requirePermission("admin:write"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "Workflow refer error:"); }
 });
 
-router.post("/:id/escalate", requirePermission("admin:write"), async (req, res) => {
+router.post("/:id/escalate", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(escalateSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -206,7 +208,7 @@ router.post("/:id/escalate", requirePermission("admin:write"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "Workflow escalate error:"); }
 });
 
-router.post("/:id/return", requirePermission("admin:write"), async (req, res) => {
+router.post("/:id/return", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(returnSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -226,7 +228,7 @@ router.post("/:id/return", requirePermission("admin:write"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Workflow return error:"); }
 });
 
-router.get("/:id/timeline", requirePermission("admin:read"), async (req, res) => {
+router.get("/:id/timeline", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -235,7 +237,7 @@ router.get("/:id/timeline", requirePermission("admin:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Workflow timeline error:"); }
 });
 
-router.get("/timeline/:refTable/:refId", requirePermission("admin:read"), async (req, res) => {
+router.get("/timeline/:refTable/:refId", authorize({ feature: "admin", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const refId = parseId(req.params.refId, "refId");
@@ -246,27 +248,37 @@ router.get("/timeline/:refTable/:refId", requirePermission("admin:read"), async 
   }
 });
 
-router.get("/", requirePermission("admin:read"), async (req, res) => {
+router.get("/", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, requestType } = req.query as any;
-    let where = `wi."companyId" = $1`;
-    const params: any[] = [scope.companyId];
+
+    const { where: scopeWhere, params, nextParamIndex } = buildScopedWhere(
+      scope,
+      {},
+      {
+        companyColumn: 'wi."companyId"',
+        disableBranchScope: true,
+        softDeleteColumn: 'wi."deletedAt"',
+      }
+    );
+    const conditions = [scopeWhere];
+    let paramIdx = nextParamIndex;
 
     if (status) {
       params.push(status);
-      where += ` AND wi.status = $${params.length}`;
+      conditions.push(`wi.status = $${paramIdx++}`);
     }
     if (requestType) {
       params.push(requestType);
-      where += ` AND wi."requestType" = $${params.length}`;
+      conditions.push(`wi."requestType" = $${paramIdx++}`);
     }
 
     const rows = await rawQuery<any>(
       `SELECT wi.*, wd."requestTypeLabel" AS "defLabel"
        FROM workflow_instances wi
        LEFT JOIN workflow_definitions wd ON wd.id = wi."definitionId"
-       WHERE ${where}
+       WHERE ${conditions.join(" AND ")}
        ORDER BY wi."createdAt" DESC
        LIMIT 200`,
       params
@@ -277,13 +289,14 @@ router.get("/", requirePermission("admin:read"), async (req, res) => {
   }
 });
 
-router.get("/pending", requirePermission("admin:read"), async (req, res) => {
+router.get("/pending", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
       `SELECT wi.*
        FROM workflow_instances wi
        WHERE wi."companyId" = $1
+         AND wi."deletedAt" IS NULL
          AND wi.status IN ('pending', 'in_review')
          AND wi."currentAssignee" = $2
        ORDER BY
@@ -293,7 +306,8 @@ router.get("/pending", requirePermission("admin:read"), async (req, res) => {
            WHEN 'warning' THEN 2
            ELSE 3
          END,
-         wi."createdAt" ASC`,
+         wi."createdAt" ASC
+       LIMIT 200`,
       [scope.companyId, scope.activeAssignmentId]
     );
     res.json({ data: rows, total: rows.length });
@@ -302,14 +316,14 @@ router.get("/pending", requirePermission("admin:read"), async (req, res) => {
   }
 });
 
-router.get("/definitions", requirePermission("admin:read"), async (req, res) => {
+router.get("/definitions", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const defs = await rawQuery<any>(
       `SELECT wd.*, (SELECT COUNT(*) FROM workflow_steps ws WHERE ws."definitionId" = wd.id) AS "stepCount"
        FROM workflow_definitions wd
        WHERE wd."companyId" = $1
-       ORDER BY wd."requestTypeLabel"`,
+       ORDER BY wd."requestTypeLabel" LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: defs, total: defs.length });
@@ -318,7 +332,7 @@ router.get("/definitions", requirePermission("admin:read"), async (req, res) => 
   }
 });
 
-router.get("/definitions/:id", requirePermission("admin:read"), async (req, res) => {
+router.get("/definitions/:id", authorize({ feature: "admin", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -337,7 +351,7 @@ router.get("/definitions/:id", requirePermission("admin:read"), async (req, res)
   }
 });
 
-router.post("/definitions", requirePermission("admin:write"), async (req, res) => {
+router.post("/definitions", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(createDefinitionSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -363,13 +377,15 @@ router.post("/definitions", requirePermission("admin:write"), async (req, res) =
     });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflow_definitions", entityId: insertId, after: { requestType, requestTypeLabel } }).catch((e) => logger.error(e, "workflows background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.created", entity: "workflow_definitions", entityId: insertId, details: JSON.stringify({ requestType, requestTypeLabel }) }).catch((e) => logger.error(e, "workflows background task failed"));
-    res.status(201).json({ id: insertId });
+    const [row] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const defSteps = await rawQuery<any>(`SELECT * FROM workflow_steps WHERE "definitionId"=$1 ORDER BY "stepOrder" LIMIT 500`, [insertId]);
+    res.status(201).json(row ? { ...row, steps: defSteps } : { id: insertId });
   } catch (err) {
     handleRouteError(err, res, "workflows");
   }
 });
 
-router.put("/definitions/:id", requirePermission("admin:write"), async (req, res) => {
+router.put("/definitions/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(updateDefinitionSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -399,7 +415,7 @@ router.put("/definitions/:id", requirePermission("admin:write"), async (req, res
       }
     });
 
-    const [def] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id = $1`, [id]);
+    const [def] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     const updatedSteps = await rawQuery<any>(`SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder" LIMIT 500`, [id]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_definitions", entityId: id, after: { requestTypeLabel } }).catch((e) => logger.error(e, "workflows background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.updated", entity: "workflow_definitions", entityId: id, details: JSON.stringify({ requestTypeLabel }) }).catch((e) => logger.error(e, "workflows background task failed"));
@@ -409,12 +425,13 @@ router.put("/definitions/:id", requirePermission("admin:write"), async (req, res
   }
 });
 
-router.delete("/definitions/:id", requirePermission("admin:write"), async (req, res) => {
+router.delete("/definitions/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [before] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
-    await rawExecute(`DELETE FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`DELETE FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("التعريف غير موجود");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "workflow_definitions", entityId: id, before }).catch((e) => logger.error(e, "workflows background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.deleted", entity: "workflow_definitions", entityId: id, details: JSON.stringify({ requestType: before?.requestType }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.json({ message: "تم الحذف" });
@@ -423,11 +440,11 @@ router.delete("/definitions/:id", requirePermission("admin:write"), async (req, 
   }
 });
 
-router.get("/sla-definitions", requirePermission("admin:read"), async (req, res) => {
+router.get("/sla-definitions", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT * FROM sla_definitions WHERE "companyId" = $1 ORDER BY "requestType"`,
+      `SELECT * FROM sla_definitions WHERE "companyId" = $1 ORDER BY "requestType" LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
@@ -436,7 +453,7 @@ router.get("/sla-definitions", requirePermission("admin:read"), async (req, res)
   }
 });
 
-router.post("/sla-definitions", requirePermission("admin:write"), async (req, res) => {
+router.post("/sla-definitions", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(slaDefinitionSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -452,19 +469,20 @@ router.post("/sla-definitions", requirePermission("admin:write"), async (req, re
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "sla_definitions", entityId: insertId, after: { requestType } }).catch((e) => logger.error(e, "workflows background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.created", entity: "sla_definitions", entityId: insertId, details: JSON.stringify({ requestType }) }).catch((e) => logger.error(e, "workflows background task failed"));
-    res.status(201).json({ id: insertId });
+    const [row] = await rawQuery<any>(`SELECT * FROM sla_definitions WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json(row || { id: insertId });
   } catch (err) {
     handleRouteError(err, res, "workflows");
   }
 });
 
-router.get("/stats", requirePermission("admin:read"), async (req, res) => {
+router.get("/stats", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [total] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1`, [scope.companyId]);
-    const [pending] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND status IN ('pending','in_review')`, [scope.companyId]);
-    const [slaWarning] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "slaStatus" IN ('warning','exceeded') AND status IN ('pending','in_review')`, [scope.companyId]);
-    const [escalated] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "slaStatus" = 'escalated' AND status IN ('pending','in_review')`, [scope.companyId]);
+    const [total] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [scope.companyId]);
+    const [pending] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status IN ('pending','in_review')`, [scope.companyId]);
+    const [slaWarning] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "slaStatus" IN ('warning','exceeded') AND status IN ('pending','in_review')`, [scope.companyId]);
+    const [escalated] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "slaStatus" = 'escalated' AND status IN ('pending','in_review')`, [scope.companyId]);
     res.json({
       total: Number(total.count),
       pending: Number(pending.count),

@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { formatCurrency } from "@/lib/formatters";
 import { Package, Check, X, Plus, Pencil, Trash2 } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PageShell } from "@/components/page-shell";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
@@ -149,14 +150,14 @@ export default function UmrahPackages() {
   ];
 
   if (packagesQ.isLoading) return <LoadingSpinner />;
-  if (packagesQ.isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (packagesQ.isError) return <ErrorState />;
 
   return (
     <PageShell title="باقات العمرة" breadcrumbs={[{ label: "العمرة" }, { label: "الباقات" }]}>
       <UmrahTabsNav />
       <div className="flex items-center justify-between">
         <p className="text-muted-foreground">إدارة باقات العمرة والأسعار والتفاصيل</p>
-        <Button onClick={openCreate}><Plus className="h-4 w-4 ml-2" />إضافة باقة</Button>
+        <GuardedButton perm="umrah:create" onClick={openCreate}><Plus className="h-4 w-4 ml-2" />إضافة باقة</GuardedButton>
       </div>
       <DataTable columns={columns} data={rows} isLoading={packagesQ.isLoading} isError={packagesQ.isError} error={packagesQ.error} onRowClick={(row) => navigate(`/umrah/packages/${row.id}`)} />
 
@@ -231,9 +232,9 @@ export default function UmrahPackages() {
           <p>هل أنت متأكد من حذف هذه الباقة؟ لا يمكن حذف باقة مرتبطة بمعتمرين.</p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteId(null)}>إلغاء</Button>
-            <Button variant="destructive" onClick={() => deleteMut.mutate({})} disabled={deleteMut.isPending}>
+            <GuardedButton perm="umrah:delete" variant="destructive" onClick={() => deleteMut.mutate({})} disabled={deleteMut.isPending}>
               {deleteMut.isPending ? "جاري الحذف..." : "حذف"}
-            </Button>
+            </GuardedButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>

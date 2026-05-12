@@ -4,6 +4,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { Button } from "@/components/ui/button";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Plus, Route, Navigation, CheckCircle, MapPin } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
@@ -43,7 +44,7 @@ export default function TripsPage() {
   ];
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   return (
     <PageShell
@@ -53,7 +54,7 @@ export default function TripsPage() {
       loading={isLoading}
       actions={
         <Link href="/fleet/trips/create">
-          <Button size="sm"><Plus className="h-4 w-4 me-1" />رحلة جديدة</Button>
+          <GuardedButton perm="fleet:create" size="sm"><Plus className="h-4 w-4 me-1" />رحلة جديدة</GuardedButton>
         </Link>
       }
     >

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Receipt, DollarSign, FileText } from "lucide-react";
 import { AdvancedFilters, useFilters } from "@/components/shared/advanced-filters";
 import { cn } from "@/lib/utils";
@@ -27,7 +28,7 @@ export default function UmrahInvoices() {
   const { toast } = useToast();
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const generate = async () => {
     try {
@@ -97,9 +98,9 @@ export default function UmrahInvoices() {
               </SelectContent>
             </Select>
           </div>
-          <Button onClick={generate} disabled={!genAgent || !genSeason} className="gap-2">
+          <GuardedButton perm="umrah:create" onClick={generate} disabled={!genAgent || !genSeason} className="gap-2">
             <Receipt className="h-4 w-4" />إنشاء فاتورة
-          </Button>
+          </GuardedButton>
         </CardContent>
       </Card>
 

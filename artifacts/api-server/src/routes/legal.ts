@@ -8,7 +8,7 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { haversineKm } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -161,7 +161,7 @@ const VALID_CASE_TRANSITIONS: Record<string, readonly string[]> = {
 
 const CASE_STATUSES = ["open", "in_progress", "judgment", "execution", "closed"] as const;
 
-router.get("/contracts", requirePermission("legal:read"), async (req, res) => {
+router.get("/contracts", authorize({ feature: "legal.contracts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
@@ -174,7 +174,7 @@ router.get("/contracts", requirePermission("legal:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Legal contracts error:"); }
 });
 
-router.post("/contracts", requirePermission("legal:create"), async (req, res) => {
+router.post("/contracts", authorize({ feature: "legal.contracts", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createContractSchema.safeParse(req.body)) as any;
@@ -242,7 +242,7 @@ router.post("/contracts", requirePermission("legal:create"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Create legal contract error:"); }
 });
 
-router.get("/contracts/renewal-alerts", requirePermission("legal:read"), async (req, res) => {
+router.get("/contracts/renewal-alerts", authorize({ feature: "legal.contracts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -282,7 +282,7 @@ router.get("/contracts/renewal-alerts", requirePermission("legal:read"), async (
   } catch (err) { handleRouteError(err, res, "Renewal alerts error:"); }
 });
 
-router.get("/contracts/:id", requirePermission("legal:read"), async (req, res) => {
+router.get("/contracts/:id", authorize({ feature: "legal.contracts", action: "view", resource: { table: "legal_contracts", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -292,7 +292,7 @@ router.get("/contracts/:id", requirePermission("legal:read"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "Get contract error:"); }
 });
 
-router.patch("/contracts/:id", requirePermission("legal:write"), async (req, res) => {
+router.patch("/contracts/:id", authorize({ feature: "legal.contracts", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -361,7 +361,8 @@ router.patch("/contracts/:id", requirePermission("legal:write"), async (req, res
     }
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id, scope.companyId);
-    await rawExecute(`UPDATE legal_contracts SET ${sets.join(",")}, "updatedAt"=NOW() WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    const { affectedRows } = await rawExecute(`UPDATE legal_contracts SET ${sets.join(",")}, "updatedAt"=NOW() WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("العقد غير موجود");
     const [row] = await rawQuery<any>(`SELECT * FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
@@ -390,7 +391,7 @@ router.patch("/contracts/:id", requirePermission("legal:write"), async (req, res
   } catch (err) { handleRouteError(err, res, "Update contract error:"); }
 });
 
-router.delete("/contracts/:id", requirePermission("legal:delete"), async (req, res) => {
+router.delete("/contracts/:id", authorize({ feature: "legal.contracts", action: "delete", resource: { table: "legal_contracts", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -405,7 +406,8 @@ router.delete("/contracts/:id", requirePermission("legal:delete"), async (req, r
         { field: "status", fix: "أنهِ العقد عبر /contracts/:id/terminate قبل الحذف" }
       );
     }
-    await rawExecute(`UPDATE legal_contracts SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE legal_contracts SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("العقد غير موجود");
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -431,7 +433,7 @@ router.delete("/contracts/:id", requirePermission("legal:delete"), async (req, r
 // Lifecycle endpoints: renew and terminate
 // ---------------------------------------------------------------------------
 
-router.post("/contracts/:id/renew", requirePermission("legal:write"), async (req, res) => {
+router.post("/contracts/:id/renew", authorize({ feature: "legal.contracts", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -502,7 +504,7 @@ router.post("/contracts/:id/renew", requirePermission("legal:write"), async (req
   }
 });
 
-router.post("/contracts/:id/terminate", requirePermission("legal:write"), async (req, res) => {
+router.post("/contracts/:id/terminate", authorize({ feature: "legal.contracts", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -550,7 +552,7 @@ router.post("/contracts/:id/terminate", requirePermission("legal:write"), async 
   }
 });
 
-router.get("/cases", requirePermission("legal:read"), async (req, res) => {
+router.get("/cases", authorize({ feature: "legal.cases", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
@@ -563,7 +565,7 @@ router.get("/cases", requirePermission("legal:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Legal cases error:"); }
 });
 
-router.post("/cases", requirePermission("legal:create"), async (req, res) => {
+router.post("/cases", authorize({ feature: "legal.cases", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createCaseSchema.safeParse(req.body)) as any;
@@ -634,7 +636,9 @@ router.post("/cases", requirePermission("legal:create"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create legal case error:"); }
 });
 
-router.get("/cases/:id", requirePermission("legal:read"), async (req, res) => {
+// RBAC v2: legal cases hold confidential notes (declared sensitive in
+// catalog) — maskFields automatically applies role-level field policies.
+router.get("/cases/:id", authorize({ feature: "legal.cases", action: "view", resource: { table: "legal_cases", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -647,7 +651,7 @@ router.get("/cases/:id", requirePermission("legal:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Get case error:"); }
 });
 
-router.patch("/cases/:id", requirePermission("legal:write"), async (req, res) => {
+router.patch("/cases/:id", authorize({ feature: "legal.cases", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -685,7 +689,8 @@ router.patch("/cases/:id", requirePermission("legal:write"), async (req, res) =>
     if (b.court !== undefined) { params.push(b.court); sets.push(`court=$${params.length}`); }
     if (sets.length <= 1 && params.length === 0) { res.json(existing); return; }
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE legal_cases SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    const { affectedRows } = await rawExecute(`UPDATE legal_cases SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("القضية غير موجودة");
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -726,7 +731,7 @@ router.patch("/cases/:id", requirePermission("legal:write"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Update case error:"); }
 });
 
-router.delete("/cases/:id", requirePermission("legal:delete"), async (req, res) => {
+router.delete("/cases/:id", authorize({ feature: "legal.cases", action: "delete", resource: { table: "legal_cases", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -741,7 +746,8 @@ router.delete("/cases/:id", requirePermission("legal:delete"), async (req, res) 
         { field: "status", fix: "أغلق القضية عبر /cases/:id/close قبل الحذف" }
       );
     }
-    await rawExecute(`UPDATE legal_cases SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE legal_cases SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("القضية غير موجودة");
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -764,7 +770,7 @@ router.delete("/cases/:id", requirePermission("legal:delete"), async (req, res) 
 });
 
 /** Close a legal case — cancels all outstanding obligations and emits event */
-router.post("/cases/:id/close", requirePermission("legal:write"), async (req, res) => {
+router.post("/cases/:id/close", authorize({ feature: "legal.cases", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -775,7 +781,7 @@ router.post("/cases/:id/close", requirePermission("legal:write"), async (req, re
       id,
       scope,
       action: "legal.case.closed",
-      fromStates: ["open", "in_progress", "on_hold"],
+      fromStates: ["open", "in_progress", "on_hold", "judgment", "execution"],
       toState: "closed",
       reason: b.closureReason,
       extraWhere: '"deletedAt" IS NULL',
@@ -794,7 +800,7 @@ router.post("/cases/:id/close", requirePermission("legal:write"), async (req, re
   }
 });
 
-router.get("/cases/:caseId/sessions", requirePermission("legal:read"), async (req, res) => {
+router.get("/cases/:caseId/sessions", authorize({ feature: "legal.cases", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const caseId = parseId(req.params.caseId, "caseId");
@@ -805,7 +811,7 @@ router.get("/cases/:caseId/sessions", requirePermission("legal:read"), async (re
   } catch (err) { handleRouteError(err, res, "Legal sessions error:"); }
 });
 
-router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async (req, res) => {
+router.post("/cases/:caseId/sessions", authorize({ feature: "legal.cases", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createSessionSchema.safeParse(req.body)) as any;
@@ -976,15 +982,17 @@ router.post("/cases/:caseId/sessions", requirePermission("legal:create"), async 
   } catch (err) { handleRouteError(err, res, "Create session error:"); }
 });
 
-router.get("/stats", requirePermission("legal:read"), async (req, res) => {
+router.get("/stats", authorize({ feature: "legal.cases", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [contracts] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='active') as active FROM legal_contracts WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [cases] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COUNT(*) FILTER (WHERE status='in_progress') as "inProgress" FROM legal_cases WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [expiring] = await rawQuery<any>(`SELECT COUNT(*) as count FROM legal_contracts WHERE "companyId"=$1 AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days' AND status='active' AND "deletedAt" IS NULL`, [cid]);
-    const [sessions] = await rawQuery<any>(`SELECT COUNT(*) as upcoming FROM legal_sessions ls JOIN legal_cases lc ON lc.id=ls."caseId" WHERE lc."companyId"=$1 AND lc."deletedAt" IS NULL AND ls."sessionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'`, [cid]);
-    const [contingent] = await rawQuery<any>(`SELECT COALESCE(SUM("financialRisk"),0) as total FROM legal_cases WHERE "companyId"=$1 AND status NOT IN ('closed') AND "deletedAt" IS NULL`, [cid]).catch((e) => { logger.error(e, "legal query failed"); return [{ total: 0 }]; });
+    const [[contracts], [cases], [expiring], [sessions], [contingent]] = await Promise.all([
+      rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='active') as active FROM legal_contracts WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COUNT(*) FILTER (WHERE status='in_progress') as "inProgress" FROM legal_cases WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as count FROM legal_contracts WHERE "companyId"=$1 AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days' AND status='active' AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as upcoming FROM legal_sessions ls JOIN legal_cases lc ON lc.id=ls."caseId" WHERE lc."companyId"=$1 AND lc."deletedAt" IS NULL AND ls."deletedAt" IS NULL AND ls."sessionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'`, [cid]),
+      rawQuery<any>(`SELECT COALESCE(SUM("financialRisk"),0) as total FROM legal_cases WHERE "companyId"=$1 AND status NOT IN ('closed') AND "deletedAt" IS NULL`, [cid]).catch((e) => { logger.error(e, "legal query failed"); return [{ total: 0 }]; }),
+    ]);
     res.json({
       totalContracts: Number(contracts.total), activeContracts: Number(contracts.active),
       totalCases: Number(cases.total), openCases: Number(cases.open), inProgressCases: Number(cases.inProgress),
@@ -994,7 +1002,7 @@ router.get("/stats", requirePermission("legal:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Legal stats error:"); }
 });
 
-router.get("/cases/:caseId/correspondence", requirePermission("legal:read"), async (req, res) => {
+router.get("/cases/:caseId/correspondence", authorize({ feature: "legal.cases", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const caseId = parseId(req.params.caseId, "caseId");
@@ -1005,7 +1013,7 @@ router.get("/cases/:caseId/correspondence", requirePermission("legal:read"), asy
   } catch (err) { handleRouteError(err, res, "Legal correspondence error:"); }
 });
 
-router.post("/cases/:caseId/correspondence", requirePermission("legal:create"), async (req, res) => {
+router.post("/cases/:caseId/correspondence", authorize({ feature: "legal.cases", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const caseId = parseId(req.params.caseId, "caseId");
@@ -1038,7 +1046,7 @@ router.post("/cases/:caseId/correspondence", requirePermission("legal:create"), 
 });
 
 // ─── Case Costs — مصاريف القضية ─────────────────────────────────────────────
-router.post("/cases/:caseId/costs", requirePermission("legal:create"), async (req, res) => {
+router.post("/cases/:caseId/costs", authorize({ feature: "legal.cases", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const caseId = parseId(req.params.caseId, "caseId");
@@ -1052,7 +1060,7 @@ router.post("/cases/:caseId/costs", requirePermission("legal:create"), async (re
 
     // Update the case's financialRisk to accumulate costs
     await rawExecute(
-      `UPDATE legal_cases SET "financialRisk"=COALESCE("financialRisk",0)+$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3`,
+      `UPDATE legal_cases SET "financialRisk"=COALESCE("financialRisk",0)+$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
       [b.amount, caseId, scope.companyId]
     );
 
@@ -1091,18 +1099,18 @@ router.post("/cases/:caseId/costs", requirePermission("legal:create"), async (re
   } catch (err) { handleRouteError(err, res, "Create case cost error:"); }
 });
 
-router.get("/cases/:caseId/judgments", requirePermission("legal:read"), async (req, res) => {
+router.get("/cases/:caseId/judgments", authorize({ feature: "legal.cases", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const caseId = parseId(req.params.caseId, "caseId");
     const [lc] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!lc) throw new NotFoundError("القضية غير موجودة");
-    const rows = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE "caseId"=$1 ORDER BY "judgmentDate" DESC LIMIT 500`, [caseId]);
+    const rows = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE "caseId"=$1 AND "companyId"=$2 ORDER BY "judgmentDate" DESC LIMIT 500`, [caseId, scope.companyId]);
     res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "Legal judgments error:"); }
 });
 
-router.post("/cases/:caseId/judgments", requirePermission("legal:create"), async (req, res) => {
+router.post("/cases/:caseId/judgments", authorize({ feature: "legal.cases", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const caseId = parseId(req.params.caseId, "caseId");
@@ -1122,7 +1130,7 @@ router.post("/cases/:caseId/judgments", requirePermission("legal:create"), async
       );
       const insertId = insertRes.rows[0]?.id ?? 0;
       if (b.amount && Number(b.amount) > 0) {
-        await client.query(`UPDATE legal_cases SET "financialRisk"=COALESCE("financialRisk",0)+$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3`, [Number(b.amount), caseId, scope.companyId]);
+        await client.query(`UPDATE legal_cases SET "financialRisk"=COALESCE("financialRisk",0)+$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [Number(b.amount), caseId, scope.companyId]);
       }
       return { insertId };
     });
@@ -1192,12 +1200,12 @@ router.post("/cases/:caseId/judgments", requirePermission("legal:create"), async
       after: { caseId, judgmentDate: b.judgmentDate, judgmentType: b.judgmentType, verdict: b.verdict, amount: b.amount },
     }).catch((e) => logger.error(e, "legal background task failed"));
 
-    const [row] = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create judgment error:"); }
 });
 
-router.patch("/cases/:caseId/judgments/:id", requirePermission("legal:write"), async (req, res) => {
+router.patch("/cases/:caseId/judgments/:id", authorize({ feature: "legal.cases", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1229,9 +1237,10 @@ router.patch("/cases/:caseId/judgments/:id", requirePermission("legal:write"), a
     if (b.verdict !== undefined) { params.push(b.verdict); sets.push(`verdict=$${params.length}`); }
     if (b.notes !== undefined) { params.push(b.notes); sets.push(`notes=$${params.length}`); }
     if (b.dueDate !== undefined) { params.push(b.dueDate); sets.push(`"dueDate"=$${params.length}`); }
-    params.push(id); params.push(caseId);
-    await rawExecute(`UPDATE legal_judgments SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "caseId"=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE id=$1`, [id]);
+    params.push(id); params.push(caseId); params.push(scope.companyId);
+    const { affectedRows } = await rawExecute(`UPDATE legal_judgments SET ${sets.join(",")} WHERE id=$${params.length - 2} AND "caseId"=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    if (!affectedRows) throw new NotFoundError("الحكم غير موجود");
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
 
     // Mark payment obligation met if fully paid
     if (row && Number(row.paidAmount || 0) >= Number(row.amount || 0) && Number(row.amount || 0) > 0) {
@@ -1262,7 +1271,7 @@ router.patch("/cases/:caseId/judgments/:id", requirePermission("legal:write"), a
   } catch (err) { handleRouteError(err, res, "Update judgment error:"); }
 });
 
-router.patch("/cases/:id/financial-risk", requirePermission("legal:write"), async (req, res) => {
+router.patch("/cases/:id/financial-risk", authorize({ feature: "legal.cases", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1287,7 +1296,7 @@ router.patch("/cases/:id/financial-risk", requirePermission("legal:write"), asyn
     }
 
     await rawExecute(
-      `UPDATE legal_cases SET "financialRisk"=$1, "riskLevel"=$2, "updatedAt"=NOW() WHERE id=$3 AND "companyId"=$4`,
+      `UPDATE legal_cases SET "financialRisk"=$1, "riskLevel"=$2, "updatedAt"=NOW() WHERE id=$3 AND "companyId"=$4 AND "deletedAt" IS NULL`,
       [financialRisk || 0, riskLevel || 'medium', id, scope.companyId]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
@@ -1317,7 +1326,7 @@ router.patch("/cases/:id/financial-risk", requirePermission("legal:write"), asyn
   } catch (err) { handleRouteError(err, res, "Financial risk update error:"); }
 });
 
-router.get("/sessions/:id", requirePermission("legal:read"), async (req, res) => {
+router.get("/sessions/:id", authorize({ feature: "legal.cases", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1333,7 +1342,7 @@ router.get("/sessions/:id", requirePermission("legal:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Legal session detail error:"); }
 });
 
-router.get("/judgments/:id", requirePermission("legal:read"), async (req, res) => {
+router.get("/judgments/:id", authorize({ feature: "legal.cases", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1349,7 +1358,7 @@ router.get("/judgments/:id", requirePermission("legal:read"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "Legal judgment detail error:"); }
 });
 
-router.get("/correspondence/:id", requirePermission("legal:read"), async (req, res) => {
+router.get("/correspondence/:id", authorize({ feature: "legal.cases", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1365,7 +1374,7 @@ router.get("/correspondence/:id", requirePermission("legal:read"), async (req, r
   } catch (err) { handleRouteError(err, res, "Legal correspondence detail error:"); }
 });
 
-router.get("/sessions/upcoming", requirePermission("legal:read"), async (req, res) => {
+router.get("/sessions/upcoming", authorize({ feature: "legal.cases", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const days = Number(req.query.days) || 14;
@@ -1386,7 +1395,7 @@ router.get("/sessions/upcoming", requirePermission("legal:read"), async (req, re
   } catch (err) { handleRouteError(err, res, "Upcoming sessions error:"); }
 });
 
-router.get("/judgments/financial-report", requirePermission("legal:read"), async (req, res) => {
+router.get("/judgments/financial-report", authorize({ feature: "legal.cases", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -1416,7 +1425,7 @@ router.get("/judgments/financial-report", requirePermission("legal:read"), async
   } catch (err) { handleRouteError(err, res, "Judgments financial report error:"); }
 });
 
-router.get("/financial-report", requirePermission("legal:read"), async (req, res) => {
+router.get("/financial-report", authorize({ feature: "legal.cases", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cases = await rawQuery<any>(

@@ -80,7 +80,7 @@ export default function FieldTrackingPage() {
   const items = asList(data);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const kpis = [
     { label: "تسجيلات اليوم", value: items.length, icon: Navigation, color: "text-blue-600 bg-blue-50" },

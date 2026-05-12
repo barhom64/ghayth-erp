@@ -19,6 +19,7 @@ import {
 import { formatCurrency } from "@/lib/formatters";
 import { apiFetch } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#f97316", "#84cc16"];
 
@@ -97,7 +98,7 @@ export default function Insights() {
   };
 
   if (loadingSummary) return <LoadingSpinner />;
-  if (!summary && !loadingSummary) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (!summary && !loadingSummary) return <ErrorState />;
 
   const overview = summary?.overview ?? {};
   const usageStats = summary?.usageStats ?? {};
@@ -138,10 +139,10 @@ export default function Insights() {
     <PageShell
       title="رؤى ذكية"
       actions={
-        <Button variant="outline" size="sm" onClick={handleRecalculate} disabled={recalculating}>
+        <GuardedButton perm="bi:export" variant="outline" size="sm" onClick={handleRecalculate} disabled={recalculating}>
           <RefreshCw className={`h-4 w-4 me-2 ${recalculating ? "animate-spin" : ""}`} />
           تحديث التحليل
-        </Button>
+        </GuardedButton>
       }
     >
       {/* Overview KPIs */}

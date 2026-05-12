@@ -1,9 +1,20 @@
+import { useState } from "react";
 import { useLocation, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { formatDateAr } from "@/lib/formatters";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 // Phase A — CreatePageLayout now delegates to PageShell so every one of
 // the 56+ create pages in the app automatically picks up the unified
 // header + breadcrumbs + error boundary without touching the call sites.
@@ -45,12 +56,13 @@ export function CreatePageLayout({
   isDirty = false,
 }: CreatePageLayoutProps) {
   const [, setLocation] = useLocation();
+  const [confirmOpen, setConfirmOpen] = useState(false);
   useUnsavedChanges(isDirty);
 
   const handleBack = () => {
     if (isDirty) {
-      const confirmed = window.confirm("لديك تغييرات غير محفوظة. هل تريد المغادرة؟");
-      if (!confirmed) return;
+      setConfirmOpen(true);
+      return;
     }
     setLocation(backPath);
   };
@@ -61,24 +73,42 @@ export function CreatePageLayout({
   ];
 
   return (
-    <PageShell
-      title={title}
-      subtitle={subtitle}
-      breadcrumbs={allCrumbs}
-      actions={
-        <Button variant="ghost" size="sm" onClick={handleBack} className="gap-1">
-          <ArrowRight className="h-4 w-4" />
-          رجوع
-        </Button>
-      }
-    >
-      <Card>
-        <CardHeader>
-          <CardTitle>{title}</CardTitle>
-        </CardHeader>
-        <CardContent>{children}</CardContent>
-      </Card>
-    </PageShell>
+    <>
+      <PageShell
+        title={title}
+        subtitle={subtitle}
+        breadcrumbs={allCrumbs}
+        actions={
+          <Button variant="ghost" size="sm" onClick={handleBack} className="gap-1">
+            <ArrowRight className="h-4 w-4" />
+            رجوع
+          </Button>
+        }
+      >
+        <Card>
+          <CardHeader>
+            <CardTitle>{title}</CardTitle>
+          </CardHeader>
+          <CardContent>{children}</CardContent>
+        </Card>
+      </PageShell>
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>تغييرات غير محفوظة</AlertDialogTitle>
+            <AlertDialogDescription>
+              لديك تغييرات لم تُحفظ بعد. هل تريد المغادرة وتجاهل التعديلات؟
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>البقاء</AlertDialogCancel>
+            <AlertDialogAction onClick={() => setLocation(backPath)}>
+              مغادرة وتجاهل
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 

@@ -1,6 +1,11 @@
 import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 import { DetailPageLayout, type RelatedEntity } from "@/components/shared/detail-page-layout";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
@@ -10,6 +15,7 @@ import { Edit, Fuel, Gauge } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const FUEL_TYPES: Record<string, string> = {
   gasoline_91: "بنزين 91",
@@ -22,6 +28,7 @@ export default function FuelDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/fleet/fuel/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("fuel_log", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["fuel-detail", String(id)],
@@ -76,8 +83,27 @@ export default function FuelDetail() {
 
   const costPerLiter = item?.cost && item?.quantity ? (Number(item.cost) / Number(item.quantity)).toFixed(2) : null;
 
+  const editDelete = useDetailEditDelete({
+    entityLabel: "تعبئة الوقود",
+    patchPath: `/fleet/fuel-logs/${id}`,
+    deletePath: `/fleet/fuel-logs/${id}`,
+    listPath: "/fleet/fuel",
+    initialValues: item,
+    fields: [
+      { key: "liters", label: "الكمية (لتر)", type: "number" },
+      { key: "costPerLiter", label: "سعر اللتر", type: "number" },
+      { key: "totalCost", label: "التكلفة الإجمالية", type: "number" },
+      { key: "stationName", label: "المحطة" },
+    ],
+    invalidateKeys: [["fuel-log", String(id)], ["fuel-logs"]],
+    onSaved: () => refetch(),
+  });
+
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
+      <div className="md:col-span-3">
+        <InlineEditCard hook={editDelete} />
+      </div>
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
@@ -189,6 +215,8 @@ export default function FuelDetail() {
       relatedEntities={relatedEntities}
       entityType="fuel"
       entityId={id ?? 0}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       overview={overview}
       isLoading={isLoading}
       error={error}
@@ -202,10 +230,7 @@ export default function FuelDetail() {
             date={formatDateAr(item?.date || item?.createdAt)}
             sections={printSections}
           />
-          <GuardedButton perm="fleet:update" variant="outline" size="sm" onClick={() => setLocation("/fleet/fuel")} disabled={!item}>
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
+          <DetailActionButtons hook={editDelete} />
         </>
       }
     />

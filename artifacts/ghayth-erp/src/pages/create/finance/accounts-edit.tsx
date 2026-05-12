@@ -60,7 +60,7 @@ export default function AccountsEdit() {
   };
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
   if (!account) return <div className="text-center py-16 text-gray-500">الحساب غير موجود</div>;
 
   return (
@@ -94,7 +94,7 @@ export default function AccountsEdit() {
 
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/finance/accounts")}>إلغاء</Button>
-        <Button onClick={handleSave} disabled={saving} className="gap-2">
+        <Button onClick={handleSave} disabled={saving} className="gap-2" rateLimitAware>
           <Save className="h-4 w-4" /> {saving ? "جاري الحفظ..." : "حفظ التعديلات"}
         </Button>
       </div>

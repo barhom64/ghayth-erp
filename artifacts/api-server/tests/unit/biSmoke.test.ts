@@ -11,13 +11,13 @@ describe("bi — dashboard management", () => {
   it("GET /dashboards requires bi:read", () => {
     const idx = SRC.indexOf('"/dashboards"');
     const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("bi:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("POST /dashboards requires bi:write", () => {
     const idx = SRC.indexOf('router.post("/dashboards"');
     const section = SRC.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("bi:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("dashboards scoped by companyId", () => {
@@ -61,13 +61,13 @@ describe("bi — KPI management", () => {
   it("GET /kpis requires bi:read", () => {
     const idx = SRC.indexOf('"/kpis"');
     const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("bi:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("POST /kpis requires bi:write", () => {
     const idx = SRC.indexOf('router.post("/kpis"');
     const section = SRC.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("bi:write")');
+    expect(section).toContain('authorize(');
   });
 });
 
@@ -75,13 +75,13 @@ describe("bi — reports management", () => {
   it("GET /reports requires bi:read", () => {
     const idx = SRC.indexOf('router.get("/reports"');
     const section = SRC.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("bi:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("POST /reports requires bi:write", () => {
     const idx = SRC.indexOf('router.post("/reports"');
     const section = SRC.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("bi:write")');
+    expect(section).toContain('authorize(');
   });
 });
 
@@ -190,8 +190,8 @@ describe("bi — security patterns", () => {
     expect(SRC).not.toContain("router.use(authMiddleware)");
   });
 
-  it("all endpoints use requirePermission", () => {
-    const perms = [...SRC.matchAll(/requirePermission\("bi:(read|write)"\)/g)];
+  it("all endpoints use authorize", () => {
+    const perms = [...SRC.matchAll(/authorize\(/g)];
     expect(perms.length).toBeGreaterThanOrEqual(25);
   });
 

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -169,9 +170,9 @@ export default function AdminLogsPage() {
           <p className="text-sm text-muted-foreground mt-0.5">عرض وتصفية جميع العمليات والتغييرات في النظام</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={exportCSV}>
+          <GuardedButton perm="admin:export" variant="outline" size="sm" onClick={exportCSV}>
             <Download className="h-4 w-4 me-1" />تصدير جدولي
-          </Button>
+          </GuardedButton>
           <Button variant="outline" size="sm" onClick={() => refetch()}>تحديث</Button>
         </div>
       </div>
@@ -243,7 +244,7 @@ export default function AdminLogsPage() {
           data={filteredLogs}
           isLoading={isLoading}
           isError={isError}
-          onRetry={() => window.location.reload()}
+         
           noToolbar
           emptyMessage="لا توجد سجلات"
           emptyIcon={<ScrollText className="h-8 w-8 mx-auto mb-2 text-gray-300" />}

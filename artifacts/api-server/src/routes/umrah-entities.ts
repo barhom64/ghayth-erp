@@ -15,12 +15,12 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
-import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { emitEvent, createAuditLog, initiateApprovalChain } from "../lib/businessHelpers.js";
 import {
   generateSalesInvoice,
   registerPayment,
@@ -32,12 +32,13 @@ import {
   calculateAllForCompany,
 } from "../lib/umrahCommissionEngine.js";
 import { logger } from "../lib/logger.js";
+import { exportOfficialLetterPdf, exportUmrahStatementPdf, exportUmrahDailyRunsheetPdf } from "../lib/pdfExport.js";
 
 const router = Router();
 
 async function requireOpenSeason(seasonId: number, companyId: number): Promise<void> {
   const [season] = await rawQuery<{ id: number; status: string }>(
-    `SELECT id, status FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+    `SELECT id, status FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
     [seasonId, companyId]
   );
   if (!season) throw new ValidationError("الموسم غير موجود", { field: "seasonId" });
@@ -197,7 +198,7 @@ const createPaymentSchema = z.object({
 // SUB-AGENTS
 // ============================================================================
 
-router.get("/sub-agents", requirePermission("umrah:read"), async (req, res) => {
+router.get("/sub-agents", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(
@@ -214,7 +215,7 @@ router.get("/sub-agents", requirePermission("umrah:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "List sub-agents"); }
 });
 
-router.post("/sub-agents", requirePermission("umrah:write"), async (req, res) => {
+router.post("/sub-agents", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const parsed = zodParse(createSubAgentSchema.safeParse(req.body));
@@ -236,7 +237,27 @@ router.post("/sub-agents", requirePermission("umrah:write"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Create sub-agent"); }
 });
 
-router.get("/sub-agents/unlinked", requirePermission("umrah:read"), async (req, res) => {
+// Single-row sub-agent fetch. Used by the detail page UI to render
+// the full row (same joined columns the list returns) plus the
+// statement / pricing / attachments panels.
+router.get("/sub-agents/:id", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(
+      `SELECT sa.*, a.name AS "agentName", c.name AS "clientName"
+         FROM umrah_sub_agents sa
+         LEFT JOIN umrah_agents a ON sa."agentId" = a.id
+         LEFT JOIN clients c ON sa."clientId" = c.id AND c."deletedAt" IS NULL
+        WHERE sa.id = $1 AND sa."companyId" = $2 AND sa."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("الوكيل الفرعي غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Get sub-agent"); }
+});
+
+router.get("/sub-agents/unlinked", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { seasonId } = req.query as any;
@@ -266,7 +287,7 @@ router.get("/sub-agents/unlinked", requirePermission("umrah:read"), async (req, 
   } catch (err) { handleRouteError(err, res, "List unlinked sub-agents"); }
 });
 
-router.patch("/sub-agents/:id", requirePermission("umrah:write"), async (req, res) => {
+router.patch("/sub-agents/:id", authorize({ feature: "umrah", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -281,16 +302,16 @@ router.patch("/sub-agents/:id", requirePermission("umrah:write"), async (req, re
     params.push(scope.userId); sets.push(`"updatedBy"=$${params.length}`);
     sets.push(`"updatedAt"=NOW()`);
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE umrah_sub_agents SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    const { affectedRows } = await rawExecute(`UPDATE umrah_sub_agents SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("الوكيل الفرعي غير موجود");
     const [row] = await rawQuery(`SELECT * FROM umrah_sub_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    if (!row) throw new NotFoundError("الوكيل الفرعي غير موجود");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_sub_agents", entityId: id, after: b }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sub_agent.updated", entity: "umrah_sub_agents", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update sub-agent"); }
 });
 
-router.delete("/sub-agents/:id", requirePermission("umrah:write"), async (req, res) => {
+router.delete("/sub-agents/:id", authorize({ feature: "umrah", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -305,7 +326,7 @@ router.delete("/sub-agents/:id", requirePermission("umrah:write"), async (req, r
   } catch (err) { handleRouteError(err, res, "Delete sub-agent"); }
 });
 
-router.put("/sub-agents/:id/link", requirePermission("umrah:write"), async (req, res) => {
+router.put("/sub-agents/:id/link", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -324,7 +345,7 @@ router.put("/sub-agents/:id/link", requirePermission("umrah:write"), async (req,
       finalClientId = newClient.id;
     } else {
       if (!clientId) throw new ValidationError("معرف العميل مطلوب");
-      const [existingClient] = await rawQuery<any>(
+      const [existingClient] = await rawQuery<{ id: number }>(
         `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
         [clientId, scope.companyId]
       );
@@ -355,12 +376,12 @@ router.put("/sub-agents/:id/link", requirePermission("umrah:write"), async (req,
   } catch (err) { handleRouteError(err, res, "Link sub-agent"); }
 });
 
-router.post("/sub-agents/link-by-nusk", requirePermission("umrah:write"), async (req, res) => {
+router.post("/sub-agents/link-by-nusk", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const parsed = zodParse(linkByNuskSchema.safeParse(req.body));
     const { nuskCode, clientId } = parsed;
-    const [existingClient] = await rawQuery<any>(
+    const [existingClient] = await rawQuery<{ id: number }>(
       `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [clientId, scope.companyId]
     );
@@ -376,13 +397,13 @@ router.post("/sub-agents/link-by-nusk", requirePermission("umrah:write"), async 
   } catch (err) { handleRouteError(err, res, "Link sub-agent by nusk"); }
 });
 
-router.post("/sub-agents/:id/link-client", requirePermission("umrah:write"), async (req, res) => {
+router.post("/sub-agents/:id/link-client", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const parsed = zodParse(linkClientSchema.safeParse(req.body));
     const { clientId } = parsed;
-    const [existingClient] = await rawQuery<any>(
+    const [existingClient] = await rawQuery<{ id: number }>(
       `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [clientId, scope.companyId]
     );
@@ -403,7 +424,7 @@ router.post("/sub-agents/:id/link-client", requirePermission("umrah:write"), asy
 // PRICING
 // ============================================================================
 
-router.get("/pricing", requirePermission("umrah:read"), async (req, res) => {
+router.get("/pricing", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(
@@ -411,7 +432,7 @@ router.get("/pricing", requirePermission("umrah:read"), async (req, res) => {
        FROM umrah_pricing p
        LEFT JOIN umrah_agents a ON p."agentId" = a.id
        LEFT JOIN umrah_sub_agents sa ON p."subAgentId" = sa.id
-       LEFT JOIN umrah_seasons s ON p."seasonId" = s.id
+       LEFT JOIN umrah_seasons s ON p."seasonId" = s.id AND s."deletedAt" IS NULL
        WHERE p."companyId" = $1 AND p."deletedAt" IS NULL
        ORDER BY p."validFrom" DESC
        LIMIT 500`,
@@ -421,7 +442,7 @@ router.get("/pricing", requirePermission("umrah:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "List pricing"); }
 });
 
-router.post("/pricing", requirePermission("umrah:write"), async (req, res) => {
+router.post("/pricing", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const parsed = zodParse(createPricingSchema.safeParse(req.body));
@@ -452,7 +473,7 @@ router.post("/pricing", requirePermission("umrah:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create pricing"); }
 });
 
-router.patch("/pricing/:id", requirePermission("umrah:write"), async (req, res) => {
+router.patch("/pricing/:id", authorize({ feature: "umrah", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -488,7 +509,8 @@ router.patch("/pricing/:id", requirePermission("umrah:write"), async (req, res) 
     params.push(scope.userId); sets.push(`"updatedBy"=$${params.length}`);
     sets.push(`"updatedAt"=NOW()`);
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE umrah_pricing SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    const { affectedRows } = await rawExecute(`UPDATE umrah_pricing SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("التسعير غير موجود");
     const [row] = await rawQuery(`SELECT * FROM umrah_pricing WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_pricing", entityId: id, after: b }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pricing.updated", entity: "umrah_pricing", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
@@ -496,7 +518,7 @@ router.patch("/pricing/:id", requirePermission("umrah:write"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "Update pricing"); }
 });
 
-router.delete("/pricing/:id", requirePermission("umrah:write"), async (req, res) => {
+router.delete("/pricing/:id", authorize({ feature: "umrah", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -514,7 +536,7 @@ router.delete("/pricing/:id", requirePermission("umrah:write"), async (req, res)
 // GROUPS
 // ============================================================================
 
-router.get("/groups", requirePermission("umrah:read"), async (req, res) => {
+router.get("/groups", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { seasonId } = req.query as any;
@@ -526,7 +548,7 @@ router.get("/groups", requirePermission("umrah:read"), async (req, res) => {
        FROM umrah_groups g
        LEFT JOIN umrah_agents a ON g."agentId" = a.id
        LEFT JOIN umrah_sub_agents sa ON g."subAgentId" = sa.id
-       LEFT JOIN umrah_seasons s ON g."seasonId" = s.id
+       LEFT JOIN umrah_seasons s ON g."seasonId" = s.id AND s."deletedAt" IS NULL
        WHERE ${where}
        ORDER BY g."createdAt" DESC
        LIMIT 500`,
@@ -539,23 +561,23 @@ router.get("/groups", requirePermission("umrah:read"), async (req, res) => {
 const createGroupSchema = z.object({
   nuskGroupNumber: z.string().min(1),
   name: z.string().optional(),
-  agentId: z.number().optional(),
-  subAgentId: z.number().optional(),
-  seasonId: z.number(),
-  mutamerCount: z.number().int().min(0).default(0),
-  programDuration: z.number().int().optional(),
+  agentId: z.coerce.number().optional(),
+  subAgentId: z.coerce.number().optional(),
+  seasonId: z.coerce.number(),
+  mutamerCount: z.coerce.number().int().min(0).default(0),
+  programDuration: z.coerce.number().int().optional(),
 });
 
 const patchGroupSchema = z.object({
   name: z.string().optional(),
-  agentId: z.number().optional().nullable(),
-  subAgentId: z.number().optional().nullable(),
-  mutamerCount: z.number().int().min(0).optional(),
-  programDuration: z.number().int().optional(),
+  agentId: z.coerce.number().optional().nullable(),
+  subAgentId: z.coerce.number().optional().nullable(),
+  mutamerCount: z.coerce.number().int().min(0).optional(),
+  programDuration: z.coerce.number().int().optional(),
   status: z.string().optional(),
 });
 
-router.get("/groups/:id", requirePermission("umrah:read"), async (req, res): Promise<void> => {
+router.get("/groups/:id", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -564,7 +586,7 @@ router.get("/groups/:id", requirePermission("umrah:read"), async (req, res): Pro
        FROM umrah_groups g
        LEFT JOIN umrah_agents a ON g."agentId" = a.id
        LEFT JOIN umrah_sub_agents sa ON g."subAgentId" = sa.id
-       LEFT JOIN umrah_seasons s ON g."seasonId" = s.id
+       LEFT JOIN umrah_seasons s ON g."seasonId" = s.id AND s."deletedAt" IS NULL
        WHERE g.id = $1 AND g."companyId" = $2 AND g."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -577,7 +599,7 @@ router.get("/groups/:id", requirePermission("umrah:read"), async (req, res): Pro
   } catch (err) { handleRouteError(err, res, "Get group"); }
 });
 
-router.post("/groups", requirePermission("umrah:write"), async (req, res) => {
+router.post("/groups", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createGroupSchema.safeParse(req.body));
@@ -593,7 +615,7 @@ router.post("/groups", requirePermission("umrah:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create group"); }
 });
 
-router.patch("/groups/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+router.patch("/groups/:id", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -624,11 +646,11 @@ router.patch("/groups/:id", requirePermission("umrah:write"), async (req, res): 
   } catch (err) { handleRouteError(err, res, "Update group"); }
 });
 
-router.delete("/groups/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+router.delete("/groups/:id", authorize({ feature: "umrah", action: "delete" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<{ id: number; salesInvoiceId: number | null }>(
       `SELECT id, "salesInvoiceId" FROM umrah_groups WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -644,10 +666,185 @@ router.delete("/groups/:id", requirePermission("umrah:write"), async (req, res):
 });
 
 // ============================================================================
+// GROUP OPS — split / merge (#5 from internal review)
+// ============================================================================
+
+const splitGroupSchema = z.object({
+  pilgrimIds: z.array(z.number().int().positive()).min(1, "اختر معتمراً واحداً على الأقل"),
+  newGroupName: z.string().min(1).max(255).optional(),
+  newNuskGroupNumber: z.string().min(1).max(30).optional(),
+});
+
+// Split a group: move N pilgrims into a freshly created group. The source
+// group is preserved (still owns remaining pilgrims + its salesInvoice).
+// Idempotent in spirit — if the new group already exists by nusk number
+// it's reused, otherwise auto-generated. Sub-agent + agent + seasonId
+// are copied from the source so analytics + scoping line up.
+router.post("/groups/:id/split", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const sourceId = parseId(req.params.id, "id");
+    const body = zodParse(splitGroupSchema.safeParse(req.body));
+
+    const result = await withTransaction(async (client) => {
+      const [source] = (await client.query(
+        `SELECT * FROM umrah_groups WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL FOR UPDATE`,
+        [sourceId, scope.companyId]
+      )).rows;
+      if (!source) throw new NotFoundError("المجموعة المصدر غير موجودة");
+      if (source.salesInvoiceId) {
+        throw new ConflictError("لا يمكن تقسيم مجموعة مرتبطة بفاتورة مبيعات — أُصدر إشعار دائن أولاً");
+      }
+
+      const verifyRes = await client.query(
+        `SELECT id FROM umrah_pilgrims
+          WHERE id = ANY($1::int[]) AND "groupId" = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+        [body.pilgrimIds, sourceId, scope.companyId]
+      );
+      if (verifyRes.rows.length !== body.pilgrimIds.length) {
+        throw new ValidationError("بعض المعتمرين لا ينتمون لهذه المجموعة أو محذوفون", {
+          meta: { provided: body.pilgrimIds.length, valid: verifyRes.rows.length },
+        });
+      }
+
+      const newNuskNum = body.newNuskGroupNumber || `${source.nuskGroupNumber}-S${Date.now().toString().slice(-5)}`;
+      const newName = body.newGroupName || `${source.name || ""} - تقسيم`.trim();
+
+      const insertRes = await client.query(
+        `INSERT INTO umrah_groups
+          ("companyId","branchId","nuskGroupNumber",name,"agentId","subAgentId","seasonId",
+           "mutamerCount","programDuration",status,"createdBy","createdAt","updatedAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'split_from_'||$10,$11,NOW(),NOW())
+         RETURNING id, "nuskGroupNumber", name, "mutamerCount"`,
+        [
+          scope.companyId, scope.branchId || source.branchId, newNuskNum, newName,
+          source.agentId, source.subAgentId, source.seasonId,
+          body.pilgrimIds.length, source.programDuration, sourceId, scope.userId,
+        ]
+      );
+      const newGroup = insertRes.rows[0];
+
+      await client.query(
+        `UPDATE umrah_pilgrims
+            SET "groupId"=$1, "updatedBy"=$2, "updatedAt"=NOW()
+          WHERE id = ANY($3::int[]) AND "companyId"=$4`,
+        [newGroup.id, scope.userId, body.pilgrimIds, scope.companyId]
+      );
+
+      await client.query(
+        `UPDATE umrah_groups
+            SET "mutamerCount" = GREATEST(0, COALESCE("mutamerCount",0) - $1),
+                "updatedBy"=$2, "updatedAt"=NOW()
+          WHERE id=$3 AND "companyId"=$4`,
+        [body.pilgrimIds.length, scope.userId, sourceId, scope.companyId]
+      );
+
+      return { newGroup, movedCount: body.pilgrimIds.length };
+    });
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "split", entity: "umrah_groups", entityId: sourceId,
+      after: { newGroupId: result.newGroup.id, movedCount: result.movedCount },
+    }).catch((e) => logger.error(e, "umrah groups split bg"));
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.group.split", entity: "umrah_groups", entityId: sourceId,
+      details: JSON.stringify({ newGroupId: result.newGroup.id, movedCount: result.movedCount }),
+    }).catch((e) => logger.error(e, "umrah groups split bg"));
+
+    res.json({ success: true, ...result });
+  } catch (err) { handleRouteError(err, res, "Split group"); }
+});
+
+const mergeGroupsSchema = z.object({
+  sourceGroupIds: z.array(z.number().int().positive()).min(1, "اختر مجموعة مصدر واحدة على الأقل"),
+  targetGroupId: z.number().int().positive(),
+});
+
+// Merge: move every pilgrim from sourceGroupIds → targetGroupId, then
+// soft-delete the source groups (they leave a paper trail). Source groups
+// must not be invoiced — if any has a salesInvoiceId we abort cleanly with
+// a 409 so the caller can issue credit notes first.
+router.post("/groups/merge", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const body = zodParse(mergeGroupsSchema.safeParse(req.body));
+
+    if (body.sourceGroupIds.includes(body.targetGroupId)) {
+      throw new ValidationError("الهدف لا يمكن أن يكون ضمن المصادر");
+    }
+
+    const result = await withTransaction(async (client) => {
+      const [target] = (await client.query(
+        `SELECT * FROM umrah_groups WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL FOR UPDATE`,
+        [body.targetGroupId, scope.companyId]
+      )).rows;
+      if (!target) throw new NotFoundError("المجموعة الهدف غير موجودة");
+
+      const sources = (await client.query(
+        `SELECT id, "salesInvoiceId", "mutamerCount" FROM umrah_groups
+          WHERE id = ANY($1::int[]) AND "companyId"=$2 AND "deletedAt" IS NULL
+          FOR UPDATE`,
+        [body.sourceGroupIds, scope.companyId]
+      )).rows;
+      if (sources.length !== body.sourceGroupIds.length) {
+        throw new ValidationError("بعض المجموعات المصدر غير موجودة أو محذوفة");
+      }
+      const invoiced = sources.filter((s: any) => s.salesInvoiceId);
+      if (invoiced.length > 0) {
+        throw new ConflictError("بعض المجموعات المصدر مفوترة — أصدر إشعار دائن أولاً", {
+          meta: { invoicedSourceIds: invoiced.map((s: any) => s.id) },
+        });
+      }
+
+      const moveRes = await client.query(
+        `UPDATE umrah_pilgrims
+            SET "groupId"=$1, "updatedBy"=$2, "updatedAt"=NOW()
+          WHERE "groupId" = ANY($3::int[]) AND "companyId"=$4 AND "deletedAt" IS NULL
+          RETURNING id`,
+        [body.targetGroupId, scope.userId, body.sourceGroupIds, scope.companyId]
+      );
+      const movedCount = moveRes.rowCount || 0;
+
+      await client.query(
+        `UPDATE umrah_groups
+            SET "mutamerCount" = COALESCE("mutamerCount",0) + $1,
+                "updatedBy"=$2, "updatedAt"=NOW()
+          WHERE id=$3 AND "companyId"=$4`,
+        [movedCount, scope.userId, body.targetGroupId, scope.companyId]
+      );
+
+      await client.query(
+        `UPDATE umrah_groups
+            SET "deletedAt"=NOW(), "updatedBy"=$1, "updatedAt"=NOW()
+          WHERE id = ANY($2::int[]) AND "companyId"=$3`,
+        [scope.userId, body.sourceGroupIds, scope.companyId]
+      );
+
+      return { movedCount, mergedSourceIds: body.sourceGroupIds };
+    });
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "merge", entity: "umrah_groups", entityId: body.targetGroupId,
+      after: result,
+    }).catch((e) => logger.error(e, "umrah groups merge bg"));
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.group.merged", entity: "umrah_groups", entityId: body.targetGroupId,
+      details: JSON.stringify(result),
+    }).catch((e) => logger.error(e, "umrah groups merge bg"));
+
+    res.json({ success: true, ...result });
+  } catch (err) { handleRouteError(err, res, "Merge groups"); }
+});
+
+// ============================================================================
 // NUSK INVOICES
 // ============================================================================
 
-router.get("/nusk-invoices", requirePermission("umrah:read"), async (req, res) => {
+router.get("/nusk-invoices", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { seasonId, groupId } = req.query as any;
@@ -673,7 +870,7 @@ router.get("/nusk-invoices", requirePermission("umrah:read"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "List nusk invoices"); }
 });
 
-router.get("/nusk-invoices/:id", requirePermission("umrah:read"), async (req, res): Promise<void> => {
+router.get("/nusk-invoices/:id", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -727,7 +924,7 @@ const updateNuskInvoiceSchema = z.object({
   notes: z.string().optional(),
 });
 
-router.post("/nusk-invoices", requirePermission("umrah:write"), async (req, res) => {
+router.post("/nusk-invoices", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createNuskInvoiceSchema.safeParse(req.body));
@@ -738,11 +935,11 @@ router.post("/nusk-invoices", requirePermission("umrah:write"), async (req, res)
     if (dup) throw new ConflictError("رقم فاتورة نسك مكرر");
     const rows = await rawQuery(
       `INSERT INTO umrah_nusk_invoices ("companyId","branchId","nuskInvoiceNumber","agentId","subAgentId","groupId","mutamerCount",
-       "groundServices","visaFees","insuranceFees","transportTotal","hotelTotal","additionalServices","netCost","totalAmount","nuskStatus","issueDate","expiryDate",notes,"createdBy")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING *`,
+       "groundServices","visaFees","insuranceFees","transportTotal","hotelTotal","additionalServices","netCost","totalAmount","nuskStatus","issueDate","expiryDate","createdBy")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
       [scope.companyId, scope.branchId || null, b.nuskInvoiceNumber, b.agentId, b.subAgentId || null, b.groupId || null, b.mutamerCount,
        b.groundServices, b.visaFees, b.insuranceFees, b.transportTotal, b.hotelTotal, b.additionalServices, b.netCost, b.totalAmount, b.nuskStatus,
-       b.issueDate || null, b.expiryDate || null, b.notes || null, scope.userId]
+       b.issueDate || null, b.expiryDate || null, scope.userId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_nusk_invoices", entityId: rows[0]?.id, after: { nuskInvoiceNumber: b.nuskInvoiceNumber } }).catch((e) => logger.error(e, "nusk bg"));
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.nusk_invoice.created", entity: "umrah_nusk_invoices", entityId: rows[0]?.id }).catch((e) => logger.error(e, "nusk bg"));
@@ -750,12 +947,12 @@ router.post("/nusk-invoices", requirePermission("umrah:write"), async (req, res)
   } catch (err) { handleRouteError(err, res, "Create nusk invoice"); }
 });
 
-router.patch("/nusk-invoices/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+router.patch("/nusk-invoices/:id", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(updateNuskInvoiceSchema.safeParse(req.body));
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<{ id: number; nuskStatus: string }>(
       `SELECT * FROM umrah_nusk_invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -763,7 +960,7 @@ router.patch("/nusk-invoices/:id", requirePermission("umrah:write"), async (req,
     if (existing.nuskStatus === "paid" && b.nuskStatus !== "refunded") {
       throw new ConflictError("لا يمكن تعديل فاتورة نسك مدفوعة");
     }
-    const fields = ["mutamerCount","groundServices","visaFees","insuranceFees","transportTotal","hotelTotal","additionalServices","netCost","totalAmount","nuskStatus","issueDate","expiryDate","notes"] as const;
+    const fields = ["mutamerCount","groundServices","visaFees","insuranceFees","transportTotal","hotelTotal","additionalServices","netCost","totalAmount","nuskStatus","issueDate","expiryDate"] as const;
     const params: any[] = [];
     const sets: string[] = [];
     for (const key of fields) {
@@ -783,11 +980,11 @@ router.patch("/nusk-invoices/:id", requirePermission("umrah:write"), async (req,
   } catch (err) { handleRouteError(err, res, "Update nusk invoice"); }
 });
 
-router.delete("/nusk-invoices/:id", requirePermission("umrah:write"), async (req, res): Promise<void> => {
+router.delete("/nusk-invoices/:id", authorize({ feature: "umrah", action: "delete" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<{ id: number; nuskStatus: string }>(
       `SELECT id, "nuskStatus" FROM umrah_nusk_invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -807,7 +1004,7 @@ router.delete("/nusk-invoices/:id", requirePermission("umrah:write"), async (req
 // EMPLOYEE ASSIGNMENTS (umrah-specific roles / positions)
 // ============================================================================
 
-router.get("/employees/:employeeId/assignments", requirePermission("umrah:read"), async (req, res) => {
+router.get("/employees/:employeeId/assignments", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const employeeId = parseId(req.params.employeeId, "employeeId");
@@ -826,7 +1023,7 @@ router.get("/employees/:employeeId/assignments", requirePermission("umrah:read")
 // COMMISSION PLANS
 // ============================================================================
 
-router.get("/commission-plans", requirePermission("umrah:read"), async (req, res) => {
+router.get("/commission-plans", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(
@@ -834,7 +1031,7 @@ router.get("/commission-plans", requirePermission("umrah:read"), async (req, res
               s.title AS "seasonTitle",
               (SELECT COUNT(*)::int FROM employee_commission_tiers WHERE "planId" = cp.id) AS "tierCount"
        FROM employee_commission_plans cp
-       LEFT JOIN umrah_seasons s ON cp."seasonId" = s.id
+       LEFT JOIN umrah_seasons s ON cp."seasonId" = s.id AND s."deletedAt" IS NULL
        WHERE cp."companyId" = $1 AND cp."deletedAt" IS NULL
        ORDER BY cp."createdAt" DESC`,
       [scope.companyId]
@@ -843,32 +1040,34 @@ router.get("/commission-plans", requirePermission("umrah:read"), async (req, res
   } catch (err) { handleRouteError(err, res, "List commission plans"); }
 });
 
-router.get("/commission-plans/:id", requirePermission("umrah:read"), async (req, res): Promise<void> => {
+router.get("/commission-plans/:id", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [plan] = await rawQuery(
-      `SELECT cp.*, s.title AS "seasonTitle"
-       FROM employee_commission_plans cp
-       LEFT JOIN umrah_seasons s ON cp."seasonId" = s.id
-       WHERE cp.id = $1 AND cp."companyId" = $2 AND cp."deletedAt" IS NULL`,
-      [id, scope.companyId]
-    );
+    const [[plan], tiers, calculations] = await Promise.all([
+      rawQuery(
+        `SELECT cp.*, s.title AS "seasonTitle"
+         FROM employee_commission_plans cp
+         LEFT JOIN umrah_seasons s ON cp."seasonId" = s.id AND s."deletedAt" IS NULL
+         WHERE cp.id = $1 AND cp."companyId" = $2 AND cp."deletedAt" IS NULL`,
+        [id, scope.companyId]
+      ),
+      rawQuery(
+        `SELECT * FROM employee_commission_tiers WHERE "planId" = $1 ORDER BY "tierOrder"`,
+        [id]
+      ),
+      rawQuery(
+        `SELECT * FROM employee_commission_calculations
+         WHERE "planId" = $1 AND "deletedAt" IS NULL ORDER BY year DESC, month DESC LIMIT 12`,
+        [id]
+      ),
+    ]);
     if (!plan) { throw new NotFoundError("الخطة غير موجودة"); }
-    const tiers = await rawQuery(
-      `SELECT * FROM employee_commission_tiers WHERE "planId" = $1 ORDER BY "tierOrder"`,
-      [id]
-    );
-    const calculations = await rawQuery(
-      `SELECT * FROM employee_commission_calculations
-       WHERE "planId" = $1 AND "deletedAt" IS NULL ORDER BY year DESC, month DESC LIMIT 12`,
-      [id]
-    );
     res.json({ ...plan, tiers, calculations });
   } catch (err) { handleRouteError(err, res, "Get commission plan"); }
 });
 
-router.post("/commission-plans", requirePermission("umrah:write"), async (req, res) => {
+router.post("/commission-plans", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const parsed = zodParse(createCommissionPlanSchema.safeParse(req.body));
@@ -908,13 +1107,31 @@ router.post("/commission-plans", requirePermission("umrah:write"), async (req, r
       return plan;
     });
 
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "employee_commission_plans", entityId: result.id, after: { planName: b.planName } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.commission_plan.created", entity: "employee_commission_plans", entityId: result.id, details: JSON.stringify({ planName: b.planName }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    res.status(201).json(result);
+    // Governance hook: route through approval chain when company has
+    // a configured chain for `umrah_commission_plan` matching the base
+    // salary. If no chain matches, requiresApproval comes back false
+    // and the plan is treated as auto-approved (existing behaviour).
+    let approval: { requiresApproval: boolean; chainId: number | null; approvalRequestId: number | null; currentStep: number; totalSteps: number } | null = null;
+    try {
+      approval = await initiateApprovalChain({
+        companyId: scope.companyId,
+        branchId: scope.branchId || 0,
+        chainType: "umrah_commission_plan" as any,
+        refType: "employee_commission_plan",
+        refId: result.id,
+        amount: Number(b.baseSalary || 0),
+      });
+    } catch (e) {
+      logger.error(e, "umrah commission plan approval chain init failed (non-blocking)");
+    }
+
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "employee_commission_plans", entityId: result.id, after: { planName: b.planName, approvalRequired: approval?.requiresApproval ?? false } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.commission_plan.created", entity: "employee_commission_plans", entityId: result.id, details: JSON.stringify({ planName: b.planName, approvalChainId: approval?.chainId ?? null }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    res.status(201).json({ ...result, approval });
   } catch (err) { handleRouteError(err, res, "Create commission plan"); }
 });
 
-router.patch("/commission-plans/:id", requirePermission("umrah:write"), async (req, res) => {
+router.patch("/commission-plans/:id", authorize({ feature: "umrah", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -973,7 +1190,7 @@ router.patch("/commission-plans/:id", requirePermission("umrah:write"), async (r
   } catch (err) { handleRouteError(err, res, "Update commission plan"); }
 });
 
-router.post("/commission-plans/:id/simulate", requirePermission("umrah:read"), async (req, res) => {
+router.post("/commission-plans/:id/simulate", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const parsed = zodParse(simulateCommissionSchema.safeParse(req.body));
     const { month, year } = parsed;
@@ -986,7 +1203,7 @@ router.post("/commission-plans/:id/simulate", requirePermission("umrah:read"), a
   } catch (err) { handleRouteError(err, res, "Simulate commission"); }
 });
 
-router.post("/commission-plans/:id/calculate", requirePermission("umrah:write"), async (req, res) => {
+router.post("/commission-plans/:id/calculate", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -999,7 +1216,7 @@ router.post("/commission-plans/:id/calculate", requirePermission("umrah:write"),
   } catch (err) { handleRouteError(err, res, "Calculate commission"); }
 });
 
-router.get("/commission-calculations", requirePermission("umrah:read"), async (req, res) => {
+router.get("/commission-calculations", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { planId, year, month } = req.query as any;
@@ -1013,7 +1230,7 @@ router.get("/commission-calculations", requirePermission("umrah:read"), async (r
        FROM employee_commission_calculations cc
        LEFT JOIN employee_commission_plans cp ON cc."planId" = cp.id
        WHERE ${where}
-       ORDER BY cc.year DESC, cc.month DESC`,
+       ORDER BY cc.year DESC, cc.month DESC LIMIT 500`,
       params
     );
     res.json({ data: rows });
@@ -1024,32 +1241,32 @@ router.get("/commission-calculations", requirePermission("umrah:read"), async (r
 // IMPORT — preview + confirm
 // ============================================================================
 
-router.get("/import/batches", requirePermission("umrah:read"), async (req, res) => {
+router.get("/import/batches", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { seasonId } = req.query as any;
-    let where = `b."companyId" = $1`;
+    let where = `b."companyId" = $1 AND b."deletedAt" IS NULL`;
     const params: any[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND b."seasonId" = $${params.length}`; }
     const rows = await rawQuery(
-      `SELECT b.* FROM umrah_import_batches b WHERE ${where} ORDER BY b."createdAt" DESC`,
+      `SELECT b.* FROM umrah_import_batches b WHERE ${where} ORDER BY b."createdAt" DESC LIMIT 500`,
       params
     );
     res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "List import batches"); }
 });
 
-router.get("/import/batches/:id/changes", requirePermission("umrah:read"), async (req, res) => {
+router.get("/import/batches/:id/changes", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [batch] = await rawQuery(
-      `SELECT id FROM umrah_import_batches WHERE id = $1 AND "companyId" = $2`,
+      `SELECT id FROM umrah_import_batches WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!batch) throw new NotFoundError("الدفعة غير موجودة");
     const rows = await rawQuery(
-      `SELECT * FROM umrah_import_changes WHERE "batchId" = $1 ORDER BY id`,
+      `SELECT * FROM umrah_import_changes WHERE "batchId" = $1 ORDER BY id LIMIT 1000`,
       [id]
     );
     res.json({ data: rows });
@@ -1060,7 +1277,7 @@ router.get("/import/batches/:id/changes", requirePermission("umrah:read"), async
 // SALES INVOICES
 // ============================================================================
 
-router.get("/invoices", requirePermission("umrah:read"), async (req, res) => {
+router.get("/invoices", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { seasonId, subAgentId, status } = req.query as any;
@@ -1075,14 +1292,15 @@ router.get("/invoices", requirePermission("umrah:read"), async (req, res) => {
        LEFT JOIN umrah_sub_agents sa ON sa.id = si."subAgentId"
        LEFT JOIN clients c ON c.id = si."clientId" AND c."deletedAt" IS NULL
        WHERE ${where}
-       ORDER BY si."createdAt" DESC`,
+       ORDER BY si."createdAt" DESC
+       LIMIT 500`,
       params
     );
-    res.json({ data: rows });
+    res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "List umrah invoices"); }
 });
 
-router.post("/invoices/generate", requirePermission("umrah:write"), async (req, res) => {
+router.post("/invoices/generate", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const parsed = zodParse(generateInvoiceSchema.safeParse(req.body));
@@ -1097,7 +1315,7 @@ router.post("/invoices/generate", requirePermission("umrah:write"), async (req, 
   } catch (err) { handleRouteError(err, res, "Generate umrah invoice"); }
 });
 
-router.patch("/invoices/:id", requirePermission("umrah:write"), async (req, res) => {
+router.patch("/invoices/:id", authorize({ feature: "umrah", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1130,7 +1348,7 @@ router.patch("/invoices/:id", requirePermission("umrah:write"), async (req, res)
 // PAYMENTS
 // ============================================================================
 
-router.get("/payments", requirePermission("umrah:read"), async (req, res) => {
+router.get("/payments", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { subAgentId } = req.query as any;
@@ -1142,14 +1360,15 @@ router.get("/payments", requirePermission("umrah:read"), async (req, res) => {
        FROM umrah_payments p
        LEFT JOIN umrah_sub_agents sa ON sa.id = p."subAgentId"
        WHERE ${where}
-       ORDER BY p."paymentDate" DESC, p.id DESC`,
+       ORDER BY p."paymentDate" DESC, p.id DESC
+       LIMIT 500`,
       params
     );
-    res.json({ data: rows });
+    res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "List umrah payments"); }
 });
 
-router.post("/payments", requirePermission("umrah:write"), async (req, res) => {
+router.post("/payments", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const parsed = zodParse(createPaymentSchema.safeParse(req.body));
@@ -1177,7 +1396,7 @@ router.post("/payments", requirePermission("umrah:write"), async (req, res) => {
 // STATEMENTS
 // ============================================================================
 
-router.get("/statements/:subAgentId", requirePermission("umrah:read"), async (req, res) => {
+router.get("/statements/:subAgentId", authorize({ feature: "umrah", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { type, from, to } = req.query as any;
@@ -1190,6 +1409,405 @@ router.get("/statements/:subAgentId", requirePermission("umrah:read"), async (re
     );
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Generate statement"); }
+});
+
+// Printable Arabic PDF of the sub-agent statement. Always uses the detailed
+// shape since the summary version aggregates by month and is less useful as
+// a hand-off document. Streams as inline PDF for browser preview + Save.
+router.get("/statements/:subAgentId/pdf", authorize({ feature: "umrah", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { from, to } = req.query as any;
+    const subAgentId = parseId(req.params.subAgentId, "subAgentId");
+    const data = await generateStatement(
+      { companyId: scope.companyId, userId: scope.userId },
+      subAgentId,
+      "detailed",
+      from, to
+    );
+    const pdf = await exportUmrahStatementPdf(scope.companyId, subAgentId, data as any, { from, to });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="umrah-statement-${subAgentId}.pdf"`);
+    res.send(pdf);
+  } catch (err) { handleRouteError(err, res, "Statement PDF"); }
+});
+
+// ============================================================================
+// LETTERS — PDF rendering + dispatch (closes spec §14 dispatch gap)
+// ============================================================================
+
+// Download a generated umrah letter as a printable Arabic PDF. Reads
+// from the central official_letters table — same table HR / legal /
+// contracts use — so there's no parallel storage.
+router.get("/letters/:id/pdf", authorize({ feature: "umrah", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      throw new ValidationError("معرّف الخطاب غير صالح");
+    }
+    // Scope check — letter belongs to the user's company AND is umrah-typed.
+    const [letter] = await rawQuery<{ id: number; type: string }>(
+      `SELECT id, type FROM official_letters
+        WHERE id=$1 AND "companyId"=$2
+          AND (type LIKE 'umrah_%' OR type = 'umrah')`,
+      [id, scope.companyId]
+    );
+    if (!letter) throw new NotFoundError("الخطاب غير موجود");
+
+    const pdf = await exportOfficialLetterPdf(scope.companyId, id);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="umrah-letter-${id}.pdf"`);
+    res.send(pdf);
+  } catch (err) { handleRouteError(err, res, "Letter PDF"); }
+});
+
+// Mark an umrah letter as dispatched. Sets sentAt + dispatchedVia + flips
+// status='sent'. Idempotent: re-dispatch returns 409 (typed ConflictError).
+router.post("/letters/:id/dispatch", authorize({ feature: "umrah", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = Number(req.params.id);
+    const body = z.object({
+      dispatchedVia: z.enum(["print", "email", "whatsapp", "courier", "hand_delivery"]),
+      recipient: z.string().optional(),
+      notes: z.string().optional(),
+    }).parse(req.body);
+    if (!Number.isFinite(id) || id <= 0) {
+      throw new ValidationError("معرّف الخطاب غير صالح");
+    }
+    const [letter] = await rawQuery<{ id: number; status: string; sentAt: string | null; type: string }>(
+      `SELECT id, status, "sentAt", type FROM official_letters
+        WHERE id=$1 AND "companyId"=$2
+          AND (type LIKE 'umrah_%' OR type = 'umrah')`,
+      [id, scope.companyId]
+    );
+    if (!letter) throw new NotFoundError("الخطاب غير موجود");
+    if (letter.sentAt) {
+      throw new ConflictError("الخطاب مُرسل سابقاً", {
+        meta: { sentAt: letter.sentAt, currentStatus: letter.status },
+      });
+    }
+    if (letter.status === "draft") {
+      throw new ConflictError("لا يمكن إرسال خطاب في حالة draft — يحتاج اعتماد أولاً", {
+        meta: { currentStatus: letter.status, fix: "اعتمد الخطاب من /official-letters/:id/approve" },
+      });
+    }
+
+    await rawExecute(
+      `UPDATE official_letters
+          SET "sentAt"=NOW(), "dispatchedVia"=$1, status='sent'
+        WHERE id=$2 AND "companyId"=$3`,
+      [body.dispatchedVia, id, scope.companyId]
+    );
+
+    await createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "dispatch",
+      entity: "umrah_letter",
+      entityId: id,
+      after: { dispatchedVia: body.dispatchedVia, recipient: body.recipient ?? null },
+    });
+
+    await emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? undefined,
+      userId: scope.userId,
+      action: "umrah.letter.dispatched",
+      entity: "official_letters",
+      entityId: id,
+      details: JSON.stringify({
+        dispatchedVia: body.dispatchedVia,
+        recipient: body.recipient,
+      }),
+    });
+
+    res.json({ id, status: "sent", dispatchedVia: body.dispatchedVia, sentAt: new Date().toISOString() });
+  } catch (err) { handleRouteError(err, res, "Letter dispatch"); }
+});
+
+// ============================================================================
+// REPORTS — Daily run-sheet (arrivals + departures + overstays)
+// ============================================================================
+
+// Returns arrivals + departures for `date` (defaults to today, ISO yyyy-mm-dd)
+// + everyone currently overstaying. Used by ops to plan transport / hotel
+// allocations and chase overstays. Same payload also feeds the PDF endpoint.
+async function fetchDailyRunsheet(companyId: number, date: string) {
+  const baseSelect = `
+    SELECT p."nuskNumber", p."fullName", p.nationality,
+           g.name AS "groupName", sa.name AS "subAgentName",
+           p."entryPort", p."entryFlight", p."exitPort", p."exitFlight",
+           p."overstayDays"
+      FROM umrah_pilgrims p
+      LEFT JOIN umrah_groups g ON g.id = p."groupId"
+      LEFT JOIN umrah_sub_agents sa ON sa.id = p."subAgentId"
+     WHERE p."companyId" = $1 AND p."deletedAt" IS NULL`;
+
+  const [arrivals, departures, overstays] = await Promise.all([
+    rawQuery<Record<string, unknown>>(`${baseSelect} AND p."entryDate" = $2 ORDER BY g.name NULLS LAST, p."fullName"`, [companyId, date]),
+    rawQuery<Record<string, unknown>>(`${baseSelect} AND p."exitDate" = $2 ORDER BY g.name NULLS LAST, p."fullName"`, [companyId, date]),
+    rawQuery<Record<string, unknown>>(`${baseSelect} AND p.status IN ('overstayed','violated') AND p."overstayDays" > 0 ORDER BY p."overstayDays" DESC, p."fullName"`, [companyId]),
+  ]);
+
+  return { arrivals, departures, overstays };
+}
+
+router.get("/reports/daily-runsheet", authorize({ feature: "umrah", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const date = String((req.query.date as string) || new Date().toISOString().slice(0, 10));
+    const data = await fetchDailyRunsheet(scope.companyId, date);
+    res.json({ date, ...data });
+  } catch (err) { handleRouteError(err, res, "Daily run-sheet"); }
+});
+
+router.get("/reports/daily-runsheet/pdf", authorize({ feature: "umrah", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const date = String((req.query.date as string) || new Date().toISOString().slice(0, 10));
+    const data = await fetchDailyRunsheet(scope.companyId, date);
+    const pdf = await exportUmrahDailyRunsheetPdf(scope.companyId, date, data as any);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="umrah-runsheet-${date}.pdf"`);
+    res.send(pdf);
+  } catch (err) { handleRouteError(err, res, "Daily run-sheet PDF"); }
+});
+
+// ============================================================================
+// ATTACHMENTS — polymorphic document storage for umrah entities (#4)
+// ============================================================================
+
+const ATTACH_ENTITY_TYPES = ["mutamer","sub_agent","group","agent","nusk_invoice","season","sales_invoice","violation"] as const;
+const ATTACH_TYPES = ["passport","visa","contract","nusk_file","identity","transfer_receipt","other"] as const;
+
+const createAttachmentSchema = z.object({
+  entityType: z.enum(ATTACH_ENTITY_TYPES),
+  entityId: z.number().int().positive(),
+  type: z.enum(ATTACH_TYPES),
+  title: z.string().min(1).max(255),
+  notes: z.string().optional(),
+  fileUrl: z.string().url().max(2000).optional(),
+  storageKey: z.string().max(500).optional(),
+  fileSize: z.number().int().nonnegative().optional(),
+  mimeType: z.string().max(120).optional(),
+});
+
+// Map entityType → table for ownership verification. Keeps the route from
+// trusting arbitrary entityIds — every attachment must point at a row the
+// caller's company actually owns.
+const ATTACH_OWNER_TABLE: Record<string, string> = {
+  mutamer:        "umrah_pilgrims",
+  sub_agent:      "umrah_sub_agents",
+  group:          "umrah_groups",
+  agent:          "umrah_agents",
+  nusk_invoice:   "umrah_nusk_invoices",
+  season:         "umrah_seasons",
+  sales_invoice:  "umrah_sales_invoices",
+  violation:      "umrah_violations",
+};
+
+async function assertAttachmentOwner(companyId: number, entityType: string, entityId: number): Promise<void> {
+  const table = ATTACH_OWNER_TABLE[entityType];
+  if (!table) throw new ValidationError("نوع كيان غير مدعوم", { field: "entityType" });
+  const safeTable = table.replace(/[^a-zA-Z0-9_]/g, "");
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT id FROM "${safeTable}" WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+    [entityId, companyId]
+  );
+  if (!row) throw new NotFoundError("الكيان المرفق به غير موجود أو محذوف");
+}
+
+router.get("/attachments", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { entityType, entityId, type } = req.query as Record<string, string | undefined>;
+    let where = `"companyId" = $1 AND "deletedAt" IS NULL`;
+    const params: any[] = [scope.companyId];
+    if (entityType) { params.push(entityType); where += ` AND "entityType" = $${params.length}`; }
+    if (entityId)   { params.push(Number(entityId)); where += ` AND "entityId" = $${params.length}`; }
+    if (type)       { params.push(type); where += ` AND type = $${params.length}`; }
+    const rows = await rawQuery(
+      `SELECT id, "entityType", "entityId", type, title, notes, "fileUrl", "storageKey",
+              "fileSize", "mimeType", "uploadedBy", "createdAt"
+         FROM umrah_attachments
+        WHERE ${where}
+        ORDER BY "createdAt" DESC
+        LIMIT 500`,
+      params
+    );
+    res.json({ data: rows });
+  } catch (err) { handleRouteError(err, res, "List attachments"); }
+});
+
+router.post("/attachments", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const body = zodParse(createAttachmentSchema.safeParse(req.body));
+    await assertAttachmentOwner(scope.companyId, body.entityType, body.entityId);
+
+    const [row] = await rawQuery<{ id: number }>(
+      `INSERT INTO umrah_attachments
+         ("companyId","branchId","entityType","entityId",type,title,notes,
+          "fileUrl","storageKey","fileSize","mimeType","uploadedBy","createdAt","updatedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW(),NOW())
+       RETURNING id`,
+      [
+        scope.companyId, scope.branchId || null, body.entityType, body.entityId,
+        body.type, body.title, body.notes || null,
+        body.fileUrl || null, body.storageKey || null,
+        body.fileSize ?? null, body.mimeType || null,
+        scope.userId,
+      ]
+    );
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "create", entity: "umrah_attachments", entityId: row.id,
+      after: { entityType: body.entityType, entityId: body.entityId, type: body.type, title: body.title },
+    }).catch((e) => logger.error(e, "umrah attachments bg"));
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.attachment.created", entity: "umrah_attachments", entityId: row.id,
+      details: JSON.stringify({ entityType: body.entityType, entityId: body.entityId, type: body.type }),
+    }).catch((e) => logger.error(e, "umrah attachments bg"));
+
+    res.status(201).json({ id: row.id });
+  } catch (err) { handleRouteError(err, res, "Create attachment"); }
+});
+
+router.delete("/attachments/:id", authorize({ feature: "umrah", action: "delete" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT id FROM umrah_attachments WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("المرفق غير موجود");
+    await rawExecute(
+      `UPDATE umrah_attachments SET "deletedAt"=NOW(), "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
+      [id, scope.companyId]
+    );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_attachments", entityId: id }).catch((e) => logger.error(e, "umrah attachments bg"));
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "Delete attachment"); }
+});
+
+// ============================================================================
+// RECONCILIATION REPORT — NUSK file ↔ system diff (#8)
+// ============================================================================
+
+// Compares the canonical NUSK invoice file against system state in three
+// dimensions:
+//   1. Total amount of nusk invoice vs total of journal entries against it
+//      (catches refunds / partial payments missed by the importer).
+//   2. mutamerCount on the nusk invoice vs actual pilgrims linked to its
+//      group (catches drop-outs that the file never recorded).
+//   3. Overstays: pilgrims with overstayDays > 0 and no open violation row
+//      (catches violations the cron should have created but didn't).
+//
+// Read-only — no mutations. Output is grouped so ops can drill into the
+// specific records that need attention without re-running ad-hoc SQL.
+router.get("/reports/reconciliation", authorize({ feature: "umrah", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { seasonId } = req.query as Record<string, string | undefined>;
+
+    const seasonFilter = seasonId
+      ? { fragment: ` AND "seasonId" = $2`, params: [scope.companyId, Number(seasonId)] }
+      : { fragment: "", params: [scope.companyId] };
+
+    // 1. Amount diff: nusk total vs posted JE total
+    const amountDiffs = await rawQuery<Record<string, unknown>>(
+      `SELECT ni.id, ni."nuskInvoiceNumber", ni."totalAmount" AS "fileTotal",
+              ni."nuskStatus", ni."purchaseInvoiceId", ni."journalEntryId",
+              COALESCE(je_ap.total, 0) AS "postedAp",
+              COALESCE(je_rf.total, 0) AS "postedRefund",
+              (ni."totalAmount" - COALESCE(je_ap.total, 0) + COALESCE(je_rf.total, 0))::numeric(12,2) AS "diff"
+         FROM umrah_nusk_invoices ni
+    LEFT JOIN LATERAL (
+           SELECT SUM(jl.debit) AS total FROM journal_entries je
+             JOIN journal_lines jl ON jl."journalId" = je.id
+            WHERE je.id = ni."purchaseInvoiceId" AND je."deletedAt" IS NULL
+              AND jl."accountCode" LIKE '5%'
+         ) je_ap ON true
+    LEFT JOIN LATERAL (
+           SELECT SUM(jl.credit) AS total FROM journal_entries je
+             JOIN journal_lines jl ON jl."journalId" = je.id
+            WHERE je.id = ni."journalEntryId" AND je."deletedAt" IS NULL
+              AND jl."accountCode" LIKE '5%'
+         ) je_rf ON true
+        WHERE ni."companyId" = $1 AND ni."deletedAt" IS NULL
+          AND ni."nuskStatus" != 'cancelled'
+          AND ABS(ni."totalAmount" - COALESCE(je_ap.total, 0) + COALESCE(je_rf.total, 0)) > 0.01
+        ORDER BY ABS(ni."totalAmount" - COALESCE(je_ap.total, 0) + COALESCE(je_rf.total, 0)) DESC
+        LIMIT 500`,
+      [scope.companyId]
+    );
+
+    // 2. Mutamer count diff: file says X, system has Y in the linked group
+    const countDiffs = await rawQuery<Record<string, unknown>>(
+      `SELECT ni.id, ni."nuskInvoiceNumber", ni."mutamerCount" AS "fileCount",
+              ni."groupId", g.name AS "groupName",
+              (SELECT COUNT(*)::int FROM umrah_pilgrims p
+                WHERE p."groupId" = ni."groupId"
+                  AND p."companyId" = ni."companyId"
+                  AND p."deletedAt" IS NULL) AS "systemCount"
+         FROM umrah_nusk_invoices ni
+    LEFT JOIN umrah_groups g ON g.id = ni."groupId"
+        WHERE ni."companyId" = $1 AND ni."deletedAt" IS NULL
+          AND ni."groupId" IS NOT NULL
+          AND ni."mutamerCount" IS NOT NULL
+          AND ni."mutamerCount" != (
+            SELECT COUNT(*)::int FROM umrah_pilgrims p
+              WHERE p."groupId" = ni."groupId"
+                AND p."companyId" = ni."companyId"
+                AND p."deletedAt" IS NULL
+          )
+        ORDER BY ABS(ni."mutamerCount" - (
+            SELECT COUNT(*) FROM umrah_pilgrims p
+              WHERE p."groupId" = ni."groupId"
+                AND p."companyId" = ni."companyId"
+                AND p."deletedAt" IS NULL
+          )) DESC
+        LIMIT 500`,
+      [scope.companyId]
+    );
+
+    // 3. Overstays without a violation row
+    const overstayGaps = await rawQuery<Record<string, unknown>>(
+      `SELECT p.id, p."nuskNumber", p."fullName", p."overstayDays", p."groupId",
+              g.name AS "groupName", sa.name AS "subAgentName"
+         FROM umrah_pilgrims p
+    LEFT JOIN umrah_groups g ON g.id = p."groupId"
+    LEFT JOIN umrah_sub_agents sa ON sa.id = p."subAgentId"
+        WHERE p."companyId" = $1 AND p."deletedAt" IS NULL
+          AND COALESCE(p."overstayDays", 0) > 0
+          AND NOT EXISTS (
+            SELECT 1 FROM umrah_violations v
+             WHERE v."mutamerId" = p.id
+               AND v."companyId" = p."companyId"
+               AND v.status IN ('detected','open')
+               AND v."deletedAt" IS NULL
+          )
+        ORDER BY p."overstayDays" DESC
+        LIMIT 500`,
+      [scope.companyId]
+    );
+
+    res.json({
+      summary: {
+        amountDiffs: amountDiffs.length,
+        countDiffs: countDiffs.length,
+        overstayGaps: overstayGaps.length,
+      },
+      amountDiffs,
+      countDiffs,
+      overstayGaps,
+    });
+  } catch (err) { handleRouteError(err, res, "Reconciliation report"); }
 });
 
 // ============================================================================

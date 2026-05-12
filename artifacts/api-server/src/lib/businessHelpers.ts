@@ -139,8 +139,15 @@ export async function emitEvent(params: {
     logger.warn(`[emitEvent] payload warnings for ${params.action}: ${validation.warnings.join("; ")}`);
   }
 
-  // Critical events: persist to event_logs BEFORE emitting to listeners
-  if (isCritical) {
+  // Critical events: persist to event_logs BEFORE emitting to listeners.
+  // Non-critical events: persist iff the operator has opted in via
+  // PERSIST_ALL_EVENTS — defaults off because every emitEvent() call
+  // would otherwise write a row, and that bloats event_logs fast on
+  // a busy tenant. The original audit flagged "event_logs is empty";
+  // turning the env flag on is the supported way to fix that without
+  // surprising existing deployments with a behaviour change.
+  const persistAll = process.env.PERSIST_ALL_EVENTS === "true";
+  if (isCritical || persistAll) {
     await rawExecute(
       `INSERT INTO event_logs ("companyId","userId",action,entity,"entityId",details)
        VALUES ($1,$2,$3,$4,$5,$6)`,
@@ -292,8 +299,12 @@ export async function createJournalEntry(params: {
     }
   }
 
-  const totalDebit = params.lines.reduce((s, l) => s + Number(l.debit), 0);
-  const totalCredit = params.lines.reduce((s, l) => s + Number(l.credit), 0);
+  for (const line of params.lines) {
+    line.debit = roundTo2(Number(line.debit));
+    line.credit = roundTo2(Number(line.credit));
+  }
+  const totalDebit = roundTo2(params.lines.reduce((s, l) => s + l.debit, 0));
+  const totalCredit = roundTo2(params.lines.reduce((s, l) => s + l.credit, 0));
   const imbalance = roundTo4(totalDebit - totalCredit);
   if (Math.abs(imbalance) > 0.001 && Math.abs(imbalance) <= 0.05) {
     let [roundingAcc] = await rawQuery<any>(
@@ -359,14 +370,13 @@ export async function createJournalEntry(params: {
         `INSERT INTO journal_lines (
           "journalId","accountCode","accountId",debit,credit,description,"costCenter",
           "departmentId","projectId","employeeId","vehicleId","propertyId","contractId",
-          "productId","clientId","vendorId","driverId","activityType","templateId"
-         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+          "activityType","templateId"
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
         [
           jId, line.accountCode, accountId, line.debit, line.credit,
           line.description ?? null, line.costCenter ?? null,
           line.departmentId ?? null, line.projectId ?? null, line.employeeId ?? null,
           line.vehicleId ?? null, line.propertyId ?? null, line.contractId ?? null,
-          line.productId ?? null, line.clientId ?? null, line.vendorId ?? null, line.driverId ?? null,
           line.activityType ?? null, line.templateId ?? null,
         ]
       );
@@ -467,8 +477,8 @@ export async function reverseAccountBalances(
   journalId: number
 ) {
   const lines = await rawQuery<any>(
-    `SELECT "accountCode", debit, credit FROM journal_lines WHERE "journalId" = $1`,
-    [journalId]
+    `SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" WHERE jl."journalId" = $1 AND je."companyId" = $2`,
+    [journalId, companyId]
   );
   const balanceChanges = new Map<string, number>();
   for (const line of lines) {
@@ -495,7 +505,7 @@ export async function softDeleteJournalEntry(
   );
 }
 
-type ApprovalChainType = "leaves" | "purchases" | "expenses" | "advances" | "letters" | "procurement" | "loans" | "overtime" | "exit";
+type ApprovalChainType = "leaves" | "purchases" | "expenses" | "advances" | "letters" | "procurement" | "loans" | "overtime" | "exit" | "umrah_commission_plan";
 
 interface ApprovalChainResult {
   requiresApproval: boolean;
@@ -522,6 +532,7 @@ export async function initiateApprovalChain(params: {
   const chains = await rawQuery<any>(
     `SELECT * FROM approval_chains
      WHERE "companyId" = $1 AND "chainType" = $2 AND "isActive" = true
+     AND "deletedAt" IS NULL
      ${amountFilter}
      ORDER BY "minAmount" DESC LIMIT 1`,
     queryParams
@@ -621,16 +632,16 @@ export async function processApprovalStep(params: {
   if (!params.approved) {
     await rawExecute(
       `UPDATE approval_requests SET status = 'rejected', "decidedBy" = $1, "decidedAt" = NOW()
-       WHERE id = $2`,
-      [params.decidedBy, request.id]
+       WHERE id = $2 AND "companyId" = $3`,
+      [params.decidedBy, request.id, params.companyId]
     );
     return { status: "rejected", message: "تم الرفض" };
   }
 
   await rawExecute(
     `UPDATE approval_requests SET status = 'approved', "decidedBy" = $1, "decidedAt" = NOW()
-     WHERE id = $2`,
-    [params.decidedBy, request.id]
+     WHERE id = $2 AND "companyId" = $3`,
+    [params.decidedBy, request.id, params.companyId]
   );
 
   const chainId = request.chainId;
@@ -682,6 +693,7 @@ function chainTypeLabel(t: ApprovalChainType): string {
     leaves: "إجازات", purchases: "مشتريات", expenses: "مصروفات",
     advances: "سلفة/عهدة", letters: "خطاب رسمي", procurement: "مشتريات",
     loans: "سلفة موظف", overtime: "وقت إضافي", exit: "نهاية خدمة",
+    umrah_commission_plan: "خطة عمولة عمرة",
   };
   return map[t] ?? t;
 }
@@ -694,6 +706,10 @@ export function refTypeToChainType(refType: string): ApprovalChainType | null {
     purchase_request: "procurement",
     hr_employee_loan: "loans", hr_overtime_request: "overtime",
     hr_exit_request: "exit",
+    // Umrah commission plans pass through an approval chain when the
+    // base salary or tier bonuses exceed company thresholds — invoked
+    // by umrah-entities.ts: POST /umrah/commission-plans.
+    employee_commission_plan: "umrah_commission_plan",
   };
   return map[refType] ?? null;
 }
@@ -793,7 +809,8 @@ export async function getDirectorAssignmentId(companyId: number, branchId: numbe
 export async function getCfoAssignmentId(companyId: number, branchId: number): Promise<number | null> {
   const [row] = await rawQuery<any>(
     `SELECT ea.id FROM employee_assignments ea
-     JOIN user_roles ur ON ur."userId" = (SELECT "employeeId" FROM employee_assignments WHERE id = ea.id)
+     JOIN users u ON u."employeeId" = ea."employeeId"
+     JOIN user_roles ur ON ur."userId" = u.id
      WHERE ea."companyId" = $1 AND ea."branchId" = $2
        AND ur."roleKey" = 'finance_manager' AND ea.status = 'active'
      LIMIT 1`,

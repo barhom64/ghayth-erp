@@ -1,6 +1,11 @@
 import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 import { DetailPageLayout, type RelatedEntity } from "@/components/shared/detail-page-layout";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
@@ -10,6 +15,7 @@ import { AlertTriangle, CheckCircle2, Edit, Shield, Car } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
   active: "ساري",
@@ -49,6 +55,7 @@ export default function InsuranceDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/fleet/insurance/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("insurance_policy", id ?? 0);
 
   const { data: insurance, isLoading, error, refetch } = useApiQuery<any>(
     ["insurance-detail", String(id)],
@@ -96,14 +103,29 @@ export default function InsuranceDetail() {
     return sections;
   }, [insurance, id]);
 
-  const handleEdit = () => {
-    setLocation(`/fleet/insurance`);
-  };
+  const editDelete = useDetailEditDelete({
+    entityLabel: "التأمين",
+    patchPath: `/fleet/insurance/${id}`,
+    deletePath: `/fleet/insurance/${id}`,
+    listPath: "/fleet/insurance",
+    initialValues: insurance,
+    fields: [
+      { key: "policyNumber", label: "رقم البوليصة" },
+      { key: "provider", label: "شركة التأمين" },
+      { key: "premium", label: "القسط", type: "number" },
+      { key: "coverageAmount", label: "مبلغ التغطية", type: "number" },
+    ],
+    invalidateKeys: [["insurance", String(id)], ["insurance"]],
+    onSaved: () => refetch(),
+  });
 
   const premium = insurance?.premium || insurance?.amount || 0;
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
+      <div className="md:col-span-3">
+        <InlineEditCard hook={editDelete} />
+      </div>
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
@@ -258,6 +280,8 @@ export default function InsuranceDetail() {
       relatedEntities={relatedEntities}
       entityType="insurance"
       entityId={id ?? 0}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       overview={overview}
       isLoading={isLoading}
       error={error}
@@ -273,16 +297,7 @@ export default function InsuranceDetail() {
               sections={printSections}
             />
           )}
-          <GuardedButton
-            perm="fleet:update"
-            variant="outline"
-            size="sm"
-            onClick={handleEdit}
-            disabled={!insurance || ["expired", "cancelled"].includes(insurance.status)}
-          >
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
+          <DetailActionButtons hook={editDelete} />
         </>
       }
     />

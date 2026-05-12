@@ -193,8 +193,8 @@ async function executeAction(
       if (payload.entityId) {
         const slaHours = Math.max(1, Math.min(Number(config.slaHours) || 4, 720));
         await rawExecute(
-          `UPDATE support_tickets SET "slaDeadline" = NOW() + make_interval(hours => $2) WHERE id = $1`,
-          [payload.entityId, slaHours]
+          `UPDATE support_tickets SET "slaDeadline" = NOW() + make_interval(hours => $2) WHERE id = $1 AND "companyId" = $3`,
+          [payload.entityId, slaHours, companyId]
         ).catch((e) => logger.error(e, "[RulesEngine] SLA update failed:"));
         return `sla_set_${slaHours}h`;
       }
@@ -281,18 +281,23 @@ export function registerRulesEngineListener() {
   const trackedEvents = [
     "attendance.checkin",
     "attendance.checkout",
+    "attendance.absent",
     "invoice.created",
     "invoice.paid",
-    "invoice.overdue",
+    "invoice.overdue_check",
     "leave.requested",
     "leave.approved",
     "leave.rejected",
     "expense.created",
     "support.ticket.created",
     "support.ticket.resolved",
-    "support.ticket.closed",
     "fleet.trip.started",
     "fleet.trip.completed",
+    "fleet.maintenance_check",
+    "fleet.insurance_check",
+    "contract.expiry_check",
+    "project.budget_check",
+    "property.contract_check",
     "legal.case.created",
     "task.created",
     "task.completed",

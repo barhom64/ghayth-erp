@@ -18,6 +18,7 @@ import { Target, DollarSign, Calendar, User, TrendingUp, Phone, Mail, MessageSqu
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 export default function OpportunityDetail() {
   const [, params] = useRoute("/crm/:id");
@@ -31,6 +32,7 @@ export default function OpportunityDetail() {
   const printContainerRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const branch = useBranchLetterhead(user?.branchId);
+  const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("crm_opportunity", id ?? 0);
 
   const { data: opportunity, isLoading, isError, error } = useApiQuery<any>(["opportunity-detail", id || ""], `/crm/opportunities/${id}`, !!id);
   const { data: activitiesResp } = useApiQuery<any>(["opportunity-activities", id || ""], `/crm/opportunities/${id}/activities`, !!id && !!opportunity);
@@ -216,9 +218,11 @@ export default function OpportunityDetail() {
         entityId={id!}
         isLoading={isLoading}
         error={isError ? error : undefined}
-        onRetry={() => window.location.reload()}
+       
         createdAt={opportunity?.createdAt}
         updatedAt={opportunity?.updatedAt}
+        extraTabs={registryExtraTabs}
+        hideTabs={registryHideTabs}
         overview={overview}
         actions={actions}
       />

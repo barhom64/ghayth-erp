@@ -68,15 +68,17 @@ function AnimatedNumber({ value, duration = 700 }: { value: number; duration?: n
     const end = value;
     if (start === end) return;
     let startTime: number | null = null;
+    let rafId: number;
     const animate = (t: number) => {
       if (!startTime) startTime = t;
       const p = Math.min((t - startTime) / duration, 1);
       const ease = 1 - Math.pow(1 - p, 3);
       setDisplay(Math.round(start + (end - start) * ease));
-      if (p < 1) requestAnimationFrame(animate);
+      if (p < 1) rafId = requestAnimationFrame(animate);
     };
-    requestAnimationFrame(animate);
+    rafId = requestAnimationFrame(animate);
     prev.current = end;
+    return () => cancelAnimationFrame(rafId);
   }, [value, duration]);
   return <span>{formatNumber(display)}</span>;
 }
@@ -157,7 +159,8 @@ function CommandCard({ title, value, sub, icon: Icon, color, link, pulse }: {
 function ProgressRing({ percent, size = 64, stroke = 6 }: { percent: number; size?: number; stroke?: number }) {
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (percent / 100) * circumference;
+  const safePct = Math.max(0, Math.min(100, percent));
+  const offset = circumference - (safePct / 100) * circumference;
   const color = percent >= 80 ? "#10b981" : percent >= 50 ? "#f59e0b" : "#ef4444";
 
   return (
@@ -169,7 +172,7 @@ function ProgressRing({ percent, size = 64, stroke = 6 }: { percent: number; siz
           className="transition-all duration-1000 ease-out" />
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-sm font-bold" style={{ color }}>{percent}%</span>
+        <span className="text-sm font-bold" style={{ color }}>{safePct}%</span>
       </div>
     </div>
   );
@@ -317,7 +320,7 @@ export default function Dashboard() {
   const { data: suggestionsResp } = useApiQuery<any>(["intelligence-suggestions"], "/intelligence/suggestions", roleLevel >= 40);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const cards = cmdCenter?.cards || {};
   const todayTasks = cmdCenter?.todayTasks || [];

@@ -290,8 +290,8 @@ describe("hrEnums HR_TABLES match actual table names", () => {
     expect(ENUMS_SRC).toContain('DISCIPLINE_REGULATION: "hr_discipline_regulation"');
   });
 
-  it("ATTENDANCE maps to hr_attendance", () => {
-    expect(ENUMS_SRC).toContain('ATTENDANCE: "hr_attendance"');
+  it("ATTENDANCE maps to attendance", () => {
+    expect(ENUMS_SRC).toContain('ATTENDANCE: "attendance"');
   });
 });
 

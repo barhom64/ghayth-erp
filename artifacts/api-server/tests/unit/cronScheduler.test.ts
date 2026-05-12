@@ -108,6 +108,53 @@ describe("Domain registry cron coverage", () => {
   });
 });
 
+describe("Rate-limit fallback alerter (Task #176)", () => {
+  it("registers a rate_limit_fallback_alert cron job", () => {
+    expect(cronJobNames).toContain("rate_limit_fallback_alert");
+  });
+
+  it("runs the alerter at least every few minutes", () => {
+    // Schedule must include the rate_limit_fallback_alert job and use a
+    // sub-hourly cadence (e.g. */2 * * * *) so we don't sit on a degraded
+    // status for an hour before paging an admin.
+    expect(source).toMatch(/name:\s*"rate_limit_fallback_alert"[\s\S]{0,200}schedule:\s*"\*\/[0-9]+ \* \* \* \*"/);
+  });
+
+  it("reads the live Redis rate-limit status from rateLimitStore", () => {
+    expect(source).toContain("getRedisRateLimitStatus");
+    expect(source).toContain('from "./rateLimitStore.js"');
+  });
+
+  it("tracks last-seen status across ticks for transition detection", () => {
+    expect(source).toContain("lastSeenStatus");
+    expect(source).toContain("isTransition");
+  });
+
+  it("persists alerter state in shared storage so cross-replica behavior is consistent", () => {
+    expect(source).toContain("RATE_LIMIT_STATE_KEY");
+    expect(source).toContain("rate_limit_alerter_state");
+    expect(source).toContain("loadRateLimitAlerterState");
+    expect(source).toContain("saveRateLimitAlerterState");
+  });
+
+  it("applies a re-alert cooldown to prevent alert storms", () => {
+    expect(source).toMatch(/RATE_LIMIT_REALERT_COOLDOWN_MS\s*=\s*\d+\s*\*\s*60_000/);
+    expect(source).toContain("within cooldown");
+  });
+
+  it("sends a recovery notification when the status returns to connected", () => {
+    expect(source).toContain('type: "rate_limit_recovered"');
+  });
+
+  it("uses the in-app + email channels so overnight degradations reach an admin", () => {
+    expect(source).toMatch(/channels:\s*admin\.email\s*\?\s*\["in_app",\s*"email"\]\s*:\s*\["in_app"\]/);
+  });
+
+  it("treats REDIS_URL=unset (disabled) as intentional and does not alert", () => {
+    expect(source).toContain('skipped (REDIS_URL not configured)');
+  });
+});
+
 describe("Timezone handling", () => {
   it("reads timezone from system_settings", () => {
     expect(source).toContain("getSystemTimezone");

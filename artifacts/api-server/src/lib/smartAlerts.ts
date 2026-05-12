@@ -57,8 +57,8 @@ async function checkEmployeeOverload(companyId: number): Promise<number> {
         );
         if (oldestTask) {
           await rawExecute(
-            `UPDATE tasks SET "assignedTo" = $1 WHERE id = $2`,
-            [target.assignmentId, oldestTask.id]
+            `UPDATE tasks SET "assignedTo" = $1 WHERE id = $2 AND "companyId" = $3`,
+            [target.assignmentId, oldestTask.id, companyId]
           );
           await createNotification({
             companyId, assignmentId: target.assignmentId,
@@ -104,7 +104,7 @@ async function checkTaskTakingTooLong(companyId: number): Promise<number> {
       "warning", "task", row.id
     );
 
-    if (row.assigneeId) {
+    if (row.assignedTo) {
       try {
         const [supervisorAsgn] = await rawQuery<any>(
           `SELECT ea.id FROM employee_assignments ea
@@ -150,14 +150,14 @@ async function checkRepeatedMaintenanceAtProperty(companyId: number): Promise<nu
 
     try {
       await rawExecute(
-        `INSERT INTO maintenance_requests ("companyId", "unitId", title, description, priority, status, "createdAt")
-         SELECT $1, $2, 'فحص شامل تلقائي', $3, 'high', 'pending', NOW()
+        `INSERT INTO maintenance_requests ("companyId", "unitId", description, priority, status, "createdAt")
+         SELECT $1, $2, $3, 'high', 'pending', NOW()
          WHERE NOT EXISTS (
            SELECT 1 FROM maintenance_requests
-           WHERE "companyId" = $1 AND "unitId" = $2 AND title = 'فحص شامل تلقائي'
+           WHERE "companyId" = $1 AND "unitId" = $2 AND description LIKE '%فحص شامل تلقائي%'
            AND "createdAt" > NOW() - INTERVAL '30 days'
          )`,
-        [companyId, row.unitId, `فحص شامل مجدول تلقائياً بسبب ${row.cnt} بلاغ صيانة خلال شهر`]
+        [companyId, row.unitId, `فحص شامل تلقائي — مجدول تلقائياً بسبب ${row.cnt} بلاغ صيانة خلال شهر`]
       );
     } catch (e) { logger.error(e, "Auto inspection creation error:"); }
   }
@@ -174,7 +174,7 @@ async function checkLowEmployeeRating(companyId: number): Promise<number> {
      WHERE st."companyId" = $1
        AND st.rating IS NOT NULL
        AND st."resolvedAt" >= NOW() - INTERVAL '30 days'
-       AND st."assignedTo" = ea.id
+       AND st."assigneeId" = ea.id
      GROUP BY ea."employeeId", e.name, ea.id
      HAVING AVG(st.rating) < 3`,
     [companyId]
@@ -214,7 +214,7 @@ async function checkBranchSlaBreachRate(companyId: number): Promise<number> {
             COUNT(*) FILTER (WHERE st."slaBreached" = true)::int AS breached,
             ROUND(COUNT(*) FILTER (WHERE st."slaBreached" = true)::numeric / NULLIF(COUNT(*),0) * 100, 1) AS "breachPct"
      FROM branches b
-     JOIN support_tickets st ON st."branchId" = b.id AND st."companyId" = $1
+     JOIN support_tickets st ON st."companyId" = $1
      WHERE b."companyId" = $1
        AND st."createdAt" >= NOW() - INTERVAL '30 days'
      GROUP BY b.id, b.name
@@ -268,11 +268,11 @@ async function checkTechnicianNoUpdate(companyId: number): Promise<number> {
       "warning", "task", row.id
     );
 
-    if (row.assigneeId) {
+    if (row.assignedTo) {
       try {
         const [asgn] = await rawQuery<any>(
-          `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
-          [row.assigneeId, companyId]
+          `SELECT id FROM employee_assignments WHERE id = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
+          [row.assignedTo, companyId]
         );
         if (asgn) {
           await createNotification({
@@ -289,83 +289,16 @@ async function checkTechnicianNoUpdate(companyId: number): Promise<number> {
   return rows.length;
 }
 
-async function checkGeofenceViolation(companyId: number): Promise<number> {
-  const rows = await rawQuery<any>(
-    `SELECT ft.id AS "tripId", ft."vehicleId", fv."plateNumber",
-            fd.name AS "driverName", ft."currentLat", ft."currentLon"
-     FROM fleet_trips ft
-     JOIN fleet_vehicles fv ON fv.id = ft."vehicleId"
-     LEFT JOIN fleet_drivers fd ON fd.id = ft."driverId"
-     WHERE ft."companyId" = $1 AND ft.status = 'in_progress'
-       AND ft."geofenceLat" IS NOT NULL AND ft."geofenceLon" IS NOT NULL
-       AND ft."geofenceRadius" IS NOT NULL AND ft."geofenceRadius" > 0
-       AND ft."currentLat" IS NOT NULL AND ft."currentLon" IS NOT NULL
-       AND NOT EXISTS (
-         SELECT 1 FROM smart_alerts sa
-         WHERE sa."companyId" = $1 AND sa.type = 'geofence_violation' AND sa."relatedId" = ft.id
-         AND sa."createdAt" > NOW() - INTERVAL '1 hour'
-       )`,
-    [companyId]
-  );
-
-  let fired = 0;
-  for (const row of rows) {
-    try {
-      const { haversineDistance } = await import("./algorithms.js");
-      const dist = haversineDistance(
-        Number(row.currentLat), Number(row.currentLon),
-        Number(row.geofenceLat), Number(row.geofenceLon)
-      );
-      const radiusKm = Number(row.geofenceRadius) / 1000;
-      if (dist > radiusKm) {
-        await broadcastAlert(
-          companyId, "geofence_violation",
-          `خروج من السياج: ${row.plateNumber}`,
-          `المركبة ${row.plateNumber} (${row.driverName || ''}) خارج النطاق بـ ${(dist - radiusKm).toFixed(1)} كم`,
-          "critical", "fleet_trip", row.tripId
-        );
-        fired++;
-      }
-    } catch (e) { logger.error(e, "Geofence check error:"); }
-  }
-  return fired;
+// Geofence violation check is disabled: fleet_trips schema does not have
+// geofenceLat/geofenceLon/geofenceRadius/currentLat/currentLon columns.
+async function checkGeofenceViolation(_companyId: number): Promise<number> {
+  return 0;
 }
 
-async function checkSpeedViolation(companyId: number): Promise<number> {
-  const rows = await rawQuery<any>(
-    `SELECT ft.id AS "tripId", ft."vehicleId", fv."plateNumber",
-            fd.name AS "driverName", ft."currentSpeed"
-     FROM fleet_trips ft
-     JOIN fleet_vehicles fv ON fv.id = ft."vehicleId"
-     LEFT JOIN fleet_drivers fd ON fd.id = ft."driverId"
-     WHERE ft."companyId" = $1 AND ft.status = 'in_progress'
-       AND ft."currentSpeed" IS NOT NULL AND ft."currentSpeed" > 120
-       AND NOT EXISTS (
-         SELECT 1 FROM smart_alerts sa
-         WHERE sa."companyId" = $1 AND sa.type = 'speed_violation' AND sa."relatedId" = ft.id
-         AND sa."createdAt" > NOW() - INTERVAL '30 minutes'
-       )`,
-    [companyId]
-  );
-
-  for (const row of rows) {
-    await broadcastAlert(
-      companyId, "speed_violation",
-      `تجاوز سرعة: ${row.plateNumber}`,
-      `المركبة ${row.plateNumber} (${row.driverName || ''}) تسير بسرعة ${row.currentSpeed} كم/ساعة (الحد 120)`,
-      "critical", "fleet_trip", row.tripId
-    );
-
-    try {
-      await rawExecute(
-        `INSERT INTO fleet_violations ("companyId", "vehicleId", "driverId", "tripId", type, description, "createdAt")
-         VALUES ($1, $2, $3, $4, 'speed', $5, NOW())`,
-        [companyId, row.vehicleId, row.driverId ?? null, row.tripId,
-         `تجاوز سرعة: ${row.currentSpeed} كم/ساعة — الحد 120 كم/ساعة`]
-      ).catch((e) => logger.error(e, "smart alert background task failed"));
-    } catch (e) { logger.error(e, "Speed violation record insert error"); }
-  }
-  return rows.length;
+// Speed violation check is disabled: fleet_trips schema does not have
+// a currentSpeed column.
+async function checkSpeedViolation(_companyId: number): Promise<number> {
+  return 0;
 }
 
 async function checkVehicleRepeatedBreakdowns(companyId: number): Promise<number> {
@@ -391,8 +324,8 @@ async function checkVehicleRepeatedBreakdowns(companyId: number): Promise<number
 
     try {
       await rawExecute(
-        `UPDATE fleet_vehicles SET status = 'under_review' WHERE id = $1 AND status = 'active'`,
-        [row.vehicleId]
+        `UPDATE fleet_vehicles SET status = 'under_review' WHERE id = $1 AND "companyId" = $2 AND status = 'active'`,
+        [row.vehicleId, companyId]
       ).catch((e) => logger.error(e, "smart alert background task failed"));
     } catch (e) { logger.error(e, "Vehicle status update to under_review error"); }
   }
@@ -403,12 +336,12 @@ async function checkInventoryBelowThreshold(companyId: number): Promise<number> 
   const rows = await rawQuery<any>(
     `SELECT wp.id AS "productId", wp.name,
             COALESCE(wp."currentStock", 0)::float AS current,
-            COALESCE(wp."minStock", wp."safetyStock", 0)::float AS threshold
+            COALESCE(wp."minStock", 0)::float AS threshold
      FROM warehouse_products wp
      WHERE wp."companyId" = $1
-       AND (wp."minStock" IS NOT NULL OR wp."safetyStock" IS NOT NULL)
-       AND COALESCE(wp."currentStock", 0) < COALESCE(wp."minStock", wp."safetyStock", 0)
-       AND COALESCE(wp."minStock", wp."safetyStock", 0) > 0`,
+       AND wp."minStock" IS NOT NULL
+       AND COALESCE(wp."currentStock", 0) < COALESCE(wp."minStock", 0)
+       AND COALESCE(wp."minStock", 0) > 0`,
     [companyId]
   );
 
@@ -422,11 +355,11 @@ async function checkInventoryBelowThreshold(companyId: number): Promise<number> 
 
     try {
       await rawExecute(
-        `INSERT INTO purchase_orders ("companyId", title, status, "totalAmount", "createdAt")
+        `INSERT INTO purchase_orders ("companyId", notes, status, "totalAmount", "createdAt")
          SELECT $1, $2, 'draft', 0, NOW()
          WHERE NOT EXISTS (
            SELECT 1 FROM purchase_orders
-           WHERE "companyId" = $1 AND title LIKE $3
+           WHERE "companyId" = $1 AND notes LIKE $3
            AND "createdAt" > NOW() - INTERVAL '7 days' AND status NOT IN ('cancelled','rejected')
          )`,
         [companyId, `طلب شراء تلقائي: ${row.name}`, `%${row.name}%`]

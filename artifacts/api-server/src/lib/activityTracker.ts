@@ -80,7 +80,7 @@ export async function getUsageStats(companyId: number, days: number = 30): Promi
   dailyActivity: { date: string; count: number }[];
   repeatedActions: { userId: number; name: string; entity: string; method: string; count: number }[];
 }> {
-  const since = `NOW() - INTERVAL '${days} days'`;
+  const since = `NOW() - INTERVAL '1 day' * $2`;
 
   const topPages = await rawQuery<any>(
     `SELECT COALESCE(page, path, entity) AS page, COUNT(*)::int AS visits
@@ -89,7 +89,7 @@ export async function getUsageStats(companyId: number, days: number = 30): Promi
      GROUP BY COALESCE(page, path, entity)
      ORDER BY visits DESC
      LIMIT 10`,
-    [companyId]
+    [companyId, days]
   ).catch((e) => { logger.error(e, "activity tracker query failed"); return []; });
 
   const peakHours = await rawQuery<any>(
@@ -98,7 +98,7 @@ export async function getUsageStats(companyId: number, days: number = 30): Promi
      WHERE "companyId"=$1 AND "createdAt" >= ${since}
      GROUP BY hour
      ORDER BY hour`,
-    [companyId]
+    [companyId, days]
   ).catch((e) => { logger.error(e, "activity tracker query failed"); return []; });
 
   const topUsers = await rawQuery<any>(
@@ -110,7 +110,7 @@ export async function getUsageStats(companyId: number, days: number = 30): Promi
        GROUP BY ual."userId", e.name, u.email
        ORDER BY count DESC
        LIMIT 10`,
-      [companyId]
+      [companyId, days]
     ).catch((e) => { logger.error(e, "activity tracker query failed"); return []; });
 
   const moduleUsage = await rawQuery<any>(
@@ -120,7 +120,7 @@ export async function getUsageStats(companyId: number, days: number = 30): Promi
      GROUP BY module
      ORDER BY count DESC
      LIMIT 15`,
-    [companyId]
+    [companyId, days]
   ).catch((e) => { logger.error(e, "activity tracker query failed"); return []; });
 
   const dailyActivity = await rawQuery<any>(
@@ -129,7 +129,7 @@ export async function getUsageStats(companyId: number, days: number = 30): Promi
      WHERE "companyId"=$1 AND "createdAt" >= ${since}
      GROUP BY date
      ORDER BY date`,
-    [companyId]
+    [companyId, days]
   ).catch((e) => { logger.error(e, "activity tracker query failed"); return []; });
 
   const repeatedActions = await rawQuery<any>(
@@ -143,7 +143,7 @@ export async function getUsageStats(companyId: number, days: number = 30): Promi
        HAVING COUNT(*) > 5
        ORDER BY count DESC
        LIMIT 20`,
-      [companyId]
+      [companyId, days]
     ).catch((e) => { logger.error(e, "activity tracker query failed"); return []; });
 
     return { topPages, peakHours, topUsers, moduleUsage, dailyActivity, repeatedActions };

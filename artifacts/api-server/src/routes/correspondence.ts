@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import {
   handleRouteError,
   ValidationError,
@@ -16,6 +16,50 @@ import { logger } from "../lib/logger.js";
 
 const correspondenceRouter = Router();
 correspondenceRouter.use(authMiddleware);
+
+interface CorrespondenceRow {
+  id: number;
+  companyId: number;
+  branchId: number | null;
+  direction: "outgoing" | "incoming";
+  ref: string;
+  subject: string;
+  content: string | null;
+  entityType: string | null;
+  entityId: number | null;
+  senderName: string | null;
+  senderOrg: string | null;
+  recipientName: string | null;
+  recipientOrg: string | null;
+  channel: string;
+  status: string;
+  attachments: unknown;
+  notes: string | null;
+  responseRef: string | null;
+  respondedAt: string | null;
+  sentAt: string | null;
+  receivedAt: string | null;
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+interface CorrespondenceListRow extends CorrespondenceRow {
+  createdByName: string | null;
+}
+
+interface SeqRow {
+  seq: string | number;
+}
+
+interface CorrespondenceStatsRow {
+  totalOutgoing: string | number;
+  totalIncoming: string | number;
+  totalDraft: string | number;
+  totalSent: string | number;
+  totalResponded: string | number;
+  totalPending: string | number;
+}
 
 const respondSchema = z.object({
   subject: z.string().optional(),
@@ -55,18 +99,18 @@ const createSchema = z.object({
 async function generateCorrespondenceRef(direction: "outgoing" | "incoming", companyId: number): Promise<string> {
   const prefix = direction === "outgoing" ? "OUT" : "IN";
   const seqName = direction === "outgoing" ? "correspondence_outgoing_seq" : "correspondence_incoming_seq";
-  const [row] = await rawQuery<any>(`SELECT nextval($1::regclass) AS seq`, [seqName]);
+  const [row] = await rawQuery<SeqRow>(`SELECT nextval($1::regclass) AS seq`, [seqName]);
   if (!row) throw new Error(`فشل في توليد التسلسل: ${seqName}`);
   return makeRef(prefix, row.seq);
 }
 
 // ── List correspondence ──
-correspondenceRouter.get("/", requirePermission("communications:read"), async (req, res) => {
+correspondenceRouter.get("/", authorize({ feature: "communications", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { direction, entityType, entityId, search, status } = req.query as Record<string, string>;
     const params: any[] = [scope.companyId];
-    let where = `c."companyId" = $1 AND c."deletedAt" IS NULL`;
+    let where = `c."companyId" = $1`;
 
     if (direction) {
       params.push(direction);
@@ -89,7 +133,7 @@ correspondenceRouter.get("/", requirePermission("communications:read"), async (r
       where += ` AND (c.subject ILIKE $${params.length} OR c.ref ILIKE $${params.length} OR c."senderName" ILIKE $${params.length} OR c."recipientName" ILIKE $${params.length})`;
     }
 
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<CorrespondenceListRow>(
       `SELECT c.*, COALESCE(e.name, u.email) AS "createdByName"
        FROM correspondence c
        LEFT JOIN users u ON u.id = c."createdBy"
@@ -106,16 +150,16 @@ correspondenceRouter.get("/", requirePermission("communications:read"), async (r
 });
 
 // ── Get single correspondence ──
-correspondenceRouter.get("/:id", requirePermission("communications:read"), async (req, res) => {
+correspondenceRouter.get("/:id", authorize({ feature: "communications", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<CorrespondenceListRow>(
       `SELECT c.*, COALESCE(e.name, u.email) AS "createdByName"
        FROM correspondence c
        LEFT JOIN users u ON u.id = c."createdBy"
        LEFT JOIN employees e ON e.id = u."employeeId"
-       WHERE c.id = $1 AND c."companyId" = $2 AND c."deletedAt" IS NULL`,
+       WHERE c.id = $1 AND c."companyId" = $2`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("المراسلة غير موجودة");
@@ -126,13 +170,13 @@ correspondenceRouter.get("/:id", requirePermission("communications:read"), async
 });
 
 // ── Create correspondence ──
-correspondenceRouter.post("/", requirePermission("communications:write"), async (req, res) => {
+correspondenceRouter.post("/", authorize({ feature: "communications", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const data = createSchema.parse(req.body);
     const ref = await generateCorrespondenceRef(data.direction, scope.companyId);
 
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<CorrespondenceRow>(
       `INSERT INTO correspondence (
         "companyId", "branchId", direction, ref, subject, content,
         "entityType", "entityId",
@@ -162,12 +206,12 @@ correspondenceRouter.post("/", requirePermission("communications:write"), async 
 });
 
 // ── Update correspondence (draft only) ──
-correspondenceRouter.patch("/:id", requirePermission("communications:write"), async (req, res) => {
+correspondenceRouter.patch("/:id", authorize({ feature: "communications", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(
-      `SELECT * FROM correspondence WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+    const [existing] = await rawQuery<CorrespondenceRow>(
+      `SELECT * FROM correspondence WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("المراسلة غير موجودة");
@@ -192,7 +236,7 @@ correspondenceRouter.patch("/:id", requirePermission("communications:write"), as
     sets.push(`"updatedAt" = NOW()`);
     params.push(id, scope.companyId);
 
-    const [updated] = await rawQuery<any>(
+    const [updated] = await rawQuery<CorrespondenceRow>(
       `UPDATE correspondence SET ${sets.join(", ")}
        WHERE id = $${params.length - 1} AND "companyId" = $${params.length}
        RETURNING *`,
@@ -207,12 +251,12 @@ correspondenceRouter.patch("/:id", requirePermission("communications:write"), as
 });
 
 // ── Send correspondence ──
-correspondenceRouter.post("/:id/send", requirePermission("communications:write"), async (req, res) => {
+correspondenceRouter.post("/:id/send", authorize({ feature: "communications", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(
-      `SELECT * FROM correspondence WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+    const [existing] = await rawQuery<CorrespondenceRow>(
+      `SELECT * FROM correspondence WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("المراسلة غير موجودة");
@@ -221,7 +265,7 @@ correspondenceRouter.post("/:id/send", requirePermission("communications:write")
     }
 
     const sentField = existing.direction === "outgoing" ? '"sentAt"' : '"receivedAt"';
-    const [updated] = await rawQuery<any>(
+    const [updated] = await rawQuery<CorrespondenceRow>(
       `UPDATE correspondence SET status = 'sent', ${sentField} = NOW(), "updatedAt" = NOW()
        WHERE id = $1 AND "companyId" = $2 AND status = 'draft' RETURNING *`,
       [id, scope.companyId]
@@ -238,15 +282,15 @@ correspondenceRouter.post("/:id/send", requirePermission("communications:write")
 });
 
 // ── Record response to correspondence ──
-correspondenceRouter.post("/:id/respond", requirePermission("communications:write"), async (req, res) => {
+correspondenceRouter.post("/:id/respond", authorize({ feature: "communications", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(respondSchema.safeParse(req.body ?? {}));
     const { subject, content, notes } = b;
 
-    const [original] = await rawQuery<any>(
-      `SELECT * FROM correspondence WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+    const [original] = await rawQuery<CorrespondenceRow>(
+      `SELECT * FROM correspondence WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
     if (!original) throw new NotFoundError("المراسلة الأصلية غير موجودة");
@@ -254,29 +298,33 @@ correspondenceRouter.post("/:id/respond", requirePermission("communications:writ
     const responseDirection = original.direction === "outgoing" ? "incoming" : "outgoing";
     const responseRef = await generateCorrespondenceRef(responseDirection as "outgoing" | "incoming", scope.companyId);
 
-    const [response] = await rawQuery<any>(
-      `INSERT INTO correspondence (
-        "companyId", "branchId", direction, ref, subject, content,
-        "entityType", "entityId",
-        "senderName", "senderOrg", "recipientName", "recipientOrg",
-        channel, status, "responseRef", notes, "createdBy"
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'draft',$14,$15,$16)
-      RETURNING *`,
-      [
-        scope.companyId, original.branchId, responseDirection, responseRef,
-        subject || `رد: ${original.subject}`, content || null,
-        original.entityType, original.entityId,
-        original.recipientName, original.recipientOrg,
-        original.senderName, original.senderOrg,
-        original.channel, original.ref,
-        notes || null, scope.userId,
-      ]
-    );
+    const response = await withTransaction(async (client) => {
+      const insertRes = await client.query(
+        `INSERT INTO correspondence (
+          "companyId", "branchId", direction, ref, subject, content,
+          "entityType", "entityId",
+          "senderName", "senderOrg", "recipientName", "recipientOrg",
+          channel, status, "responseRef", notes, "createdBy"
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'draft',$14,$15,$16)
+        RETURNING *`,
+        [
+          scope.companyId, original.branchId, responseDirection, responseRef,
+          subject || `رد: ${original.subject}`, content || null,
+          original.entityType, original.entityId,
+          original.recipientName, original.recipientOrg,
+          original.senderName, original.senderOrg,
+          original.channel, original.ref,
+          notes || null, scope.userId,
+        ]
+      );
 
-    await rawExecute(
-      `UPDATE correspondence SET "respondedAt" = NOW(), "responseRef" = $2, "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $3`,
-      [id, responseRef, scope.companyId]
-    );
+      await client.query(
+        `UPDATE correspondence SET "respondedAt" = NOW(), "responseRef" = $2, "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $3`,
+        [id, responseRef, scope.companyId]
+      );
+
+      return insertRes.rows[0];
+    });
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "correspondence_response", entity: "correspondence", entityId: response.id, after: {
       responseRef, originalRef: original.ref,
@@ -290,10 +338,10 @@ correspondenceRouter.post("/:id/respond", requirePermission("communications:writ
 });
 
 // ── Dashboard stats ──
-correspondenceRouter.get("/stats/summary", requirePermission("communications:read"), async (req, res) => {
+correspondenceRouter.get("/stats/summary", authorize({ feature: "communications", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [stats] = await rawQuery<any>(
+    const [stats] = await rawQuery<CorrespondenceStatsRow>(
       `SELECT
         COUNT(*) FILTER (WHERE direction = 'outgoing') AS "totalOutgoing",
         COUNT(*) FILTER (WHERE direction = 'incoming') AS "totalIncoming",
@@ -301,7 +349,7 @@ correspondenceRouter.get("/stats/summary", requirePermission("communications:rea
         COUNT(*) FILTER (WHERE status = 'sent') AS "totalSent",
         COUNT(*) FILTER (WHERE "respondedAt" IS NOT NULL) AS "totalResponded",
         COUNT(*) FILTER (WHERE "respondedAt" IS NULL AND status = 'sent') AS "totalPending"
-       FROM correspondence WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
+       FROM correspondence WHERE "companyId" = $1`,
       [scope.companyId]
     );
     res.json(stats || {});

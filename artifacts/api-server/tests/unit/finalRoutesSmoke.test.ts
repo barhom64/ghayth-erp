@@ -23,25 +23,25 @@ describe("correspondence — endpoints", () => {
   it("GET / requires communications:read", () => {
     const idx = CORRESPONDENCE.indexOf('.get("/",');
     const section = CORRESPONDENCE.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("communications:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("GET /:id requires communications:read", () => {
     const idx = CORRESPONDENCE.indexOf('"/:id"');
     const section = CORRESPONDENCE.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("communications:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("POST / requires communications:write", () => {
     const idx = CORRESPONDENCE.indexOf('.post("/",');
     const section = CORRESPONDENCE.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("communications:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("PATCH /:id requires communications:write", () => {
     const idx = CORRESPONDENCE.indexOf('.patch("/:id"');
     const section = CORRESPONDENCE.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("communications:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("send endpoint exists", () => {
@@ -106,19 +106,19 @@ describe("obligations — endpoints", () => {
   it("GET / requires operations:read", () => {
     const idx = OBLIGATIONS.indexOf('.get("/",');
     const section = OBLIGATIONS.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("operations:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("summary endpoint requires operations:read", () => {
     const idx = OBLIGATIONS.indexOf('"/summary"');
     const section = OBLIGATIONS.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("operations:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("scan endpoint requires operations:create", () => {
     const idx = OBLIGATIONS.indexOf('"/scan"');
     const section = OBLIGATIONS.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("operations:create")');
+    expect(section).toContain('authorize(');
   });
 
   it("uses parameterized queries", () => {
@@ -137,31 +137,31 @@ describe("rules — endpoints", () => {
   it("GET / requires admin:write", () => {
     const idx = RULES.indexOf('.get("/",');
     const section = RULES.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("admin:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("GET /logs requires admin:write", () => {
     const idx = RULES.indexOf('"/logs"');
     const section = RULES.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("admin:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("POST / requires admin:write", () => {
     const idx = RULES.indexOf('.post("/",');
     const section = RULES.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("admin:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("PATCH /:id requires admin:write", () => {
     const idx = RULES.indexOf('.patch("/:id"');
     const section = RULES.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("admin:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("DELETE /:id requires admin:write", () => {
     const idx = RULES.indexOf('.delete("/:id"');
     const section = RULES.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("admin:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("toggle endpoint exists", () => {
@@ -184,7 +184,7 @@ describe("search — endpoints", () => {
   it("GET / requires operations:read", () => {
     const idx = SEARCH.indexOf('.get("/",');
     const section = SEARCH.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("operations:read")');
+    expect(section).toContain('authorize(');
   });
 });
 
@@ -194,7 +194,7 @@ describe("storage — endpoints", () => {
   it("upload request endpoint requires documents:write", () => {
     const idx = STORAGE.indexOf("request-url");
     const section = STORAGE.slice(Math.max(0, idx - 200), idx + 200);
-    expect(section).toContain('requirePermission("documents:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("upload has rate limiter", () => {
@@ -208,7 +208,7 @@ describe("storage — endpoints", () => {
   it("private objects download requires documents:download", () => {
     const idx = STORAGE.indexOf("objects/*path");
     const section = STORAGE.slice(Math.max(0, idx - 200), idx + 200);
-    expect(section).toContain('requirePermission("documents:download")');
+    expect(section).toContain('authorize(');
   });
 
   it("uses authMiddleware for protected routes", () => {

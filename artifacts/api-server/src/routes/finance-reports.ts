@@ -8,14 +8,14 @@ import {
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { currentPeriod, currentYear, toDateISO, todayISO, roundTo2 } from "../lib/businessHelpers.js";
 
 export const reportsRouter = Router();
 reportsRouter.use(authMiddleware);
 
-reportsRouter.get("/reports/entities/:entityType", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/reports/entities/:entityType", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType } = req.params;
@@ -33,7 +33,7 @@ reportsRouter.get("/reports/entities/:entityType", requirePermission("finance:re
   }
 });
 
-reportsRouter.get("/reports/trial-balance", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/reports/trial-balance", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate } = req.query as any;
@@ -76,7 +76,7 @@ reportsRouter.get("/reports/trial-balance", requirePermission("finance:read"), a
   }
 });
 
-reportsRouter.get("/reports/income-statement", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/reports/income-statement", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate } = req.query as any;
@@ -94,7 +94,7 @@ reportsRouter.get("/reports/income-statement", requirePermission("finance:read")
   }
 });
 
-reportsRouter.get("/reports/balance-sheet", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/reports/balance-sheet", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { asOfDate } = req.query as any;
@@ -139,7 +139,7 @@ reportsRouter.get("/reports/balance-sheet", requirePermission("finance:read"), a
 // Returns per-section line items + totals, plus opening/closing cash balance.
 // ─────────────────────────────────────────────────────────────────────────────
 
-reportsRouter.get("/reports/cash-flow", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/reports/cash-flow", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate } = req.query as any;
@@ -196,9 +196,10 @@ reportsRouter.get("/reports/cash-flow", requirePermission("finance:read"), async
                 coa.type, coa.code, coa.name
            FROM journal_lines jl
            LEFT JOIN chart_of_accounts coa
-                  ON coa.code = jl."accountCode" AND coa."companyId" = $1 AND coa."deletedAt" IS NULL
+                  ON coa.code = jl."accountCode" AND coa."companyId" = $1
           WHERE jl."journalId" = ANY($2)
-            AND NOT (jl."accountCode" = ANY($3))`,
+            AND NOT (jl."accountCode" = ANY($3))
+            AND jl."deletedAt" IS NULL`,
         [scope.companyId, jeIds, cashCodes]
       );
     }
@@ -297,7 +298,7 @@ reportsRouter.get("/reports/cash-flow", requirePermission("finance:read"), async
   }
 });
 
-reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType } = req.params;
@@ -322,13 +323,16 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", requirePermission(
       const assignmentId = emp.assignmentId;
 
       const { filter: prFilter, extraParams: prDates } = buildDateFilter(2, startDate, endDate);
-      const payrollRows = await rawQuery<any>(`SELECT pr.id, pr.period AS ref, CONCAT('راتب ', pr.period) AS description, pr."grossSalary" AS debit, 0 AS credit, pr."createdAt" AS date, 'payroll' AS "movementType" FROM payroll_records pr WHERE pr."employeeAssignmentId" = $1 AND pr."companyId" = $2 ${prFilter.replace(/"createdAt"/g, 'pr."createdAt"')} ORDER BY pr."createdAt" DESC LIMIT 500`, [assignmentId, scope.companyId, ...prDates]);
       const { filter: advFilter, extraParams: advDates } = buildDateFilter(2, startDate, endDate);
-      const advanceRows = await rawQuery<any>(`SELECT je.id, je.ref, CONCAT('سلفة: ', je.description) AS description, COALESCE(SUM(jl.debit), 0) AS debit, 0 AS credit, je."createdAt" AS date, 'advance' AS "movementType" FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1410' WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."createdBy" = $2 ${advFilter.replace(/"createdAt"/g, 'je."createdAt"')} GROUP BY je.id, je.ref, je.description, je."createdAt" LIMIT 500`, [scope.companyId, assignmentId, ...advDates]);
       const { filter: cstFilter, extraParams: cstDates } = buildDateFilter(2, startDate, endDate);
-      const custodyRows = await rawQuery<any>(`SELECT je.id, je.ref, CONCAT('عهدة: ', je.description) AS description, COALESCE(SUM(jl.debit), 0) AS debit, 0 AS credit, je."createdAt" AS date, 'custody' AS "movementType" FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1400' WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."createdBy" = $2 AND je.ref LIKE 'CUSTODY%' ${cstFilter.replace(/"createdAt"/g, 'je."createdAt"')} GROUP BY je.id, je.ref, je.description, je."createdAt" LIMIT 500`, [scope.companyId, assignmentId, ...cstDates]);
-      const { filter: vioFilter, extraParams: vioDates } = buildDateFilter(1, startDate, endDate);
-      const violationRows = await rawQuery<any>(`SELECT v.id, CONCAT('VIO-', v.id::text) AS ref, CONCAT('خصم مخالفة: ', v.description) AS description, 0 AS debit, COALESCE(v.deduction, 0) AS credit, v."createdAt" AS date, 'violation' AS "movementType" FROM employee_violations v WHERE v."assignmentId" = $1 AND v.deduction > 0 ${vioFilter.replace(/"createdAt"/g, 'v."createdAt"')} ORDER BY v."createdAt" DESC LIMIT 500`, [assignmentId, ...vioDates]);
+      const { filter: vioFilter, extraParams: vioDates } = buildDateFilter(2, startDate, endDate);
+
+      const [payrollRows, advanceRows, custodyRows, violationRows] = await Promise.all([
+        rawQuery<any>(`SELECT pr.id, pr.period AS ref, CONCAT('راتب ', pr.period) AS description, pr."grossSalary" AS debit, 0 AS credit, pr."createdAt" AS date, 'payroll' AS "movementType" FROM payroll_records pr WHERE pr."employeeAssignmentId" = $1 AND pr."companyId" = $2 ${prFilter.replace(/"createdAt"/g, 'pr."createdAt"')} ORDER BY pr."createdAt" DESC LIMIT 500`, [assignmentId, scope.companyId, ...prDates]),
+        rawQuery<any>(`SELECT je.id, je.ref, CONCAT('سلفة: ', je.description) AS description, COALESCE(SUM(jl.debit), 0) AS debit, 0 AS credit, je."createdAt" AS date, 'advance' AS "movementType" FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1410' WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."createdBy" = $2 ${advFilter.replace(/"createdAt"/g, 'je."createdAt"')} GROUP BY je.id, je.ref, je.description, je."createdAt" LIMIT 500`, [scope.companyId, assignmentId, ...advDates]),
+        rawQuery<any>(`SELECT je.id, je.ref, CONCAT('عهدة: ', je.description) AS description, COALESCE(SUM(jl.debit), 0) AS debit, 0 AS credit, je."createdAt" AS date, 'custody' AS "movementType" FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1400' WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."createdBy" = $2 AND je.ref LIKE 'CUSTODY%' ${cstFilter.replace(/"createdAt"/g, 'je."createdAt"')} GROUP BY je.id, je.ref, je.description, je."createdAt" LIMIT 500`, [scope.companyId, assignmentId, ...cstDates]),
+        rawQuery<any>(`SELECT v.id, CONCAT('VIO-', v.id::text) AS ref, CONCAT('خصم مخالفة: ', v.description) AS description, 0 AS debit, COALESCE(v.deduction, 0) AS credit, v."createdAt" AS date, 'violation' AS "movementType" FROM employee_violations v WHERE v."assignmentId" = $1 AND v."companyId" = $2 AND v.deduction > 0 ${vioFilter.replace(/"createdAt"/g, 'v."createdAt"')} ORDER BY v."createdAt" DESC LIMIT 500`, [assignmentId, scope.companyId, ...vioDates]),
+      ]);
 
       const all = [...payrollRows, ...advanceRows, ...custodyRows, ...violationRows].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
       let runningBalance = 0;
@@ -357,18 +361,17 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", requirePermission(
 
     } else if (entityType === "supplier") {
       const { filter: dateFilter, extraParams: dateDates } = buildDateFilter(2, startDate, endDate);
-      const poRows = await rawQuery<any>(`SELECT po.id, po.ref, po."totalAmount" AS debit, 0 AS credit, po."createdAt" AS date, CONCAT('أمر شراء ', po.ref) AS description, 'purchase_order' AS "movementType", po.status FROM purchase_orders po WHERE po."companyId" = $1 AND po."supplierId" = $2 ${dateFilter.replace(/"createdAt"/g, 'po."createdAt"')} ORDER BY po."createdAt" ASC LIMIT 500`, [scope.companyId, id, ...dateDates]);
+      const poRows = await rawQuery<any>(`SELECT po.id, po.ref, po."totalAmount" AS debit, 0 AS credit, po."createdAt" AS date, CONCAT('أمر شراء ', po.ref) AS description, 'purchase_order' AS "movementType", po.status FROM purchase_orders po WHERE po."companyId" = $1 AND po."supplierId" = $2 AND po."deletedAt" IS NULL ${dateFilter.replace(/"createdAt"/g, 'po."createdAt"')} ORDER BY po."createdAt" ASC LIMIT 500`, [scope.companyId, id, ...dateDates]);
       let runningBalance = 0;
       movements = poRows.map((m: any) => { runningBalance += Number(m.debit) - Number(m.credit); return { ...m, runningBalance }; });
       const totalOrdered = poRows.reduce((s: number, r: any) => s + Number(r.debit), 0);
       sections = { orders: { label: "أوامر الشراء", amount: totalOrdered, count: poRows.length } };
 
-    } else if (entityType === "vehicle" || entityType === "property" || entityType === "project" || entityType === "product") {
+    } else if (entityType === "vehicle" || entityType === "property" || entityType === "project") {
       const colFilterMap: Record<string, string> = {
         vehicle: 'jl."vehicleId"',
         property: 'jl."propertyId"',
         project: 'jl."projectId"',
-        product: 'jl."productId"',
       };
       const colFilter = colFilterMap[entityType];
       if (!colFilter) throw new ValidationError("نوع الكيان غير مدعوم");
@@ -415,7 +418,7 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", requirePermission(
 // Returns: opening balance, invoice + payment movements in period, running
 // balance, aging buckets (0-30, 31-60, 61-90, 90+), and ending balance.
 // ─────────────────────────────────────────────────────────────────────────────
-reportsRouter.get("/reports/customer-statement/:clientId", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const clientId = parseId(req.params.clientId, "clientId");
@@ -534,7 +537,7 @@ reportsRouter.get("/reports/customer-statement/:clientId", requirePermission("fi
 // Returns: opening balance, PO/invoice + scheduled-payment movements, running
 // balance, aging buckets on unpaid POs, and ending balance.
 // ─────────────────────────────────────────────────────────────────────────────
-reportsRouter.get("/reports/vendor-statement/:supplierId", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const supplierId = parseId(req.params.supplierId, "supplierId");
@@ -543,7 +546,7 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", requirePermission("fi
     const from = startDate || "1900-01-01";
 
     const [supplier] = await rawQuery<any>(
-      `SELECT id, name, phone, email, "taxNumber" FROM suppliers WHERE id = $1 AND "companyId" = $2`,
+      `SELECT id, name, phone, email, "taxNumber" FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [supplierId, scope.companyId]
     );
     if (!supplier) { throw new NotFoundError("المورد غير موجود"); return; }
@@ -555,6 +558,7 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", requirePermission("fi
       `SELECT COALESCE(
          (SELECT SUM("totalAmount") FROM purchase_orders
            WHERE "supplierId"=$1 AND "companyId"=$2
+             AND "deletedAt" IS NULL
              AND status IN ('received','partially_received','invoice_matched','payment_scheduled','paid','completed')
              AND "createdAt" < $3), 0
        ) AS opening`,
@@ -568,6 +572,7 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", requirePermission("fi
               CONCAT('أمر شراء ', ref) AS description
          FROM purchase_orders
         WHERE "supplierId"=$1 AND "companyId"=$2
+          AND "deletedAt" IS NULL
           AND "createdAt" >= $3 AND "createdAt" <= $4
         ORDER BY "createdAt"`,
       [supplierId, scope.companyId, from, asOf]
@@ -584,6 +589,7 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", requirePermission("fi
       `SELECT id, ref, "createdAt", "expectedDelivery", "totalAmount"
          FROM purchase_orders
         WHERE "supplierId"=$1 AND "companyId"=$2
+          AND "deletedAt" IS NULL
           AND status NOT IN ('paid','completed','cancelled','rejected')
           AND "createdAt" <= $3`,
       [supplierId, scope.companyId, asOf]
@@ -636,7 +642,7 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", requirePermission("fi
 // Phase 7.1 — migrated from finance.ts (canonical ownership consolidation)
 // ─────────────────────────────────────────────────────────────────────────────
 
-reportsRouter.get("/reports/entity-statement", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/reports/entity-statement", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId, startDate, endDate } = req.query as any;
@@ -685,7 +691,7 @@ reportsRouter.get("/reports/entity-statement", requirePermission("finance:read")
         qParams
       );
     } else if (entityType === "supplier" && entityId) {
-      const [sup] = await rawQuery<any>(`SELECT name FROM suppliers WHERE id = $1 AND "companyId" = $2`, [(Number(entityId) || 0), scope.companyId]);
+      const [sup] = await rawQuery<any>(`SELECT name FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [(Number(entityId) || 0), scope.companyId]);
       entityName = sup?.name || "";
       const qParams: any[] = [(Number(entityId) || 0), scope.companyId];
       let dateFilter = "";
@@ -696,7 +702,7 @@ reportsRouter.get("/reports/entity-statement", requirePermission("finance:read")
                 po."totalAmount" AS debit, 0 AS credit,
                 po."totalAmount" AS net,
                 po."createdAt" AS date, po.status AS type
-         FROM purchase_orders po WHERE po."supplierId" = $1 AND po."companyId" = $2 ${dateFilter}
+         FROM purchase_orders po WHERE po."supplierId" = $1 AND po."companyId" = $2 AND po."deletedAt" IS NULL ${dateFilter}
          ORDER BY po."createdAt" DESC LIMIT 100`,
         qParams
       );
@@ -711,7 +717,7 @@ reportsRouter.get("/reports/entity-statement", requirePermission("finance:read")
   }
 });
 
-reportsRouter.get("/reports/custody-advances", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/reports/custody-advances", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate, branchId } = req.query as any;
@@ -770,7 +776,7 @@ reportsRouter.get("/reports/custody-advances", requirePermission("finance:read")
   }
 });
 
-reportsRouter.get("/reports/expenses-analysis", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/reports/expenses-analysis", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate, branchId, departmentId, projectId, costCenterId, groupBy = "account" } = req.query as any;
@@ -802,7 +808,7 @@ reportsRouter.get("/reports/expenses-analysis", requirePermission("finance:read"
        LEFT JOIN branches b ON b.id = je."branchId"
        LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
        LEFT JOIN employees e ON e.id = ea."employeeId"
-       WHERE jl.debit > jl.credit
+       WHERE jl.debit > jl.credit AND jl."deletedAt" IS NULL
        GROUP BY ${groupCol}
        ORDER BY amount DESC
        LIMIT 500`,
@@ -816,7 +822,7 @@ reportsRouter.get("/reports/expenses-analysis", requirePermission("finance:read"
   }
 });
 
-reportsRouter.get("/reports/revenue-analysis", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/reports/revenue-analysis", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate, branchId } = req.query as any;
@@ -834,6 +840,7 @@ reportsRouter.get("/reports/revenue-analysis", requirePermission("finance:read")
        FROM journal_lines jl
        JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}
        JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa.type = 'revenue'
+       WHERE jl."deletedAt" IS NULL
        GROUP BY coa.code, coa.name
        ORDER BY amount DESC
        LIMIT 500`,
@@ -860,7 +867,7 @@ reportsRouter.get("/reports/revenue-analysis", requirePermission("finance:read")
   }
 });
 
-reportsRouter.get("/reports/budget-variance", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/reports/budget-variance", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { period, branchId } = req.query as any;
@@ -877,7 +884,7 @@ reportsRouter.get("/reports/budget-variance", requirePermission("finance:read"),
               b.amount - COALESCE(b.used, 0) AS variance,
               CASE WHEN b.amount > 0 THEN ROUND(COALESCE(b.used, 0)::numeric / b.amount * 100, 1) ELSE 0 END AS "usagePct"
        FROM budgets b
-       LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = $1 AND coa."deletedAt" IS NULL
+       LEFT JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = $1
        WHERE b."companyId" = $1 AND b."deletedAt" IS NULL AND b.period = $2 ${branchFilter}
        ORDER BY b."accountCode"
        LIMIT 500`,
@@ -894,7 +901,7 @@ reportsRouter.get("/reports/budget-variance", requirePermission("finance:read"),
   }
 });
 
-reportsRouter.get("/reports/cash-bank-statement", requirePermission("finance:read"), async (req, res) => {
+reportsRouter.get("/reports/cash-bank-statement", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate, accountCode = "1100", branchId } = req.query as any;
@@ -906,7 +913,7 @@ reportsRouter.get("/reports/cash-bank-statement", requirePermission("finance:rea
     if (branchId) { params.push(branchId); dateFilter += ` AND je."branchId" = $${params.length}`; }
 
     const [accountInfo] = await rawQuery<any>(
-      `SELECT code, name, type FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2`,
+      `SELECT code, name, type FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2 AND "deletedAt" IS NULL`,
       [scope.companyId, accountCode]
     );
 
@@ -917,7 +924,7 @@ reportsRouter.get("/reports/cash-bank-statement", requirePermission("finance:rea
        FROM journal_lines jl
        JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}
        LEFT JOIN branches b ON b.id = je."branchId"
-       WHERE jl."accountCode" = $2
+       WHERE jl."accountCode" = $2 AND jl."deletedAt" IS NULL
        ORDER BY je."createdAt" ASC
        LIMIT 500`,
       params

@@ -105,7 +105,7 @@ export async function loadBalanceAssign(
     const employees = await rawQuery<any>(
       `SELECT ea.id AS "assignmentId", ea."employeeId", ea.role,
               e.name, e.lat, e.lon,
-              COALESCE(e.rating, 3) AS rating,
+              3 AS rating,
               (SELECT COUNT(*) FROM tasks t
                WHERE t."assignedTo" = ea.id AND t."companyId" = $1
                AND t.status NOT IN ('completed','cancelled'))::int AS workload

@@ -10,7 +10,7 @@ import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
 import { TextField, TextAreaField, NumberField, DateField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
-import { VehicleSelect, EmployeeSelect, ClientSelect } from "@/components/shared/entity-selects";
+import { VehicleSelect, DriverSelect, ClientSelect } from "@/components/shared/entity-selects";
 
 const DRAFT_KEY = "fleet_trips_create";
 const INITIAL = {
@@ -83,7 +83,7 @@ export default function TripsCreate() {
             </div>
           )}
         </div>
-        <EmployeeSelect value={form.driverId} onChange={(v) => setForm((f) => ({ ...f, driverId: v }))} label="السائق" required error={fieldErrors.driverId} />
+        <DriverSelect value={form.driverId} onChange={(v) => setForm((f) => ({ ...f, driverId: v }))} label="السائق" required error={fieldErrors.driverId} />
         <ClientSelect value={form.clientId} onChange={(v) => setForm((f) => ({ ...f, clientId: v }))} label="العميل" />
         <TextField label="من" required value={form.fromLocation} onChange={(v) => setForm((f) => ({ ...f, fromLocation: v }))} placeholder="نقطة الانطلاق" error={fieldErrors.fromLocation} />
         <TextField label="إلى" required value={form.toLocation} onChange={(v) => setForm((f) => ({ ...f, toLocation: v }))} placeholder="الوجهة" error={fieldErrors.toLocation} />
@@ -108,7 +108,7 @@ export default function TripsCreate() {
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/fleet/trips")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
         </Button>
       </div>

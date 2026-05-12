@@ -2,6 +2,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { PageShell } from "@/components/page-shell";
 import {
@@ -18,6 +19,8 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { OVERTIME_STATUS } from "@/lib/hr-type-maps";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PromptDialog } from "@/components/shared/prompt-dialog";
+import { useState } from "react";
 
 const STATUS_OPTIONS = Object.entries(OVERTIME_STATUS).map(([value, { label }]) => ({ value, label }));
 const STATUS_MAP = OVERTIME_STATUS;
@@ -27,6 +30,7 @@ export default function OvertimePage() {
   const [filters, setFilters] = useFilters();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [rejectingId, setRejectingId] = useState<number | null>(null);
 
   const { data, isLoading, isError } = useApiQuery<{ data: any[]; stats: any; total: number }>(
     ["hr-overtime"],
@@ -47,8 +51,12 @@ export default function OvertimePage() {
     await approveMut.mutateAsync({ __url: `/hr/overtime/${id}/approve` } as any);
     queryClient.invalidateQueries({ queryKey: ["hr-overtime"] });
   };
-  const handleReject = async (id: number) => {
-    const reason = window.prompt("سبب الرفض (اختياري):");
+  const handleReject = (id: number) => setRejectingId(id);
+
+  const submitRejection = async (reason: string) => {
+    if (rejectingId === null) return;
+    const id = rejectingId;
+    setRejectingId(null);
     await rejectMut.mutateAsync({ __url: `/hr/overtime/${id}/reject`, reason } as any);
     queryClient.invalidateQueries({ queryKey: ["hr-overtime"] });
   };
@@ -190,7 +198,8 @@ export default function OvertimePage() {
         if (v.status !== "pending") return null;
         return (
           <div className="flex items-center gap-1">
-            <Button
+            <GuardedButton
+              perm="hr:approve"
               size="sm"
               variant="ghost"
               className="h-7 px-2 text-green-700 hover:bg-green-50"
@@ -199,8 +208,9 @@ export default function OvertimePage() {
             >
               <CheckCircle className="h-3.5 w-3.5 ml-1" />
               اعتماد
-            </Button>
-            <Button
+            </GuardedButton>
+            <GuardedButton
+              perm="hr:approve"
               size="sm"
               variant="ghost"
               className="h-7 px-2 text-red-700 hover:bg-red-50"
@@ -209,7 +219,7 @@ export default function OvertimePage() {
             >
               <XCircle className="h-3.5 w-3.5 ml-1" />
               رفض
-            </Button>
+            </GuardedButton>
           </div>
         );
       },
@@ -226,10 +236,10 @@ export default function OvertimePage() {
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
         <Link href="/hr/overtime/create">
-          <Button size="sm" className="gap-1.5">
+          <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
             <Plus className="h-4 w-4" />
             طلب وقت إضافي
-          </Button>
+          </GuardedButton>
         </Link>
       }
     >
@@ -283,6 +293,15 @@ export default function OvertimePage() {
         emptyMessage="لا توجد طلبات وقت إضافي — سجّل طلب جديد للبدء"
         pageSize={20}
         onRowClick={(item) => navigate(`/hr/overtime/${item.id}`)}
+      />
+      <PromptDialog
+        open={rejectingId !== null}
+        title="رفض طلب الوقت الإضافي"
+        description="يمكنك إضافة سبب الرفض (اختياري)."
+        optional
+        confirmLabel="تأكيد الرفض"
+        onSubmit={submitRejection}
+        onClose={() => setRejectingId(null)}
       />
     </PageShell>
   );

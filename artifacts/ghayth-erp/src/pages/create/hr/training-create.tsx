@@ -196,7 +196,7 @@ export default function TrainingCreate() {
       <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات التدريب (منهج، مواد تدريبية)" />
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/hr/training")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={!form.title || createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={!form.title || createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "حفظ البرنامج"}
         </Button>
       </div>

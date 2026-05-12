@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import {
   Activity, Database, Clock, AlertTriangle, Shield,
   Server, CheckCircle, XCircle, Users, Building2,
-  HardDrive, Cpu, MemoryStick, RefreshCw, Plug,
+  HardDrive, Cpu, MemoryStick, RefreshCw, Plug, Gauge,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -38,6 +38,8 @@ export default function AdminMonitoring() {
   const memUsage = health?.memoryUsage || {};
   const counts = health?.counts || {};
   const security = health?.security || {};
+  const redisRateLimit: "connected" | "fallback-memory" | "disabled" | undefined =
+    services.redisRateLimit;
   const cronJobs = health?.cronJobs || [];
   const recentCronLogs = health?.recentCronLogs || [];
   const recentErrors = health?.recentErrors || [];
@@ -92,6 +94,37 @@ export default function AdminMonitoring() {
     >
       <PageStateWrapper isLoading={isLoading && !health} error={error} onRetry={refetch}>
       <div className="space-y-6">
+      {/* Rate-limit backend banner — surfaces the silent fallback to per-process
+          MemoryStore so an operator can investigate before the cap actually
+          gets bypassed across replicas. See artifacts/api-server/src/lib/rateLimitStore.ts. */}
+      {redisRateLimit && redisRateLimit !== "connected" && (
+        <Card className={cn(
+          "border",
+          redisRateLimit === "fallback-memory"
+            ? "border-amber-200 bg-amber-50/40"
+            : "border-gray-200 bg-gray-50/60",
+        )}>
+          <CardContent className="p-4 flex items-start gap-3">
+            <AlertTriangle className={cn(
+              "w-5 h-5 mt-0.5 shrink-0",
+              redisRateLimit === "fallback-memory" ? "text-amber-600" : "text-gray-500",
+            )} />
+            <div className="text-sm">
+              <p className="font-semibold mb-0.5">
+                {redisRateLimit === "fallback-memory"
+                  ? "تنبيه: تحديد المعدل يعمل بالذاكرة المحلية فقط"
+                  : "تحديد المعدل غير مفعّل عبر Redis"}
+              </p>
+              <p className="text-xs text-gray-600 leading-relaxed">
+                {redisRateLimit === "fallback-memory"
+                  ? "تعذّر الاتصال بخادم Redis، لذا تُفرض حدود الطلبات داخل كل نسخة من الخادم على حدة وتُمسح عند إعادة التشغيل. الحدود لا تزال تعمل، لكنها أضعف من المعتاد. يُرجى مراجعة المتغيّر REDIS_URL وحالة Upstash."
+                  : "متغيّر REDIS_URL غير مضبوط، لذا تُحفظ عدّادات تحديد المعدل في ذاكرة العملية فقط. هذا مقبول في بيئة التطوير، أمّا في الإنتاج فيُفضَّل إعداد Redis مشترك."}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Failed cron jobs banner — full error text, sorted to the top */}
       {failedCronJobs.length > 0 && (
         <Card className="border-red-200 bg-red-50/30">
@@ -169,6 +202,36 @@ export default function AdminMonitoring() {
               <p className="text-sm font-semibold">التكاملات</p>
               <p className="text-xs text-gray-500">{services.integrations?.active || 0} نشطة من {services.integrations?.total || 0}</p>
               {(services.integrations?.pendingMessages || 0) > 0 && <p className="text-xs text-amber-500">{services.integrations?.pendingMessages} رسالة معلقة</p>}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className={cn(
+          "border-0 shadow-sm",
+          redisRateLimit === "connected" ? "bg-green-50/50"
+            : redisRateLimit === "fallback-memory" ? "bg-amber-50/50"
+            : "bg-gray-50/60",
+        )}>
+          <CardContent className="p-4 flex items-center gap-3">
+            <Gauge className={cn(
+              "w-8 h-8",
+              redisRateLimit === "connected" ? "text-green-600"
+                : redisRateLimit === "fallback-memory" ? "text-amber-600"
+                : "text-gray-500",
+            )} />
+            <div>
+              <p className="text-sm font-semibold">تحديد المعدل (Redis)</p>
+              <p className="text-xs text-gray-500">
+                {redisRateLimit === "connected" ? "متصل ومشترك"
+                  : redisRateLimit === "fallback-memory" ? "ذاكرة محلية (احتياطي)"
+                  : redisRateLimit === "disabled" ? "غير مفعّل"
+                  : "غير معروف"}
+              </p>
+              <p className="text-xs text-gray-400">
+                {redisRateLimit === "connected" ? "حدود الطلبات تُحفظ في Redis"
+                  : redisRateLimit === "fallback-memory" ? "حدود تُفرض داخل النسخة فقط"
+                  : "REDIS_URL غير مضبوط"}
+              </p>
             </div>
           </CardContent>
         </Card>

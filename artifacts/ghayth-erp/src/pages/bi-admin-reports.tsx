@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { BiTabsNav } from "@/components/shared/bi-tabs-nav";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
@@ -83,7 +84,7 @@ function DailyReportTab() {
   const { data, isLoading, isError } = useApiQuery<any>(["admin-report-daily", date], `/bi/admin-reports/daily?date=${date}`);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
   if (!data) return <div className="text-center py-12 text-muted-foreground">لا توجد بيانات</div>;
 
   return (
@@ -169,7 +170,7 @@ function WeeklyReportTab() {
   const { data, isLoading, isError } = useApiQuery<any>(["admin-report-weekly"], "/bi/admin-reports/weekly");
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
   if (!data) return <div className="text-center py-12 text-muted-foreground">لا توجد بيانات</div>;
 
   const { current, previous, changes, period } = data;
@@ -241,7 +242,7 @@ function MonthlyReportTab() {
   const { data, isLoading, isError } = useApiQuery<any>(["admin-report-monthly"], "/bi/admin-reports/monthly");
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
   if (!data) return <div className="text-center py-12 text-muted-foreground">لا توجد بيانات</div>;
 
   const { current, previous, changes, weeklyTrend, period } = data;
@@ -352,9 +353,9 @@ export default function BiAdminReportsPage() {
       title="التقارير الإدارية"
       subtitle="تقارير يومية وأسبوعية وشهرية شاملة"
       actions={
-        <Button variant="outline" size="sm" onClick={() => window.print()} className="print:hidden gap-2">
+        <GuardedButton perm="bi:export" variant="outline" size="sm" onClick={() => window.print()} className="print:hidden gap-2">
           <Printer className="w-4 h-4" /> طباعة التقرير
-        </Button>
+        </GuardedButton>
       }
     >
       <BiTabsNav />

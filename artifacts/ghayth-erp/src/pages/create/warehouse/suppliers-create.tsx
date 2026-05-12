@@ -63,18 +63,18 @@ export default function SuppliersCreate() {
               <SelectTrigger><SelectValue placeholder="اختر الشروط" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="_none">اختر الشروط</SelectItem>
-                <SelectItem value="cash">نقدي</SelectItem>
-                <SelectItem value="net_15">صافي 15 يوم</SelectItem>
-                <SelectItem value="net_30">صافي 30 يوم</SelectItem>
-                <SelectItem value="net_60">صافي 60 يوم</SelectItem>
-                <SelectItem value="net_90">صافي 90 يوم</SelectItem>
+                <SelectItem value="0">نقدي</SelectItem>
+                <SelectItem value="15">صافي 15 يوم</SelectItem>
+                <SelectItem value="30">صافي 30 يوم</SelectItem>
+                <SelectItem value="60">صافي 60 يوم</SelectItem>
+                <SelectItem value="90">صافي 90 يوم</SelectItem>
               </SelectContent>
             </Select>
           </FormFieldWrapper>
         </div>
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/warehouse")}>إلغاء</Button>
-          <Button onClick={handleSubmit} disabled={addSupplier.isPending}>{addSupplier.isPending ? "جاري الإضافة..." : "إضافة"}</Button>
+          <Button onClick={handleSubmit} disabled={addSupplier.isPending} rateLimitAware>{addSupplier.isPending ? "جاري الإضافة..." : "إضافة"}</Button>
         </div>
       </div>
     </CreatePageLayout>

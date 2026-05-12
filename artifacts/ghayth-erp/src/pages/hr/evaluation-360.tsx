@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
@@ -37,7 +38,7 @@ export default function Evaluation360Page() {
   const cycles = cyclesData?.data || [];
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const filtered = applyFilters(cycles, filters, {
     searchFields: ["employeeName", "period"],
@@ -142,10 +143,10 @@ export default function Evaluation360Page() {
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
         <Link href="/hr/evaluation-360/create">
-          <Button size="sm" className="gap-1.5">
+          <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
             <Plus className="h-4 w-4" />
             بدء دورة تقييم
-          </Button>
+          </GuardedButton>
         </Link>
       }
     >

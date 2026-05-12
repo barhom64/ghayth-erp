@@ -8,6 +8,8 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Search, Link2 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { CreatePageLayout } from "@/components/create-page-layout";
 
 export default function BankManualMatchPage() {
@@ -15,7 +17,8 @@ export default function BankManualMatchPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const [jeSearch, setJeSearch] = useState("");
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("finance_bank_manual_match", { jeSearch: "" });
+  const { fieldErrors, validate } = useFieldErrors();
   const [jeResults, setJeResults] = useState<any[]>([]);
   const [jeSearching, setJeSearching] = useState(false);
   const [matchMsg, setMatchMsg] = useState("");
@@ -31,13 +34,16 @@ export default function BankManualMatchPage() {
   const manualMatchMutation = useApiMutation("/finance/bank-reconciliation/manual-match", "POST");
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   async function searchJournalLines() {
-    if (!jeSearch.trim()) return;
+    const firstError = validate({
+      jeSearch: !form.jeSearch.trim() ? "يرجى إدخال نص للبحث" : null,
+    });
+    if (firstError) return;
     setJeSearching(true);
     try {
-      const res = await apiFetch(`/finance/journal?search=${encodeURIComponent(jeSearch)}&limit=20`);
+      const res = await apiFetch(`/finance/journal?search=${encodeURIComponent(form.jeSearch)}&limit=20`);
       setJeResults(res?.data || []);
     } catch {
       setJeResults([]);
@@ -53,6 +59,7 @@ export default function BankManualMatchPage() {
         journalLineId,
       });
       setMatchMsg("تمت المطابقة بنجاح");
+      clearDraft();
       toast({ title: "تمت المطابقة بنجاح" });
       setTimeout(() => setLocation("/finance/bank-reconciliation"), 1500);
     } catch (err: any) {
@@ -67,6 +74,12 @@ export default function BankManualMatchPage() {
       subtitle={row ? (row.description || `سطر #${row.id}`) : "تحميل..."}
       backPath="/finance/bank-reconciliation"
     >
+      {hasDraft && (
+        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+          <span>تم استعادة مسودة محفوظة سابقاً</span>
+          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+        </div>
+      )}
       <div className="space-y-6">
         {row && (
           <div>
@@ -88,12 +101,12 @@ export default function BankManualMatchPage() {
           <div className="flex gap-2">
             <Input
               placeholder="ابحث بالمرجع أو الوصف..."
-              value={jeSearch}
-              onChange={e => setJeSearch(e.target.value)}
+              value={form.jeSearch}
+              onChange={e => setForm(f => ({ ...f, jeSearch: e.target.value }))}
               onKeyDown={e => e.key === "Enter" && searchJournalLines()}
               className="flex-1"
             />
-            <Button onClick={searchJournalLines} disabled={jeSearching} variant="outline" className="gap-1">
+            <Button onClick={searchJournalLines} disabled={jeSearching} variant="outline" className="gap-1" rateLimitAware>
               <Search className="h-4 w-4" /> بحث
             </Button>
           </div>
@@ -138,7 +151,7 @@ export default function BankManualMatchPage() {
                     key: "actions",
                     header: "",
                     render: (jl) => (
-                      <Button size="sm" onClick={() => handleManualMatch(jl.id)} disabled={manualMatchMutation.isPending}>
+                      <Button size="sm" onClick={() => handleManualMatch(jl.id)} disabled={manualMatchMutation.isPending} rateLimitAware>
                         ربط
                       </Button>
                     ),
@@ -154,7 +167,7 @@ export default function BankManualMatchPage() {
             </div>
           )}
 
-          {jeResults.length === 0 && !jeSearching && jeSearch && (
+          {jeResults.length === 0 && !jeSearching && form.jeSearch && (
             <p className="text-gray-400 text-sm text-center">لا توجد نتائج</p>
           )}
 

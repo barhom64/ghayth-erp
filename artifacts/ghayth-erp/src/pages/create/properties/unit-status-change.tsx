@@ -7,25 +7,32 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Pencil, CheckCircle, XCircle, Info, AlertTriangle, ShieldAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { cn } from "@/lib/utils";
 import { CreatePageLayout } from "@/components/create-page-layout";
 
 const STATUS_OPTIONS = [
   { value: "available", label: "متاحة" },
-  { value: "occupied", label: "مشغولة" },
+  { value: "rented", label: "مؤجرة" },
   { value: "maintenance", label: "صيانة" },
   { value: "reserved", label: "محجوزة" },
+  { value: "under_maintenance", label: "تحت الصيانة" },
+  { value: "out_of_service", label: "خارج الخدمة" },
 ];
 
 const STATUS_LABELS: Record<string, string> = {
-  available: "متاحة", occupied: "مشغولة", maintenance: "صيانة", reserved: "محجوزة",
+  available: "متاحة", rented: "مؤجرة", maintenance: "صيانة", reserved: "محجوزة",
+  under_maintenance: "تحت الصيانة", out_of_service: "خارج الخدمة",
 };
 
 const STATUS_COLORS: Record<string, string> = {
   available: "border-green-300 text-green-700 bg-green-50",
-  occupied: "border-blue-300 text-blue-700 bg-blue-50",
+  rented: "border-blue-300 text-blue-700 bg-blue-50",
   maintenance: "border-yellow-300 text-yellow-700 bg-yellow-50",
   reserved: "border-purple-300 text-purple-700 bg-purple-50",
+  under_maintenance: "border-orange-300 text-orange-700 bg-orange-50",
+  out_of_service: "border-red-300 text-red-700 bg-red-50",
 };
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -49,10 +56,13 @@ export default function UnitStatusChangePage() {
 
   const { data: unit, isLoading } = useApiQuery<any>(["unit-detail", id || ""], `/properties/units/${id}`, !!id);
 
-  const [selectedNewStatus, setSelectedNewStatus] = useState("");
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("properties_unit_status_change", { selectedNewStatus: "" });
+  const { fieldErrors, validate } = useFieldErrors();
   const [impactData, setImpactData] = useState<any>(null);
   const [impactLoading, setImpactLoading] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const selectedNewStatus = form.selectedNewStatus;
+  const setSelectedNewStatus = (v: string) => setForm(f => ({ ...f, selectedNewStatus: v }));
 
   const loadImpactPreview = async (newStatus: string) => {
     if (!newStatus || !id) return;
@@ -77,6 +87,7 @@ export default function UnitStatusChangePage() {
         body: JSON.stringify({ status: selectedNewStatus }),
       });
       toast({ title: "تم تغيير الحالة بنجاح" });
+      clearDraft();
       qc.invalidateQueries({ queryKey: ["unit-detail", id] });
       qc.invalidateQueries({ queryKey: ["property-units"] });
       setLocation(`/properties/${id}`);
@@ -96,6 +107,12 @@ export default function UnitStatusChangePage() {
       subtitle={unit.unitNumber || unit.name || `وحدة #${id}`}
       backPath={`/properties/${id}`}
     >
+      {hasDraft && (
+        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+          <span>تم استعادة مسودة محفوظة سابقاً</span>
+          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+        </div>
+      )}
       <div className="space-y-5">
         <h3 className="flex items-center gap-2 text-lg font-semibold">
           <Pencil className="h-5 w-5 text-blue-500" /> تغيير الحالة
@@ -168,6 +185,7 @@ export default function UnitStatusChangePage() {
         <Button
           disabled={!selectedNewStatus || !impactData || !impactData.canProceed || confirming}
           onClick={applyStatusChange}
+          rateLimitAware
         >
           {confirming ? "جاري التطبيق..." : "تطبيق التغيير"}
         </Button>

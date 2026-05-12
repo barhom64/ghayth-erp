@@ -32,7 +32,7 @@ export default function MyPerformance() {
   const { data, isLoading, isError } = useApiQuery<any>(["my-performance"], "/my-space/performance");
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const reviews: any[] = data?.data ?? [];
   const latestReview = reviews[0];

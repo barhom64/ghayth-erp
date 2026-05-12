@@ -7,18 +7,13 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { Switch } from "@/components/ui/switch";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Cog, Play, Clock, Search, Zap, Activity, Bot, TrendingUp } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-
-const MODULE_LABELS: Record<string, string> = {
-  hr: "الموارد البشرية",
-  finance: "المالية",
-  fleet: "الأسطول",
-  property: "العقارات",
-};
+import { moduleLabel } from "@/lib/module-labels";
 
 const AUTOMATION_TYPE_LABELS: Record<string, string> = {
   employee_contract_expiry: "تجديد عقد موظف",
@@ -73,7 +68,7 @@ export default function Automation() {
   );
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const filteredJobs = cronJobs.filter((j: any) => !jobSearch || j.name?.includes(jobSearch) || j.description?.includes(jobSearch));
   const filteredLogs = cronLogs.filter((l: any) => !logSearch || l.jobName?.includes(logSearch) || l.result?.includes(logSearch));
@@ -115,7 +110,7 @@ export default function Automation() {
     { key: "isActive", header: "نشط", render: (j) => <Switch checked={j.isActive} onCheckedChange={() => handleToggle(j.id)} /> },
     {
       key: "actions", header: "الإجراءات",
-      render: (j) => <Button variant="outline" size="sm" className="gap-1" onClick={() => handleTrigger(j.id)}><Play className="h-3 w-3" /> تشغيل</Button>,
+      render: (j) => <GuardedButton perm="settings:create" variant="outline" size="sm" className="gap-1" onClick={() => handleTrigger(j.id)}><Play className="h-3 w-3" /> تشغيل</GuardedButton>,
     },
   ];
 
@@ -169,7 +164,7 @@ export default function Automation() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <h3 className="font-semibold text-sm">{rule.nameAr || rule.name}</h3>
-                            <Badge variant="outline" className="text-xs">{MODULE_LABELS[rule.module] || rule.module}</Badge>
+                            <Badge variant="outline" className="text-xs">{moduleLabel(rule.module)}</Badge>
                           </div>
                           <p className="text-xs text-muted-foreground">{rule.descriptionAr || rule.description}</p>
                           <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">

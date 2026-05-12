@@ -1,12 +1,21 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { handleRouteError, zodParse } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
+
+interface RequestPreviewRow { id: number; status: string; data: unknown }
+interface LeavePreviewRow { id: number; status: string; days: number; leaveTypeName: string | null; employeeName: string | null }
+interface InvoicePreviewRow { id: number; total: number | string | null; clientName: string | null }
+interface PurchasePreviewRow { id: number; totalAmount?: number | string | null; total?: number | string | null; estimatedCost?: number | string | null }
+interface ExpensePreviewRow { id: number; amount: number | string | null; ref: string }
+interface EmployeeNameRow { name: string }
+interface ProjectNameRow { name: string }
+interface CountAliasRow { c: number | string }
 
 // ============================================================================
 // ZOD SCHEMAS
@@ -25,7 +34,7 @@ interface ImpactItem {
   detail: string;
 }
 
-router.post("/", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const parsed = zodParse(impactPreviewSchema.safeParse(req.body));
@@ -34,21 +43,20 @@ router.post("/", requirePermission("admin:write"), async (req, res): Promise<voi
     const impacts: ImpactItem[] = [];
 
     if (entityType === "request" || entityType === "requests") {
-      const [request] = await rawQuery<any>(
+      const [request] = await rawQuery<RequestPreviewRow>(
         `SELECT * FROM requests WHERE id = $1 AND ("companyId" = $2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
         [entityId, scope.companyId]
       );
       if (request) {
-        if (request.requestType === "salary_advance" || request.requestType === "financial") {
-          const amount = request.amount || request.metadata?.amount;
-          if (amount) {
-            impacts.push({
-              type: "financial",
-              icon: "💰",
-              label: "أثر مالي",
-              detail: `خصم/إضافة مبلغ ${Number(amount).toLocaleString("ar-SA")} ر.س`,
-            });
-          }
+        const requestData = typeof request.data === "string" ? JSON.parse(request.data) : (request.data || {});
+        const amount = requestData.amount;
+        if (amount) {
+          impacts.push({
+            type: "financial",
+            icon: "💰",
+            label: "أثر مالي",
+            detail: `خصم/إضافة مبلغ ${Number(amount).toLocaleString("ar-SA")} ر.س`,
+          });
         }
         impacts.push({
           type: "administrative",
@@ -66,12 +74,12 @@ router.post("/", requirePermission("admin:write"), async (req, res): Promise<voi
     }
 
     if (entityType === "leave_request" || entityType === "hr_leave_request") {
-      const [leave] = await rawQuery<any>(
+      const [leave] = await rawQuery<LeavePreviewRow>(
         `SELECT lr.*, lt.name AS "leaveTypeName", e.name AS "employeeName"
          FROM hr_leave_requests lr
          LEFT JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
          LEFT JOIN employees e ON e.id = lr."employeeId"
-         WHERE lr.id = $1 AND lr."companyId" = $2`,
+         WHERE lr.id = $1 AND lr."companyId" = $2 AND lr."deletedAt" IS NULL`,
         [entityId, scope.companyId]
       );
       if (leave) {
@@ -104,7 +112,7 @@ router.post("/", requirePermission("admin:write"), async (req, res): Promise<voi
     }
 
     if (entityType === "invoice") {
-      const [invoice] = await rawQuery<any>(
+      const [invoice] = await rawQuery<InvoicePreviewRow>(
         `SELECT i.*, c.name AS "clientName"
          FROM invoices i
          LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
@@ -135,12 +143,12 @@ router.post("/", requirePermission("admin:write"), async (req, res): Promise<voi
 
     if (entityType === "purchase_request" || entityType === "purchase_order") {
       const [item] = entityType === "purchase_request"
-        ? await rawQuery<any>(
+        ? await rawQuery<PurchasePreviewRow>(
             `SELECT * FROM purchase_requests WHERE id = $1 AND "companyId" = $2`,
             [entityId, scope.companyId]
           )
-        : await rawQuery<any>(
-            `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2`,
+        : await rawQuery<PurchasePreviewRow>(
+            `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
             [entityId, scope.companyId]
           );
       if (item) {
@@ -171,7 +179,7 @@ router.post("/", requirePermission("admin:write"), async (req, res): Promise<voi
     }
 
     if (entityType === "expense") {
-      const [expense] = await rawQuery<any>(
+      const [expense] = await rawQuery<ExpensePreviewRow>(
         `SELECT je.*, COALESCE(SUM(jl.debit), 0) AS amount FROM journal_entries je LEFT JOIN journal_lines jl ON jl."journalId" = je.id WHERE je.id = $1 AND je."companyId" = $2 AND je.ref LIKE 'EXP%' AND je."deletedAt" IS NULL GROUP BY je.id`,
         [entityId, scope.companyId]
       );
@@ -192,23 +200,23 @@ router.post("/", requirePermission("admin:write"), async (req, res): Promise<voi
     }
 
     if (action === "delete" && entityType === "employee") {
-      const [emp] = await rawQuery<any>(
+      const [emp] = await rawQuery<EmployeeNameRow>(
         `SELECT e.name FROM employees e
          JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
-         WHERE e.id = $1 AND ea."companyId" = $2`,
+         WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL`,
         [entityId, scope.companyId]
       );
       if (emp) {
         impacts.push({ type: "administrative", icon: "⚠️", label: "إنهاء خدمة", detail: "سيتم تغيير حالة الموظف والتعيين إلى «منتهي الخدمة»" });
 
         const [[taskCount], [leaveCount]] = await Promise.all([
-          rawQuery<any>(
+          rawQuery<CountAliasRow>(
             `SELECT COUNT(*) AS c FROM project_tasks pt
              JOIN projects p ON p.id = pt."projectId"
              WHERE pt."assigneeId" = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL AND pt.status NOT IN ('completed','cancelled')`,
             [entityId, scope.companyId]
           ),
-          rawQuery<any>(
+          rawQuery<CountAliasRow>(
             `SELECT COUNT(*) AS c FROM hr_leave_requests
              WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'pending'`,
             [entityId, scope.companyId]
@@ -223,14 +231,14 @@ router.post("/", requirePermission("admin:write"), async (req, res): Promise<voi
     }
 
     if (action === "delete" && entityType === "project") {
-      const [proj] = await rawQuery<any>(
+      const [proj] = await rawQuery<ProjectNameRow>(
         `SELECT p.name FROM projects p WHERE p.id = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL`,
         [entityId, scope.companyId]
       );
       if (proj) {
         const [[taskCount], [phaseCount]] = await Promise.all([
-          rawQuery<any>(`SELECT COUNT(*) AS c FROM project_tasks WHERE "projectId" = $1 AND "companyId" = $2`, [entityId, scope.companyId]),
-          rawQuery<any>(`SELECT COUNT(*) AS c FROM project_phases WHERE "projectId" = $1 AND "companyId" = $2`, [entityId, scope.companyId]),
+          rawQuery<CountAliasRow>(`SELECT COUNT(*) AS c FROM project_tasks WHERE "projectId" = $1 AND "deletedAt" IS NULL`, [entityId]),
+          rawQuery<CountAliasRow>(`SELECT COUNT(*) AS c FROM project_phases WHERE "projectId" = $1`, [entityId]),
         ]);
         const tasks = Number(taskCount?.c || 0);
         const phases = Number(phaseCount?.c || 0);

@@ -13,9 +13,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { Plus, Trash2 } from "lucide-react";
 import { formatCurrency, roundMoney } from "@/lib/formatters";
-import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 interface TemplateLine {
   accountCode: string;
@@ -29,6 +30,7 @@ const emptyLine = (): TemplateLine => ({ accountCode: "", description: "", debit
 export default function RecurringJournalsCreatePage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { fieldErrors, validate } = useFieldErrors();
 
   const { data: accountsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
   const accounts = accountsData?.data || [];
@@ -74,7 +76,7 @@ export default function RecurringJournalsCreatePage() {
   );
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   function updateLine(idx: number, field: keyof TemplateLine, value: string) {
     setLines((prev) => {
@@ -88,14 +90,6 @@ export default function RecurringJournalsCreatePage() {
     setLines((p) => (p.length > 2 ? p.filter((_, i) => i !== idx) : p));
 
   function handleSubmit() {
-    if (!name.trim()) {
-      toast({ variant: "destructive", title: "اسم القيد الدوري مطلوب" });
-      return;
-    }
-    if (!isBalanced) {
-      toast({ variant: "destructive", title: "القالب غير متوازن" });
-      return;
-    }
     const validLines = lines
       .filter((l) => l.accountCode && (Number(l.debit) > 0 || Number(l.credit) > 0))
       .map((l) => ({
@@ -104,8 +98,13 @@ export default function RecurringJournalsCreatePage() {
         debit: Number(l.debit) || 0,
         credit: Number(l.credit) || 0,
       }));
-    if (validLines.length < 2) {
-      toast({ variant: "destructive", title: "يجب إدخال بندين على الأقل" });
+    const firstError = validate({
+      name: name.trim() ? null : "اسم القيد الدوري مطلوب",
+      balance: !isBalanced ? "القالب غير متوازن" : null,
+      lines: validLines.length < 2 ? "يجب إدخال بندين على الأقل" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     createMut.mutate({
@@ -130,7 +129,7 @@ export default function RecurringJournalsCreatePage() {
       )}
       <CreationDateField />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <TextField label="اسم القيد" required value={name} onChange={setName} placeholder="مثال: إهلاك شهري للسيارات" className="md:col-span-2" />
+        <TextField label="اسم القيد" required value={name} onChange={setName} placeholder="مثال: إهلاك شهري للسيارات" className="md:col-span-2" error={fieldErrors.name} />
         <FormFieldWrapper label="التكرار" required>
           <Select value={frequency} onValueChange={setFrequency}>
             <SelectTrigger><SelectValue /></SelectTrigger>
@@ -192,8 +191,8 @@ export default function RecurringJournalsCreatePage() {
                   </SelectContent>
                 </Select>
                 <Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} placeholder="البيان" />
-                <Input type="number" step="0.01" min="0" value={line.debit} onChange={(e) => updateLine(idx, "debit", e.target.value)} placeholder="0" />
-                <Input type="number" step="0.01" min="0" value={line.credit} onChange={(e) => updateLine(idx, "credit", e.target.value)} placeholder="0" />
+                <NumberField label="مدين" min={0} value={line.debit} onChange={(v) => updateLine(idx, "debit", v)} placeholder="0" />
+                <NumberField label="دائن" min={0} value={line.credit} onChange={(v) => updateLine(idx, "credit", v)} placeholder="0" />
                 <Button variant="ghost" size="icon" type="button" onClick={() => removeLine(idx)} disabled={lines.length <= 2}>
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
@@ -219,7 +218,7 @@ export default function RecurringJournalsCreatePage() {
         <Button variant="outline" onClick={() => setLocation("/finance/recurring-journals")}>
           إلغاء
         </Button>
-        <Button onClick={handleSubmit} disabled={!isBalanced || !name || createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={!isBalanced || !name || createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
         </Button>
       </div>

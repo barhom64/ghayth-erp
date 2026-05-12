@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,6 +36,7 @@ export default function WarehouseSupplierDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/warehouse/suppliers/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("warehouse-supplier", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["warehouse-supplier", String(id)],
@@ -212,6 +214,8 @@ export default function WarehouseSupplierDetail() {
       createdByName={supplier?.createdByName}
       entityType="warehouse-supplier"
       entityId={id ?? 0}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       overview={overview}
       isLoading={isLoading}
       error={error}
