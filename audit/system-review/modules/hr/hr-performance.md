@@ -23,13 +23,26 @@ _لم تُلتقط أزرار._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/hr.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+تقييم الأداء (Performance Reviews) — دورة سنوية أو ربع سنوية.
+
+| الحركة | الوحدة الهدف | مدخل API | مدخل DB | الحالة |
+|--------|--------------|----------|---------|--------|
+| إنشاء مراجعة أداء | hr | `hr.ts` POST `/performance` | `hr_performance_reviews` | ✅ |
+| تحديد KPIs الموظف | hr | `performance_kpis` per role | ✅ |
+| مراجعة 360° (راجع `hr-evaluation-360.md`) | hr | `evaluation_cycles` | متصلة | ✅ |
+| ربط بـ training/IDP (للنقاط الضعيفة) | hr/training | `idp_items.linkedReviewId` | ✅ |
+| توصية بـ علاوة/ترقية | hr | `performance_outcomes` | ⚠ تحقق |
+| تأثير على راتب (next cycle) | hr/payroll | تعديل `salary_components` يدوي بناءً على outcome | ✅ |
+| تأثير على المكافأة السنوية | finance/GL | bonus calculation → `expenses` | ⚠ |
+| توقيع رقمي للمراجعة | digital-signature | الموظف + المدير + HR | ✅ |
+| تخزين في ملف الموظف | documents | `documents.entityType='employee'` | ✅ |
+| إشعارات (الموظف + المدير + HR) | comms | event=`review_scheduled\|completed\|signed` | `notifications` | ✅ |
+| Audit log | core | `auditMiddleware` (`/hr/performance`) | `audit_logs` (entity=`performance`) | ✅ |
+
+تحقق يدوي:
+- [ ] هل تقييم سنتين متتاليتين ضعيفتين يطلق Performance Improvement Plan آلياً؟
+- [ ] هل اعتراض الموظف على التقييم يفتح workflow مراجعة منفصل؟
+- [ ] هل المراجعة محفوظة immutable بعد التوقيع؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `performance` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
