@@ -10,47 +10,6 @@ import { logger } from "../lib/logger.js";
 
 const router = Router();
 
-interface RoleSummaryRow {
-  roleKey: string;
-  label: string;
-  modules: unknown;
-  level: number;
-}
-
-interface PermissionNameRow {
-  permission: string;
-}
-
-interface UserPermissionRow {
-  permission: string;
-  type: "grant" | "revoke";
-}
-
-interface RolePermissionRow {
-  id: number;
-  role: string;
-  permission: string;
-  companyId: number | null;
-  createdAt: string;
-  updatedAt: string | null;
-}
-
-interface UserPermissionFullRow {
-  id: number;
-  userId: number;
-  permission: string;
-  type: "grant" | "revoke";
-  companyId: number | null;
-  grantedBy: number | null;
-  createdAt: string;
-  updatedAt: string | null;
-  userName: string | null;
-}
-
-interface UserIdRow {
-  id: number;
-}
-
 const PERMISSION_PATTERN = /^[a-zA-Z0-9_]+:[a-zA-Z0-9_]+$/;
 
 const rolePermissionSchema = z.object({
@@ -109,20 +68,20 @@ function parseModules(raw: unknown, roleKey?: string): string[] {
 router.get("/my", async (req, res) => {
   try {
     const scope = req.scope!;
-    const roleRows = await rawQuery<RoleSummaryRow>(
+    const roleRows = await rawQuery<any>(
       `SELECT "roleKey", label, modules, level FROM user_roles WHERE "userId" = $1 AND ("companyId" = $2 OR "companyId" IS NULL) ORDER BY level DESC`,
       [scope.userId, scope.companyId]
     );
 
-    let roles: RoleSummaryRow[];
+    let roles: any[];
     if (roleRows.length > 0) {
       roles = roleRows;
     } else {
       const roleKey = scope.role || "employee";
-      const customRow = await rawQuery<RoleSummaryRow>(
+      const customRow = await rawQuery<any>(
         `SELECT "roleKey", label, modules, level FROM custom_roles WHERE "roleKey"=$1 AND "companyId"=$2 LIMIT 1`,
         [roleKey, scope.companyId]
-      ).catch((e) => { logger.error(e, "permissions query failed"); return [] as RoleSummaryRow[]; });
+      ).catch((e) => { logger.error(e, "permissions query failed"); return [] as any[]; });
       if (customRow.length > 0) {
         roles = customRow;
       } else {
@@ -136,22 +95,22 @@ router.get("/my", async (req, res) => {
       }
     }
 
-    const highestLevel = Math.max(...roles.map((r) => Number(r.level) || 0));
-    const allModules = Array.from(new Set(roles.flatMap((r) => parseModules(r.modules, r.roleKey))));
+    const highestLevel = Math.max(...roles.map((r: any) => Number(r.level) || 0));
+    const allModules = Array.from(new Set(roles.flatMap((r: any) => parseModules(r.modules, r.roleKey))));
 
-    const permRows = await rawQuery<PermissionNameRow>(
+    const permRows = await rawQuery<any>(
       `SELECT permission FROM role_permissions
        WHERE role = ANY($1::text[]) AND ("companyId" IS NULL OR "companyId" = $2)`,
-      [roles.map((r) => r.roleKey), scope.companyId]
+      [roles.map((r: any) => r.roleKey as string), scope.companyId]
     );
-    const rolePerms = permRows.map((p) => p.permission);
+    const rolePerms = permRows.map((p: any) => p.permission as string);
 
-    const userPermRows = await rawQuery<UserPermissionRow>(
+    const userPermRows = await rawQuery<any>(
       `SELECT permission, type FROM permissions WHERE "userId" = $1 AND ("companyId" IS NULL OR "companyId" = $2)`,
       [scope.userId, scope.companyId]
-    ).catch((e) => { logger.error(e, "permissions query failed"); return [] as UserPermissionRow[]; });
-    const grants = userPermRows.filter((p) => p.type === "grant").map((p) => p.permission);
-    const revokes = new Set(userPermRows.filter((p) => p.type === "revoke").map((p) => p.permission));
+    ).catch((e) => { logger.error(e, "permissions query failed"); return [] as any[]; });
+    const grants = userPermRows.filter((p: any) => p.type === "grant").map((p: any) => p.permission as string);
+    const revokes = new Set(userPermRows.filter((p: any) => p.type === "revoke").map((p: any) => p.permission as string));
     const grantedPerms = Array.from(new Set([...rolePerms, ...grants])).filter((p) => !revokes.has(p));
 
     res.json({
@@ -169,7 +128,7 @@ router.get("/my", async (req, res) => {
 router.get("/role-permissions", authorize({ feature: "admin.roles", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<RolePermissionRow>(
+    const rows = await rawQuery<any>(
       `SELECT * FROM role_permissions WHERE "companyId" IS NULL OR "companyId" = $1 ORDER BY role, permission`,
       [scope.companyId]
     );
@@ -206,7 +165,7 @@ router.delete("/role-permissions", authorize({ feature: "admin", action: "update
   try {
     const scope = req.scope!;
     const { role, permission } = zodParse(rolePermissionSchema.safeParse(req.body));
-    const [before] = await rawQuery<RolePermissionRow>(
+    const [before] = await rawQuery<any>(
       `SELECT * FROM role_permissions WHERE role = $1 AND permission = $2 AND "companyId" = $3`,
       [role, permission, scope.companyId]
     );
@@ -229,7 +188,7 @@ router.get("/user-permissions", authorize({ feature: "admin.roles", action: "vie
     const scope = req.scope!;
     const { userId } = req.query as { userId?: string };
     const targetId = userId ? Number(userId) : scope.userId;
-    const rows = await rawQuery<UserPermissionFullRow>(
+    const rows = await rawQuery<any>(
       `SELECT p.*, COALESCE(e.name, u.email) AS "userName" FROM permissions p
        LEFT JOIN users u ON u.id = p."userId"
        LEFT JOIN employees e ON e.id = u."employeeId"
@@ -248,7 +207,7 @@ router.post("/user-permissions", authorize({ feature: "admin", action: "update" 
     const scope = req.scope!;
     const { userId, permission, type = "grant" } = zodParse(userPermissionCreateSchema.safeParse(req.body));
 
-    const [targetUser] = await rawQuery<UserIdRow>(
+    const [targetUser] = await rawQuery<any>(
       `SELECT u.id FROM users u
        JOIN employees e ON e.id = u."employeeId"
        JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $2
@@ -281,7 +240,7 @@ router.delete("/user-permissions", authorize({ feature: "admin", action: "update
   try {
     const scope = req.scope!;
     const { userId, permission } = zodParse(userPermissionDeleteSchema.safeParse(req.body));
-    const [before] = await rawQuery<UserPermissionFullRow>(
+    const [before] = await rawQuery<any>(
       `SELECT * FROM permissions WHERE "userId" = $1 AND permission = $2 AND "companyId" = $3`,
       [userId, permission, scope.companyId]
     );
