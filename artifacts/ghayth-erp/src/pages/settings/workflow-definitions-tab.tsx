@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Workflow, Clock, AlertTriangle, Plus, X, Save, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 
 export function WorkflowDefinitionsTab() {
   const { data, refetch, isLoading, isError } = useApiQuery<any>(["workflow-definitions"], "/workflows/definitions");
@@ -125,16 +126,9 @@ export function WorkflowDefinitionsTab() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("هل أنت متأكد من حذف هذا التعريف؟")) return;
-    try {
-      await apiFetch(`/workflows/definitions/${id}`, { method: "DELETE" });
-      toast({ title: "تم الحذف" });
-      refetch();
-    } catch (e: any) {
-      toast({ variant: "destructive", title: e.message || "خطأ" });
-    }
-  };
+  // Replaces window.confirm(). The dialog owns the DELETE and
+  // surfaces 409 blockers inline (e.g. workflow has active instances).
+  const [deletingDef, setDeletingDef] = useState<{ id: number; label: string } | null>(null);
 
   const handleSaveSla = async () => {
     try {
@@ -306,7 +300,7 @@ export function WorkflowDefinitionsTab() {
                 </div>
                 <div className="flex gap-1">
                   <Button variant="ghost" size="sm" onClick={() => handleEdit(def)}><Pencil className="h-4 w-4" /></Button>
-                  <Button variant="ghost" size="sm" className="text-red-500" onClick={() => handleDelete(def.id)}><Trash2 className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="sm" className="text-red-500" onClick={() => setDeletingDef({ id: def.id, label: def.requestTypeLabel || def.requestType || "—" })}><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </div>
               {def.description && <p className="text-sm text-gray-500 mb-2">{def.description}</p>}
@@ -326,6 +320,20 @@ export function WorkflowDefinitionsTab() {
           </CardContent></Card>
         )}
       </div>
+
+      <ConfirmDeleteDialog
+        open={deletingDef !== null}
+        onOpenChange={(v) => { if (!v) setDeletingDef(null); }}
+        entity={{
+          type: "workflow_definition",
+          id: deletingDef?.id ?? 0,
+          name: deletingDef?.label ?? "",
+        }}
+        deletePath={`/workflows/definitions/${deletingDef?.id}`}
+        invalidateKeys={[["workflow-definitions"]]}
+        successMessage="تم الحذف"
+        onDeleted={() => { setDeletingDef(null); refetch(); }}
+      />
     </div>
   );
 }

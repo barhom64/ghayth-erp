@@ -239,19 +239,26 @@ async function compute(
 
   const { conditionMet, conditionDetails } = checkConditions(plan, avgProfitPerVisa, salesPercent);
 
+  // Per-employee scoping per spec §9 + acceptance #15:
+  // Only block this plan's commission if the violation is attributed to
+  // the plan-owner's assignment (responsibleAssignmentId match). Rows
+  // without the attribution still block (backward-compat with un-tagged
+  // legacy violations) so behaviour does not regress.
   const violationRes = (await queryFn(
     `SELECT COUNT(*)::int AS cnt FROM umrah_violations v
      WHERE v."companyId" = $1 AND v.status IN ('detected','open')
        AND v."createdAt" >= DATE_TRUNC('month', MAKE_DATE($2, $3, 1))
        AND v."createdAt" < DATE_TRUNC('month', MAKE_DATE($2, $3, 1)) + INTERVAL '1 month'
        AND v."deletedAt" IS NULL
+       AND ( v."responsibleAssignmentId" IS NULL
+             OR v."responsibleAssignmentId" = $5 )
        AND EXISTS (
          SELECT 1 FROM umrah_pilgrims p
          WHERE p."companyId" = v."companyId" AND p."seasonId" = $4
            AND (p.id = v."mutamerId" OR p."groupId" = v."groupId")
            AND p."deletedAt" IS NULL
        )`,
-    [plan.companyId, year, month, plan.seasonId]
+    [plan.companyId, year, month, plan.seasonId, plan.assignmentId ?? -1]
   )).rows[0];
   const hasViolations = Number(violationRes?.cnt) > 0;
 

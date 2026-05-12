@@ -200,12 +200,6 @@ export function asList<T = any>(resp: { data?: T[] } | T[] | unknown): T[] {
   return [];
 }
 
-export function formDataToRecord(fd: FormData): Record<string, string> {
-  const obj: Record<string, string> = {};
-  fd.forEach((value, key) => { obj[key] = String(value); });
-  return obj;
-}
-
 export function useApiQuery<T = any>(
   key: string[],
   path: string | null,

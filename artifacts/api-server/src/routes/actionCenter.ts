@@ -253,9 +253,8 @@ router.get("/", async (req, res) => {
         pendingTransfers = await rawQuery<any>(
           `SELECT t.id, t.status, t."createdAt",
                   e.name AS "employeeName"
-           FROM hr_transfers t
-           JOIN employee_assignments ea ON ea.id = t."assignmentId"
-           JOIN employees e ON e.id = ea."employeeId"
+           FROM employee_transfers t
+           JOIN employees e ON e.id = t."employeeId"
            WHERE t."companyId" = ANY($1::int[]) AND t.status = 'pending' AND t."deletedAt" IS NULL
            ORDER BY t."createdAt" DESC LIMIT 20`,
           [scope.allowedCompanies]
@@ -289,7 +288,7 @@ router.get("/", async (req, res) => {
         pendingViolations = await rawQuery<any>(
           `SELECT dm.id, dm.status, dm."createdAt",
                   e.name AS "employeeName"
-           FROM hr_discipline_memos dm
+           FROM hr_inquiry_memos dm
            JOIN employee_assignments ea ON ea.id = dm."assignmentId"
            JOIN employees e ON e.id = ea."employeeId"
            WHERE dm."companyId" = ANY($1::int[]) AND dm.status IN ('draft','issued','appealed','escalated','gm_review') AND dm."deletedAt" IS NULL

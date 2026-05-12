@@ -230,7 +230,7 @@ router.get("/entity-search", authorize({ feature: "tasks", action: "list" }), as
   try {
     const scope = req.scope!;
     const { type, q } = req.query as any;
-    if (!type) { res.json([]); return; }
+    if (!type) { res.json({ data: [], total: 0 }); return; }
 
     const searchMap: Record<string, string> = {
       property_unit: `SELECT id, "unitNumber" AS name FROM property_units WHERE "companyId"=$1 AND "deletedAt" IS NULL AND ("unitNumber" ILIKE $2 OR "buildingName" ILIKE $2) ORDER BY id DESC LIMIT 10`,
@@ -243,7 +243,7 @@ router.get("/entity-search", authorize({ feature: "tasks", action: "list" }), as
     };
 
     const query = searchMap[type];
-    if (!query) { res.json([]); return; }
+    if (!query) { res.json({ data: [], total: 0 }); return; }
     const searchTerm = `%${q || ""}%`;
     const results = await rawQuery<EntitySearchRow>(query, [scope.companyId, searchTerm]);
     res.json(results);

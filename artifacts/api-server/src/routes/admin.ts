@@ -1206,8 +1206,7 @@ router.get("/governance/system-guards", authorize({ feature: "admin", action: "l
     const result = await checkSystemGuards(companyId, "all", { date: todayISO() });
     res.json(result);
   } catch (err: any) {
-    logger.error(err, "System guards error");
-    res.status(500).json({ allowed: false, violations: [], error: "خطأ في فحص حراسة النظام" });
+    handleRouteError(err, res, "System guards error");
   }
 });
 
