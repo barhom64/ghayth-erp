@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { buildScopedWhere } from "../lib/scopedQuery.js";
 import { handleRouteError, NotFoundError,
@@ -20,6 +19,69 @@ import {
   getTimelineByRef,
 } from "../lib/workflowEngine.js";
 import { logger } from "../lib/logger.js";
+
+// Local row shapes for workflow tables. Not in @workspace/db schema yet
+// (the engine pre-dates the Drizzle layer). Move to dbTypes.ts when other
+// routes start consuming them.
+
+interface WorkflowInstanceRow {
+  id: number;
+  companyId: number;
+  branchId?: number | null;
+  definitionId?: number | null;
+  refTable?: string | null;
+  refId?: number | null;
+  requestType: string;
+  title: string;
+  status: string;
+  currentStep?: number | null;
+  currentAssignee?: number | null;
+  slaStatus?: string | null;
+  slaDeadline?: string | null;
+  initiatedBy?: number | null;
+  createdAt: string;
+  updatedAt?: string | null;
+  deletedAt?: string | null;
+  defLabel?: string | null;
+}
+
+interface WorkflowDefinitionRow {
+  id: number;
+  companyId: number;
+  requestType: string;
+  requestTypeLabel: string;
+  description?: string | null;
+  isReturnable?: boolean | null;
+  enableEscalation?: boolean | null;
+  defaultSlaHours?: number | null;
+  isActive?: boolean | null;
+  createdAt?: string;
+  updatedAt?: string | null;
+  stepCount?: number | string;
+}
+
+interface WorkflowStepRow {
+  id: number;
+  definitionId: number;
+  stepOrder: number;
+  stepName: string;
+  requiredRole: string;
+  slaHours: number;
+  autoApproveOnTimeout?: boolean;
+  canReject?: boolean;
+  canRefer?: boolean;
+}
+
+interface SlaDefinitionRow {
+  id: number;
+  companyId: number;
+  requestType: string;
+  warningHours: number;
+  deadlineHours: number;
+  escalationHours: number;
+  autoApproveOnTimeout?: boolean;
+  escalateTo?: string | null;
+}
 
 // ── Zod Schemas ──────────────────────────────────────────────────────────────
 
@@ -274,7 +336,7 @@ router.get("/", authorize({ feature: "admin", action: "list" }), async (req, res
       conditions.push(`wi."requestType" = $${paramIdx++}`);
     }
 
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<WorkflowInstanceRow>(
       `SELECT wi.*, wd."requestTypeLabel" AS "defLabel"
        FROM workflow_instances wi
        LEFT JOIN workflow_definitions wd ON wd.id = wi."definitionId"
@@ -292,7 +354,7 @@ router.get("/", authorize({ feature: "admin", action: "list" }), async (req, res
 router.get("/pending", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<WorkflowInstanceRow>(
       `SELECT wi.*
        FROM workflow_instances wi
        WHERE wi."companyId" = $1
@@ -319,7 +381,7 @@ router.get("/pending", authorize({ feature: "admin", action: "list" }), async (r
 router.get("/definitions", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const defs = await rawQuery<any>(
+    const defs = await rawQuery<WorkflowDefinitionRow>(
       `SELECT wd.*, (SELECT COUNT(*) FROM workflow_steps ws WHERE ws."definitionId" = wd.id) AS "stepCount"
        FROM workflow_definitions wd
        WHERE wd."companyId" = $1
@@ -336,12 +398,12 @@ router.get("/definitions/:id", authorize({ feature: "admin", action: "view" }), 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [def] = await rawQuery<any>(
+    const [def] = await rawQuery<WorkflowDefinitionRow>(
       `SELECT * FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
     if (!def) throw new NotFoundError("التعريف غير موجود");
-    const steps = await rawQuery<any>(
+    const steps = await rawQuery<WorkflowStepRow>(
       `SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder" LIMIT 500`,
       [def.id]
     );
@@ -377,8 +439,8 @@ router.post("/definitions", authorize({ feature: "admin", action: "update" }), a
     });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflow_definitions", entityId: insertId, after: { requestType, requestTypeLabel } }).catch((e) => logger.error(e, "workflows background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.created", entity: "workflow_definitions", entityId: insertId, details: JSON.stringify({ requestType, requestTypeLabel }) }).catch((e) => logger.error(e, "workflows background task failed"));
-    const [row] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
-    const defSteps = await rawQuery<any>(`SELECT * FROM workflow_steps WHERE "definitionId"=$1 ORDER BY "stepOrder" LIMIT 500`, [insertId]);
+    const [row] = await rawQuery<WorkflowDefinitionRow>(`SELECT * FROM workflow_definitions WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const defSteps = await rawQuery<WorkflowStepRow>(`SELECT * FROM workflow_steps WHERE "definitionId"=$1 ORDER BY "stepOrder" LIMIT 500`, [insertId]);
     res.status(201).json(row ? { ...row, steps: defSteps } : { id: insertId });
   } catch (err) {
     handleRouteError(err, res, "workflows");
@@ -415,8 +477,8 @@ router.put("/definitions/:id", authorize({ feature: "admin", action: "update" })
       }
     });
 
-    const [def] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
-    const updatedSteps = await rawQuery<any>(`SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder" LIMIT 500`, [id]);
+    const [def] = await rawQuery<WorkflowDefinitionRow>(`SELECT * FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    const updatedSteps = await rawQuery<WorkflowStepRow>(`SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder" LIMIT 500`, [id]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "workflow_definitions", entityId: id, after: { requestTypeLabel } }).catch((e) => logger.error(e, "workflows background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.updated", entity: "workflow_definitions", entityId: id, details: JSON.stringify({ requestTypeLabel }) }).catch((e) => logger.error(e, "workflows background task failed"));
     res.json({ ...def, steps: updatedSteps });
@@ -429,7 +491,7 @@ router.delete("/definitions/:id", authorize({ feature: "admin", action: "update"
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [before] = await rawQuery<any>(`SELECT * FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    const [before] = await rawQuery<WorkflowDefinitionRow>(`SELECT * FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     const { affectedRows } = await rawExecute(`DELETE FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     if (!affectedRows) throw new NotFoundError("التعريف غير موجود");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "workflow_definitions", entityId: id, before }).catch((e) => logger.error(e, "workflows background task failed"));
@@ -443,7 +505,7 @@ router.delete("/definitions/:id", authorize({ feature: "admin", action: "update"
 router.get("/sla-definitions", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<SlaDefinitionRow>(
       `SELECT * FROM sla_definitions WHERE "companyId" = $1 ORDER BY "requestType" LIMIT 500`,
       [scope.companyId]
     );
@@ -469,7 +531,7 @@ router.post("/sla-definitions", authorize({ feature: "admin", action: "update" }
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "sla_definitions", entityId: insertId, after: { requestType } }).catch((e) => logger.error(e, "workflows background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "workflow.definition.created", entity: "sla_definitions", entityId: insertId, details: JSON.stringify({ requestType }) }).catch((e) => logger.error(e, "workflows background task failed"));
-    const [row] = await rawQuery<any>(`SELECT * FROM sla_definitions WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<SlaDefinitionRow>(`SELECT * FROM sla_definitions WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row || { id: insertId });
   } catch (err) {
     handleRouteError(err, res, "workflows");
@@ -479,10 +541,10 @@ router.post("/sla-definitions", authorize({ feature: "admin", action: "update" }
 router.get("/stats", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [total] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [scope.companyId]);
-    const [pending] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status IN ('pending','in_review')`, [scope.companyId]);
-    const [slaWarning] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "slaStatus" IN ('warning','exceeded') AND status IN ('pending','in_review')`, [scope.companyId]);
-    const [escalated] = await rawQuery<any>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "slaStatus" = 'escalated' AND status IN ('pending','in_review')`, [scope.companyId]);
+    const [total] = await rawQuery<{ count: string | number }>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [scope.companyId]);
+    const [pending] = await rawQuery<{ count: string | number }>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status IN ('pending','in_review')`, [scope.companyId]);
+    const [slaWarning] = await rawQuery<{ count: string | number }>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "slaStatus" IN ('warning','exceeded') AND status IN ('pending','in_review')`, [scope.companyId]);
+    const [escalated] = await rawQuery<{ count: string | number }>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "slaStatus" = 'escalated' AND status IN ('pending','in_review')`, [scope.companyId]);
     res.json({
       total: Number(total.count),
       pending: Number(pending.count),
