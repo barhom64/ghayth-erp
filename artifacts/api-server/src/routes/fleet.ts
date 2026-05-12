@@ -386,7 +386,7 @@ router.post("/vehicles", authorize({ feature: "fleet.vehicles", action: "create"
   } catch (err) { handleRouteError(err, res, "Create vehicle error:"); }
 });
 
-router.get("/drivers", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
+router.get("/drivers", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { search, status } = req.query as any;
@@ -410,7 +410,7 @@ router.get("/drivers", authorize({ feature: "fleet.vehicles", action: "list" }),
   } catch (err) { handleRouteError(err, res, "Fleet drivers error:"); }
 });
 
-router.post("/drivers", authorize({ feature: "fleet.vehicles", action: "create" }), async (req, res) => {
+router.post("/drivers", authorize({ feature: "fleet", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createDriverSchema.safeParse(req.body)) as any;
@@ -714,7 +714,7 @@ router.delete("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "d
   } catch (err) { handleRouteError(err, res, "Delete vehicle error:"); }
 });
 
-router.get("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "view" }), async (req, res) => {
+router.get("/drivers/:id", authorize({ feature: "fleet", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -724,7 +724,7 @@ router.get("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "view"
   } catch (err) { handleRouteError(err, res, "Get driver error:"); }
 });
 
-router.patch("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
+router.patch("/drivers/:id", authorize({ feature: "fleet", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -818,7 +818,7 @@ router.patch("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "upd
 
 // Drivers fall under the parent "fleet" feature; no dedicated catalog
 // entry yet. Delete checks scope against the drivers table.
-router.delete("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "delete", resource: { table: "drivers", idParam: "id" } }), async (req, res) => {
+router.delete("/drivers/:id", authorize({ feature: "fleet", action: "delete", resource: { table: "drivers", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1604,7 +1604,7 @@ router.post("/maintenance/:id/cancel", authorize({ feature: "fleet.maintenance",
   } catch (err) { handleRouteError(err, res, "Cancel maintenance error:"); }
 });
 
-router.get("/alerts", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
+router.get("/alerts", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -1617,67 +1617,13 @@ router.get("/alerts", authorize({ feature: "fleet.vehicles", action: "list" }), 
     const in30Days = new Date(today); in30Days.setDate(today.getDate() + 30);
     const in90Days = new Date(today); in90Days.setDate(today.getDate() + 90);
 
-    const in90Str = toDateISO(in90Days);
-    const [allInsurance, expiringLicenses, speedAlerts, abnormalFuel, frequentBreakdowns, lowRatingDrivers, oilDue] = await Promise.all([
-      rawQuery<any>(
-        `SELECT v."plateNumber", i."endDate", i.type AS "insuranceType",
-                (i."endDate"::date - CURRENT_DATE) AS "daysLeft"
-         FROM fleet_insurance i JOIN fleet_vehicles v ON v.id=i."vehicleId" AND v."deletedAt" IS NULL
-         WHERE i."companyId"=$1 AND i."deletedAt" IS NULL AND i."endDate" BETWEEN $2 AND $3`,
-        [cid, todayStr, in90Str]
-      ),
-      rawQuery<any>(
-        `SELECT d.name, d."licenseExpiry", d."licenseNumber",
-                (d."licenseExpiry"::date - CURRENT_DATE) AS "daysLeft"
-         FROM fleet_drivers d
-         WHERE d."companyId"=$1 AND d."licenseExpiry" IS NOT NULL
-           AND d."deletedAt" IS NULL
-           AND d."licenseExpiry" BETWEEN $2 AND $3`,
-        [cid, todayStr, in90Str]
-      ),
-      rawQuery<any>(
-        `SELECT g.speed, g.latitude, g.longitude, g."recordedAt",
-                v."plateNumber", d.name AS "driverName"
-         FROM fleet_gps_tracking g
-         LEFT JOIN fleet_vehicles v ON v.id=g."vehicleId" AND v."companyId"=$1 AND v."deletedAt" IS NULL
-         LEFT JOIN fleet_drivers d ON d.id=g."driverId" AND d."companyId"=$1 AND d."deletedAt" IS NULL
-         WHERE g.speed > 120 AND g."recordedAt" > NOW() - INTERVAL '24 hours'
-           AND v."companyId" = $1
-         ORDER BY g."recordedAt" DESC LIMIT 50`,
-        [cid]
-      ),
-      rawQuery<any>(
-        `SELECT v."plateNumber", v.id AS "vehicleId",
-                AVG(f.liters) AS "avgLiters",
-                MAX(f.liters) AS "maxLiters"
-         FROM fleet_fuel_logs f
-         JOIN fleet_vehicles v ON v.id=f."vehicleId" AND v."deletedAt" IS NULL
-         WHERE f."companyId"=$1 AND f."fuelDate" > CURRENT_DATE - INTERVAL '30 days'
-         GROUP BY v.id, v."plateNumber"
-         HAVING MAX(f.liters) > AVG(f.liters) * 1.2`,
-        [cid]
-      ),
-      rawQuery<any>(
-        `SELECT v."plateNumber", v.id AS "vehicleId", COUNT(m.id) AS "breakdownCount"
-         FROM fleet_maintenance m
-         JOIN fleet_vehicles v ON v.id=m."vehicleId" AND v."deletedAt" IS NULL
-         WHERE m."companyId"=$1 AND m."serviceDate" > CURRENT_DATE - INTERVAL '30 days'
-           AND m.type IN ('breakdown','emergency','repair')
-         GROUP BY v.id, v."plateNumber"
-         HAVING COUNT(m.id) >= 3`,
-        [cid]
-      ),
-      rawQuery<any>(
-        `SELECT d.name, d.rating, d.id FROM fleet_drivers d
-         WHERE d."companyId"=$1 AND d.rating IS NOT NULL AND d.rating < 3 AND d."deletedAt" IS NULL
-         LIMIT 500`,
-        [cid]
-      ),
-      rawQuery<any>(
-        `SELECT v."plateNumber", v."currentMileage", m."mileageAtService" FROM fleet_vehicles v LEFT JOIN fleet_maintenance m ON m.id=(SELECT id FROM fleet_maintenance WHERE "vehicleId"=v.id AND type='oil_change' ORDER BY "mileageAtService" DESC LIMIT 1) WHERE v."companyId"=$1 AND v."deletedAt" IS NULL AND (v."currentMileage" - COALESCE(m."mileageAtService",0)) >= 5000`,
-        [cid]
-      ),
-    ]);
+    const allInsurance = await rawQuery<any>(
+      `SELECT v."plateNumber", i."endDate", i.type AS "insuranceType",
+              (i."endDate"::date - CURRENT_DATE) AS "daysLeft"
+       FROM fleet_insurance i JOIN fleet_vehicles v ON v.id=i."vehicleId" AND v."deletedAt" IS NULL
+       WHERE i."companyId"=$1 AND i."deletedAt" IS NULL AND i."endDate" BETWEEN $2 AND $3`,
+      [cid, todayStr, toDateISO(in90Days)]
+    );
     for (const r of allInsurance) {
       const daysLeft = Number(r.daysLeft);
       let severity: string;
@@ -1694,6 +1640,16 @@ router.get("/alerts", authorize({ feature: "fleet.vehicles", action: "list" }), 
           : `تأمين المركبة ${r.plateNumber} ينتهي خلال ${daysLeft} يوم`,
       });
     }
+
+    const expiringLicenses = await rawQuery<any>(
+      `SELECT d.name, d."licenseExpiry", d."licenseNumber",
+              (d."licenseExpiry"::date - CURRENT_DATE) AS "daysLeft"
+       FROM fleet_drivers d
+       WHERE d."companyId"=$1 AND d."licenseExpiry" IS NOT NULL
+         AND d."deletedAt" IS NULL
+         AND d."licenseExpiry" BETWEEN $2 AND $3`,
+      [cid, todayStr, toDateISO(in90Days)]
+    );
     for (const d of expiringLicenses) {
       const daysLeft = Number(d.daysLeft);
       let severity = daysLeft <= 7 ? 'critical' : daysLeft <= 14 ? 'high' : daysLeft <= 30 ? 'medium' : 'low';
@@ -1703,6 +1659,18 @@ router.get("/alerts", authorize({ feature: "fleet.vehicles", action: "list" }), 
         message: `رخصة السائق ${d.name} تنتهي خلال ${daysLeft} يوم`,
       });
     }
+
+    const speedAlerts = await rawQuery<any>(
+      `SELECT g.speed, g.latitude, g.longitude, g."recordedAt",
+              v."plateNumber", d.name AS "driverName"
+       FROM fleet_gps_tracking g
+       LEFT JOIN fleet_vehicles v ON v.id=g."vehicleId" AND v."companyId"=$1 AND v."deletedAt" IS NULL
+       LEFT JOIN fleet_drivers d ON d.id=g."driverId" AND d."companyId"=$1 AND d."deletedAt" IS NULL
+       WHERE g.speed > 120 AND g."recordedAt" > NOW() - INTERVAL '24 hours'
+         AND v."companyId" = $1
+       ORDER BY g."recordedAt" DESC LIMIT 50`,
+      [scope.companyId]
+    );
     for (const s of speedAlerts) {
       alerts.push({
         type: 'speed_violation', severity: 'high',
@@ -1711,6 +1679,18 @@ router.get("/alerts", authorize({ feature: "fleet.vehicles", action: "list" }), 
         message: `تجاوز سرعة: ${s.driverName || 'غير معروف'} — ${s.speed} كم/س (المركبة ${s.plateNumber || 'غير محدد'})`,
       });
     }
+
+    const abnormalFuel = await rawQuery<any>(
+      `SELECT v."plateNumber", v.id AS "vehicleId",
+              AVG(f.liters) AS "avgLiters",
+              MAX(f.liters) AS "maxLiters"
+       FROM fleet_fuel_logs f
+       JOIN fleet_vehicles v ON v.id=f."vehicleId" AND v."deletedAt" IS NULL
+       WHERE f."companyId"=$1 AND f."fuelDate" > CURRENT_DATE - INTERVAL '30 days'
+       GROUP BY v.id, v."plateNumber"
+       HAVING MAX(f.liters) > AVG(f.liters) * 1.2`,
+      [cid]
+    );
     for (const r of abnormalFuel) {
       alerts.push({
         type: 'abnormal_fuel', severity: 'medium', vehicle: r.plateNumber,
@@ -1718,6 +1698,17 @@ router.get("/alerts", authorize({ feature: "fleet.vehicles", action: "list" }), 
         message: `وقود غير طبيعي: المركبة ${r.plateNumber} — أقصى ${Number(r.maxLiters).toFixed(1)} لتر (المتوسط ${Number(r.avgLiters).toFixed(1)}) تجاوز 120%`,
       });
     }
+
+    const frequentBreakdowns = await rawQuery<any>(
+      `SELECT v."plateNumber", v.id AS "vehicleId", COUNT(m.id) AS "breakdownCount"
+       FROM fleet_maintenance m
+       JOIN fleet_vehicles v ON v.id=m."vehicleId" AND v."deletedAt" IS NULL
+       WHERE m."companyId"=$1 AND m."serviceDate" > CURRENT_DATE - INTERVAL '30 days'
+         AND m.type IN ('breakdown','emergency','repair')
+       GROUP BY v.id, v."plateNumber"
+       HAVING COUNT(m.id) >= 3`,
+      [cid]
+    );
     for (const r of frequentBreakdowns) {
       alerts.push({
         type: 'frequent_breakdowns', severity: 'high', vehicle: r.plateNumber,
@@ -1725,6 +1716,13 @@ router.get("/alerts", authorize({ feature: "fleet.vehicles", action: "list" }), 
         message: `المركبة ${r.plateNumber} تعطلت ${r.breakdownCount} مرات خلال الشهر — يُنصح بالاستبعاد`,
       });
     }
+
+    const lowRatingDrivers = await rawQuery<any>(
+      `SELECT d.name, d.rating, d.id FROM fleet_drivers d
+       WHERE d."companyId"=$1 AND d.rating IS NOT NULL AND d.rating < 3 AND d."deletedAt" IS NULL
+       LIMIT 500`,
+      [cid]
+    );
     for (const d of lowRatingDrivers) {
       alerts.push({
         type: 'low_driver_rating', severity: 'medium', driver: d.name,
@@ -1732,13 +1730,18 @@ router.get("/alerts", authorize({ feature: "fleet.vehicles", action: "list" }), 
         message: `تقييم السائق ${d.name} منخفض: ${Number(d.rating).toFixed(1)}/5 — يحتاج مراجعة`,
       });
     }
+
+    const oilDue = await rawQuery<any>(
+      `SELECT v."plateNumber", v."currentMileage", m."mileageAtService" FROM fleet_vehicles v LEFT JOIN fleet_maintenance m ON m.id=(SELECT id FROM fleet_maintenance WHERE "vehicleId"=v.id AND type='oil_change' ORDER BY "mileageAtService" DESC LIMIT 1) WHERE v."companyId"=$1 AND v."deletedAt" IS NULL AND (v."currentMileage" - COALESCE(m."mileageAtService",0)) >= 5000`,
+      [cid]
+    );
     oilDue.forEach((r: any) => alerts.push({ type: 'oil_change_due', severity: 'medium', vehicle: r.plateNumber, message: `تغيير زيت المركبة ${r.plateNumber} مستحق (الكيلومتراج: ${r.currentMileage})` }));
 
     res.json({ data: alerts, total: alerts.length, page: 1, pageSize: alerts.length });
   } catch (err) { handleRouteError(err, res, "Fleet alerts error:"); }
 });
 
-router.get("/fuel-logs", authorize({ feature: "fleet.trips", action: "list" }), async (req, res) => {
+router.get("/fuel-logs", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { vehicleId, search, status } = req.query as any;
@@ -1757,7 +1760,7 @@ router.get("/fuel-logs", authorize({ feature: "fleet.trips", action: "list" }), 
   } catch (err) { handleRouteError(err, res, "Fleet fuel error:"); }
 });
 
-router.get("/fuel-logs/:id", authorize({ feature: "fleet.trips", action: "view" }), async (req, res) => {
+router.get("/fuel-logs/:id", authorize({ feature: "fleet", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1777,7 +1780,7 @@ router.get("/fuel-logs/:id", authorize({ feature: "fleet.trips", action: "view" 
   } catch (err) { handleRouteError(err, res, "Fleet fuel detail error:"); }
 });
 
-router.post("/fuel-logs", authorize({ feature: "fleet.trips", action: "create" }), async (req, res) => {
+router.post("/fuel-logs", authorize({ feature: "fleet", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createFuelLogSchema.safeParse(req.body)) as any;
@@ -1874,7 +1877,7 @@ router.post("/fuel-logs", authorize({ feature: "fleet.trips", action: "create" }
   } catch (err) { handleRouteError(err, res, "Create fuel log error:"); }
 });
 
-router.get("/insurance", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
+router.get("/insurance", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { vehicleId } = req.query as any;
@@ -1891,7 +1894,7 @@ router.get("/insurance", authorize({ feature: "fleet.vehicles", action: "list" }
   } catch (err) { handleRouteError(err, res, "Fleet insurance error:"); }
 });
 
-router.get("/insurance/:id", authorize({ feature: "fleet.vehicles", action: "view" }), async (req, res) => {
+router.get("/insurance/:id", authorize({ feature: "fleet", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1907,7 +1910,7 @@ router.get("/insurance/:id", authorize({ feature: "fleet.vehicles", action: "vie
   } catch (err) { handleRouteError(err, res, "Fleet insurance detail error:"); }
 });
 
-router.post("/insurance", authorize({ feature: "fleet.vehicles", action: "create" }), async (req, res) => {
+router.post("/insurance", authorize({ feature: "fleet", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createInsuranceSchema.safeParse(req.body)) as any;
@@ -2275,7 +2278,7 @@ router.delete("/maintenance/:id", authorize({ feature: "fleet.maintenance", acti
   } catch (err) { handleRouteError(err, res, "Delete maintenance error:"); }
 });
 
-router.patch("/fuel-logs/:id", authorize({ feature: "fleet.trips", action: "update" }), async (req, res) => {
+router.patch("/fuel-logs/:id", authorize({ feature: "fleet", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2351,7 +2354,7 @@ router.patch("/fuel-logs/:id", authorize({ feature: "fleet.trips", action: "upda
   } catch (err) { handleRouteError(err, res, "Update fuel log error:"); }
 });
 
-router.delete("/fuel-logs/:id", authorize({ feature: "fleet.trips", action: "delete" }), async (req, res) => {
+router.delete("/fuel-logs/:id", authorize({ feature: "fleet", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2383,7 +2386,7 @@ router.delete("/fuel-logs/:id", authorize({ feature: "fleet.trips", action: "del
   } catch (err) { handleRouteError(err, res, "Delete fuel log error:"); }
 });
 
-router.patch("/insurance/:id", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
+router.patch("/insurance/:id", authorize({ feature: "fleet", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2462,7 +2465,7 @@ router.patch("/insurance/:id", authorize({ feature: "fleet.vehicles", action: "u
   } catch (err) { handleRouteError(err, res, "Update insurance error:"); }
 });
 
-router.delete("/insurance/:id", authorize({ feature: "fleet.vehicles", action: "delete" }), async (req, res) => {
+router.delete("/insurance/:id", authorize({ feature: "fleet", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2491,19 +2494,17 @@ router.delete("/insurance/:id", authorize({ feature: "fleet.vehicles", action: "
   } catch (err) { handleRouteError(err, res, "Delete insurance error:"); }
 });
 
-router.get("/stats", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
+router.get("/stats", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [[vehicles], [trips], [fuel], [insurance], [maintenance], [drivers], [alerts]] = await Promise.all([
-      rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='available') as available, COUNT(*) FILTER (WHERE status='in_use') as "inUse", COUNT(*) FILTER (WHERE status='maintenance') as "inMaintenance" FROM fleet_vehicles WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
-      rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='completed') as completed FROM fleet_trips WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
-      rawQuery<any>(`SELECT COALESCE(SUM("totalCost"),0) as "totalFuelCost" FROM fleet_fuel_logs WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
-      rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_insurance WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
-      rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_maintenance WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
-      rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_drivers WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
-      rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_maintenance WHERE "companyId"=$1 AND status='in_progress' AND "deletedAt" IS NULL`, [cid]),
-    ]);
+    const [vehicles] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='available') as available, COUNT(*) FILTER (WHERE status='in_use') as "inUse", COUNT(*) FILTER (WHERE status='maintenance') as "inMaintenance" FROM fleet_vehicles WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [trips] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='completed') as completed FROM fleet_trips WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [fuel] = await rawQuery<any>(`SELECT COALESCE(SUM("totalCost"),0) as "totalFuelCost" FROM fleet_fuel_logs WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [insurance] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_insurance WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [maintenance] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_maintenance WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [drivers] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_drivers WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [alerts] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_maintenance WHERE "companyId"=$1 AND status='in_progress' AND "deletedAt" IS NULL`, [cid]);
     res.json({
       totalVehicles: Number(vehicles.total), availableVehicles: Number(vehicles.available),
       inUseVehicles: Number(vehicles.inUse), inMaintenanceVehicles: Number(vehicles.inMaintenance),
@@ -2520,7 +2521,7 @@ router.get("/stats", authorize({ feature: "fleet.vehicles", action: "list" }), a
 // PREVENTIVE MAINTENANCE PLANS — خطة الصيانة الوقائية
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/preventive-plans", authorize({ feature: "fleet.maintenance", action: "list" }), async (req, res) => {
+router.get("/preventive-plans", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { vehicleId } = req.query as any;
@@ -2539,7 +2540,7 @@ router.get("/preventive-plans", authorize({ feature: "fleet.maintenance", action
   } catch (err) { handleRouteError(err, res, "Preventive plans error:"); }
 });
 
-router.post("/preventive-plans", authorize({ feature: "fleet.maintenance", action: "create" }), async (req, res) => {
+router.post("/preventive-plans", authorize({ feature: "fleet", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createPreventivePlanSchema.safeParse(req.body));
@@ -2612,7 +2613,7 @@ router.post("/preventive-plans", authorize({ feature: "fleet.maintenance", actio
   } catch (err) { handleRouteError(err, res, "Create preventive plan error:"); }
 });
 
-router.patch("/preventive-plans/:id", authorize({ feature: "fleet.maintenance", action: "update" }), async (req, res) => {
+router.patch("/preventive-plans/:id", authorize({ feature: "fleet", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2690,7 +2691,7 @@ router.patch("/preventive-plans/:id", authorize({ feature: "fleet.maintenance", 
 // TRAFFIC VIOLATIONS — مخالفات مرورية
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/traffic-violations", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
+router.get("/traffic-violations", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { vehicleId, driverId } = req.query as any;
@@ -2711,7 +2712,7 @@ router.get("/traffic-violations", authorize({ feature: "fleet.vehicles", action:
   } catch (err) { handleRouteError(err, res, "Traffic violations error:"); }
 });
 
-router.get("/traffic-violations/:id", authorize({ feature: "fleet.vehicles", action: "view" }), async (req, res): Promise<any> => {
+router.get("/traffic-violations/:id", authorize({ feature: "fleet", action: "view" }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2728,7 +2729,7 @@ router.get("/traffic-violations/:id", authorize({ feature: "fleet.vehicles", act
   } catch (err) { handleRouteError(err, res, "Traffic violation detail error:"); }
 });
 
-router.post("/traffic-violations", authorize({ feature: "fleet.vehicles", action: "create" }), async (req, res) => {
+router.post("/traffic-violations", authorize({ feature: "fleet", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createTrafficViolationSchema.safeParse(req.body));
@@ -2866,7 +2867,7 @@ router.post("/traffic-violations", authorize({ feature: "fleet.vehicles", action
   } catch (err) { handleRouteError(err, res, "Create traffic violation error:"); }
 });
 
-router.patch("/traffic-violations/:id/pay", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
+router.patch("/traffic-violations/:id/pay", authorize({ feature: "fleet", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
