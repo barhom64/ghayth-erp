@@ -1,27 +1,42 @@
 import { useState } from "react";
 import { z } from "zod";
-import { useFormContext, useWatch } from "react-hook-form";
+import { useFormContext, useWatch, useFieldArray } from "react-hook-form";
 import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Workflow, Clock, AlertTriangle, Plus, X, Save, Pencil, Trash2 } from "lucide-react";
+import { Workflow, Clock, AlertTriangle, Plus, X, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import {
   FormShell,
+  FormTextField,
   FormNumberField,
   FormSelectField,
   FormGrid,
 } from "@/components/form-shell";
 
-// SLA schema. The workflow-definition form (with its nested
-// `steps` array) is intentionally left on useState — useFieldArray
-// is a separate pattern that warrants its own batch.
+const workflowStepSchema = z.object({
+  stepName: z.string().trim().min(1, "اسم الخطوة مطلوب"),
+  requiredRole: z.string().min(1),
+  slaHours: z.coerce.number().int().nonnegative(),
+  autoApproveOnTimeout: z.boolean(),
+});
+
+const workflowDefSchema = z.object({
+  requestType: z.string().min(1),
+  requestTypeLabel: z.string().trim().min(1, "العنوان مطلوب"),
+  description: z.string().trim(),
+  isReturnable: z.boolean(),
+  enableEscalation: z.boolean(),
+  defaultSlaHours: z.coerce.number().int().nonnegative(),
+  steps: z.array(workflowStepSchema).min(1, "خطوة واحدة على الأقل"),
+});
+type WorkflowDefForm = z.infer<typeof workflowDefSchema>;
+
 const slaDefSchema = z.object({
   requestType: z.string().min(1),
   warningHours: z.coerce.number().int().nonnegative(),
@@ -61,14 +76,14 @@ export function WorkflowDefinitionsTab() {
     { value: "procurement", label: "المشتريات" },
   ];
 
-  const [form, setForm] = useState({
+  const [formSeed, setFormSeed] = useState<WorkflowDefForm>({
     requestType: "leave",
     requestTypeLabel: "إجازة",
     description: "",
     isReturnable: true,
     enableEscalation: true,
     defaultSlaHours: 48,
-    steps: [{ stepName: "موافقة المدير", requiredRole: "manager", slaHours: 48, autoApproveOnTimeout: false }] as { stepName: string; requiredRole: string; slaHours: number; autoApproveOnTimeout: boolean }[],
+    steps: [{ stepName: "موافقة المدير", requiredRole: "manager", slaHours: 48, autoApproveOnTimeout: false }],
   });
 
   const slaDefaults: SlaDefForm = {
@@ -96,7 +111,7 @@ export function WorkflowDefinitionsTab() {
   if (isError) return <DataTable columns={slaColumns} data={[]} isError={true} searchPlaceholder={null} noToolbar />;
 
   const resetForm = () => {
-    setForm({
+    setFormSeed({
       requestType: "leave", requestTypeLabel: "إجازة", description: "",
       isReturnable: true, enableEscalation: true, defaultSlaHours: 48,
       steps: [{ stepName: "موافقة المدير", requiredRole: "manager", slaHours: 48, autoApproveOnTimeout: false }],
@@ -109,7 +124,7 @@ export function WorkflowDefinitionsTab() {
     try {
       const detail = await apiFetch(`/workflows/definitions/${def.id}`);
       const d = detail as any;
-      setForm({
+      setFormSeed({
         requestType: d.requestType,
         requestTypeLabel: d.requestTypeLabel,
         description: d.description || "",
@@ -128,16 +143,16 @@ export function WorkflowDefinitionsTab() {
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = async (values: WorkflowDefForm) => {
     try {
       if (editingId) {
         await apiFetch(`/workflows/definitions/${editingId}`, {
-          method: "PUT", body: JSON.stringify(form),
+          method: "PUT", body: JSON.stringify(values),
         });
         toast({ title: "تم التحديث" });
       } else {
         await apiFetch("/workflows/definitions", {
-          method: "POST", body: JSON.stringify(form),
+          method: "POST", body: JSON.stringify(values),
         });
         toast({ title: "تمت الإضافة" });
       }
@@ -163,20 +178,6 @@ export function WorkflowDefinitionsTab() {
     } catch (e: any) {
       toast({ variant: "destructive", title: e.message || "خطأ" });
     }
-  };
-
-  const addStep = () => {
-    setForm({ ...form, steps: [...form.steps, { stepName: "", requiredRole: "hr", slaHours: 48, autoApproveOnTimeout: false }] });
-  };
-
-  const removeStep = (idx: number) => {
-    setForm({ ...form, steps: form.steps.filter((_, i) => i !== idx) });
-  };
-
-  const updateStep = (idx: number, field: string, value: any) => {
-    const steps = [...form.steps];
-    (steps[idx] as any)[field] = value;
-    setForm({ ...form, steps });
   };
 
   return (
@@ -243,66 +244,29 @@ export function WorkflowDefinitionsTab() {
 
       {showForm && (
         <Card>
-          <CardContent className="p-4 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label>نوع الطلب</Label>
-                <select className="w-full border rounded-md p-2" value={form.requestType}
-                  onChange={(e) => {
-                    const t = REQUEST_TYPES.find(r => r.value === e.target.value);
-                    setForm({ ...form, requestType: e.target.value, requestTypeLabel: t?.label || e.target.value });
-                  }}
-                  disabled={!!editingId}
-                >
-                  {REQUEST_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
-              </div>
-              <div><Label>العنوان</Label><Input value={form.requestTypeLabel} onChange={(e) => setForm({ ...form, requestTypeLabel: e.target.value })} /></div>
-              <div className="md:col-span-2"><Label>الوصف</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
-              <div><Label>المهلة الافتراضية (ساعة)</Label><Input type="number" value={form.defaultSlaHours} onChange={(e) => setForm({ ...form, defaultSlaHours: Number(e.target.value) })} /></div>
-              <div className="flex items-center gap-6 pt-6">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={form.isReturnable} onChange={(e) => setForm({ ...form, isReturnable: e.target.checked })} className="rounded" />
-                  <span className="text-sm">قابل للإرجاع</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={form.enableEscalation} onChange={(e) => setForm({ ...form, enableEscalation: e.target.checked })} className="rounded" />
-                  <span className="text-sm">تصعيد تلقائي</span>
-                </label>
-              </div>
-            </div>
+          <CardContent className="p-4">
+            <FormShell
+              key={editingId ?? "new"}
+              schema={workflowDefSchema}
+              defaultValues={formSeed}
+              submitLabel={editingId ? "تحديث" : "حفظ"}
+              onSubmit={async (values) => {
+                await handleSave(values);
+              }}
+            >
+              <FormGrid cols={2}>
+                <FormSelectField
+                  name="requestType"
+                  label="نوع الطلب"
+                  options={REQUEST_TYPES}
+                />
+                <FormTextField name="requestTypeLabel" label="العنوان" required />
+                <FormTextField name="description" label="الوصف" className="md:col-span-2" />
+                <FormNumberField name="defaultSlaHours" label="المهلة الافتراضية (ساعة)" />
+                <WorkflowToggles />
+              </FormGrid>
 
-            <div className="border-t pt-4">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="font-semibold text-sm">خطوات الموافقة</h4>
-                <Button size="sm" variant="outline" onClick={addStep}><Plus className="h-3 w-3 me-1" />خطوة</Button>
-              </div>
-              <div className="space-y-3">
-                {form.steps.map((step, idx) => (
-                  <div key={idx} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-sm font-bold shrink-0">{idx + 1}</div>
-                    <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-2">
-                      <Input placeholder="اسم الخطوة" value={step.stepName} onChange={(e) => updateStep(idx, "stepName", e.target.value)} />
-                      <select className="border rounded-md p-2" value={step.requiredRole} onChange={(e) => updateStep(idx, "requiredRole", e.target.value)}>
-                        {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                      </select>
-                      <Input type="number" placeholder="مهلة (ساعة)" value={step.slaHours} onChange={(e) => updateStep(idx, "slaHours", Number(e.target.value))} />
-                      <label className="flex items-center gap-1 text-xs cursor-pointer">
-                        <input type="checkbox" checked={step.autoApproveOnTimeout} onChange={(e) => updateStep(idx, "autoApproveOnTimeout", e.target.checked)} className="rounded" />
-                        موافقة تلقائية
-                      </label>
-                    </div>
-                    {form.steps.length > 1 && (
-                      <Button size="sm" variant="ghost" className="text-red-500 shrink-0" onClick={() => removeStep(idx)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <GuardedButton perm="settings:create" onClick={handleSave} rateLimitAware><Save className="h-4 w-4 me-1" />{editingId ? "تحديث" : "حفظ"}</GuardedButton>
+            </FormShell>
           </CardContent>
         </Card>
       )}
@@ -379,5 +343,115 @@ function AutoApproveToggle() {
         <span className="text-sm">موافقة تلقائية عند التجاوز</span>
       </label>
     </div>
+  );
+}
+
+// Pair of toggles for the workflow-definition form
+// (isReturnable + enableEscalation). The original DOM had them
+// inline in the grid with native <input type="checkbox">.
+function WorkflowToggles() {
+  const { setValue } = useFormContext<WorkflowDefForm>();
+  const isReturnable = useWatch<WorkflowDefForm, "isReturnable">({ name: "isReturnable" });
+  const enableEscalation = useWatch<WorkflowDefForm, "enableEscalation">({ name: "enableEscalation" });
+  return (
+    <div className="flex items-center gap-6 pt-6">
+      <label className="flex items-center gap-2 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={Boolean(isReturnable)}
+          onChange={(e) => setValue("isReturnable", e.target.checked, { shouldDirty: true })}
+          className="rounded"
+        />
+        <span className="text-sm">قابل للإرجاع</span>
+      </label>
+      <label className="flex items-center gap-2 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={Boolean(enableEscalation)}
+          onChange={(e) => setValue("enableEscalation", e.target.checked, { shouldDirty: true })}
+          className="rounded"
+        />
+        <span className="text-sm">تصعيد تلقائي</span>
+      </label>
+    </div>
+  );
+}
+
+// Dynamic-array editor for `steps`. useFieldArray gives us append/
+// remove/swap operations against the RHF state, replacing the old
+// imperative `setForm({ ...form, steps: [...] })` helpers.
+function StepsEditor({ roles }: { roles: { value: string; label: string }[] }) {
+  const { control, register, setValue } = useFormContext<WorkflowDefForm>();
+  const { fields, append, remove } = useFieldArray({ control, name: "steps" });
+  return (
+    <>
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="font-semibold text-sm">خطوات الموافقة</h4>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => append({ stepName: "", requiredRole: "hr", slaHours: 48, autoApproveOnTimeout: false })}
+        >
+          <Plus className="h-3 w-3 me-1" />خطوة
+        </Button>
+      </div>
+      <div className="space-y-3">
+        {fields.map((field, idx) => (
+          <div key={field.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-sm font-bold shrink-0">
+              {idx + 1}
+            </div>
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-2">
+              <Input placeholder="اسم الخطوة" {...register(`steps.${idx}.stepName`)} />
+              <select className="border rounded-md p-2" {...register(`steps.${idx}.requiredRole`)}>
+                {roles.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+              </select>
+              <Input
+                type="number"
+                placeholder="مهلة (ساعة)"
+                {...register(`steps.${idx}.slaHours`, { valueAsNumber: true })}
+              />
+              <StepAutoApproveToggle idx={idx} setValue={setValue} />
+            </div>
+            {fields.length > 1 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="text-red-500 shrink-0"
+                onClick={() => remove(idx)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+// Per-step auto-approve checkbox. Lives outside the FormGrid → uses
+// the same useWatch pattern as WorkflowToggles.
+function StepAutoApproveToggle({
+  idx,
+  setValue,
+}: {
+  idx: number;
+  setValue: ReturnType<typeof useFormContext<WorkflowDefForm>>["setValue"];
+}) {
+  const path = `steps.${idx}.autoApproveOnTimeout` as const;
+  const checked = useWatch<WorkflowDefForm>({ name: path }) as unknown as boolean;
+  return (
+    <label className="flex items-center gap-1 text-xs cursor-pointer">
+      <input
+        type="checkbox"
+        checked={Boolean(checked)}
+        onChange={(e) => setValue(path, e.target.checked, { shouldDirty: true })}
+        className="rounded"
+      />
+      موافقة تلقائية
+    </label>
   );
 }
