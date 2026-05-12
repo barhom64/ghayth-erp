@@ -127,12 +127,12 @@ purchaseRouter.post("/purchase-requests/impact-preview", authorize({ feature: "f
     let supplierName = "";
     let outstanding = 0;
     if (supplierId) {
-      const [supplier] = await rawQuery<Record<string, unknown>>(
+      const [supplier] = await rawQuery<any>(
         `SELECT name FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
         [Number(supplierId), scope.companyId]
       );
-      supplierName = (supplier?.name as string | undefined) || "";
-      const [row] = await rawQuery<Record<string, unknown>>(
+      supplierName = supplier?.name || "";
+      const [row] = await rawQuery<any>(
         `SELECT COALESCE(SUM("totalAmount"),0)::numeric AS outstanding
          FROM purchase_orders
          WHERE "supplierId" = $1 AND "companyId" = $2
@@ -223,7 +223,7 @@ purchaseRouter.get("/purchase-requests", authorize({ feature: "finance.purchase"
     params.push(offset);
     const offsetIdx = paramIdx++;
 
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT pr.id, pr.ref, pr.status, pr."totalAmount", pr."createdAt", pr.notes, pr."requestedBy", pr."supplierId",
               s.name AS "supplierName", e.name AS "requestedByName",
               json_agg(pri.*) FILTER (WHERE pri.id IS NOT NULL) AS items
@@ -240,7 +240,7 @@ purchaseRouter.get("/purchase-requests", authorize({ feature: "finance.purchase"
     );
 
     const countParams = params.slice(0, params.length - 2);
-    const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM purchase_requests pr WHERE ${where}${extraWhere}`, countParams);
+    const [countRow] = await rawQuery<any>(`SELECT COUNT(*) AS total FROM purchase_requests pr WHERE ${where}${extraWhere}`, countParams);
 
     res.json({ data: rows, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) });
   } catch (err) {
@@ -285,7 +285,7 @@ purchaseRouter.post("/purchase-requests", authorize({ feature: "finance.purchase
       for (const p of productRows) productNameById.set(Number(p.id), p.name);
     }
 
-    const [seqRow] = await rawQuery<{ seq: string | number }>(`SELECT nextval('pr_number_seq') AS seq`).catch((e) => { logger.error(e, "finance purchase query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
+    const [seqRow] = await rawQuery<any>(`SELECT nextval('pr_number_seq') AS seq`).catch((e) => { logger.error(e, "finance purchase query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
     const ref = generateRef("PR", seqRow.seq, 5);
 
     if (supplierId) {
@@ -352,7 +352,7 @@ purchaseRouter.post("/purchase-requests", authorize({ feature: "finance.purchase
       data: { ref, totalAmount, supplierId, items: items.length },
     }).catch((e) => logger.error(e, "finance-purchase background task failed"));
 
-    const [pr] = await rawQuery<Record<string, unknown>>(`SELECT * FROM purchase_requests WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]);
+    const [pr] = await rawQuery<any>(`SELECT * FROM purchase_requests WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]);
     res.status(201).json({ ...pr, items, approval: approvalResult });
   } catch (err) {
     const lcErr = lifecycleErrorResponse(err);
@@ -368,7 +368,7 @@ purchaseRouter.patch("/purchase-requests/:id/approve", authorize({ feature: "fin
     const id = parseId(req.params.id, "id");
     const { approved, notes } = zodParse(prApprovalSchema.safeParse(req.body ?? {})) as any;
 
-    const [pr] = await rawQuery<Record<string, unknown>>(`SELECT * FROM purchase_requests WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    const [pr] = await rawQuery<any>(`SELECT * FROM purchase_requests WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     if (!pr) throw new NotFoundError("طلب الشراء غير موجود");
 
     const newStatus = approved === "returned" ? "returned" : approved ? "approved" : "rejected";
@@ -424,17 +424,17 @@ purchaseRouter.post("/purchase-requests/:id/convert", authorize({ feature: "fina
 
     const id = parseId(req.params.id, "id");
 
-    const [pr] = await rawQuery<Record<string, unknown>>(`SELECT * FROM purchase_requests WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    const [pr] = await rawQuery<any>(`SELECT * FROM purchase_requests WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     if (!pr) throw new NotFoundError("طلب الشراء غير موجود");
     if (pr.status !== "approved") { throw new ValidationError("يمكن تحويل الطلبات المعتمدة فقط"); return; }
 
-    const items = await rawQuery<Record<string, unknown>>(`SELECT * FROM purchase_request_items WHERE "requestId" = $1 LIMIT 500`, [id]);
+    const items = await rawQuery<any>(`SELECT * FROM purchase_request_items WHERE "requestId" = $1 LIMIT 500`, [id]);
     const subtotal = Number(pr.totalAmount);
     const vatRate = 15;
     const vatAmount = computeVat(subtotal, vatRate);
     const totalAmount = subtotal + vatAmount;
 
-    const [seqRow] = await rawQuery<{ seq: string | number }>(`SELECT nextval('po_number_seq') AS seq`).catch((e) => { logger.error(e, "finance purchase query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
+    const [seqRow] = await rawQuery<any>(`SELECT nextval('po_number_seq') AS seq`).catch((e) => { logger.error(e, "finance purchase query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
     const poRef = generateRef("PO", seqRow.seq, 5);
 
     let poId!: number;
@@ -484,7 +484,7 @@ purchaseRouter.post("/purchase-requests/:id/convert", authorize({ feature: "fina
       after: { status: "converted", purchaseOrderId: poId, poRef, totalAmount },
     }).catch((e) => logger.error(e, "finance-purchase background task failed"));
 
-    const [po] = await rawQuery<Record<string, unknown>>(`SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2`, [poId, scope.companyId]);
+    const [po] = await rawQuery<any>(`SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2`, [poId, scope.companyId]);
     res.status(201).json({ message: "تم تحويل طلب الشراء إلى أمر شراء", ...(po || { purchaseOrderId: poId, poRef, totalAmount }) });
   } catch (err) {
     const lcErr = lifecycleErrorResponse(err);
@@ -513,7 +513,7 @@ purchaseRouter.get("/purchase-orders", authorize({ feature: "finance.purchase", 
     params.push(offset);
     const offsetIdx = paramIdx++;
 
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT po.id, po.ref, po.status, po."totalAmount", po."createdAt",
               po."expectedDelivery", po.notes, s.name AS "supplierName"
        FROM purchase_orders po
@@ -525,7 +525,7 @@ purchaseRouter.get("/purchase-orders", authorize({ feature: "finance.purchase", 
     );
 
     const countParams = params.slice(0, params.length - 2);
-    const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM purchase_orders po WHERE ${where}${extraWhere}`, countParams);
+    const [countRow] = await rawQuery<any>(`SELECT COUNT(*) AS total FROM purchase_orders po WHERE ${where}${extraWhere}`, countParams);
     res.json({ data: rows, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) });
   } catch (err) {
     handleRouteError(err, res, "List purchase orders error:");
@@ -548,7 +548,7 @@ purchaseRouter.post("/purchase-orders", authorize({ feature: "finance.purchase",
       if (!sup) throw new ValidationError("المورد غير موجود", { field: "supplierId", fix: "اختر مورداً من قائمة الموردين." });
     }
 
-    const [seqRow] = await rawQuery<{ seq: string | number }>(`SELECT nextval('po_number_seq') AS seq`).catch((e) => { logger.error(e, "finance purchase query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
+    const [seqRow] = await rawQuery<any>(`SELECT nextval('po_number_seq') AS seq`).catch((e) => { logger.error(e, "finance purchase query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
     const ref = generateRef("PO", seqRow.seq, 5);
 
     const { insertId } = await rawExecute(
@@ -584,7 +584,7 @@ purchaseRouter.post("/purchase-orders", authorize({ feature: "finance.purchase",
     }
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "purchase_order.created", entity: "purchase_orders", entityId: insertId, details: JSON.stringify({ ref, totalAmount, supplierId }) }).catch((e) => logger.error(e, "finance-purchase background task failed"));
-    const [po] = await rawQuery<Record<string, unknown>>(`SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2`, [insertId, effectiveCompanyId]);
+    const [po] = await rawQuery<any>(`SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2`, [insertId, effectiveCompanyId]);
     res.status(201).json({ ...po, approval: approvalResult });
   } catch (err) {
     const lcErr = lifecycleErrorResponse(err);
@@ -600,7 +600,7 @@ async function poApprovalAction(req: any, res: any, newStatus: "approved" | "rej
     const id = parseId(req.params.id, "id");
     const { notes } = zodParse(poApprovalNotesSchema.safeParse(req.body ?? {}));
 
-    const [po] = await rawQuery<Record<string, unknown>>(`SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [po] = await rawQuery<any>(`SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!po) throw new NotFoundError("أمر الشراء غير موجود");
 
     if ((newStatus === "rejected" || newStatus === "returned") && (!notes || !String(notes).trim())) {
@@ -649,12 +649,12 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
     const id = parseId(req.params.id, "id");
     const { receivedDate, qualityNotes, lines } = zodParse(poReceiveSchema.safeParse(req.body ?? {})) as any;
 
-    const [po] = await rawQuery<Record<string, unknown>>(
+    const [po] = await rawQuery<any>(
       `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!po) throw new NotFoundError("أمر الشراء غير موجود");
-    if (!["approved", "partially_received"].includes(po.status as string)) {
+    if (!["approved", "partially_received"].includes(po.status)) {
       throw new ValidationError("يمكن استلام الطلبات المعتمدة فقط");
     }
 
@@ -664,7 +664,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
       throw new ConflictError(`لا يمكن استلام بضاعة في فترة مُقفلة: ${periodCheck.periodName ?? ""}`);
     }
 
-    const poItems = await rawQuery<Record<string, unknown>>(
+    const poItems = await rawQuery<any>(
       `SELECT id, "itemName", quantity, "unitPrice", "lineTotal",
               COALESCE("receivedQty",0) AS "receivedQty",
               COALESCE("invoicedQty",0) AS "invoicedQty"
@@ -718,11 +718,11 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
     const grnTotal = roundTo2(subtotal + vatAmount);
 
     // Create GRN header + lines + update PO items atomically
-    const [grnSeq] = await rawQuery<Record<string, unknown>>(
+    const [grnSeq] = await rawQuery<any>(
       `SELECT COALESCE(MAX(id),0)+1 AS seq FROM goods_receipts WHERE "companyId" = $1`,
       [scope.companyId]
     );
-    const grnRef = generateRef("GRN", (grnSeq?.seq as string | number | undefined) ?? Date.now(), 5);
+    const grnRef = generateRef("GRN", grnSeq?.seq ?? Date.now(), 5);
 
     const grnId = await withTransaction(async (client) => {
       const grnRes = await client.query(
@@ -768,9 +768,9 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
       sourceId: grnId,
       sourceKey: `finance:grn:${grnId}`,
       lines: [
-        { accountCode: invAccount, debit: subtotal, credit: 0, vendorId: po.supplierId as number | undefined },
-        ...(vatAmount > 0 ? [{ accountCode: vatAccount, debit: vatAmount, credit: 0, vendorId: po.supplierId as number | undefined }] : []),
-        { accountCode: grniAccount, debit: 0, credit: grnTotal, vendorId: po.supplierId as number | undefined },
+        { accountCode: invAccount, debit: subtotal, credit: 0, vendorId: po.supplierId },
+        ...(vatAmount > 0 ? [{ accountCode: vatAccount, debit: vatAmount, credit: 0, vendorId: po.supplierId }] : []),
+        { accountCode: grniAccount, debit: 0, credit: grnTotal, vendorId: po.supplierId },
       ],
       guardTable: "goods_receipts",
       guardId: grnId,
@@ -781,7 +781,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
     }
 
     // Update PO header status — partial vs fully received
-    const remainingItems = await rawQuery<Record<string, unknown>>(
+    const remainingItems = await rawQuery<any>(
       `SELECT SUM(quantity - COALESCE("receivedQty",0)) AS remaining
          FROM purchase_order_items WHERE "orderId" = $1`,
       [id]
@@ -856,7 +856,7 @@ purchaseRouter.get("/purchase-orders/:id/receipts", authorize({ feature: "financ
   try {
     const scope = req.scope!;
     const poId = parseId(req.params.id, "id");
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT gr.id, gr.ref, gr."receivedAt", gr."journalId", gr.notes,
               COALESCE(SUM(gri."lineTotal"),0) AS "total",
               json_agg(json_build_object(
@@ -885,14 +885,14 @@ purchaseRouter.get("/purchase-orders/:id/match", authorize({ feature: "finance.p
   try {
     const scope = req.scope!;
     const poId = parseId(req.params.id, "id");
-    const [po] = await rawQuery<Record<string, unknown>>(
+    const [po] = await rawQuery<any>(
       `SELECT id, ref, status, "totalAmount", 0 AS "vatAmount", "supplierId"
          FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [poId, scope.companyId]
     );
     if (!po) throw new NotFoundError("أمر الشراء غير موجود");
 
-    const items = await rawQuery<Record<string, unknown>>(
+    const items = await rawQuery<any>(
       `SELECT id, "itemName", quantity, "unitPrice", "lineTotal",
               COALESCE("receivedQty",0) AS "receivedQty",
               COALESCE("invoicedQty",0) AS "invoicedQty"
@@ -946,7 +946,7 @@ purchaseRouter.get("/payment-run/pending", authorize({ feature: "finance.purchas
     if (supplierId) { params.push(Number(supplierId) || 0); where += ` AND po."supplierId" = $${params.length}`; }
     if (cutoffDate) { params.push(cutoffDate); where += ` AND COALESCE(po."expectedDelivery", po."createdAt") <= $${params.length}`; }
 
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT po.id, po.ref, po."totalAmount", po."createdAt", po."expectedDelivery",
               po."supplierId", s.name AS "supplierName"
          FROM purchase_orders po
@@ -959,7 +959,7 @@ purchaseRouter.get("/payment-run/pending", authorize({ feature: "finance.purchas
     const byVendor = new Map<number, { supplierId: number; supplierName: string; amount: number; count: number }>();
     for (const r of rows) {
       const sid = Number(r.supplierId);
-      const cur = byVendor.get(sid) ?? { supplierId: sid, supplierName: String(r.supplierName ?? ""), amount: 0, count: 0 };
+      const cur = byVendor.get(sid) ?? { supplierId: sid, supplierName: r.supplierName, amount: 0, count: 0 };
       cur.amount += Number(r.totalAmount);
       cur.count += 1;
       byVendor.set(sid, cur);
@@ -992,7 +992,7 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
     }
 
     const poIdNums = poIds.map((x: any) => Number(x)).filter((n: number) => !Number.isNaN(n));
-    const pos = await rawQuery<Record<string, unknown>>(
+    const pos = await rawQuery<any>(
       `SELECT id, ref, "totalAmount", "supplierId", "branchId", status
          FROM purchase_orders
         WHERE id = ANY($1) AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -1076,7 +1076,7 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
     for (const po of pos) {
       await applyTransition({
         entity: "purchase_orders",
-        id: po.id as number,
+        id: po.id,
         scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
         action: "purchase_order.paid",
         fromStates: ["invoice_matched"],
@@ -1087,7 +1087,7 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
         // paidAt column may not exist — fall back without setExtras
         await applyTransition({
           entity: "purchase_orders",
-          id: po.id as number,
+          id: po.id,
           scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
           action: "purchase_order.paid",
           fromStates: ["invoice_matched"],
@@ -1132,7 +1132,7 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
       details: JSON.stringify({ runRef, poCount: pos.length, totalPayment, journalId }),
     }).catch((e) => logger.error(e, "finance-purchase background task failed"));
 
-    const [run] = await rawQuery<Record<string, unknown>>(`SELECT * FROM payment_runs WHERE id=$1 AND "companyId"=$2`, [runId, scope.companyId]);
+    const [run] = await rawQuery<any>(`SELECT * FROM payment_runs WHERE id=$1 AND "companyId"=$2`, [runId, scope.companyId]);
     res.status(201).json(run || { runId, runRef, paymentDate: payDate, method, poCount: pos.length, totalPayment, journalId });
   } catch (err) {
     const lcErr = lifecycleErrorResponse(err);
@@ -1147,7 +1147,7 @@ purchaseRouter.get("/payment-run", authorize({ feature: "finance.purchase", acti
 
     let rows: any[] = [];
     try {
-      rows = await rawQuery<Record<string, unknown>>(
+      rows = await rawQuery<any>(
         `SELECT id, ref, "paymentDate", method, "totalAmount", "poCount", status, "journalId", "createdAt"
            FROM payment_runs WHERE "companyId" = $1 ORDER BY "paymentDate" DESC, id DESC LIMIT 500`,
         [scope.companyId]
@@ -1170,7 +1170,7 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", authorize({ feature:
     const id = parseId(req.params.id, "id");
     const { expectedDelivery, notes } = zodParse(convertToPOSchema.safeParse(req.body ?? {}));
 
-    const [pr] = await rawQuery<Record<string, unknown>>(
+    const [pr] = await rawQuery<any>(
       `SELECT * FROM purchase_requests WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
@@ -1182,7 +1182,7 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", authorize({ feature:
     }
 
     // Auto-generate PO ref using DB sequence (race-safe)
-    const [poSeqRow] = await rawQuery<Record<string, unknown>>(`SELECT nextval('po_number_seq') AS seq`);
+    const [poSeqRow] = await rawQuery<any>(`SELECT nextval('po_number_seq') AS seq`);
     const poRef = generateRef("PO", Number(poSeqRow.seq));
 
     let poId!: number;
@@ -1232,7 +1232,7 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", authorize({ feature:
     }
 
     if (pr.supplierId) {
-      const [supplier] = await rawQuery<Record<string, unknown>>(
+      const [supplier] = await rawQuery<any>(
         `SELECT name, email, phone FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
         [pr.supplierId, scope.companyId]
       );
@@ -1253,7 +1253,7 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", authorize({ feature:
       details: JSON.stringify({ poRef, prId: id, approvalRequired: approvalResult.requiresApproval, supplierNotified: !!pr.supplierId }),
     }).catch((e) => logger.error(e, "finance-purchase background task failed"));
 
-    const [po] = await rawQuery<Record<string, unknown>>(
+    const [po] = await rawQuery<any>(
       `SELECT po.*, s.name AS "supplierName", s.email AS "supplierEmail"
        FROM purchase_orders po
        LEFT JOIN suppliers s ON s.id = po."supplierId" AND s."deletedAt" IS NULL
@@ -1272,7 +1272,7 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", authorize({ feature:
 purchaseRouter.get("/purchase-orders/pending-grn", authorize({ feature: "finance.purchase", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT po.id, po.ref, po.status, po."totalAmount" AS total, s.name AS "supplierName",
               po."createdAt", po."expectedDelivery"
        FROM purchase_orders po
@@ -1290,7 +1290,7 @@ purchaseRouter.get("/purchase-orders/:id", authorize({ feature: "finance.purchas
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [po] = await rawQuery<Record<string, unknown>>(
+    const [po] = await rawQuery<any>(
       `SELECT po.*, s.name AS "supplierName", s.phone AS "supplierPhone", s.email AS "supplierEmail",
               b.name AS "branchName", b."nameEn" AS "branchNameEn", b."logoUrl" AS "branchLogoUrl",
               b.address AS "branchAddress", b.phone AS "branchPhone", b.email AS "branchEmail",
@@ -1306,7 +1306,7 @@ purchaseRouter.get("/purchase-orders/:id", authorize({ feature: "finance.purchas
 
     let lines: any[] = [];
     try {
-      lines = await rawQuery<Record<string, unknown>>(
+      lines = await rawQuery<any>(
         `SELECT * FROM purchase_order_items WHERE "orderId" = $1 ORDER BY id`,
         [id]
       );
@@ -1325,14 +1325,14 @@ purchaseRouter.patch("/purchase-orders/:id/vendor-confirm", authorize({ feature:
     const id = parseId(req.params.id, "id");
     const { confirmedDelivery, notes } = zodParse(vendorConfirmSchema.safeParse(req.body ?? {}));
 
-    const [po] = await rawQuery<Record<string, unknown>>(
+    const [po] = await rawQuery<any>(
       `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!po) {
       throw new NotFoundError("أمر الشراء غير موجود");
     }
-    if (!["pending", "sent"].includes(po.status as string)) {
+    if (!["pending", "sent"].includes(po.status)) {
       throw new ValidationError("لا يمكن تأكيد أمر الشراء في هذه الحالة");
     }
 
@@ -1365,14 +1365,14 @@ purchaseRouter.post("/purchase-orders/:id/match-invoice", authorize({ feature: "
     const id = parseId(req.params.id, "id");
     const { supplierInvoiceRef, invoicedAmount, invoicedDate } = zodParse(matchInvoiceSchema.safeParse(req.body ?? {}));
 
-    const [po] = await rawQuery<Record<string, unknown>>(
+    const [po] = await rawQuery<any>(
       `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!po) {
       throw new NotFoundError("أمر الشراء غير موجود");
     }
-    if (!["received", "partially_received"].includes(po.status as string)) {
+    if (!["received", "partially_received"].includes(po.status)) {
       throw new ValidationError("يجب استلام البضاعة قبل مطابقة الفاتورة");
     }
 
@@ -1381,7 +1381,7 @@ purchaseRouter.post("/purchase-orders/:id/match-invoice", authorize({ feature: "
 
     let prTotal = poTotal;
     if (po.requestId) {
-      const [prRow] = await rawQuery<Record<string, unknown>>(
+      const [prRow] = await rawQuery<any>(
         `SELECT "totalAmount" FROM purchase_requests WHERE id = $1 AND "companyId" = $2`,
         [po.requestId, scope.companyId]
       );
@@ -1389,7 +1389,7 @@ purchaseRouter.post("/purchase-orders/:id/match-invoice", authorize({ feature: "
     }
 
     let receivedTotal = poTotal;
-    const grMovements = await rawQuery<Record<string, unknown>>(
+    const grMovements = await rawQuery<any>(
       `SELECT COALESCE(SUM(quantity * "unitCost"), 0) AS total
        FROM warehouse_movements
        WHERE "companyId" = $1 AND reference = $2 AND type = 'in'`,
@@ -1467,7 +1467,7 @@ purchaseRouter.post("/purchase-orders/:id/schedule-payment", authorize({ feature
     const id = parseId(req.params.id, "id");
     const { paymentDate, amount, method = "bank_transfer", notes } = zodParse(schedulePaymentSchema.safeParse(req.body ?? {})) as any;
 
-    const [po] = await rawQuery<Record<string, unknown>>(
+    const [po] = await rawQuery<any>(
       `SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -1509,8 +1509,8 @@ purchaseRouter.post("/purchase-orders/:id/schedule-payment", authorize({ feature
       sourceId: id,
       sourceKey: `finance:sched_payment:${id}:${paymentDate}`,
       lines: [
-        { accountCode: schedApCode, debit: Number(amount), credit: 0, vendorId: po.supplierId as number | undefined },
-        { accountCode: schedCashCode, debit: 0, credit: Number(amount), vendorId: po.supplierId as number | undefined },
+        { accountCode: schedApCode, debit: Number(amount), credit: 0, vendorId: po.supplierId },
+        { accountCode: schedCashCode, debit: 0, credit: Number(amount), vendorId: po.supplierId },
       ],
     });
 
