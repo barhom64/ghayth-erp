@@ -2,6 +2,7 @@ import { useState } from "react";
 import { z } from "zod";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GitBranch, Plus, X, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -94,9 +95,9 @@ export function ApprovalWorkflowsTab() {
           <GitBranch className="h-5 w-5" />
           سلاسل الموافقة
         </h3>
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>
+        <GuardedButton perm="settings:create" size="sm" onClick={() => setShowForm(!showForm)}>
           {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة مرحلة</>}
-        </Button>
+        </GuardedButton>
       </div>
 
       {showForm && (
@@ -147,9 +148,9 @@ export function ApprovalWorkflowsTab() {
                       )}
                     </div>
                     {idx < group.chains.length - 1 && <span className="text-gray-300 text-xs">→</span>}
-                    <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => handleDelete(chain.id)}>
+                    <GuardedButton perm="settings:create" variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => handleDelete(chain.id)}>
                       <Trash2 className="h-4 w-4" />
-                    </Button>
+                    </GuardedButton>
                   </div>
                 ))}
               </div>

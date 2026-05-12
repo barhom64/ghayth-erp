@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { KeyRound, CheckCircle, Shield, Plus, X } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { roleKeyColors } from "@/contexts/app-context";
@@ -222,9 +223,9 @@ export default function AdminRolesPage() {
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">تعيين الوحدات المسموحة لكل دور وضبط مصفوفة الصلاحيات</p>
         </div>
-        <Button size="sm" onClick={() => setActiveTab(activeTab === "create" ? "modules" : "create")}>
+        <GuardedButton perm="admin:create" size="sm" onClick={() => setActiveTab(activeTab === "create" ? "modules" : "create")}>
           {activeTab === "create" ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إنشاء دور جديد</>}
-        </Button>
+        </GuardedButton>
       </div>
 
       <div className="flex gap-2 border-b">

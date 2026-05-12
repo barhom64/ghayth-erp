@@ -4,6 +4,7 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Input } from "@/components/ui/input";
@@ -104,13 +105,13 @@ export default function FixedAssetsPage() {
       actions={
         <>
           <Link href="/finance/fixed-assets/batch-depreciate">
-            <Button variant="outline" size="sm">
+            <GuardedButton perm="finance:approve" variant="outline" size="sm">
               <TrendingDown className="h-4 w-4 me-2" />إهلاك دفعي
-            </Button>
+            </GuardedButton>
           </Link>
-          <Button onClick={() => setShowCreate(true)}>
+          <GuardedButton perm="finance:create" onClick={() => setShowCreate(true)}>
             <Plus className="h-4 w-4 me-1" />أصل جديد
-          </Button>
+          </GuardedButton>
         </>
       }
     >
@@ -138,13 +139,14 @@ export default function FixedAssetsPage() {
           ) },
           { key: "status", header: "الحالة", render: (a: any) => <PageStatusBadge status={a.status} domain="asset" /> },
           { key: "actions", header: "", render: (a: any) => (
-            <Button
+            <GuardedButton
+              perm="finance:approve"
               variant="ghost"
               size="sm"
               onClick={() => { setSelectedAsset(a); setDepResult(null); setShowDepreciate(true); }}
             >
               <Calculator className="h-4 w-4" />
-            </Button>
+            </GuardedButton>
           ) },
         ] as DataTableColumn<any>[]}
         data={assets}
