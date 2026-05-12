@@ -31,6 +31,7 @@ import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/e
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { formatDateAr } from "@/lib/formatters";
 import { PageStateWrapper } from "@/components/shared/page-state";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 function Support() {
   const [, navigate] = useLocation();
@@ -130,10 +131,10 @@ function Support() {
       breadcrumbs={[{ label: "الدعم" }]}
       actions={
         <Link href="/support/create">
-          <Button className="gap-2">
+          <GuardedButton perm="support:create" className="gap-2">
             <Plus className="h-4 w-4" />
             تذكرة جديدة
-          </Button>
+          </GuardedButton>
         </Link>
       }
     >
@@ -301,7 +302,7 @@ function KBManagement() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <AdvancedFilters config={{ searchPlaceholder: "بحث بالعنوان أو التصنيف...", statuses: [{ value: "published", label: "منشور" }, { value: "draft", label: "مسودة" }, { value: "archived", label: "مؤرشف" }] }} values={filters} onChange={setFilters} resultCount={filteredItems.length} />
-        {canWrite && <Button size="sm" onClick={() => setShowNew(!showNew)}><Plus className="h-4 w-4 me-1" />مقالة جديدة</Button>}
+        {canWrite && <GuardedButton perm="support:create" size="sm" onClick={() => setShowNew(!showNew)}><Plus className="h-4 w-4 me-1" />مقالة جديدة</GuardedButton>}
       </div>
 
       {showNew && (

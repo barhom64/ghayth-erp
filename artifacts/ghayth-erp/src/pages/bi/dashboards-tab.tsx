@@ -7,6 +7,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { LayoutDashboard, Plus } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 export function DashboardsTab() {
   const { data: dashResp, isLoading, isError, refetch } = useApiQuery<any>(["bi-dashboards"], "/bi/dashboards");
@@ -40,13 +41,13 @@ export function DashboardsTab() {
             resultCount={filtered.length}
           />
         </div>
-        {canWrite && <Link href="/bi/dashboards/create"><Button className="gap-2"><Plus className="h-4 w-4" /> إضافة لوحة</Button></Link>}
+        {canWrite && <Link href="/bi/dashboards/create"><GuardedButton perm="bi:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة لوحة</GuardedButton></Link>}
       </div>
       {filtered.length === 0 ? (
         <Card><CardContent className="p-8 text-center">
           <LayoutDashboard className="h-8 w-8 text-slate-400 mx-auto mb-2" />
           <p className="text-muted-foreground">لا توجد لوحات معلومات</p>
-          {canWrite && <Link href="/bi/dashboards/create"><Button size="sm" className="mt-3">إضافة لوحة</Button></Link>}
+          {canWrite && <Link href="/bi/dashboards/create"><GuardedButton perm="bi:create" size="sm" className="mt-3">إضافة لوحة</GuardedButton></Link>}
         </CardContent></Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

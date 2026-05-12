@@ -450,13 +450,13 @@ router.patch("/loans/:id/approve", authorize({ feature: "hr.loans", action: "upd
         type: "loan_rejected", title: "تم رفض طلب السلفة",
         body: `تم رفض السلفة ${loan.loanNumber}${rejectionReason ? " — السبب: " + rejectionReason : ""}`,
         priority: "normal", refType: "hr_employee_loan", refId: loan.id,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr-loans notification failed"));
       try {
         await rawExecute(
           `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('hr_employee_loan',$1,'rejected',$2,$3,$4)`,
           [loan.id, rejectionReason || null, scope.userId, scope.companyId]
         );
-      } catch (e) { console.error("Failed to log approval action:", e); }
+      } catch (e) { logger.error(e, "Failed to log approval action"); }
       emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "hr.loan.rejected", entity: "hr_employee_loans", entityId: loan.id, details: JSON.stringify({ loanNumber: loan.loanNumber, reason: rejectionReason }) }).catch((e) => logger.error(e, "hr-loans background task failed"));
       res.json({ success: true, message: "تم رفض السلفة" });
       return;
@@ -533,7 +533,7 @@ router.patch("/loans/:id/approve", authorize({ feature: "hr.loans", action: "upd
         `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('hr_employee_loan',$1,'approved',$2,$3,$4)`,
         [loan.id, notes || null, scope.userId, scope.companyId]
       );
-    } catch (e) { console.error("Failed to log approval action:", e); }
+    } catch (e) { logger.error(e, "Failed to log approval action"); }
 
     await createAuditLog({
       companyId: scope.companyId, userId: scope.userId,

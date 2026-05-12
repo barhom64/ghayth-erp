@@ -18,6 +18,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { getApprovalEndpoint, getApprovalMethod, getApprovalBadgeClass, buildAllPending } from "@/lib/approval-registry";
 import { PromptDialog } from "@/components/shared/prompt-dialog";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 function formatTimeAgo(timestamp: string): string {
   const now = Date.now();
@@ -174,12 +175,12 @@ export default function ManagerBoard() {
         const isProcessing = processingIds.has(key);
         return (
           <div className="flex gap-1">
-            <Button size="sm" disabled={isProcessing} className="h-7 bg-green-600 hover:bg-green-700 text-xs" onClick={() => doApprove(item)}>
+            <GuardedButton perm="hr:approve" size="sm" disabled={isProcessing} className="h-7 bg-green-600 hover:bg-green-700 text-xs" onClick={() => doApprove(item)}>
               {isProcessing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-            </Button>
-            <Button size="sm" variant="outline" disabled={isProcessing} className="h-7 text-xs border-red-300 text-red-600 hover:bg-red-50" onClick={() => doReject(item)}>
+            </GuardedButton>
+            <GuardedButton perm="hr:approve" size="sm" variant="outline" disabled={isProcessing} className="h-7 text-xs border-red-300 text-red-600 hover:bg-red-50" onClick={() => doReject(item)}>
               <XIcon className="h-3 w-3" />
-            </Button>
+            </GuardedButton>
           </div>
         );
       },
@@ -241,13 +242,13 @@ export default function ManagerBoard() {
                       <p className="text-xs text-gray-500 mt-0.5">{item.reason || item.description || item.leaveTypeName || "—"}</p>
                     </div>
                     <div className="flex gap-1 shrink-0">
-                      <Button size="sm" disabled={isProcessing} className="h-7 bg-green-600 hover:bg-green-700 text-xs gap-1" onClick={() => doApprove(item)}>
+                      <GuardedButton perm="hr:approve" size="sm" disabled={isProcessing} className="h-7 bg-green-600 hover:bg-green-700 text-xs gap-1" onClick={() => doApprove(item)}>
                         {isProcessing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
                         موافقة
-                      </Button>
-                      <Button size="sm" variant="outline" disabled={isProcessing} className="h-7 text-xs gap-1 border-red-300 text-red-700 hover:bg-red-50" onClick={() => doReject(item)}>
+                      </GuardedButton>
+                      <GuardedButton perm="hr:approve" size="sm" variant="outline" disabled={isProcessing} className="h-7 text-xs gap-1 border-red-300 text-red-700 hover:bg-red-50" onClick={() => doReject(item)}>
                         <XIcon className="h-3 w-3" />رفض
-                      </Button>
+                      </GuardedButton>
                     </div>
                   </div>
                 );

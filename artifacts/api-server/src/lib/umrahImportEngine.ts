@@ -251,7 +251,8 @@ async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "m
 
     const existing = await rawQuery<any>(
       `SELECT id, "nuskNumber", "fullName", nationality, status, "passportNumber",
-              "entryPort", "exitPort", "overstayDays", "actualStayDays"
+              "entryPort", "exitPort", "overstayDays", "actualStayDays",
+              "entryDate", "exitDate"
        FROM umrah_pilgrims
        WHERE "companyId" = $1 AND "nuskNumber" = ANY($2) AND "deletedAt" IS NULL`,
       [scope.companyId, nuskNumbers]
@@ -270,7 +271,7 @@ async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "m
 
     const unlinkedMap = new Map<string, { name: string; count: number }>();
 
-    const COMPARE_FIELDS = ["fullName", "nationality", "status", "passportNumber", "entryPort", "exitPort", "overstayDays", "actualStayDays"];
+    const COMPARE_FIELDS = ["fullName", "nationality", "status", "passportNumber", "entryPort", "exitPort", "overstayDays", "actualStayDays", "entryDate", "exitDate"];
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]!;
@@ -388,7 +389,8 @@ export async function confirmMutamersImport(
       const existing = nuskNumbers.length > 0
         ? (await client.query(
             `SELECT id, "nuskNumber", "fullName", nationality, status, "passportNumber",
-                    "entryPort", "exitPort", "overstayDays", "actualStayDays"
+                    "entryPort", "exitPort", "overstayDays", "actualStayDays",
+                    "entryDate", "exitDate"
              FROM umrah_pilgrims
              WHERE "companyId" = $1 AND "nuskNumber" = ANY($2) AND "deletedAt" IS NULL`,
             [scope.companyId, nuskNumbers]
@@ -419,11 +421,11 @@ export async function confirmMutamersImport(
                ("companyId","branchId","seasonId","nuskNumber","fullName",nationality,gender,
                 "passportNumber","passportNumber_hash","passportExpiry","visaNumber","visaNumber_hash",
                 "groupId","subAgentId","agentId",
-                status,"entryPort","entryFlight","exitPort","exitFlight",
+                status,"entryDate","exitDate","entryPort","entryFlight","exitPort","exitFlight",
                 "actualStayDays","programDuration","overstayDays",
                 "borderNumber","borderNumber_hash","mofaNumber","mofaNumber_hash",
                 "isInsideKingdom","hasUmrahPermit","createdBy","createdAt","updatedAt")
-               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,NOW(),NOW())
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,NOW(),NOW())
                RETURNING id`,
               [
                 scope.companyId, scope.branchId, scope.seasonId,
@@ -431,6 +433,7 @@ export async function confirmMutamersImport(
                 ppEnc, ppHash, row.passportExpiry || null, visaEnc, visaHash,
                 groupId, subAgentId, agentId,
                 row.status || "pending",
+                row.entryDate || null, row.exitDate || null,
                 row.entryPort || null, row.entryFlight || null,
                 row.exitPort || null, row.exitFlight || null,
                 row.actualStayDays ?? null, row.programDuration ?? 14, row.overstayDays ?? 0,
@@ -446,7 +449,7 @@ export async function confirmMutamersImport(
               await detectViolation(client, scope, row, res.rows[0].id, groupId, subAgentId, agentId);
             }
           } else {
-            const FIELDS = ["fullName", "nationality", "status", "passportNumber", "entryPort", "exitPort", "overstayDays", "actualStayDays"];
+            const FIELDS = ["fullName", "nationality", "status", "passportNumber", "entryPort", "exitPort", "overstayDays", "actualStayDays", "entryDate", "exitDate"];
             const changes: string[] = [];
             const vals: any[] = [];
             let hasFinancial = false;

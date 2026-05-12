@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { useApiQuery, asList } from "@/lib/api";
+import { z } from "zod";
+import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable } from "@/components/ui/data-table";
 import { Activity, Plus, Eye } from "lucide-react";
@@ -17,6 +16,33 @@ import { useQueryClient } from "@tanstack/react-query";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import {
+  FormShell,
+  FormTextField,
+  FormTextareaField,
+  FormDateField,
+  FormSelectField,
+  FormGrid,
+} from "@/components/form-shell";
+
+const complianceActionSchema = z.object({
+  title: z.string().trim().min(1, "العنوان مطلوب"),
+  regulation: z.string().trim(),
+  owner: z.string().trim(),
+  dueDate: z.string(),
+  description: z.string().trim(),
+  status: z.enum(["open", "in_progress", "done", "overdue"]),
+});
+type ComplianceActionForm = z.infer<typeof complianceActionSchema>;
+const defaultComplianceAction: ComplianceActionForm = {
+  title: "", regulation: "", owner: "", dueDate: "", description: "", status: "open",
+};
+const STATUS_OPTIONS = [
+  { value: "open", label: "مفتوح" },
+  { value: "in_progress", label: "جاري" },
+  { value: "done", label: "منجز" },
+  { value: "overdue", label: "متأخر" },
+];
 
 export function ComplianceActionsTab() {
   const { data: actionsResp, isLoading, isError, error, refetch } = useApiQuery<any>(["gov-compliance-actions"], "/governance/compliance-actions");
@@ -44,18 +70,15 @@ export function ComplianceActionsTab() {
     { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "open", label: "مفتوح" }, { value: "in_progress", label: "جاري" }, { value: "done", label: "منجز" }, { value: "overdue", label: "متأخر" }] },
   ];
 
-  const [newForm, setNewForm] = useState({ title: "", regulation: "", owner: "", dueDate: "", description: "", status: "open" });
   const [showNew, setShowNew] = useState(false);
-  const handleCreate = async () => {
-    if (!newForm.title) return;
+  const handleCreate = async (values: ComplianceActionForm) => {
     try {
-      await import("@/lib/api").then(({ apiFetch }) => apiFetch("/governance/compliance-actions", {
+      await apiFetch("/governance/compliance-actions", {
         method: "POST",
-        body: JSON.stringify(newForm),
-      }));
+        body: JSON.stringify(values),
+      });
       toast({ title: "تم إنشاء الإجراء" });
       setShowNew(false);
-      setNewForm({ title: "", regulation: "", owner: "", dueDate: "", description: "", status: "open" });
       qc.invalidateQueries({ queryKey: ["gov-compliance-actions"] });
     } catch { toast({ variant: "destructive", title: "خطأ في الحفظ" }); }
   };
@@ -78,34 +101,34 @@ export function ComplianceActionsTab() {
         <div className="flex-1">
           <AdvancedFilters config={{ searchPlaceholder: "بحث بالإجراء أو اللائحة...", statuses: [{ value: "open", label: "مفتوح" }, { value: "in_progress", label: "جاري" }, { value: "done", label: "منجز" }, { value: "overdue", label: "متأخر" }], showDateRange: true }} values={filters} onChange={setFilters} resultCount={filteredItems.length} />
         </div>
-        {canWrite && <Button size="sm" onClick={() => setShowNew(!showNew)}><Plus className="h-4 w-4 me-1" />إجراء جديد</Button>}
+        {canWrite && <GuardedButton perm="governance:create" size="sm" onClick={() => setShowNew(!showNew)}><Plus className="h-4 w-4 me-1" />إجراء جديد</GuardedButton>}
       </div>
       {showNew && (
         <Card className="border-dashed">
-          <CardContent className="p-4 grid grid-cols-2 gap-3">
-            {editFields.map(f => (
-              <div key={f.key}>
-                <label className="text-xs text-gray-500 mb-1 block">{f.label}</label>
-                {f.type === "select" ? (
-                  <Select value={(newForm as any)[f.key]} onValueChange={(v) => setNewForm(p => ({ ...p, [f.key]: v }))}>
-                    <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {f.options!.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Input type={f.type === "date" ? "date" : "text"} className="text-sm" value={(newForm as any)[f.key]} onChange={e => setNewForm(p => ({ ...p, [f.key]: e.target.value }))} />
-                )}
-              </div>
-            ))}
-            <div className="col-span-2">
-              <label className="text-xs text-gray-500 mb-1 block">الوصف</label>
-              <Textarea className="text-sm" rows={2} value={newForm.description} onChange={e => setNewForm(p => ({ ...p, description: e.target.value }))} />
-            </div>
-            <div className="col-span-2 flex gap-2">
-              <Button size="sm" onClick={handleCreate} rateLimitAware>حفظ</Button>
-              <Button size="sm" variant="ghost" onClick={() => setShowNew(false)}>إلغاء</Button>
-            </div>
+          <CardContent className="p-4">
+            <FormShell
+              schema={complianceActionSchema}
+              defaultValues={defaultComplianceAction}
+              submitLabel="حفظ"
+              secondaryActions={
+                <Button type="button" size="sm" variant="ghost" onClick={() => setShowNew(false)}>
+                  إلغاء
+                </Button>
+              }
+              onSubmit={async (values, ctx) => {
+                await handleCreate(values);
+                ctx.reset();
+              }}
+            >
+              <FormGrid cols={2}>
+                <FormTextField name="title" label="العنوان" required />
+                <FormTextField name="regulation" label="اللائحة" />
+                <FormTextField name="owner" label="المسؤول" />
+                <FormDateField name="dueDate" label="تاريخ الاستحقاق" />
+                <FormSelectField name="status" label="الحالة" options={STATUS_OPTIONS} />
+                <FormTextareaField name="description" label="الوصف" rows={2} className="col-span-2" />
+              </FormGrid>
+            </FormShell>
           </CardContent>
         </Card>
       )}

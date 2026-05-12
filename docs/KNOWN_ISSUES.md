@@ -139,24 +139,40 @@ A two-week freeze (`docs/freeze/freeze-14-day.md`) was opened on 9 May 2026 to c
 
 - [x] **This Phase 9 section.** Captures every closure and outstanding item from the freeze.
 
-### Day 10-11 — RBAC v2 migration grid (pending)
+### Day 10-11 — RBAC v2 migration grid (CLOSED 2026-05-11)
 
-- [ ] **Add a route × permission table to `docs/RBAC_V2.md`** enumerating all routes and marking which use `authorize()` vs the legacy `requirePermission()`.
-- [ ] **Migrate +100 endpoints** from `requirePermission()` to `authorize()`. Current state: 102/1024 migrated (~10%). The 12 currently-failing test files are downstream of this work — they assert the legacy `requirePermission(...)` string and will pass again as their target route is migrated.
+- [x] **Route × permission table in `docs/RBAC_V2.md`** — see §11 + Appendix A.
+- [x] **Migrate +100 endpoints** from `requirePermission()` to `authorize()`. **Final state: 1131/1131 endpoints migrated (100%)** as of PR #260. 65 dead `requirePermission` imports also pruned in the same sweep. The 12 originally-failing test files all pass on `main` now.
 
-### Day 12-13 — Real-PG dynamic supertest harness (pending)
+### Day 12-13 — Real-PG dynamic supertest harness (CLOSED 2026-05-11)
 
-- [ ] **Spin docker-compose Postgres in CI.** Seed two companies, three users per company, basic chart of accounts.
-- [ ] **30 scenarios.** Each asserts a success path + a cross-tenant fetch that must 404/403. Initial scenarios already sketched in `tests/integration/tenantIsolation.dynamic.test.ts.skip`, including:
-  - `/api/clients`, `/api/employees`, `/api/invoices`, `/api/finance/journal`, `/api/hr/leave-requests`, `/api/finance/budgets`, `/api/suppliers`, `/api/purchase-orders` — list/detail cross-tenant
-  - `POST /api/finance/custodies` with foreign assignmentId → 403
-  - `POST /api/properties/maintenance-requests` with foreign assignedTo → 400/403
+- [x] **Postgres service in CI** — wired in `.github/workflows/guard.yml` via PR #214 (postgres:16-alpine on port 54329, seeded by `db/schema_pre.sql` + `db/schema_post.sql`).
+- [x] **27 scenarios live on every PR + push to main** (PRs #214 / #220 / #225 / #260 / #267):
+  - 14 list endpoints assert no foreign-companyId rows in the response (`/api/clients`, `/api/employees`, `/api/finance/journal/entries`, `/api/hr/leave-requests`, `/api/finance/budget/budgets`, `/api/finance/vendors`, `/api/projects`, `/api/tasks`, `/api/documents`, `/api/requests`, `/api/workflows`, `/api/gov-integrations`, `/api/notifications`, `/api/audit-logs`).
+  - 11 write endpoints assert a cross-tenant DELETE/PATCH returns 401/403/404/422 (clients × 2, projects × 2, tasks, employees × 2, documents × 2, requests × 2).
+  - 2 reproductions of the Day 2 D-class findings (`POST /finance/custodies` and `POST /properties/maintenance-requests` rejecting foreign-tenant ids).
 
-### Day 14 — Freeze final report + go/no-go (pending)
+### Day 14 — Freeze final report + go/no-go (CLOSED 2026-05-09)
 
-- [ ] **Tally**: tests added, leaks fixed, queries migrated, endpoints migrated.
-- [ ] **Decision matrix**: GO if 0 P0 open, ≤ 5 P1 open, all tenant tests green; DELAY otherwise.
-- [ ] **Publish** `.local/tasks/freeze-final-report.md`.
+- [x] **Tally** — captured in `docs/freeze/freeze-final-report.md`.
+- [x] **Decision matrix** — **GO** issued conditionally on CI wiring, which landed in PR #214 the next day.
+- [x] **Published** `docs/freeze/freeze-final-report.md`.
+
+### Post-freeze sweeps (2026-05-09 → 2026-05-11)
+
+| PR | Sweep | What |
+| --- | --- | --- |
+| #214 | CI wiring | Postgres service + DATABASE_URL + JWT_SECRET + 2-pass schema load |
+| #220 | sweep #1 | workflows.ts + gov-integrations.ts → buildScopedWhere; harness 6 → 14 list endpoints |
+| #225 | sweep #2 | 5 cross-tenant write scenarios; RBAC test-debt marked resolved |
+| #254 | CI fixes | schema split → separate pre/post psql; lockfile drift; audit lazy-table support; test slice |
+| #260 | sweep #3 | RBAC 100% (3 last `requirePermission` migrated + 65 dead imports pruned); +2 employees scenarios |
+| #267 | sweep #4 | +4 documents/requests scenarios; fixed `requests.ts` `service_requests` table-name bug + `convertedTo` missing-column bug |
+| #278 | regressions | auth.ts:326 ALLOWLIST entry + 2 test slice/regex updates after handler refactors |
+| #286 | audit fix | TS-generic rawQuery regex; alias-elsewhere detection; views + migrations parsed; uncovered `umrah_groups.groupName` + `delegations.fromUserId` bugs |
+| #289 | syntax fix | missing `return` in discipline-memo-detail.tsx |
+| #293 | ops docs | DEPLOYMENT.md + .env.example completeness |
+| #297 | ops trio | SECRETS_ROTATION.md + DR.md + MONITORING.md + .gitignore root .env |
 
 ---
 

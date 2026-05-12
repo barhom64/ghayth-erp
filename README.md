@@ -190,6 +190,9 @@ Deep-dive docs live under `docs/`:
 - [`docs/MODULES.md`](docs/MODULES.md) — map of every business module to its backend route file and frontend pages.
 - [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — day-to-day workflow: migrations, seeding, adding routes/pages, conventions.
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — production deployment guide: provisioning, required secrets, multi-instance setup, backups, upgrade procedure, common production-readiness mistakes.
+- [`docs/SECRETS_ROTATION.md`](docs/SECRETS_ROTATION.md) — when + how to rotate `JWT_SECRET` / `FIELD_ENCRYPTION_KEY` / `SECRETS_ENCRYPTION_KEY` without data loss.
+- [`docs/DR.md`](docs/DR.md) — disaster recovery: backup/restore procedures, RTO/RPO targets, quarterly restore drill.
+- [`docs/MONITORING.md`](docs/MONITORING.md) — health endpoints, log alerts, database metrics, SIEM forwarding, suggested dashboard.
 - [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md) — open operational gaps and technical debt tracked against the system audit.
 - [`docs/AI_GUARDIAN_SETUP.md`](docs/AI_GUARDIAN_SETUP.md) — legacy AI guardian setup (pre-existing).
 

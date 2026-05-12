@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth";
 import { PageShell } from "@/components/page-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { QrCode, Clock, CheckCircle, MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -108,15 +109,17 @@ export default function QRScannerPage() {
             </div>
 
             <div className="space-y-3">
-              <Button
+              <GuardedButton
+                perm="hr:create"
                 className="w-full h-14 text-lg bg-green-600 hover:bg-green-700"
                 onClick={handleCheckIn}
                 disabled={checkInMut.isPending}
               >
                 <MapPin className="h-5 w-5 me-2" />
                 {checkInMut.isPending ? "جاري التسجيل..." : "تسجيل حضور"}
-              </Button>
-              <Button
+              </GuardedButton>
+              <GuardedButton
+                perm="hr:create"
                 className="w-full h-14 text-lg"
                 variant="destructive"
                 onClick={handleCheckOut}
@@ -124,7 +127,7 @@ export default function QRScannerPage() {
               >
                 <CheckCircle className="h-5 w-5 me-2" />
                 {checkOutMut.isPending ? "جاري التسجيل..." : "تسجيل انصراف"}
-              </Button>
+              </GuardedButton>
             </div>
 
             {lastAction && (
