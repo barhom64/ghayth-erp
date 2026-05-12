@@ -856,69 +856,74 @@ router.get("/reports/branch-performance", authorize({ feature: "bi", action: "li
       [cid]
     );
 
-    const result = await Promise.all(branches.map(async (branch: any) => {
-      const [revenue] = await rawQuery<any>(
-        `SELECT COALESCE(SUM("paidAmount"), 0) AS revenue, COALESCE(SUM(total), 0) AS invoiced,
-                COUNT(*) AS invoiceCount
-         FROM invoices WHERE "companyId" = $1 AND "branchId" = $2 AND "deletedAt" IS NULL
-           AND DATE("createdAt") BETWEEN $3::date AND $4::date`,
-        [cid, branch.id, dateFrom, dateTo]
-      ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
-
-      const [expenses] = await rawQuery<any>(
-        `SELECT COALESCE(SUM(amount), 0) AS expenses FROM vouchers
-         WHERE "companyId" = $1 AND "branchId" = $2 AND type = 'payment'
-           AND DATE("createdAt") BETWEEN $3::date AND $4::date`,
-        [cid, branch.id, dateFrom, dateTo]
-      ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
-
-      const [employees] = await rawQuery<any>(
-        `SELECT COUNT(*) AS total FROM employee_assignments
-         WHERE "companyId" = $1 AND "branchId" = $2 AND status = 'active'`,
-        [cid, branch.id]
-      ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
-
-      const [attRow] = await rawQuery<any>(
-        `SELECT
-           COUNT(*) FILTER (WHERE status = 'present') AS present,
-           COUNT(*) AS total
+    const branchIds = branches.map((b: any) => b.id);
+    const [revenueRows, expenseRows, employeeRows, attRows, ticketRows, satRows] = await Promise.all([
+      rawQuery<any>(
+        `SELECT "branchId", COALESCE(SUM("paidAmount"), 0) AS revenue, COALESCE(SUM(total), 0) AS invoiced, COUNT(*) AS "invoiceCount"
+         FROM invoices WHERE "companyId" = $1 AND "branchId" = ANY($2::int[]) AND "deletedAt" IS NULL
+           AND DATE("createdAt") BETWEEN $3::date AND $4::date
+         GROUP BY "branchId"`,
+        [cid, branchIds, dateFrom, dateTo]
+      ).catch((e) => { logger.error(e, "bi query failed"); return []; }),
+      rawQuery<any>(
+        `SELECT "branchId", COALESCE(SUM(amount), 0) AS expenses FROM vouchers
+         WHERE "companyId" = $1 AND "branchId" = ANY($2::int[]) AND type = 'payment'
+           AND DATE("createdAt") BETWEEN $3::date AND $4::date
+         GROUP BY "branchId"`,
+        [cid, branchIds, dateFrom, dateTo]
+      ).catch((e) => { logger.error(e, "bi query failed"); return []; }),
+      rawQuery<any>(
+        `SELECT "branchId", COUNT(*) AS total FROM employee_assignments
+         WHERE "companyId" = $1 AND "branchId" = ANY($2::int[]) AND status = 'active'
+         GROUP BY "branchId"`,
+        [cid, branchIds]
+      ).catch((e) => { logger.error(e, "bi query failed"); return []; }),
+      rawQuery<any>(
+        `SELECT "branchId", COUNT(*) FILTER (WHERE status = 'present') AS present, COUNT(*) AS total
          FROM attendance
-         WHERE "companyId" = $1 AND "branchId" = $2
-           AND date BETWEEN $3::date AND $4::date AND "deletedAt" IS NULL`,
-        [cid, branch.id, dateFrom, dateTo]
-      ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
-
-      const [ticketsRow] = await rawQuery<any>(
-        `SELECT COUNT(*) AS cnt FROM support_tickets
-         WHERE "companyId" = $1 AND "branchId" = $2 AND status = 'open'`,
-        [cid, branch.id]
-      ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
-
-      const [satisfactionRow] = await rawQuery<any>(
-        `SELECT COALESCE(AVG(rating), 0) AS avg FROM support_tickets
-         WHERE "companyId" = $1 AND "branchId" = $4 AND rating IS NOT NULL
-           AND DATE("createdAt") BETWEEN $2::date AND $3::date`,
-        [cid, dateFrom, dateTo, branch.id]
-      ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
-
-      const rev = Number(revenue?.revenue ?? 0);
-      const exp = Number(expenses?.expenses ?? 0);
-      const attTotal = Number(attRow?.total ?? 0);
-      const attPresent = Number(attRow?.present ?? 0);
-
+         WHERE "companyId" = $1 AND "branchId" = ANY($2::int[])
+           AND date BETWEEN $3::date AND $4::date AND "deletedAt" IS NULL
+         GROUP BY "branchId"`,
+        [cid, branchIds, dateFrom, dateTo]
+      ).catch((e) => { logger.error(e, "bi query failed"); return []; }),
+      rawQuery<any>(
+        `SELECT "branchId", COUNT(*) AS cnt FROM support_tickets
+         WHERE "companyId" = $1 AND "branchId" = ANY($2::int[]) AND status = 'open'
+         GROUP BY "branchId"`,
+        [cid, branchIds]
+      ).catch((e) => { logger.error(e, "bi query failed"); return []; }),
+      rawQuery<any>(
+        `SELECT "branchId", COALESCE(AVG(rating), 0) AS avg FROM support_tickets
+         WHERE "companyId" = $1 AND "branchId" = ANY($2::int[]) AND rating IS NOT NULL
+           AND DATE("createdAt") BETWEEN $3::date AND $4::date
+         GROUP BY "branchId"`,
+        [cid, branchIds, dateFrom, dateTo]
+      ).catch((e) => { logger.error(e, "bi query failed"); return []; }),
+    ]);
+    const revMap = new Map(revenueRows.map((r: any) => [r.branchId, r]));
+    const expMap = new Map(expenseRows.map((r: any) => [r.branchId, r]));
+    const empMap = new Map(employeeRows.map((r: any) => [r.branchId, r]));
+    const attMap = new Map(attRows.map((r: any) => [r.branchId, r]));
+    const tickMap = new Map(ticketRows.map((r: any) => [r.branchId, r]));
+    const satMap = new Map(satRows.map((r: any) => [r.branchId, r]));
+    const result = branches.map((branch: any) => {
+      const rev = Number(revMap.get(branch.id)?.revenue ?? 0);
+      const exp = Number(expMap.get(branch.id)?.expenses ?? 0);
+      const attTotal = Number(attMap.get(branch.id)?.total ?? 0);
+      const attPresent = Number(attMap.get(branch.id)?.present ?? 0);
       return {
         branchId: branch.id,
         branchName: branch.name,
         revenue: rev,
         expenses: exp,
         netProfit: rev - exp,
-        invoiceCount: Number(revenue?.invoiceCount ?? 0),
-        employees: Number(employees?.total ?? 0),
+        invoiceCount: Number(revMap.get(branch.id)?.invoiceCount ?? 0),
+        employees: Number(empMap.get(branch.id)?.total ?? 0),
         attendanceRate: attTotal > 0 ? Math.round((attPresent / attTotal) * 100) : 0,
-        openTickets: Number(ticketsRow?.cnt ?? 0),
-        clientSatisfaction: Math.round(Number(satisfactionRow?.avg ?? 0) * 10) / 10,
+        openTickets: Number(tickMap.get(branch.id)?.cnt ?? 0),
+        clientSatisfaction: Math.round(Number(satMap.get(branch.id)?.avg ?? 0) * 10) / 10,
       };
-    }));
+    });
 
     result.sort((a: any, b: any) => b.revenue - a.revenue);
     result.forEach((r: any, i: number) => { r.rank = i + 1; });

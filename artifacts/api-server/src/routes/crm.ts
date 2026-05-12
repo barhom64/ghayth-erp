@@ -1143,18 +1143,20 @@ router.get("/analytics", authorize({ feature: "crm.clients", action: "list" }), 
       if (!['closed_won', 'closed_lost'].includes(stage)) prevCount = count;
     }
 
-    const [avgDeal] = await rawQuery<{ avgDays: number | string | null }>(
-      `SELECT AVG(EXTRACT(EPOCH FROM ("updatedAt"::timestamp - "createdAt"::timestamp))/86400) AS "avgDays" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage='closed_won'`,
-      [cid]
-    );
-    const [revenue] = await rawQuery<{ wonRevenue: number | string; forecast: number | string }>(
-      `SELECT COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) AS "wonRevenue", COALESCE(SUM(value) FILTER (WHERE status='open'),0) AS "forecast" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
-      [cid]
-    );
-    const [lostAnalysis] = await rawQuery<{ lostCount: number | string; lostValue: number | string }>(
-      `SELECT COUNT(*) as "lostCount", COALESCE(SUM(value),0) as "lostValue" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage='closed_lost'`,
-      [cid]
-    );
+    const [[avgDeal], [revenue], [lostAnalysis]] = await Promise.all([
+      rawQuery<{ avgDays: number | string | null }>(
+        `SELECT AVG(EXTRACT(EPOCH FROM ("updatedAt"::timestamp - "createdAt"::timestamp))/86400) AS "avgDays" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage='closed_won'`,
+        [cid]
+      ),
+      rawQuery<{ wonRevenue: number | string; forecast: number | string }>(
+        `SELECT COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) AS "wonRevenue", COALESCE(SUM(value) FILTER (WHERE status='open'),0) AS "forecast" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
+        [cid]
+      ),
+      rawQuery<{ lostCount: number | string; lostValue: number | string }>(
+        `SELECT COUNT(*) as "lostCount", COALESCE(SUM(value),0) as "lostValue" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage='closed_lost'`,
+        [cid]
+      ),
+    ]);
 
     res.json({
       conversionRates,
@@ -1177,11 +1179,13 @@ router.get("/stats", authorize({ feature: "crm.clients", action: "list" }), asyn
       wonValue: string | number;
       pipelineValue: string | number;
     }
-    const [opp] = await rawQuery<OpportunityStatsRow>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) as "wonValue", COALESCE(SUM(value) FILTER (WHERE status='open'),0) as "pipelineValue" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [overdue] = await rawQuery<CountRow>(
-      `SELECT COUNT(*) as count FROM crm_activities ca JOIN crm_opportunities co ON co.id=ca."opportunityId" WHERE co."companyId"=$1 AND co."deletedAt" IS NULL AND ca."completedAt" IS NULL AND ca."scheduledAt" < NOW()`,
-      [cid]
-    );
+    const [[opp], [overdue]] = await Promise.all([
+      rawQuery<OpportunityStatsRow>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) as "wonValue", COALESCE(SUM(value) FILTER (WHERE status='open'),0) as "pipelineValue" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<CountRow>(
+        `SELECT COUNT(*) as count FROM crm_activities ca JOIN crm_opportunities co ON co.id=ca."opportunityId" WHERE co."companyId"=$1 AND co."deletedAt" IS NULL AND ca."completedAt" IS NULL AND ca."scheduledAt" < NOW()`,
+        [cid]
+      ),
+    ]);
     res.json({
       totalOpportunities: Number(opp.total), openOpportunities: Number(opp.open),
       wonValue: Number(opp.wonValue), pipelineValue: Number(opp.pipelineValue),

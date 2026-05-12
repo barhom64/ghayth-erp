@@ -8,15 +8,15 @@ import { logger } from "../lib/logger.js";
 
 const router = Router();
 
-function buildFilter(scope: any, req: any, opts: { branchColumn?: string } = {}) {
+function buildFilter(scope: any, req: any, opts: { companyColumn?: string; branchColumn?: string } = {}) {
   const filters = parseScopeFilters(req);
   return buildScopedWhere(scope, filters, opts);
 }
 
-function buildFilterNoBranch(scope: any, req: any) {
+function buildFilterNoBranch(scope: any, req: any, opts: { companyColumn?: string } = {}) {
   const filters = parseScopeFilters(req);
   const stripped = { ...filters, branchIds: undefined };
-  return buildScopedWhere(scope, stripped);
+  return buildScopedWhere(scope, stripped, opts);
 }
 
 router.get("/", async (req, res) => {
@@ -24,12 +24,14 @@ router.get("/", async (req, res) => {
     const scope = req.scope!;
     const today = todayISO();
     const { where, params, nextParamIndex } = buildFilter(scope, req);
+    const { where: taskAliasWhere, params: taskAliasParams, nextParamIndex: taskAliasNextIdx } = buildFilter(scope, req, { companyColumn: 't."companyId"', branchColumn: 't."branchId"' });
 
     const todayIdx = nextParamIndex;
     const assignIdx = nextParamIndex + 1;
     const taskParams = [...params, today, scope.activeAssignmentId];
+    const taskAliasTodayIdx = taskAliasNextIdx;
 
-    const { where: leaveWhere, params: leaveParams } = buildFilterNoBranch(scope, req);
+    const { where: leaveWhere, params: leaveParams } = buildFilterNoBranch(scope, req, { companyColumn: 'lr."companyId"' });
     const { where: fw, params: fp } = buildFilter(scope, req);
     const { where: pw, params: pp } = buildFilter(scope, req);
 
@@ -55,12 +57,12 @@ router.get("/", async (req, res) => {
          FROM tasks t
          LEFT JOIN employee_assignments ea ON ea.id = t."assignedTo"
          LEFT JOIN employees e ON e.id = ea."employeeId"
-         WHERE ${where.replace(/"companyId"/g, 't."companyId"').replace(/"branchId"/g, 't."branchId"')}
+         WHERE ${taskAliasWhere}
            AND t."deletedAt" IS NULL
-           AND t."scheduledDate" = $${todayIdx}
+           AND t."scheduledDate" = $${taskAliasTodayIdx}
          ORDER BY t.priority DESC, t.status ASC
          LIMIT 15`,
-        [...params, today]
+        [...taskAliasParams, today]
       ),
       rawQuery<any>(
         `SELECT lr.id, e.name AS "employeeName", lt.name AS "leaveType",
@@ -68,7 +70,7 @@ router.get("/", async (req, res) => {
          FROM hr_leave_requests lr
          JOIN employees e ON e.id = lr."employeeId"
          JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
-         WHERE ${leaveWhere.replace(/"companyId"/g, 'lr."companyId"')} AND lr.status = 'pending' AND lr."deletedAt" IS NULL
+         WHERE ${leaveWhere} AND lr.status = 'pending' AND lr."deletedAt" IS NULL
          ORDER BY lr."createdAt" DESC
          LIMIT 10`,
         leaveParams
@@ -268,13 +270,13 @@ router.get("/charts/revenue", async (req, res) => {
       "05": "مايو", "06": "يونيو", "07": "يوليو", "08": "أغسطس",
       "09": "سبتمبر", "10": "أكتوبر", "11": "نوفمبر", "12": "ديسمبر",
     };
-    const { where: voucherWhere, params: voucherParams } = buildFilterNoBranch(scope, req);
+    const { where: voucherWhere, params: voucherParams } = buildFilterNoBranch(scope, req, { companyColumn: 'v."companyId"' });
     const expenseRows = await rawQuery<any>(
       `SELECT
          TO_CHAR(DATE_TRUNC('month', v."createdAt"), 'YYYY-MM') AS month_key,
          COALESCE(SUM(v.amount), 0) AS total
        FROM vouchers v
-       WHERE ${voucherWhere.replace(/"companyId"/g, 'v."companyId"')}
+       WHERE ${voucherWhere}
          AND v.type = 'payment'
          AND v."createdAt" >= (CURRENT_DATE - INTERVAL '6 months')
        GROUP BY month_key`,
@@ -331,14 +333,14 @@ router.get("/charts/attendance", async (req, res) => {
 router.get("/charts/departments", async (req, res) => {
   try {
     const scope = req.scope!;
-    const { where, params } = buildFilter(scope, req);
+    const { where, params } = buildFilter(scope, req, { companyColumn: 'ea."companyId"', branchColumn: 'ea."branchId"' });
     const rows = await rawQuery<any>(
       `SELECT
          COALESCE(d.name, 'بدون قسم') AS name,
          COUNT(ea.id) AS value
        FROM employee_assignments ea
        LEFT JOIN departments d ON d.id = ea."departmentId"
-       WHERE ${where.replace(/"companyId"/g, 'ea."companyId"').replace(/"branchId"/g, 'ea."branchId"')} AND ea.status = 'active'
+       WHERE ${where} AND ea.status = 'active'
        GROUP BY d.name
        ORDER BY value DESC
        LIMIT 8`,
