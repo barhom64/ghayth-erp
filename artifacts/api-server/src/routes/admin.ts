@@ -11,7 +11,7 @@ import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
 import { getRedisRateLimitStatus } from "../lib/rateLimitStore.js";
 import { integrationService } from "../lib/integrationService.js";
 import { invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import crypto from "node:crypto";
 import { ADMIN_ROLES } from "../lib/rbacCatalog.js";
@@ -148,7 +148,7 @@ router.get("/users", authorize({ feature: "admin", action: "list" }), async (req
       ORDER BY u."createdAt" DESC
       LIMIT 500
     `, [scope.companyId]);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (e: any) { logger.error(e, "Get users error"); handleRouteError(e, res, "خطأ غير متوقع"); }
 });
 
@@ -408,7 +408,7 @@ router.get("/roles", authorize({ feature: "admin", action: "list" }), async (req
     const systemRoles = await rawQuery(`SELECT * FROM roles ORDER BY name LIMIT 100`, []);
     const customRoles = await rawQuery(`SELECT * FROM custom_roles WHERE "companyId" = $1 ORDER BY label LIMIT 500`, [scope.companyId]);
     const rows = [...systemRoles, ...customRoles];
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (e: any) { logger.error(e, "Get roles error"); handleRouteError(e, res, "خطأ غير متوقع"); }
 });
 
@@ -494,7 +494,7 @@ router.get("/predefined-roles", authorize({ feature: "admin", action: "list" }),
     }));
     const existing = new Set(customRoles.map((r: Record<string, unknown>) => r.roleKey));
     const predefined = PREDEFINED_ROLES.filter(r => !existing.has(r.roleKey));
-    res.json({ data: [...customRoles, ...predefined] });
+    res.json(maskFields(req, { data: [...customRoles, ...predefined] }));
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
@@ -511,7 +511,7 @@ router.get("/user-roles/:userId", authorize({ feature: "admin", action: "view" }
       `SELECT * FROM user_roles WHERE "userId"=$1 AND "companyId"=$2 ORDER BY level DESC LIMIT 500`,
       [userId, scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
@@ -598,7 +598,7 @@ router.get("/integrations", authorize({ feature: "admin", action: "list" }), asy
       `SELECT id, "companyId", type, name, status, "lastSuccessAt", "lastFailureAt", "retryCount", "maxRetries", "createdAt", "updatedAt" FROM integrations WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 500`,
       [scope.companyId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
@@ -745,7 +745,7 @@ router.get("/integration-logs", authorize({ feature: "admin", action: "list" }),
       `SELECT id, "integrationId", channel, status, "errorMessage", "createdAt" FROM integration_logs WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
     );
-    res.json({ data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset });
+    res.json(maskFields(req, { data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset }));
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
@@ -873,7 +873,7 @@ router.get("/system-health", authorize({ feature: "admin", action: "list" }), as
     const [integrationStats] = integrationStatsRow;
     const [pendingMessages] = pendingMessagesRow;
 
-    res.json({
+    res.json(maskFields(req, {
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       memoryUsage: process.memoryUsage(),
@@ -907,7 +907,7 @@ router.get("/system-health", authorize({ feature: "admin", action: "list" }), as
         companies: Number(companyCount?.count || 0),
         employees: Number(employeeCount?.count || 0),
       },
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
@@ -989,7 +989,7 @@ router.get("/violations-report", authorize({ feature: "admin", action: "list" })
     const [totalCount] = totalCountRow;
     const [summary] = summaryRow;
 
-    res.json({ data: violations, summary, byType, byDepartment, trend, total: totalCount?.count || violations.length });
+    res.json(maskFields(req, { data: violations, summary, byType, byDepartment, trend, total: totalCount?.count || violations.length }));
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
@@ -1085,13 +1085,13 @@ router.get("/security-log", authorize({ feature: "admin", action: "list" }), asy
       [scope.companyId]
     );
 
-    res.json({
+    res.json(maskFields(req, {
       data: rows,
       total: Number(countRow?.total ?? 0),
       page: pageNum,
       pageSize,
       summary,
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
@@ -1107,7 +1107,7 @@ router.get("/role-permissions", authorize({ feature: "admin", action: "list" }),
       `SELECT id, role, permission, "companyId", "createdAt" FROM role_permissions WHERE ${conditions.join(" AND ")} ORDER BY role, permission LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
@@ -1219,12 +1219,12 @@ router.get("/governance/policy-audit", authorize({ feature: "admin", action: "li
   try {
     const scope = req.scope!;
     const violations = await runFullPolicyAudit(scope.companyId);
-    res.json({ violations, total: violations.length, critical: violations.filter(v => v.severity === "critical").length });
+    res.json(maskFields(req, { violations, total: violations.length, critical: violations.filter(v => v.severity === "critical").length }));
   } catch (err) { handleRouteError(err, res, "Policy audit error:"); }
 });
 
-router.get("/governance/role-strategies", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
-  res.json({ strategies: ROLE_STRATEGIES, separationOfDuties: SEPARATION_OF_DUTIES, sensitiveOperations: SENSITIVE_OPERATIONS });
+router.get("/governance/role-strategies", authorize({ feature: "admin", action: "list" }), async (req, res) => {
+  res.json(maskFields(req, { strategies: ROLE_STRATEGIES, separationOfDuties: SEPARATION_OF_DUTIES, sensitiveOperations: SENSITIVE_OPERATIONS }));
 });
 
 router.get("/governance/system-guards", authorize({ feature: "admin", action: "list" }), async (req, res) => {
@@ -1235,15 +1235,15 @@ router.get("/governance/system-guards", authorize({ feature: "admin", action: "l
       return;
     }
     const result = await checkSystemGuards(companyId, "all", { date: todayISO() });
-    res.json(result);
+    res.json(maskFields(req, result));
   } catch (err: any) {
     handleRouteError(err, res, "System guards error");
   }
 });
 
-router.get("/governance/domain-registry", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
+router.get("/governance/domain-registry", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
-    res.json({ domains: DOMAIN_REGISTRY, stats: getSystemStats() });
+    res.json(maskFields(req, { domains: DOMAIN_REGISTRY, stats: getSystemStats() }));
   } catch (err) { handleRouteError(err, res, "Domain registry error:"); }
 });
 
@@ -1267,17 +1267,17 @@ router.get("/governance/gl-reconciliation", authorize({ feature: "admin", action
        LIMIT 50`,
       [companyId]
     );
-    res.json({
+    res.json(maskFields(req, {
       healthy: mismatches.length === 0,
       driftCount: mismatches.length,
       mismatches,
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "GL reconciliation error:"); }
 });
 
-router.get("/governance/lifecycle-machines", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
+router.get("/governance/lifecycle-machines", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
-    res.json({ machines: STATE_MACHINES, total: STATE_MACHINES.length });
+    res.json(maskFields(req, { machines: STATE_MACHINES, total: STATE_MACHINES.length }));
   } catch (err) { handleRouteError(err, res, "Lifecycle machines error:"); }
 });
 
@@ -1300,7 +1300,7 @@ router.get("/governance/event-dlq", authorize({ feature: "admin", action: "list"
        GROUP BY "eventName" ORDER BY count DESC`,
       [scope.companyId]
     );
-    res.json({ entries: rows, total: rows.length, summary });
+    res.json(maskFields(req, { entries: rows, total: rows.length, summary }));
   } catch (err) { handleRouteError(err, res, "DLQ list error:"); }
 });
 
@@ -1345,12 +1345,12 @@ router.get("/governance/event-catalog", authorize({ feature: "admin", action: "l
        WHERE "companyId" = $1 ORDER BY "createdAt" DESC LIMIT 20`,
       [scope.companyId]
     );
-    res.json({
+    res.json(maskFields(req, {
       total: EVENT_CATALOG.length,
       byDomain,
       catalog: EVENT_CATALOG.map(e => ({ action: e.name, domain: e.domain, label: e.label, critical: e.critical })),
       recentEvents,
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Event catalog error:"); }
 });
 
@@ -1361,13 +1361,13 @@ router.get("/governance/rbac-matrix", authorize({ feature: "admin", action: "lis
       `SELECT role, permission FROM role_permissions WHERE "companyId" = $1 LIMIT 500`,
       [scope.companyId]
     );
-    res.json({
+    res.json(maskFields(req, {
       permissions: PERMISSIONS,
       roleDefaults: ROLE_PERMISSIONS,
       customPermissions: customPerms,
       totalPermissions: PERMISSIONS.length,
       totalRoles: Object.keys(ROLE_PERMISSIONS).length,
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "RBAC matrix error:"); }
 });
 
@@ -1389,7 +1389,7 @@ router.get("/system-registry", authorize({ feature: "admin", action: "list" }), 
     );
 
     const coverageSummary = getCoverageSummary();
-    res.json({
+    res.json(maskFields(req, {
       overview: {
         domains: stats.domains,
         tables: tableCountRows?.c || stats.tables,
@@ -1413,7 +1413,7 @@ router.get("/system-registry", authorize({ feature: "admin", action: "list" }), 
         glIntegration: d.glIntegration,
         obligationTypes: d.obligationTypes,
       })),
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "System registry error:"); }
 });
 
@@ -1421,11 +1421,11 @@ router.get("/system-registry/entities", authorize({ feature: "admin", action: "l
   try {
     const domain = req.query.domain as string | undefined;
     const entities = domain ? getEntitiesByDomain(domain) : ENTITY_REGISTRY;
-    res.json({ entities, total: entities.length });
+    res.json(maskFields(req, { entities, total: entities.length }));
   } catch (err) { handleRouteError(err, res, "Entity registry error:"); }
 });
 
-router.get("/system-registry/coverage", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
+router.get("/system-registry/coverage", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const gaps = getMissingCoverage();
     const summary = getCoverageSummary();
@@ -1435,11 +1435,11 @@ router.get("/system-registry/coverage", authorize({ feature: "admin", action: "l
       bySeverity[g.severity]++;
       byCategory[g.category] = (byCategory[g.category] || 0) + 1;
     }
-    res.json({ gaps, total: gaps.length, bySeverity, byCategory, summary });
+    res.json(maskFields(req, { gaps, total: gaps.length, bySeverity, byCategory, summary }));
   } catch (err) { handleRouteError(err, res, "Coverage analysis error:"); }
 });
 
-router.get("/system-registry/notifications", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
+router.get("/system-registry/notifications", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const byDomain: Record<string, Array<{ entityId: string; entityLabel: string; notifications: string[] }>> = {};
     for (const entity of ENTITY_REGISTRY) {
@@ -1453,11 +1453,11 @@ router.get("/system-registry/notifications", authorize({ feature: "admin", actio
     }
     const totalTypes = ENTITY_REGISTRY.reduce((s, e) => s + e.notifications.length, 0);
     const entitiesWithNotifications = ENTITY_REGISTRY.filter(e => e.notifications.length > 0).length;
-    res.json({ byDomain, totalTypes, entitiesWithNotifications, totalEntities: ENTITY_REGISTRY.length });
+    res.json(maskFields(req, { byDomain, totalTypes, entitiesWithNotifications, totalEntities: ENTITY_REGISTRY.length }));
   } catch (err) { handleRouteError(err, res, "Notification registry error:"); }
 });
 
-router.get("/system-registry/reports", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
+router.get("/system-registry/reports", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const byDomain: Record<string, Array<{ entityId: string; entityLabel: string; reports: string[] }>> = {};
     for (const entity of ENTITY_REGISTRY) {
@@ -1471,11 +1471,11 @@ router.get("/system-registry/reports", authorize({ feature: "admin", action: "li
     }
     const totalReports = ENTITY_REGISTRY.reduce((s, e) => s + e.reports.length, 0);
     const entitiesWithReports = ENTITY_REGISTRY.filter(e => e.reports.length > 0).length;
-    res.json({ byDomain, totalReports, entitiesWithReports, totalEntities: ENTITY_REGISTRY.length });
+    res.json(maskFields(req, { byDomain, totalReports, entitiesWithReports, totalEntities: ENTITY_REGISTRY.length }));
   } catch (err) { handleRouteError(err, res, "Report registry error:"); }
 });
 
-router.get("/system-registry/print-templates", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
+router.get("/system-registry/print-templates", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const templates = ENTITY_REGISTRY
       .filter(e => e.print?.hasTemplate)
@@ -1486,7 +1486,7 @@ router.get("/system-registry/print-templates", authorize({ feature: "admin", act
         templateKey: e.print!.templateKey,
         detailRoute: e.routes.detail,
       }));
-    res.json({ templates, total: templates.length });
+    res.json(maskFields(req, { templates, total: templates.length }));
   } catch (err) { handleRouteError(err, res, "Print templates error:"); }
 });
 
@@ -1514,11 +1514,11 @@ router.get("/system-registry/actions", authorize({ feature: "admin", action: "li
       [scope.companyId]
     );
 
-    res.json({ events, total: events.length, recentActions });
+    res.json(maskFields(req, { events, total: events.length, recentActions }));
   } catch (err) { handleRouteError(err, res, "Action registry error:"); }
 });
 
-router.get("/system-registry/pages", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
+router.get("/system-registry/pages", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const pages = [
       { path: "/", component: "Dashboard", domain: "core", lazy: true },
@@ -1546,7 +1546,7 @@ router.get("/system-registry/pages", authorize({ feature: "admin", action: "list
       domainCounts[p.domain] = (domainCounts[p.domain] || 0) + 1;
     }
 
-    res.json({ pages, total: pages.length, byDomain: domainCounts });
+    res.json(maskFields(req, { pages, total: pages.length, byDomain: domainCounts }));
   } catch (err) { handleRouteError(err, res, "Page registry error:"); }
 });
 
@@ -1577,11 +1577,11 @@ router.get("/system-registry/missing", authorize({ feature: "admin", action: "li
       .filter(d => !d.tables.some(t => lifecycleEntities.includes(t)))
       .map(d => ({ id: d.id, label: d.label }));
 
-    res.json({
+    res.json(maskFields(req, {
       tablesWithoutEvents: { items: tablesWithoutEvents, count: tablesWithoutEvents.length },
       domainsWithoutLifecycle: { items: domainsWithoutLifecycle, count: domainsWithoutLifecycle.length },
       orphanNotifications: { items: orphanNotifications || [], count: orphanNotifications?.length || 0 },
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Missing registry items error:"); }
 });
 
@@ -1726,7 +1726,7 @@ router.get("/system-health-checks", authorize({ feature: "admin", action: "list"
         ? "degraded"
         : "attention";
 
-    res.json({
+    res.json(maskFields(req, {
       status: overall,
       timestamp: new Date().toISOString(),
       checks,
@@ -1735,13 +1735,13 @@ router.get("/system-health-checks", authorize({ feature: "admin", action: "list"
         warn: checks.filter(c => c.status === "warn").length,
         error: checks.filter(c => c.status === "error").length,
       },
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "System health error:"); }
 });
 
 // ─── Domain Dependency Graph ────────────────────────────────────────────
 
-router.get("/system-health/dependency-graph", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
+router.get("/system-health/dependency-graph", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const graph: { from: string; to: string; via: string }[] = [];
 
@@ -1776,7 +1776,7 @@ router.get("/system-health/dependency-graph", authorize({ feature: "admin", acti
       return { id, label: d?.label ?? id, glIntegration: d?.glIntegration ?? false };
     });
 
-    res.json({ nodes, edges: uniqueEdges, totalDependencies: uniqueEdges.length });
+    res.json(maskFields(req, { nodes, edges: uniqueEdges, totalDependencies: uniqueEdges.length }));
   } catch (err) { handleRouteError(err, res, "Dependency graph error:"); }
 });
 
@@ -1796,7 +1796,7 @@ router.get("/system-stops", authorize({ feature: "admin", action: "list" }), asy
        ORDER BY ss."createdAt" DESC`,
       [scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "List system stops"); }
 });
 

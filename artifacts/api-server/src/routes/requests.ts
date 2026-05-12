@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError,
   parseId,
@@ -241,7 +241,7 @@ router.get("/", authorize({ feature: "requests", action: "list" }), async (req, 
     } else {
       rows = await rawQuery(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE (r."companyId"=$1 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL AND (r."requesterId"::text=$2 OR r."currentApprover"=$3) ORDER BY r."createdAt" DESC LIMIT 500`, [scope.companyId, String(scope.activeAssignmentId), String(scope.activeAssignmentId)]);
     }
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
@@ -387,12 +387,12 @@ router.get("/catalog", authorize({ feature: "requests", action: "list" }), async
 
     const filteredCustomTypes = allTypes;
 
-    res.json({
+    res.json(maskFields(req, {
       catalog: filteredCatalog,
       customTypes: filteredCustomTypes,
       role,
       jobTitle,
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
@@ -400,7 +400,7 @@ router.get("/types", authorize({ feature: "requests", action: "list" }), async (
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM request_types WHERE "isActive"=true AND ("companyId"=$1 OR "companyId" IS NULL) ORDER BY name LIMIT 500`, [scope.companyId]);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
@@ -424,7 +424,7 @@ router.get("/workflows", authorize({ feature: "requests", action: "list" }), asy
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM workflows WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
@@ -454,12 +454,12 @@ router.get("/stats", authorize({ feature: "requests", action: "list" }), async (
       rawQuery(`SELECT COUNT(*) as count FROM requests WHERE status='approved' AND ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]),
       rawQuery(`SELECT COUNT(*) as count FROM request_types WHERE "isActive"=true AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]),
     ]);
-    res.json({
+    res.json(maskFields(req, {
       totalRequests: Number(total.count),
       pendingRequests: Number(pending.count),
       approvedRequests: Number(approved.count),
       activeTypes: Number(types.count),
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
@@ -469,7 +469,7 @@ router.get("/:id", authorize({ feature: "requests", action: "view", resource: { 
     const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<RequestRow>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("الطلب غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
@@ -788,7 +788,7 @@ router.get("/:id/actions", authorize({ feature: "requests", action: "list" }), a
       `SELECT aa.*, u.email as "actionByEmail" FROM approval_actions aa LEFT JOIN users u ON aa."actionBy"=u.id WHERE aa."entityType"='request' AND aa."entityId"=$1 AND aa."companyId"=$2 ORDER BY aa."createdAt" DESC`,
       [id, scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 

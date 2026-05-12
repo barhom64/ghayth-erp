@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
   zodParse,
@@ -117,7 +117,7 @@ router.get("/programs", authorize({ feature: "hr.training", action: "list" }), a
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM training_programs WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "training"); }
 });
 
@@ -159,7 +159,7 @@ router.get("/programs/:id", authorize({ feature: "hr.training", action: "view" }
     const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<TrainingProgramRow>(`SELECT * FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("البرنامج التدريبي غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "training"); }
 });
 
@@ -294,7 +294,7 @@ router.get("/enrollments", authorize({ feature: "hr.training", action: "list" })
     const params: unknown[] = [scope.companyId];
     if (programId) { params.push(programId); where += ` AND e."programId"=$${params.length}`; }
     const rows = await rawQuery(`SELECT e.*, tp.title as "programTitle" FROM training_enrollments e LEFT JOIN training_programs tp ON e."programId"=tp.id WHERE ${where} ORDER BY e."createdAt" DESC LIMIT 500`, params);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "training"); }
 });
 
@@ -356,7 +356,7 @@ router.get("/enrollments/:id", authorize({ feature: "hr.training", action: "view
     const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<TrainingEnrollmentRow>(`SELECT e.*, tp.title as "programTitle" FROM training_enrollments e LEFT JOIN training_programs tp ON e."programId"=tp.id WHERE e.id=$1 AND tp."companyId"=$2 AND e."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("التسجيل غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "training"); }
 });
 
@@ -415,12 +415,12 @@ router.get("/stats", authorize({ feature: "hr.training", action: "list" }), asyn
       rawQuery(`SELECT COUNT(*) as count FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE tp."companyId"=$1 AND tp."deletedAt" IS NULL AND e."deletedAt" IS NULL`, [cid]),
       rawQuery(`SELECT COUNT(*) as count FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE e.status='completed' AND tp."companyId"=$1 AND tp."deletedAt" IS NULL AND e."deletedAt" IS NULL`, [cid]),
     ]);
-    res.json({
+    res.json(maskFields(req, {
       totalPrograms: Number(programs.count),
       activePrograms: Number(active.count),
       totalEnrollments: Number(enrollments.count),
       completedEnrollments: Number(completed.count),
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "training"); }
 });
 

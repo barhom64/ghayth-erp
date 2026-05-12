@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { handleRouteError, ValidationError, NotFoundError,
   parseId,
@@ -101,7 +101,7 @@ router.get("/postings", authorize({ feature: "hr.recruitment", action: "list" })
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM job_postings WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
@@ -143,7 +143,7 @@ router.get("/postings/:id", authorize({ feature: "hr.recruitment", action: "view
     const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<JobPostingRow>(`SELECT * FROM job_postings WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("الإعلان الوظيفي غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
@@ -292,7 +292,7 @@ router.get("/applications", authorize({ feature: "hr.recruitment", action: "list
     const params: unknown[] = [scope.companyId];
     if (postingId) { params.push(postingId); where += ` AND a."postingId"=$${params.length}`; }
     const rows = await rawQuery(`SELECT a.*, jp.title as "postingTitle" FROM job_applications a LEFT JOIN job_postings jp ON a."postingId"=jp.id WHERE ${where} ORDER BY a."createdAt" DESC LIMIT 500`, params);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
@@ -336,7 +336,7 @@ router.get("/applications/:id", authorize({ feature: "hr.recruitment", action: "
     const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<JobApplicationRow>(`SELECT a.*, jp.title as "postingTitle" FROM job_applications a LEFT JOIN job_postings jp ON a."postingId"=jp.id WHERE a.id=$1 AND (jp."companyId"=$2 OR jp."companyId" IS NULL) AND a."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("طلب التوظيف غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
@@ -405,12 +405,12 @@ router.get("/stats", authorize({ feature: "hr.recruitment", action: "list" }), a
       rawQuery(`SELECT COUNT(*) as count FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.status='new' AND (jp."companyId"=$1 OR jp."companyId" IS NULL) AND a."deletedAt" IS NULL`, [cid]),
       rawQuery(`SELECT COUNT(*) as count FROM job_applications a JOIN job_postings jp ON a."postingId"=jp.id WHERE a.status='interview' AND (jp."companyId"=$1 OR jp."companyId" IS NULL) AND a."deletedAt" IS NULL`, [cid]),
     ]);
-    res.json({
+    res.json(maskFields(req, {
       openPostings: Number(postings.count),
       totalApplications: Number(applications.count),
       newApplications: Number(newApps.count),
       scheduledInterviews: Number(interviews.count),
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 

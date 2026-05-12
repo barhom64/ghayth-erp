@@ -3,7 +3,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { auditLog } from "../lib/audit.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
@@ -154,13 +154,13 @@ router.get("/my", async (req, res) => {
     const revokes = new Set(userPermRows.filter((p) => p.type === "revoke").map((p) => p.permission));
     const grantedPerms = Array.from(new Set([...rolePerms, ...grants])).filter((p) => !revokes.has(p));
 
-    res.json({
+    res.json(maskFields(req, {
       userId: scope.userId,
       roles,
       highestLevel,
       modules: allModules,
       permissions: grantedPerms,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Get my permissions error:");
   }
@@ -173,7 +173,7 @@ router.get("/role-permissions", authorize({ feature: "admin.roles", action: "vie
       `SELECT * FROM role_permissions WHERE "companyId" IS NULL OR "companyId" = $1 ORDER BY role, permission`,
       [scope.companyId]
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "Get role permissions error:");
   }
@@ -237,7 +237,7 @@ router.get("/user-permissions", authorize({ feature: "admin.roles", action: "vie
        ORDER BY p.permission`,
       [targetId, scope.companyId]
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "Get user permissions error:");
   }

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { handleRouteError } from "../lib/errorHandler.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 
 const router = Router();
 
@@ -187,12 +187,12 @@ router.get("/", authorize({ feature: "admin", action: "list" }), async (req, res
       params
     );
 
-    res.json({
+    res.json(maskFields(req, {
       data: rows,
       total: Number(countResult?.total ?? 0),
       limit: pageLimit,
       offset: pageOffset,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "activityLog");
   }
@@ -232,7 +232,7 @@ router.get("/summary", authorize({ feature: "admin", action: "list" }), async (r
         [cid, scope.activeAssignmentId]),
     ]);
 
-    res.json({
+    res.json(maskFields(req, {
       pendingRequests: Number(pendingRequests?.count ?? 0),
       pendingLeaves: Number(pendingLeaves?.count ?? 0),
       overdueInvoices: Number(overdueInvoices?.count ?? 0),
@@ -241,7 +241,7 @@ router.get("/summary", authorize({ feature: "admin", action: "list" }), async (r
       expiringContracts: Number(expiringContracts?.count ?? 0),
       lowStock: Number(lowStock?.count ?? 0),
       unreadNotifications: Number(unreadNotifications?.count ?? 0),
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "activityLog");
   }
