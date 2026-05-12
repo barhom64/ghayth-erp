@@ -34,13 +34,34 @@
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/misc.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+الصفحة الرئيسية (Dashboard) — أول صفحة بعد login. تختلف حسب الدور.
+
+| الدور | البيانات المعروضة |
+|-------|---------------------|
+| Employee | My attendance, my leaves, my tasks, my requests |
+| Manager | + team KPIs (راجع `manager-board.md`) |
+| HR | + headcount, pending hiring, exits |
+| Finance | + AR aging, today's vouchers, posting failures |
+| CFO | + Revenue MTD, cash position, budget alerts |
+| CEO | + exec dashboard summary |
+| Admin | + system health, RBAC violations, governance alerts |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| تحميل dashboard حسب role | client-side router | ✅ |
+| Check-in/out (للموظف) | راجع `hr-attendance.md` | ✅ |
+| Quick stats per scope | aggregate من 10+ مصدر | views | ✅ |
+| إشعارات unread badge | aggregate `notifications.unreadCount` | ✅ |
+| Recent activities | `event_logs` آخر 20 | ✅ |
+| Pending approvals badge | aggregate `approval_chain_steps` | ✅ |
+| Quick links (top 5 used) | based on user behavior | ⚠ يدوي حالياً |
+| Birthday/anniversary reminders | hr | ⚠ |
+| Audit log | لا تُسجّل (read-only) | ✅ |
+
+تحقق يدوي:
+- [ ] هل الـ default view لكل role مُهيَّأ بالفعل؟
+- [ ] هل المستخدم يستطيع تخصيص dashboard لنفسه؟ (`personal_dashboards`)
+- [ ] هل dashboard لا يُحمّل بيانات حساسة لا يحتاجها المستخدم (lazy load)؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `dashboard` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

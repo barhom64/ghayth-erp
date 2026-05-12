@@ -23,13 +23,35 @@ _لم تُلتقط أزرار._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/misc.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+لوحة التنفيذي (Exec Dashboard) — KPIs على مستوى المؤسسة (CEO/CFO/MD).
+
+| Pillar | KPIs | المصدر |
+|--------|------|--------|
+| **Financial Health** | Revenue YTD, Net Income, EBITDA, Cash Position | finance/GL, fiscal-periods |
+| **Liquidity** | Quick Ratio, AR/AP Aging, Days Cash Outstanding | finance/AR, AP |
+| **Profitability** | Gross Margin, Net Margin per segment | finance/reports |
+| **Compliance** | ZATCA submission, GOSI, WPS, audit findings | gov-integrations + governance |
+| **HR Headcount** | Total, hiring rate, exit rate, turnover | hr |
+| **Operations** | Active projects, properties occupancy, fleet utilization | operations |
+| **Risk** | Top risks by score, open CAPAs | governance |
+| **Sales** | Pipeline value, win rate, top clients | crm |
+| **Customer** | NPS, support ticket volume, churn | support |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| تجميع KPIs بدون filter scope | aggregate across all branches | unrestricted view | ✅ |
+| فلترة per company (multi-tenant) | scopeQueryString | ✅ |
+| Drill-down حسب الـ pillar | navigate to source module | ✅ |
+| Comparative analytics (YoY, QoQ) | aggregate per period | views | ✅ |
+| Forecasting (cash flow + revenue) | finance/cash-flow-forecast | ⚠ تحقق |
+| تنبيهات حرجة (RED alerts) | event=`exec_alert` | `notifications` | ✅ |
+| تصدير PDF | branded report | ⚠ |
+| RBAC level 90+ only | يفعّل في route minRoleLevel | ✅ |
+
+تحقق يدوي:
+- [ ] هل MD يرى كل الشركات الفرعية في نفس الـ holding أم فقط شركته؟
+- [ ] هل CFO له view مالي معمّق + CEO له strategic بدون التفاصيل المحاسبية؟
+- [ ] هل تنبيهات RED تطلق إيميل/SMS فوري بدلاً من in-app فقط؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `exec-dashboard` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
