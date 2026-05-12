@@ -23,13 +23,27 @@ _لم تُلتقط أزرار._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/fleet.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+صيانة المركبات (preventive + corrective).
+
+| الحركة | الوحدة الهدف | مدخل API | مدخل DB | الحالة |
+|--------|--------------|----------|---------|--------|
+| تسجيل أمر صيانة | fleet | `fleet.ts` POST `/maintenance` | `fleet_maintenance` | ✅ |
+| اقتراح صيانة وقائية (تلقائي) | fleet | cron يقرأ odometer + interval | ينشئ row تلقائياً | ✅ |
+| ربط بمركبة | fleet | `maintenance.vehicleId` → `vehicles` | ✅ |
+| إسناد لورشة (vendor) | finance/vendors | `maintenance.vendorId` → `vendors` | ✅ |
+| تقدير + اعتماد التكلفة | governance/workflows | `business_rules.fleet_maintenance_approval` | `approval_chains` | ✅ |
+| تنفيذ + رفع تقارير | fleet | `maintenance_attachments` (قبل/بعد + فاتورة) | object storage | ✅ |
+| **قيد محاسبي** | finance/GL | DR Vehicle Maintenance Expense / CR AP أو Cash | `gl_entries` | ✅ |
+| تحديث vehicle status | fleet | أثناء الصيانة `vehicles.status='in_maintenance'` | ✅ |
+| تعطيل الرحلات أثناء الصيانة | fleet/trips | `trips` لا تستطيع البدء على مركبة معطّلة | guard | ⚠ تحقق |
+| تأثير على TCO | fleet | aggregation in `vehicle_tco` | view | ✅ |
+| إشعارات (السائق + المدير + المالية) | comms | event=`maintenance_scheduled\|completed\|overdue` | `notifications` | ✅ |
+| Audit log | core | `auditMiddleware` (`/fleet/maintenance`) | `audit_logs` (entity=`maintenance`) | ✅ |
+
+تحقق يدوي:
+- [ ] هل تجاوز ميزانية الصيانة السنوية يطلق تنبيه؟
+- [ ] هل الصيانة الطارئة تتخطى الـ approval (emergency override)؟
+- [ ] هل التكلفة الفعلية > التقدير بـ X% تطلب موافقة إضافية؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `maintenance` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
