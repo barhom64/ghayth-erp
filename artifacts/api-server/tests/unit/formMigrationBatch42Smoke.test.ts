@@ -47,7 +47,9 @@ describe("umrah/commission-plan-editor — simulator on FormShell + zod", () => 
   it("runSim takes a typed SimForm + POSTs to the simulate endpoint", () => {
     expect(SRC).toContain("type SimForm = z.infer<typeof simSchema>");
     expect(SRC).toContain("const runSim = async (values: SimForm)");
-    expect(SRC).toMatch(/apiFetch\(`\/umrah\/commission-plans\/\$\{plan\.id\}\/simulate`/);
+    // Batch 43 replaced plan.id with planRowId after the plan
+    // editor itself moved into FormShell — either match is fine.
+    expect(SRC).toMatch(/apiFetch\(`\/umrah\/commission-plans\/\$\{(plan\.id|planRowId)\}\/simulate`/);
   });
 
   it("simBusy + simResult preserved as parent useState (status flags, not form data)", () => {
@@ -55,12 +57,14 @@ describe("umrah/commission-plan-editor — simulator on FormShell + zod", () => 
     expect(SRC).toMatch(/const \[simBusy, setSimBusy\] = useState\(false\)/);
   });
 
-  it("plan editor INTENTIONALLY preserved — multi-section, future batch", () => {
-    // The bigger plan form (with tiers/excludedMonths/conditions)
-    // still uses setPlan(). Documented above.
-    expect(SRC).toContain("setPlan(");
-    expect(SRC).toContain("const updateTier =");
-    expect(SRC).toContain("const addTier =");
+  it("simulator's parent page (plan editor) — migrated in batch 43", () => {
+    // Originally this test guarded that the plan editor stayed on
+    // useState. Batch 43 (#TBD) followed and migrated the plan
+    // editor itself to FormShell + useFieldArray. The simSchema
+    // and SimForm type still live in the same file, but the plan
+    // state now goes through useFormContext.
+    expect(SRC).toContain("planSchema = z.object(");
+    expect(SRC).toContain("type PlanForm = z.infer<typeof planSchema>");
   });
 
   it("FormShell renders the submit button — replaces the GuardedButton onClick={runSim}", () => {
