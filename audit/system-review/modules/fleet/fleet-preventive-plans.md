@@ -8,15 +8,14 @@
 - الكومبوننت: `PreventivePlans`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `preventive-plans`
-- سطور الملف: 287
+- سطور الملف: 288
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L189: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L214: "(بلا تسمية)" → `() => setShowForm(false)`
+- L215: "(بلا تسمية)" → `() => setShowForm(false)`
 
 ### القراءات (GET)
 - GET `/fleet/vehicles?limit=200`

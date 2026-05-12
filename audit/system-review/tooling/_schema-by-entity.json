@@ -261,7 +261,7 @@
   "hr_leave_balances": {
     "exportName": "hrLeaveBalances",
     "tableName": "hr_leave_balances",
-    "columnCount": 10,
+    "columnCount": 11,
     "columns": [
       "id",
       "companyId",
@@ -272,13 +272,14 @@
       "entitled",
       "used",
       "reserved",
-      "remaining"
+      "remaining",
+      "createdAt"
     ],
     "audit": {
       "tenant": true,
       "createdBy": false,
       "updatedBy": false,
-      "createdAt": false,
+      "createdAt": true,
       "updatedAt": false,
       "softDelete": false,
       "lifecycle": false
@@ -339,7 +340,7 @@
   "journal_lines": {
     "exportName": "journalLines",
     "tableName": "journal_lines",
-    "columnCount": 7,
+    "columnCount": 8,
     "columns": [
       "id",
       "journalId",
@@ -347,13 +348,14 @@
       "accountId",
       "debit",
       "credit",
-      "description"
+      "description",
+      "createdAt"
     ],
     "audit": {
       "tenant": false,
       "createdBy": false,
       "updatedBy": false,
-      "createdAt": false,
+      "createdAt": true,
       "updatedAt": false,
       "softDelete": false,
       "lifecycle": false
@@ -631,7 +633,7 @@
   "payroll_lines": {
     "exportName": "payrollLines",
     "tableName": "payroll_lines",
-    "columnCount": 18,
+    "columnCount": 19,
     "columns": [
       "id",
       "runId",
@@ -650,13 +652,14 @@
       "overtime",
       "overtimeHours",
       "netSalary",
-      "deletedAt"
+      "deletedAt",
+      "createdAt"
     ],
     "audit": {
       "tenant": true,
       "createdBy": false,
       "updatedBy": false,
-      "createdAt": false,
+      "createdAt": true,
       "updatedAt": false,
       "softDelete": true,
       "lifecycle": false
@@ -745,20 +748,21 @@
   "approval_chain_steps": {
     "exportName": "approvalChainSteps",
     "tableName": "approval_chain_steps",
-    "columnCount": 6,
+    "columnCount": 7,
     "columns": [
       "id",
       "chainId",
       "stepOrder",
       "requiredRole",
       "timeoutHours",
-      "autoApproveOnTimeout"
+      "autoApproveOnTimeout",
+      "createdAt"
     ],
     "audit": {
       "tenant": false,
       "createdBy": false,
       "updatedBy": false,
-      "createdAt": false,
+      "createdAt": true,
       "updatedAt": false,
       "softDelete": false,
       "lifecycle": false

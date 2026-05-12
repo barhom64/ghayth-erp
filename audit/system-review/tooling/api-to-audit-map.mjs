@@ -125,7 +125,10 @@ function scanFile(file) {
       mountPrefix: prefix,
       file: fileRel,
       line: i + 1,
-      hasAudit: /createAuditLog\s*\(/.test(win) || isAuditedByMiddleware(joined),
+      hasAudit:
+        /createAuditLog\s*\(/.test(win) ||
+        /emitEvent\s*\(/.test(win) ||
+        isAuditedByMiddleware(joined),
       hasEmitEvent: /emitEvent\s*\(/.test(win),
       hasLifecycle: /applyTransition\s*\(|nextState\s*\(/.test(win),
       hasNotification: /sendNotification\s*\(|queueNotification\s*\(|notify\(/.test(win),

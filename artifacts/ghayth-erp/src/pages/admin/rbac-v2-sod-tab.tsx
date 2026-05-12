@@ -5,6 +5,7 @@ import { useApiQuery, apiFetch } from "@/lib/api";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { ShieldAlert, Plus, Trash2, AlertTriangle, X } from "lucide-react";
@@ -120,9 +121,9 @@ export function SodRulesTab() {
             تمنع اجتماع صلاحيتين متعارضتين في دور واحد (مَن يُنشئ القيد لا يَعتمده).
           </p>
         </div>
-        <Button size="sm" onClick={() => setShowAdd(!showAdd)}>
+        <GuardedButton perm="admin:create" size="sm" onClick={() => setShowAdd(!showAdd)}>
           {showAdd ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />قاعدة جديدة</>}
-        </Button>
+        </GuardedButton>
       </div>
 
       {showAdd && (
@@ -182,9 +183,9 @@ export function SodRulesTab() {
                 )}
               </div>
               <div className="col-span-1">
-                <Button size="sm" variant="ghost" onClick={() => remove(r)}>
+                <GuardedButton perm="admin:create" size="sm" variant="ghost" onClick={() => remove(r)}>
                   <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+                </GuardedButton>
               </div>
             </div>
           );

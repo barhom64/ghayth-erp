@@ -5,6 +5,7 @@ import { useApiQuery, apiFetch, buildErrorToast } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { PromptDialog } from "@/components/shared/prompt-dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -201,12 +202,13 @@ export default function DisciplineMemoDetailPage() {
               />
               أرفض تقديم تبرير
             </label>
-            <Button
+            <GuardedButton
+              perm="hr:create"
               onClick={() => act("/justify", { justification, declined }, "تم إرسال التبرير")}
               disabled={busy || (!justification && !declined)}
             >
               إرسال التبرير
-            </Button>
+            </GuardedButton>
           </CardContent>
         </Card>
       )}
@@ -243,7 +245,8 @@ export default function DisciplineMemoDetailPage() {
                 rows={3}
               />
             </div>
-            <Button
+            <GuardedButton
+              perm="hr:approve"
               onClick={() =>
                 act(
                   "/manager-recommendation",
@@ -254,7 +257,7 @@ export default function DisciplineMemoDetailPage() {
               disabled={busy}
             >
               إرسال التوصية
-            </Button>
+            </GuardedButton>
           </CardContent>
         </Card>
       )}
@@ -297,7 +300,8 @@ export default function DisciplineMemoDetailPage() {
                 rows={3}
               />
             </div>
-            <Button
+            <GuardedButton
+              perm="hr:approve"
               onClick={() =>
                 act(
                   "/gm-decision",
@@ -308,7 +312,7 @@ export default function DisciplineMemoDetailPage() {
               disabled={busy}
             >
               اعتماد القرار
-            </Button>
+            </GuardedButton>
           </CardContent>
         </Card>
       )}
@@ -316,7 +320,8 @@ export default function DisciplineMemoDetailPage() {
       {!["approved", "rejected", "cancelled", "closed", "appeal_pending", "appeal_accepted"].includes(memo.status) && (
         <Card>
           <CardContent className="pt-6">
-            <Button
+            <GuardedButton
+              perm="hr:delete"
               variant="outline"
               className="text-red-600"
               onClick={() => setShowCancelDialog(true)}
@@ -324,7 +329,7 @@ export default function DisciplineMemoDetailPage() {
             >
               <Ban className="w-4 h-4 me-2" />
               إلغاء المحضر
-            </Button>
+            </GuardedButton>
           </CardContent>
         </Card>
       )}
@@ -351,9 +356,9 @@ export default function DisciplineMemoDetailPage() {
                   rows={4}
                 />
                 <div className="flex gap-2">
-                  <Button onClick={() => act("/appeal", { reason: appealReason }, "تم تقديم الاستئناف")} disabled={busy || !appealReason.trim()}>
+                  <GuardedButton perm="hr:create" onClick={() => act("/appeal", { reason: appealReason }, "تم تقديم الاستئناف")} disabled={busy || !appealReason.trim()}>
                     إرسال الاستئناف
-                  </Button>
+                  </GuardedButton>
                   <Button variant="outline" onClick={() => setShowAppeal(false)}>إلغاء</Button>
                 </div>
               </>
@@ -378,12 +383,12 @@ export default function DisciplineMemoDetailPage() {
               </div>
             )}
             <div className="flex gap-2">
-              <Button className="bg-green-600 hover:bg-green-700" disabled={busy} onClick={() => act("/appeal-decision", { decision: "accepted", comment: "" }, "تم قبول الاستئناف")}>
+              <GuardedButton perm="hr:approve" className="bg-green-600 hover:bg-green-700" disabled={busy} onClick={() => act("/appeal-decision", { decision: "accepted", comment: "" }, "تم قبول الاستئناف")}>
                 قبول الاستئناف
-              </Button>
-              <Button variant="destructive" disabled={busy} onClick={() => act("/appeal-decision", { decision: "rejected", comment: "" }, "تم رفض الاستئناف")}>
+              </GuardedButton>
+              <GuardedButton perm="hr:delete" variant="destructive" disabled={busy} onClick={() => act("/appeal-decision", { decision: "rejected", comment: "" }, "تم رفض الاستئناف")}>
                 رفض الاستئناف
-              </Button>
+              </GuardedButton>
             </div>
           </CardContent>
         </Card>
@@ -393,9 +398,9 @@ export default function DisciplineMemoDetailPage() {
       {["approved", "rejected", "appeal_accepted", "cancelled"].includes(memo.status) && memo.status !== "closed" && (
         <Card>
           <CardContent className="pt-6 flex items-center gap-3 flex-wrap">
-            <Button variant="outline" onClick={() => act("/close", { note: "إقفال عادي" }, "تم إقفال المحضر")} disabled={busy}>
+            <GuardedButton perm="hr:approve" variant="outline" onClick={() => act("/close", { note: "إقفال عادي" }, "تم إقفال المحضر")} disabled={busy}>
               <Lock className="w-4 h-4 me-2" /> إقفال المحضر
-            </Button>
+            </GuardedButton>
             <Link href={`/communications/letters/create?relatedType=discipline_memo&relatedId=${memo.id}&subject=${encodeURIComponent(`إخطار تأديبي — ${memo.memoNumber}`)}`}>
               <Button variant="outline">
                 <Mail className="w-4 h-4 me-2" /> إصدار خطاب تأديبي

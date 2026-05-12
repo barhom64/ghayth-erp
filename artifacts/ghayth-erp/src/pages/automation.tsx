@@ -7,6 +7,7 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { Switch } from "@/components/ui/switch";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Cog, Play, Clock, Search, Zap, Activity, Bot, TrendingUp } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -109,7 +110,7 @@ export default function Automation() {
     { key: "isActive", header: "نشط", render: (j) => <Switch checked={j.isActive} onCheckedChange={() => handleToggle(j.id)} /> },
     {
       key: "actions", header: "الإجراءات",
-      render: (j) => <Button variant="outline" size="sm" className="gap-1" onClick={() => handleTrigger(j.id)}><Play className="h-3 w-3" /> تشغيل</Button>,
+      render: (j) => <GuardedButton perm="settings:create" variant="outline" size="sm" className="gap-1" onClick={() => handleTrigger(j.id)}><Play className="h-3 w-3" /> تشغيل</GuardedButton>,
     },
   ];
 

@@ -4,6 +4,7 @@ import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ShieldAlert, Plus, AlertTriangle } from "lucide-react";
@@ -200,9 +201,9 @@ export default function RisksPage() {
         <>
           {criticalCount > 0 && <Badge className="bg-red-100 text-red-700">{criticalCount} حرج</Badge>}
           {highCount > 0 && <Badge className="bg-orange-100 text-orange-700">{highCount} عالٍ</Badge>}
-          <Button onClick={() => setShowForm(!showForm)} size="sm" disabled={!projectId}>
+          <GuardedButton perm="projects:create" onClick={() => setShowForm(!showForm)} size="sm" disabled={!projectId}>
             <Plus className="w-4 h-4 me-1" /> إضافة مخاطرة
-          </Button>
+          </GuardedButton>
         </>
       }
     >

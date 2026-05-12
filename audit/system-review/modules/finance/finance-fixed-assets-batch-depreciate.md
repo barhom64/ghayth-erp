@@ -14,7 +14,7 @@
 ## 2. الأزرار والإجراءات
 | الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
 |------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(write)_ | `/finance/fixed-assets/depreciate-all` | POST | — | — | — | — | ✅ | ✅ | ✅ |
+| _(write)_ | `/finance/fixed-assets/depreciate-all` | POST | ✅ | ✅ | — | — | ✅ | ✅ | ✅ |
 
 ### تفاصيل الأزرار المرئية
 - L48: "مسح المسودة" → `clearDraft`
@@ -26,13 +26,24 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/finance.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+إهلاك دفعي لأصول ثابتة. عملية شهرية cron-driven.
+
+| الحركة | الوحدة الهدف | مدخل API | مدخل DB | الحالة |
+|--------|--------------|----------|---------|--------|
+| اختيار الأصول المؤهلة | finance/fixed-assets | `fixed_assets.status='active' AND remaining_useful_life > 0 AND no record for period` | aggregation | ✅ |
+| حساب الإهلاك لكل أصل | finance/fixed-assets | straight-line: `cost / useful_life_months` | scalar في الـ handler | ✅ |
+| **قيد محاسبي** | finance/GL | DR Depreciation Expense / CR Accumulated Depreciation (واحد per أصل، داخل `withTransaction`) | `gl_entries`, `gl_lines` | ✅ موجود |
+| تحديث `accumulatedDepreciation` و `currentBookValue` | finance/fixed-assets | UPDATE داخل الـ transaction | `fixed_assets.accumulatedDepreciation`, `currentBookValue` | ✅ |
+| تسجيل سطر في schedule | finance/fixed-assets | INSERT لـ `depreciation_schedules` (status='posted') | `depreciation_schedules` | ✅ |
+| Event log (audit trail) | core | `emitEvent('finance.fixed_assets.batch_depreciated')` | `event_logs` (مع `period`, `assetsCount`, `totalDepreciation`) | ✅ مُضاف الآن |
+| إشعار لـ Finance Manager | comms | event=`finance.fixed_assets.batch_depreciated` consumed | `notifications` (مستقبلي) | ⚠ غير متفعّل |
+| تكامل مع التقارير المالية | finance/reports | يظهر في income statement كمصروف، balance sheet كتراكم | views | ✅ |
+
+تحقق يدوي:
+- [ ] هل cron يُشغّل تلقائياً في يوم محدد من الشهر؟ ما يحصل لو فاتت أكثر من فترة (catch-up)؟
+- [ ] هل أصل تجاوز عمره الافتراضي يبقى عند book_value=0 ولا يولّد قيد؟
+- [ ] هل إعادة تشغيل البطاقة لنفس الفترة محصّن ضد الازدواجية (idempotency)؟
+- [ ] هل توجد حالة "روجع للمراجعة" قبل ترحيل القيود — أم تُرحّل مباشرة؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `batch-depreciate` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

@@ -8,19 +8,16 @@
 - الكومبوننت: `Evaluation360Create`
 - subKey: `performance` | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 200
+- سطور الملف: 297
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(write)_ | `/hr/evaluation-cycles` | POST | ✅ | — | ✅ | — | ✅ | ✅ | ✅ |
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L102: "مسح المسودة" → `clearDraft`
-- L163: "إضافة" → `addParticipant`
-- L192: "(بلا تسمية)" → `() => setLocation("/hr/evaluation-360")` 🔒
-- L193: "(بلا تسمية)" → `handleSave` 🔒
+- L124: "(بلا تسمية)" → `() => setLocation("/hr/evaluation-360")`
+- L188: "إضافة" → `addParticipant`
+- L247: "(بلا تسمية)"
 
 ### القراءات (GET)
 _لا قراءات._

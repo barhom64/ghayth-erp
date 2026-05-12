@@ -5,6 +5,7 @@ import { formatDateAr } from "@/lib/formatters";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 // Phase A — HR official letters on unified primitives.
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -126,9 +127,9 @@ export default function OfficialLettersPage() {
       subtitle="إصدار ومتابعة الخطابات الرسمية للموظفين"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>
+        <GuardedButton perm="hr:create" size="sm" onClick={() => setShowForm(!showForm)}>
           <Plus className="h-4 w-4 me-1" />{showForm ? "إلغاء" : "خطاب جديد"}
-        </Button>
+        </GuardedButton>
       }
     >
       <KpiGrid items={[
