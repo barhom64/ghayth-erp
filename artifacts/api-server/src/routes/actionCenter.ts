@@ -162,14 +162,14 @@ router.get("/", async (req, res) => {
 
     let todayTasks: any[] = [];
     try {
-      const { where: tw, params: tp, nextParamIndex } = buildScopedWhere(scope, filters);
+      const { where: tw, params: tp, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 't."companyId"', branchColumn: 't."branchId"' });
       todayTasks = await rawQuery<any>(
         `SELECT t.id, t.title, t.status, t.priority, t."scheduledDate",
                 e.name AS "assigneeName"
          FROM tasks t
          LEFT JOIN employee_assignments ea ON ea.id = t."assignedTo"
          LEFT JOIN employees e ON e.id = ea."employeeId"
-         WHERE ${tw.replace(/"companyId"/g, 't."companyId"').replace(/"branchId"/g, 't."branchId"')}
+         WHERE ${tw}
            AND t."deletedAt" IS NULL
            AND t."scheduledDate" = $${nextParamIndex}
          ORDER BY t.priority DESC, t.status ASC
