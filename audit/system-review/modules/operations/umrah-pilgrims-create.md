@@ -3,21 +3,20 @@
 ## 1. الميتاداتا
 - المسار: `/umrah/pilgrims/create`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/pilgrim-create.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:40`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:49`
 - المجموعة: `operations`
 - الكومبوننت: `PilgrimCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 103
+- سطور الملف: 104
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L47: "(بلا تسمية)"
-- L95: "إلغاء" → `save` 🔒
-- L96: "(بلا تسمية)" → `save` 🔒
+- L48: "(بلا تسمية)"
+- L96: "إلغاء" → `save` 🔒
 
 ### القراءات (GET)
 - GET `/umrah/seasons`

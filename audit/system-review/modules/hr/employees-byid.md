@@ -8,21 +8,19 @@
 - الكومبوننت: `EmployeeDetail`
 - subKey: `employees` | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 963
+- سطور الملف: 964
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L347: "(بلا تسمية)" → `() => setActiveTab("attendance")`
-- L357: "(بلا تسمية)" → `() => setActiveTab("leaves")`
-- L387: "(بلا تسمية)" → `() => setActiveTab("tasks")`
-- L422: "(بلا تسمية)" → `() => setActiveTab("payroll")`
-- L474: "تعديل" → `govStartEdit`
-- L535: "حفظ" → `govSaveEdit`
-- L538: "(بلا تسمية)" → `() => setGovEditing(false)`
-- L854: "(بلا تسمية)" → `() => setShowPrintMenu(!showPrintMenu)`
+- L348: "(بلا تسمية)" → `() => setActiveTab("attendance")`
+- L358: "(بلا تسمية)" → `() => setActiveTab("leaves")`
+- L388: "(بلا تسمية)" → `() => setActiveTab("tasks")`
+- L423: "(بلا تسمية)" → `() => setActiveTab("payroll")`
+- L539: "(بلا تسمية)" → `() => setGovEditing(false)`
+- L855: "(بلا تسمية)" → `() => setShowPrintMenu(!showPrintMenu)`
 
 ### القراءات (GET)
 - GET `/documents/templates`
@@ -30,13 +28,32 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/hr.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+ملف الموظف. المرجع: `docs/HR_REFERENCE_MODEL.md`. **الكيان الأكثر تشعّباً في النظام** — يلامس كل وحدة HR.
+
+| الحركة | الوحدة الهدف | مدخل API | مدخل DB | الحالة |
+|--------|--------------|----------|---------|--------|
+| إنشاء موظف | hr | `employees.ts` POST `/` | `employees` (global identity) | ✅ |
+| تخصيص (تعيين وظيفي) | hr | POST `/employee-assignments` (شركة + فرع + قسم + راتب) | `employee_assignments` (هنا يدخل tenant) | ✅ |
+| ربط بمستخدم نظام | auth | اختياري — `users.employeeId` → `employees.id` | تفعيل الـ Self-service | ✅ |
+| مكونات الراتب | hr | `salary_components` لكل assignment | يُستخدم في `payroll_runs` | ✅ |
+| الحضور | hr/attendance | كل check-in/out يستخدم `assignmentId` | `attendance` | ✅ |
+| الإجازات | hr/leaves | `hr_leave_balances` per (employee + year + leaveType) | ✅ |
+| السلف | hr/loans | `hr_loans.employeeId` | ✅ |
+| المخالفات | hr/discipline | `employee_violations.assignmentId` | ✅ |
+| التقييم | hr/performance | `hr_performance_reviews` + `evaluation_cycles` | ✅ |
+| التدريب | hr/training | `training_enrollments.employeeId` | ✅ |
+| الوثائق | documents | `documents.entityId=employee_id, entityType='employee'` | ✅ |
+| مخالفات مرورية (إن سائق) | fleet | `fleet_traffic_violations.driverId` → `drivers.employeeId` | ✅ |
+| مكافأة نهاية الخدمة | hr/gratuity | محسوبة من تاريخ التعيين + آخر راتب | `hr_gratuity_calculations` | ✅ |
+| إشعارات (تجديد إقامة/جواز/شهادة...) | comms | cron يقرأ `employees.expiringDates` | `notifications` | ✅ |
+| تكامل GOSI (التأمينات) | gov-integrations | اختياري | `gosi_submissions` | ⚠ |
+| Audit log | core | `auditMiddleware` (`/employees`) | `audit_logs` (entity=`employee`) | ✅ |
+
+تحقق يدوي:
+- [ ] هل حذف موظف (soft) يقفل كل assignments تلقائياً ويوقف الرواتب؟
+- [ ] هل تغيير الـ assignment (نقل قسم) يحدّث `salary_components` تلقائياً أم يدوي؟
+- [ ] هل الموظف الذي مرّ عبر شركات متعددة (نفس tenant) يحتفظ بسجل كامل؟
+- [ ] هل GOSI نسبة الموظف vs صاحب العمل محسوبة من نفس مصدر القاعدة؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `:id` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

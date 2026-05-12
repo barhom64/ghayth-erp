@@ -8,19 +8,14 @@
 - الكومبوننت: `ScheduledReports`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `scheduled`
-- سطور الملف: 262
+- سطور الملف: 290
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(write)_ | `/scheduled-reports` | POST | — | — | — | — | ✅ | ✅ | — |
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L89: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L140: "(بلا تسمية)" → `handleSubmit` 🔒
-- L144: "(بلا تسمية)" → `() => setShowForm(false)`
-- L253: "(بلا تسمية)" → `handleDelete` 🔒
+- L125: "(بلا تسمية)" → `() => setShowForm(false)`
 
 ### القراءات (GET)
 - GET `/scheduled-reports`
