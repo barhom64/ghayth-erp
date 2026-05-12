@@ -180,13 +180,15 @@ router.get("/overview", authorize({ feature: "admin", action: "list" }), async (
     const scope = req.scope!;
     const cid = scope.companyId;
 
-    const [employees] = await rawQuery<any>(`SELECT COUNT(*) as total FROM employee_assignments WHERE "companyId"=$1 AND status='active'`, [cid]);
-    const [vehicles] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_vehicles WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [properties] = await rawQuery<any>(`SELECT COUNT(*) as total FROM property_units WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [projects] = await rawQuery<any>(`SELECT COUNT(*) as active FROM projects WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]);
-    const [tickets] = await rawQuery<any>(`SELECT COUNT(*) as open FROM support_tickets WHERE "companyId"=$1 AND status='open' AND "deletedAt" IS NULL`, [cid]);
-    const [revenue] = await rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) as total FROM invoices WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "createdAt" >= date_trunc('month', CURRENT_DATE)`, [cid]);
-    const [alerts] = await rawQuery<any>(`SELECT COUNT(*) as unread FROM smart_alerts WHERE "companyId"=$1 AND "isRead"=false`, [cid]);
+    const [[employees], [vehicles], [properties], [projects], [tickets], [revenue], [alerts]] = await Promise.all([
+      rawQuery<any>(`SELECT COUNT(*) as total FROM employee_assignments WHERE "companyId"=$1 AND status='active'`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_vehicles WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as total FROM property_units WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as active FROM projects WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as open FROM support_tickets WHERE "companyId"=$1 AND status='open' AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) as total FROM invoices WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "createdAt" >= date_trunc('month', CURRENT_DATE)`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as unread FROM smart_alerts WHERE "companyId"=$1 AND "isRead"=false`, [cid]),
+    ]);
 
     res.json({
       totalEmployees: Number(employees?.total ?? 0),
