@@ -29,7 +29,7 @@ router.get("/", async (req, res) => {
     const assignIdx = nextParamIndex + 1;
     const taskParams = [...params, today, scope.activeAssignmentId];
 
-    const [taskStats] = await rawQuery<any>(
+    const [taskStats] = await rawQuery<Record<string, unknown>>(
       `SELECT
         COUNT(*) FILTER (WHERE status IN ('pending','in_progress') AND "scheduledDate" = $${todayIdx}) AS "todayTasks",
         COUNT(*) FILTER (WHERE status IN ('pending','in_progress') AND "assignedTo" = $${assignIdx}) AS "awaitingMe",
@@ -45,7 +45,7 @@ router.get("/", async (req, res) => {
       taskParams
     );
 
-    const todayTasks = await rawQuery<any>(
+    const todayTasks = await rawQuery<Record<string, unknown>>(
       `SELECT t.id, t.title, t.status, t.priority, t."scheduledDate",
               e.name AS "assigneeName"
        FROM tasks t
@@ -60,7 +60,7 @@ router.get("/", async (req, res) => {
     );
 
     const { where: leaveWhere, params: leaveParams } = buildFilterNoBranch(scope, req);
-    const pendingApprovals = await rawQuery<any>(
+    const pendingApprovals = await rawQuery<Record<string, unknown>>(
       `SELECT lr.id, e.name AS "employeeName", lt.name AS "leaveType",
               lr."startDate", lr."endDate", lr.days, lr.status, lr."createdAt"
        FROM hr_leave_requests lr
@@ -72,10 +72,10 @@ router.get("/", async (req, res) => {
       leaveParams
     );
 
-    let pendingFinanceApprovals: any[] = [];
+    let pendingFinanceApprovals: Record<string, unknown>[] = [];
     try {
       const { where: fw, params: fp } = buildFilter(scope, req);
-      pendingFinanceApprovals = await rawQuery<any>(
+      pendingFinanceApprovals = await rawQuery<Record<string, unknown>>(
         `SELECT id, ref, title, status, "createdAt"
          FROM expense_claims
          WHERE ${fw} AND "deletedAt" IS NULL AND status = 'pending'
@@ -85,10 +85,10 @@ router.get("/", async (req, res) => {
       );
     } catch (_e) { logger.error(_e, "Dashboard: failed to load pending expense claims:"); }
 
-    let pendingPurchaseRequests: any[] = [];
+    let pendingPurchaseRequests: Record<string, unknown>[] = [];
     try {
       const { where: pw, params: pp } = buildFilter(scope, req);
-      pendingPurchaseRequests = await rawQuery<any>(
+      pendingPurchaseRequests = await rawQuery<Record<string, unknown>>(
         `SELECT id, title, status, "createdAt"
          FROM purchase_requests
          WHERE ${pw} AND status = 'pending'
@@ -98,7 +98,7 @@ router.get("/", async (req, res) => {
       );
     } catch (_e) { logger.error(_e, "Dashboard: failed to load pending purchase requests:"); }
 
-    const notifications = await rawQuery<any>(
+    const notifications = await rawQuery<Record<string, unknown>>(
       `SELECT id, type, title, body, priority, "isRead", "createdAt"
        FROM notifications
        WHERE "assignmentId" = $1 AND "companyId" = $2 AND "isRead" = false
@@ -136,16 +136,16 @@ router.get("/summary", async (req, res) => {
 
     const { where, params, nextParamIndex } = buildFilter(scope, req);
 
-    const [employees] = await rawQuery<any>(
+    const [employees] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS total FROM employee_assignments WHERE ${where} AND status = 'active'`,
       params
     );
     const { where: noBranchWhere, params: noBranchParams, nextParamIndex: noBranchNextIdx } = buildFilterNoBranch(scope, req);
-    const [clients] = await rawQuery<any>(
+    const [clients] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS total FROM clients WHERE ${noBranchWhere} AND "deletedAt" IS NULL`,
       [...noBranchParams]
     );
-    const [invoices] = await rawQuery<any>(
+    const [invoices] = await rawQuery<Record<string, unknown>>(
       `SELECT
          COALESCE(SUM("paidAmount"), 0) AS revenue,
          COUNT(*) FILTER (WHERE status IN ('sent','partial','overdue')) AS pending
@@ -153,13 +153,13 @@ router.get("/summary", async (req, res) => {
        WHERE ${where} AND "deletedAt" IS NULL AND DATE("createdAt") >= $${nextParamIndex}`,
       [...params, monthStart]
     );
-    const [att] = await rawQuery<any>(
+    const [att] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS present
        FROM attendance
        WHERE ${where} AND date = $${nextParamIndex} AND status = 'present'`,
       [...params, today]
     );
-    const [tasks] = await rawQuery<any>(
+    const [tasks] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS active
        FROM tasks
        WHERE ${where} AND "deletedAt" IS NULL AND status IN ('in_progress','pending')
@@ -169,7 +169,7 @@ router.get("/summary", async (req, res) => {
 
     let vehicles = { total: 0, active: 0 };
     try {
-      const [v] = await rawQuery<any>(
+      const [v] = await rawQuery<Record<string, unknown>>(
         `SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status='active') AS active FROM fleet_vehicles WHERE ${where} AND "deletedAt" IS NULL`,
         [...params]
       );
@@ -178,7 +178,7 @@ router.get("/summary", async (req, res) => {
 
     let tickets = { open: 0, breached: 0 };
     try {
-      const [t] = await rawQuery<any>(
+      const [t] = await rawQuery<Record<string, unknown>>(
         `SELECT COUNT(*) FILTER (WHERE status='open') AS open, COUNT(*) FILTER (WHERE status='open' AND "slaDeadline" < NOW()) AS breached FROM support_tickets WHERE ${noBranchWhere} AND "deletedAt" IS NULL`,
         [...noBranchParams]
       );
@@ -187,7 +187,7 @@ router.get("/summary", async (req, res) => {
 
     let projects = { active: 0, total: 0 };
     try {
-      const [p] = await rawQuery<any>(
+      const [p] = await rawQuery<Record<string, unknown>>(
         `SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status='in_progress') AS active FROM projects WHERE ${noBranchWhere} AND "deletedAt" IS NULL`,
         [...noBranchParams]
       );
@@ -196,7 +196,7 @@ router.get("/summary", async (req, res) => {
 
     let contracts = { active: 0, expiringSoon: 0 };
     try {
-      const [c] = await rawQuery<any>(
+      const [c] = await rawQuery<Record<string, unknown>>(
         `SELECT COUNT(*) FILTER (WHERE status='active') AS active, COUNT(*) FILTER (WHERE status='active' AND "endDate"::date - CURRENT_DATE <= 30) AS "expiringSoon" FROM legal_contracts WHERE ${noBranchWhere} AND "deletedAt" IS NULL`,
         [...noBranchParams]
       );
@@ -205,7 +205,7 @@ router.get("/summary", async (req, res) => {
 
     let opportunities = { total: 0, value: 0 };
     try {
-      const [o] = await rawQuery<any>(
+      const [o] = await rawQuery<Record<string, unknown>>(
         `SELECT COUNT(*) AS total, COALESCE(SUM(value),0) AS value FROM crm_opportunities WHERE ${noBranchWhere} AND "deletedAt" IS NULL AND stage NOT IN ('lost','won')`,
         [...noBranchParams]
       );
@@ -214,7 +214,7 @@ router.get("/summary", async (req, res) => {
 
     let warehouseAlerts = 0;
     try {
-      const [w] = await rawQuery<any>(
+      const [w] = await rawQuery<Record<string, unknown>>(
         `SELECT COUNT(*) AS total FROM warehouse_products WHERE ${where} AND status='active' AND "deletedAt" IS NULL AND "currentStock" <= "minStock"`,
         [...params]
       );
@@ -223,7 +223,7 @@ router.get("/summary", async (req, res) => {
 
     let pendingLeaveRequests = 0;
     try {
-      const [lr] = await rawQuery<any>(
+      const [lr] = await rawQuery<Record<string, unknown>>(
         `SELECT COUNT(*) AS total FROM hr_leave_requests WHERE ${noBranchWhere} AND status = 'pending' AND "deletedAt" IS NULL`,
         [...noBranchParams]
       );
@@ -259,10 +259,10 @@ router.get("/role-data", async (req, res) => {
     const result: any = { role };
 
     if (HR_ROLES.includes(role)) {
-      const [onboarding] = await rawQuery<any>(
+      const [onboarding] = await rawQuery<Record<string, unknown>>(
         `SELECT COUNT(*) AS total FROM tasks WHERE ${where} AND "deletedAt" IS NULL AND type = 'onboarding' AND status != 'completed'`, params
       ).catch((e) => { logger.error(e, "dashboard query failed"); return [{ total: 0 }]; });
-      const probationRows = await rawQuery<any>(
+      const probationRows = await rawQuery<Record<string, unknown>>(
         `SELECT e.name, ec."probationEndDate"
          FROM employee_contracts ec
          JOIN employees e ON e.id = ec."employeeId"
@@ -270,7 +270,7 @@ router.get("/role-data", async (req, res) => {
          LIMIT 10`,
         [scope.allowedCompanies]
       ).catch((e) => { logger.error(e, "dashboard query failed"); return []; });
-      const [expiringDocs] = await rawQuery<any>(
+      const [expiringDocs] = await rawQuery<Record<string, unknown>>(
         `SELECT COUNT(*) AS total FROM employee_documents WHERE "companyId" = ANY($1::int[]) AND "expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'`,
         [scope.allowedCompanies]
       ).catch((e) => { logger.error(e, "dashboard query failed"); return [{ total: 0 }]; });
@@ -282,17 +282,17 @@ router.get("/role-data", async (req, res) => {
     }
 
     if (FINANCE_ROLES.includes(role)) {
-      const [overdueInvoices] = await rawQuery<any>(
+      const [overdueInvoices] = await rawQuery<Record<string, unknown>>(
         `SELECT COUNT(*) AS count, COALESCE(SUM(total - "paidAmount"), 0) AS amount
          FROM invoices WHERE ${where} AND "deletedAt" IS NULL AND status IN ('overdue','sent') AND "dueDate" < CURRENT_DATE`, params
       ).catch((e) => { logger.error(e, "dashboard query failed"); return [{ count: 0, amount: 0 }]; });
-      const [advancedCollection] = await rawQuery<any>(
+      const [advancedCollection] = await rawQuery<Record<string, unknown>>(
         `SELECT COUNT(*) AS total FROM invoice_collection_stages ics
          JOIN invoices i ON i.id = ics."invoiceId" AND i."deletedAt" IS NULL
          WHERE i."companyId" = ANY($1::int[]) AND ics.stage >= 4`,
         [scope.allowedCompanies]
       ).catch((e) => { logger.error(e, "dashboard query failed"); return [{ total: 0 }]; });
-      const [budgetUsage] = await rawQuery<any>(
+      const [budgetUsage] = await rawQuery<Record<string, unknown>>(
         `SELECT COALESCE(AVG(CASE WHEN b."totalAmount" > 0 THEN (COALESCE(bl_used.total,0)::numeric / b."totalAmount") * 100 ELSE 0 END), 0) AS avg
          FROM budgets b
          LEFT JOIN LATERAL (SELECT COALESCE(SUM(bl.amount),0) AS total FROM budget_lines bl WHERE bl."budgetId" = b.id) bl_used ON TRUE
@@ -308,7 +308,7 @@ router.get("/role-data", async (req, res) => {
     }
 
     if (PR_APPROVAL_ROLES.includes(role)) {
-      const [teamTasks] = await rawQuery<any>(
+      const [teamTasks] = await rawQuery<Record<string, unknown>>(
         `SELECT
            COUNT(*) AS total,
            COUNT(*) FILTER (WHERE status = 'completed') AS completed,
@@ -332,7 +332,7 @@ router.get("/charts/revenue", async (req, res) => {
   try {
     const scope = req.scope!;
     const { where, params } = buildFilter(scope, req);
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT
          TO_CHAR(DATE_TRUNC('month', "createdAt"), 'YYYY-MM') AS month_key,
          COALESCE(SUM(total), 0) AS revenue,
@@ -350,7 +350,7 @@ router.get("/charts/revenue", async (req, res) => {
       "09": "سبتمبر", "10": "أكتوبر", "11": "نوفمبر", "12": "ديسمبر",
     };
     const { where: voucherWhere, params: voucherParams } = buildFilterNoBranch(scope, req);
-    const expenseRows = await rawQuery<any>(
+    const expenseRows = await rawQuery<Record<string, unknown>>(
       `SELECT
          TO_CHAR(DATE_TRUNC('month', v."createdAt"), 'YYYY-MM') AS month_key,
          COALESCE(SUM(v.amount), 0) AS total
@@ -379,7 +379,7 @@ router.get("/charts/attendance", async (req, res) => {
   try {
     const scope = req.scope!;
     const { where, params } = buildFilter(scope, req);
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT
          EXTRACT(DOW FROM date) AS dow,
          COUNT(*) FILTER (WHERE status = 'present') AS present,
@@ -413,7 +413,7 @@ router.get("/charts/departments", async (req, res) => {
   try {
     const scope = req.scope!;
     const { where, params } = buildFilter(scope, req);
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT
          COALESCE(d.name, 'بدون قسم') AS name,
          COUNT(ea.id) AS value
@@ -445,7 +445,7 @@ router.get("/charts/recent-events", async (req, res) => {
     const companyParam = companyIds.length === 1 ? companyIds[0] : companyIds;
     const companyWhere = companyIds.length === 1 ? `"companyId" = $1` : `"companyId" = ANY($1)`;
 
-    const events = await rawQuery<any>(
+    const events = await rawQuery<Record<string, unknown>>(
       `(SELECT 'invoice' AS type, id, 'فاتورة جديدة #' || id AS text, "createdAt"
         FROM invoices WHERE ${companyWhere} AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 3)
        UNION ALL

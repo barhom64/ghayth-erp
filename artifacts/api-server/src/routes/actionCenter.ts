@@ -21,10 +21,10 @@ router.get("/", async (req, res) => {
     const filters = parseScopeFilters(req);
     const { where, params } = buildScopedWhere(scope, filters);
 
-    let pendingLeaves: any[] = [];
+    let pendingLeaves: Record<string, unknown>[] = [];
     if (LEAVE_APPROVAL_ROLES.includes(scope.role)) {
       try {
-        pendingLeaves = await rawQuery<any>(
+        pendingLeaves = await rawQuery<Record<string, unknown>>(
           `SELECT lr.id, e.name AS "employeeName", lt.name AS "leaveType",
                   lr."startDate", lr."endDate", lr.days, lr.status, lr."createdAt"
            FROM hr_leave_requests lr
@@ -45,10 +45,10 @@ router.get("/", async (req, res) => {
       }
     }
 
-    let pendingAdvances: any[] = [];
+    let pendingAdvances: Record<string, unknown>[] = [];
     if (PAYROLL_ROLES.includes(scope.role)) {
       try {
-        pendingAdvances = await rawQuery<any>(
+        pendingAdvances = await rawQuery<Record<string, unknown>>(
           `SELECT je.id, je.description AS reason,
                   COALESCE((SELECT SUM(jl.debit) FROM journal_lines jl WHERE jl."journalId" = je.id AND jl.debit > 0), 0) AS amount,
                   ea2.id IS NOT NULL AS "hasAssignment",
@@ -67,10 +67,10 @@ router.get("/", async (req, res) => {
       }
     }
 
-    let pendingCustodies: any[] = [];
+    let pendingCustodies: Record<string, unknown>[] = [];
     if (FINANCE_ROLES.includes(scope.role)) {
       try {
-        pendingCustodies = await rawQuery<any>(
+        pendingCustodies = await rawQuery<Record<string, unknown>>(
           `SELECT je.id, je.description,
                   COALESCE((SELECT SUM(jl.debit) FROM journal_lines jl WHERE jl."journalId" = je.id AND jl.debit > 0), 0) AS amount,
                   COALESCE(emp.name, je.description) AS "employeeName",
@@ -88,10 +88,10 @@ router.get("/", async (req, res) => {
       }
     }
 
-    let pendingLetters: any[] = [];
+    let pendingLetters: Record<string, unknown>[] = [];
     if (LETTER_APPROVAL_ROLES.includes(scope.role)) {
       try {
-        pendingLetters = await rawQuery<any>(
+        pendingLetters = await rawQuery<Record<string, unknown>>(
           `SELECT ol.id, e.name AS "employeeName", ol.type AS "letterType", ol.status, ol."createdAt"
            FROM official_letters ol
            JOIN employees e ON e.id = ol."employeeId"
@@ -104,10 +104,10 @@ router.get("/", async (req, res) => {
       }
     }
 
-    let pendingPurchases: any[] = [];
+    let pendingPurchases: Record<string, unknown>[] = [];
     if (PR_APPROVAL_ROLES.includes(scope.role)) {
       try {
-        pendingPurchases = await rawQuery<any>(
+        pendingPurchases = await rawQuery<Record<string, unknown>>(
           `SELECT id, title, status, "createdAt"
            FROM purchase_requests
            WHERE "companyId" = ANY($1::int[]) AND status = 'pending'
@@ -119,10 +119,10 @@ router.get("/", async (req, res) => {
       }
     }
 
-    let pendingExpenses: any[] = [];
+    let pendingExpenses: Record<string, unknown>[] = [];
     if (FINANCE_ROLES.includes(scope.role)) {
       try {
-        pendingExpenses = await rawQuery<any>(
+        pendingExpenses = await rawQuery<Record<string, unknown>>(
           `SELECT id, ref, title, status, "createdAt"
            FROM expense_claims
            WHERE "companyId" = ANY($1::int[]) AND status = 'pending' AND "deletedAt" IS NULL
@@ -134,9 +134,9 @@ router.get("/", async (req, res) => {
       }
     }
 
-    let slaBreached: any[] = [];
+    let slaBreached: Record<string, unknown>[] = [];
     try {
-      slaBreached = await rawQuery<any>(
+      slaBreached = await rawQuery<Record<string, unknown>>(
         `SELECT id, title, "createdAt", "slaDeadline"
          FROM support_tickets
          WHERE "companyId" = ANY($1::int[]) AND "deletedAt" IS NULL AND status = 'open' AND "slaDeadline" < NOW()
@@ -147,9 +147,9 @@ router.get("/", async (req, res) => {
       logger.error(e, "Action-center slaBreached error");
     }
 
-    let escalations: any[] = [];
+    let escalations: Record<string, unknown>[] = [];
     try {
-      escalations = await rawQuery<any>(
+      escalations = await rawQuery<Record<string, unknown>>(
         `SELECT n.id, n.title, n.body, n.priority, n."createdAt"
          FROM notifications n
          WHERE n."assignmentId" = $1 AND n."companyId" = ANY($2::int[]) AND n.type IN ('escalation','sla_breach','urgent') AND n."isRead" = false
@@ -160,10 +160,10 @@ router.get("/", async (req, res) => {
       logger.error(e, "Action-center escalations error");
     }
 
-    let todayTasks: any[] = [];
+    let todayTasks: Record<string, unknown>[] = [];
     try {
       const { where: tw, params: tp, nextParamIndex } = buildScopedWhere(scope, filters);
-      todayTasks = await rawQuery<any>(
+      todayTasks = await rawQuery<Record<string, unknown>>(
         `SELECT t.id, t.title, t.status, t.priority, t."scheduledDate",
                 e.name AS "assigneeName"
          FROM tasks t
@@ -180,9 +180,9 @@ router.get("/", async (req, res) => {
       logger.error(e, "Action-center todayTasks error");
     }
 
-    let criticalAlerts: any[] = [];
+    let criticalAlerts: Record<string, unknown>[] = [];
     try {
-      criticalAlerts = await rawQuery<any>(
+      criticalAlerts = await rawQuery<Record<string, unknown>>(
         `SELECT id, type, title, body, priority, "createdAt"
          FROM notifications
          WHERE "assignmentId" = $1 AND "companyId" = ANY($2::int[]) AND priority IN ('high','urgent','critical') AND "isRead" = false
@@ -193,10 +193,10 @@ router.get("/", async (req, res) => {
       logger.error(e, "Action-center criticalAlerts error");
     }
 
-    let pendingLoans: any[] = [];
+    let pendingLoans: Record<string, unknown>[] = [];
     if (PAYROLL_ROLES.includes(scope.role)) {
       try {
-        pendingLoans = await rawQuery<any>(
+        pendingLoans = await rawQuery<Record<string, unknown>>(
           `SELECT l.id, l."loanNumber", l."loanType", l.amount, l.status, l."createdAt",
                   e.name AS "employeeName"
            FROM hr_employee_loans l
@@ -211,10 +211,10 @@ router.get("/", async (req, res) => {
       }
     }
 
-    let pendingOvertime: any[] = [];
+    let pendingOvertime: Record<string, unknown>[] = [];
     if (PAYROLL_ROLES.includes(scope.role)) {
       try {
-        pendingOvertime = await rawQuery<any>(
+        pendingOvertime = await rawQuery<Record<string, unknown>>(
           `SELECT o.id, o."requestNumber", o.hours, o."totalAmount", o.status, o."createdAt",
                   e.name AS "employeeName"
            FROM hr_overtime_requests o
@@ -229,10 +229,10 @@ router.get("/", async (req, res) => {
       }
     }
 
-    let pendingExitRequests: any[] = [];
+    let pendingExitRequests: Record<string, unknown>[] = [];
     if (PAYROLL_ROLES.includes(scope.role)) {
       try {
-        pendingExitRequests = await rawQuery<any>(
+        pendingExitRequests = await rawQuery<Record<string, unknown>>(
           `SELECT er.id, er."exitType", er.status, er."createdAt",
                   e.name AS "employeeName"
            FROM hr_exit_requests er
@@ -247,10 +247,10 @@ router.get("/", async (req, res) => {
       }
     }
 
-    let pendingTransfers: any[] = [];
+    let pendingTransfers: Record<string, unknown>[] = [];
     if (PAYROLL_ROLES.includes(scope.role)) {
       try {
-        pendingTransfers = await rawQuery<any>(
+        pendingTransfers = await rawQuery<Record<string, unknown>>(
           `SELECT t.id, t.status, t."createdAt",
                   e.name AS "employeeName"
            FROM employee_transfers t
@@ -264,10 +264,10 @@ router.get("/", async (req, res) => {
       }
     }
 
-    let pendingExcuses: any[] = [];
+    let pendingExcuses: Record<string, unknown>[] = [];
     if (LEAVE_APPROVAL_ROLES.includes(scope.role)) {
       try {
-        pendingExcuses = await rawQuery<any>(
+        pendingExcuses = await rawQuery<Record<string, unknown>>(
           `SELECT er.id, er."excuseDate", er."excuseType", er.reason, er.status, er."createdAt",
                   e.name AS "employeeName"
            FROM hr_excuse_requests er
@@ -282,10 +282,10 @@ router.get("/", async (req, res) => {
       }
     }
 
-    let pendingViolations: any[] = [];
+    let pendingViolations: Record<string, unknown>[] = [];
     if (PAYROLL_ROLES.includes(scope.role)) {
       try {
-        pendingViolations = await rawQuery<any>(
+        pendingViolations = await rawQuery<Record<string, unknown>>(
           `SELECT dm.id, dm.status, dm."createdAt",
                   e.name AS "employeeName"
            FROM hr_inquiry_memos dm
@@ -300,10 +300,10 @@ router.get("/", async (req, res) => {
       }
     }
 
-    let pendingPurchaseOrders: any[] = [];
+    let pendingPurchaseOrders: Record<string, unknown>[] = [];
     if (FINANCE_ROLES.includes(scope.role)) {
       try {
-        pendingPurchaseOrders = await rawQuery<any>(
+        pendingPurchaseOrders = await rawQuery<Record<string, unknown>>(
           `SELECT id, ref, status, "createdAt"
            FROM purchase_orders
            WHERE "companyId" = ANY($1::int[]) AND status = 'pending_approval' AND "deletedAt" IS NULL
@@ -315,10 +315,10 @@ router.get("/", async (req, res) => {
       }
     }
 
-    let pendingTrainings: any[] = [];
+    let pendingTrainings: Record<string, unknown>[] = [];
     if (PAYROLL_ROLES.includes(scope.role)) {
       try {
-        pendingTrainings = await rawQuery<any>(
+        pendingTrainings = await rawQuery<Record<string, unknown>>(
           `SELECT id, name AS title, status, "createdAt"
            FROM training_programs
            WHERE "companyId" = ANY($1::int[]) AND status = 'pending' AND "deletedAt" IS NULL
@@ -332,7 +332,7 @@ router.get("/", async (req, res) => {
 
     let pendingMaintenance: any[] = [];
     try {
-      pendingMaintenance = await rawQuery<any>(
+      pendingMaintenance = await rawQuery<Record<string, unknown>>(
         `SELECT id, title, status, priority, "createdAt"
          FROM maintenance_requests
          WHERE "companyId" = ANY($1::int[]) AND status = 'pending' AND "deletedAt" IS NULL
@@ -346,7 +346,7 @@ router.get("/", async (req, res) => {
     let pendingJournals: any[] = [];
     if (FINANCE_ROLES.includes(scope.role)) {
       try {
-        pendingJournals = await rawQuery<any>(
+        pendingJournals = await rawQuery<Record<string, unknown>>(
           `SELECT id, ref, description, status, "createdAt"
            FROM journal_entries
            WHERE "companyId" = ANY($1::int[]) AND status = 'pending_approval' AND "deletedAt" IS NULL
@@ -361,7 +361,7 @@ router.get("/", async (req, res) => {
 
     let pendingInventory: any[] = [];
     try {
-      pendingInventory = await rawQuery<any>(
+      pendingInventory = await rawQuery<Record<string, unknown>>(
         `SELECT id, status, "countDate", notes, "createdAt"
          FROM inventory_counts
          WHERE "companyId" = ANY($1::int[]) AND status = 'pending_approval' AND "deletedAt" IS NULL
@@ -374,7 +374,7 @@ router.get("/", async (req, res) => {
 
     let pendingWorkflows: any[] = [];
     try {
-      pendingWorkflows = await rawQuery<any>(
+      pendingWorkflows = await rawQuery<Record<string, unknown>>(
         `SELECT wi.id, wi."requestType", wi.title, wi.status, wi."slaStatus",
                 wi."currentStepOrder", wi."createdAt", wi."submittedBy",
                 e.name AS "submittedByName"

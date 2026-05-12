@@ -87,7 +87,7 @@ router.get("/alerts", authorize({ feature: "admin", action: "list" }), async (re
     const params: any[] = [scope.companyId];
     if (severity) { params.push(severity); conditions.push(`severity = $${params.length}`); }
     if (isRead !== undefined) { params.push(isRead === 'true'); conditions.push(`"isRead" = $${params.length}`); }
-    const rows = await rawQuery<any>(`SELECT * FROM smart_alerts WHERE ${conditions.join(" AND ")} ORDER BY "createdAt" DESC LIMIT 100`, params);
+    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM smart_alerts WHERE ${conditions.join(" AND ")} ORDER BY "createdAt" DESC LIMIT 100`, params);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Alerts error:"); }
 });
@@ -140,7 +140,7 @@ router.get("/kpis", authorize({ feature: "admin", action: "list" }), async (req,
     const params: any[] = [scope.companyId];
     if (employeeId) { params.push(Number(employeeId) || 0); conditions.push(`"employeeId" = $${params.length}`); }
     if (metricName) { params.push(metricName); conditions.push(`"metricName" = $${params.length}`); }
-    const rows = await rawQuery<any>(`SELECT * FROM kpi_snapshots WHERE ${conditions.join(" AND ")} ORDER BY "snapshotDate" DESC LIMIT 200`, params);
+    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM kpi_snapshots WHERE ${conditions.join(" AND ")} ORDER BY "snapshotDate" DESC LIMIT 200`, params);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "KPIs error:"); }
 });
@@ -180,13 +180,13 @@ router.get("/overview", authorize({ feature: "admin", action: "list" }), async (
     const scope = req.scope!;
     const cid = scope.companyId;
 
-    const [employees] = await rawQuery<any>(`SELECT COUNT(*) as total FROM employee_assignments WHERE "companyId"=$1 AND status='active'`, [cid]);
-    const [vehicles] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_vehicles WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [properties] = await rawQuery<any>(`SELECT COUNT(*) as total FROM property_units WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [projects] = await rawQuery<any>(`SELECT COUNT(*) as active FROM projects WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]);
-    const [tickets] = await rawQuery<any>(`SELECT COUNT(*) as open FROM support_tickets WHERE "companyId"=$1 AND status='open' AND "deletedAt" IS NULL`, [cid]);
-    const [revenue] = await rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) as total FROM invoices WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "createdAt" >= date_trunc('month', CURRENT_DATE)`, [cid]);
-    const [alerts] = await rawQuery<any>(`SELECT COUNT(*) as unread FROM smart_alerts WHERE "companyId"=$1 AND "isRead"=false`, [cid]);
+    const [employees] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as total FROM employee_assignments WHERE "companyId"=$1 AND status='active'`, [cid]);
+    const [vehicles] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as total FROM fleet_vehicles WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [properties] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as total FROM property_units WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [projects] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as active FROM projects WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]);
+    const [tickets] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as open FROM support_tickets WHERE "companyId"=$1 AND status='open' AND "deletedAt" IS NULL`, [cid]);
+    const [revenue] = await rawQuery<Record<string, unknown>>(`SELECT COALESCE(SUM("paidAmount"),0) as total FROM invoices WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "createdAt" >= date_trunc('month', CURRENT_DATE)`, [cid]);
+    const [alerts] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as unread FROM smart_alerts WHERE "companyId"=$1 AND "isRead"=false`, [cid]);
 
     res.json({
       totalEmployees: Number(employees?.total ?? 0),
@@ -206,7 +206,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
     const cid = scope.companyId;
     const suggestions: Array<{ id: string; type: string; severity: string; title: string; description: string; action: string; actionLink?: string }> = [];
 
-    const overloadedEmployees = await rawQuery<any>(
+    const overloadedEmployees = await rawQuery<Record<string, unknown>>(
       `SELECT e.name,
               (SELECT COUNT(*) FROM tasks t WHERE t."assignedTo" = ea.id AND t."companyId" = $1
                AND t.status NOT IN ('completed','cancelled') AND t."deletedAt" IS NULL)::int AS "activeTasks"
@@ -228,7 +228,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
       });
     }
 
-    const expiringContracts = await rawQuery<any>(
+    const expiringContracts = await rawQuery<Record<string, unknown>>(
       `SELECT id, title, "endDate",
               (lc."endDate"::date - CURRENT_DATE) AS "daysLeft"
        FROM legal_contracts lc
@@ -239,15 +239,16 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
     ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
 
     for (const c of expiringContracts) {
+      const daysLeft = Number(c.daysLeft);
       suggestions.push({
-        id: `contract-${c.id}`, type: "contract_expiring", severity: c.daysLeft <= 7 ? "critical" : "warning",
-        title: `عقد "${c.title || c.id}" ينتهي خلال ${c.daysLeft} يوم`,
+        id: `contract-${c.id}`, type: "contract_expiring", severity: daysLeft <= 7 ? "critical" : "warning",
+        title: `عقد "${c.title || c.id}" ينتهي خلال ${daysLeft} يوم`,
         description: `يُقترح بدء إجراءات التجديد قبل انتهاء العقد`,
         action: "مراجعة العقد", actionLink: "/legal/contracts",
       });
     }
 
-    const overdueClients = await rawQuery<any>(
+    const overdueClients = await rawQuery<Record<string, unknown>>(
       `SELECT c.name,
               COALESCE(SUM(i.total - i."paidAmount"), 0) AS "overdueAmount",
               MAX(CURRENT_DATE - i."dueDate"::date) AS "maxDaysLate"
@@ -261,15 +262,16 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
     ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
 
     for (const cl of overdueClients) {
+      const maxDaysLate = Number(cl.maxDaysLate);
       suggestions.push({
-        id: `overdue-${cl.name}`, type: "client_overdue", severity: cl.maxDaysLate > 60 ? "critical" : "warning",
-        title: `عميل ${cl.name} متأخر في السداد ${cl.maxDaysLate} يوم`,
+        id: `overdue-${cl.name}`, type: "client_overdue", severity: maxDaysLate > 60 ? "critical" : "warning",
+        title: `عميل ${cl.name} متأخر في السداد ${maxDaysLate} يوم`,
         description: `المبلغ المستحق: ${Number(cl.overdueAmount).toLocaleString()} — يُقترح تصعيد التحصيل`,
         action: "متابعة التحصيل", actionLink: "/finance/invoices",
       });
     }
 
-    const slowDepartments = await rawQuery<any>(
+    const slowDepartments = await rawQuery<Record<string, unknown>>(
       `SELECT COALESCE(d.name, 'بدون قسم') AS department,
               ROUND(AVG(EXTRACT(EPOCH FROM (COALESCE(lr."approvedAt", NOW()) - lr."createdAt")) / 86400), 1) AS "avgDays"
        FROM hr_leave_requests lr
@@ -292,7 +294,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
       });
     }
 
-    const costlyVehicles = await rawQuery<any>(
+    const costlyVehicles = await rawQuery<Record<string, unknown>>(
       `SELECT fv.id, fv."plateNumber",
               COALESCE(SUM(fm.cost), 0)::float AS "maintenanceCost"
        FROM fleet_maintenance fm
@@ -316,7 +318,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
     }
 
     // Historical: productivity drop analysis
-    const prodDrops = await rawQuery<any>(
+    const prodDrops = await rawQuery<Record<string, unknown>>(
       `WITH recent AS (
          SELECT t."assignedTo", COUNT(*) FILTER (WHERE t.status='completed')::float / NULLIF(COUNT(*),0) AS rate
          FROM tasks t WHERE t."companyId"=$1 AND t."deletedAt" IS NULL AND t."scheduledDate"::date >= CURRENT_DATE - INTERVAL '7 days'
@@ -347,7 +349,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
     }
 
     // Historical: revenue trend analysis
-    const revTrendRows = await rawQuery<any>(
+    const revTrendRows = await rawQuery<Record<string, unknown>>(
       `SELECT
          COALESCE(SUM(CASE WHEN "createdAt" >= CURRENT_DATE - INTERVAL '30 days' THEN "paidAmount" ELSE 0 END),0)::float AS curr,
          COALESCE(SUM(CASE WHEN "createdAt" BETWEEN CURRENT_DATE - INTERVAL '60 days' AND CURRENT_DATE - INTERVAL '30 days' THEN "paidAmount" ELSE 0 END),0)::float AS prev
@@ -375,7 +377,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
     }
 
     // Historical: high churn risk clients from RFM
-    const churnClients = await rawQuery<any>(
+    const churnClients = await rawQuery<Record<string, unknown>>(
       `SELECT c.name, rs."recencyDays", rs."churnScore"
        FROM client_rfm_scores rs
        JOIN clients c ON c.id=rs."clientId"
@@ -387,7 +389,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
       suggestions.push({
         id: `churn-hist-${cl.name}`, type: "churn_risk_historical", severity: "warning",
         title: `خطر فقدان عميل (تحليل RFM): ${cl.name}`,
-        description: `بناءً على التحليل التاريخي: ${cl.name} لم يتعامل منذ ${cl.recencyDays} يوم — خطر الفقدان ${Math.round(cl.churnScore)}%`,
+        description: `بناءً على التحليل التاريخي: ${cl.name} لم يتعامل منذ ${cl.recencyDays} يوم — خطر الفقدان ${Math.round(Number(cl.churnScore))}%`,
         action: "التواصل مع العميل", actionLink: "/clients",
       });
     }
@@ -674,7 +676,7 @@ router.post("/smart-assign", requireRole("branch_manager", "general_manager", "o
       throw new NotFoundError("لا يوجد موظف متاح لهذه المهمة");
     }
 
-    const [emp] = await rawQuery<any>(
+    const [emp] = await rawQuery<Record<string, unknown>>(
       `SELECT e.id, e.name, e.email,
               (SELECT COUNT(*) FROM tasks t JOIN employee_assignments ea3 ON ea3.id = t."assignedTo"
                WHERE ea3."employeeId"=e.id AND t."companyId"=$1 AND t.status NOT IN ('completed','cancelled') AND t."deletedAt" IS NULL)::int AS "currentTasks"
@@ -719,10 +721,10 @@ router.get("/insights-summary", requireRole("branch_manager", "general_manager",
       detectSeasonalPatterns(cid),
     ]);
 
-    const [totalEmployees] = await rawQuery<any>(`SELECT COUNT(*) AS count FROM employee_assignments WHERE "companyId"=$1 AND status='active'`, [cid]);
-    const [totalClients] = await rawQuery<any>(`SELECT COUNT(*) AS count FROM clients WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [monthRevenue] = await rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) AS total FROM invoices WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "createdAt" >= date_trunc('month',CURRENT_DATE)`, [cid]);
-    const [prevMonthRevenue] = await rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) AS total FROM invoices WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "createdAt" >= date_trunc('month',CURRENT_DATE - INTERVAL '1 month') AND "createdAt" < date_trunc('month',CURRENT_DATE)`, [cid]);
+    const [totalEmployees] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS count FROM employee_assignments WHERE "companyId"=$1 AND status='active'`, [cid]);
+    const [totalClients] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS count FROM clients WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [monthRevenue] = await rawQuery<Record<string, unknown>>(`SELECT COALESCE(SUM("paidAmount"),0) AS total FROM invoices WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "createdAt" >= date_trunc('month',CURRENT_DATE)`, [cid]);
+    const [prevMonthRevenue] = await rawQuery<Record<string, unknown>>(`SELECT COALESCE(SUM("paidAmount"),0) AS total FROM invoices WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "createdAt" >= date_trunc('month',CURRENT_DATE - INTERVAL '1 month') AND "createdAt" < date_trunc('month',CURRENT_DATE)`, [cid]);
 
     const monthRev = Number(monthRevenue?.total ?? 0);
     const prevRev = Number(prevMonthRevenue?.total ?? 0);

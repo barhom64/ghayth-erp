@@ -1240,7 +1240,7 @@ router.post("/letters/:id/dispatch", authorize({ feature: "umrah", action: "upda
     if (!Number.isFinite(id) || id <= 0) {
       throw new ValidationError("معرّف الخطاب غير صالح");
     }
-    const [letter] = await rawQuery<any>(
+    const [letter] = await rawQuery<{ id: number; status: string; sentAt: string | null; type: string }>(
       `SELECT id, status, "sentAt", type FROM official_letters
         WHERE id=$1 AND "companyId"=$2
           AND (type LIKE 'umrah_%' OR type = 'umrah')`,
