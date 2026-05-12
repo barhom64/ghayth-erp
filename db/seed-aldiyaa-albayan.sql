@@ -37,7 +37,6 @@ DECLARE
 BEGIN
   ------------------------------------------------------------------
   -- 1. Parent company: مؤسسة الضياء والبيان للمقاولات
-  --    CR + VAT will be filled in round 2 (user will provide سجل).
   ------------------------------------------------------------------
   SELECT id INTO v_company_id
     FROM companies
