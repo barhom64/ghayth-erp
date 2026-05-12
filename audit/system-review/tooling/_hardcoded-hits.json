@@ -1,0 +1,750 @@
+{
+  "/admin/policy-engine": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/admin-violations-report.tsx",
+    "module": "admin",
+    "hits": [
+      {
+        "line": 172,
+        "kind": "inline-data-array",
+        "text": "const summaryCards = ["
+      }
+    ]
+  },
+  "/communications": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/communications.tsx",
+    "module": "communications",
+    "hits": [
+      {
+        "line": 379,
+        "kind": "inline-data-array",
+        "text": "const options = ["
+      }
+    ]
+  },
+  "/communications/notification-engine": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/communications.tsx",
+    "module": "communications",
+    "hits": [
+      {
+        "line": 379,
+        "kind": "inline-data-array",
+        "text": "const options = ["
+      }
+    ]
+  },
+  "/communications/letters/create": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/communications.tsx",
+    "module": "communications",
+    "hits": [
+      {
+        "line": 379,
+        "kind": "inline-data-array",
+        "text": "const options = ["
+      }
+    ]
+  },
+  "/finance/journal": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/vouchers-create.tsx",
+    "module": "finance",
+    "hits": [
+      {
+        "line": 44,
+        "kind": "inline-data-array",
+        "text": "const PAYMENT_METHODS = ["
+      }
+    ]
+  },
+  "/finance/expenses": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/invoices-create.tsx",
+    "module": "finance",
+    "hits": [
+      {
+        "line": 21,
+        "kind": "inline-data-array",
+        "text": "const INVOICE_TYPE_CODES = ["
+      },
+      {
+        "line": 34,
+        "kind": "inline-data-array",
+        "text": "const PAYMENT_TERMS_OPTIONS = ["
+      }
+    ]
+  },
+  "/finance/budget": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/expenses-create.tsx",
+    "module": "finance",
+    "hits": [
+      {
+        "line": 69,
+        "kind": "inline-data-array",
+        "text": "const TAX_CATEGORIES = ["
+      },
+      {
+        "line": 79,
+        "kind": "inline-data-array",
+        "text": "const INVOICE_TYPE_CODES = ["
+      }
+    ]
+  },
+  "/finance/bank-reconciliation": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/ar-aging.tsx",
+    "module": "finance",
+    "hits": [
+      {
+        "line": 34,
+        "kind": "inline-data-array",
+        "text": "const BUCKETS = ["
+      }
+    ]
+  },
+  "/finance/bank-reconciliation/manual-match/:batchId/:rowId": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/ap-aging.tsx",
+    "module": "finance",
+    "hits": [
+      {
+        "line": 34,
+        "kind": "inline-data-array",
+        "text": "const BUCKETS = ["
+      }
+    ]
+  },
+  "/fleet/traffic-violations": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/fleet/reports.tsx",
+    "module": "fleet",
+    "hits": [
+      {
+        "line": 15,
+        "kind": "inline-data-array",
+        "text": "const statCards = ["
+      }
+    ]
+  },
+  "/hr/attendance": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/employees-create.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 23,
+        "kind": "inline-data-array",
+        "text": "const OPERATIONS = ["
+      }
+    ]
+  },
+  "/hr/attendance/:id": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/attendance.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 133,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
+      }
+    ]
+  },
+  "/hr/attendance/qr-scanner": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/attendance-reports.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 43,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
+      }
+    ]
+  },
+  "/hr/leaves": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/field-tracking.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 85,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
+      }
+    ]
+  },
+  "/hr/leaves/:id": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/leaves.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 203,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
+      }
+    ]
+  },
+  "/hr/payroll": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/leave-management.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 104,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
+      }
+    ]
+  },
+  "/hr/payroll/create": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/approval-chains.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 30,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
+      }
+    ]
+  },
+  "/hr/payroll/salary-components": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/payroll.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 57,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
+      }
+    ]
+  },
+  "/hr/performance/advanced": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/performance.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 29,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
+      }
+    ]
+  },
+  "/hr/training": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/performance-advanced.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 24,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
+      }
+    ]
+  },
+  "/hr/training/advanced": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/training.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 45,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
+      }
+    ]
+  },
+  "/hr/organization": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/training-advanced.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 31,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
+      }
+    ]
+  },
+  "/hr/recruitment": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/organization.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 18,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
+      }
+    ]
+  },
+  "/hr/recruitment/create": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/organization-structure.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 23,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
+      }
+    ]
+  },
+  "/hr/recruitment/applicants/create": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/recruitment.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 40,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
+      }
+    ]
+  },
+  "/hr/recruitment/jobs/:id": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/application-list.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 32,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
+      }
+    ]
+  },
+  "/hr/loans": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/recruitment-advanced.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 32,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
+      }
+    ]
+  },
+  "/hr/exit/create": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/overtime-detail.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 77,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
+      }
+    ]
+  },
+  "/hr/violations/management": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/violations.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 182,
+        "kind": "inline-data-array",
+        "text": "const byStage = ["
+      }
+    ]
+  },
+  "/hr/violations/:id": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/penalty-escalation.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 34,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
+      }
+    ]
+  },
+  "/hr/shifts/management": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/shifts.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 47,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
+      }
+    ]
+  },
+  "/hr/shifts/:id": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/shifts-create.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 23,
+        "kind": "inline-data-array",
+        "text": "const daysOfWeek = ["
+      }
+    ]
+  },
+  "/hr/evaluation-360/create": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/employee-activation.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 116,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
+      }
+    ]
+  },
+  "/hr/evaluation-360/history/:employeeId": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/onboarding-review.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 70,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
+      }
+    ]
+  },
+  "/hr/evaluation-360/:id/upward": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/evaluation-360.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 62,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
+      }
+    ]
+  },
+  "/hr/transfers": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/evaluation-360-detail.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 146,
+        "kind": "inline-data-array",
+        "text": "const tabs = ["
+      }
+    ]
+  },
+  "/hr/turnover-report": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/idp.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 92,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
+      }
+    ]
+  },
+  "/hr/contracts/create": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/expiring-documents.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 47,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
+      }
+    ]
+  },
+  "/hr/excuse-requests/:id": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/excuse-requests.tsx",
+    "module": "hr",
+    "hits": [
+      {
+        "line": 44,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
+      }
+    ]
+  },
+  "/crm/:id": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/crm/activities.tsx",
+    "module": "misc",
+    "hits": [
+      {
+        "line": 40,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
+      }
+    ]
+  },
+  "/projects/risks": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/tasks.tsx",
+    "module": "misc",
+    "hits": [
+      {
+        "line": 24,
+        "kind": "inline-data-array",
+        "text": "const statusOptions = ["
+      }
+    ]
+  },
+  "/warehouse": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/projects/risks.tsx",
+    "module": "misc",
+    "hits": [
+      {
+        "line": 41,
+        "kind": "inline-data-array",
+        "text": "const PROBABILITY_OPTIONS = ["
+      },
+      {
+        "line": 48,
+        "kind": "inline-data-array",
+        "text": "const IMPACT_OPTIONS = ["
+      }
+    ]
+  },
+  "/warehouse/create": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/details/project-detail.tsx",
+    "module": "misc",
+    "hits": [
+      {
+        "line": 74,
+        "kind": "inline-data-array",
+        "text": "const PROJECT_TABS = ["
+      }
+    ]
+  },
+  "/intelligence": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/tasks.tsx",
+    "module": "misc",
+    "hits": [
+      {
+        "line": 24,
+        "kind": "inline-data-array",
+        "text": "const statusOptions = ["
+      }
+    ]
+  },
+  "/reports/scheduled": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/activity-log.tsx",
+    "module": "misc",
+    "hits": [
+      {
+        "line": 273,
+        "kind": "inline-data-array",
+        "text": "const alertCards = ["
+      }
+    ]
+  },
+  "/properties/tenants": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/properties/tenants-create.tsx",
+    "module": "properties",
+    "hits": [
+      {
+        "line": 109,
+        "kind": "dummy-name",
+        "text": "<TextField label=\"البريد الإلكتروني\" type=\"email\" dir=\"ltr\" value={form.email} onChange={v => set(\"email\", v)} placehold"
+      }
+    ]
+  },
+  "/properties/owners/:id": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/properties/owners-create.tsx",
+    "module": "properties",
+    "hits": [
+      {
+        "line": 88,
+        "kind": "dummy-iban",
+        "text": "<TextField label=\"رقم الآيبان\" dir=\"ltr\" value={form.iban} onChange={v => setForm({ ...form, iban: v })} placeholder=\"SA"
+      }
+    ]
+  },
+  "/properties/owners": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/properties/owners-edit.tsx",
+    "module": "properties",
+    "hits": [
+      {
+        "line": 121,
+        "kind": "dummy-iban",
+        "text": "<TextField label=\"رقم الآيبان\" dir=\"ltr\" value={form.iban} onChange={v => setForm({ ...form, iban: v })} placeholder=\"SA"
+      }
+    ]
+  },
+  "/properties/guide": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/properties/occupancy-report.tsx",
+    "module": "properties",
+    "hits": [
+      {
+        "line": 30,
+        "kind": "inline-data-array",
+        "text": "const pieData = ["
+      }
+    ]
+  },
+  "/properties/:id/status": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/properties-guide.tsx",
+    "module": "properties",
+    "hits": [
+      {
+        "line": 429,
+        "kind": "dummy-phone",
+        "text": "{ name: \"أحمد محمد السعيد\", phone: \"0551234567\", id: \"1234567890\", contracts: \"2 نشط\", unit: \"A-101\", paid: \"42,000 ر.س\""
+      },
+      {
+        "line": 430,
+        "kind": "dummy-phone",
+        "text": "{ name: \"سارة عبدالله الغامدي\", phone: \"0557654321\", id: \"0987654321\", contracts: \"1 نشط\", unit: \"B-201\", paid: \"96,000 "
+      },
+      {
+        "line": 431,
+        "kind": "dummy-phone",
+        "text": "{ name: \"خالد إبراهيم العمري\", phone: \"0501112233\", id: \"2345678901\", contracts: \"1 نشط\", unit: \"C-305\", paid: \"28,000 ر"
+      },
+      {
+        "line": 475,
+        "kind": "dummy-phone",
+        "text": "{ name: \"عبدالرحمن الحربي\", type: \"فرد\", phone: \"0501234567\", buildings: 2, units: 20, contracts: 18 },"
+      },
+      {
+        "line": 477,
+        "kind": "dummy-phone",
+        "text": "{ name: \"فاطمة القحطاني\", type: \"فرد\", phone: \"0559876543\", buildings: 1, units: 13, contracts: 13 },"
+      }
+    ]
+  },
+  "/properties/:id": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/properties-guide.tsx",
+    "module": "properties",
+    "hits": [
+      {
+        "line": 429,
+        "kind": "dummy-phone",
+        "text": "{ name: \"أحمد محمد السعيد\", phone: \"0551234567\", id: \"1234567890\", contracts: \"2 نشط\", unit: \"A-101\", paid: \"42,000 ر.س\""
+      },
+      {
+        "line": 430,
+        "kind": "dummy-phone",
+        "text": "{ name: \"سارة عبدالله الغامدي\", phone: \"0557654321\", id: \"0987654321\", contracts: \"1 نشط\", unit: \"B-201\", paid: \"96,000 "
+      },
+      {
+        "line": 431,
+        "kind": "dummy-phone",
+        "text": "{ name: \"خالد إبراهيم العمري\", phone: \"0501112233\", id: \"2345678901\", contracts: \"1 نشط\", unit: \"C-305\", paid: \"28,000 ر"
+      },
+      {
+        "line": 475,
+        "kind": "dummy-phone",
+        "text": "{ name: \"عبدالرحمن الحربي\", type: \"فرد\", phone: \"0501234567\", buildings: 2, units: 20, contracts: 18 },"
+      },
+      {
+        "line": 477,
+        "kind": "dummy-phone",
+        "text": "{ name: \"فاطمة القحطاني\", type: \"فرد\", phone: \"0559876543\", buildings: 1, units: 13, contracts: 13 },"
+      }
+    ]
+  },
+  "/requests": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/requests-page.tsx",
+    "module": "requests",
+    "hits": [
+      {
+        "line": 95,
+        "kind": "inline-data-array",
+        "text": "const CONVERT_OPTIONS = ["
+      }
+    ]
+  },
+  "/requests/create": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/requests-page.tsx",
+    "module": "requests",
+    "hits": [
+      {
+        "line": 95,
+        "kind": "inline-data-array",
+        "text": "const CONVERT_OPTIONS = ["
+      }
+    ]
+  },
+  "/requests/types": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/requests-page.tsx",
+    "module": "requests",
+    "hits": [
+      {
+        "line": 95,
+        "kind": "inline-data-array",
+        "text": "const CONVERT_OPTIONS = ["
+      }
+    ]
+  },
+  "/requests/workflows": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/requests-page.tsx",
+    "module": "requests",
+    "hits": [
+      {
+        "line": 95,
+        "kind": "inline-data-array",
+        "text": "const CONVERT_OPTIONS = ["
+      }
+    ]
+  },
+  "/store": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/store.tsx",
+    "module": "store",
+    "hits": [
+      {
+        "line": 314,
+        "kind": "inline-data-array",
+        "text": "const statCards = ["
+      }
+    ]
+  },
+  "/store/products/create": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/store.tsx",
+    "module": "store",
+    "hits": [
+      {
+        "line": 314,
+        "kind": "inline-data-array",
+        "text": "const statCards = ["
+      }
+    ]
+  },
+  "/store/products/:id": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/store.tsx",
+    "module": "store",
+    "hits": [
+      {
+        "line": 314,
+        "kind": "inline-data-array",
+        "text": "const statCards = ["
+      }
+    ]
+  },
+  "/store/orders/:id": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/store.tsx",
+    "module": "store",
+    "hits": [
+      {
+        "line": 314,
+        "kind": "inline-data-array",
+        "text": "const statCards = ["
+      }
+    ]
+  },
+  "/umrah/pilgrims/:id": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/pilgrims.tsx",
+    "module": "umrah",
+    "hits": [
+      {
+        "line": 26,
+        "kind": "inline-data-array",
+        "text": "const kpiCards = ["
+      }
+    ]
+  },
+  "/umrah/seasons": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/agents.tsx",
+    "module": "umrah",
+    "hits": [
+      {
+        "line": 104,
+        "kind": "inline-data-array",
+        "text": "const kpiCards = ["
+      }
+    ]
+  },
+  "/umrah/invoices": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/penalties.tsx",
+    "module": "umrah",
+    "hits": [
+      {
+        "line": 54,
+        "kind": "inline-data-array",
+        "text": "const kpiCards = ["
+      }
+    ]
+  },
+  "/umrah/packages": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/invoices.tsx",
+    "module": "umrah",
+    "hits": [
+      {
+        "line": 52,
+        "kind": "inline-data-array",
+        "text": "const kpiCards = ["
+      }
+    ]
+  }
+}
