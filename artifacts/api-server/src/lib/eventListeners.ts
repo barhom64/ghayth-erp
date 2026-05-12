@@ -486,7 +486,7 @@ export function registerEventListeners() {
       const letterId = Number(payload.entityId);
       if (!letterId || !payload.companyId) return;
 
-      const [letter] = await rawQuery<Record<string, unknown>>(
+      const [letter] = await rawQuery<any>(
         `SELECT ol.*, e.name AS "employeeName", e.email AS "employeeEmail", e.phone AS "employeePhone"
          FROM official_letters ol
          LEFT JOIN employees e ON e.id = ol."employeeId" AND e."deletedAt" IS NULL
@@ -802,7 +802,7 @@ export function registerEventListeners() {
     // Cross-module: when payroll is posted, create GL journal entry for total salaries
     if (payload.companyId && payload.entityId) {
       try {
-        const [runTotals] = await rawQuery<Record<string, unknown>>(
+        const [runTotals] = await rawQuery<any>(
           `SELECT COALESCE(SUM("grossSalary"),0)::numeric(12,2) AS gross,
                   COALESCE(SUM(commission),0)::numeric(12,2) AS comm,
                   COALESCE(SUM("netSalary"),0)::numeric(12,2) AS net
@@ -1207,7 +1207,7 @@ export function registerEventListeners() {
     const details = typeof payload.details === "string" ? JSON.parse(payload.details) : (payload.details ?? {});
 
     // Cross-module: auto-post GL journal for umrah agent invoice (AR ↔ Revenue)
-    const [glEntry] = await rawQuery<Record<string, unknown>>(
+    const [glEntry] = await rawQuery<any>(
       `SELECT id FROM journal_entries WHERE "sourceType"='umrah_sales_invoices' AND "sourceId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
       [payload.entityId, payload.companyId]
     );
@@ -1283,7 +1283,7 @@ export function registerEventListeners() {
     const details = typeof payload.details === "string" ? JSON.parse(payload.details) : (payload.details ?? {});
 
     // Cross-module: verify GL journal entry was posted for the payment
-    const [glEntry] = await rawQuery<Record<string, unknown>>(
+    const [glEntry] = await rawQuery<any>(
       `SELECT id FROM journal_entries WHERE "sourceType"='umrah_payments' AND "sourceId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
       [payload.entityId, payload.companyId]
     );
@@ -1322,7 +1322,7 @@ export function registerEventListeners() {
     // Cross-module: mark obligation as fulfilled for fully-paid invoices
     if (details.allocations && Array.isArray(details.allocations)) {
       for (const alloc of details.allocations as Array<{ invoiceId: number }>) {
-        const [inv] = await rawQuery<Record<string, unknown>>(
+        const [inv] = await rawQuery<any>(
           `SELECT status FROM umrah_sales_invoices WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
           [alloc.invoiceId, payload.companyId]
         );
@@ -1358,7 +1358,7 @@ export function registerEventListeners() {
 
     // Cross-module: verify GL accrual was posted
     if (finalAmount > 0) {
-      const [glEntry] = await rawQuery<Record<string, unknown>>(
+      const [glEntry] = await rawQuery<any>(
         `SELECT id FROM journal_entries WHERE "sourceType"='employee_commission_calculations' AND "sourceId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
         [planId, payload.companyId]
       );
@@ -1417,13 +1417,13 @@ export function registerEventListeners() {
       const assignmentId = after?.assignmentId as number | undefined;
       const employeeId = after?.employeeId as number | undefined;
       const periodKey = `${year}-${String(month).padStart(2, "0")}`;
-      const [activeRun] = await rawQuery<Record<string, unknown>>(
+      const [activeRun] = await rawQuery<any>(
         `SELECT id FROM payroll_runs WHERE "companyId"=$1 AND period=$2 AND status IN ('draft','processing') AND "deletedAt" IS NULL ORDER BY id DESC LIMIT 1`,
         [payload.companyId, periodKey]
       );
       if (activeRun && assignmentId) {
         try {
-          const [existingLine] = await rawQuery<Record<string, unknown>>(
+          const [existingLine] = await rawQuery<any>(
             `SELECT id FROM payroll_lines WHERE "runId"=$1 AND "assignmentId"=$2 AND "deletedAt" IS NULL`,
             [activeRun.id, assignmentId]
           );

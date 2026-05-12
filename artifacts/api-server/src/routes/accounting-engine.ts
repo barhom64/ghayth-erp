@@ -85,7 +85,7 @@ export async function validateAccountingMapping(
   companyId: number,
   operationType: string
 ): Promise<{ valid: boolean; mapping?: any; error?: string }> {
-  const [mapping] = await rawQuery<Record<string, unknown>>(
+  const [mapping] = await rawQuery<any>(
     `SELECT am.*, 
             da.code AS "debitCode", da.name AS "debitName",
             ca.code AS "creditCode", ca.name AS "creditName"
@@ -127,7 +127,7 @@ export async function validateAccountingMapping(
 router.get("/accounting-mappings", authorize({ feature: "finance.accounting_engine", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT am.*,
               da.code AS "debitCode", da.name AS "debitName",
               ca.code AS "creditCode", ca.name AS "creditName"
@@ -187,7 +187,7 @@ router.post("/accounting-mappings/batch", authorize({ feature: "finance.accounti
 router.get("/accounting-mappings/:operationType", authorize({ feature: "finance.accounting_engine", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<Record<string, unknown>>(
+    const [row] = await rawQuery<any>(
       `SELECT am.*,
               da.code AS "debitCode", da.name AS "debitName",
               ca.code AS "creditCode", ca.name AS "creditName"
@@ -216,7 +216,7 @@ router.put("/accounting-mappings/:operationType", authorize({ feature: "finance.
       operationLabel, branchId, activityType, notes, isActive,
     } = body;
 
-    const existing = await rawQuery<Record<string, unknown>>(
+    const existing = await rawQuery<any>(
       `SELECT id FROM accounting_mappings WHERE "companyId" = $1 AND "operationType" = $2`,
       [scope.companyId, operationType]
     );
@@ -253,7 +253,7 @@ router.put("/accounting-mappings/:operationType", authorize({ feature: "finance.
       );
     }
 
-    const [updated] = await rawQuery<Record<string, unknown>>(
+    const [updated] = await rawQuery<any>(
       `SELECT am.*, da.code AS "debitCode", da.name AS "debitName", ca.code AS "creditCode", ca.name AS "creditName"
        FROM accounting_mappings am
        LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId"
@@ -296,7 +296,7 @@ router.get("/journal-templates", authorize({ feature: "finance.accounting_engine
     }
 
     conditions.push(`jt."deletedAt" IS NULL`);
-    const templates = await rawQuery<Record<string, unknown>>(
+    const templates = await rawQuery<any>(
       `SELECT jt.*
        FROM journal_entry_templates jt
        WHERE ${conditions.join(" AND ")}
@@ -307,7 +307,7 @@ router.get("/journal-templates", authorize({ feature: "finance.accounting_engine
 
     if (templates.length > 0) {
       const templateIds = templates.map((t: any) => t.id);
-      const allLines = await rawQuery<Record<string, unknown>>(
+      const allLines = await rawQuery<any>(
         `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
          FROM journal_entry_template_lines tl
          LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId" AND ca."companyId" = $2
@@ -360,11 +360,11 @@ router.post("/journal-templates", authorize({ feature: "finance.accounting_engin
       return templateId;
     });
 
-    const [template] = await rawQuery<Record<string, unknown>>(
+    const [template] = await rawQuery<any>(
       `SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2`, [result, scope.companyId]
     );
     if (!template) throw new NotFoundError("القالب غير موجود");
-    template.lines = await rawQuery<Record<string, unknown>>(
+    template.lines = await rawQuery<any>(
       `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
        FROM journal_entry_template_lines tl
        LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId" AND ca."companyId" = $2
@@ -388,7 +388,7 @@ router.put("/journal-templates/:id", authorize({ feature: "finance.accounting_en
     const id = parseId(req.params.id, "id");
     const { name, description, branchId, activityType, isActive, lines } = body;
 
-    const [existing] = await rawQuery<Record<string, unknown>>(
+    const [existing] = await rawQuery<any>(
       `SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -418,9 +418,9 @@ router.put("/journal-templates/:id", authorize({ feature: "finance.accounting_en
       }
     });
 
-    const [template] = await rawQuery<Record<string, unknown>>(`SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    const [template] = await rawQuery<any>(`SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     if (!template) throw new NotFoundError("القالب غير موجود");
-    template.lines = await rawQuery<Record<string, unknown>>(
+    template.lines = await rawQuery<any>(
       `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
        FROM journal_entry_template_lines tl
        LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId" AND ca."companyId" = $2
@@ -440,7 +440,7 @@ router.delete("/journal-templates/:id", authorize({ feature: "finance.accounting
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     requireFinance(scope);
-    const [existing] = await rawQuery<Record<string, unknown>>(
+    const [existing] = await rawQuery<any>(
       `SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -469,7 +469,7 @@ router.get("/subsidiary-accounts", authorize({ feature: "finance.accounting_engi
     if (entityType) { params.push(entityType); conditions.push(`sa."entityType" = $${params.length}`); }
     if (entityId) { params.push(Number(entityId) || 0); conditions.push(`sa."entityId" = $${params.length}`); }
 
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT sa.*, ca.code AS "accountCode", ca.name AS "accountName", ca.type AS "accountType2", ca."currentBalance"
        FROM subsidiary_accounts sa
        JOIN chart_of_accounts ca ON ca.id = sa."accountId"
@@ -489,7 +489,7 @@ router.get("/subsidiary-accounts/entity/:entityType/:entityId", authorize({ feat
     const scope = req.scope!;
     const { entityType } = req.params;
     const entityId = parseId(req.params.entityId, "entityId");
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT sa.*, ca.code AS "accountCode", ca.name AS "accountName", ca.type AS "accountType2",
               ca."currentBalance", ca."allowPosting"
        FROM subsidiary_accounts sa
@@ -519,7 +519,7 @@ router.post("/subsidiary-accounts", authorize({ feature: "finance.accounting_eng
       [scope.companyId, entityType, Number(entityId), accountType, Number(accountId)]
     );
 
-    const [row] = await rawQuery<Record<string, unknown>>(
+    const [row] = await rawQuery<any>(
       `SELECT sa.*, ca.code AS "accountCode", ca.name AS "accountName"
        FROM subsidiary_accounts sa JOIN chart_of_accounts ca ON ca.id = sa."accountId"
        WHERE sa.id = $1 AND sa."companyId" = $2`,
@@ -538,7 +538,7 @@ router.delete("/subsidiary-accounts/:id", authorize({ feature: "finance.accounti
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     requireFinance(scope);
-    const [before] = await rawQuery<Record<string, unknown>>(
+    const [before] = await rawQuery<any>(
       `SELECT * FROM subsidiary_accounts WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );

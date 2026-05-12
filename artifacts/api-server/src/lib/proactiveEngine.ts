@@ -14,7 +14,7 @@ async function logAutomation(params: {
   createdEntityId?: number;
   assignedTo?: number;
   status?: string;
-  details?: unknown;
+  details?: any;
 }): Promise<void> {
   try {
     await rawExecute(
@@ -44,7 +44,7 @@ async function logAutomation(params: {
 }
 
 async function getHrAssignment(companyId: number): Promise<number | null> {
-  const [hrAsgn] = await rawQuery<{ id: number }>(
+  const [hrAsgn] = await rawQuery<any>(
     `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role IN ('hr_manager','general_manager','owner') AND status = 'active' ORDER BY CASE role WHEN 'hr_manager' THEN 1 WHEN 'general_manager' THEN 2 ELSE 3 END LIMIT 1`,
     [companyId]
   );
@@ -52,7 +52,7 @@ async function getHrAssignment(companyId: number): Promise<number | null> {
 }
 
 async function getFinanceAssignment(companyId: number): Promise<number | null> {
-  const [asgn] = await rawQuery<{ id: number }>(
+  const [asgn] = await rawQuery<any>(
     `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role IN ('finance_manager','general_manager','owner') AND status = 'active' ORDER BY CASE role WHEN 'finance_manager' THEN 1 WHEN 'general_manager' THEN 2 ELSE 3 END LIMIT 1`,
     [companyId]
   );
@@ -60,7 +60,7 @@ async function getFinanceAssignment(companyId: number): Promise<number | null> {
 }
 
 async function getFleetManagerAssignment(companyId: number): Promise<number | null> {
-  const [asgn] = await rawQuery<{ id: number }>(
+  const [asgn] = await rawQuery<any>(
     `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role IN ('fleet_manager','branch_manager','owner') AND status = 'active' ORDER BY CASE role WHEN 'fleet_manager' THEN 1 WHEN 'branch_manager' THEN 2 ELSE 3 END LIMIT 1`,
     [companyId]
   );
@@ -68,7 +68,7 @@ async function getFleetManagerAssignment(companyId: number): Promise<number | nu
 }
 
 async function getPropertyManagerAssignment(companyId: number): Promise<number | null> {
-  const [asgn] = await rawQuery<{ id: number }>(
+  const [asgn] = await rawQuery<any>(
     `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role IN ('property_manager','branch_manager','owner') AND status = 'active' ORDER BY CASE role WHEN 'property_manager' THEN 1 WHEN 'branch_manager' THEN 2 ELSE 3 END LIMIT 1`,
     [companyId]
   );
@@ -77,13 +77,13 @@ async function getPropertyManagerAssignment(companyId: number): Promise<number |
 
 async function isRuleActive(ruleName: string, companyId?: number): Promise<boolean> {
   if (companyId) {
-    const [rule] = await rawQuery<{ isActive: boolean }>(
+    const [rule] = await rawQuery<any>(
       `SELECT "isActive" FROM proactive_rules WHERE name = $1 AND "companyId" = $2`,
       [ruleName, companyId]
     );
     return rule?.isActive !== false;
   }
-  const [rule] = await rawQuery<{ isActive: boolean }>(
+  const [rule] = await rawQuery<any>(
     `SELECT "isActive" FROM proactive_rules WHERE name = $1 LIMIT 1`,
     [ruleName]
   );
@@ -100,7 +100,7 @@ async function createTaskForAssignment(params: {
   dueDate?: string;
 }): Promise<number | null> {
   try {
-    const [row] = await rawQuery<{ id: number }>(
+    const [row] = await rawQuery<any>(
       `INSERT INTO tasks ("companyId","branchId",type,title,description,priority,status,"assignedTo","scheduledDate","createdAt")
        VALUES ($1,$2,'follow_up',$3,$4,$5,'pending',$6,$7,NOW()) RETURNING id`,
       [params.companyId, params.branchId ?? null, params.title, params.description, params.priority, params.assignedTo, params.dueDate ?? null]
@@ -117,7 +117,7 @@ export async function proactiveEmployeeContractExpiry(): Promise<string> {
   let created = 0;
   for (const company of companies) {
     if (!(await isRuleActive("employee_contract_expiry", company.id))) continue;
-    const contracts = await rawQuery<Record<string, unknown>>(
+    const contracts = await rawQuery<any>(
       `SELECT ec.id, ec."companyId", ec."employeeId", ec."endDate",
               e.name AS "employeeName",
               (ec."endDate"::date - CURRENT_DATE) AS "daysLeft"
@@ -144,7 +144,7 @@ export async function proactiveEmployeeContractExpiry(): Promise<string> {
         description: `عقد الموظف ${c.employeeName} ينتهي خلال ${daysLeft} يوم (${c.endDate}). يرجى مراجعة العقد واتخاذ إجراء التجديد أو إنهاء الخدمة.`,
         priority: daysLeft <= 7 ? "urgent" : "high",
         assignedTo: hrAssignment,
-        dueDate: c.endDate as string | undefined,
+        dueDate: c.endDate,
       });
       await createNotification({
         companyId: company.id, assignmentId: hrAssignment,
@@ -152,14 +152,14 @@ export async function proactiveEmployeeContractExpiry(): Promise<string> {
         title: `مهمة تلقائية: تجديد عقد ${c.employeeName}`,
         body: `تم إنشاء مهمة تجديد عقد تلقائياً — ينتهي خلال ${daysLeft} يوم`,
         priority: daysLeft <= 7 ? "urgent" : "high",
-        refType: "employee_contract", refId: c.id as number,
+        refType: "employee_contract", refId: c.id,
       });
       await logAutomation({
         companyId: company.id,
         automationType: "employee_contract_expiry",
         triggerReason: `عقد الموظف ${c.employeeName} ينتهي خلال ${daysLeft} يوم`,
         actionTaken: `إنشاء مهمة تجديد عقد وإشعار HR`,
-        entityType: "employee_contract", entityId: c.id as number,
+        entityType: "employee_contract", entityId: c.id,
         createdEntityType: "task", createdEntityId: taskId ?? undefined,
         assignedTo: hrAssignment,
       });
@@ -174,7 +174,7 @@ export async function proactiveInvoiceOverdueCollection(): Promise<string> {
   let created = 0;
   for (const company of companies) {
     if (!(await isRuleActive("invoice_overdue_collection", company.id))) continue;
-    const invoices = await rawQuery<Record<string, unknown>>(
+    const invoices = await rawQuery<any>(
       `SELECT i.id, i.ref, i.total, i."paidAmount", i."dueDate",
               c.name AS "clientName",
               (CURRENT_DATE - i."dueDate"::date) AS "daysOverdue"
@@ -207,7 +207,7 @@ export async function proactiveInvoiceOverdueCollection(): Promise<string> {
           companyId: company.id, automationType: "invoice_overdue_collection",
           triggerReason: `فاتورة ${inv.ref} متأخرة ${daysOverdue} يوم`,
           actionTaken: `فشل إنشاء مهمة مطالبة تحصيل`,
-          entityType: "invoice", entityId: inv.id as number, status: "failed",
+          entityType: "invoice", entityId: inv.id, status: "failed",
         });
         continue;
       }
@@ -217,14 +217,14 @@ export async function proactiveInvoiceOverdueCollection(): Promise<string> {
         title: `مطالبة تحصيل تلقائية: ${inv.ref}`,
         body: `فاتورة متأخرة ${daysOverdue} يوم — ${remaining} ريال`,
         priority: daysOverdue >= 60 ? "urgent" : "high",
-        refType: "invoice", refId: inv.id as number,
+        refType: "invoice", refId: inv.id,
       });
       await logAutomation({
         companyId: company.id,
         automationType: "invoice_overdue_collection",
         triggerReason: `فاتورة ${inv.ref} متأخرة ${daysOverdue} يوم`,
         actionTaken: `إنشاء مهمة مطالبة تحصيل`,
-        entityType: "invoice", entityId: inv.id as number,
+        entityType: "invoice", entityId: inv.id,
         createdEntityType: "task", createdEntityId: taskId ?? undefined,
         assignedTo: financeAsgn,
       });
@@ -239,7 +239,7 @@ export async function proactiveUnauthorizedAbsence(): Promise<string> {
   let created = 0;
   for (const company of companies) {
     if (!(await isRuleActive("unauthorized_absence_inquiry", company.id))) continue;
-    const absentees = await rawQuery<Record<string, unknown>>(
+    const absentees = await rawQuery<any>(
       `SELECT a."assignmentId", ea."employeeId", ea."branchId", e.name AS "employeeName"
        FROM attendance a
        JOIN employee_assignments ea ON ea.id = a."assignmentId"
@@ -259,11 +259,11 @@ export async function proactiveUnauthorizedAbsence(): Promise<string> {
       [company.id]
     );
     for (const a of absentees) {
-      const managerId = await getManagerAssignmentId(company.id, (a.branchId as number | null) ?? 0);
+      const managerId = await getManagerAssignmentId(company.id, a.branchId ?? 0);
       if (!managerId) continue;
       const taskId = await createTaskForAssignment({
         companyId: company.id,
-        branchId: a.branchId as number | null,
+        branchId: a.branchId,
         title: `استفسار غياب: ${a.employeeName}`,
         description: `الموظف ${a.employeeName} غائب اليوم بدون إذن مسبق. يرجى التواصل معه ومعرفة السبب.`,
         priority: "high",
@@ -275,14 +275,14 @@ export async function proactiveUnauthorizedAbsence(): Promise<string> {
         title: `غياب بدون إذن: ${a.employeeName}`,
         body: `تم إنشاء مهمة استفسار تلقائية — يرجى التواصل مع الموظف`,
         priority: "high",
-        refType: "employee", refId: a.employeeId as number,
+        refType: "employee", refId: a.employeeId,
       });
       await logAutomation({
         companyId: company.id,
         automationType: "unauthorized_absence_inquiry",
         triggerReason: `غياب الموظف ${a.employeeName} بدون إذن`,
         actionTaken: `إنشاء مهمة استفسار للمدير المباشر`,
-        entityType: "attendance", entityId: a.assignmentId as number,
+        entityType: "attendance", entityId: a.assignmentId,
         createdEntityType: "task", createdEntityId: taskId ?? undefined,
         assignedTo: managerId,
       });
@@ -297,7 +297,7 @@ export async function proactiveVehicleInsuranceExpiry(): Promise<string> {
   let created = 0;
   for (const company of companies) {
     if (!(await isRuleActive("vehicle_insurance_expiry", company.id))) continue;
-    const insurances = await rawQuery<Record<string, unknown>>(
+    const insurances = await rawQuery<any>(
       `SELECT fi.id, fi."vehicleId", fi."endDate", fv."plateNumber",
               (fi."endDate"::date - CURRENT_DATE) AS "daysLeft"
        FROM fleet_insurance fi
@@ -322,7 +322,7 @@ export async function proactiveVehicleInsuranceExpiry(): Promise<string> {
         description: `تأمين المركبة ${ins.plateNumber} ينتهي خلال ${daysLeft} يوم (${ins.endDate}). يرجى تجديد التأمين قبل انتهاء الصلاحية.`,
         priority: daysLeft <= 7 ? "urgent" : "high",
         assignedTo: fleetMgr,
-        dueDate: ins.endDate as string | undefined,
+        dueDate: ins.endDate,
       });
       await createNotification({
         companyId: company.id, assignmentId: fleetMgr,
@@ -330,14 +330,14 @@ export async function proactiveVehicleInsuranceExpiry(): Promise<string> {
         title: `تجديد تأمين: ${ins.plateNumber}`,
         body: `تأمين ينتهي خلال ${daysLeft} يوم — تم إنشاء مهمة تلقائية`,
         priority: daysLeft <= 7 ? "urgent" : "high",
-        refType: "fleet_insurance", refId: ins.id as number,
+        refType: "fleet_insurance", refId: ins.id,
       });
       await logAutomation({
         companyId: company.id,
         automationType: "vehicle_insurance_expiry",
         triggerReason: `تأمين المركبة ${ins.plateNumber} ينتهي خلال ${daysLeft} يوم`,
         actionTaken: `إنشاء مهمة تجديد تأمين`,
-        entityType: "fleet_insurance", entityId: ins.id as number,
+        entityType: "fleet_insurance", entityId: ins.id,
         createdEntityType: "task", createdEntityId: taskId ?? undefined,
         assignedTo: fleetMgr,
       });
@@ -352,7 +352,7 @@ export async function proactiveRentalContractExpiry(): Promise<string> {
   let created = 0;
   for (const company of companies) {
     if (!(await isRuleActive("rental_contract_expiry", company.id))) continue;
-    const contracts = await rawQuery<Record<string, unknown>>(
+    const contracts = await rawQuery<any>(
       `SELECT rc.id, rc."tenantName", rc."endDate",
               (rc."endDate"::date - CURRENT_DATE) AS "daysLeft"
        FROM rental_contracts rc
@@ -376,7 +376,7 @@ export async function proactiveRentalContractExpiry(): Promise<string> {
         description: `عقد إيجار المستأجر ${c.tenantName} ينتهي خلال ${daysLeft} يوم (${c.endDate}). يرجى التواصل مع المستأجر لمناقشة التجديد.`,
         priority: daysLeft <= 14 ? "urgent" : "high",
         assignedTo: propMgr,
-        dueDate: c.endDate as string | undefined,
+        dueDate: c.endDate,
       });
       await createNotification({
         companyId: company.id, assignmentId: propMgr,
@@ -384,14 +384,14 @@ export async function proactiveRentalContractExpiry(): Promise<string> {
         title: `عقد إيجار ينتهي: ${c.tenantName}`,
         body: `ينتهي خلال ${daysLeft} يوم — تم إنشاء مهمة متابعة`,
         priority: daysLeft <= 14 ? "urgent" : "high",
-        refType: "rental_contract", refId: c.id as number,
+        refType: "rental_contract", refId: c.id,
       });
       await logAutomation({
         companyId: company.id,
         automationType: "rental_contract_expiry",
         triggerReason: `عقد إيجار ${c.tenantName} ينتهي خلال ${daysLeft} يوم`,
         actionTaken: `إنشاء مهمة متابعة عقد إيجار`,
-        entityType: "rental_contract", entityId: c.id as number,
+        entityType: "rental_contract", entityId: c.id,
         createdEntityType: "task", createdEntityId: taskId ?? undefined,
         assignedTo: propMgr,
       });
@@ -409,7 +409,7 @@ export async function proactiveAnnualPerformanceReview(): Promise<string> {
   if (currentMonth !== 1 && currentMonth !== 7) return "Not review month (Jan/Jul)";
   for (const company of companies) {
     if (!(await isRuleActive("annual_performance_review", company.id))) continue;
-    const employees = await rawQuery<Record<string, unknown>>(
+    const employees = await rawQuery<any>(
       `SELECT ea.id AS "assignmentId", ea."employeeId", ea."branchId", e.name
        FROM employee_assignments ea
        JOIN employees e ON e.id = ea."employeeId"
@@ -424,12 +424,12 @@ export async function proactiveAnnualPerformanceReview(): Promise<string> {
       [company.id, curYear, currentMonth]
     );
     for (const emp of employees) {
-      const managerId = await getManagerAssignmentId(company.id, (emp.branchId as number | null) ?? 0);
+      const managerId = await getManagerAssignmentId(company.id, emp.branchId ?? 0);
       const assignTo = managerId || await getHrAssignment(company.id);
       if (!assignTo) continue;
       const taskId = await createTaskForAssignment({
         companyId: company.id,
-        branchId: emp.branchId as number | null,
+        branchId: emp.branchId,
         title: `تقييم أداء سنوي: ${emp.name}`,
         description: `حان موعد التقييم السنوي للموظف ${emp.name}. يرجى إجراء التقييم وتقديم الملاحظات.`,
         priority: "normal",
@@ -440,7 +440,7 @@ export async function proactiveAnnualPerformanceReview(): Promise<string> {
         automationType: "annual_performance_review",
         triggerReason: `موعد التقييم السنوي للموظف ${emp.name}`,
         actionTaken: `إنشاء مهمة تقييم أداء`,
-        entityType: "employee_assignment", entityId: emp.assignmentId as number,
+        entityType: "employee_assignment", entityId: emp.assignmentId,
         createdEntityType: "task", createdEntityId: taskId ?? undefined,
         assignedTo: assignTo,
       });
@@ -451,7 +451,7 @@ export async function proactiveAnnualPerformanceReview(): Promise<string> {
 }
 
 export async function proactiveProbationCompletion(): Promise<string> {
-  const contracts = await rawQuery<Record<string, unknown>>(
+  const contracts = await rawQuery<any>(
     `SELECT ec.id, ec."companyId", ec."employeeId", ec."probationEndDate",
             e.name AS "employeeName"
      FROM employee_contracts ec
@@ -467,33 +467,32 @@ export async function proactiveProbationCompletion(): Promise<string> {
   );
   let created = 0;
   for (const c of contracts) {
-    const companyId = c.companyId as number;
-    if (!(await isRuleActive("probation_completion_review", companyId))) continue;
-    const hrAssignment = await getHrAssignment(companyId);
+    if (!(await isRuleActive("probation_completion_review", c.companyId))) continue;
+    const hrAssignment = await getHrAssignment(c.companyId);
     if (!hrAssignment) continue;
-    const daysLeft = Math.ceil((new Date(c.probationEndDate as string | Date).getTime() - Date.now()) / 86400000);
+    const daysLeft = Math.ceil((new Date(c.probationEndDate).getTime() - Date.now()) / 86400000);
     const taskId = await createTaskForAssignment({
-      companyId,
+      companyId: c.companyId,
       title: `مراجعة تثبيت: ${c.employeeName}`,
       description: `فترة تجربة الموظف ${c.employeeName} تنتهي خلال ${daysLeft} يوم (${c.probationEndDate}). يرجى مراجعة الأداء واتخاذ قرار التثبيت.`,
       priority: "high",
       assignedTo: hrAssignment,
-      dueDate: c.probationEndDate as string | undefined,
+      dueDate: c.probationEndDate,
     });
     await createNotification({
-      companyId, assignmentId: hrAssignment,
+      companyId: c.companyId, assignmentId: hrAssignment,
       type: "proactive_automation",
       title: `مراجعة تثبيت: ${c.employeeName}`,
       body: `فترة التجربة تنتهي خلال ${daysLeft} يوم — تم إنشاء مهمة مراجعة`,
       priority: "high",
-      refType: "employee_contract", refId: c.id as number,
+      refType: "employee_contract", refId: c.id,
     });
     await logAutomation({
-      companyId,
+      companyId: c.companyId,
       automationType: "probation_completion_review",
       triggerReason: `فترة تجربة ${c.employeeName} تنتهي خلال ${daysLeft} يوم`,
       actionTaken: `إنشاء مهمة مراجعة تثبيت`,
-      entityType: "employee_contract", entityId: c.id as number,
+      entityType: "employee_contract", entityId: c.id,
       createdEntityType: "task", createdEntityId: taskId ?? undefined,
       assignedTo: hrAssignment,
     });
@@ -511,7 +510,7 @@ export async function proactiveVehicleBreakdown(payload: {
 }): Promise<void> {
   if (!(await isRuleActive("vehicle_breakdown_maintenance", payload.companyId))) return;
 
-  const existing = await rawQuery<{ id: number }>(
+  const existing = await rawQuery<any>(
     `SELECT id FROM automation_logs WHERE "automationType" = 'vehicle_breakdown_maintenance'
        AND "entityType" = 'fleet_vehicle' AND "entityId" = $1
        AND "createdAt" > NOW() - INTERVAL '7 days'`,
@@ -527,7 +526,7 @@ export async function proactiveVehicleBreakdown(payload: {
     try {
       const nextServiceDate = new Date();
       nextServiceDate.setMonth(nextServiceDate.getMonth() + 3);
-      const [maint] = await rawQuery<{ id: number }>(
+      const [maint] = await rawQuery<any>(
         `INSERT INTO fleet_maintenance ("companyId","vehicleId",type,description,cost,"serviceDate",status,"nextServiceDate")
          VALUES ($1,$2,'breakdown',$3,0,CURRENT_DATE,'pending',$4) RETURNING id`,
         [payload.companyId, payload.vehicleId, payload.description || `عطل تلقائي — ${payload.plateNumber}`, toDateISO(nextServiceDate)]

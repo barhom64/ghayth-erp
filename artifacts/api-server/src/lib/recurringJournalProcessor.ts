@@ -75,7 +75,7 @@ export async function runRecurringJournal(params: {
 }
 
 export async function processDueRecurringJournals(): Promise<string> {
-  const due = await rawQuery<Record<string, unknown>>(
+  const due = await rawQuery<any>(
     `SELECT * FROM recurring_journals
      WHERE active = TRUE AND "deletedAt" IS NULL AND "nextRunDate" <= CURRENT_DATE`
   );

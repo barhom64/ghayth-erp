@@ -207,27 +207,27 @@ export async function getCompanyKPIs(companyId: number): Promise<{
   taskCompletionRate: number;
 }> {
   const today = todayISO();
-  const [supResp] = await rawQuery<Record<string, unknown>>(
+  const [supResp] = await rawQuery<any>(
     `SELECT COUNT(*) FILTER (WHERE "firstResponseAt" IS NOT NULL)::float / NULLIF(COUNT(*), 0) * 100 AS rate
      FROM support_tickets WHERE "companyId"=$1 AND "createdAt"::date >= CURRENT_DATE - INTERVAL '30 days'`,
     [companyId]
   );
-  const [collection] = await rawQuery<Record<string, unknown>>(
+  const [collection] = await rawQuery<any>(
     `SELECT COUNT(*) FILTER (WHERE status='paid')::float / NULLIF(COUNT(*),0) * 100 AS rate
      FROM invoices WHERE "companyId"=$1 AND "createdAt"::date >= CURRENT_DATE - INTERVAL '30 days'`,
     [companyId]
   );
-  const [approval] = await rawQuery<Record<string, unknown>>(
+  const [approval] = await rawQuery<any>(
     `SELECT COUNT(*) FILTER (WHERE status='approved')::float / NULLIF(COUNT(*),0) * 100 AS rate
      FROM approval_requests WHERE "companyId"=$1 AND "createdAt"::date >= CURRENT_DATE - INTERVAL '30 days'`,
     [companyId]
   );
-  const [satisfaction] = await rawQuery<Record<string, unknown>>(
+  const [satisfaction] = await rawQuery<any>(
     `SELECT COALESCE(AVG(rating),0) AS avg FROM support_tickets
      WHERE "companyId"=$1 AND rating IS NOT NULL AND "resolvedAt"::date >= CURRENT_DATE - INTERVAL '30 days'`,
     [companyId]
   );
-  const [tasks] = await rawQuery<Record<string, unknown>>(
+  const [tasks] = await rawQuery<any>(
     `SELECT COUNT(*) FILTER (WHERE status='completed')::float / NULLIF(COUNT(*),0) * 100 AS rate
      FROM tasks WHERE "companyId"=$1 AND "scheduledDate"::date >= CURRENT_DATE - INTERVAL '30 days'`,
     [companyId]

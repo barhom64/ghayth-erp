@@ -21,11 +21,11 @@ reportsRouter.get("/reports/entities/:entityType", authorize({ feature: "finance
     const { entityType } = req.params;
     let rows: any[] = [];
     if (entityType === "client") {
-      rows = await rawQuery<Record<string, unknown>>(`SELECT id, name, phone, email FROM clients WHERE "companyId" = $1 AND "deletedAt" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
+      rows = await rawQuery<any>(`SELECT id, name, phone, email FROM clients WHERE "companyId" = $1 AND "deletedAt" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
     } else if (entityType === "supplier") {
-      rows = await rawQuery<Record<string, unknown>>(`SELECT id, name, phone, email FROM suppliers WHERE "companyId" = $1 AND "deletedAt" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
+      rows = await rawQuery<any>(`SELECT id, name, phone, email FROM suppliers WHERE "companyId" = $1 AND "deletedAt" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
     } else if (entityType === "employee") {
-      rows = await rawQuery<Record<string, unknown>>(`SELECT e.id, e.name, e.phone, e.email FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 WHERE e."deletedAt" IS NULL ORDER BY e.name LIMIT 500`, [scope.companyId]);
+      rows = await rawQuery<any>(`SELECT e.id, e.name, e.phone, e.email FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 WHERE e."deletedAt" IS NULL ORDER BY e.name LIMIT 500`, [scope.companyId]);
     }
     res.json({ data: rows });
   } catch (err) {
@@ -41,7 +41,7 @@ reportsRouter.get("/reports/trial-balance", authorize({ feature: "finance.report
     const params: any[] = [scope.companyId];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
     if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT coa.id, coa.code, coa.name, coa.type, coa."parentId", coa.level, coa."allowPosting",
               COALESCE(SUM(fl.debit), 0) AS "totalDebit",
               COALESCE(SUM(fl.credit), 0) AS "totalCredit",
@@ -84,8 +84,8 @@ reportsRouter.get("/reports/income-statement", authorize({ feature: "finance.rep
     const params: any[] = [scope.companyId];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
     if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
-    const revenues = await rawQuery<Record<string, unknown>>(`SELECT coa.code, coa.name, COALESCE(SUM(fl.credit) - SUM(fl.debit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}) fl ON fl."accountCode" = coa.code WHERE coa."companyId" = $1 AND coa.type = 'revenue' AND coa."deletedAt" IS NULL GROUP BY coa.code, coa.name ORDER BY coa.code LIMIT 500`, params);
-    const expenses = await rawQuery<Record<string, unknown>>(`SELECT coa.code, coa.name, COALESCE(SUM(fl.debit) - SUM(fl.credit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}) fl ON fl."accountCode" = coa.code WHERE coa."companyId" = $1 AND coa.type = 'expense' AND coa."deletedAt" IS NULL GROUP BY coa.code, coa.name ORDER BY coa.code LIMIT 500`, params);
+    const revenues = await rawQuery<any>(`SELECT coa.code, coa.name, COALESCE(SUM(fl.credit) - SUM(fl.debit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}) fl ON fl."accountCode" = coa.code WHERE coa."companyId" = $1 AND coa.type = 'revenue' AND coa."deletedAt" IS NULL GROUP BY coa.code, coa.name ORDER BY coa.code LIMIT 500`, params);
+    const expenses = await rawQuery<any>(`SELECT coa.code, coa.name, COALESCE(SUM(fl.debit) - SUM(fl.credit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}) fl ON fl."accountCode" = coa.code WHERE coa."companyId" = $1 AND coa.type = 'expense' AND coa."deletedAt" IS NULL GROUP BY coa.code, coa.name ORDER BY coa.code LIMIT 500`, params);
     const totalRevenue = revenues.reduce((s: number, r: any) => s + Number(r.amount), 0);
     const totalExpenses = expenses.reduce((s: number, r: any) => s + Number(r.amount), 0);
     res.json({ revenues, expenses, summary: { totalRevenue, totalExpenses, netIncome: totalRevenue - totalExpenses } });
@@ -101,7 +101,7 @@ reportsRouter.get("/reports/balance-sheet", authorize({ feature: "finance.report
     let dateFilter = "";
     const params: any[] = [scope.companyId];
     if (asOfDate) { params.push(asOfDate); dateFilter = ` AND je."createdAt" <= $${params.length}`; }
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT coa.code, coa.name, coa.type,
               CASE WHEN coa.type IN ('asset','expense') THEN COALESCE(SUM(fl.debit) - SUM(fl.credit), 0)
                    ELSE COALESCE(SUM(fl.credit) - SUM(fl.debit), 0) END AS balance
@@ -148,7 +148,7 @@ reportsRouter.get("/reports/cash-flow", authorize({ feature: "finance.reports", 
 
     // Dynamically discover cash/bank accounts by type+code prefix (11xx or
     // explicit mappings). Fall back to defaults if none found.
-    const cashAccountsRows = await rawQuery<Record<string, unknown>>(
+    const cashAccountsRows = await rawQuery<any>(
       `SELECT code FROM chart_of_accounts
         WHERE "companyId" = $1 AND type = 'asset'
           AND (code LIKE '11%' OR code IN ('1100','1110','1120','1130'))
@@ -160,7 +160,7 @@ reportsRouter.get("/reports/cash-flow", authorize({ feature: "finance.reports", 
       : ["1100", "1110"];
 
     // Opening cash balance = sum of all cash JL before startDate
-    const [openingRow] = await rawQuery<Record<string, unknown>>(
+    const [openingRow] = await rawQuery<any>(
       `SELECT COALESCE(SUM(jl.debit - jl.credit), 0) AS balance
          FROM journal_lines jl
          JOIN journal_entries je ON je.id = jl."journalId"
@@ -175,7 +175,7 @@ reportsRouter.get("/reports/cash-flow", authorize({ feature: "finance.reports", 
     // counter-account (any line in the same JE not pointing to cash) to infer
     // the classification. Simple heuristic: take the largest non-cash line as
     // the dominant counter-account.
-    const jes = await rawQuery<Record<string, unknown>>(
+    const jes = await rawQuery<any>(
       `SELECT je.id, je.ref, je.description, je."createdAt",
               jl_cash.debit AS "cashDebit", jl_cash.credit AS "cashCredit"
          FROM journal_entries je
@@ -191,7 +191,7 @@ reportsRouter.get("/reports/cash-flow", authorize({ feature: "finance.reports", 
     const jeIds = jes.map((j: any) => j.id);
     let counterLines: any[] = [];
     if (jeIds.length > 0) {
-      counterLines = await rawQuery<Record<string, unknown>>(
+      counterLines = await rawQuery<any>(
         `SELECT jl."journalId", jl."accountCode", jl.debit, jl.credit,
                 coa.type, coa.code, coa.name
            FROM journal_lines jl
@@ -318,7 +318,7 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", authorize({ featur
     let sections: Record<string, any> = {};
 
     if (entityType === "employee") {
-      const [emp] = await rawQuery<Record<string, unknown>>(`SELECT e.id, e.name, ea.id AS "assignmentId" FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 WHERE e.id = $2 LIMIT 1`, [scope.companyId, id]);
+      const [emp] = await rawQuery<any>(`SELECT e.id, e.name, ea.id AS "assignmentId" FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 WHERE e.id = $2 LIMIT 1`, [scope.companyId, id]);
       if (!emp) { res.json({ movements: [], summary: {}, sections: {} }); return; }
       const assignmentId = emp.assignmentId;
 
@@ -328,10 +328,10 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", authorize({ featur
       const { filter: vioFilter, extraParams: vioDates } = buildDateFilter(2, startDate, endDate);
 
       const [payrollRows, advanceRows, custodyRows, violationRows] = await Promise.all([
-        rawQuery<Record<string, unknown>>(`SELECT pr.id, pr.period AS ref, CONCAT('راتب ', pr.period) AS description, pr."grossSalary" AS debit, 0 AS credit, pr."createdAt" AS date, 'payroll' AS "movementType" FROM payroll_records pr WHERE pr."employeeAssignmentId" = $1 AND pr."companyId" = $2 ${prFilter.replace(/"createdAt"/g, 'pr."createdAt"')} ORDER BY pr."createdAt" DESC LIMIT 500`, [assignmentId, scope.companyId, ...prDates]),
-        rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, CONCAT('سلفة: ', je.description) AS description, COALESCE(SUM(jl.debit), 0) AS debit, 0 AS credit, je."createdAt" AS date, 'advance' AS "movementType" FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1410' WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."createdBy" = $2 ${advFilter.replace(/"createdAt"/g, 'je."createdAt"')} GROUP BY je.id, je.ref, je.description, je."createdAt" LIMIT 500`, [scope.companyId, assignmentId, ...advDates]),
-        rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, CONCAT('عهدة: ', je.description) AS description, COALESCE(SUM(jl.debit), 0) AS debit, 0 AS credit, je."createdAt" AS date, 'custody' AS "movementType" FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1400' WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."createdBy" = $2 AND je.ref LIKE 'CUSTODY%' ${cstFilter.replace(/"createdAt"/g, 'je."createdAt"')} GROUP BY je.id, je.ref, je.description, je."createdAt" LIMIT 500`, [scope.companyId, assignmentId, ...cstDates]),
-        rawQuery<Record<string, unknown>>(`SELECT v.id, CONCAT('VIO-', v.id::text) AS ref, CONCAT('خصم مخالفة: ', v.description) AS description, 0 AS debit, COALESCE(v.deduction, 0) AS credit, v."createdAt" AS date, 'violation' AS "movementType" FROM employee_violations v WHERE v."assignmentId" = $1 AND v."companyId" = $2 AND v.deduction > 0 ${vioFilter.replace(/"createdAt"/g, 'v."createdAt"')} ORDER BY v."createdAt" DESC LIMIT 500`, [assignmentId, scope.companyId, ...vioDates]),
+        rawQuery<any>(`SELECT pr.id, pr.period AS ref, CONCAT('راتب ', pr.period) AS description, pr."grossSalary" AS debit, 0 AS credit, pr."createdAt" AS date, 'payroll' AS "movementType" FROM payroll_records pr WHERE pr."employeeAssignmentId" = $1 AND pr."companyId" = $2 ${prFilter.replace(/"createdAt"/g, 'pr."createdAt"')} ORDER BY pr."createdAt" DESC LIMIT 500`, [assignmentId, scope.companyId, ...prDates]),
+        rawQuery<any>(`SELECT je.id, je.ref, CONCAT('سلفة: ', je.description) AS description, COALESCE(SUM(jl.debit), 0) AS debit, 0 AS credit, je."createdAt" AS date, 'advance' AS "movementType" FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1410' WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."createdBy" = $2 ${advFilter.replace(/"createdAt"/g, 'je."createdAt"')} GROUP BY je.id, je.ref, je.description, je."createdAt" LIMIT 500`, [scope.companyId, assignmentId, ...advDates]),
+        rawQuery<any>(`SELECT je.id, je.ref, CONCAT('عهدة: ', je.description) AS description, COALESCE(SUM(jl.debit), 0) AS debit, 0 AS credit, je."createdAt" AS date, 'custody' AS "movementType" FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1400' WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."createdBy" = $2 AND je.ref LIKE 'CUSTODY%' ${cstFilter.replace(/"createdAt"/g, 'je."createdAt"')} GROUP BY je.id, je.ref, je.description, je."createdAt" LIMIT 500`, [scope.companyId, assignmentId, ...cstDates]),
+        rawQuery<any>(`SELECT v.id, CONCAT('VIO-', v.id::text) AS ref, CONCAT('خصم مخالفة: ', v.description) AS description, 0 AS debit, COALESCE(v.deduction, 0) AS credit, v."createdAt" AS date, 'violation' AS "movementType" FROM employee_violations v WHERE v."assignmentId" = $1 AND v."companyId" = $2 AND v.deduction > 0 ${vioFilter.replace(/"createdAt"/g, 'v."createdAt"')} ORDER BY v."createdAt" DESC LIMIT 500`, [assignmentId, scope.companyId, ...vioDates]),
       ]);
 
       const all = [...payrollRows, ...advanceRows, ...custodyRows, ...violationRows].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -352,7 +352,7 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", authorize({ featur
 
     } else if (entityType === "client") {
       const { filter: dateFilter, extraParams: dateDates } = buildDateFilter(2, startDate, endDate);
-      const invoiceRows = await rawQuery<Record<string, unknown>>(`SELECT i.id, i.ref, i.total AS debit, i."paidAmount" AS credit, i."createdAt" AS date, CONCAT('فاتورة ', i.ref) AS description, 'invoice' AS "movementType", i.status FROM invoices i WHERE i."companyId" = $1 AND i."clientId" = $2 AND i."deletedAt" IS NULL ${dateFilter.replace(/"createdAt"/g, 'i."createdAt"')} ORDER BY i."createdAt" ASC LIMIT 500`, [scope.companyId, id, ...dateDates]);
+      const invoiceRows = await rawQuery<any>(`SELECT i.id, i.ref, i.total AS debit, i."paidAmount" AS credit, i."createdAt" AS date, CONCAT('فاتورة ', i.ref) AS description, 'invoice' AS "movementType", i.status FROM invoices i WHERE i."companyId" = $1 AND i."clientId" = $2 AND i."deletedAt" IS NULL ${dateFilter.replace(/"createdAt"/g, 'i."createdAt"')} ORDER BY i."createdAt" ASC LIMIT 500`, [scope.companyId, id, ...dateDates]);
       let runningBalance = 0;
       movements = invoiceRows.map((m: any) => { runningBalance += Number(m.debit) - Number(m.credit); return { ...m, runningBalance }; });
       const totalInvoiced = invoiceRows.reduce((s: number, r: any) => s + Number(r.debit), 0);
@@ -361,7 +361,7 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", authorize({ featur
 
     } else if (entityType === "supplier") {
       const { filter: dateFilter, extraParams: dateDates } = buildDateFilter(2, startDate, endDate);
-      const poRows = await rawQuery<Record<string, unknown>>(`SELECT po.id, po.ref, po."totalAmount" AS debit, 0 AS credit, po."createdAt" AS date, CONCAT('أمر شراء ', po.ref) AS description, 'purchase_order' AS "movementType", po.status FROM purchase_orders po WHERE po."companyId" = $1 AND po."supplierId" = $2 AND po."deletedAt" IS NULL ${dateFilter.replace(/"createdAt"/g, 'po."createdAt"')} ORDER BY po."createdAt" ASC LIMIT 500`, [scope.companyId, id, ...dateDates]);
+      const poRows = await rawQuery<any>(`SELECT po.id, po.ref, po."totalAmount" AS debit, 0 AS credit, po."createdAt" AS date, CONCAT('أمر شراء ', po.ref) AS description, 'purchase_order' AS "movementType", po.status FROM purchase_orders po WHERE po."companyId" = $1 AND po."supplierId" = $2 AND po."deletedAt" IS NULL ${dateFilter.replace(/"createdAt"/g, 'po."createdAt"')} ORDER BY po."createdAt" ASC LIMIT 500`, [scope.companyId, id, ...dateDates]);
       let runningBalance = 0;
       movements = poRows.map((m: any) => { runningBalance += Number(m.debit) - Number(m.credit); return { ...m, runningBalance }; });
       const totalOrdered = poRows.reduce((s: number, r: any) => s + Number(r.debit), 0);
@@ -376,7 +376,7 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", authorize({ featur
       const colFilter = colFilterMap[entityType];
       if (!colFilter) throw new ValidationError("نوع الكيان غير مدعوم");
       const { filter: dateFilter, extraParams: dateDates } = buildDateFilter(2, startDate, endDate);
-      const journalRows = await rawQuery<Record<string, unknown>>(
+      const journalRows = await rawQuery<any>(
         `SELECT je.id, je.ref, je.description, je."createdAt" AS date, je.type AS "movementType",
                 COALESCE(SUM(jl.debit), 0) AS debit, COALESCE(SUM(jl.credit), 0) AS credit
          FROM journal_entries je
@@ -426,14 +426,14 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
     const asOf = endDate || todayISO();
     const from = startDate || "1900-01-01";
 
-    const [client] = await rawQuery<Record<string, unknown>>(
+    const [client] = await rawQuery<any>(
       `SELECT id, name, phone, email, "vatNumber" FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [clientId, scope.companyId]
     );
     if (!client) { throw new NotFoundError("العميل غير موجود"); return; }
 
     // Opening balance = invoices before startDate - payments before startDate
-    const [openingRow] = await rawQuery<Record<string, unknown>>(
+    const [openingRow] = await rawQuery<any>(
       `SELECT COALESCE(
          (SELECT SUM(total) FROM invoices
            WHERE "clientId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL AND "createdAt" < $3), 0
@@ -446,7 +446,7 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
     const openingBalance = Number(openingRow?.opening ?? 0);
 
     // In-period invoices
-    const invoices = await rawQuery<Record<string, unknown>>(
+    const invoices = await rawQuery<any>(
       `SELECT id, ref, "createdAt" AS date, total AS debit, 0 AS credit,
               "dueDate", status, 'invoice' AS "movementType",
               CONCAT('فاتورة ', ref) AS description
@@ -457,7 +457,7 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
       [clientId, scope.companyId, from, asOf]
     );
     // In-period payments
-    const payments = await rawQuery<Record<string, unknown>>(
+    const payments = await rawQuery<any>(
       `SELECT ip.id, COALESCE(ip."transactionRef", CONCAT('PAY-', ip.id)) AS ref,
               ip."paidAt" AS date, 0 AS debit, ip.amount AS credit,
               NULL AS "dueDate", 'paid' AS status, 'payment' AS "movementType",
@@ -479,7 +479,7 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
     });
 
     // Aging of OPEN invoices as of asOf (based on dueDate or invoice date +30)
-    const openInvoices = await rawQuery<Record<string, unknown>>(
+    const openInvoices = await rawQuery<any>(
       `SELECT id, ref, "createdAt", "dueDate", total, "paidAmount",
               (total - COALESCE("paidAmount",0)) AS outstanding
          FROM invoices
@@ -545,7 +545,7 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
     const asOf = endDate || todayISO();
     const from = startDate || "1900-01-01";
 
-    const [supplier] = await rawQuery<Record<string, unknown>>(
+    const [supplier] = await rawQuery<any>(
       `SELECT id, name, phone, email, "taxNumber" FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [supplierId, scope.companyId]
     );
@@ -554,7 +554,7 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
     // Opening balance = POs matched/received before startDate - payments posted
     // before startDate. Uses purchase_orders as the AP proxy since we lack a
     // dedicated vendor_bills table today.
-    const [openingRow] = await rawQuery<Record<string, unknown>>(
+    const [openingRow] = await rawQuery<any>(
       `SELECT COALESCE(
          (SELECT SUM("totalAmount") FROM purchase_orders
            WHERE "supplierId"=$1 AND "companyId"=$2
@@ -566,7 +566,7 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
     );
     const openingBalance = Number(openingRow?.opening ?? 0);
 
-    const pos = await rawQuery<Record<string, unknown>>(
+    const pos = await rawQuery<any>(
       `SELECT id, ref, "createdAt" AS date, 0 AS debit, "totalAmount" AS credit,
               "expectedDelivery" AS "dueDate", status, 'purchase_order' AS "movementType",
               CONCAT('أمر شراء ', ref) AS description
@@ -585,7 +585,7 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
     });
 
     // Aging of open POs
-    const openPos = await rawQuery<Record<string, unknown>>(
+    const openPos = await rawQuery<any>(
       `SELECT id, ref, "createdAt", "expectedDelivery", "totalAmount"
          FROM purchase_orders
         WHERE "supplierId"=$1 AND "companyId"=$2
@@ -651,7 +651,7 @@ reportsRouter.get("/reports/entity-statement", authorize({ feature: "finance.rep
     let entityName = "";
 
     if (entityType === "employee" && entityId) {
-      const [emp] = await rawQuery<Record<string, unknown>>(
+      const [emp] = await rawQuery<any>(
         `SELECT e.name, ea.id AS aid FROM employees e
          JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1
          WHERE e.id = $2 LIMIT 1`,
@@ -664,7 +664,7 @@ reportsRouter.get("/reports/entity-statement", authorize({ feature: "finance.rep
         let dateFilter = "";
         if (startDate) { qParams.push(startDate); dateFilter += ` AND pr."createdAt" >= $${qParams.length}`; }
         if (endDate) { qParams.push(endDate); dateFilter += ` AND pr."createdAt" <= $${qParams.length}`; }
-        rows = await rawQuery<Record<string, unknown>>(
+        rows = await rawQuery<any>(
           `SELECT pr.period AS ref, CONCAT('راتب ', pr.period) AS description,
                   pr."grossSalary" AS debit, pr.deductions AS credit,
                   pr."netSalary" AS net, pr."createdAt" AS date, 'payroll' AS type
@@ -675,13 +675,13 @@ reportsRouter.get("/reports/entity-statement", authorize({ feature: "finance.rep
         );
       }
     } else if (entityType === "client" && entityId) {
-      const [cl] = await rawQuery<Record<string, unknown>>(`SELECT name FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [(Number(entityId) || 0), scope.companyId]);
+      const [cl] = await rawQuery<any>(`SELECT name FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [(Number(entityId) || 0), scope.companyId]);
       entityName = cl?.name || "";
       const qParams: any[] = [(Number(entityId) || 0), scope.companyId];
       let dateFilter = "";
       if (startDate) { qParams.push(startDate); dateFilter += ` AND i."createdAt" >= $${qParams.length}`; }
       if (endDate) { qParams.push(endDate); dateFilter += ` AND i."createdAt" <= $${qParams.length}`; }
-      rows = await rawQuery<Record<string, unknown>>(
+      rows = await rawQuery<any>(
         `SELECT i.ref, COALESCE(i.description, i.ref) AS description,
                 i.total AS debit, i."paidAmount" AS credit,
                 (i.total - i."paidAmount") AS net,
@@ -691,13 +691,13 @@ reportsRouter.get("/reports/entity-statement", authorize({ feature: "finance.rep
         qParams
       );
     } else if (entityType === "supplier" && entityId) {
-      const [sup] = await rawQuery<Record<string, unknown>>(`SELECT name FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [(Number(entityId) || 0), scope.companyId]);
+      const [sup] = await rawQuery<any>(`SELECT name FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [(Number(entityId) || 0), scope.companyId]);
       entityName = sup?.name || "";
       const qParams: any[] = [(Number(entityId) || 0), scope.companyId];
       let dateFilter = "";
       if (startDate) { qParams.push(startDate); dateFilter += ` AND po."createdAt" >= $${qParams.length}`; }
       if (endDate) { qParams.push(endDate); dateFilter += ` AND po."createdAt" <= $${qParams.length}`; }
-      rows = await rawQuery<Record<string, unknown>>(
+      rows = await rawQuery<any>(
         `SELECT po.ref, CONCAT('أمر شراء: ', po.ref) AS description,
                 po."totalAmount" AS debit, 0 AS credit,
                 po."totalAmount" AS net,
@@ -728,7 +728,7 @@ reportsRouter.get("/reports/custody-advances", authorize({ feature: "finance.rep
     if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
     if (branchId) { params.push(branchId); dateFilter += ` AND je."branchId" = $${params.length}`; }
 
-    const custodies = await rawQuery<Record<string, unknown>>(
+    const custodies = await rawQuery<any>(
       `SELECT je.id, je.ref, je.description,
               COALESCE(SUM(jl.debit), 0) AS amount,
               je."createdAt" AS date, je.status,
@@ -744,7 +744,7 @@ reportsRouter.get("/reports/custody-advances", authorize({ feature: "finance.rep
       params
     );
 
-    const advances = await rawQuery<Record<string, unknown>>(
+    const advances = await rawQuery<any>(
       `SELECT je.id, je.ref, je.description,
               COALESCE(SUM(jl.debit), 0) AS amount,
               je."createdAt" AS date, je.status,
@@ -798,7 +798,7 @@ reportsRouter.get("/reports/expenses-analysis", authorize({ feature: "finance.re
       groupCol = "e.id, e.name";
     }
 
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT ${selectCol},
               COALESCE(SUM(jl.debit) - SUM(jl.credit), 0) AS amount,
               COUNT(DISTINCT je.id) AS "entryCount"
@@ -833,7 +833,7 @@ reportsRouter.get("/reports/revenue-analysis", authorize({ feature: "finance.rep
     if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
     if (branchId) { params.push(branchId); dateFilter += ` AND je."branchId" = $${params.length}`; }
 
-    const byAccount = await rawQuery<Record<string, unknown>>(
+    const byAccount = await rawQuery<any>(
       `SELECT coa.code, coa.name,
               COALESCE(SUM(jl.credit) - SUM(jl.debit), 0) AS amount,
               COUNT(DISTINCT je.id) AS "entryCount"
@@ -847,7 +847,7 @@ reportsRouter.get("/reports/revenue-analysis", authorize({ feature: "finance.rep
       params
     );
 
-    const byMonth = await rawQuery<Record<string, unknown>>(
+    const byMonth = await rawQuery<any>(
       `SELECT to_char(i."createdAt", 'YYYY-MM') AS period,
               COALESCE(SUM(i."paidAmount"), 0) AS collected,
               COALESCE(SUM(i.total), 0) AS invoiced,
@@ -877,7 +877,7 @@ reportsRouter.get("/reports/budget-variance", authorize({ feature: "finance.repo
     const branchFilter = branchId ? ` AND b."branchId" = $${params.length + 1}` : "";
     if (branchId) params.push(branchId);
 
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT b."accountCode", b.amount AS budget,
               coa.name AS "accountName", coa.type,
               COALESCE(b.used, 0) AS actual,
@@ -912,12 +912,12 @@ reportsRouter.get("/reports/cash-bank-statement", authorize({ feature: "finance.
     if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
     if (branchId) { params.push(branchId); dateFilter += ` AND je."branchId" = $${params.length}`; }
 
-    const [accountInfo] = await rawQuery<Record<string, unknown>>(
+    const [accountInfo] = await rawQuery<any>(
       `SELECT code, name, type FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2 AND "deletedAt" IS NULL`,
       [scope.companyId, accountCode]
     );
 
-    const entries = await rawQuery<Record<string, unknown>>(
+    const entries = await rawQuery<any>(
       `SELECT jl.id, je.ref, je.description,
               jl.debit, jl.credit, je."createdAt" AS date,
               b.name AS "branchName"

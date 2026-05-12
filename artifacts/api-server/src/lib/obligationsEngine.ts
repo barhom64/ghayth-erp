@@ -403,7 +403,7 @@ export async function queryObligations(input: QueryObligationsInput): Promise<an
 
   const limit = Math.min(500, Math.max(1, input.limit ?? 100));
   params.push(limit);
-  return rawQuery<Record<string, unknown>>(
+  return rawQuery<any>(
     `SELECT * FROM obligations WHERE ${where} ORDER BY "dueAt" ASC LIMIT $${params.length}`,
     params
   );
@@ -422,7 +422,7 @@ export async function obligationSummary(companyId: number): Promise<{
   byType: Record<string, number>;
 }> {
   await ensureObligationsTable();
-  const [counts] = await rawQuery<Record<string, unknown>>(
+  const [counts] = await rawQuery<any>(
     `SELECT
       COUNT(*) FILTER (WHERE status='pending')::int AS pending,
       COUNT(*) FILTER (WHERE status='breached')::int AS breached,
@@ -433,7 +433,7 @@ export async function obligationSummary(companyId: number): Promise<{
      FROM obligations WHERE "companyId"=$1`,
     [companyId]
   );
-  const byTypeRows = await rawQuery<Record<string, unknown>>(
+  const byTypeRows = await rawQuery<any>(
     `SELECT "obligationType", COUNT(*)::int AS count
        FROM obligations
        WHERE "companyId"=$1 AND status IN ('pending','breached','escalated_l1','escalated_l2')

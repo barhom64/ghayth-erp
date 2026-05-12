@@ -249,7 +249,7 @@ async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "m
     const nuskNumbers = rows.map((r) => r.nuskNumber).filter(Boolean) as string[];
     if (nuskNumbers.length === 0) return diff;
 
-    const existing = await rawQuery<Record<string, unknown>>(
+    const existing = await rawQuery<any>(
       `SELECT id, "nuskNumber", "fullName", nationality, status, "passportNumber",
               "entryPort", "exitPort", "overstayDays", "actualStayDays",
               "entryDate", "exitDate"
@@ -262,7 +262,7 @@ async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "m
     const subAgentCodes = new Set<string>();
     rows.forEach((r) => { if (r.nuskCode) subAgentCodes.add(String(r.nuskCode)); });
     const linkedSubs = subAgentCodes.size > 0
-      ? await rawQuery<Record<string, unknown>>(
+      ? await rawQuery<any>(
           `SELECT "nuskCode" FROM umrah_sub_agents WHERE "companyId" = $1 AND "nuskCode" = ANY($2) AND "clientId" IS NOT NULL AND "deletedAt" IS NULL`,
           [scope.companyId, [...subAgentCodes]]
         )
@@ -314,7 +314,7 @@ async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "m
     const invoiceNumbers = rows.map((r) => r.nuskInvoiceNumber).filter(Boolean) as string[];
     if (invoiceNumbers.length === 0) return diff;
 
-    const existing = await rawQuery<Record<string, unknown>>(
+    const existing = await rawQuery<any>(
       `SELECT id, "nuskInvoiceNumber", "totalAmount", "netCost", "nuskStatus"
        FROM umrah_nusk_invoices
        WHERE "companyId" = $1 AND "nuskInvoiceNumber" = ANY($2) AND "deletedAt" IS NULL`,

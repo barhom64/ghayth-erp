@@ -148,7 +148,7 @@ function infoRow(doc: PDFKit.PDFDocument, label: string, value: string, x = 50, 
  * pulled from companies + branches.
  */
 export async function exportOfficialLetterPdf(companyId: number, letterId: number): Promise<Buffer> {
-  const [letterRow] = await rawQuery<Record<string, unknown>>(
+  const [letter] = await rawQuery<any>(
     `SELECT l.id, l.type, l.subject, l.content, l.status, l."createdAt",
             l."sentAt", l."dispatchedVia", l."approvedAt", l."approvedBy",
             c.name AS "companyName", c.phone, c.address
@@ -157,19 +157,14 @@ export async function exportOfficialLetterPdf(companyId: number, letterId: numbe
       WHERE l.id = $1 AND l."companyId" = $2`,
     [letterId, companyId]
   );
-  if (!letterRow) throw new NotFoundError("الخطاب غير موجود");
-  const letter = letterRow as {
-    id: number; type: string | null; subject: string | null; content: string | null;
-    createdAt: string | Date; approvedAt: string | Date | null;
-    companyName: string | null; phone: string | null; address: string | null;
-  };
+  if (!letter) throw new NotFoundError("الخطاب غير موجود");
 
-  const doc = createDoc({ title: letter.subject || "خطاب رسمي", companyName: letter.companyName || undefined });
+  const doc = createDoc({ title: letter.subject || "خطاب رسمي", companyName: letter.companyName });
   drawHeader(doc, {
     title: letter.subject || "خطاب رسمي",
-    companyName: letter.companyName || undefined,
-    phone: letter.phone || undefined,
-    address: letter.address || undefined,
+    companyName: letter.companyName,
+    phone: letter.phone,
+    address: letter.address,
   });
 
   doc.moveDown(0.5);
@@ -198,7 +193,7 @@ export async function exportOfficialLetterPdf(companyId: number, letterId: numbe
 }
 
 export async function exportInvoicePdf(companyId: number, invoiceId: number): Promise<Buffer> {
-  const [invoiceRow] = await rawQuery<Record<string, unknown>>(
+  const [invoice] = await rawQuery<any>(
     `SELECT i.*, c.name AS "clientName", c.phone AS "clientPhone",
             b.name AS "branchName", b.address AS "branchAddress", b.phone AS "branchPhone"
      FROM invoices i
@@ -207,14 +202,9 @@ export async function exportInvoicePdf(companyId: number, invoiceId: number): Pr
      WHERE i.id = $1 AND i."companyId" = $2`,
     [invoiceId, companyId]
   );
-  if (!invoiceRow) throw new NotFoundError("Invoice not found");
-  const invoice = invoiceRow as Record<string, string | number | null | undefined> & {
-    ref: string; createdAt: string | Date | null; dueDate: string | Date | null;
-    clientName: string | null; clientPhone: string | null; status: string;
-    branchName: string | null; branchAddress: string | null; branchPhone: string | null;
-  };
+  if (!invoice) throw new NotFoundError("Invoice not found");
 
-  const lines = await rawQuery<Record<string, unknown>>(
+  const lines = await rawQuery<any>(
     `SELECT description, quantity, "unitPrice", "lineTotal", "vatAmount", "lineGross"
      FROM invoice_lines WHERE "invoiceId" = $1 ORDER BY id`,
     [invoiceId]
@@ -226,8 +216,8 @@ export async function exportInvoicePdf(companyId: number, invoiceId: number): Pr
   drawHeader(doc, {
     title: `فاتورة / Invoice: ${invoice.ref}`,
     companyName: invoice.branchName || "غيث ERP",
-    phone: invoice.branchPhone || undefined,
-    address: invoice.branchAddress || undefined,
+    phone: invoice.branchPhone,
+    address: invoice.branchAddress,
     date: invoice.createdAt ? new Date(invoice.createdAt).toLocaleDateString("en-SA") : "",
   });
 
@@ -235,7 +225,7 @@ export async function exportInvoicePdf(companyId: number, invoiceId: number): Pr
   infoRow(doc, "Client", invoice.clientName || "-", 50, y);
   if (invoice.clientPhone) infoRow(doc, "Phone", invoice.clientPhone);
   infoRow(doc, "Status", invoice.status);
-  infoRow(doc, "Due Date", invoice.dueDate ? new Date(invoice.dueDate as string | Date).toLocaleDateString("en-SA") : "-");
+  infoRow(doc, "Due Date", invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString("en-SA") : "-");
   doc.moveDown(0.5);
 
   const colWidths = [30, 200, 50, 60, 60, 60, 65];
@@ -243,9 +233,9 @@ export async function exportInvoicePdf(companyId: number, invoiceId: number): Pr
     doc,
     ["#", "Description", "Qty", "Unit Price", "Total", "VAT", "Gross"],
     [
-      ...lines.map((l, i: number) => [
+      ...lines.map((l: any, i: number) => [
         i + 1,
-        (l.description as string) || "",
+        l.description || "",
         Number(l.quantity),
         Number(l.unitPrice).toFixed(2),
         Number(l.lineTotal).toFixed(2),
@@ -280,7 +270,7 @@ export async function exportInvoicePdf(companyId: number, invoiceId: number): Pr
 }
 
 export async function exportPurchaseOrderPdf(companyId: number, poId: number): Promise<Buffer> {
-  const [poRow] = await rawQuery<Record<string, unknown>>(
+  const [po] = await rawQuery<any>(
     `SELECT po.*, s.name AS "supplierName", s.phone AS "supplierPhone",
             b.name AS "branchName", b.address AS "branchAddress", b.phone AS "branchPhone"
      FROM purchase_orders po
@@ -289,16 +279,9 @@ export async function exportPurchaseOrderPdf(companyId: number, poId: number): P
      WHERE po.id = $1 AND po."companyId" = $2`,
     [poId, companyId]
   );
-  if (!poRow) throw new NotFoundError("Purchase order not found");
-  const po = poRow as Record<string, string | number | null | undefined> & {
-    id: number; ref: string | null; status: string | null;
-    createdAt: string | Date | null; expectedDelivery: string | Date | null;
-    supplierName: string | null; supplierPhone: string | null;
-    branchName: string | null; branchAddress: string | null; branchPhone: string | null;
-    totalAmount: number | null;
-  };
+  if (!po) throw new NotFoundError("Purchase order not found");
 
-  const lines = await rawQuery<Record<string, unknown>>(
+  const lines = await rawQuery<any>(
     `SELECT description, quantity, "unitPrice", "totalPrice"
      FROM purchase_order_lines WHERE "purchaseOrderId" = $1 ORDER BY id`,
     [poId]
@@ -310,8 +293,8 @@ export async function exportPurchaseOrderPdf(companyId: number, poId: number): P
   drawHeader(doc, {
     title: `أمر شراء / Purchase Order: ${po.ref || po.id}`,
     companyName: po.branchName || "غيث ERP",
-    phone: po.branchPhone || undefined,
-    address: po.branchAddress || undefined,
+    phone: po.branchPhone,
+    address: po.branchAddress,
     date: po.createdAt ? new Date(po.createdAt).toLocaleDateString("en-SA") : "",
   });
 
@@ -325,12 +308,12 @@ export async function exportPurchaseOrderPdf(companyId: number, poId: number): P
     doc,
     ["#", "Description", "Qty", "Unit Price", "Total"],
     [
-      ...lines.map((l, i: number) => [
+      ...lines.map((l: any, i: number) => [
         i + 1,
-        (l.description as string) || "",
+        l.description || "",
         Number(l.quantity),
         Number(l.unitPrice || 0).toFixed(2),
-        Number(l.totalPrice || Number(l.unitPrice) * Number(l.quantity) || 0).toFixed(2),
+        Number(l.totalPrice || l.unitPrice * l.quantity || 0).toFixed(2),
       ]),
       [null, "Total Amount", null, null, Number(po.totalAmount || 0).toFixed(2)],
     ],
@@ -344,19 +327,13 @@ export async function exportPurchaseOrderPdf(companyId: number, poId: number): P
 }
 
 export async function exportVoucherPdf(companyId: number, voucherId: number): Promise<Buffer> {
-  const [voucherRow] = await rawQuery<Record<string, unknown>>(
+  const [voucher] = await rawQuery<any>(
     `SELECT v.*, b.name AS "branchName", b.address AS "branchAddress"
      FROM vouchers v LEFT JOIN branches b ON b.id = v."branchId"
      WHERE v.id = $1 AND v."companyId" = $2`,
     [voucherId, companyId]
   );
-  if (!voucherRow) throw new NotFoundError("Voucher not found");
-  const voucher = voucherRow as Record<string, string | number | null | undefined> & {
-    id: number; ref: string | null; type: string | null;
-    createdAt: string | Date | null; amount: number | null;
-    paymentMethod: string | null; description: string | null;
-    branchName: string | null; branchAddress: string | null;
-  };
+  if (!voucher) throw new NotFoundError("Voucher not found");
 
   const typeLabel = voucher.type === "receipt" ? "سند قبض / Receipt Voucher" : "سند صرف / Payment Voucher";
 
@@ -366,7 +343,7 @@ export async function exportVoucherPdf(companyId: number, voucherId: number): Pr
   drawHeader(doc, {
     title: `${typeLabel}: ${voucher.ref || voucher.id}`,
     companyName: voucher.branchName || "غيث ERP",
-    address: voucher.branchAddress || undefined,
+    address: voucher.branchAddress,
     date: voucher.createdAt ? new Date(voucher.createdAt).toLocaleDateString("en-SA") : "",
   });
 
@@ -391,7 +368,7 @@ export async function exportVoucherPdf(companyId: number, voucherId: number): Pr
 }
 
 export async function exportPayrollSlipPdf(companyId: number, payrollId: number): Promise<Buffer> {
-  const [recordRow] = await rawQuery<Record<string, unknown>>(
+  const [record] = await rawQuery<any>(
     `SELECT pr.*, e.name AS "employeeName", ea."jobTitle" AS position, ea.salary AS "baseSalary",
             b.name AS "branchName"
      FROM payroll_records pr
@@ -401,14 +378,7 @@ export async function exportPayrollSlipPdf(companyId: number, payrollId: number)
      WHERE pr.id = $1 AND pr."companyId" = $2`,
     [payrollId, companyId]
   );
-  if (!recordRow) throw new NotFoundError("Payroll record not found");
-  const record = recordRow as Record<string, string | number | null | undefined> & {
-    employeeName: string; position: string | null; period: string;
-    branchName: string | null;
-    baseSalary: number | null; housingAllowance: number | null; transportAllowance: number | null;
-    overtime: number | null; grossSalary: number | null; totalDeductions: number | null;
-    netSalary: number | null;
-  };
+  if (!record) throw new NotFoundError("Payroll record not found");
 
   const doc = createDoc({ title: "Payroll Slip" });
   const buf = docToBuffer(doc);
@@ -454,11 +424,11 @@ export async function exportPayrollSlipPdf(companyId: number, payrollId: number)
 
 export async function exportTrialBalancePdf(companyId: number, startDate?: string, endDate?: string): Promise<Buffer> {
   let dateFilter = "";
-  const params: unknown[] = [companyId];
+  const params: any[] = [companyId];
   if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
   if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
 
-  const rows = await rawQuery<Record<string, unknown>>(
+  const rows = await rawQuery<any>(
     `SELECT coa.code, coa.name, coa.type,
             COALESCE(SUM(jl.debit), 0) AS "totalDebit",
             COALESCE(SUM(jl.credit), 0) AS "totalCredit",
@@ -472,8 +442,8 @@ export async function exportTrialBalancePdf(companyId: number, startDate?: strin
   );
 
   const typeMap: Record<string, string> = { asset: "Assets", liability: "Liabilities", equity: "Equity", revenue: "Revenue", expense: "Expense" };
-  const totalDebit = rows.reduce((s: number, r) => s + Number(r.totalDebit), 0);
-  const totalCredit = rows.reduce((s: number, r) => s + Number(r.totalCredit), 0);
+  const totalDebit = rows.reduce((s: number, r: any) => s + Number(r.totalDebit), 0);
+  const totalCredit = rows.reduce((s: number, r: any) => s + Number(r.totalCredit), 0);
 
   const doc = createDoc({ title: "Trial Balance" });
   const buf = docToBuffer(doc);
@@ -489,7 +459,7 @@ export async function exportTrialBalancePdf(companyId: number, startDate?: strin
     doc,
     ["Code", "Account Name", "Type", "Debit", "Credit", "Balance"],
     [
-      ...rows.map((r) => [r.code as string, r.name as string, typeMap[r.type as string] || (r.type as string), Number(r.totalDebit).toFixed(2), Number(r.totalCredit).toFixed(2), Number(r.balance).toFixed(2)]),
+      ...rows.map((r: any) => [r.code, r.name, typeMap[r.type] || r.type, Number(r.totalDebit).toFixed(2), Number(r.totalCredit).toFixed(2), Number(r.balance).toFixed(2)]),
       [null, "Total / الإجمالي", null, totalDebit.toFixed(2), totalCredit.toFixed(2), (totalDebit - totalCredit).toFixed(2)],
     ],
     [50, 165, 70, 75, 75, 75]
@@ -510,11 +480,11 @@ export async function exportTrialBalancePdf(companyId: number, startDate?: strin
 
 export async function exportFleetTripsPdf(companyId: number, startDate?: string, endDate?: string): Promise<Buffer> {
   let dateFilter = "";
-  const params: unknown[] = [companyId];
+  const params: any[] = [companyId];
   if (startDate) { params.push(startDate); dateFilter += ` AND t."startTime" >= $${params.length}`; }
   if (endDate) { params.push(endDate); dateFilter += ` AND t."startTime" <= $${params.length}`; }
 
-  const rows = await rawQuery<Record<string, unknown>>(
+  const rows = await rawQuery<any>(
     `SELECT t.id, v."plateNumber", d.name AS "driverName",
             t."fromLocation", t."toLocation",
             COALESCE(t.distance, 0) AS distance,
@@ -529,8 +499,8 @@ export async function exportFleetTripsPdf(companyId: number, startDate?: string,
     params
   );
 
-  const totalDistance = rows.reduce((s: number, r) => s + Number(r.distance), 0);
-  const totalCost = rows.reduce((s: number, r) => s + Number(r.cost), 0);
+  const totalDistance = rows.reduce((s: number, r: any) => s + Number(r.distance), 0);
+  const totalCost = rows.reduce((s: number, r: any) => s + Number(r.cost), 0);
 
   const doc = createDoc({ title: "Fleet Trip Report" });
   const buf = docToBuffer(doc);
@@ -546,15 +516,15 @@ export async function exportFleetTripsPdf(companyId: number, startDate?: string,
     doc,
     ["Trip #", "Vehicle", "Driver", "From", "To", "Distance (km)", "Cost (SAR)", "Status"],
     [
-      ...rows.map((r) => [
+      ...rows.map((r: any) => [
         String(r.id),
-        (r.plateNumber as string) || "-",
-        (r.driverName as string) || "-",
-        (r.fromLocation as string) || "-",
-        (r.toLocation as string) || "-",
+        r.plateNumber || "-",
+        r.driverName || "-",
+        r.fromLocation || "-",
+        r.toLocation || "-",
         Number(r.distance).toFixed(1),
         Number(r.cost).toFixed(2),
-        r.status as string,
+        r.status,
       ]),
       [null, null, "Total / الإجمالي", null, null, totalDistance.toFixed(1), totalCost.toFixed(2), null],
     ],
@@ -590,7 +560,7 @@ export async function exportUmrahStatementPdf(
   },
   range: { from?: string; to?: string },
 ): Promise<Buffer> {
-  const [subAgentRow] = await rawQuery<Record<string, unknown>>(
+  const [subAgent] = await rawQuery<any>(
     `SELECT sa.id, sa.name, sa."nuskCode", sa."paymentTerms",
             c.name AS "companyName", c.phone, c.address
        FROM umrah_sub_agents sa
@@ -598,13 +568,9 @@ export async function exportUmrahStatementPdf(
       WHERE sa.id = $1 AND sa."companyId" = $2 AND sa."deletedAt" IS NULL`,
     [subAgentId, companyId]
   );
-  if (!subAgentRow) throw new NotFoundError("الوكيل الفرعي غير موجود");
-  const subAgent = subAgentRow as {
-    id: number; name: string; nuskCode: string | null; paymentTerms: string | null;
-    companyName: string | null; phone: string | null; address: string | null;
-  };
+  if (!subAgent) throw new NotFoundError("الوكيل الفرعي غير موجود");
 
-  const doc = createDoc({ title: "كشف حساب وكيل فرعي", companyName: subAgent.companyName || undefined });
+  const doc = createDoc({ title: "كشف حساب وكيل فرعي", companyName: subAgent.companyName });
   const buf = docToBuffer(doc);
 
   const rangeText = range.from && range.to
@@ -613,9 +579,9 @@ export async function exportUmrahStatementPdf(
   drawHeader(doc, {
     title: "كشف حساب وكيل فرعي — عمرة",
     subtitle: `${subAgent.name} • ${subAgent.nuskCode || ""} • ${rangeText}`,
-    companyName: subAgent.companyName || undefined,
-    phone: subAgent.phone || undefined,
-    address: subAgent.address || undefined,
+    companyName: subAgent.companyName,
+    phone: subAgent.phone,
+    address: subAgent.address,
     date: new Date().toLocaleDateString("en-SA"),
   });
 
@@ -673,21 +639,20 @@ export async function exportUmrahDailyRunsheetPdf(
     overstays: Array<{ nuskNumber: string; fullName: string; nationality: string; groupName: string | null; subAgentName: string | null; overstayDays: number }>;
   },
 ): Promise<Buffer> {
-  const [companyRow] = await rawQuery<Record<string, unknown>>(
+  const [company] = await rawQuery<any>(
     `SELECT name AS "companyName", phone, address FROM companies WHERE id = $1`,
     [companyId]
   );
-  const company = companyRow as { companyName: string | null; phone: string | null; address: string | null } | undefined;
 
-  const doc = createDoc({ title: "كشف اليوم التشغيلي — عمرة", companyName: company?.companyName || undefined });
+  const doc = createDoc({ title: "كشف اليوم التشغيلي — عمرة", companyName: company?.companyName });
   const buf = docToBuffer(doc);
 
   drawHeader(doc, {
     title: "كشف اليوم التشغيلي — عمرة",
     subtitle: `تاريخ التشغيل: ${date}`,
-    companyName: company?.companyName || undefined,
-    phone: company?.phone || undefined,
-    address: company?.address || undefined,
+    companyName: company?.companyName,
+    phone: company?.phone,
+    address: company?.address,
     date: new Date().toLocaleDateString("en-SA"),
   });
 

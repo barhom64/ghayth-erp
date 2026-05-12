@@ -16,7 +16,7 @@ const safeQuery = async <T = any>(sql: string, params: any[] = [], fallback: T[]
   }
 };
 
-const sq1 = async (sql: string, params: any[] = [], fb: any = {}): Promise<void> => {
+const sq1 = async (sql: string, params: any[] = [], fb: any = {}): Promise<any> => {
   const rows = await safeQuery(sql, params, [fb]);
   return rows[0] ?? fb;
 };

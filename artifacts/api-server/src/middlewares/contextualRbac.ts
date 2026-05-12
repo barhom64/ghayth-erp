@@ -94,7 +94,7 @@ export function requireOwnership(options: OwnershipOptions) {
       }
 
       const safeTable = table.replace(/[^a-zA-Z0-9_]/g, "");
-      const [record] = await rawQuery<Record<string, unknown>>(
+      const [record] = await rawQuery<any>(
         `SELECT ${columns.join(", ")}
          FROM "${safeTable}" WHERE id = $1 LIMIT 1`,
         [recordId]
@@ -191,7 +191,7 @@ export async function canAct(
   }
 
   const safeTable = resource.table.replace(/[^a-zA-Z0-9_]/g, "");
-  const [record] = await rawQuery<Record<string, unknown>>(
+  const [record] = await rawQuery<any>(
     `SELECT "companyId", "branchId", "createdBy" FROM "${safeTable}" WHERE id = $1 LIMIT 1`,
     [resource.id],
   );

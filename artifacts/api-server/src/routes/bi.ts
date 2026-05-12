@@ -57,7 +57,7 @@ router.post("/dashboards", authorize({ feature: "bi", action: "create" }), async
     const scope = req.scope!;
     const body = zodParse(createDashboardSchema.safeParse(req.body));
     const { title, description, layout, isDefault } = body;
-    const [row] = await rawQuery<Record<string, unknown>>(
+    const [row] = await rawQuery<any>(
       `INSERT INTO bi_dashboards (title, description, layout, "isDefault", "createdBy", "companyId")
        VALUES ($1,$2,$3,$4,$5,$6)
        ON CONFLICT DO NOTHING
@@ -84,7 +84,7 @@ router.post("/kpis", authorize({ feature: "bi", action: "create" }), async (req,
     const scope = req.scope!;
     const body = zodParse(createKpiSchema.safeParse(req.body));
     const { name, description, module, formula, target, currentValue, unit, frequency } = body;
-    const [kpiRow] = await rawQuery<Record<string, unknown>>(
+    const [kpiRow] = await rawQuery<any>(
       `INSERT INTO bi_kpis (name, description, module, formula, target, "currentValue", unit, frequency, "companyId")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        ON CONFLICT DO NOTHING
@@ -111,7 +111,7 @@ router.post("/reports", authorize({ feature: "bi", action: "create" }), async (r
     const scope = req.scope!;
     const body = zodParse(createReportSchema.safeParse(req.body));
     const { title, description, type, query, filters, scheduledAt } = body;
-    const [reportRow] = await rawQuery<Record<string, unknown>>(
+    const [reportRow] = await rawQuery<any>(
       `INSERT INTO bi_reports (title, description, type, query, filters, "scheduledAt", "createdBy", "companyId")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
        ON CONFLICT DO NOTHING
@@ -129,7 +129,7 @@ router.get("/overview", authorize({ feature: "bi", action: "list" }), async (req
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [row] = await rawQuery<Record<string, unknown>>(
+    const [row] = await rawQuery<any>(
       `SELECT
          (SELECT COUNT(*) FROM employee_assignments WHERE "companyId" = $1 AND status = 'active') AS employees,
          (SELECT COUNT(*) FROM clients WHERE "companyId" = $1 AND "deletedAt" IS NULL) AS clients,
@@ -167,7 +167,7 @@ router.get("/operations/sla-delays", authorize({ feature: "bi", action: "list" }
       params.push(depId); conditions.push(`ea."departmentId" = $${params.length}`);
     }
 
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT
          COALESCE(d.name, 'بدون قسم') AS department,
          COUNT(*) AS total,
@@ -195,7 +195,7 @@ router.get("/operations/rejection-rate", authorize({ feature: "bi", action: "lis
     if (from) { params.push(from); conditions.push(`"createdAt" >= $${params.length}::date`); }
     if (to) { params.push(to); conditions.push(`"createdAt" <= $${params.length}::date`); }
 
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT
          COALESCE(type, 'عام') AS type,
          COUNT(*) AS total,
@@ -226,7 +226,7 @@ router.get("/operations/bottleneck", authorize({ feature: "bi", action: "list" }
       params.push(depId); conditions.push(`ea."departmentId" = $${params.length}`);
     }
 
-    const departmentDelay = await rawQuery<Record<string, unknown>>(
+    const departmentDelay = await rawQuery<any>(
       `SELECT
          COALESCE(d.name, 'بدون قسم') AS department,
          ROUND(AVG(EXTRACT(EPOCH FROM (COALESCE(t."completedAt", NOW()) - t."createdAt")) / 3600), 1) AS "avgHours",
@@ -249,7 +249,7 @@ router.get("/operations/bottleneck", authorize({ feature: "bi", action: "list" }
       approvalParams.push(Number(departmentId)); approvalConds.push(`ea."departmentId" = $${approvalParams.length}`);
     }
 
-    const approvalBottleneck = await rawQuery<Record<string, unknown>>(
+    const approvalBottleneck = await rawQuery<any>(
       `SELECT
          COALESCE(d.name, 'بدون قسم') AS department,
          COUNT(*) AS "pendingApprovals",
@@ -284,7 +284,7 @@ router.get("/operations/employee-productivity", authorize({ feature: "bi", actio
       params.push(depId); conditions.push(`ea."departmentId" = $${params.length}`);
     }
 
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT
          e.name,
          COALESCE(d.name, 'بدون قسم') AS department,
@@ -333,7 +333,7 @@ router.get("/operations/approval-timeliness", authorize({ feature: "bi", action:
       params.push(depId); conditions.push(`ea."departmentId" = $${params.length}`);
     }
 
-    const [stats] = await rawQuery<Record<string, unknown>>(
+    const [stats] = await rawQuery<any>(
       `SELECT
          COUNT(*) AS total,
          COUNT(*) FILTER (WHERE lr.status = 'approved') AS approved,
@@ -366,7 +366,7 @@ router.get("/operations/avg-completion-time", authorize({ feature: "bi", action:
       params.push(depId); conditions.push(`ea."departmentId" = $${params.length}`);
     }
 
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT
          COALESCE(t.type, 'عام') AS type,
          ROUND(AVG(EXTRACT(EPOCH FROM (t."completedAt" - t."createdAt")) / 3600), 1) AS "avgHours",
@@ -397,7 +397,7 @@ router.get("/operations/trend", authorize({ feature: "bi", action: "list" }), as
       params.push(depId); conditions.push(`ea."departmentId" = $${params.length}`);
     }
 
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT
          TO_CHAR(DATE_TRUNC('week', t."scheduledDate"), 'YYYY-MM-DD') AS week,
          COUNT(*) AS total,
@@ -420,7 +420,7 @@ router.get("/admin-reports/daily", authorize({ feature: "bi", action: "list" }),
     const cid = scope.companyId;
     const date = (req.query.date as string) || todayISO();
 
-    const [attendance] = await rawQuery<Record<string, unknown>>(
+    const [attendance] = await rawQuery<any>(
       `SELECT
          COUNT(*) AS total,
          COUNT(*) FILTER (WHERE status = 'present') AS present,
@@ -431,7 +431,7 @@ router.get("/admin-reports/daily", authorize({ feature: "bi", action: "list" }),
       [cid, date]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0, present: 0, absent: 0, late: 0 }]; });
 
-    const [tasks] = await rawQuery<Record<string, unknown>>(
+    const [tasks] = await rawQuery<any>(
       `SELECT
          COUNT(*) FILTER (WHERE "scheduledDate" = $2::date) AS scheduled,
          COUNT(*) FILTER (WHERE status = 'completed' AND DATE("completedAt") = $2::date) AS completed,
@@ -441,7 +441,7 @@ router.get("/admin-reports/daily", authorize({ feature: "bi", action: "list" }),
       [cid, date]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{ scheduled: 0, completed: 0, overdue: 0 }]; });
 
-    const [financial] = await rawQuery<Record<string, unknown>>(
+    const [financial] = await rawQuery<any>(
       `SELECT
          COALESCE(SUM(total), 0) AS "invoicesTotal",
          COALESCE(SUM("paidAmount"), 0) AS "paidTotal",
@@ -451,13 +451,13 @@ router.get("/admin-reports/daily", authorize({ feature: "bi", action: "list" }),
       [cid, date]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{ invoicesTotal: 0, paidTotal: 0, invoiceCount: 0 }]; });
 
-    const [leaves] = await rawQuery<Record<string, unknown>>(
+    const [leaves] = await rawQuery<any>(
       `SELECT COUNT(*) AS total FROM hr_leave_requests
        WHERE "companyId" = $1 AND DATE("createdAt") = $2::date AND "deletedAt" IS NULL`,
       [cid, date]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0 }]; });
 
-    const [tickets] = await rawQuery<Record<string, unknown>>(
+    const [tickets] = await rawQuery<any>(
       `SELECT
          COUNT(*) FILTER (WHERE DATE("createdAt") = $2::date) AS opened,
          COUNT(*) FILTER (WHERE DATE("resolvedAt") = $2::date) AS resolved
@@ -499,7 +499,7 @@ router.get("/admin-reports/weekly", authorize({ feature: "bi", action: "list" })
     const cid = scope.companyId;
 
     const buildWeekStats = async (startDate: string, endDate: string) => {
-      const [tasks] = await rawQuery<Record<string, unknown>>(
+      const [tasks] = await rawQuery<any>(
         `SELECT
            COUNT(*) AS total,
            COUNT(*) FILTER (WHERE status = 'completed') AS completed,
@@ -510,7 +510,7 @@ router.get("/admin-reports/weekly", authorize({ feature: "bi", action: "list" })
         [cid, startDate, endDate]
       ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0, completed: 0, overdue: 0, completionRate: 0 }]; });
 
-      const [attendance] = await rawQuery<Record<string, unknown>>(
+      const [attendance] = await rawQuery<any>(
         `SELECT
            COUNT(*) AS total,
            COUNT(*) FILTER (WHERE status = 'present') AS present,
@@ -520,14 +520,14 @@ router.get("/admin-reports/weekly", authorize({ feature: "bi", action: "list" })
         [cid, startDate, endDate]
       ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0, present: 0, presentRate: 0 }]; });
 
-      const [revenue] = await rawQuery<Record<string, unknown>>(
+      const [revenue] = await rawQuery<any>(
         `SELECT COALESCE(SUM("paidAmount"), 0) AS total
          FROM invoices
          WHERE "companyId" = $1 AND "deletedAt" IS NULL AND DATE("createdAt") BETWEEN $2::date AND $3::date`,
         [cid, startDate, endDate]
       ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0 }]; });
 
-      const [tickets] = await rawQuery<Record<string, unknown>>(
+      const [tickets] = await rawQuery<any>(
         `SELECT
            COUNT(*) FILTER (WHERE DATE("createdAt") BETWEEN $2::date AND $3::date) AS opened,
            COUNT(*) FILTER (WHERE DATE("resolvedAt") BETWEEN $2::date AND $3::date) AS resolved
@@ -598,7 +598,7 @@ router.get("/admin-reports/monthly", authorize({ feature: "bi", action: "list" }
     const fmt = toDateISO;
 
     const buildMonthStats = async (startDate: string, endDate: string) => {
-      const [tasks] = await rawQuery<Record<string, unknown>>(
+      const [tasks] = await rawQuery<any>(
         `SELECT
            COUNT(*) AS total,
            COUNT(*) FILTER (WHERE status = 'completed') AS completed,
@@ -608,7 +608,7 @@ router.get("/admin-reports/monthly", authorize({ feature: "bi", action: "list" }
         [cid, startDate, endDate]
       ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0, completed: 0, overdue: 0, completionRate: 0 }]; });
 
-      const [attendance] = await rawQuery<Record<string, unknown>>(
+      const [attendance] = await rawQuery<any>(
         `SELECT
            COUNT(*) AS total,
            COUNT(*) FILTER (WHERE status = 'present') AS present,
@@ -619,7 +619,7 @@ router.get("/admin-reports/monthly", authorize({ feature: "bi", action: "list" }
         [cid, startDate, endDate]
       ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0, present: 0, absent: 0, late: 0, presentRate: 0 }]; });
 
-      const [financial] = await rawQuery<Record<string, unknown>>(
+      const [financial] = await rawQuery<any>(
         `SELECT
            COALESCE(SUM(total), 0) AS revenue,
            COALESCE(SUM("paidAmount"), 0) AS collected,
@@ -629,7 +629,7 @@ router.get("/admin-reports/monthly", authorize({ feature: "bi", action: "list" }
         [cid, startDate, endDate]
       ).catch((e) => { logger.error(e, "bi query failed"); return [{ revenue: 0, collected: 0, invoiceCount: 0, overdueInvoices: 0 }]; });
 
-      const [hr] = await rawQuery<Record<string, unknown>>(
+      const [hr] = await rawQuery<any>(
         `SELECT
            COUNT(*) AS "newEmployees"
          FROM employee_assignments
@@ -637,7 +637,7 @@ router.get("/admin-reports/monthly", authorize({ feature: "bi", action: "list" }
         [cid, startDate, endDate]
       ).catch((e) => { logger.error(e, "bi query failed"); return [{ newEmployees: 0 }]; });
 
-      const [leaves] = await rawQuery<Record<string, unknown>>(
+      const [leaves] = await rawQuery<any>(
         `SELECT
            COUNT(*) AS total,
            COUNT(*) FILTER (WHERE status = 'approved') AS approved,
@@ -648,7 +648,7 @@ router.get("/admin-reports/monthly", authorize({ feature: "bi", action: "list" }
         [cid, startDate, endDate]
       ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0, approved: 0, rejected: 0, totalDays: 0 }]; });
 
-      const [tickets] = await rawQuery<Record<string, unknown>>(
+      const [tickets] = await rawQuery<any>(
         `SELECT
            COUNT(*) FILTER (WHERE DATE("createdAt") BETWEEN $2::date AND $3::date) AS opened,
            COUNT(*) FILTER (WHERE DATE("resolvedAt") BETWEEN $2::date AND $3::date) AS resolved,
@@ -684,7 +684,7 @@ router.get("/admin-reports/monthly", authorize({ feature: "bi", action: "list" }
       };
     };
 
-    const weeklyTrend = await rawQuery<Record<string, unknown>>(
+    const weeklyTrend = await rawQuery<any>(
       `SELECT
          TO_CHAR(DATE_TRUNC('week', "scheduledDate"), 'YYYY-MM-DD') AS week,
          COUNT(*) AS total,
@@ -726,7 +726,7 @@ router.get("/ceo-dashboard", authorize({ feature: "bi", action: "list" }), async
     const lastMonthStart = toDateISO(new Date(now.getFullYear(), now.getMonth() - 1, 1));
     const lastMonthEnd = toDateISO(new Date(now.getFullYear(), now.getMonth(), 0));
 
-    const [financial] = await rawQuery<Record<string, unknown>>(
+    const [financial] = await rawQuery<any>(
       `SELECT
          COALESCE(SUM(CASE WHEN DATE("createdAt") >= $2::date THEN "paidAmount" ELSE 0 END), 0) AS "revenueThisMonth",
          COALESCE(SUM(CASE WHEN DATE("createdAt") >= $3::date AND DATE("createdAt") <= $4::date THEN "paidAmount" ELSE 0 END), 0) AS "revenueLastMonth",
@@ -737,7 +737,7 @@ router.get("/ceo-dashboard", authorize({ feature: "bi", action: "list" }), async
       [cid, thisMonthStart, lastMonthStart, lastMonthEnd]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
-    const [expenses] = await rawQuery<Record<string, unknown>>(
+    const [expenses] = await rawQuery<any>(
       `SELECT
          COALESCE(SUM(CASE WHEN DATE("createdAt") >= $2::date THEN amount ELSE 0 END), 0) AS "expensesThisMonth",
          COALESCE(SUM(CASE WHEN DATE("createdAt") >= $3::date AND DATE("createdAt") <= $4::date THEN amount ELSE 0 END), 0) AS "expensesLastMonth"
@@ -745,7 +745,7 @@ router.get("/ceo-dashboard", authorize({ feature: "bi", action: "list" }), async
       [cid, thisMonthStart, lastMonthStart, lastMonthEnd]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
-    const [hr] = await rawQuery<Record<string, unknown>>(
+    const [hr] = await rawQuery<any>(
       `SELECT
          COUNT(*) FILTER (WHERE status = 'active') AS "totalEmployees",
          COUNT(*) FILTER (WHERE status = 'pending') AS "pendingLeaveRequests"
@@ -753,7 +753,7 @@ router.get("/ceo-dashboard", authorize({ feature: "bi", action: "list" }), async
       [cid]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
-    const [attendance] = await rawQuery<Record<string, unknown>>(
+    const [attendance] = await rawQuery<any>(
       `SELECT
          COUNT(*) FILTER (WHERE status = 'present') AS "presentToday",
          COUNT(*) AS "totalToday"
@@ -761,12 +761,12 @@ router.get("/ceo-dashboard", authorize({ feature: "bi", action: "list" }), async
       [cid]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
-    const [pendingLeave] = await rawQuery<Record<string, unknown>>(
+    const [pendingLeave] = await rawQuery<any>(
       `SELECT COUNT(*) AS cnt FROM hr_leave_requests WHERE "companyId" = $1 AND status = 'pending' AND "deletedAt" IS NULL`,
       [cid]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{ cnt: 0 }]; });
 
-    const [ops] = await rawQuery<Record<string, unknown>>(
+    const [ops] = await rawQuery<any>(
       `SELECT
          COUNT(*) FILTER (WHERE status NOT IN ('completed','cancelled') AND "endDate" < CURRENT_DATE) AS "overdueProjects",
          COUNT(*) AS "totalProjects"
@@ -774,17 +774,17 @@ router.get("/ceo-dashboard", authorize({ feature: "bi", action: "list" }), async
       [cid]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
-    const [tickets] = await rawQuery<Record<string, unknown>>(
+    const [tickets] = await rawQuery<any>(
       `SELECT COUNT(*) FILTER (WHERE status = 'open') AS "openTickets" FROM support_tickets WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [cid]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
-    const [maintenance] = await rawQuery<Record<string, unknown>>(
+    const [maintenance] = await rawQuery<any>(
       `SELECT COUNT(*) FILTER (WHERE status = 'pending') AS "pendingMaintenance" FROM maintenance_requests WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [cid]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
-    const [contracts] = await rawQuery<Record<string, unknown>>(
+    const [contracts] = await rawQuery<any>(
       `SELECT
          COUNT(*) FILTER (WHERE status='active' AND "endDate"::date - CURRENT_DATE <= 30) AS "expiringContracts",
          COUNT(*) FILTER (WHERE status='active' AND "endDate"::date - CURRENT_DATE <= 90) AS "expiringContracts90"
@@ -792,7 +792,7 @@ router.get("/ceo-dashboard", authorize({ feature: "bi", action: "list" }), async
       [cid]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
-    const [docs] = await rawQuery<Record<string, unknown>>(
+    const [docs] = await rawQuery<any>(
       `SELECT COUNT(*) AS "expiringDocs" FROM employee_documents
        WHERE "companyId" = $1 AND "expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'`,
       [cid]
@@ -851,34 +851,34 @@ router.get("/reports/branch-performance", authorize({ feature: "bi", action: "li
     const dateFrom = from || toDateISO(new Date(currentYear(), new Date().getMonth(), 1));
     const dateTo = to || todayISO();
 
-    const branches = await rawQuery<Record<string, unknown>>(
+    const branches = await rawQuery<any>(
       `SELECT b.id, b.name FROM branches b WHERE b."companyId" = $1 ORDER BY b.name LIMIT 500`,
       [cid]
     );
 
     const branchIds = branches.map((b: any) => b.id);
     const [revenueRows, expenseRows, employeeRows, attRows, ticketRows, satRows] = await Promise.all([
-      rawQuery<Record<string, unknown>>(
+      rawQuery<any>(
         `SELECT "branchId", COALESCE(SUM("paidAmount"), 0) AS revenue, COALESCE(SUM(total), 0) AS invoiced, COUNT(*) AS "invoiceCount"
          FROM invoices WHERE "companyId" = $1 AND "branchId" = ANY($2::int[]) AND "deletedAt" IS NULL
            AND DATE("createdAt") BETWEEN $3::date AND $4::date
          GROUP BY "branchId"`,
         [cid, branchIds, dateFrom, dateTo]
       ).catch((e) => { logger.error(e, "bi query failed"); return []; }),
-      rawQuery<Record<string, unknown>>(
+      rawQuery<any>(
         `SELECT "branchId", COALESCE(SUM(amount), 0) AS expenses FROM vouchers
          WHERE "companyId" = $1 AND "branchId" = ANY($2::int[]) AND type = 'payment'
            AND DATE("createdAt") BETWEEN $3::date AND $4::date
          GROUP BY "branchId"`,
         [cid, branchIds, dateFrom, dateTo]
       ).catch((e) => { logger.error(e, "bi query failed"); return []; }),
-      rawQuery<Record<string, unknown>>(
+      rawQuery<any>(
         `SELECT "branchId", COUNT(*) AS total FROM employee_assignments
          WHERE "companyId" = $1 AND "branchId" = ANY($2::int[]) AND status = 'active'
          GROUP BY "branchId"`,
         [cid, branchIds]
       ).catch((e) => { logger.error(e, "bi query failed"); return []; }),
-      rawQuery<Record<string, unknown>>(
+      rawQuery<any>(
         `SELECT "branchId", COUNT(*) FILTER (WHERE status = 'present') AS present, COUNT(*) AS total
          FROM attendance
          WHERE "companyId" = $1 AND "branchId" = ANY($2::int[])
@@ -886,13 +886,13 @@ router.get("/reports/branch-performance", authorize({ feature: "bi", action: "li
          GROUP BY "branchId"`,
         [cid, branchIds, dateFrom, dateTo]
       ).catch((e) => { logger.error(e, "bi query failed"); return []; }),
-      rawQuery<Record<string, unknown>>(
+      rawQuery<any>(
         `SELECT "branchId", COUNT(*) AS cnt FROM support_tickets
          WHERE "companyId" = $1 AND "branchId" = ANY($2::int[]) AND status = 'open'
          GROUP BY "branchId"`,
         [cid, branchIds]
       ).catch((e) => { logger.error(e, "bi query failed"); return []; }),
-      rawQuery<Record<string, unknown>>(
+      rawQuery<any>(
         `SELECT "branchId", COALESCE(AVG(rating), 0) AS avg FROM support_tickets
          WHERE "companyId" = $1 AND "branchId" = ANY($2::int[]) AND rating IS NOT NULL
            AND DATE("createdAt") BETWEEN $3::date AND $4::date
@@ -940,7 +940,7 @@ router.get("/reports/vendor-performance", authorize({ feature: "bi", action: "li
     const dateFrom = from || toDateISO(new Date(currentYear(), 0, 1));
     const dateTo = to || todayISO();
 
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT
          v.id AS "vendorId",
          v.name AS "vendorName",
@@ -987,7 +987,7 @@ router.get("/reports/fleet-tco", authorize({ feature: "bi", action: "list" }), a
     const scope = req.scope!;
     const cid = scope.companyId;
 
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT
          fv.id AS "vehicleId",
          fv."plateNumber",
@@ -1056,7 +1056,7 @@ router.get("/reports/department-leave-balance", authorize({ feature: "bi", actio
     const cid = scope.companyId;
     const year = currentYear();
 
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT
          COALESCE(d.name, 'بدون قسم') AS department,
          d.id AS "departmentId",
@@ -1109,7 +1109,7 @@ router.get("/reports/property-occupancy", authorize({ feature: "bi", action: "li
     const scope = req.scope!;
     const cid = scope.companyId;
 
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT
          pb.id AS "buildingId",
          pb.name AS "buildingName",
@@ -1158,7 +1158,7 @@ router.get("/reports/training-roi", authorize({ feature: "bi", action: "list" })
     const dateFrom = from || toDateISO(new Date(currentYear(), 0, 1));
     const dateTo = to || todayISO();
 
-    const [summary] = await rawQuery<Record<string, unknown>>(
+    const [summary] = await rawQuery<any>(
       `SELECT
          COUNT(DISTINCT tp."employeeId") AS "trainedEmployees",
          COUNT(*) AS "totalSessions",
@@ -1172,7 +1172,7 @@ router.get("/reports/training-roi", authorize({ feature: "bi", action: "list" })
       [cid, dateFrom, dateTo]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
-    const byProgram = await rawQuery<Record<string, unknown>>(
+    const byProgram = await rawQuery<any>(
       `SELECT
          t.title AS "programName",
          t.type,
@@ -1221,7 +1221,7 @@ router.get("/ai-insights", authorize({ feature: "bi", action: "list" }), async (
       conditions.push(`sa.severity = $${params.length}`);
     }
 
-    const alerts = await rawQuery<Record<string, unknown>>(
+    const alerts = await rawQuery<any>(
       `SELECT sa.id, sa.type, sa.title, sa.description AS message, sa.severity, sa."createdAt",
               sa."relatedType", sa."relatedId", sa."isDismissed", sa."isRead",
               sa."suggestedAction"
@@ -1234,7 +1234,7 @@ router.get("/ai-insights", authorize({ feature: "bi", action: "list" }), async (
       [...params, pageSize]
     ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
-    const proactive = await rawQuery<Record<string, unknown>>(
+    const proactive = await rawQuery<any>(
       `SELECT al.id, al."automationType", al."triggerReason", al."actionTaken",
               al."entityType", al."entityId", al.status, al."createdAt"
        FROM automation_logs al
@@ -1244,7 +1244,7 @@ router.get("/ai-insights", authorize({ feature: "bi", action: "list" }), async (
       [cid]
     ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
-    const [counts] = await rawQuery<Record<string, unknown>>(
+    const [counts] = await rawQuery<any>(
       `SELECT
          COUNT(*) FILTER (WHERE severity = 'critical' AND "isDismissed" = false) AS critical,
          COUNT(*) FILTER (WHERE severity = 'warning' AND "isDismissed" = false) AS warning,
@@ -1298,7 +1298,7 @@ router.patch("/ai-insights/:id/read", authorize({ feature: "bi", action: "update
 router.get("/alert-fatigue/settings", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT * FROM alert_fatigue_settings WHERE "assignmentId" = $1`,
       [scope.activeAssignmentId]
     ).catch((e) => { logger.error(e, "bi query failed"); return []; });
@@ -1342,7 +1342,7 @@ router.delete("/alert-fatigue/mute/:alertType", authorize({ feature: "bi", actio
 router.get("/alert-fatigue/daily-count", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<Record<string, unknown>>(
+    const [row] = await rawQuery<any>(
       `SELECT COUNT(*) AS today_count FROM notifications
        WHERE "assignmentId" = $1 AND DATE("createdAt") = CURRENT_DATE`,
       [scope.activeAssignmentId]

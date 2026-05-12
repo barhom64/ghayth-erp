@@ -169,7 +169,7 @@ router.get("/contracts", authorize({ feature: "legal.contracts", action: "list" 
     const params: any[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`status = $${params.length}`); }
     conditions.push(`"deletedAt" IS NULL`);
-    const rows = await rawQuery<Record<string, unknown>>(`SELECT *, ("endDate"::date - CURRENT_DATE) AS "daysToExpiry" FROM legal_contracts WHERE ${conditions.join(" AND ")} ORDER BY id DESC LIMIT 500`, params);
+    const rows = await rawQuery<any>(`SELECT *, ("endDate"::date - CURRENT_DATE) AS "daysToExpiry" FROM legal_contracts WHERE ${conditions.join(" AND ")} ORDER BY id DESC LIMIT 500`, params);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Legal contracts error:"); }
 });
@@ -200,7 +200,7 @@ router.post("/contracts", authorize({ feature: "legal.contracts", action: "creat
       }
     }
     if (b.ref) {
-      const [dup] = await rawQuery<Record<string, unknown>>(
+      const [dup] = await rawQuery<any>(
         `SELECT id FROM legal_contracts WHERE ref=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
         [b.ref, scope.companyId]
       );
@@ -216,7 +216,7 @@ router.post("/contracts", authorize({ feature: "legal.contracts", action: "creat
       `INSERT INTO legal_contracts ("companyId",ref,title,"contractType","partyName","partyContact","startDate","endDate",value,status,notes,"createdBy") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
       [scope.companyId, b.ref || null, b.title.trim(), b.contractType || null, b.partyName.trim(), b.partyContact || null, b.startDate, b.endDate, b.value || 0, b.status || 'draft', b.notes || null, scope.userId]
     );
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -247,19 +247,19 @@ router.get("/contracts/renewal-alerts", authorize({ feature: "legal.contracts", 
     const scope = req.scope!;
     const cid = scope.companyId;
 
-    const alerts90 = await rawQuery<Record<string, unknown>>(
+    const alerts90 = await rawQuery<any>(
       `SELECT id, title, "partyName", "endDate", ("endDate"::date - CURRENT_DATE) AS "daysLeft"
        FROM legal_contracts WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL
        AND "endDate" BETWEEN CURRENT_DATE + INTERVAL '31 days' AND CURRENT_DATE + INTERVAL '90 days' LIMIT 500`,
       [cid]
     );
-    const alerts30 = await rawQuery<Record<string, unknown>>(
+    const alerts30 = await rawQuery<any>(
       `SELECT id, title, "partyName", "endDate", ("endDate"::date - CURRENT_DATE) AS "daysLeft"
        FROM legal_contracts WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL
        AND "endDate" BETWEEN CURRENT_DATE + INTERVAL '15 days' AND CURRENT_DATE + INTERVAL '30 days' LIMIT 500`,
       [cid]
     );
-    const alerts14 = await rawQuery<Record<string, unknown>>(
+    const alerts14 = await rawQuery<any>(
       `SELECT id, title, "partyName", "endDate", ("endDate"::date - CURRENT_DATE) AS "daysLeft"
        FROM legal_contracts WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL
        AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '14 days' LIMIT 500`,
@@ -286,7 +286,7 @@ router.get("/contracts/:id", authorize({ feature: "legal.contracts", action: "vi
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT *, ("endDate"::date - CURRENT_DATE) AS "daysToExpiry" FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT *, ("endDate"::date - CURRENT_DATE) AS "daysToExpiry" FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("العقد غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Get contract error:"); }
@@ -296,7 +296,7 @@ router.patch("/contracts/:id", authorize({ feature: "legal.contracts", action: "
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<Record<string, unknown>>(
+    const [existing] = await rawQuery<any>(
       `SELECT * FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -363,7 +363,7 @@ router.patch("/contracts/:id", authorize({ feature: "legal.contracts", action: "
     params.push(id, scope.companyId);
     const { affectedRows } = await rawExecute(`UPDATE legal_contracts SET ${sets.join(",")}, "updatedAt"=NOW() WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     if (!affectedRows) throw new NotFoundError("العقد غير موجود");
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -395,7 +395,7 @@ router.delete("/contracts/:id", authorize({ feature: "legal.contracts", action: 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<Record<string, unknown>>(
+    const [existing] = await rawQuery<any>(
       `SELECT id, title, status FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -438,7 +438,7 @@ router.post("/contracts/:id/renew", authorize({ feature: "legal.contracts", acti
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { newEndDate, newValue, notes } = zodParse(renewContractSchema.safeParse(req.body ?? {}));
-    const [current] = await rawQuery<Record<string, unknown>>(
+    const [current] = await rawQuery<any>(
       `SELECT id, "endDate", value, "renewalCount" FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -560,7 +560,7 @@ router.get("/cases", authorize({ feature: "legal.cases", action: "list" }), asyn
     const params: any[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`status = $${params.length}`); }
     conditions.push(`"deletedAt" IS NULL`);
-    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_cases WHERE ${conditions.join(" AND ")} ORDER BY id DESC LIMIT 500`, params);
+    const rows = await rawQuery<any>(`SELECT * FROM legal_cases WHERE ${conditions.join(" AND ")} ORDER BY id DESC LIMIT 500`, params);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Legal cases error:"); }
 });
@@ -580,7 +580,7 @@ router.post("/cases", authorize({ feature: "legal.cases", action: "create" }), a
       );
     }
     if (b.caseNumber) {
-      const [dup] = await rawQuery<Record<string, unknown>>(
+      const [dup] = await rawQuery<any>(
         `SELECT id FROM legal_cases WHERE "caseNumber"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
         [b.caseNumber, scope.companyId]
       );
@@ -631,7 +631,7 @@ router.post("/cases", authorize({ feature: "legal.cases", action: "create" }), a
       }).catch((e) => logger.error(e, "legal background task failed"));
     }
 
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create legal case error:"); }
 });
@@ -642,10 +642,10 @@ router.get("/cases/:id", authorize({ feature: "legal.cases", action: "view", res
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("القضية غير موجودة");
 
-    const sessions = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 AND "deletedAt" IS NULL ORDER BY "sessionDate" DESC LIMIT 500`, [row.id]);
+    const sessions = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 AND "deletedAt" IS NULL ORDER BY "sessionDate" DESC LIMIT 500`, [row.id]);
 
     res.json({ ...row, sessions, allowedTransitions: VALID_CASE_TRANSITIONS[row.status] || [] });
   } catch (err) { handleRouteError(err, res, "Get case error:"); }
@@ -655,7 +655,7 @@ router.patch("/cases/:id", authorize({ feature: "legal.cases", action: "update" 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("القضية غير موجودة");
     const b = zodParse(updateCaseSchema.safeParse(req.body));
 
@@ -725,7 +725,7 @@ router.patch("/cases/:id", authorize({ feature: "legal.cases", action: "update" 
       }
     }
 
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("القضية غير موجودة");
     res.json({ ...row, allowedTransitions: VALID_CASE_TRANSITIONS[row.status] || [] });
   } catch (err) { handleRouteError(err, res, "Update case error:"); }
@@ -735,7 +735,7 @@ router.delete("/cases/:id", authorize({ feature: "legal.cases", action: "delete"
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<Record<string, unknown>>(
+    const [existing] = await rawQuery<any>(
       `SELECT id, title, status FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -804,9 +804,9 @@ router.get("/cases/:caseId/sessions", authorize({ feature: "legal.cases", action
   try {
     const scope = req.scope!;
     const caseId = parseId(req.params.caseId, "caseId");
-    const [legalCase] = await rawQuery<Record<string, unknown>>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
+    const [legalCase] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!legalCase) throw new NotFoundError("القضية غير موجودة");
-    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 AND "deletedAt" IS NULL ORDER BY "sessionDate" DESC LIMIT 500`, [caseId]);
+    const rows = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 AND "deletedAt" IS NULL ORDER BY "sessionDate" DESC LIMIT 500`, [caseId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Legal sessions error:"); }
 });
@@ -822,7 +822,7 @@ router.post("/cases/:caseId/sessions", authorize({ feature: "legal.cases", actio
       throw new ValidationError("تاريخ الجلسة غير صالح", { field: "sessionDate", fix: "استخدم تنسيق YYYY-MM-DD" });
     }
 
-    const [legalCase] = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
+    const [legalCase] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!legalCase) throw new NotFoundError("القضية غير موجودة أو غير مصرح بها");
     if (legalCase.status === "closed") {
       throw new ConflictError(
@@ -846,7 +846,7 @@ router.post("/cases/:caseId/sessions", authorize({ feature: "legal.cases", actio
 
     if (legalCase.lawyerName) {
       try {
-        const [lawyerEmp] = await rawQuery<Record<string, unknown>>(
+        const [lawyerEmp] = await rawQuery<any>(
           `SELECT ea.id AS "assignmentId" FROM employees e
            JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea.status='active'
            WHERE ea."companyId"=$1 AND e.name ILIKE $2 LIMIT 1`,
@@ -924,7 +924,7 @@ router.post("/cases/:caseId/sessions", authorize({ feature: "legal.cases", actio
     let journalEntryId: number | null = null;
     if (b.hoursSpent && b.hourlyRate) {
       const billingAmount = Number(b.hoursSpent) * Number(b.hourlyRate);
-      const [vatSetting] = await rawQuery<Record<string, unknown>>(`SELECT value FROM system_settings WHERE "companyId" = $1 AND key = 'vat_rate' LIMIT 1`, [scope.companyId]);
+      const [vatSetting] = await rawQuery<any>(`SELECT value FROM system_settings WHERE "companyId" = $1 AND key = 'vat_rate' LIMIT 1`, [scope.companyId]);
       const vatRate = vatSetting ? Number(vatSetting.value) / 100 : 0.15;
       const vatAmount = billingAmount * vatRate;
       const monthNum = currentMonthPadded();
@@ -977,7 +977,7 @@ router.post("/cases/:caseId/sessions", authorize({ feature: "legal.cases", actio
       details: JSON.stringify({ caseId, sessionDate: b.sessionDate, location: b.location, judge: b.judge }),
     }).catch((e) => logger.error(e, "legal background task failed"));
 
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_sessions WHERE id=$1 AND "deletedAt" IS NULL`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_sessions WHERE id=$1 AND "deletedAt" IS NULL`, [insertId]);
     res.status(201).json({ ...row, distanceToCourtKm, invoiceId, invoiceError, journalEntryId, calendarTaskCreated: !!legalCase.lawyerName });
   } catch (err) { handleRouteError(err, res, "Create session error:"); }
 });
@@ -987,11 +987,11 @@ router.get("/stats", authorize({ feature: "legal.cases", action: "list" }), asyn
     const scope = req.scope!;
     const cid = scope.companyId;
     const [[contracts], [cases], [expiring], [sessions], [contingent]] = await Promise.all([
-      rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='active') as active FROM legal_contracts WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
-      rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COUNT(*) FILTER (WHERE status='in_progress') as "inProgress" FROM legal_cases WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
-      rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as count FROM legal_contracts WHERE "companyId"=$1 AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days' AND status='active' AND "deletedAt" IS NULL`, [cid]),
-      rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as upcoming FROM legal_sessions ls JOIN legal_cases lc ON lc.id=ls."caseId" WHERE lc."companyId"=$1 AND lc."deletedAt" IS NULL AND ls."deletedAt" IS NULL AND ls."sessionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'`, [cid]),
-      rawQuery<Record<string, unknown>>(`SELECT COALESCE(SUM("financialRisk"),0) as total FROM legal_cases WHERE "companyId"=$1 AND status NOT IN ('closed') AND "deletedAt" IS NULL`, [cid]).catch((e) => { logger.error(e, "legal query failed"); return [{ total: 0 }]; }),
+      rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='active') as active FROM legal_contracts WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COUNT(*) FILTER (WHERE status='in_progress') as "inProgress" FROM legal_cases WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as count FROM legal_contracts WHERE "companyId"=$1 AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days' AND status='active' AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as upcoming FROM legal_sessions ls JOIN legal_cases lc ON lc.id=ls."caseId" WHERE lc."companyId"=$1 AND lc."deletedAt" IS NULL AND ls."deletedAt" IS NULL AND ls."sessionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'`, [cid]),
+      rawQuery<any>(`SELECT COALESCE(SUM("financialRisk"),0) as total FROM legal_cases WHERE "companyId"=$1 AND status NOT IN ('closed') AND "deletedAt" IS NULL`, [cid]).catch((e) => { logger.error(e, "legal query failed"); return [{ total: 0 }]; }),
     ]);
     res.json({
       totalContracts: Number(contracts.total), activeContracts: Number(contracts.active),
@@ -1006,9 +1006,9 @@ router.get("/cases/:caseId/correspondence", authorize({ feature: "legal.cases", 
   try {
     const scope = req.scope!;
     const caseId = parseId(req.params.caseId, "caseId");
-    const [lc] = await rawQuery<Record<string, unknown>>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
+    const [lc] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!lc) throw new NotFoundError("القضية غير موجودة");
-    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_correspondence WHERE "caseId"=$1 ORDER BY "correspondenceDate" DESC LIMIT 500`, [caseId]);
+    const rows = await rawQuery<any>(`SELECT * FROM legal_correspondence WHERE "caseId"=$1 ORDER BY "correspondenceDate" DESC LIMIT 500`, [caseId]);
     res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "Legal correspondence error:"); }
 });
@@ -1018,13 +1018,13 @@ router.post("/cases/:caseId/correspondence", authorize({ feature: "legal.cases",
     const scope = req.scope!;
     const caseId = parseId(req.params.caseId, "caseId");
     const b = zodParse(createCorrespondenceSchema.safeParse(req.body)) as any;
-    const [lc] = await rawQuery<Record<string, unknown>>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
+    const [lc] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!lc) throw new NotFoundError("القضية غير موجودة");
     const { insertId } = await rawExecute(
       `INSERT INTO legal_correspondence ("caseId","companyId",direction,subject,parties,"correspondenceDate","documentRef",notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [caseId, scope.companyId, b.direction || 'outgoing', b.subject, b.parties, b.correspondenceDate || todayISO(), b.documentRef || null, b.notes || null]
     );
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_correspondence WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_correspondence WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -1052,7 +1052,7 @@ router.post("/cases/:caseId/costs", authorize({ feature: "legal.cases", action: 
     const caseId = parseId(req.params.caseId, "caseId");
     const b = zodParse(createCaseCostSchema.safeParse(req.body));
 
-    const [legalCase] = await rawQuery<Record<string, unknown>>(
+    const [legalCase] = await rawQuery<any>(
       `SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [caseId, scope.companyId]
     );
@@ -1091,7 +1091,7 @@ router.post("/cases/:caseId/costs", authorize({ feature: "legal.cases", action: 
       details: `مصروف قانوني: ${b.type} — ${b.amount.toLocaleString()} ريال — قضية #${caseId}`,
     }).catch((e) => logger.error(e, "legal background task failed"));
 
-    const [updated] = await rawQuery<Record<string, unknown>>(
+    const [updated] = await rawQuery<any>(
       `SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [caseId, scope.companyId]
     );
@@ -1103,9 +1103,9 @@ router.get("/cases/:caseId/judgments", authorize({ feature: "legal.cases", actio
   try {
     const scope = req.scope!;
     const caseId = parseId(req.params.caseId, "caseId");
-    const [lc] = await rawQuery<Record<string, unknown>>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
+    const [lc] = await rawQuery<any>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!lc) throw new NotFoundError("القضية غير موجودة");
-    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_judgments WHERE "caseId"=$1 AND "companyId"=$2 ORDER BY "judgmentDate" DESC LIMIT 500`, [caseId, scope.companyId]);
+    const rows = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE "caseId"=$1 AND "companyId"=$2 ORDER BY "judgmentDate" DESC LIMIT 500`, [caseId, scope.companyId]);
     res.json({ data: rows, total: rows.length });
   } catch (err) { handleRouteError(err, res, "Legal judgments error:"); }
 });
@@ -1121,7 +1121,7 @@ router.post("/cases/:caseId/judgments", authorize({ feature: "legal.cases", acti
         throw new ValidationError("قيمة الحكم غير صالحة", { field: "amount", fix: "أدخل قيمة غير سالبة" });
       }
     }
-    const [lc] = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
+    const [lc] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!lc) throw new NotFoundError("القضية غير موجودة");
     const { insertId } = await withTransaction(async (client) => {
       const insertRes = await client.query(
@@ -1200,7 +1200,7 @@ router.post("/cases/:caseId/judgments", authorize({ feature: "legal.cases", acti
       after: { caseId, judgmentDate: b.judgmentDate, judgmentType: b.judgmentType, verdict: b.verdict, amount: b.amount },
     }).catch((e) => logger.error(e, "legal background task failed"));
 
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_judgments WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create judgment error:"); }
 });
@@ -1212,7 +1212,7 @@ router.patch("/cases/:caseId/judgments/:id", authorize({ feature: "legal.cases",
     const caseId = parseId(req.params.caseId, "caseId");
     const b = zodParse(updateJudgmentSchema.safeParse(req.body));
 
-    const [existingJ] = await rawQuery<Record<string, unknown>>(
+    const [existingJ] = await rawQuery<any>(
       `SELECT * FROM legal_judgments WHERE id=$1 AND "caseId"=$2 AND "companyId"=$3`,
       [id, caseId, scope.companyId]
     );
@@ -1240,7 +1240,7 @@ router.patch("/cases/:caseId/judgments/:id", authorize({ feature: "legal.cases",
     params.push(id); params.push(caseId); params.push(scope.companyId);
     const { affectedRows } = await rawExecute(`UPDATE legal_judgments SET ${sets.join(",")} WHERE id=$${params.length - 2} AND "caseId"=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     if (!affectedRows) throw new NotFoundError("الحكم غير موجود");
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_judgments WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_judgments WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
 
     // Mark payment obligation met if fully paid
     if (row && Number(row.paidAmount || 0) >= Number(row.amount || 0) && Number(row.amount || 0) > 0) {
@@ -1276,7 +1276,7 @@ router.patch("/cases/:id/financial-risk", authorize({ feature: "legal.cases", ac
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { financialRisk, riskLevel } = zodParse(updateFinancialRiskSchema.safeParse(req.body));
-    const [existing] = await rawQuery<Record<string, unknown>>(
+    const [existing] = await rawQuery<any>(
       `SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -1299,7 +1299,7 @@ router.patch("/cases/:id/financial-risk", authorize({ feature: "legal.cases", ac
       `UPDATE legal_cases SET "financialRisk"=$1, "riskLevel"=$2, "updatedAt"=NOW() WHERE id=$3 AND "companyId"=$4 AND "deletedAt" IS NULL`,
       [financialRisk || 0, riskLevel || 'medium', id, scope.companyId]
     );
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -1330,7 +1330,7 @@ router.get("/sessions/:id", authorize({ feature: "legal.cases", action: "view" }
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<Record<string, unknown>>(
+    const [row] = await rawQuery<any>(
       `SELECT s.*, lc."caseNumber", lc.title AS "caseTitle"
        FROM legal_sessions s
        JOIN legal_cases lc ON lc.id = s."caseId" AND lc."companyId" = $2 AND lc."deletedAt" IS NULL
@@ -1346,7 +1346,7 @@ router.get("/judgments/:id", authorize({ feature: "legal.cases", action: "view" 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<Record<string, unknown>>(
+    const [row] = await rawQuery<any>(
       `SELECT j.*, lc."caseNumber", lc.title AS "caseTitle"
        FROM legal_judgments j
        JOIN legal_cases lc ON lc.id = j."caseId" AND lc."companyId" = $2 AND lc."deletedAt" IS NULL
@@ -1362,7 +1362,7 @@ router.get("/correspondence/:id", authorize({ feature: "legal.cases", action: "v
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<Record<string, unknown>>(
+    const [row] = await rawQuery<any>(
       `SELECT c.*, lc."caseNumber", lc.title AS "caseTitle"
        FROM legal_correspondence c
        JOIN legal_cases lc ON lc.id = c."caseId" AND lc."companyId" = $2 AND lc."deletedAt" IS NULL
@@ -1378,7 +1378,7 @@ router.get("/sessions/upcoming", authorize({ feature: "legal.cases", action: "li
   try {
     const scope = req.scope!;
     const days = Number(req.query.days) || 14;
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT ls.*, lc.title AS "caseTitle", lc."lawyerName", lc.priority,
               (ls."sessionDate"::date - CURRENT_DATE) AS "daysUntil"
        FROM legal_sessions ls
@@ -1398,7 +1398,7 @@ router.get("/sessions/upcoming", authorize({ feature: "legal.cases", action: "li
 router.get("/judgments/financial-report", authorize({ feature: "legal.cases", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT lj.*, lc.title AS "caseTitle", lc."caseNumber", lc."riskLevel"
        FROM legal_judgments lj
        JOIN legal_cases lc ON lc.id=lj."caseId"
@@ -1406,12 +1406,12 @@ router.get("/judgments/financial-report", authorize({ feature: "legal.cases", ac
        ORDER BY lj."judgmentDate" DESC`,
       [scope.companyId]
     );
-    const [totals] = await rawQuery<Record<string, unknown>>(
+    const [totals] = await rawQuery<any>(
       `SELECT COALESCE(SUM(amount),0) AS "totalAmount", COALESCE(SUM("paidAmount"),0) AS "totalPaid"
        FROM legal_judgments WHERE "companyId"=$1`,
       [scope.companyId]
     );
-    const [contingent] = await rawQuery<Record<string, unknown>>(
+    const [contingent] = await rawQuery<any>(
       `SELECT COALESCE(SUM("financialRisk"),0) AS total FROM legal_cases WHERE "companyId"=$1 AND status NOT IN ('closed') AND "deletedAt" IS NULL`,
       [scope.companyId]
     ).catch((e) => { logger.error(e, "legal query failed"); return [{ total: 0 }]; });
@@ -1428,18 +1428,18 @@ router.get("/judgments/financial-report", authorize({ feature: "legal.cases", ac
 router.get("/financial-report", authorize({ feature: "legal.cases", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const cases = await rawQuery<Record<string, unknown>>(
+    const cases = await rawQuery<any>(
       `SELECT status, COUNT(*) AS count, COALESCE(SUM("financialRisk"),0) AS risk
        FROM legal_cases WHERE "companyId"=$1 AND "deletedAt" IS NULL GROUP BY status`,
       [scope.companyId]
     );
-    const [totals] = await rawQuery<Record<string, unknown>>(
+    const [totals] = await rawQuery<any>(
       `SELECT COUNT(*) AS "totalCases",
               COALESCE(SUM("financialRisk"),0) AS "totalRisk"
        FROM legal_cases WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
       [scope.companyId]
     );
-    const [judgments] = await rawQuery<Record<string, unknown>>(
+    const [judgments] = await rawQuery<any>(
       `SELECT COALESCE(SUM(amount),0) AS "totalJudgments",
               COALESCE(SUM("paidAmount"),0) AS "totalPaid"
        FROM legal_judgments WHERE "companyId"=$1`,

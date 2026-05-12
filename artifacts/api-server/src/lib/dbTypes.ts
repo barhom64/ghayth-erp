@@ -22,7 +22,7 @@
 // Migration pattern in routes/*.ts:
 //
 //   // before
-//   const rows = await rawQuery<Record<string, unknown>>(`SELECT id, name, phone FROM clients ...`, [...]);
+//   const rows = await rawQuery<any>(`SELECT id, name, phone FROM clients ...`, [...]);
 //
 //   // after
 //   import type { ClientRow } from "../lib/dbTypes.js";
