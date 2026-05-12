@@ -81,6 +81,10 @@ const BUILTIN_IDENTIFIERS = new Set([
   "rn",
   "rank",
   "row_number",
+  // Umrah pilgrim entry/exit fields — present in live DB (added via migration)
+  // but not yet reflected in db/schema.sql dump. See umrahImportEngine.ts.
+  "entryDate",
+  "exitDate",
 ]);
 
 async function walk(dir, acc = []) {
