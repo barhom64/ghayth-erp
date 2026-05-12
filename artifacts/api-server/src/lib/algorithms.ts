@@ -102,7 +102,7 @@ export async function loadBalanceAssign(
   requiredSpecialty?: string
 ): Promise<{ employeeId: number; assignmentId: number; score: number } | null> {
   try {
-    const employees = await rawQuery<any>(
+    const employees = await rawQuery<Record<string, unknown>>(
       `SELECT ea.id AS "assignmentId", ea."employeeId", ea.role,
               e.name, e.lat, e.lon,
               3 AS rating,

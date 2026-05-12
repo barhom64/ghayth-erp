@@ -34,7 +34,7 @@ export async function buildEmployeeSchedule(
   );
   const employeeName = empRow?.name ?? `Employee ${employeeId}`;
 
-  const tasks = await rawQuery<any>(
+  const tasks = await rawQuery<Record<string, unknown>>(
     `SELECT t.id, t.title, t."scheduledDate" as "scheduledTime",
             t."estimatedDuration", t.priority, t.status
      FROM tasks t
@@ -46,7 +46,7 @@ export async function buildEmployeeSchedule(
     [companyId, date, employeeId]
   );
 
-  const tickets = await rawQuery<any>(
+  const tickets = await rawQuery<Record<string, unknown>>(
     `SELECT st.id, st.title, st."createdAt" as "scheduledTime",
             st."escalationLevel", st."slaBreached"
      FROM support_tickets st
@@ -58,7 +58,7 @@ export async function buildEmployeeSchedule(
     [companyId, employeeId]
   );
 
-  const maintenance = await rawQuery<any>(
+  const maintenance = await rawQuery<Record<string, unknown>>(
     `SELECT mr.id, mr.description AS title, mr."createdAt" as "scheduledTime", mr.priority
      FROM maintenance_requests mr
      WHERE mr."companyId"=$1

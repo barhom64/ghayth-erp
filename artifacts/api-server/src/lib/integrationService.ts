@@ -166,7 +166,7 @@ export async function retryFailedMessages(companyId?: number): Promise<{ retried
     conditions.push(`il."companyId"=$${params.length}`);
   }
 
-  const failedLogs = await rawQuery<any>(
+  const failedLogs = await rawQuery<Record<string, unknown>>(
     `SELECT il.*, i.config, i.type FROM integration_logs il
      LEFT JOIN integrations i ON i.id = il."integrationId"
      WHERE ${conditions.join(" AND ")}

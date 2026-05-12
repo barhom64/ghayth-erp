@@ -60,7 +60,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
 async function buildScope(payload: JWTPayload): Promise<RequestScope> {
   const activeAssignmentId = payload.assignmentId;
 
-  const [assignment] = await rawQuery<any>(
+  const [assignment] = await rawQuery<Record<string, unknown>>(
     `SELECT ea.id, ea."employeeId", ea."companyId", ea."branchId", ea.role,
             ea."jobTitleId", COALESCE(jt.name, ea."jobTitle") AS "jobTitle",
             COALESCE(e.name, 'مستخدم') AS "userName"
@@ -74,7 +74,7 @@ async function buildScope(payload: JWTPayload): Promise<RequestScope> {
 
   if (!assignment) throw new Error("التعيين غير موجود أو غير نشط");
 
-  const allAssignments = await rawQuery<any>(
+  const allAssignments = await rawQuery<Record<string, unknown>>(
     `SELECT id, "companyId", "branchId" FROM employee_assignments
      WHERE "employeeId" = $1 AND status = 'active'`,
     [assignment.employeeId]
@@ -90,7 +90,7 @@ async function buildScope(payload: JWTPayload): Promise<RequestScope> {
   ];
 
   if (assignment.role === "owner" || assignment.role === "general_manager") {
-    const companyBranches = await rawQuery<any>(
+    const companyBranches = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM branches WHERE "companyId" = ANY($1)`,
       [allowedCompanies]
     );

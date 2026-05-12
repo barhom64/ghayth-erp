@@ -48,7 +48,7 @@ export async function exportTrialBalanceExcel(companyId: number, startDate?: str
   if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
   if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
 
-  const rows = await rawQuery<any>(
+  const rows = await rawQuery<Record<string, unknown>>(
     `SELECT coa.code, coa.name, coa.type,
             COALESCE(SUM(jl.debit), 0) AS "totalDebit",
             COALESCE(SUM(jl.credit), 0) AS "totalCredit",
@@ -84,8 +84,8 @@ export async function exportIncomeStatementExcel(companyId: number, startDate?: 
   if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
   if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
 
-  const revenues = await rawQuery<any>(`SELECT coa.code, coa.name, COALESCE(SUM(jl.credit) - SUM(jl.debit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code LEFT JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL ${dateFilter} WHERE coa."companyId" = $1 AND coa.type = 'revenue' GROUP BY coa.code, coa.name ORDER BY coa.code`, params);
-  const expenses = await rawQuery<any>(`SELECT coa.code, coa.name, COALESCE(SUM(jl.debit) - SUM(jl.credit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code LEFT JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL ${dateFilter} WHERE coa."companyId" = $1 AND coa.type = 'expense' GROUP BY coa.code, coa.name ORDER BY coa.code`, params);
+  const revenues = await rawQuery<Record<string, unknown>>(`SELECT coa.code, coa.name, COALESCE(SUM(jl.credit) - SUM(jl.debit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code LEFT JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL ${dateFilter} WHERE coa."companyId" = $1 AND coa.type = 'revenue' GROUP BY coa.code, coa.name ORDER BY coa.code`, params);
+  const expenses = await rawQuery<Record<string, unknown>>(`SELECT coa.code, coa.name, COALESCE(SUM(jl.debit) - SUM(jl.credit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code LEFT JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL ${dateFilter} WHERE coa."companyId" = $1 AND coa.type = 'expense' GROUP BY coa.code, coa.name ORDER BY coa.code`, params);
 
   const totalRevenue = revenues.reduce((s: number, r: any) => s + Number(r.amount), 0);
   const totalExpenses = expenses.reduce((s: number, r: any) => s + Number(r.amount), 0);
@@ -121,7 +121,7 @@ export async function exportInvoicesExcel(companyId: number, startDate?: string,
   if (startDate) { params.push(startDate); dateFilter += ` AND i."createdAt" >= $${params.length}`; }
   if (endDate) { params.push(endDate); dateFilter += ` AND i."createdAt" <= $${params.length}`; }
 
-  const invoices = await rawQuery<any>(
+  const invoices = await rawQuery<Record<string, unknown>>(
     `SELECT i.ref, c.name AS "clientName", i.status, i.subtotal, i."vatAmount", i.total, i."paidAmount",
             i.total - i."paidAmount" AS remaining, i."createdAt", i."dueDate"
      FROM invoices i
@@ -155,7 +155,7 @@ export async function exportPayrollExcel(companyId: number, period?: string): Pr
   const params: any[] = [companyId];
   if (period) { params.push(period); filter = ` AND pr.period = $${params.length}`; }
 
-  const records = await rawQuery<any>(
+  const records = await rawQuery<Record<string, unknown>>(
     `SELECT pr.period, e.name AS "employeeName", ea."jobTitle" AS position, ea.salary AS "baseSalary",
             pr."grossSalary", pr."totalDeductions", pr."netSalary",
             pr.status, pr."createdAt" AS "paidAt"
@@ -210,7 +210,7 @@ export async function exportAttendanceExcel(companyId: number, startDate?: strin
   if (startDate) { params.push(startDate); dateFilter += ` AND a.date >= $${params.length}`; }
   if (endDate) { params.push(endDate); dateFilter += ` AND a.date <= $${params.length}`; }
 
-  const records = await rawQuery<any>(
+  const records = await rawQuery<Record<string, unknown>>(
     `SELECT e.name AS "employeeName", ea."jobTitle" AS position, a.date, a.status,
             a."checkIn", a."checkOut",
             CASE WHEN a."checkIn" IS NOT NULL AND a."checkOut" IS NOT NULL
@@ -249,7 +249,7 @@ export async function exportAttendanceExcel(companyId: number, startDate?: strin
 }
 
 export async function exportFleetExcel(companyId: number): Promise<Buffer> {
-  const vehicles = await rawQuery<any>(
+  const vehicles = await rawQuery<Record<string, unknown>>(
     `SELECT v."plateNumber", v.make, v.model, v.year, v.status,
             fd.name AS "driverName",
             v."nextServiceDate", v."currentMileage", v.color,
@@ -284,7 +284,7 @@ export async function exportFleetExcel(companyId: number): Promise<Buffer> {
     colWidths: [14, 12, 12, 8, 14, 20, 12, 10, 14, 12, 18],
   };
 
-  const trips = await rawQuery<any>(
+  const trips = await rawQuery<Record<string, unknown>>(
     `SELECT v."plateNumber", d.name AS "driverName", t."fromLocation", t."toLocation",
             t."startTime", t."endTime", t.distance, t.status
      FROM fleet_trips t

@@ -40,7 +40,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
     const [cashPosition, ar, ap, obligations, slaBreaches, stuckWorkflows, budgetOverages, dunning, expiringContracts, fleetMaintenance, hrDocExpiries, mtd] = await Promise.all([
     // ─── 1. CASH POSITION ─────────────────────────────────────────────────
     safe(async () => {
-      const rows = await rawQuery<any>(
+      const rows = await rawQuery<Record<string, unknown>>(
         `SELECT code, name, "currentBalance"
          FROM chart_of_accounts
          WHERE "companyId"=$1 AND code LIKE '11%' AND type='asset' AND "deletedAt" IS NULL
@@ -53,7 +53,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
 
     // ─── 2. AR AGING ───────────────────────────────────────────────────────
     safe(async () => {
-      const [sums] = await rawQuery<any>(
+      const [sums] = await rawQuery<Record<string, unknown>>(
         `SELECT
           COALESCE(SUM(total - COALESCE("paidAmount",0)), 0) AS total,
           COALESCE(SUM(CASE WHEN "dueDate"::date >= CURRENT_DATE
@@ -82,7 +82,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
 
     // ─── 3. AP EXPOSURE (open POs) ────────────────────────────────────────
     safe(async () => {
-      const [sums] = await rawQuery<any>(
+      const [sums] = await rawQuery<Record<string, unknown>>(
         `SELECT COALESCE(SUM("totalAmount"), 0) AS total, COUNT(*)::int AS count
          FROM purchase_orders
          WHERE "companyId"=$1 AND status NOT IN ('paid','cancelled','draft') AND "deletedAt" IS NULL`,
@@ -99,12 +99,12 @@ execDashboardRouter.get("/overview", async (req, res) => {
 
     // ─── 5. SLA BREACHES (support + workflow) ─────────────────────────────
     safe(async () => {
-      const [support] = await rawQuery<any>(
+      const [support] = await rawQuery<Record<string, unknown>>(
         `SELECT COUNT(*)::int AS n FROM support_tickets
          WHERE "companyId"=$1 AND status='open' AND "deletedAt" IS NULL AND "slaDeadline" < NOW()`,
         [companyId]
       );
-      const [workflow] = await rawQuery<any>(
+      const [workflow] = await rawQuery<Record<string, unknown>>(
         `SELECT COUNT(*)::int AS n FROM workflow_instances
          WHERE "companyId"=$1 AND status IN ('pending','in_review','escalated')
            AND "slaStatus" IN ('breached','at_risk') AND "deletedAt" IS NULL`,
@@ -118,7 +118,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
 
     // ─── 6. STUCK WORKFLOWS (pending >3 days) ─────────────────────────────
     safe(async () => {
-      const [r] = await rawQuery<any>(
+      const [r] = await rawQuery<Record<string, unknown>>(
         `SELECT COUNT(*)::int AS n FROM workflow_instances
          WHERE "companyId"=$1 AND status IN ('pending','in_review')
            AND "createdAt" < NOW() - INTERVAL '3 days' AND "deletedAt" IS NULL`,
@@ -133,7 +133,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
       const [y, m] = period.split("-").map(Number);
       const periodStart = `${y}-${String(m).padStart(2, "0")}-01`;
       const periodEnd = toDateISO(new Date(y, m, 0));
-      const rows = await rawQuery<any>(
+      const rows = await rawQuery<Record<string, unknown>>(
         `SELECT b."accountCode", coa.name AS "accountName", b.amount AS "budget",
                 COALESCE((
                   SELECT SUM(jl.debit - jl.credit)
@@ -172,7 +172,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
 
     // ─── 8. DUNNING PIPELINE ──────────────────────────────────────────────
     safe(async () => {
-      const rows = await rawQuery<any>(
+      const rows = await rawQuery<Record<string, unknown>>(
         `SELECT dl.level AS stage, COUNT(DISTINCT i.id)::int AS count,
                 COALESCE(SUM(i.total - COALESCE(i."paidAmount",0)), 0) AS amount
          FROM dunning_letters dl
@@ -187,7 +187,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
 
     // ─── 9. PROPERTY CONTRACTS EXPIRING (60 days) ─────────────────────────
     safe(async () => {
-      const [r] = await rawQuery<any>(
+      const [r] = await rawQuery<Record<string, unknown>>(
         `SELECT COUNT(*)::int AS n FROM property_contracts
          WHERE "companyId"=$1 AND status='active'
            AND "endDate"::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '60 days'`,
@@ -198,7 +198,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
 
     // ─── 10. FLEET MAINTENANCE DUE (30 days) ──────────────────────────────
     safe(async () => {
-      const [r] = await rawQuery<any>(
+      const [r] = await rawQuery<Record<string, unknown>>(
         `SELECT COUNT(*)::int AS n FROM fleet_vehicles
          WHERE "companyId"=$1 AND "deletedAt" IS NULL
            AND ("nextServiceDate"::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
@@ -210,7 +210,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
 
     // ─── 11. HR DOCUMENT EXPIRIES (30 days) ───────────────────────────────
     safe(async () => {
-      const [r] = await rawQuery<any>(
+      const [r] = await rawQuery<Record<string, unknown>>(
         `SELECT COUNT(*)::int AS n FROM employees
          WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL
            AND ("iqamaExpiry"::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
@@ -226,7 +226,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
       const [y, m] = period.split("-").map(Number);
       const start = `${y}-${String(m).padStart(2, "0")}-01`;
       const end = toDateISO(new Date(y, m, 0));
-      const [revenue] = await rawQuery<any>(
+      const [revenue] = await rawQuery<Record<string, unknown>>(
         `SELECT COALESCE(SUM(jl.credit - jl.debit), 0) AS v
          FROM journal_lines jl
          JOIN journal_entries je ON je.id = jl."journalId"
@@ -236,7 +236,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
            AND coa.type='revenue' AND je."createdAt"::date BETWEEN $2::date AND $3::date`,
         [companyId, start, end]
       );
-      const [expense] = await rawQuery<any>(
+      const [expense] = await rawQuery<Record<string, unknown>>(
         `SELECT COALESCE(SUM(jl.debit - jl.credit), 0) AS v
          FROM journal_lines jl
          JOIN journal_entries je ON je.id = jl."journalId"
@@ -309,7 +309,7 @@ execDashboardRouter.get("/overdue-invoices", async (req, res) => {
   try {
     const scope = req.scope!;
     requireExec(scope);
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT i.id, i.ref AS "invoiceNumber", i."dueDate",
               i.total, COALESCE(i."paidAmount",0) AS "paidAmount",
               (i.total - COALESCE(i."paidAmount",0)) AS outstanding,
@@ -337,7 +337,7 @@ execDashboardRouter.get("/critical-obligations", async (req, res) => {
   try {
     const scope = req.scope!;
     requireExec(scope);
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT id, "entityType", "entityId", "obligationType", title, "dueAt",
               status, "escalationLevel", "assignedTo"
        FROM obligations

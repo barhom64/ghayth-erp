@@ -166,7 +166,7 @@ invoicesRouter.post("/invoices/impact-preview", authorize({ feature: "finance.in
 
     let clientName = "";
     if (clientId) {
-      const [client] = await rawQuery<any>(
+      const [client] = await rawQuery<Record<string, unknown>>(
         `SELECT name FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
         [Number(clientId), scope.companyId]
       );
@@ -199,7 +199,7 @@ invoicesRouter.post("/invoices/impact-preview", authorize({ feature: "finance.in
 
     if (clientName) {
       const [[openInvoices]] = await Promise.all([
-        rawQuery<any>(
+        rawQuery<Record<string, unknown>>(
           `SELECT COUNT(*)::int AS c, COALESCE(SUM(total - COALESCE("paidAmount",0)),0)::numeric AS outstanding
            FROM invoices WHERE "clientId" = $1 AND "companyId" = $2 AND status NOT IN ('paid','cancelled') AND "deletedAt" IS NULL`,
           [Number(clientId), scope.companyId]
@@ -275,7 +275,7 @@ invoicesRouter.get("/invoices", authorize({ feature: "finance.invoices", action:
     params.push(offset);
     const offsetIdx = paramIdx++;
 
-    const invoices = await rawQuery<any>(
+    const invoices = await rawQuery<Record<string, unknown>>(
       `SELECT i.id, i.ref, i.status, i."createdAt" AS "issueDate", i."dueDate",
               i.total, i."paidAmount", i."vatAmount", i.subtotal, i."vatRate",
               i."clientId", i.description, i."paymentTerms", i.notes,
@@ -290,7 +290,7 @@ invoicesRouter.get("/invoices", authorize({ feature: "finance.invoices", action:
     );
 
     const countParams = params.slice(0, params.length - 2);
-    const [countRow] = await rawQuery<any>(
+    const [countRow] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS total FROM invoices i WHERE ${where}`,
       countParams
     );
@@ -320,7 +320,7 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
       throw new ValidationError("الفرع مطلوب لإنشاء الفاتورة", { field: "branchId", fix: "حدد الفرع الذي تنتمي إليه الفاتورة" });
     }
     if (branchId) {
-      const [branchRow] = await rawQuery<any>(
+      const [branchRow] = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM branches WHERE id=$1 AND "companyId"=$2 AND status='active'`,
         [branchId, effectiveCompanyId]
       );
@@ -329,7 +329,7 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
       }
     }
     // FK pre-check on clientId so the frontend can light up the input.
-    const [clientRow] = await rawQuery<any>(
+    const [clientRow] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM clients WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [clientId, effectiveCompanyId]
     );
@@ -405,7 +405,7 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
       financialEngine.resolveAccountCode(effectiveCompanyId, "invoice_vat_payable", "credit", "2300"),
     ]);
 
-    const [seqRow] = await rawQuery<any>(`SELECT nextval('invoice_number_seq') AS seq`);
+    const [seqRow] = await rawQuery<Record<string, unknown>>(`SELECT nextval('invoice_number_seq') AS seq`);
     const seqNum = Number(seqRow?.seq ?? Date.now() % 1000000);
     const year = currentYear();
     const month = currentMonthPadded();
@@ -481,7 +481,7 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
     createNotification({ companyId: scope.companyId, assignmentId: scope.activeAssignmentId, type: "invoice_created", title: "تم إنشاء فاتورة جديدة", body: `فاتورة ${ref} بمبلغ ${total.toLocaleString()} ﷼`, priority: "normal", refType: "invoices", refId: insertId }).catch((e) => logger.error(e, "finance-invoices background task failed"));
     createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "create", entity: "invoices", entityId: insertId, after: { ref, total, vatAmount, clientId: clientId ?? null } }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
-    const [invoice] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`, [insertId, scope.companyId]);
+    const [invoice] = await rawQuery<Record<string, unknown>>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`, [insertId, scope.companyId]);
     res.status(201).json({ ...invoice, lines: validatedLines });
   } catch (err) {
     handleRouteError(err, res, "Create invoice error:");
@@ -498,7 +498,7 @@ invoicesRouter.post("/invoices/:id/send", authorize({ feature: "finance.invoices
     // decide which delivery channels to log, and the ref/clientName for the
     // audit trail. The lifecycle engine will re-lock the invoice row FOR
     // UPDATE inside its transaction so this read is purely for display data.
-    const [invoice] = await rawQuery<any>(
+    const [invoice] = await rawQuery<Record<string, unknown>>(
       `SELECT i.id, i.ref, i.status, i.total, i."vatAmount", i."dueDate",
               c.name AS "clientName", c.phone AS "clientPhone", c.email AS "clientEmail"
        FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
@@ -568,7 +568,7 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
 
-    const [invoice] = await rawQuery<any>(
+    const [invoice] = await rawQuery<Record<string, unknown>>(
       `SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
        WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -615,7 +615,7 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
 
     // Update client totalRevenue upon approval (revenue recognition)
     if (invoice.clientId) {
-      await rawQuery<any>(
+      await rawQuery<Record<string, unknown>>(
         `UPDATE clients SET "totalRevenue" = COALESCE("totalRevenue",0) + $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
         [Number(invoice.total) - Number(invoice.vatAmount || 0), invoice.clientId, scope.companyId]
       );
@@ -630,7 +630,7 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.approved", entity: "invoices", entityId: id, details: JSON.stringify({ ref: invoice.ref, total: invoice.total }) }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
-    const [updated] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`, [id, scope.companyId]);
+    const [updated] = await rawQuery<Record<string, unknown>>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!updated) throw new NotFoundError("الفاتورة غير موجودة");
     res.json(updated);
   } catch (err) {
@@ -659,7 +659,7 @@ invoicesRouter.post("/invoices/:id/post", authorize({ feature: "finance.invoices
     });
 
     // Verify GL entry exists
-    const [glEntry] = await rawQuery<any>(
+    const [glEntry] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM journal_entries WHERE "sourceType"='invoice' AND "sourceId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
       [id, scope.companyId]
     );
@@ -669,7 +669,7 @@ invoicesRouter.post("/invoices/:id/post", authorize({ feature: "finance.invoices
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.posted", entity: "invoices", entityId: id }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
-    const [updated] = await rawQuery<any>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`, [id, scope.companyId]);
+    const [updated] = await rawQuery<Record<string, unknown>>(`SELECT i.*, c.name AS "clientName" FROM invoices i LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!updated) throw new NotFoundError("الفاتورة غير موجودة");
     res.json(updated);
   } catch (err) {
@@ -782,7 +782,7 @@ invoicesRouter.get("/invoices/:id", authorize({ feature: "finance.invoices", act
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [invoice] = await rawQuery<any>(
+    const [invoice] = await rawQuery<Record<string, unknown>>(
       `SELECT i.*, c.name AS "clientName", c.phone AS "clientPhone", c.email AS "clientEmail",
               b.name AS "branchName", b."nameEn" AS "branchNameEn", b."logoUrl" AS "branchLogoUrl",
               b.address AS "branchAddress", b.phone AS "branchPhone", b.email AS "branchEmail",
@@ -793,10 +793,10 @@ invoicesRouter.get("/invoices/:id", authorize({ feature: "finance.invoices", act
       [id, scope.companyId]
     );
     if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
-    const lines = await rawQuery<any>(`SELECT * FROM invoice_lines WHERE "invoiceId" = $1 ORDER BY id LIMIT 500`, [id]);
+    const lines = await rawQuery<Record<string, unknown>>(`SELECT * FROM invoice_lines WHERE "invoiceId" = $1 ORDER BY id LIMIT 500`, [id]);
     const [payments, journalEntries] = await Promise.all([
-      rawQuery<any>(`SELECT je.id, je.ref, je.description, je."createdAt" AS date, COALESCE(SUM(jl.debit), 0) AS amount FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE $2 AND jl."accountCode" = '1100' AND jl.debit > 0 GROUP BY je.id, je.ref, je.description, je."createdAt" ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId, `PAY-${invoice.ref}%`]),
-      rawQuery<any>(`SELECT je.id, je.ref, je.description, je."createdAt" AS date FROM journal_entries je WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND (je.ref LIKE $2 OR je.ref LIKE $3) ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId, `JE-${invoice.ref}%`, `PAY-${invoice.ref}%`]),
+      rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, je.description, je."createdAt" AS date, COALESCE(SUM(jl.debit), 0) AS amount FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE $2 AND jl."accountCode" = '1100' AND jl.debit > 0 GROUP BY je.id, je.ref, je.description, je."createdAt" ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId, `PAY-${invoice.ref}%`]),
+      rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, je.description, je."createdAt" AS date FROM journal_entries je WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND (je.ref LIKE $2 OR je.ref LIKE $3) ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId, `JE-${invoice.ref}%`, `PAY-${invoice.ref}%`]),
     ]);
     res.json(maskFields(req, { ...invoice, lines, payments, journalEntries }));
   } catch (err) {
@@ -811,7 +811,7 @@ invoicesRouter.patch("/invoices/:id", authorize({ feature: "finance.invoices", a
     const id = parseId(req.params.id, "id");
     const { status, description, dueDate } = zodParse(patchInvoiceSchema.safeParse(req.body ?? {}));
 
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM invoices WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -863,7 +863,7 @@ invoicesRouter.patch("/invoices/:id", authorize({ feature: "finance.invoices", a
       throw new ValidationError("لا توجد بيانات للتحديث", { fix: "أرسل حقلاً واحداً على الأقل لتعديله" });
     }
     params.push(id, scope.companyId);
-    const [row] = await rawQuery<any>(`UPDATE invoices SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND "deletedAt" IS NULL RETURNING *`, params);
+    const [row] = await rawQuery<Record<string, unknown>>(`UPDATE invoices SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND "deletedAt" IS NULL RETURNING *`, params);
     if (!row) throw new NotFoundError("الفاتورة غير موجودة");
 
     createAuditLog({
@@ -899,7 +899,7 @@ invoicesRouter.delete("/invoices/:id", authorize({ feature: "finance.invoices", 
     const scope = req.scope!;
 
     const id = parseId(req.params.id, "id");
-    const [inv] = await rawQuery<any>(
+    const [inv] = await rawQuery<Record<string, unknown>>(
       `SELECT id, ref, status, "paidAmount" FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -914,7 +914,7 @@ invoicesRouter.delete("/invoices/:id", authorize({ feature: "finance.invoices", 
     // Reverse the GL balances that were pushed at creation time so AR /
     // Revenue / VAT payable drop back. The journal_entries row is located via
     // its ref (JE-<invoice ref>) since invoices don't store a journalId column.
-    const [je] = await rawQuery<any>(
+    const [je] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM journal_entries WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL`,
       [scope.companyId, `JE-${inv.ref}`]
     );
@@ -1052,8 +1052,8 @@ invoicesRouter.get("/tax/summary", authorize({ feature: "finance.zatca", action:
     const scope = req.scope!;
     const { period } = req.query as any;
     const targetPeriod = period ?? currentPeriod();
-    const [outputVat] = await rawQuery<any>(`SELECT COALESCE(SUM("vatAmount"), 0) AS total FROM invoices WHERE "companyId" = $1 AND to_char("createdAt", 'YYYY-MM') = $2 AND "deletedAt" IS NULL`, [scope.companyId, targetPeriod]);
-    const [inputVat] = await rawQuery<any>(`SELECT COALESCE(SUM(jl.debit), 0) AS total FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."deletedAt" IS NULL AND je.status = 'posted' WHERE je."companyId" = $1 AND jl."accountCode" = '1400' AND to_char(je."createdAt", 'YYYY-MM') = $2`, [scope.companyId, targetPeriod]);
+    const [outputVat] = await rawQuery<Record<string, unknown>>(`SELECT COALESCE(SUM("vatAmount"), 0) AS total FROM invoices WHERE "companyId" = $1 AND to_char("createdAt", 'YYYY-MM') = $2 AND "deletedAt" IS NULL`, [scope.companyId, targetPeriod]);
+    const [inputVat] = await rawQuery<Record<string, unknown>>(`SELECT COALESCE(SUM(jl.debit), 0) AS total FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."deletedAt" IS NULL AND je.status = 'posted' WHERE je."companyId" = $1 AND jl."accountCode" = '1400' AND to_char(je."createdAt", 'YYYY-MM') = $2`, [scope.companyId, targetPeriod]);
     const outputTotal = Number(outputVat?.total ?? 0);
     const inputTotal = Number(inputVat?.total ?? 0);
     res.json({ period: targetPeriod, outputVat: outputTotal, inputVat: inputTotal, netVat: outputTotal - inputTotal, vatRate: 15, status: outputTotal - inputTotal > 0 ? "payable" : "refundable" });
@@ -1208,7 +1208,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
       details: JSON.stringify({ memoId, amount: creditAmount, net, vat, reason }),
     }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
-    const [memo] = await rawQuery<any>(`SELECT * FROM credit_memos WHERE id=$1 AND "companyId"=$2`, [memoId, scope.companyId]);
+    const [memo] = await rawQuery<Record<string, unknown>>(`SELECT * FROM credit_memos WHERE id=$1 AND "companyId"=$2`, [memoId, scope.companyId]);
     res.status(201).json(memo || { memoId, journalId, invoiceId: id, amount: creditAmount, netAmount: net, vatAmount: vat, reason, memoDate: memoDateStr });
   } catch (err) {
     handleRouteError(err, res, "Credit memo error:");
@@ -1222,7 +1222,7 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
     const id = parseId(req.params.id, "id");
     const { amount, reason, vatIncluded = true, memoDate } = zodParse(createDebitMemoSchema.safeParse(req.body ?? {}));
 
-    const [invoice] = await rawQuery<any>(
+    const [invoice] = await rawQuery<Record<string, unknown>>(
       `SELECT id, ref, "clientId", "companyId", "branchId", total, "vatRate"
          FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -1330,7 +1330,7 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
       details: JSON.stringify({ memoId, amount: chargeAmount, net, vat, reason }),
     }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
-    const [memo] = await rawQuery<any>(`SELECT * FROM debit_memos WHERE id=$1 AND "companyId"=$2`, [memoId, scope.companyId]);
+    const [memo] = await rawQuery<Record<string, unknown>>(`SELECT * FROM debit_memos WHERE id=$1 AND "companyId"=$2`, [memoId, scope.companyId]);
     res.status(201).json(memo || { memoId, journalId, invoiceId: id, amount: chargeAmount, netAmount: net, vatAmount: vat, reason, memoDate: memoDateStr });
   } catch (err) {
     handleRouteError(err, res, "Debit memo error:");
@@ -1344,14 +1344,14 @@ invoicesRouter.get("/invoices/:id/memos", authorize({ feature: "finance.invoices
     let creditMemos: any[] = [];
     let debitMemos: any[] = [];
     try {
-      creditMemos = await rawQuery<any>(
+      creditMemos = await rawQuery<Record<string, unknown>>(
         `SELECT id, amount, "netAmount", "vatAmount", reason, "memoDate", "journalEntryId", "createdAt"
            FROM credit_memos WHERE "invoiceId" = $1 AND "companyId" = $2 ORDER BY "memoDate" DESC`,
         [id, scope.companyId]
       );
     } catch (e) { logger.warn(e, "credit_memos table may not exist yet"); }
     try {
-      debitMemos = await rawQuery<any>(
+      debitMemos = await rawQuery<Record<string, unknown>>(
         `SELECT id, amount, "netAmount", "vatAmount", reason, "memoDate", "createdAt"
            FROM debit_memos WHERE "invoiceId" = $1 AND "companyId" = $2 ORDER BY "memoDate" DESC`,
         [id, scope.companyId]
@@ -1384,7 +1384,7 @@ invoicesRouter.get("/bad-debt/preview", authorize({ feature: "finance.collection
       d90plus: Number.isFinite(Number(req.query.rate90plus)) ? Number(req.query.rate90plus) : 0.75,
     };
 
-    const invoices = await rawQuery<any>(
+    const invoices = await rawQuery<Record<string, unknown>>(
       `SELECT id, ref, "clientId", "createdAt", "dueDate", total, "paidAmount",
               (total - COALESCE("paidAmount",0)) AS outstanding
          FROM invoices
@@ -1441,7 +1441,7 @@ invoicesRouter.post("/bad-debt/post", authorize({ feature: "finance.collection",
     }
 
     const ref = `BAD-DEBT-${targetPeriod}`;
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM journal_entries WHERE "companyId"=$1 AND ref=$2 AND "deletedAt" IS NULL LIMIT 1`,
       [scope.companyId, ref]
     );
@@ -1460,7 +1460,7 @@ invoicesRouter.post("/bad-debt/post", authorize({ feature: "finance.collection",
       d90plus: Number(rates?.d90plus ?? 0.75),
     };
 
-    const invoices = await rawQuery<any>(
+    const invoices = await rawQuery<Record<string, unknown>>(
       `SELECT "createdAt", "dueDate", (total - COALESCE("paidAmount",0)) AS outstanding
          FROM invoices
         WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "createdAt" <= $2
@@ -1747,7 +1747,7 @@ invoicesRouter.get("/customer-advances", authorize({ feature: "finance.invoices"
     if (status) { params.push(status); where += ` AND status = $${params.length}`; }
     let rows: any[] = [];
     try {
-      rows = await rawQuery<any>(
+      rows = await rawQuery<Record<string, unknown>>(
         `SELECT ca.id, ca.ref, ca.amount, ca."appliedAmount",
                 (ca.amount - ca."appliedAmount") AS remaining,
                 ca.method, ca."receivedDate", ca.status, ca."journalId", ca."createdAt",
@@ -1849,7 +1849,7 @@ invoicesRouter.get("/dunning/preview", authorize({ feature: "finance.collection"
     const minDays = Number(req.query.minDaysPastDue) || 1;
     const today = todayISO();
 
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT i.id, i.ref AS "invoiceNumber", i."createdAt"::date AS "invoiceDate", i."dueDate",
               i.total, COALESCE(i."paidAmount",0) AS "paidAmount",
               i."clientId", i."lastDunningStage", i."lastDunningAt",
@@ -1932,7 +1932,7 @@ invoicesRouter.post("/dunning/send", authorize({ feature: "finance.collection", 
 
     // Batch-fetch all invoices in one query
     const invoiceIdNums = invoiceIds.map(Number);
-    const allInvoices = await rawQuery<any>(
+    const allInvoices = await rawQuery<Record<string, unknown>>(
       `SELECT i.id, i.ref AS "invoiceNumber", i."createdAt"::date AS "invoiceDate", i."dueDate",
               i.total, COALESCE(i."paidAmount",0) AS "paidAmount", i."clientId",
               c.name AS "clientName"
@@ -1971,7 +1971,7 @@ invoicesRouter.post("/dunning/send", authorize({ feature: "finance.collection", 
         tone: stg.tone,
       });
 
-      const [row] = await rawQuery<any>(
+      const [row] = await rawQuery<Record<string, unknown>>(
         `INSERT INTO dunning_letters
          ("companyId","invoiceId","clientId","level",subject,body,"sentAt",status)
          VALUES ($1,$2,$3,$4,$5,$6,NOW(),'sent') RETURNING id`,
@@ -2003,7 +2003,7 @@ invoicesRouter.get("/dunning/history", authorize({ feature: "finance.collection"
     if (clientId) { params.push(Number(clientId)); where += ` AND dl."clientId"=$${params.length}`; }
     if (stage) { params.push(Number(stage)); where += ` AND dl.level=$${params.length}`; }
 
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT dl.*, i.ref AS "invoiceNumber", c.name AS "clientName"
        FROM dunning_letters dl
        LEFT JOIN invoices i ON i.id = dl."invoiceId" AND i."deletedAt" IS NULL
@@ -2022,7 +2022,7 @@ invoicesRouter.get("/tax/declarations", authorize({ feature: "finance.zatca", ac
   try {
     const scope = req.scope!;
     const thisYear = currentYear();
-    const vatRows = await rawQuery<any>(
+    const vatRows = await rawQuery<Record<string, unknown>>(
       `SELECT to_char("createdAt", 'YYYY-MM') AS period,
               COALESCE(SUM("vatAmount"), 0) AS "outputVat",
               COUNT(*) AS "invoiceCount"

@@ -44,20 +44,20 @@ export async function computeLeaveImpact(
 ): Promise<ImpactPreview> {
   const items: ImpactItem[] = [];
 
-  const [employee] = await rawQuery<any>(
+  const [employee] = await rawQuery<Record<string, unknown>>(
     `SELECT e.name, ea.salary FROM employees e
      JOIN employee_assignments ea ON ea.id = $1
      WHERE e.id = $2`,
     [assignmentId, employeeId]
   );
 
-  const [leaveType] = await rawQuery<any>(
+  const [leaveType] = await rawQuery<Record<string, unknown>>(
     `SELECT name, "annualDays", "isPaid" FROM hr_leave_types WHERE id = $1 AND "companyId" = $2`,
     [leaveTypeId, companyId]
   );
 
   const year = new Date(startDate).getFullYear();
-  const [balance] = await rawQuery<any>(
+  const [balance] = await rawQuery<Record<string, unknown>>(
     `SELECT entitled, used, reserved, remaining FROM hr_leave_balances
      WHERE "companyId" = $1 AND "employeeId" = $2 AND "leaveTypeId" = $3 AND year = $4`,
     [companyId, employeeId, leaveTypeId, year]
@@ -92,7 +92,7 @@ export async function computeLeaveImpact(
     });
   }
 
-  const pendingTasks = await rawQuery<any>(
+  const pendingTasks = await rawQuery<Record<string, unknown>>(
     `SELECT COUNT(*) AS cnt FROM project_tasks
      WHERE "assigneeId" = $1 AND status NOT IN ('completed','cancelled')
        AND ("dueDate" IS NULL OR "dueDate" BETWEEN $2 AND $3)`,
@@ -135,7 +135,7 @@ export async function computeTerminationImpact(
 ): Promise<ImpactPreview> {
   const items: ImpactItem[] = [];
 
-  const [employee] = await rawQuery<any>(
+  const [employee] = await rawQuery<Record<string, unknown>>(
     `SELECT e.name, ea.salary, ea."hireDate" FROM employees e
      JOIN employee_assignments ea ON ea.id = $1
      WHERE e.id = $2`,
@@ -156,7 +156,7 @@ export async function computeTerminationImpact(
     });
   }
 
-  const [custodies] = await rawQuery<any>(
+  const [custodies] = await rawQuery<Record<string, unknown>>(
     `SELECT COALESCE(SUM(jl.debit - jl.credit),0) AS total
      FROM journal_entries je
      JOIN journal_lines jl ON jl."journalId" = je.id
@@ -175,7 +175,7 @@ export async function computeTerminationImpact(
     });
   }
 
-  const [loans] = await rawQuery<any>(
+  const [loans] = await rawQuery<Record<string, unknown>>(
     `SELECT COALESCE(SUM("remainingAmount"),0) AS total FROM hr_employee_loans
      WHERE "companyId" = $1 AND "employeeId" = $2 AND status NOT IN ('completed','paid','rejected')`,
     [companyId, employeeId]
@@ -190,7 +190,7 @@ export async function computeTerminationImpact(
     });
   }
 
-  const [activeTasks] = await rawQuery<any>(
+  const [activeTasks] = await rawQuery<Record<string, unknown>>(
     `SELECT COUNT(*) AS cnt FROM project_tasks
      WHERE "assigneeId" = $1 AND status NOT IN ('completed','cancelled')`,
     [employeeId]
@@ -239,7 +239,7 @@ export async function computeViolationImpact(
 ): Promise<ImpactPreview> {
   const items: ImpactItem[] = [];
 
-  const [employee] = await rawQuery<any>(
+  const [employee] = await rawQuery<Record<string, unknown>>(
     `SELECT e.name, ea.salary FROM employees e
      JOIN employee_assignments ea ON ea.id = $1
      WHERE e.id = $2`,
@@ -247,7 +247,7 @@ export async function computeViolationImpact(
   );
 
   const period = currentPeriod();
-  const [monthCount] = await rawQuery<any>(
+  const [monthCount] = await rawQuery<Record<string, unknown>>(
     `SELECT COUNT(*) AS cnt FROM employee_violations
      WHERE "assignmentId" = $1 AND period = $2`,
     [assignmentId, period]
@@ -318,7 +318,7 @@ export async function computeEmployeeOperationalStatus(
   const today = todayISO();
   const period = today.slice(0, 7);
 
-  const [onLeave] = await rawQuery<any>(
+  const [onLeave] = await rawQuery<Record<string, unknown>>(
     `SELECT id FROM hr_leave_requests
      WHERE "employeeId" = $1 AND status = 'approved'
        AND "startDate" <= $2 AND "endDate" >= $2`,
@@ -328,7 +328,7 @@ export async function computeEmployeeOperationalStatus(
     return { status: "on_leave", label: "في إجازة", color: "bg-blue-100 text-blue-700", reason: "إجازة معتمدة" };
   }
 
-  const [contract] = await rawQuery<any>(
+  const [contract] = await rawQuery<Record<string, unknown>>(
     `SELECT status FROM employee_contracts
      WHERE "companyId" = $1 AND "employeeId" = $2 ORDER BY id DESC LIMIT 1`,
     [companyId, employeeId]
@@ -337,7 +337,7 @@ export async function computeEmployeeOperationalStatus(
     return { status: "terminated", label: "منتهية خدماته", color: "bg-gray-100 text-gray-600", reason: "انتهاء الخدمة" };
   }
 
-  const [suspension] = await rawQuery<any>(
+  const [suspension] = await rawQuery<Record<string, unknown>>(
     `SELECT id FROM employee_violations
      WHERE "assignmentId" = $1 AND type = 'suspension' AND status = 'active'`,
     [assignmentId]
@@ -346,7 +346,7 @@ export async function computeEmployeeOperationalStatus(
     return { status: "suspended", label: "موقوف", color: "bg-red-100 text-red-700", reason: "إيقاف تأديبي" };
   }
 
-  const [pendingViolation] = await rawQuery<any>(
+  const [pendingViolation] = await rawQuery<Record<string, unknown>>(
     `SELECT id FROM employee_violations
      WHERE "assignmentId" = $1 AND period = $2 AND severity IN ('high','critical') AND status = 'active'`,
     [assignmentId, period]
@@ -355,7 +355,7 @@ export async function computeEmployeeOperationalStatus(
     return { status: "under_action", label: "تحت إجراء", color: "bg-orange-100 text-orange-700", reason: "مخالفة نشطة" };
   }
 
-  const [todayAttendance] = await rawQuery<any>(
+  const [todayAttendance] = await rawQuery<Record<string, unknown>>(
     `SELECT status, "lateMinutes" FROM attendance WHERE "assignmentId" = $1 AND date = $2`,
     [assignmentId, today]
   ).catch((e) => { logger.error(e, "impact preview query failed"); return [null]; });
@@ -385,7 +385,7 @@ export async function getPropertyUnitStatusImpact(
   companyId: number,
   newStatus: string
 ): Promise<StatusImpactPreview> {
-  const [unit] = await rawQuery<any>(
+  const [unit] = await rawQuery<Record<string, unknown>>(
     `SELECT * FROM property_units WHERE id=$1 AND "companyId"=$2`,
     [unitId, companyId]
   );
@@ -395,13 +395,13 @@ export async function getPropertyUnitStatusImpact(
   const impacts: StatusImpactItem[] = [];
   const blockers: string[] = [];
 
-  const [activeContract] = await rawQuery<any>(
+  const [activeContract] = await rawQuery<Record<string, unknown>>(
     `SELECT rc.*, (SELECT COUNT(*) FROM rent_payments WHERE "contractId"=rc.id AND status IN ('pending','partial')) AS "pendingPayments"
      FROM rental_contracts rc WHERE "unitId"=$1 AND status='active' LIMIT 1`,
     [unitId]
   );
 
-  const [openMaintenance] = await rawQuery<any>(
+  const [openMaintenance] = await rawQuery<Record<string, unknown>>(
     `SELECT COUNT(*) AS cnt FROM maintenance_requests WHERE "unitId"=$1 AND status NOT IN ('completed','closed')`,
     [unitId]
   );
@@ -542,7 +542,7 @@ export async function getVehicleStatusImpact(
   companyId: number,
   newStatus: string
 ): Promise<StatusImpactPreview> {
-  const [vehicle] = await rawQuery<any>(
+  const [vehicle] = await rawQuery<Record<string, unknown>>(
     `SELECT v.*, d.name AS "driverName" FROM fleet_vehicles v LEFT JOIN fleet_drivers d ON d.id=v."assignedDriverId" WHERE v.id=$1 AND v."companyId"=$2`,
     [vehicleId, companyId]
   );
@@ -552,18 +552,18 @@ export async function getVehicleStatusImpact(
   const impacts: StatusImpactItem[] = [];
   const blockers: string[] = [];
 
-  const [activeTrip] = await rawQuery<any>(
+  const [activeTrip] = await rawQuery<Record<string, unknown>>(
     `SELECT * FROM fleet_trips WHERE "vehicleId"=$1 AND status='in_progress' LIMIT 1`,
     [vehicleId]
   );
 
-  const [insurance] = await rawQuery<any>(
+  const [insurance] = await rawQuery<Record<string, unknown>>(
     `SELECT * FROM fleet_insurance WHERE "vehicleId"=$1 ORDER BY "endDate" DESC LIMIT 1`,
     [vehicleId]
   );
   const insuranceExpired = !insurance || new Date(insurance.endDate) < new Date();
 
-  const [openMaintenance] = await rawQuery<any>(
+  const [openMaintenance] = await rawQuery<Record<string, unknown>>(
     `SELECT COUNT(*) AS cnt FROM fleet_maintenance WHERE "vehicleId"=$1 AND status NOT IN ('completed')`,
     [vehicleId]
   );

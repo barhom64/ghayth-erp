@@ -124,7 +124,7 @@ financeAlgorithmsRouter.get("/ar-aging", authorize({ feature: "finance.algorithm
     const scope = req.scope!;
     const asOfDate = (req.query.asOfDate as string) || todayISO();
 
-    const invoices = await rawQuery<any>(
+    const invoices = await rawQuery<Record<string, unknown>>(
       `SELECT
          i.id, i.ref, i.status,
          i."dueDate",
@@ -214,7 +214,7 @@ financeAlgorithmsRouter.get("/ap-aging", authorize({ feature: "finance.algorithm
     const scope = req.scope!;
     const asOfDate = (req.query.asOfDate as string) || todayISO();
 
-    const orders = await rawQuery<any>(
+    const orders = await rawQuery<Record<string, unknown>>(
       `SELECT
          po.id, po.ref, po.status,
          'purchase_order' AS "sourceType",
@@ -393,7 +393,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/auto-match", authorize({ feat
 
     const { batchId, accountCode, toleranceDays } = zodParse(bankAutoMatchSchema.safeParse(req.body ?? {}));
 
-    const bankRows = await rawQuery<any>(
+    const bankRows = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM bank_statements
        WHERE "companyId" = $1
          AND "importBatchId" = $2
@@ -414,7 +414,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/auto-match", authorize({ feat
       const creditOrDebit = bRow.type === "credit" ? "debit" : "credit";
       if (creditOrDebit !== "debit" && creditOrDebit !== "credit") throw new Error("Invalid column");
 
-      const [jLine] = await rawQuery<any>(
+      const [jLine] = await rawQuery<Record<string, unknown>>(
         `SELECT jl.id, je."createdAt"
          FROM journal_lines jl
          JOIN journal_entries je ON je.id = jl."journalId"
@@ -456,7 +456,7 @@ financeAlgorithmsRouter.get("/bank-reconciliation/:batchId", authorize({ feature
     const scope = req.scope!;
     const { batchId } = req.params;
 
-    const bankRows = await rawQuery<any>(
+    const bankRows = await rawQuery<Record<string, unknown>>(
       `SELECT bs.*,
               jl.debit AS "jeDebit", jl.credit AS "jeCredit",
               je.ref AS "jeRef", je.description AS "jeDescription", je."createdAt" AS "jeDate"
@@ -498,13 +498,13 @@ financeAlgorithmsRouter.post("/bank-reconciliation/manual-match", authorize({ fe
     const scope = req.scope!;
     assertFinanceRole(scope);
     const { bankStatementId, journalLineId } = zodParse(bankManualMatchSchema.safeParse(req.body ?? {}));
-    const [bs] = await rawQuery<any>(
+    const [bs] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM bank_statements WHERE id=$1 AND "companyId"=$2 AND "matchStatus"='unmatched'`,
       [bankStatementId, scope.companyId]
     );
     if (!bs) { throw new NotFoundError("سطر الكشف البنكي غير موجود أو تمت مطابقته مسبقاً"); return; }
 
-    const [jl] = await rawQuery<any>(
+    const [jl] = await rawQuery<Record<string, unknown>>(
       `SELECT jl.id FROM journal_lines jl
        JOIN journal_entries je ON je.id = jl."journalId"
        WHERE jl.id=$1 AND je."companyId"=$2
@@ -543,7 +543,7 @@ financeAlgorithmsRouter.get("/journal-lines/search", authorize({ feature: "finan
     conditions.push(`NOT EXISTS (SELECT 1 FROM bank_statements bs WHERE bs."matchedJournalLineId"=jl.id)`);
 
     params.push(Math.min(Number(pageSize), 50));
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT jl.id, jl."accountCode", jl.debit, jl.credit, jl.description,
               je.ref AS "jeRef", je.description AS "jeDescription", je."createdAt" AS "jeDate"
        FROM journal_lines jl
@@ -562,7 +562,7 @@ financeAlgorithmsRouter.get("/journal-lines/search", authorize({ feature: "finan
 financeAlgorithmsRouter.get("/bank-reconciliation", authorize({ feature: "finance.algorithms", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const batches = await rawQuery<any>(
+    const batches = await rawQuery<Record<string, unknown>>(
       `SELECT "importBatchId" AS "batchId",
               COUNT(*) AS total,
               COUNT(*) FILTER (WHERE "matchStatus"='matched') AS matched,
@@ -590,7 +590,7 @@ financeAlgorithmsRouter.get("/bank-reconciliation", authorize({ feature: "financ
 financeAlgorithmsRouter.get("/fixed-assets", authorize({ feature: "finance.algorithms", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM fixed_assets WHERE "companyId" = $1 ORDER BY "purchaseDate" DESC LIMIT 500`,
       [scope.companyId]
     );
@@ -626,7 +626,7 @@ financeAlgorithmsRouter.post("/fixed-assets", authorize({ feature: "finance.algo
        b.assetAccountCode, b.depreciationAccountCode,
        b.accDepreciationAccountCode]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM fixed_assets WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fixed_assets WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]);
     res.status(201).json(row);
   } catch (err) {
     handleRouteError(err, res, "Create fixed asset error:");
@@ -637,12 +637,12 @@ financeAlgorithmsRouter.get("/fixed-assets/:id", authorize({ feature: "finance.a
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [asset] = await rawQuery<any>(
+    const [asset] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM fixed_assets WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
     );
     if (!asset) { throw new NotFoundError("الأصل غير موجود"); return; }
-    const schedule = await rawQuery<any>(
+    const schedule = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM depreciation_entries WHERE "assetId"=$1 AND "companyId"=$2 ORDER BY period ASC`,
       [asset.id, scope.companyId]
     );
@@ -669,7 +669,7 @@ financeAlgorithmsRouter.patch("/fixed-assets/:id", authorize({ feature: "finance
     f("depreciationMethod", b.depreciationMethod); f("status", b.status);
     if (sets.length === 1) { throw new ValidationError("لا توجد تغييرات"); return; }
     params.push(id, scope.companyId);
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `UPDATE fixed_assets SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
       params
     );
@@ -735,7 +735,7 @@ financeAlgorithmsRouter.get("/fixed-assets/:id/schedule", authorize({ feature: "
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [asset] = await rawQuery<any>(
+    const [asset] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM fixed_assets WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
     );
@@ -814,13 +814,13 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", authorize({ feature
     const { period, unitsThisPeriod } = zodParse(depreciateAssetSchema.safeParse(req.body ?? {}));
     const targetPeriod = period;
 
-    const [asset] = await rawQuery<any>(
+    const [asset] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM fixed_assets WHERE id=$1 AND "companyId"=$2 AND status='active'`,
       [id, scope.companyId]
     );
     if (!asset) { throw new NotFoundError("الأصل غير موجود أو غير نشط"); return; }
 
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM depreciation_entries WHERE "assetId"=$1 AND period=$2 AND "companyId"=$3`,
       [id, targetPeriod, scope.companyId]
     );
@@ -893,7 +893,7 @@ financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", authorize({ feature
     const { period } = zodParse(depreciateAllSchema.safeParse(req.body ?? {}));
     const targetPeriod = period;
 
-    const assets = await rawQuery<any>(
+    const assets = await rawQuery<Record<string, unknown>>(
       `SELECT fa.* FROM fixed_assets fa WHERE fa."companyId"=$1 AND fa.status='active'
        AND NOT EXISTS (SELECT 1 FROM depreciation_entries de WHERE de."assetId"=fa.id AND de.period=$2)`,
       [scope.companyId, targetPeriod]
@@ -962,7 +962,7 @@ financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", authorize({ feature
 financeAlgorithmsRouter.get("/inventory-costing", authorize({ feature: "finance.algorithms", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const products = await rawQuery<any>(
+    const products = await rawQuery<Record<string, unknown>>(
       `SELECT p.id, p.sku, p.name, p."currentStock", p."costPrice", p."lastWaCost",
               p."costingMethod", p."sellPrice",
               c.name AS "categoryName",
@@ -992,13 +992,13 @@ financeAlgorithmsRouter.get("/inventory-costing/:productId", authorize({ feature
     const scope = req.scope!;
     const productId = parseId(req.params.productId, "productId");
 
-    const [product] = await rawQuery<any>(
+    const [product] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [productId, scope.companyId]
     );
     if (!product) { throw new NotFoundError("المنتج غير موجود"); return; }
 
-    const movements = await rawQuery<any>(
+    const movements = await rawQuery<Record<string, unknown>>(
       `SELECT m.*, m."createdAt" AS date
        FROM warehouse_movements m
        WHERE m."productId"=$1 AND m."companyId"=$2
@@ -1058,7 +1058,7 @@ financeAlgorithmsRouter.get("/inventory-costing/:productId", authorize({ feature
 financeAlgorithmsRouter.get("/rounding-account", authorize({ feature: "finance.algorithms", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [account] = await rawQuery<any>(
+    const [account] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM chart_of_accounts WHERE "companyId"=$1 AND (code='9999' OR name LIKE '%تقريب%') AND "deletedAt" IS NULL ORDER BY code LIMIT 1`,
       [scope.companyId]
     );
@@ -1073,7 +1073,7 @@ financeAlgorithmsRouter.post("/rounding-account/setup", authorize({ feature: "fi
     const scope = req.scope!;
     assertFinanceRole(scope);
 
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM chart_of_accounts WHERE "companyId"=$1 AND code='9999' AND "deletedAt" IS NULL`,
       [scope.companyId]
     );
@@ -1087,7 +1087,7 @@ financeAlgorithmsRouter.post("/rounding-account/setup", authorize({ feature: "fi
        VALUES ($1,'9999','فروقات التقريب','Rounding Differences','expense',2,null,true)`,
       [scope.companyId]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM chart_of_accounts WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM chart_of_accounts WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json({ account: row, message: "تم إنشاء حساب فروقات التقريب (9999)" });
   } catch (err) {
     handleRouteError(err, res, "Setup rounding account error:");
@@ -1108,7 +1108,7 @@ financeAlgorithmsRouter.post("/rounding-differences/apply", authorize({ feature:
       throw new ValidationError("فرق التقريب يتجاوز الحد المسموح (0.05 ﷼)");
     }
 
-    const [roundingAcc] = await rawQuery<any>(
+    const [roundingAcc] = await rawQuery<Record<string, unknown>>(
       `SELECT code FROM chart_of_accounts WHERE "companyId"=$1 AND code='9999' AND "deletedAt" IS NULL LIMIT 1`,
       [scope.companyId]
     );
@@ -1116,7 +1116,7 @@ financeAlgorithmsRouter.post("/rounding-differences/apply", authorize({ feature:
       throw new ValidationError("يجب إنشاء حساب فروقات التقريب أولاً");
     }
 
-    const [je] = await rawQuery<any>(
+    const [je] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [journalEntryId, scope.companyId]
     );
@@ -1199,7 +1199,7 @@ financeAlgorithmsRouter.get("/fx/rates", authorize({ feature: "finance.algorithm
     if (from) { params.push(from); where += ` AND "fromCurrency"=$${params.length}`; }
     if (to) { params.push(to); where += ` AND "toCurrency"=$${params.length}`; }
     if (type) { params.push(type); where += ` AND source=$${params.length}`; }
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM fx_rates WHERE ${where} ORDER BY "effectiveDate" DESC, "fromCurrency" ASC LIMIT 500`,
       params
     );
@@ -1216,7 +1216,7 @@ financeAlgorithmsRouter.post("/fx/rates", authorize({ feature: "finance.algorith
     assertFinanceRole(scope);
     const { rateDate, fromCurrency, toCurrency, rate, type } = zodParse(fxRateUpsertSchema.safeParse(req.body ?? {}));
     await ensureFxTables();
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `INSERT INTO fx_rates ("companyId","effectiveDate","fromCurrency","toCurrency",rate,source)
        VALUES ($1,$2,$3,$4,$5,$6)
        ON CONFLICT ("companyId","effectiveDate","fromCurrency","toCurrency","source")
@@ -1246,7 +1246,7 @@ financeAlgorithmsRouter.get("/fx/revaluation/preview", authorize({ feature: "fin
     const periodEnd = toDateISO(new Date(y, m, 0));
 
     // Open foreign-currency invoices
-    const openInvoices = await rawQuery<any>(
+    const openInvoices = await rawQuery<Record<string, unknown>>(
       `SELECT id, ref, currency, "exchangeRate", total, "paidAmount", "clientId"
        FROM invoices
        WHERE "companyId"=$1
@@ -1258,7 +1258,7 @@ financeAlgorithmsRouter.get("/fx/revaluation/preview", authorize({ feature: "fin
     );
 
     // Open foreign-currency POs (AP proxy)
-    const openPOs = await rawQuery<any>(
+    const openPOs = await rawQuery<Record<string, unknown>>(
       `SELECT id, ref, currency, "exchangeRate", "totalAmount", status, "supplierId"
        FROM purchase_orders
        WHERE "companyId"=$1
@@ -1275,7 +1275,7 @@ financeAlgorithmsRouter.get("/fx/revaluation/preview", authorize({ feature: "fin
     );
     const rateMap: Record<string, number> = {};
     if (currencies.length > 0) {
-      const rateRows = await rawQuery<any>(
+      const rateRows = await rawQuery<Record<string, unknown>>(
         `SELECT DISTINCT ON ("fromCurrency") "fromCurrency", rate FROM fx_rates
          WHERE "companyId"=$1 AND "fromCurrency" = ANY($2::text[]) AND "toCurrency"='SAR'
            AND "effectiveDate"::date <= $3::date
@@ -1370,7 +1370,7 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
       throw new ValidationError(`لا يمكن الترحيل — الفترة ${periodCheck.periodName ?? period} مقفلة`);
     }
 
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM fx_revaluations WHERE "companyId"=$1 AND "revaluationDate"=$2::date`,
       [scope.companyId, periodEndDate]
     );
@@ -1382,7 +1382,7 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
     const [y, m] = period.split("-").map(Number);
     const periodEnd = toDateISO(new Date(y, m, 0));
 
-    const openInvoices = await rawQuery<any>(
+    const openInvoices = await rawQuery<Record<string, unknown>>(
       `SELECT id, ref, currency, "exchangeRate", total, "paidAmount"
        FROM invoices
        WHERE "companyId"=$1 AND currency IS NOT NULL AND currency<>'SAR'
@@ -1390,7 +1390,7 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
          AND "createdAt"::date <= $2::date`,
       [scope.companyId, periodEnd]
     );
-    const openPOs = await rawQuery<any>(
+    const openPOs = await rawQuery<Record<string, unknown>>(
       `SELECT id, ref, currency, "exchangeRate", "totalAmount"
        FROM purchase_orders
        WHERE "companyId"=$1 AND "deletedAt" IS NULL AND currency IS NOT NULL AND currency<>'SAR'
@@ -1405,7 +1405,7 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
     ]));
     const rateMap: Record<string, number> = {};
     if (currencies.length > 0) {
-      const rateRows = await rawQuery<any>(
+      const rateRows = await rawQuery<Record<string, unknown>>(
         `SELECT DISTINCT ON ("fromCurrency") "fromCurrency", rate FROM fx_rates
          WHERE "companyId"=$1 AND "fromCurrency" = ANY($2::text[]) AND "toCurrency"='SAR'
            AND "effectiveDate"::date <= $3::date
@@ -1496,7 +1496,7 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
     const revalIds: number[] = [];
     for (const cur of currencies) {
       const curImpact = details.filter((d: any) => d.currency === cur).reduce((s: number, d: any) => s + d.diff, 0);
-      const [revRow] = await rawQuery<any>(
+      const [revRow] = await rawQuery<Record<string, unknown>>(
         `INSERT INTO fx_revaluations ("companyId","currency","revaluationDate","journalEntryId","totalImpact","createdBy")
          VALUES ($1,$2,$3::date,$4,$5,$6) RETURNING id`,
         [scope.companyId, cur, periodEnd, journalEntryId, roundTo2(curImpact), scope.activeAssignmentId]
@@ -1524,7 +1524,7 @@ financeAlgorithmsRouter.get("/fx/revaluation", authorize({ feature: "finance.alg
   try {
     const scope = req.scope!;
     await ensureFxTables();
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM fx_revaluations WHERE "companyId"=$1 ORDER BY "revaluationDate" DESC LIMIT 120`,
       [scope.companyId]
     );
@@ -1542,7 +1542,7 @@ financeAlgorithmsRouter.get("/treasury", authorize({ feature: "finance.algorithm
   try {
     const scope = req.scope!;
 
-    const cashAccounts = await rawQuery<any>(
+    const cashAccounts = await rawQuery<Record<string, unknown>>(
       `SELECT ca.id, ca.code, ca.name, ca.nature, ca."currentBalance",
               ca."allowPosting", ca."parentCode", ca.level
        FROM chart_of_accounts ca
@@ -1563,7 +1563,7 @@ financeAlgorithmsRouter.get("/treasury", authorize({ feature: "finance.algorithm
     const today = todayISO();
     const thirtyDaysAgo = toDateISO(new Date(Date.now() - 30 * 86400000));
 
-    const recentMovements = await rawQuery<any>(
+    const recentMovements = await rawQuery<Record<string, unknown>>(
       `SELECT je.id, je.ref, je.description, je.type, je."createdAt",
               json_agg(json_build_object(
                 'accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit
@@ -1586,7 +1586,7 @@ financeAlgorithmsRouter.get("/treasury", authorize({ feature: "finance.algorithm
       [scope.companyId, thirtyDaysAgo]
     );
 
-    const dailySummary = await rawQuery<any>(
+    const dailySummary = await rawQuery<Record<string, unknown>>(
       `SELECT DATE(je."createdAt") AS day,
               SUM(CASE WHEN jl.debit > 0 AND (jl."accountCode" LIKE '11%' OR jl."accountCode" LIKE '12%') THEN jl.debit ELSE 0 END) AS "totalIn",
               SUM(CASE WHEN jl.credit > 0 AND (jl."accountCode" LIKE '11%' OR jl."accountCode" LIKE '12%') THEN jl.credit ELSE 0 END) AS "totalOut"
@@ -1602,7 +1602,7 @@ financeAlgorithmsRouter.get("/treasury", authorize({ feature: "finance.algorithm
       [scope.companyId, thirtyDaysAgo]
     );
 
-    const custodySummary = await rawQuery<any>(
+    const custodySummary = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) FILTER (WHERE remaining > 0) AS "activeCustodies",
               COALESCE(SUM(remaining) FILTER (WHERE remaining > 0), 0) AS "totalOutstanding"
        FROM (
@@ -1667,7 +1667,7 @@ financeAlgorithmsRouter.get("/entity-financial-profile", authorize({ feature: "f
     if (!safeCol) throw new ValidationError("نوع الكيان غير مدعوم", { field: "entityType" });
 
     const [subsidiaryAccounts, transactions, costBreakdown, totalSummary] = await Promise.all([
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT sa.*, ca.code AS "accountCode", ca.name AS "accountName", ca.type AS "accountType",
                 COALESCE((SELECT SUM(jl.debit) - SUM(jl.credit) FROM journal_lines jl
                   JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1
@@ -1678,7 +1678,7 @@ financeAlgorithmsRouter.get("/entity-financial-profile", authorize({ feature: "f
         [cid, entityType, eid]
       ),
 
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT je.id, je.ref, je.description, je."createdAt", je.type AS "journalType",
                 je."sourceType", je."sourceId",
                 jl."accountCode", ca.name AS "accountName",
@@ -1692,7 +1692,7 @@ financeAlgorithmsRouter.get("/entity-financial-profile", authorize({ feature: "f
         [cid, eid]
       ),
 
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT ca.code, ca.name,
                 SUM(jl.debit) AS "totalDebit",
                 SUM(jl.credit) AS "totalCredit",
@@ -1708,7 +1708,7 @@ financeAlgorithmsRouter.get("/entity-financial-profile", authorize({ feature: "f
         [cid, eid]
       ),
 
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT
            COUNT(DISTINCT je.id) AS "journalCount",
            SUM(jl.debit) AS "totalDebit",
