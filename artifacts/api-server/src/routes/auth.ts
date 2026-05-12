@@ -4,6 +4,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { signToken, signRefreshToken, verifyPassword, hashPassword } from "../lib/auth.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { setCsrfCookie } from "../middlewares/csrfMiddleware.js";
 import rateLimit from "express-rate-limit";
 import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
 import { makeRateLimitStore } from "../lib/rateLimitStore.js";
@@ -363,6 +364,7 @@ router.post("/login", loginLimiter, async (req, res) => {
 
     setAccessTokenCookie(res, token);
     setRefreshTokenCookie(res, refreshToken);
+    setCsrfCookie(res);
 
     emitEvent({ companyId: primary.companyId, branchId: primary.branchId ?? undefined, userId: user.id, action: "auth.login.success", entity: "users", entityId: user.id, ip: ipAddress || "unknown", details: JSON.stringify({ email, assignmentId: primary.id }) }).catch((e) => logger.error(e, "auth background task failed"));
     res.json({ assignments, userRoles });
@@ -435,6 +437,7 @@ router.post("/refresh", refreshLimiter, async (req, res) => {
       );
     });
     setRefreshTokenCookie(res, newRefreshToken);
+    setCsrfCookie(res);
 
     emitEvent({ companyId: 0, userId: rt.userId, action: "auth.refresh", entity: "users", entityId: rt.userId }).catch((e) => logger.error(e, "auth background task failed"));
     createAuditLog({ companyId: 0, userId: rt.userId, action: "update", entity: "users", entityId: rt.userId, after: { reason: "token_refresh" } }).catch((e) => logger.error(e, "auth background task failed"));

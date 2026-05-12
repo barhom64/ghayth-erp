@@ -30,38 +30,30 @@ async function safe<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
   try { return await fn(); } catch (e) { logger.error(e, "exec dashboard query failed"); return fallback; }
 }
 
-interface CashAccountRow { code: string; name: string; currentBalance: number | string | null }
-interface ArSumsRow { total: number | string; current: number | string; b1_30: number | string; b31_60: number | string; b61_90: number | string; b90_plus: number | string }
-interface ApSumsRow { total: number | string; count: number | string }
-interface CountNRow { n: number | string }
-interface BudgetOverageRow { accountCode: string; accountName: string | null; budget: number | string; actual: number | string }
-interface DunningStageRow { stage: number; count: number; amount: number | string }
-interface AmountVRow { v: number | string }
-interface OverdueInvoiceDrillRow { id: number; invoiceNumber: string; dueDate: string; total: number | string; paidAmount: number | string; outstanding: number | string; daysPastDue: number; dunningStage: number; clientName: string | null }
-interface CriticalObligationDrillRow { id: number; entityType: string; entityId: number; obligationType: string; title: string; dueAt: string; status: string; escalationLevel: number; assignedTo: number | null }
-
 execDashboardRouter.get("/overview", async (req, res) => {
   try {
     const scope = req.scope!;
     requireExec(scope);
     const companyId = scope.companyId;
 
+    // All 12 dashboard sections are independent — run in parallel.
+    const [cashPosition, ar, ap, obligations, slaBreaches, stuckWorkflows, budgetOverages, dunning, expiringContracts, fleetMaintenance, hrDocExpiries, mtd] = await Promise.all([
     // ─── 1. CASH POSITION ─────────────────────────────────────────────────
-    const cashPosition = await safe(async () => {
-      const rows = await rawQuery<CashAccountRow>(
+    safe(async () => {
+      const rows = await rawQuery<any>(
         `SELECT code, name, "currentBalance"
          FROM chart_of_accounts
          WHERE "companyId"=$1 AND code LIKE '11%' AND type='asset' AND "deletedAt" IS NULL
          ORDER BY code`,
         [companyId]
       );
-      const total = rows.reduce((s, r) => s + Number(r.currentBalance ?? 0), 0);
+      const total = rows.reduce((s: number, r: any) => s + Number(r.currentBalance ?? 0), 0);
       return { total: roundTo2(total), accounts: rows };
-    }, { total: 0, accounts: [] });
+    }, { total: 0, accounts: [] }),
 
     // ─── 2. AR AGING ───────────────────────────────────────────────────────
-    const ar = await safe(async () => {
-      const [sums] = await rawQuery<ArSumsRow>(
+    safe(async () => {
+      const [sums] = await rawQuery<any>(
         `SELECT
           COALESCE(SUM(total - COALESCE("paidAmount",0)), 0) AS total,
           COALESCE(SUM(CASE WHEN "dueDate"::date >= CURRENT_DATE
@@ -86,62 +78,62 @@ execDashboardRouter.get("/overview", async (req, res) => {
         d61_90: Number(sums?.b61_90 ?? 0),
         d90_plus: Number(sums?.b90_plus ?? 0),
       };
-    }, { total: 0, current: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90_plus: 0 });
+    }, { total: 0, current: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90_plus: 0 }),
 
     // ─── 3. AP EXPOSURE (open POs) ────────────────────────────────────────
-    const ap = await safe(async () => {
-      const [sums] = await rawQuery<ApSumsRow>(
+    safe(async () => {
+      const [sums] = await rawQuery<any>(
         `SELECT COALESCE(SUM("totalAmount"), 0) AS total, COUNT(*)::int AS count
          FROM purchase_orders
          WHERE "companyId"=$1 AND status NOT IN ('paid','cancelled','draft') AND "deletedAt" IS NULL`,
         [companyId]
       );
       return { total: Number(sums?.total ?? 0), count: Number(sums?.count ?? 0) };
-    }, { total: 0, count: 0 });
+    }, { total: 0, count: 0 }),
 
     // ─── 4. OBLIGATIONS SUMMARY ───────────────────────────────────────────
-    const obligations = await safe(
+    safe(
       () => obligationSummary(companyId),
       { pending: 0, breached: 0, escalatedL1: 0, escalatedL2: 0, dueIn24h: 0, dueIn7d: 0, byType: {} }
-    );
+    ),
 
     // ─── 5. SLA BREACHES (support + workflow) ─────────────────────────────
-    const slaBreaches = await safe(async () => {
-      const [support] = await rawQuery<CountNRow>(
+    safe(async () => {
+      const [support] = await rawQuery<any>(
         `SELECT COUNT(*)::int AS n FROM support_tickets
          WHERE "companyId"=$1 AND status='open' AND "deletedAt" IS NULL AND "slaDeadline" < NOW()`,
         [companyId]
       );
-      const [workflow] = await rawQuery<CountNRow>(
+      const [workflow] = await rawQuery<any>(
         `SELECT COUNT(*)::int AS n FROM workflow_instances
          WHERE "companyId"=$1 AND status IN ('pending','in_review','escalated')
            AND "slaStatus" IN ('breached','at_risk') AND "deletedAt" IS NULL`,
         [companyId]
-      ).catch((e) => { logger.error(e, "exec dashboard query failed"); return [{ n: 0 }] as CountNRow[]; });
+      ).catch((e) => { logger.error(e, "exec dashboard query failed"); return [{ n: 0 }]; });
       return {
         support: Number(support?.n ?? 0),
         workflow: Number(workflow?.n ?? 0),
       };
-    }, { support: 0, workflow: 0 });
+    }, { support: 0, workflow: 0 }),
 
     // ─── 6. STUCK WORKFLOWS (pending >3 days) ─────────────────────────────
-    const stuckWorkflows = await safe(async () => {
-      const [r] = await rawQuery<CountNRow>(
+    safe(async () => {
+      const [r] = await rawQuery<any>(
         `SELECT COUNT(*)::int AS n FROM workflow_instances
          WHERE "companyId"=$1 AND status IN ('pending','in_review')
            AND "createdAt" < NOW() - INTERVAL '3 days' AND "deletedAt" IS NULL`,
         [companyId]
       );
       return Number(r?.n ?? 0);
-    }, 0);
+    }, 0),
 
     // ─── 7. BUDGET OVERAGES (current month) ───────────────────────────────
-    const budgetOverages = await safe(async () => {
+    safe(async () => {
       const period = currentPeriod();
       const [y, m] = period.split("-").map(Number);
       const periodStart = `${y}-${String(m).padStart(2, "0")}-01`;
       const periodEnd = toDateISO(new Date(y, m, 0));
-      const rows = await rawQuery<BudgetOverageRow>(
+      const rows = await rawQuery<any>(
         `SELECT b."accountCode", coa.name AS "accountName", b.amount AS "budget",
                 COALESCE((
                   SELECT SUM(jl.debit - jl.credit)
@@ -158,7 +150,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
         [companyId, periodStart, periodEnd, period]
       );
       const withPct = rows
-        .map((r) => {
+        .map((r: any) => {
           const actual = Number(r.actual);
           const budget = Number(r.budget);
           return {
@@ -169,18 +161,18 @@ execDashboardRouter.get("/overview", async (req, res) => {
             pct: budget > 0 ? Math.round((actual / budget) * 10000) / 100 : 0,
           };
         })
-        .filter((r) => r.pct >= 80)
-        .sort((a, b) => b.pct - a.pct);
+        .filter((r: any) => r.pct >= 80)
+        .sort((a: any, b: any) => b.pct - a.pct);
       return {
         count: withPct.length,
-        over100: withPct.filter((r) => r.pct > 100).length,
+        over100: withPct.filter((r: any) => r.pct > 100).length,
         top5: withPct.slice(0, 5),
       };
-    }, { count: 0, over100: 0, top5: [] });
+    }, { count: 0, over100: 0, top5: [] }),
 
     // ─── 8. DUNNING PIPELINE ──────────────────────────────────────────────
-    const dunning = await safe(async () => {
-      const rows = await rawQuery<DunningStageRow>(
+    safe(async () => {
+      const rows = await rawQuery<any>(
         `SELECT dl.level AS stage, COUNT(DISTINCT i.id)::int AS count,
                 COALESCE(SUM(i.total - COALESCE(i."paidAmount",0)), 0) AS amount
          FROM dunning_letters dl
@@ -191,22 +183,22 @@ execDashboardRouter.get("/overview", async (req, res) => {
         [companyId]
       );
       return rows;
-    }, []);
+    }, []),
 
     // ─── 9. PROPERTY CONTRACTS EXPIRING (60 days) ─────────────────────────
-    const expiringContracts = await safe(async () => {
-      const [r] = await rawQuery<CountNRow>(
+    safe(async () => {
+      const [r] = await rawQuery<any>(
         `SELECT COUNT(*)::int AS n FROM property_contracts
          WHERE "companyId"=$1 AND status='active'
            AND "endDate"::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '60 days'`,
         [companyId]
       );
       return Number(r?.n ?? 0);
-    }, 0);
+    }, 0),
 
     // ─── 10. FLEET MAINTENANCE DUE (30 days) ──────────────────────────────
-    const fleetMaintenance = await safe(async () => {
-      const [r] = await rawQuery<CountNRow>(
+    safe(async () => {
+      const [r] = await rawQuery<any>(
         `SELECT COUNT(*)::int AS n FROM fleet_vehicles
          WHERE "companyId"=$1 AND "deletedAt" IS NULL
            AND ("nextServiceDate"::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
@@ -214,11 +206,11 @@ execDashboardRouter.get("/overview", async (req, res) => {
         [companyId]
       );
       return Number(r?.n ?? 0);
-    }, 0);
+    }, 0),
 
     // ─── 11. HR DOCUMENT EXPIRIES (30 days) ───────────────────────────────
-    const hrDocExpiries = await safe(async () => {
-      const [r] = await rawQuery<CountNRow>(
+    safe(async () => {
+      const [r] = await rawQuery<any>(
         `SELECT COUNT(*)::int AS n FROM employees
          WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL
            AND ("iqamaExpiry"::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
@@ -226,15 +218,15 @@ execDashboardRouter.get("/overview", async (req, res) => {
         [companyId]
       );
       return Number(r?.n ?? 0);
-    }, 0);
+    }, 0),
 
     // ─── 12. MONTH-TO-DATE FINANCIALS ─────────────────────────────────────
-    const mtd = await safe(async () => {
+    safe(async () => {
       const period = currentPeriod();
       const [y, m] = period.split("-").map(Number);
       const start = `${y}-${String(m).padStart(2, "0")}-01`;
       const end = toDateISO(new Date(y, m, 0));
-      const [revenue] = await rawQuery<AmountVRow>(
+      const [revenue] = await rawQuery<any>(
         `SELECT COALESCE(SUM(jl.credit - jl.debit), 0) AS v
          FROM journal_lines jl
          JOIN journal_entries je ON je.id = jl."journalId"
@@ -244,7 +236,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
            AND coa.type='revenue' AND je."createdAt"::date BETWEEN $2::date AND $3::date`,
         [companyId, start, end]
       );
-      const [expense] = await rawQuery<AmountVRow>(
+      const [expense] = await rawQuery<any>(
         `SELECT COALESCE(SUM(jl.debit - jl.credit), 0) AS v
          FROM journal_lines jl
          JOIN journal_entries je ON je.id = jl."journalId"
@@ -259,7 +251,8 @@ execDashboardRouter.get("/overview", async (req, res) => {
         expense: Number(expense?.v ?? 0),
         net: Number(revenue?.v ?? 0) - Number(expense?.v ?? 0),
       };
-    }, { revenue: 0, expense: 0, net: 0 });
+    }, { revenue: 0, expense: 0, net: 0 }),
+    ]); // end Promise.all
 
     // ─── ROLL-UP RISK SCORE ───────────────────────────────────────────────
     // Composite: 0..100 — higher means more attention needed
@@ -269,7 +262,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
       stuckWorkflows,
       budgetOver100: budgetOverages.over100,
       ar90Plus: ar.d90_plus > 0 ? 10 : 0,
-      dunningL4L5: dunning.filter((d) => d.stage >= 4).reduce((s, d) => s + d.count, 0),
+      dunningL4L5: dunning.filter((d: any) => d.stage >= 4).reduce((s: number, d: any) => s + d.count, 0),
       expiringContracts,
       fleetMaintenance,
       hrDocExpiries,
@@ -316,7 +309,7 @@ execDashboardRouter.get("/overdue-invoices", async (req, res) => {
   try {
     const scope = req.scope!;
     requireExec(scope);
-    const rows = await rawQuery<OverdueInvoiceDrillRow>(
+    const rows = await rawQuery<any>(
       `SELECT i.id, i.ref AS "invoiceNumber", i."dueDate",
               i.total, COALESCE(i."paidAmount",0) AS "paidAmount",
               (i.total - COALESCE(i."paidAmount",0)) AS outstanding,
@@ -344,7 +337,7 @@ execDashboardRouter.get("/critical-obligations", async (req, res) => {
   try {
     const scope = req.scope!;
     requireExec(scope);
-    const rows = await rawQuery<CriticalObligationDrillRow>(
+    const rows = await rawQuery<any>(
       `SELECT id, "entityType", "entityId", "obligationType", title, "dueAt",
               status, "escalationLevel", "assignedTo"
        FROM obligations

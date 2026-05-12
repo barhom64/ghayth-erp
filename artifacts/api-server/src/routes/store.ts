@@ -422,10 +422,12 @@ router.get("/stats", authorize({ feature: "store", action: "list" }), async (req
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [products] = await rawQuery(`SELECT COUNT(*) as count FROM store_products WHERE status='active' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [orders] = await rawQuery(`SELECT COUNT(*) as count FROM store_orders WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [pendingOrders] = await rawQuery(`SELECT COUNT(*) as count FROM store_orders WHERE status='pending' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [revenue] = await rawQuery(`SELECT COALESCE(SUM("totalAmount"),0) as total FROM store_orders WHERE status='completed' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [[products], [orders], [pendingOrders], [revenue]] = await Promise.all([
+      rawQuery(`SELECT COUNT(*) as count FROM store_products WHERE status='active' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery(`SELECT COUNT(*) as count FROM store_orders WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery(`SELECT COUNT(*) as count FROM store_orders WHERE status='pending' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery(`SELECT COALESCE(SUM("totalAmount"),0) as total FROM store_orders WHERE status='completed' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+    ]);
     res.json({
       activeProducts: Number(products.count),
       totalOrders: Number(orders.count),

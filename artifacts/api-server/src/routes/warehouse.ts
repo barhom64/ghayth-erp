@@ -153,7 +153,7 @@ async function updateWeightedAverageCost(
   direction: "in" | "out"
 ): Promise<void> {
   try {
-    const [product] = await rawQuery<Record<string, unknown>>(
+    const [product] = await rawQuery<any>(
       `SELECT "currentStock", "costPrice" FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [productId, companyId]
     );
@@ -279,7 +279,7 @@ router.get("/products", authorize({ feature: "warehouse.inventory", action: "lis
     if (status) { where += ` AND p.status = $${paramIdx}`; params.push(status); paramIdx++; }
 
     const countParams = [...params];
-    const [countRow] = await rawQuery<Record<string, unknown>>(
+    const [countRow] = await rawQuery<any>(
       `SELECT COUNT(*) AS total FROM warehouse_products p WHERE ${where} AND p."deletedAt" IS NULL`,
       countParams
     );
@@ -289,7 +289,7 @@ router.get("/products", authorize({ feature: "warehouse.inventory", action: "lis
     params.push(offset);
     const offsetParam = paramIdx++;
 
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT p.*, c.name AS "categoryName" FROM warehouse_products p LEFT JOIN warehouse_categories c ON c.id=p."categoryId" WHERE ${where} AND p."deletedAt" IS NULL ORDER BY p.name LIMIT $${limitParam} OFFSET $${offsetParam}`,
       params
     );
@@ -305,7 +305,7 @@ router.post("/products", authorize({ feature: "warehouse.inventory", action: "cr
     const costPrice = Number(b.costPrice) || 0;
     const sellPrice = Number(b.sellPrice) || 0;
     // Duplicate SKU check
-    const [dup] = await rawQuery<Record<string, unknown>>(
+    const [dup] = await rawQuery<any>(
       `SELECT id FROM warehouse_products WHERE sku=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [b.sku, scope.companyId]
     );
@@ -317,7 +317,7 @@ router.post("/products", authorize({ feature: "warehouse.inventory", action: "cr
     }
     // FK check for categoryId
     if (b.categoryId) {
-      const [cat] = await rawQuery<Record<string, unknown>>(
+      const [cat] = await rawQuery<any>(
         `SELECT id FROM warehouse_categories WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
         [b.categoryId, scope.companyId]
       );
@@ -331,7 +331,7 @@ router.post("/products", authorize({ feature: "warehouse.inventory", action: "cr
       `INSERT INTO warehouse_products ("companyId",sku,name,description,"categoryId",unit,"minStock","maxStock","currentStock","costPrice","sellPrice",location,"branchId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
       [scope.companyId, b.sku.trim(), b.name.trim(), b.description, b.categoryId || null, b.unit || 'piece', b.minStock || 0, b.maxStock || 99999, b.currentStock || 0, costPrice, sellPrice, b.location, b.branchId || scope.branchId]
     );
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -362,7 +362,7 @@ router.get("/products/:id", authorize({ feature: "warehouse.inventory", action: 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT p.*, c.name AS "categoryName" FROM warehouse_products p LEFT JOIN warehouse_categories c ON c.id=p."categoryId" WHERE p.id=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT p.*, c.name AS "categoryName" FROM warehouse_products p LEFT JOIN warehouse_categories c ON c.id=p."categoryId" WHERE p.id=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المنتج غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Get product error:"); }
@@ -372,7 +372,7 @@ router.patch("/products/:id", authorize({ feature: "warehouse.inventory", action
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<Record<string, unknown>>(
+    const [existing] = await rawQuery<any>(
       `SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -390,7 +390,7 @@ router.patch("/products/:id", authorize({ feature: "warehouse.inventory", action
     }
     // Duplicate SKU on rename
     if (b.sku && b.sku !== existing.sku) {
-      const [dup] = await rawQuery<Record<string, unknown>>(
+      const [dup] = await rawQuery<any>(
         `SELECT id FROM warehouse_products WHERE sku=$1 AND "companyId"=$2 AND "deletedAt" IS NULL AND id<>$3`,
         [b.sku, scope.companyId, id]
       );
@@ -470,7 +470,7 @@ router.patch("/products/:id", authorize({ feature: "warehouse.inventory", action
       }
       params.push(id);
       await rawExecute(`UPDATE warehouse_products SET ${sets.join(",")} WHERE id=$${params.length} AND "companyId"=$${params.length + 1} AND "deletedAt" IS NULL`, [...params, scope.companyId]);
-      const [fetched] = await rawQuery<Record<string, unknown>>(`SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+      const [fetched] = await rawQuery<any>(`SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
       row = fetched;
 
       createAuditLog({
@@ -508,7 +508,7 @@ router.delete("/products/:id", authorize({ feature: "warehouse.inventory", actio
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<Record<string, unknown>>(
+    const [existing] = await rawQuery<any>(
       `SELECT id, sku, name, "currentStock" FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -555,7 +555,7 @@ router.get("/movements", authorize({ feature: "warehouse.transfers", action: "li
     if (productId) { where += ` AND m."productId" = $${paramIdx}`; params.push(Number(productId)); paramIdx++; }
     if (search) { params.push(`%${search}%`); where += ` AND (p.name ILIKE $${paramIdx} OR m.reference ILIKE $${paramIdx})`; paramIdx++; }
     if (status) { where += ` AND m.type = $${paramIdx}`; params.push(status); paramIdx++; }
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT m.*, p.name AS "productName", p.sku FROM warehouse_movements m LEFT JOIN warehouse_products p ON p.id=m."productId" WHERE ${where} ORDER BY m.id DESC LIMIT 500`,
       params
     );
@@ -568,7 +568,7 @@ router.get("/movements/:id", authorize({ feature: "warehouse.transfers", action:
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<Record<string, unknown>>(
+    const [row] = await rawQuery<any>(
       `SELECT m.*, p.name AS "productName", p.sku
        FROM warehouse_movements m
        LEFT JOIN warehouse_products p ON p.id=m."productId"
@@ -756,7 +756,7 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
       logger.error(glOuterErr, `[warehouse-gl] unexpected error posting GL for movement ${insertId}:`);
     }
 
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM warehouse_movements WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_movements WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     if (row) (row as any).journalEntryId = journalEntryId;
 
     // Bus emission — closes the dead listener in eventListeners.ts:261 so the
@@ -805,7 +805,7 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
 });
 
 async function triggerMinStockPipeline(companyId: number, product: any, userId: number, assignmentId?: number): Promise<number | null> {
-  const lastOrders = await rawQuery<Record<string, unknown>>(
+  const lastOrders = await rawQuery<any>(
     `SELECT pri."unitPrice" AS "unitCost" FROM purchase_request_items pri JOIN purchase_requests pr ON pr.id=pri."requestId" WHERE pri."productId"=$1 AND pr."companyId"=$2 ORDER BY pr."createdAt" DESC LIMIT 3`,
     [product.id, companyId]
   );
@@ -813,7 +813,7 @@ async function triggerMinStockPipeline(companyId: number, product: any, userId: 
   const estimatedUnitCost = prices.length > 0 ? movingAverage(prices) : Number(product.costPrice) || 0;
   const reorderQty = Math.max(Number(product.maxStock) - Number(product.currentStock), Number(product.minStock) * 2, 1);
 
-  const preferredSupplier = await rawQuery<Record<string, unknown>>(
+  const preferredSupplier = await rawQuery<any>(
     `SELECT s.* FROM suppliers s JOIN purchase_requests pr ON pr."supplierId"=s.id WHERE pr."companyId"=$1 AND s."deletedAt" IS NULL ORDER BY pr."createdAt" DESC LIMIT 1`,
     [companyId]
   );
@@ -823,8 +823,8 @@ async function triggerMinStockPipeline(companyId: number, product: any, userId: 
 
   let effectiveAssignmentId = assignmentId;
   if (!effectiveAssignmentId) {
-    const [asgn] = await rawQuery<Record<string, unknown>>(`SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`, [userId, companyId]);
-    effectiveAssignmentId = (asgn?.id as number | undefined) || userId;
+    const [asgn] = await rawQuery<any>(`SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`, [userId, companyId]);
+    effectiveAssignmentId = asgn?.id || userId;
   }
   let prId = 0;
   await withTransaction(async (client) => {
@@ -909,8 +909,8 @@ router.post("/transfers", authorize({ feature: "warehouse.transfers", action: "c
       after: { transferRef, fromLocation, toLocation, quantity: b.quantity, productId: b.productId, unitCost },
     }).catch((e) => logger.error(e, "warehouse background task failed"));
 
-    const [outRow] = await rawQuery<Record<string, unknown>>(`SELECT * FROM warehouse_movements WHERE id=$1 AND "companyId"=$2`, [outId, scope.companyId]);
-    const [inRow] = await rawQuery<Record<string, unknown>>(`SELECT * FROM warehouse_movements WHERE id=$1 AND "companyId"=$2`, [inId, scope.companyId]);
+    const [outRow] = await rawQuery<any>(`SELECT * FROM warehouse_movements WHERE id=$1 AND "companyId"=$2`, [outId, scope.companyId]);
+    const [inRow] = await rawQuery<any>(`SELECT * FROM warehouse_movements WHERE id=$1 AND "companyId"=$2`, [inId, scope.companyId]);
     res.status(201).json({
       transferRef,
       outMovement: outRow || { id: outId },
@@ -941,11 +941,11 @@ router.get("/categories", authorize({ feature: "warehouse.inventory", action: "l
     if (search) { params.push(`%${search}%`); where += ` AND name ILIKE $${paramIdx}`; paramIdx++; }
     if (status) { params.push(status); where += ` AND status = $${paramIdx}`; paramIdx++; }
 
-    const [countRow] = await rawQuery<Record<string, unknown>>(
+    const [countRow] = await rawQuery<any>(
       `SELECT COUNT(*) AS total FROM warehouse_categories WHERE ${where}`,
       params
     );
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT * FROM warehouse_categories WHERE ${where} ORDER BY name LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
       [...params, perPage, offset]
     );
@@ -957,7 +957,7 @@ router.get("/categories/:id", authorize({ feature: "warehouse.inventory", action
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<Record<string, unknown>>(
+    const [row] = await rawQuery<any>(
       `SELECT * FROM warehouse_categories WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -971,7 +971,7 @@ router.post("/categories", authorize({ feature: "warehouse.inventory", action: "
     const scope = req.scope!;
     const b = zodParse(createCategorySchema.safeParse(req.body));
     if (b.parentId) {
-      const [parent] = await rawQuery<Record<string, unknown>>(
+      const [parent] = await rawQuery<any>(
         `SELECT id FROM warehouse_categories WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
         [b.parentId, scope.companyId]
       );
@@ -983,7 +983,7 @@ router.post("/categories", authorize({ feature: "warehouse.inventory", action: "
       `INSERT INTO warehouse_categories ("companyId",name,"parentId") VALUES ($1,$2,$3)`,
       [scope.companyId, b.name.trim(), b.parentId || null]
     );
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM warehouse_categories WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_categories WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -1016,11 +1016,11 @@ router.get("/suppliers", authorize({ feature: "warehouse.inventory", action: "li
     if (search) { params.push(`%${search}%`); where += ` AND (name ILIKE $${paramIdx} OR "contactPerson" ILIKE $${paramIdx} OR phone ILIKE $${paramIdx})`; paramIdx++; }
     if (status) { params.push(status); where += ` AND status = $${paramIdx}`; paramIdx++; }
 
-    const [countRow] = await rawQuery<Record<string, unknown>>(
+    const [countRow] = await rawQuery<any>(
       `SELECT COUNT(*) AS total FROM suppliers WHERE ${where}`,
       params
     );
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT * FROM suppliers WHERE ${where} ORDER BY name LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
       [...params, perPage, offset]
     );
@@ -1032,7 +1032,7 @@ router.get("/suppliers/:id", authorize({ feature: "warehouse.inventory", action:
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<Record<string, unknown>>(
+    const [row] = await rawQuery<any>(
       `SELECT * FROM suppliers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -1046,7 +1046,7 @@ router.post("/suppliers", authorize({ feature: "warehouse.inventory", action: "c
     const scope = req.scope!;
     const b = zodParse(createSupplierSchema.safeParse(req.body));
     if (b.taxNumber) {
-      const [dup] = await rawQuery<Record<string, unknown>>(
+      const [dup] = await rawQuery<any>(
         `SELECT id FROM suppliers WHERE "taxNumber"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
         [b.taxNumber, scope.companyId]
       );
@@ -1061,7 +1061,7 @@ router.post("/suppliers", authorize({ feature: "warehouse.inventory", action: "c
       `INSERT INTO suppliers ("companyId",name,"contactPerson",phone,email,address,"taxNumber","paymentTerms") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [scope.companyId, b.name.trim(), b.contactPerson, b.phone, b.email, b.address, b.taxNumber, b.paymentTerms || 30]
     );
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM suppliers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM suppliers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -1091,7 +1091,7 @@ router.patch("/categories/:id", authorize({ feature: "warehouse.inventory", acti
     if (b.parentId !== undefined) { params.push(b.parentId); fields.push(`"parentId" = $${params.length}`); }
     if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
-    const rows = await rawQuery<Record<string, unknown>>(`UPDATE warehouse_categories SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`, params);
+    const rows = await rawQuery<any>(`UPDATE warehouse_categories SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`, params);
     if (rows.length === 0) throw new NotFoundError("الفئة غير موجودة");
     emitEvent({
       companyId: scope.companyId,
@@ -1115,13 +1115,13 @@ router.delete("/categories/:id", authorize({ feature: "warehouse.inventory", act
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<Record<string, unknown>>(
+    const [existing] = await rawQuery<any>(
       `SELECT id, name FROM warehouse_categories WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("الفئة غير موجودة");
 
-    const [hasProducts] = await rawQuery<Record<string, unknown>>(
+    const [hasProducts] = await rawQuery<any>(
       `SELECT COUNT(*) AS cnt FROM warehouse_products WHERE "categoryId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -1131,7 +1131,7 @@ router.delete("/categories/:id", authorize({ feature: "warehouse.inventory", act
         { field: "categoryId", fix: "انقل المنتجات لفئة أخرى أو احذفها أولاً" }
       );
     }
-    const [hasChildren] = await rawQuery<Record<string, unknown>>(
+    const [hasChildren] = await rawQuery<any>(
       `SELECT COUNT(*) AS cnt FROM warehouse_categories WHERE "parentId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -1178,7 +1178,7 @@ router.patch("/suppliers/:id", authorize({ feature: "warehouse.inventory", actio
     addField("paymentTerms", b.paymentTerms);
     if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
-    const rows = await rawQuery<Record<string, unknown>>(`UPDATE suppliers SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`, params);
+    const rows = await rawQuery<any>(`UPDATE suppliers SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`, params);
     if (rows.length === 0) throw new NotFoundError("المورد غير موجود");
     emitEvent({
       companyId: scope.companyId,
@@ -1202,7 +1202,7 @@ router.delete("/suppliers/:id", authorize({ feature: "warehouse.inventory", acti
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<Record<string, unknown>>(`SELECT id FROM suppliers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT id FROM suppliers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المورد غير موجود");
     await rawExecute(`UPDATE suppliers SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     emitEvent({
@@ -1227,9 +1227,11 @@ router.get("/stats", authorize({ feature: "warehouse.inventory", action: "list" 
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [products] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE "currentStock" <= "minStock") as "lowStock" FROM warehouse_products WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]);
-    const [value] = await rawQuery<Record<string, unknown>>(`SELECT COALESCE(SUM("currentStock" * "costPrice"),0) as "totalValue" FROM warehouse_products WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]);
-    const [movements] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as "todayMovements" FROM warehouse_movements WHERE "companyId"=$1 AND "createdAt"::date = CURRENT_DATE`, [cid]);
+    const [[products], [value], [movements]] = await Promise.all([
+      rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE "currentStock" <= "minStock") as "lowStock" FROM warehouse_products WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COALESCE(SUM("currentStock" * "costPrice"),0) as "totalValue" FROM warehouse_products WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as "todayMovements" FROM warehouse_movements WHERE "companyId"=$1 AND "createdAt"::date = CURRENT_DATE`, [cid]),
+    ]);
     res.json({ totalProducts: Number(products.total), lowStock: Number(products.lowStock), totalValue: Number(value.totalValue), todayMovements: Number(movements.todayMovements) });
   } catch (err) { handleRouteError(err, res, "Warehouse stats error:"); }
 });
@@ -1245,7 +1247,7 @@ router.get("/inventory-counts", authorize({ feature: "warehouse.inventory", acti
     const conditions = [`ic."companyId"=$1`];
     const params: any[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`ic.status=$${params.length}`); }
-    const rows = await rawQuery<Record<string, unknown>>(
+    const rows = await rawQuery<any>(
       `SELECT ic.*, e.name AS "conductedByName"
        FROM inventory_counts ic
        LEFT JOIN employees e ON e.id=ic."conductedBy" AND e."deletedAt" IS NULL
@@ -1269,7 +1271,7 @@ router.post("/inventory-counts", authorize({ feature: "warehouse.inventory", act
        scope.employeeId || null,
        b.notes || null, b.warehouseLocation || null]
     );
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM inventory_counts WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM inventory_counts WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -1292,7 +1294,7 @@ router.get("/inventory-counts/:id/items", authorize({ feature: "warehouse.invent
   try {
     const scope = req.scope!;
     const countId = parseId(req.params.id, "id");
-    const items = await rawQuery<Record<string, unknown>>(
+    const items = await rawQuery<any>(
       `SELECT ici.*, wp.name AS "productName", wp.sku, wp."currentStock" AS "systemStock"
        FROM inventory_count_items ici
        JOIN warehouse_products wp ON wp.id=ici."productId"
@@ -1312,7 +1314,7 @@ router.get("/inventory-counts/:id/items", authorize({ feature: "warehouse.invent
     const batchesByProduct = new Map<number, any[]>();
     if (productIds.length > 0) {
       const placeholders = productIds.map((_, i) => `$${i + 1}`).join(",");
-      const allBatches = await rawQuery<Record<string, unknown>>(
+      const allBatches = await rawQuery<any>(
         `SELECT id, "productId", "batchNumber", quantity, "unitCost", "receivedDate"
          FROM warehouse_stock_batches
          WHERE "productId" IN (${placeholders}) AND quantity > 0
@@ -1339,7 +1341,7 @@ router.post("/inventory-counts/:id/items", authorize({ feature: "warehouse.inven
     const countId = parseId(req.params.id, "id");
     const b = zodParse(createCountItemSchema.safeParse(req.body));
     // Ensure count exists and is in draft
-    const [count] = await rawQuery<Record<string, unknown>>(`SELECT * FROM inventory_counts WHERE id=$1 AND "companyId"=$2`, [countId, scope.companyId]);
+    const [count] = await rawQuery<any>(`SELECT * FROM inventory_counts WHERE id=$1 AND "companyId"=$2`, [countId, scope.companyId]);
     if (!count) throw new NotFoundError("الجرد غير موجود");
     if (count.status !== "draft" && count.status !== "in_progress") {
       throw new ConflictError(
@@ -1348,7 +1350,7 @@ router.post("/inventory-counts/:id/items", authorize({ feature: "warehouse.inven
       );
     }
 
-    const [product] = await rawQuery<Record<string, unknown>>(
+    const [product] = await rawQuery<any>(
       `SELECT id, "currentStock" FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [b.productId, scope.companyId]
     );
@@ -1359,7 +1361,7 @@ router.post("/inventory-counts/:id/items", authorize({ feature: "warehouse.inven
     const variance = physicalCount - systemStock;
 
     // Upsert count item
-    const [existing] = await rawQuery<Record<string, unknown>>(
+    const [existing] = await rawQuery<any>(
       `SELECT id FROM inventory_count_items WHERE "countId"=$1 AND "productId"=$2`,
       [countId, b.productId]
     );
@@ -1400,7 +1402,7 @@ router.post("/inventory-counts/:id/approve", authorize({ feature: "warehouse.inv
 
     // Pre-fetch count items so we can use them inside onApply and for
     // GL posting after the transition commits.
-    const items = await rawQuery<Record<string, unknown>>(
+    const items = await rawQuery<any>(
       `SELECT ici.*, wp."currentStock" FROM inventory_count_items ici JOIN warehouse_products wp ON wp.id=ici."productId" WHERE ici."countId"=$1 LIMIT 10000`,
       [countId]
     );

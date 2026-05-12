@@ -48,7 +48,7 @@ const DEFAULT_THRESHOLDS: Thresholds = {
 
 async function loadThresholds(companyId: number): Promise<Thresholds> {
   try {
-    const [row] = await rawQuery<Record<string, unknown>>(
+    const [row] = await rawQuery<any>(
       `SELECT value FROM system_settings WHERE key='operations_center_thresholds' AND ("companyId"=$1 OR "companyId" IS NULL) ORDER BY "companyId" DESC NULLS LAST LIMIT 1`,
       [companyId]
     );
@@ -71,7 +71,7 @@ async function loadThresholds(companyId: number): Promise<Thresholds> {
 
 async function getApprovalSlaHours(): Promise<number> {
   try {
-    const [setting] = await rawQuery<Record<string, unknown>>(
+    const [setting] = await rawQuery<any>(
       `SELECT value FROM system_settings WHERE key = 'approval_sla_hours' LIMIT 1`
     );
     if (setting?.value) return Number(setting.value);
@@ -96,7 +96,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
     const t = await loadThresholds(cid);
 
     try {
-      const [pilgrimStats] = await rawQuery<Record<string, unknown>>(
+      const [pilgrimStats] = await rawQuery<any>(
         `SELECT
            COUNT(*) FILTER (WHERE status='overstayed') AS overstayed,
            COUNT(*) FILTER (WHERE "agentId" IS NULL AND status NOT IN ('departed','cancelled')) AS unassigned,
@@ -119,32 +119,33 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
     } catch (_e) { logger.error(_e, "OpsCenter: umrah failed:"); }
 
     try {
-      const [unitStats] = await rawQuery<Record<string, unknown>>(
-        `SELECT
-           COUNT(*) FILTER (WHERE status='under_maintenance') AS maintenance
-         FROM property_units WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
-        [cid]
-      );
-      const [overdueRent] = await rawQuery<Record<string, unknown>>(
-        `SELECT COUNT(*) AS total
-         FROM rent_payments rp
-         JOIN rental_contracts c ON c.id=rp."contractId"
-         WHERE c."companyId"=$1 AND rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE`,
-        [cid]
-      );
-      const [openMaint] = await rawQuery<Record<string, unknown>>(
-        `SELECT COUNT(*) AS total,
-           COUNT(*) FILTER (WHERE "slaDeadline" IS NOT NULL AND "slaDeadline" < NOW()) AS breached
-         FROM maintenance_requests
-         WHERE "companyId"=$1 AND status NOT IN ('completed','closed','rejected') AND "deletedAt" IS NULL`,
-        [cid]
-      );
-      const [expContracts] = await rawQuery<Record<string, unknown>>(
-        `SELECT COUNT(*) AS total
-         FROM rental_contracts
-         WHERE "companyId"=$1 AND status='active' AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days' AND "deletedAt" IS NULL`,
-        [cid]
-      );
+      const [[unitStats], [overdueRent], [openMaint], [expContracts]] = await Promise.all([
+        rawQuery<any>(
+          `SELECT COUNT(*) FILTER (WHERE status='under_maintenance') AS maintenance
+           FROM property_units WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
+          [cid]
+        ),
+        rawQuery<any>(
+          `SELECT COUNT(*) AS total
+           FROM rent_payments rp
+           JOIN rental_contracts c ON c.id=rp."contractId"
+           WHERE c."companyId"=$1 AND rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE`,
+          [cid]
+        ),
+        rawQuery<any>(
+          `SELECT COUNT(*) AS total,
+             COUNT(*) FILTER (WHERE "slaDeadline" IS NOT NULL AND "slaDeadline" < NOW()) AS breached
+           FROM maintenance_requests
+           WHERE "companyId"=$1 AND status NOT IN ('completed','closed','rejected') AND "deletedAt" IS NULL`,
+          [cid]
+        ),
+        rawQuery<any>(
+          `SELECT COUNT(*) AS total
+           FROM rental_contracts
+           WHERE "companyId"=$1 AND status='active' AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days' AND "deletedAt" IS NULL`,
+          [cid]
+        ),
+      ]);
       const overdueRentVal = Number(overdueRent?.total ?? 0);
       const openMaintVal = Number(openMaint?.total ?? 0);
       const maintBreached = Number(openMaint?.breached ?? 0);
@@ -162,24 +163,26 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
 
     try {
       const today = todayISO();
-      const [absent] = await rawQuery<Record<string, unknown>>(
-        `SELECT
-           (SELECT COUNT(*) FROM employee_assignments WHERE "companyId" = ANY($1::int[]) AND status='active') -
-           (SELECT COUNT(DISTINCT "assignmentId") FROM attendance WHERE "companyId" = ANY($1::int[]) AND date=$2 AND status IN ('present','late')) AS total`,
-        [companies, today]
-      );
-      const [pendingLeaves] = await rawQuery<Record<string, unknown>>(
-        `SELECT COUNT(*) AS total FROM hr_leave_requests WHERE "companyId" = ANY($1::int[]) AND "deletedAt" IS NULL AND status='pending'`,
-        [companies]
-      );
-      const [expiringDocs] = await rawQuery<Record<string, unknown>>(
-        `SELECT COUNT(*) AS total FROM employee_documents WHERE "companyId" = ANY($1::int[]) AND "expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'`,
-        [companies]
-      );
-      const [violations] = await rawQuery<Record<string, unknown>>(
-        `SELECT COUNT(*) AS total FROM employee_violations WHERE "companyId" = ANY($1::int[]) AND status IN ('pending_inquiry','pending_employee','pending_manager','pending_gm') AND "deletedAt" IS NULL`,
-        [companies]
-      ).catch((e) => { logger.error(e, "operations center query failed"); return [{ total: 0 }]; });
+      const [[absent], [pendingLeaves], [expiringDocs], [violations]] = await Promise.all([
+        rawQuery<any>(
+          `SELECT
+             (SELECT COUNT(*) FROM employee_assignments WHERE "companyId" = ANY($1::int[]) AND status='active') -
+             (SELECT COUNT(DISTINCT "assignmentId") FROM attendance WHERE "companyId" = ANY($1::int[]) AND date=$2 AND status IN ('present','late')) AS total`,
+          [companies, today]
+        ),
+        rawQuery<any>(
+          `SELECT COUNT(*) AS total FROM hr_leave_requests WHERE "companyId" = ANY($1::int[]) AND "deletedAt" IS NULL AND status='pending'`,
+          [companies]
+        ),
+        rawQuery<any>(
+          `SELECT COUNT(*) AS total FROM employee_documents WHERE "companyId" = ANY($1::int[]) AND "expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'`,
+          [companies]
+        ),
+        rawQuery<any>(
+          `SELECT COUNT(*) AS total FROM employee_violations WHERE "companyId" = ANY($1::int[]) AND status IN ('pending_inquiry','pending_employee','pending_manager','pending_gm') AND "deletedAt" IS NULL`,
+          [companies]
+        ).catch((e) => { logger.error(e, "operations center query failed"); return [{ total: 0 }]; }),
+      ]);
       const absentVal = Math.max(0, Number(absent?.total ?? 0));
       const pendingLeavesVal = Number(pendingLeaves?.total ?? 0);
       const expiringDocsVal = Number(expiringDocs?.total ?? 0);
@@ -196,25 +199,27 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
     } catch (_e) { logger.error(_e, "OpsCenter: hr failed:"); }
 
     try {
-      const [overdueInv] = await rawQuery<Record<string, unknown>>(
-        `SELECT COUNT(*) AS count, COALESCE(SUM(total - "paidAmount"), 0) AS amount
-         FROM invoices WHERE ${where} AND status IN ('overdue','sent') AND "dueDate" < CURRENT_DATE`,
-        params
-      );
-      const [pendingExpenses] = await rawQuery<Record<string, unknown>>(
-        `SELECT COUNT(*) AS total FROM expense_claims WHERE ${where} AND status='pending'`,
-        params
-      ).catch((e) => { logger.error(e, "operations center query failed"); return [{ total: 0 }]; });
-      const [pendingPO] = await rawQuery<Record<string, unknown>>(
-        `SELECT COUNT(*) AS total FROM purchase_requests WHERE ${where} AND status='pending'`,
-        params
-      ).catch((e) => { logger.error(e, "operations center query failed"); return [{ total: 0 }]; });
-      const [cashFlow] = await rawQuery<Record<string, unknown>>(
-        `SELECT
-           COALESCE((SELECT SUM(amount) FROM vouchers WHERE "companyId"=$1 AND type='receipt' AND "createdAt" >= date_trunc('month', CURRENT_DATE)), 0) AS inflow,
-           COALESCE((SELECT SUM(amount) FROM vouchers WHERE "companyId"=$1 AND type='payment' AND "createdAt" >= date_trunc('month', CURRENT_DATE)), 0) AS outflow`,
-        [cid]
-      ).catch((e) => { logger.error(e, "operations center query failed"); return [{ inflow: 0, outflow: 0 }]; });
+      const [[overdueInv], [pendingExpenses], [pendingPO], [cashFlow]] = await Promise.all([
+        rawQuery<any>(
+          `SELECT COUNT(*) AS count, COALESCE(SUM(total - "paidAmount"), 0) AS amount
+           FROM invoices WHERE ${where} AND status IN ('overdue','sent') AND "dueDate" < CURRENT_DATE`,
+          params
+        ),
+        rawQuery<any>(
+          `SELECT COUNT(*) AS total FROM expense_claims WHERE ${where} AND status='pending'`,
+          params
+        ).catch((e) => { logger.error(e, "operations center query failed"); return [{ total: 0 }]; }),
+        rawQuery<any>(
+          `SELECT COUNT(*) AS total FROM purchase_requests WHERE ${where} AND status='pending'`,
+          params
+        ).catch((e) => { logger.error(e, "operations center query failed"); return [{ total: 0 }]; }),
+        rawQuery<any>(
+          `SELECT
+             COALESCE((SELECT SUM(amount) FROM vouchers WHERE "companyId"=$1 AND type='receipt' AND "createdAt" >= date_trunc('month', CURRENT_DATE)), 0) AS inflow,
+             COALESCE((SELECT SUM(amount) FROM vouchers WHERE "companyId"=$1 AND type='payment' AND "createdAt" >= date_trunc('month', CURRENT_DATE)), 0) AS outflow`,
+          [cid]
+        ).catch((e) => { logger.error(e, "operations center query failed"); return [{ inflow: 0, outflow: 0 }]; }),
+      ]);
       const inflow = Number(cashFlow?.inflow ?? 0);
       const outflow = Number(cashFlow?.outflow ?? 0);
       const netCashFlow = inflow - outflow;
@@ -234,16 +239,18 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
     } catch (_e) { logger.error(_e, "OpsCenter: finance failed:"); }
 
     try {
-      const [vehicleStats] = await rawQuery<Record<string, unknown>>(
-        `SELECT
-           COUNT(*) FILTER (WHERE status='active' AND "nextServiceDate" IS NOT NULL AND "nextServiceDate" <= CURRENT_DATE + INTERVAL '7 days') AS needService
-         FROM fleet_vehicles WHERE ${where} AND "deletedAt" IS NULL`,
-        params
-      );
-      const [activeTrips] = await rawQuery<Record<string, unknown>>(
-        `SELECT COUNT(*) AS total FROM fleet_trips WHERE ${where} AND status='in_progress' AND "deletedAt" IS NULL`,
-        params
-      ).catch((e) => { logger.error(e, "operations center query failed"); return [{ total: 0 }]; });
+      const [[vehicleStats], [activeTrips]] = await Promise.all([
+        rawQuery<any>(
+          `SELECT
+             COUNT(*) FILTER (WHERE status='active' AND "nextServiceDate" IS NOT NULL AND "nextServiceDate" <= CURRENT_DATE + INTERVAL '7 days') AS needService
+           FROM fleet_vehicles WHERE ${where} AND "deletedAt" IS NULL`,
+          params
+        ),
+        rawQuery<any>(
+          `SELECT COUNT(*) AS total FROM fleet_trips WHERE ${where} AND status='in_progress' AND "deletedAt" IS NULL`,
+          params
+        ).catch((e) => { logger.error(e, "operations center query failed"); return [{ total: 0 }]; }),
+      ]);
       const needServiceVal = Number(vehicleStats?.needService ?? 0);
       const activeTripsVal = Number(activeTrips?.total ?? 0);
       sections.fleet = {
@@ -255,9 +262,9 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
       };
     } catch (_e) { logger.error(_e, "OpsCenter: fleet failed:"); }
 
-    let slaItems: Record<string, unknown>[] = [];
-    try {
-      const maintSla = await rawQuery<Record<string, unknown>>(
+    const slaHours = await getApprovalSlaHours();
+    const [maintSla, ticketSla, approvalSla, expenseSla] = await Promise.all([
+      rawQuery<any>(
         `SELECT id, category AS title, 'maintenance' AS type, "slaDeadline",
            EXTRACT(EPOCH FROM (NOW() - "slaDeadline"))/3600 AS "hoursOverdue",
            priority, status
@@ -266,16 +273,8 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
            AND "slaDeadline" IS NOT NULL AND "slaDeadline" < NOW()
          ORDER BY "slaDeadline" LIMIT 10`,
         [cid]
-      );
-      slaItems = slaItems.concat(maintSla.map((m: any) => ({
-        ...m,
-        hoursOverdue: Math.round(Number(m.hoursOverdue ?? 0)),
-        entityLink: "/properties/maintenance",
-      })));
-    } catch (_e) { logger.error(_e, "silent catch"); }
-
-    try {
-      const ticketSla = await rawQuery<Record<string, unknown>>(
+      ).catch((_e) => { logger.error(_e, "silent catch"); return [] as any[]; }),
+      rawQuery<any>(
         `SELECT id, title, 'ticket' AS type, "slaDeadline",
            EXTRACT(EPOCH FROM (NOW() - "slaDeadline"))/3600 AS "hoursOverdue",
            priority, status
@@ -283,17 +282,8 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
          WHERE ${where} AND "deletedAt" IS NULL AND status='open' AND "slaDeadline" IS NOT NULL AND "slaDeadline" < NOW()
          ORDER BY "slaDeadline" LIMIT 10`,
         params
-      );
-      slaItems = slaItems.concat(ticketSla.map((t: any) => ({
-        ...t,
-        hoursOverdue: Math.round(Number(t.hoursOverdue ?? 0)),
-        entityLink: `/support/${t.id}`,
-      })));
-    } catch (_e) { logger.error(_e, "silent catch"); }
-
-    try {
-      const slaHours = await getApprovalSlaHours();
-      const approvalSla = await rawQuery<Record<string, unknown>>(
+      ).catch((_e) => { logger.error(_e, "silent catch"); return [] as any[]; }),
+      rawQuery<any>(
         `SELECT id, 'طلب إجازة' AS title, 'leave_approval' AS type,
            "createdAt" AS "slaDeadline",
            EXTRACT(EPOCH FROM (NOW() - "createdAt"))/3600 AS "hoursOverdue"
@@ -302,14 +292,8 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
            AND "createdAt" < NOW() - INTERVAL '1 hour' * $2
          ORDER BY "createdAt" LIMIT 10`,
         [companies, slaHours]
-      );
-      slaItems = slaItems.concat(approvalSla.map((a: any) => ({
-        ...a,
-        hoursOverdue: Math.round(Number(a.hoursOverdue ?? 0)),
-        entityLink: "/hr/leaves",
-      })));
-
-      const expenseSla = await rawQuery<Record<string, unknown>>(
+      ).catch((_e) => { logger.error(_e, "OpsCenter: approval SLA failed:"); return [] as any[]; }),
+      rawQuery<any>(
         `SELECT id, 'مطالبة مصروف #' || id AS title, 'expense_approval' AS type,
            "createdAt" AS "slaDeadline",
            EXTRACT(EPOCH FROM (NOW() - "createdAt"))/3600 AS "hoursOverdue"
@@ -318,13 +302,14 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
            AND "createdAt" < NOW() - INTERVAL '1 hour' * $2
          ORDER BY "createdAt" LIMIT 10`,
         [companies, slaHours]
-      );
-      slaItems = slaItems.concat(expenseSla.map((e: any) => ({
-        ...e,
-        hoursOverdue: Math.round(Number(e.hoursOverdue ?? 0)),
-        entityLink: "/finance/expenses",
-      })));
-    } catch (_e) { logger.error(_e, "OpsCenter: approval SLA failed:"); }
+      ).catch((_e) => { logger.error(_e, "OpsCenter: approval SLA failed:"); return [] as any[]; }),
+    ]);
+    let slaItems: any[] = [
+      ...maintSla.map((m: any) => ({ ...m, hoursOverdue: Math.round(Number(m.hoursOverdue ?? 0)), entityLink: "/properties/maintenance" })),
+      ...ticketSla.map((t: any) => ({ ...t, hoursOverdue: Math.round(Number(t.hoursOverdue ?? 0)), entityLink: `/support/${t.id}` })),
+      ...approvalSla.map((a: any) => ({ ...a, hoursOverdue: Math.round(Number(a.hoursOverdue ?? 0)), entityLink: "/hr/leaves" })),
+      ...expenseSla.map((e: any) => ({ ...e, hoursOverdue: Math.round(Number(e.hoursOverdue ?? 0)), entityLink: "/finance/expenses" })),
+    ];
 
     slaItems = slaItems.map(item => {
       const hoursOver = Math.abs(Number(item.hoursOverdue ?? 0));
@@ -335,9 +320,9 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
       return { ...item, escalationStatus, hoursOverdue: hoursOver };
     }).sort((a, b) => b.hoursOverdue - a.hoursOverdue);
 
-    let liveFeed: Record<string, unknown>[] = [];
+    let liveFeed: any[] = [];
     try {
-      liveFeed = await rawQuery<Record<string, unknown>>(
+      liveFeed = await rawQuery<any>(
         `SELECT a.id, a.action, a.entity, a."entityId",
                 COALESCE(e.name, u.email, 'نظام') AS "userName",
                 a."createdAt", a.reason
@@ -358,140 +343,103 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
 });
 
 async function buildChecklistItems(scope: any, where: string, params: any[], companies: number[], today: string): Promise<any[]> {
-    const items: any[] = [];
+    const safe = <T>(p: Promise<T[]>): Promise<T | null> => p.then(r => r[0] ?? null).catch(() => null);
 
-    try {
-      const [att] = await rawQuery<Record<string, unknown>>(
+    const [att, pending, maint, overdue, tasks, tickets, receipts, payments] = await Promise.all([
+      safe(rawQuery<any>(
         `SELECT
            (SELECT COUNT(*) FROM employee_assignments WHERE "companyId" = ANY($1::int[]) AND status='active') AS expected,
            (SELECT COUNT(DISTINCT "assignmentId") FROM attendance WHERE "companyId" = ANY($1::int[]) AND "deletedAt" IS NULL AND date=$2) AS actual`,
         [companies, today]
-      );
-      const expected = Number(att?.expected ?? 0);
-      const actual = Number(att?.actual ?? 0);
-      items.push({
-        key: "attendance_sync",
-        label: "مزامنة الحضور",
-        description: `تم تسجيل ${actual} من ${expected} موظف`,
-        passed: expected > 0 ? actual >= expected * 0.9 : true,
-        value: `${actual}/${expected}`,
-      });
-    } catch (_e) {
-      items.push({ key: "attendance_sync", label: "مزامنة الحضور", description: "تعذّر التحقق", passed: false, value: "—" });
-    }
-
-    try {
-      const [pending] = await rawQuery<Record<string, unknown>>(
+      )),
+      safe(rawQuery<any>(
         `SELECT COUNT(*) AS total FROM hr_leave_requests WHERE "companyId" = ANY($1::int[]) AND "deletedAt" IS NULL AND status='pending'`,
         [companies]
-      );
-      const val = Number(pending?.total ?? 0);
-      items.push({
-        key: "pending_approvals",
-        label: "مراجعة الطلبات المعلقة",
-        description: `${val} طلب إجازة معلق`,
-        passed: val === 0,
-        value: String(val),
-      });
-    } catch (_e) {
-      items.push({ key: "pending_approvals", label: "مراجعة الطلبات المعلقة", description: "تعذّر التحقق", passed: false, value: "—" });
-    }
-
-    try {
-      const [maint] = await rawQuery<Record<string, unknown>>(
+      )),
+      safe(rawQuery<any>(
         `SELECT COUNT(*) AS total FROM maintenance_requests
          WHERE "companyId"=$1 AND priority IN ('critical','urgent') AND status NOT IN ('completed','closed','rejected')`,
         [scope.companyId]
-      );
-      const val = Number(maint?.total ?? 0);
-      items.push({
-        key: "critical_maintenance",
-        label: "صيانة حرجة مفتوحة",
-        description: `${val} طلب صيانة حرج/عاجل`,
-        passed: val === 0,
-        value: String(val),
-      });
-    } catch (_e) {
-      items.push({ key: "critical_maintenance", label: "صيانة حرجة", description: "تعذّر التحقق", passed: false, value: "—" });
-    }
-
-    try {
-      const [overdue] = await rawQuery<Record<string, unknown>>(
+      )),
+      safe(rawQuery<any>(
         `SELECT COUNT(*) AS total FROM invoices WHERE ${where} AND status IN ('overdue') AND "dueDate" < CURRENT_DATE AND "deletedAt" IS NULL`,
         params
-      );
-      const val = Number(overdue?.total ?? 0);
-      items.push({
-        key: "overdue_invoices",
-        label: "فواتير متأخرة",
-        description: `${val} فاتورة متأخرة عن السداد`,
-        passed: val === 0,
-        value: String(val),
-      });
-    } catch (_e) {
-      items.push({ key: "overdue_invoices", label: "فواتير متأخرة", description: "تعذّر التحقق", passed: false, value: "—" });
-    }
-
-    try {
-      const [tasks] = await rawQuery<Record<string, unknown>>(
+      )),
+      safe(rawQuery<any>(
         `SELECT
            COUNT(*) AS total,
            COUNT(*) FILTER (WHERE status='completed') AS completed
          FROM tasks WHERE ${where} AND "scheduledDate"=$${params.length + 1}`,
         [...params, today]
-      );
-      const total = Number(tasks?.total ?? 0);
-      const completed = Number(tasks?.completed ?? 0);
-      items.push({
-        key: "tasks_completed",
-        label: "إنجاز مهام اليوم",
-        description: `${completed} من ${total} مهمة مكتملة`,
-        passed: total === 0 || completed >= total * 0.8,
-        value: `${completed}/${total}`,
-      });
-    } catch (_e) {
-      items.push({ key: "tasks_completed", label: "إنجاز مهام اليوم", description: "تعذّر التحقق", passed: false, value: "—" });
-    }
-
-    try {
-      const [tickets] = await rawQuery<Record<string, unknown>>(
+      )),
+      safe(rawQuery<any>(
         `SELECT COUNT(*) AS total FROM support_tickets WHERE ${where} AND status='open' AND "slaDeadline" IS NOT NULL AND "slaDeadline" < NOW()`,
         params
-      );
-      const val = Number(tickets?.total ?? 0);
-      items.push({
-        key: "sla_tickets",
-        label: "تذاكر متجاوزة لـSLA",
-        description: `${val} تذكرة تجاوزت وقت الاستجابة`,
-        passed: val === 0,
-        value: String(val),
-      });
-    } catch (_e) {
-      items.push({ key: "sla_tickets", label: "تذاكر SLA", description: "تعذّر التحقق", passed: false, value: "—" });
-    }
-
-    try {
-      const [receipts] = await rawQuery<Record<string, unknown>>(
+      )),
+      safe(rawQuery<any>(
         `SELECT COALESCE(SUM(amount),0) AS total FROM vouchers
          WHERE "companyId" = ANY($1::int[]) AND type='receipt' AND "createdAt"::date = $2`,
         [companies, today]
-      );
-      const [payments] = await rawQuery<Record<string, unknown>>(
+      )),
+      safe(rawQuery<any>(
         `SELECT COALESCE(SUM(amount),0) AS total FROM vouchers
          WHERE "companyId" = ANY($1::int[]) AND type='payment' AND "createdAt"::date = $2`,
         [companies, today]
-      );
-      const receiptTotal = Number(receipts?.total ?? 0);
-      const paymentTotal = Number(payments?.total ?? 0);
+      )),
+    ]);
+
+    const items: any[] = [];
+
+    if (att) {
+      const expected = Number(att.expected ?? 0);
+      const actual = Number(att.actual ?? 0);
+      items.push({ key: "attendance_sync", label: "مزامنة الحضور", description: `تم تسجيل ${actual} من ${expected} موظف`, passed: expected > 0 ? actual >= expected * 0.9 : true, value: `${actual}/${expected}` });
+    } else {
+      items.push({ key: "attendance_sync", label: "مزامنة الحضور", description: "تعذّر التحقق", passed: false, value: "—" });
+    }
+
+    if (pending) {
+      const val = Number(pending.total ?? 0);
+      items.push({ key: "pending_approvals", label: "مراجعة الطلبات المعلقة", description: `${val} طلب إجازة معلق`, passed: val === 0, value: String(val) });
+    } else {
+      items.push({ key: "pending_approvals", label: "مراجعة الطلبات المعلقة", description: "تعذّر التحقق", passed: false, value: "—" });
+    }
+
+    if (maint) {
+      const val = Number(maint.total ?? 0);
+      items.push({ key: "critical_maintenance", label: "صيانة حرجة مفتوحة", description: `${val} طلب صيانة حرج/عاجل`, passed: val === 0, value: String(val) });
+    } else {
+      items.push({ key: "critical_maintenance", label: "صيانة حرجة", description: "تعذّر التحقق", passed: false, value: "—" });
+    }
+
+    if (overdue) {
+      const val = Number(overdue.total ?? 0);
+      items.push({ key: "overdue_invoices", label: "فواتير متأخرة", description: `${val} فاتورة متأخرة عن السداد`, passed: val === 0, value: String(val) });
+    } else {
+      items.push({ key: "overdue_invoices", label: "فواتير متأخرة", description: "تعذّر التحقق", passed: false, value: "—" });
+    }
+
+    if (tasks) {
+      const total = Number(tasks.total ?? 0);
+      const completed = Number(tasks.completed ?? 0);
+      items.push({ key: "tasks_completed", label: "إنجاز مهام اليوم", description: `${completed} من ${total} مهمة مكتملة`, passed: total === 0 || completed >= total * 0.8, value: `${completed}/${total}` });
+    } else {
+      items.push({ key: "tasks_completed", label: "إنجاز مهام اليوم", description: "تعذّر التحقق", passed: false, value: "—" });
+    }
+
+    if (tickets) {
+      const val = Number(tickets.total ?? 0);
+      items.push({ key: "sla_tickets", label: "تذاكر متجاوزة لـSLA", description: `${val} تذكرة تجاوزت وقت الاستجابة`, passed: val === 0, value: String(val) });
+    } else {
+      items.push({ key: "sla_tickets", label: "تذاكر SLA", description: "تعذّر التحقق", passed: false, value: "—" });
+    }
+
+    if (receipts && payments) {
+      const receiptTotal = Number(receipts.total ?? 0);
+      const paymentTotal = Number(payments.total ?? 0);
       const netCash = receiptTotal - paymentTotal;
-      items.push({
-        key: "cash_reconciliation",
-        label: "تسوية النقدية",
-        description: `إيرادات: ${receiptTotal.toLocaleString()} | مصروفات: ${paymentTotal.toLocaleString()} | صافي: ${netCash.toLocaleString()}`,
-        passed: true,
-        value: `${netCash.toLocaleString()}`,
-      });
-    } catch (_e) {
+      items.push({ key: "cash_reconciliation", label: "تسوية النقدية", description: `إيرادات: ${receiptTotal.toLocaleString()} | مصروفات: ${paymentTotal.toLocaleString()} | صافي: ${netCash.toLocaleString()}`, passed: true, value: `${netCash.toLocaleString()}` });
+    } else {
       items.push({ key: "cash_reconciliation", label: "تسوية النقدية", description: "لا توجد حركات نقدية اليوم", passed: true, value: "—" });
     }
 
@@ -509,7 +457,7 @@ router.get("/daily-close/checklist", authorize({ feature: "projects", action: "l
 
     let closedToday = false;
     try {
-      const [existing] = await rawQuery<Record<string, unknown>>(
+      const [existing] = await rawQuery<any>(
         `SELECT id FROM daily_close_log WHERE "companyId"=$1 AND "closeDate"=$2`,
         [scope.companyId, today]
       );
@@ -567,7 +515,7 @@ router.post("/daily-close/execute", authorize({ feature: "finance", action: "cre
        )`
     ).catch((e) => logger.error(e, "operationsCenter background task failed"));
 
-    const [existing] = await rawQuery<Record<string, unknown>>(
+    const [existing] = await rawQuery<any>(
       `SELECT id FROM daily_close_log WHERE "companyId"=$1 AND "closeDate"=$2`,
       [cid, today]
     );
