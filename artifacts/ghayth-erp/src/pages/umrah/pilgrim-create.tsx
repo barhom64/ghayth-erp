@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { ArrowRight, Save } from "lucide-react";
 import { Link } from "wouter";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
@@ -93,7 +94,7 @@ export default function PilgrimCreate() {
           </div>
           <div className="md:col-span-3 flex justify-end gap-2">
             <Link href="/umrah/pilgrims"><Button variant="outline">إلغاء</Button></Link>
-            <Button onClick={save} disabled={saving} className="gap-2"><Save className="h-4 w-4" />{saving ? "جارٍ الحفظ..." : "حفظ"}</Button>
+            <GuardedButton perm="umrah:create" onClick={save} disabled={saving} className="gap-2"><Save className="h-4 w-4" />{saving ? "جارٍ الحفظ..." : "حفظ"}</GuardedButton>
           </div>
         </CardContent>
       </Card>

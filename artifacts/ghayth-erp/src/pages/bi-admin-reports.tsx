@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { BiTabsNav } from "@/components/shared/bi-tabs-nav";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
@@ -352,9 +353,9 @@ export default function BiAdminReportsPage() {
       title="التقارير الإدارية"
       subtitle="تقارير يومية وأسبوعية وشهرية شاملة"
       actions={
-        <Button variant="outline" size="sm" onClick={() => window.print()} className="print:hidden gap-2">
+        <GuardedButton perm="bi:export" variant="outline" size="sm" onClick={() => window.print()} className="print:hidden gap-2">
           <Printer className="w-4 h-4" /> طباعة التقرير
-        </Button>
+        </GuardedButton>
       }
     >
       <BiTabsNav />
