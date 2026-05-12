@@ -289,6 +289,9 @@ describe("Loan approval flow", () => {
     const endIdx = LOANS_ROUTE.indexOf("router.", idx + 10);
     const section = LOANS_ROUTE.slice(idx, endIdx);
     expect(section).toContain("isLast");
+    // The handler now copies `loan.installmentCount ?? 0` into a local
+    // `installmentCount` const and uses the local in the formula, so the
+    // assertion accepts either spelling.
     expect(section).toMatch(/(?:loan\.)?installmentCount - 1/);
   });
 
@@ -309,7 +312,7 @@ describe("Loan approval flow", () => {
 
   it("supports multi-step approval chain", () => {
     const idx = LOANS_ROUTE.indexOf('"/loans/:id/approve"');
-    const section = LOANS_ROUTE.slice(idx, idx + 4000);
+    const section = LOANS_ROUTE.slice(idx, idx + 3500);
     expect(section).toContain("processApprovalStep");
     expect(section).toContain("pending_next_step");
   });
@@ -427,7 +430,7 @@ describe("Overtime approval flow", () => {
 
   it("supports multi-step approval chain", () => {
     const idx = OVERTIME_ROUTE.indexOf('"/overtime/:id/approve"');
-    const section = OVERTIME_ROUTE.slice(idx, idx + 4000);
+    const section = OVERTIME_ROUTE.slice(idx, idx + 3500);
     expect(section).toContain("processApprovalStep");
     expect(section).toContain("pending_next_step");
   });
@@ -461,6 +464,13 @@ describe("Overtime monthly summary", () => {
 describe("Overtime self-service", () => {
   it("GET /overtime/my scopes by activeAssignmentId", () => {
     const idx = OVERTIME_ROUTE.indexOf('"/overtime/my"');
+    // Window widened from 500 → 2000 chars: the original slice landed
+    // exactly on the boundary, and additions to the route's SELECT
+    // projection (e.g. typing rawQuery<OvertimeRow> in #271) could push
+    // the assertion target past the cliff. The intent of the assertion
+    // is "the route filters by scope.activeAssignmentId somewhere in
+    // its handler" — the slice is just a guard against accidentally
+    // matching a comment elsewhere in the file.
     const section = OVERTIME_ROUTE.slice(idx, idx + 2000);
     expect(section).toContain("scope.activeAssignmentId");
   });
