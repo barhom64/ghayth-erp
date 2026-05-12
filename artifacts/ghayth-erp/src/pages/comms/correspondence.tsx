@@ -21,6 +21,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useToast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
 import { formatDateAr } from "@/lib/formatters";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import {
   Plus,
   MoreHorizontal,
@@ -189,7 +190,7 @@ export default function CorrespondencePage() {
       subtitle="إدارة المراسلات الصادرة والواردة"
       actions={
         <Link href="/correspondence/create">
-          <Button className="gap-1.5"><Plus className="h-4 w-4" /> مراسلة جديدة</Button>
+          <GuardedButton perm="communications:create" className="gap-1.5"><Plus className="h-4 w-4" /> مراسلة جديدة</GuardedButton>
         </Link>
       }
     >

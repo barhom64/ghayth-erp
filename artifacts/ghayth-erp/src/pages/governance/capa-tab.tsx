@@ -3,6 +3,7 @@ import { z } from "zod";
 import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable } from "@/components/ui/data-table";
 import { CheckCircle2, Plus, Eye } from "lucide-react";
@@ -102,7 +103,7 @@ export function CAPATab() {
         <div className="flex-1">
           <AdvancedFilters config={{ searchPlaceholder: "بحث بالإجراءات التصحيحية...", statuses: [{ value: "open", label: "مفتوح" }, { value: "in_progress", label: "جاري" }, { value: "closed", label: "مغلق" }, { value: "overdue", label: "متأخر" }], showDateRange: true }} values={filters} onChange={setFilters} resultCount={filteredItems.length} />
         </div>
-        {canWrite && <Button size="sm" onClick={() => setShowNew(!showNew)}><Plus className="h-4 w-4 me-1" />إجراء تصحيحي جديد</Button>}
+        {canWrite && <GuardedButton perm="governance:create" size="sm" onClick={() => setShowNew(!showNew)}><Plus className="h-4 w-4 me-1" />إجراء تصحيحي جديد</GuardedButton>}
       </div>
       {showNew && (
         <Card className="border-dashed">

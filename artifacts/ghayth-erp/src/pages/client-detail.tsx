@@ -6,6 +6,7 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -702,10 +703,10 @@ function ClientPortalTab({ clientId, clientEmail }: { clientId: string; clientEm
               <p className="text-sm text-blue-800">لا يوجد حساب بوابة لهذا العميل بعد. يمكنك إنشاء حساب يتيح له الدخول إلى بوابة العملاء ومتابعة فواتيره وطلباته.</p>
             </div>
             {!showCreate ? (
-              <Button onClick={() => setShowCreate(true)} className="gap-2">
+              <GuardedButton perm="clients:create" onClick={() => setShowCreate(true)} className="gap-2">
                 <Globe className="h-4 w-4" />
                 إنشاء حساب بوابة
-              </Button>
+              </GuardedButton>
             ) : (
               <div className="space-y-3 border rounded-lg p-4">
                 <p className="text-sm font-semibold">إنشاء حساب بوابة للعميل</p>
@@ -746,7 +747,8 @@ function ClientPortalTab({ clientId, clientEmail }: { clientId: string; clientEm
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Button
+              <GuardedButton
+                perm="clients:create"
                 variant="outline"
                 size="sm"
                 onClick={handleToggleActive}
@@ -754,7 +756,7 @@ function ClientPortalTab({ clientId, clientEmail }: { clientId: string; clientEm
                 className={account.isActive ? "text-red-600 hover:text-red-700 border-red-200" : "text-green-600 hover:text-green-700 border-green-200"}
               >
                 {account.isActive ? "تعطيل الحساب" : "تفعيل الحساب"}
-              </Button>
+              </GuardedButton>
             </div>
 
             <div className="border rounded-lg p-4 space-y-3">
@@ -767,9 +769,9 @@ function ClientPortalTab({ clientId, clientEmail }: { clientId: string; clientEm
                   placeholder="كلمة المرور الجديدة"
                   className="flex-1"
                 />
-                <Button size="sm" variant="outline" onClick={handleResetPassword} disabled={updateMut.isPending}>
+                <GuardedButton perm="clients:create" size="sm" variant="outline" onClick={handleResetPassword} disabled={updateMut.isPending}>
                   تعيين
-                </Button>
+                </GuardedButton>
               </div>
               <p className="text-xs text-muted-foreground">سيُطلب من العميل تغيير كلمة المرور عند أول دخول بعد إعادة التعيين</p>
             </div>
