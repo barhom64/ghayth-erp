@@ -40,13 +40,13 @@ function calcChurnRisk(recencyDays: number, frequencyCount: number, monetaryValu
 }
 
 export async function calculateClientRFM(companyId: number, clientId: number): Promise<ClientRFM | null> {
-  const [client] = await rawQuery<any>(
+  const [client] = await rawQuery<Record<string, unknown>>(
     `SELECT c.id, c.name FROM clients c WHERE c.id = $1 AND c."companyId" = $2`,
     [clientId, companyId]
   );
   if (!client) return null;
 
-  const [invoiceStats] = await rawQuery<any>(
+  const [invoiceStats] = await rawQuery<Record<string, unknown>>(
     `SELECT
        COUNT(*)::int AS "frequencyCount",
        COALESCE(SUM(i."paidAmount"),0)::float AS "monetaryValue",
@@ -62,7 +62,7 @@ export async function calculateClientRFM(companyId: number, clientId: number): P
   const recency = Number(invoiceStats?.recencyDays ?? 9999);
   const lastOrder = invoiceStats?.lastOrderDate ?? null;
 
-  const prevMonthAmount = await rawQuery<any>(
+  const prevMonthAmount = await rawQuery<Record<string, unknown>>(
     `SELECT COALESCE(SUM("paidAmount"),0)::float AS amount FROM invoices
      WHERE "companyId" = $1 AND "clientId" = $2
        AND status NOT IN ('cancelled','draft')
@@ -70,7 +70,7 @@ export async function calculateClientRFM(companyId: number, clientId: number): P
        AND "dueDate"::date < CURRENT_DATE - INTERVAL '30 days'`,
     [companyId, clientId]
   );
-  const currMonthAmount = await rawQuery<any>(
+  const currMonthAmount = await rawQuery<Record<string, unknown>>(
     `SELECT COALESCE(SUM("paidAmount"),0)::float AS amount FROM invoices
      WHERE "companyId" = $1 AND "clientId" = $2
        AND status NOT IN ('cancelled','draft')
@@ -92,8 +92,8 @@ export async function calculateClientRFM(companyId: number, clientId: number): P
   const segment = classifySegment(rfmScore, recency);
 
   return {
-    clientId: client.id,
-    clientName: client.name,
+    clientId: client.id as number,
+    clientName: client.name as string,
     recencyDays: recency,
     frequencyCount: freq,
     monetaryValue: monetary,
@@ -102,7 +102,7 @@ export async function calculateClientRFM(companyId: number, clientId: number): P
     churnRisk,
     churnScore,
     ltv: Math.round(ltv),
-    lastOrderDate: lastOrder,
+    lastOrderDate: lastOrder as string | null,
     trend,
   };
 }
@@ -140,15 +140,15 @@ export async function getClientAnalyticsSummary(companyId: number): Promise<{
   topClients: any[];
   atRiskClients: any[];
 }> {
-  const segmentRows = await rawQuery<any>(
+  const segmentRows = await rawQuery<Record<string, unknown>>(
     `SELECT segment, COUNT(*)::int AS count FROM client_rfm_scores WHERE "companyId"=$1 GROUP BY segment`,
     [companyId]
   );
-  const churnRows = await rawQuery<any>(
+  const churnRows = await rawQuery<Record<string, unknown>>(
     `SELECT "churnRisk", COUNT(*)::int AS count FROM client_rfm_scores WHERE "companyId"=$1 GROUP BY "churnRisk"`,
     [companyId]
   );
-  const topClients = await rawQuery<any>(
+  const topClients = await rawQuery<Record<string, unknown>>(
     `SELECT rs.*, c.name AS "clientName", c.phone
      FROM client_rfm_scores rs
      JOIN clients c ON c.id = rs."clientId"
@@ -157,7 +157,7 @@ export async function getClientAnalyticsSummary(companyId: number): Promise<{
      LIMIT 10`,
     [companyId]
   );
-  const atRiskClients = await rawQuery<any>(
+  const atRiskClients = await rawQuery<Record<string, unknown>>(
     `SELECT rs.*, c.name AS "clientName", c.phone
      FROM client_rfm_scores rs
      JOIN clients c ON c.id = rs."clientId"
@@ -168,9 +168,9 @@ export async function getClientAnalyticsSummary(companyId: number): Promise<{
   );
 
   const segmentBreakdown: Record<string, number> = {};
-  for (const r of segmentRows) segmentBreakdown[r.segment] = r.count;
+  for (const r of segmentRows) segmentBreakdown[r.segment as string] = Number(r.count);
   const churnRiskBreakdown: Record<string, number> = {};
-  for (const r of churnRows) churnRiskBreakdown[r.churnRisk] = r.count;
+  for (const r of churnRows) churnRiskBreakdown[r.churnRisk as string] = Number(r.count);
 
   return { segmentBreakdown, churnRiskBreakdown, topClients, atRiskClients };
 }
@@ -180,7 +180,7 @@ export async function getBestContactTime(companyId: number, clientId: number): P
   bestHourRange: string;
   confidence: number;
 }> {
-  const activityRows = await rawQuery<any>(
+  const activityRows = await rawQuery<Record<string, unknown>>(
     `SELECT
        EXTRACT(DOW FROM i."createdAt") AS dow,
        EXTRACT(HOUR FROM i."createdAt") AS hour,
@@ -203,15 +203,15 @@ export async function getBestContactTime(companyId: number, clientId: number): P
   const bestDay = days[Number(topRow.dow)] ?? "الأحد";
   const hour = Number(topRow.hour);
   const bestHour = hour < 12 ? `${hour}-${hour + 2} صباحاً` : `${hour - 12 || 12}-${(hour - 12 || 12) + 2} مساءً`;
-  const totalActivity = activityRows.reduce((s: number, r: any) => s + r.cnt, 0);
-  const confidence = totalActivity > 0 ? Math.min(100, Math.round((topRow.cnt / totalActivity) * 100 + 10)) : 0;
+  const totalActivity = activityRows.reduce((s: number, r) => s + Number(r.cnt), 0);
+  const confidence = totalActivity > 0 ? Math.min(100, Math.round((Number(topRow.cnt) / totalActivity) * 100 + 10)) : 0;
 
   return { bestDayOfWeek: bestDay, bestHourRange: bestHour, confidence };
 }
 
 export async function detectSeasonalPatterns(companyId: number): Promise<{ month: number; monthName: string; avgRevenue: number; trend: string }[]> {
   const monthNames = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
-  const rows = await rawQuery<any>(
+  const rows = await rawQuery<Record<string, unknown>>(
     `SELECT
        EXTRACT(MONTH FROM i."dueDate") AS month,
        AVG(i.total)::float AS "avgRevenue",

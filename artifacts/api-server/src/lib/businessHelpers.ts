@@ -266,13 +266,13 @@ export async function createJournalEntry(params: {
   // Idempotency: composite key check (sourceKey takes priority over sourceType+sourceId)
   const idempotencyKey = params.sourceKey ?? null;
   if (idempotencyKey) {
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<{ id: number }>(
       `SELECT id FROM journal_entries WHERE "companyId"=$1 AND "sourceKey"=$2 AND "deletedAt" IS NULL LIMIT 1`,
       [params.companyId, idempotencyKey]
     );
     if (existing) return existing.id;
   } else if (params.sourceType && params.sourceId) {
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<{ id: number }>(
       `SELECT id FROM journal_entries WHERE "companyId"=$1 AND "sourceType"=$2 AND "sourceId"=$3 AND "deletedAt" IS NULL LIMIT 1`,
       [params.companyId, params.sourceType, params.sourceId]
     );
@@ -283,11 +283,11 @@ export async function createJournalEntry(params: {
   const uniqueCodes = [...new Set(params.lines.map(l => l.accountCode).filter(Boolean))];
   if (uniqueCodes.length > 0) {
     const placeholders = uniqueCodes.map((_, i) => `$${i + 2}`).join(",");
-    const accountRows = await rawQuery<any>(
+    const accountRows = await rawQuery<{ code: string; allowPosting: boolean }>(
       `SELECT code, "allowPosting" FROM chart_of_accounts WHERE "companyId" = $1 AND code IN (${placeholders}) AND "deletedAt" IS NULL`,
       [params.companyId, ...uniqueCodes]
     );
-    const accountMap = new Map(accountRows.map((a: any) => [a.code, a]));
+    const accountMap = new Map(accountRows.map((a) => [a.code, a]));
     for (const code of uniqueCodes) {
       const acc = accountMap.get(code);
       if (!acc) {
@@ -307,7 +307,7 @@ export async function createJournalEntry(params: {
   const totalCredit = roundTo2(params.lines.reduce((s, l) => s + l.credit, 0));
   const imbalance = roundTo4(totalDebit - totalCredit);
   if (Math.abs(imbalance) > 0.001 && Math.abs(imbalance) <= 0.05) {
-    let [roundingAcc] = await rawQuery<any>(
+    let [roundingAcc] = await rawQuery<Record<string, unknown>>(
       `SELECT code FROM chart_of_accounts WHERE "companyId"=$1 AND code='9999' LIMIT 1`,
       [params.companyId]
     );
@@ -318,7 +318,7 @@ export async function createJournalEntry(params: {
          ON CONFLICT DO NOTHING`,
         [params.companyId]
       );
-      [roundingAcc] = await rawQuery<any>(
+      [roundingAcc] = await rawQuery<Record<string, unknown>>(
         `SELECT code FROM chart_of_accounts WHERE "companyId"=$1 AND code='9999' LIMIT 1`,
         [params.companyId]
       );
@@ -476,7 +476,7 @@ export async function reverseAccountBalances(
   companyId: number,
   journalId: number
 ) {
-  const lines = await rawQuery<any>(
+  const lines = await rawQuery<{ accountCode: string; debit: number; credit: number }>(
     `SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" WHERE jl."journalId" = $1 AND je."companyId" = $2`,
     [journalId, companyId]
   );
@@ -529,7 +529,7 @@ export async function initiateApprovalChain(params: {
     : "";
   if (params.amount != null) queryParams.push(params.amount);
 
-  const chains = await rawQuery<any>(
+  const chains = await rawQuery<{ id: number }>(
     `SELECT * FROM approval_chains
      WHERE "companyId" = $1 AND "chainType" = $2 AND "isActive" = true
      AND "deletedAt" IS NULL
@@ -543,7 +543,7 @@ export async function initiateApprovalChain(params: {
   }
 
   const chain = chains[0];
-  const steps = await rawQuery<any>(
+  const steps = await rawQuery<{ requiredRole: string; stepOrder: number; timeoutHours: number | null }>(
     `SELECT * FROM approval_chain_steps WHERE "chainId" = $1 ORDER BY "stepOrder" ASC`,
     [chain.id]
   );
@@ -568,7 +568,7 @@ export async function initiateApprovalChain(params: {
   let approver: { id: number } | undefined;
   let resolvedRole: string = firstStep.requiredRole;
   for (const role of ROLE_FALLBACK_CHAIN) {
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<{ id: number }>(
       `SELECT id FROM employee_assignments
        WHERE "companyId" = $1 AND role = $2 AND status = 'active'
        ORDER BY CASE WHEN "branchId" = $3 THEN 0 ELSE 1 END LIMIT 1`,
@@ -618,7 +618,7 @@ export async function processApprovalStep(params: {
     throw Object.assign(new Error("لا يمكن للمنشئ الموافقة على طلبه الخاص"), { statusCode: 403 });
   }
 
-  const [request] = await rawQuery<any>(
+  const [request] = await rawQuery<Record<string, unknown>>(
     `SELECT * FROM approval_requests
      WHERE "refType" = $1 AND "refId" = $2 AND "companyId" = $3 AND status = 'pending'
      ORDER BY "createdAt" DESC LIMIT 1`,
@@ -649,17 +649,17 @@ export async function processApprovalStep(params: {
 
   if (!chainId) return { status: "approved", message: "تمت الموافقة" };
 
-  const steps = await rawQuery<any>(
+  const steps = await rawQuery<{ stepOrder: number; requiredRole: string; timeoutHours: number | null }>(
     `SELECT * FROM approval_chain_steps WHERE "chainId" = $1 ORDER BY "stepOrder" ASC`,
     [chainId]
   );
 
-  const nextStep = steps.find((s: any) => s.stepOrder > currentStepOrder);
+  const nextStep = steps.find((s) => s.stepOrder > Number(currentStepOrder));
   if (!nextStep) {
     return { status: "approved", message: "تمت الموافقة النهائية" };
   }
 
-  const [nextApprover] = await rawQuery<any>(
+  const [nextApprover] = await rawQuery<{ id: number }>(
     `SELECT id FROM employee_assignments
      WHERE "companyId" = $1 AND role = $2 AND status = 'active'
      ORDER BY CASE WHEN "branchId" = $3 THEN 0 ELSE 1 END LIMIT 1`,
@@ -724,7 +724,7 @@ export async function validateBudget(params: {
   approvalLevel?: string;
 }> {
   const targetPeriod = params.period ?? currentPeriod();
-  const [budget] = await rawQuery<any>(
+  const [budget] = await rawQuery<Record<string, unknown>>(
     `SELECT amount, used FROM budgets
      WHERE "companyId" = $1 AND "accountCode" = $2 AND period = $3`,
     [params.companyId, params.accountCode, targetPeriod]
@@ -779,7 +779,7 @@ export async function updateBudgetUsed(params: {
 }
 
 export async function getAssignmentIdByRole(companyId: number, branchId: number, role: string): Promise<number | null> {
-  const [row] = await rawQuery<any>(
+  const [row] = await rawQuery<{ id: number }>(
     `SELECT ea.id FROM employee_assignments ea
      WHERE ea."companyId" = $1 AND ea."branchId" = $2
        AND ea.role = $3 AND ea.status = 'active'
@@ -790,7 +790,7 @@ export async function getAssignmentIdByRole(companyId: number, branchId: number,
 }
 
 export async function getDirectorAssignmentId(companyId: number, branchId: number): Promise<number | null> {
-  const [row] = await rawQuery<any>(
+  const [row] = await rawQuery<{ id: number }>(
     `SELECT ea.id FROM employee_assignments ea
      WHERE ea."companyId" = $1 AND ea."branchId" = $2
        AND ea.role IN ('general_manager','owner') AND ea.status = 'active'
@@ -802,7 +802,7 @@ export async function getDirectorAssignmentId(companyId: number, branchId: numbe
 }
 
 export async function getCfoAssignmentId(companyId: number, branchId: number): Promise<number | null> {
-  const [row] = await rawQuery<any>(
+  const [row] = await rawQuery<{ id: number }>(
     `SELECT ea.id FROM employee_assignments ea
      JOIN users u ON u."employeeId" = ea."employeeId"
      JOIN user_roles ur ON ur."userId" = u.id
@@ -827,7 +827,7 @@ export async function getCfoAssignmentId(companyId: number, branchId: number): P
 export async function getLegalResponsible(
   companyId: number
 ): Promise<{ assignmentId: number; employeeName: string } | null> {
-  const [row] = await rawQuery<any>(
+  const [row] = await rawQuery<Record<string, unknown>>(
     `SELECT ea.id, e.name
        FROM employee_assignments ea
        JOIN employees e ON e.id = ea."employeeId"
@@ -848,7 +848,7 @@ export async function getLegalResponsible(
 }
 
 export async function getManagerAssignmentId(companyId: number, branchId: number): Promise<number | null> {
-  const [manager] = await rawQuery<any>(
+  const [manager] = await rawQuery<{ id: number }>(
     `SELECT ea.id FROM employee_assignments ea
      WHERE ea."companyId" = $1 AND ea."branchId" = $2
        AND ea.role IN ('branch_manager','hr_manager','general_manager','owner') AND ea.status = 'active'
@@ -863,7 +863,7 @@ export async function checkFinancialPeriodOpen(
   companyId: number,
   date: string
 ): Promise<{ open: boolean; periodName?: string }> {
-  const rows = await rawQuery<any>(
+  const rows = await rawQuery<{ name: string }>(
     `SELECT name FROM financial_periods
      WHERE "companyId" = $1 AND status = 'closed'
        AND "deletedAt" IS NULL
@@ -914,7 +914,7 @@ async function resolveByIntent(companyId: number, operationType: string, fallbac
   if (cached) return cached;
 
   // 1. If the hardcoded fallback EXISTS and accepts posting, use it.
-  const [fb] = await rawQuery<any>(
+  const [fb] = await rawQuery<{ code: string }>(
     `SELECT code FROM chart_of_accounts WHERE "companyId"=$1 AND code=$2 AND "allowPosting"=true AND "deletedAt" IS NULL LIMIT 1`,
     [companyId, fallbackCode]
   );
@@ -929,7 +929,7 @@ async function resolveByIntent(companyId: number, operationType: string, fallbac
   if (intent) {
     const likeClauses = intent.keywords.map((_, i) => `LOWER(name) LIKE $${i + 3}`).join(" OR ");
     const params = [companyId, intent.type, ...intent.keywords.map(k => `%${k.toLowerCase()}%`)];
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<{ code: string }>(
       `SELECT code FROM chart_of_accounts
        WHERE "companyId"=$1 AND type=$2 AND "allowPosting"=true AND "deletedAt" IS NULL AND (${likeClauses})
        ORDER BY length(code) ASC LIMIT 1`,
@@ -954,7 +954,7 @@ export async function getAccountCodeFromMapping(
   side: "debit" | "credit",
   fallbackCode: string
 ): Promise<string> {
-  const [mapping] = await rawQuery<any>(
+  const [mapping] = await rawQuery<{ debitAccountCode: string | null; creditAccountCode: string | null; debitCode: string | null; creditCode: string | null }>(
     `SELECT "debitAccountCode", "creditAccountCode", "debitAccountId", "creditAccountId",
             da.code AS "debitCode", ca.code AS "creditCode"
      FROM accounting_mappings am

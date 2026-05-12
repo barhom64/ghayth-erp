@@ -23,7 +23,7 @@ export async function getPersonalizedRecommendations(
 
   // 1. Detect repeated actions and suggest shortcuts
   try {
-    const repeatedActions = await rawQuery<any>(
+    const repeatedActions = await rawQuery<Record<string, unknown>>(
       `SELECT page, action, COUNT(*)::int AS cnt, EXTRACT(DOW FROM "createdAt") AS dow
        FROM user_activity_log
        WHERE "companyId"=$1 AND "userId"=$2
@@ -37,7 +37,7 @@ export async function getPersonalizedRecommendations(
     for (const row of repeatedActions) {
       const days = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
       const dayName = days[Number(row.dow)] ?? "";
-      if (row.page && row.cnt >= 5) {
+      if (row.page && Number(row.cnt) >= 5) {
         recs.push({
           id: `shortcut-${row.page}-${row.action}`,
           type: "shortcut_suggestion",
@@ -55,7 +55,7 @@ export async function getPersonalizedRecommendations(
   // 2. Clients that stopped ordering (churn risk alerts)
   if (["branch_manager", "general_manager", "owner", "finance_manager", "sales"].includes(role)) {
     try {
-      const churnClients = await rawQuery<any>(
+      const churnClients = await rawQuery<Record<string, unknown>>(
         `SELECT c.id, c.name, rs."recencyDays", rs."churnScore"
          FROM client_rfm_scores rs
          JOIN clients c ON c.id = rs."clientId"
@@ -70,7 +70,7 @@ export async function getPersonalizedRecommendations(
           id: `churn-${cl.id}`,
           type: "churn_alert",
           title: `عميل معرض للفقدان: ${cl.name}`,
-          description: `لم يتعامل العميل ${cl.name} منذ ${cl.recencyDays} يوماً — خطر الفقدان ${Math.round(cl.churnScore)}%`,
+          description: `لم يتعامل العميل ${cl.name} منذ ${cl.recencyDays} يوماً — خطر الفقدان ${Math.round(Number(cl.churnScore))}%`,
           action: "التواصل مع العميل",
           actionLink: `/clients/${cl.id}`,
           priority: "high",
@@ -83,7 +83,7 @@ export async function getPersonalizedRecommendations(
   // 3. Best time to contact clients with pending tasks
   if (["branch_manager", "general_manager", "owner", "sales"].includes(role)) {
     try {
-      const pendingClientTasks = await rawQuery<any>(
+      const pendingClientTasks = await rawQuery<Record<string, unknown>>(
         `SELECT DISTINCT t."clientId" AS "clientId", c.name AS "clientName"
          FROM tasks t
          JOIN clients c ON c.id = t."clientId"
@@ -92,7 +92,7 @@ export async function getPersonalizedRecommendations(
         [companyId]
       );
       for (const task of pendingClientTasks) {
-        const [bestTime] = await rawQuery<any>(
+        const [bestTime] = await rawQuery<Record<string, unknown>>(
           `SELECT
              EXTRACT(DOW FROM i."createdAt") AS dow,
              EXTRACT(HOUR FROM i."createdAt") AS hour,
@@ -126,7 +126,7 @@ export async function getPersonalizedRecommendations(
   // 4. Employees with productivity drop
   if (MGR_ROLES.includes(role)) {
     try {
-      const prodDrop = await rawQuery<any>(
+      const prodDrop = await rawQuery<Record<string, unknown>>(
         `WITH recent AS (
            SELECT t."assignedTo",
                   COUNT(*) FILTER (WHERE t.status='completed')::float / NULLIF(COUNT(*), 0) AS rate
@@ -171,7 +171,7 @@ export async function getPersonalizedRecommendations(
   // 5. Budget overspend warnings
   if (OPS_CLOSE_ROLES.includes(role)) {
     try {
-      const budgetAlerts = await rawQuery<any>(
+      const budgetAlerts = await rawQuery<Record<string, unknown>>(
         `SELECT b."accountCode", b.amount, b.used,
                 ROUND((b.used / NULLIF(b.amount,0)) * 100)::int AS "utilization"
          FROM budgets b
@@ -186,10 +186,10 @@ export async function getPersonalizedRecommendations(
           id: `budget-${b.accountCode}`,
           type: "budget_warning",
           title: `تنبيه ميزانية: حساب ${b.accountCode}`,
-          description: `تم استخدام ${b.utilization}% من ميزانية ${b.accountCode} هذا الشهر — المتبقي: ${Number(b.amount - b.used).toLocaleString()}`,
+          description: `تم استخدام ${b.utilization}% من ميزانية ${b.accountCode} هذا الشهر — المتبقي: ${(Number(b.amount) - Number(b.used)).toLocaleString()}`,
           action: "مراجعة الميزانية",
           actionLink: "/finance",
-          priority: b.utilization >= 100 ? "urgent" : "high",
+          priority: Number(b.utilization) >= 100 ? "urgent" : "high",
         });
       }
     } catch (err) { logger.error(err, "Budget recs error:"); }
@@ -198,7 +198,7 @@ export async function getPersonalizedRecommendations(
   // 6. Clients with 3+ consecutive unpaid invoices
   if (OPS_CLOSE_ROLES.includes(role)) {
     try {
-      const badPayers = await rawQuery<any>(
+      const badPayers = await rawQuery<Record<string, unknown>>(
         `SELECT c.id, c.name, COUNT(i.id)::int AS "unpaidCount",
                 COALESCE(SUM(i.total - i."paidAmount"),0)::float AS "totalDue"
          FROM clients c
