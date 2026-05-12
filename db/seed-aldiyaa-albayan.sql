@@ -4,12 +4,14 @@
 -- branch under it, plus a user account for the owner.
 --
 -- Hierarchy:
---   company  : مؤسسة الضياء والبيان للمقاولات       (CR pending — round 2)
---     branch : مؤسسة الدور الحديثة للتطوير العقاري  (CR 4031255541)
---       activities (stored as flat sibling branch rows because the schema
---       has no parentId on branches):
---         - نشاط النقل الثقيل (رخصة 11/00086037)
---         - نشاط التطوير العقاري (شهادة 2392866777)
+--   company  : مؤسسة الضياء والبيان للمقاولات  (CR 4031188915, VAT 310369110700003)
+--     branches (flat — schema has no parentId on branches):
+--       - مؤسسة الدور الحديثة للتطوير العقاري  (مكة، موحد 7026091814, CR 4031255541)
+--           activities under Al-Door (also flat siblings):
+--             * الدور الحديثة — نشاط النقل الثقيل   (رخصة 11/00086037)
+--             * الدور الحديثة — نشاط التطوير العقاري (شهادة 2392866777)
+--       - مؤسسة الضياء والبيان للنقليات — مكة المكرمة  (موحد 7026091798)
+--       - مؤسسة الضياء والبيان للنقليات — حفر الباطن  (موحد 7033364436)
 --
 -- User account:
 --   email:    door@door.sa
@@ -49,9 +51,9 @@ BEGIN
     ) VALUES (
       'مؤسسة الضياء والبيان للمقاولات',
       'Al-Diyaa wal-Bayan Contracting Est.',
-      NULL,            -- TODO: fill CR in round 2
-      NULL,            -- TODO: fill VAT in round 2
-      'مكة المكرمة، شارع الحج',
+      '4031188915',
+      '310369110700003',
+      'مكة المكرمة، حي التنعيم، سعد بن خيثمة رضي الله عنه 24224',
       NULL,
       NULL,
       'active',
@@ -60,9 +62,11 @@ BEGIN
     RETURNING id INTO v_company_id;
   ELSE
     UPDATE companies
-       SET "nameEn" = COALESCE("nameEn", 'Al-Diyaa wal-Bayan Contracting Est.'),
-           address  = COALESCE(address, 'مكة المكرمة، شارع الحج'),
-           status   = 'active'
+       SET "nameEn"    = 'Al-Diyaa wal-Bayan Contracting Est.',
+           "crNumber"  = '4031188915',
+           "vatNumber" = '310369110700003',
+           address     = 'مكة المكرمة، حي التنعيم، سعد بن خيثمة رضي الله عنه 24224',
+           status      = 'active'
      WHERE id = v_company_id;
   END IF;
 
@@ -158,6 +162,45 @@ BEGIN
       'محافظة رماح',
       'active',
       'شهادة تأهيل مطور عقاري رقم 2392866777 — صادرة 2023-09-25'
+    );
+  END IF;
+
+  ------------------------------------------------------------------
+  -- 3c. Additional taxpayer branches from the ZATCA VAT certificate:
+  --       - مؤسسة الضياء والبيان للنقليات — مكة المكرمة  (موحد 7026091798)
+  --       - مؤسسة الضياء والبيان للنقليات — حفر الباطن (موحد 7033364436)
+  ------------------------------------------------------------------
+  IF NOT EXISTS (
+    SELECT 1 FROM branches
+     WHERE "companyId" = v_company_id
+       AND name = 'مؤسسة الضياء والبيان للنقليات — مكة المكرمة'
+  ) THEN
+    INSERT INTO branches (
+      "companyId", name, "nameEn", "taxNumber", city, status
+    ) VALUES (
+      v_company_id,
+      'مؤسسة الضياء والبيان للنقليات — مكة المكرمة',
+      'Al-Diyaa wal-Bayan Transport — Makkah',
+      '7026091798',           -- National Unified Number
+      'مكة المكرمة',
+      'active'
+    );
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM branches
+     WHERE "companyId" = v_company_id
+       AND name = 'مؤسسة الضياء والبيان للنقليات — حفر الباطن'
+  ) THEN
+    INSERT INTO branches (
+      "companyId", name, "nameEn", "taxNumber", city, status
+    ) VALUES (
+      v_company_id,
+      'مؤسسة الضياء والبيان للنقليات — حفر الباطن',
+      'Al-Diyaa wal-Bayan Transport — Hafar Al Batin',
+      '7033364436',           -- National Unified Number
+      'حفر الباطن',
+      'active'
     );
   END IF;
 
