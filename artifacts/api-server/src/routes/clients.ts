@@ -138,7 +138,7 @@ const router = Router();
 router.get("/", authorize({ feature: "crm.clients", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { search = "", classification = "", page = "1", limit: lim = "20" } = req.query as any;
+    const { search = "", classification = "", page = "1", limit: lim = "20" } = req.query as Record<string, string | undefined>;
     const offset = (Math.max(Number(page) || 1, 1) - 1) * (Number(lim) || 20);
 
     const filters = parseScopeFilters(req);

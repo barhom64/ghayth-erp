@@ -50,7 +50,7 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
 
   if (!groupIds?.length) throw new ValidationError("يجب تحديد مجموعة واحدة على الأقل");
 
-  const [subAgent] = await rawQuery<any>(
+  const [subAgent] = await rawQuery<Record<string, unknown>>(
     `SELECT sa.*, c.name AS "clientName"
      FROM umrah_sub_agents sa
      LEFT JOIN clients c ON c.id = sa."clientId" AND c."deletedAt" IS NULL
@@ -60,7 +60,7 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
   if (!subAgent) throw new NotFoundError("الوكيل الفرعي غير موجود");
   if (!subAgent.clientId) throw new ConflictError("الوكيل الفرعي غير مربوط بعميل — يرجى ربطه أولاً", { field: "clientId" });
 
-  const groups = await rawQuery<any>(
+  const groups = await rawQuery<Record<string, unknown>>(
     `SELECT g.id, g."nuskGroupNumber", g.name, g."mutamerCount",
             g."subAgentId", g."agentId",
             (SELECT MIN(p."arrivalDate") FROM umrah_pilgrims p
@@ -73,7 +73,7 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     throw new NotFoundError("بعض المجموعات غير موجودة");
   }
 
-  const alreadyInvoiced = await rawQuery<any>(
+  const alreadyInvoiced = await rawQuery<Record<string, unknown>>(
     `SELECT DISTINCT si."groupId", inv.ref
      FROM umrah_sales_invoice_items si
      JOIN umrah_sales_invoices inv ON inv.id = si."invoiceId"
@@ -81,7 +81,7 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     [groupIds, scope.companyId]
   );
   if (alreadyInvoiced.length > 0) {
-    const refs = alreadyInvoiced.map((r: any) => r.ref).join(", ");
+    const refs = alreadyInvoiced.map((r: Record<string, unknown>) => r.ref).join(", ");
     throw new ConflictError(`بعض المجموعات مفوترة مسبقاً في: ${refs}`);
   }
 
@@ -92,14 +92,14 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
   const groupRefs: string[] = [];
 
   for (const grp of groups) {
-    const mutamerCount = grp.mutamerCount || 0;
-    const entryDate = grp.entryDate;
+    const mutamerCount = Number(grp.mutamerCount || 0);
+    const entryDate = grp.entryDate as string | undefined;
 
     if (!entryDate) {
       throw new ValidationError(`المجموعة ${grp.nuskGroupNumber} لا تحتوي على تاريخ دخول — لا يمكن تحديد السعر`);
     }
 
-    const [pricing] = await rawQuery<any>(
+    const [pricing] = await rawQuery<Record<string, unknown>>(
       `SELECT "pricePerMutamer" FROM umrah_pricing
        WHERE "companyId" = $1 AND "deletedAt" IS NULL
          AND ("subAgentId" = $2 OR ("subAgentId" IS NULL AND "agentId" = $3))
@@ -118,11 +118,11 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     const lineTotal = mutamerCount * price;
     subtotal += lineTotal;
     totalPilgrims += mutamerCount;
-    groupRefs.push(grp.nuskGroupNumber);
+    groupRefs.push(grp.nuskGroupNumber as string);
 
     lineItems.push({
       itemType: "group",
-      groupId: grp.id,
+      groupId: grp.id as number,
       violationId: null,
       description: `مجموعة ${grp.nuskGroupNumber} — ${grp.name || ""}`.trim(),
       quantity: mutamerCount,
@@ -130,19 +130,20 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
       lineTotal,
     });
 
-    const nuskInvs = await rawQuery<any>(
+    const nuskInvs = await rawQuery<Record<string, unknown>>(
       `SELECT "nuskInvoiceNumber" FROM umrah_nusk_invoices
        WHERE "groupId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [grp.id, scope.companyId]
     );
     for (const ni of nuskInvs) {
-      if (ni.nuskInvoiceNumber && !nuskInvoiceRefs.includes(ni.nuskInvoiceNumber)) {
-        nuskInvoiceRefs.push(ni.nuskInvoiceNumber);
+      const niRef = ni.nuskInvoiceNumber as string | null;
+      if (niRef && !nuskInvoiceRefs.includes(niRef)) {
+        nuskInvoiceRefs.push(niRef);
       }
     }
   }
 
-  const violations = await rawQuery<any>(
+  const violations = await rawQuery<Record<string, unknown>>(
     `SELECT v.id, v.type, v.description, v."penaltyAmount", v."groupId"
      FROM umrah_violations v
      WHERE v."subAgentId" = $1 AND v."companyId" = $2
@@ -159,8 +160,8 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     penaltiesTotal += amount;
     lineItems.push({
       itemType: "penalty",
-      groupId: v.groupId,
-      violationId: v.id,
+      groupId: v.groupId as number | null,
+      violationId: v.id as number,
       description: v.type === "overstay" ? `غرامة تجاوز — ${v.description || ""}`.trim()
                  : v.type === "absconded" ? `غرامة متغيّب — ${v.description || ""}`.trim()
                  : `غرامة — ${v.description || ""}`.trim(),
@@ -171,7 +172,7 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
   }
 
   // VAT: fetch company umrah VAT policy (defaults to 0 for exempt umrah services)
-  const [vatSetting] = await rawQuery<any>(
+  const [vatSetting] = await rawQuery<Record<string, unknown>>(
     `SELECT value FROM system_settings WHERE "companyId" = $1 AND key = 'umrah_vat_rate' LIMIT 1`,
     [scope.companyId]
   );
@@ -179,7 +180,7 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
   const vatAmount = roundTo2(subtotal * (vatRate / 100));
   const total = subtotal + penaltiesTotal + vatAmount;
 
-  const [seqRow] = await rawQuery<any>(`SELECT nextval('umrah_sales_invoice_seq') AS seq`);
+  const [seqRow] = await rawQuery<Record<string, unknown>>(`SELECT nextval('umrah_sales_invoice_seq') AS seq`);
   const seqNum = Number(seqRow.seq);
   const year = currentYear();
   const month = currentMonthPadded();
@@ -206,7 +207,7 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     if (lineItems.length > 0) {
       const cols = 8;
       const valuesSql: string[] = [];
-      const params: any[] = [];
+      const params: unknown[] = [];
       for (const li of lineItems) {
         const base = params.length;
         valuesSql.push(`(${Array.from({ length: cols }, (_, i) => `$${base + i + 1}`).join(",")})`);
@@ -287,8 +288,8 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
         total,
         currency: "SAR",
         issueDate: new Date().toISOString(),
-        buyer: { name: subAgent.clientName || "وكيل فرعي" },
-        lines: lineItems.map((li: any) => ({
+        buyer: { name: (subAgent.clientName as string | null) || "وكيل فرعي" },
+        lines: lineItems.map((li) => ({
           description: li.description ?? "",
           quantity: Number(li.quantity ?? 1),
           unitPrice: Number(li.unitPrice ?? 0),
@@ -316,13 +317,13 @@ export async function registerPayment(scope: Scope, input: RegisterPaymentInput)
 
   if (!sarAmount || sarAmount <= 0) throw new ValidationError("المبلغ بالريال مطلوب");
 
-  const [subAgent] = await rawQuery<any>(
+  const [subAgent] = await rawQuery<Record<string, unknown>>(
     `SELECT id, "clientId" FROM umrah_sub_agents WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
     [subAgentId, scope.companyId]
   );
   if (!subAgent) throw new NotFoundError("الوكيل الفرعي غير موجود");
 
-  const [seqRow] = await rawQuery<any>(`SELECT nextval('umrah_payment_seq') AS seq`);
+  const [seqRow] = await rawQuery<Record<string, unknown>>(`SELECT nextval('umrah_payment_seq') AS seq`);
   const seqNum = Number(seqRow.seq);
   const year = currentYear();
   const month = currentMonthPadded();
@@ -438,7 +439,7 @@ export async function generateStatement(scope: Scope, subAgentId: number, type: 
     ? { fromDate: from, toDate: to }
     : { fromDate: "1970-01-01", toDate: "2099-12-31" };
 
-  const invoices = await rawQuery<any>(
+  const invoices = await rawQuery<Record<string, unknown>>(
     `SELECT id, ref, "invoiceDate" AS date, total, "penaltiesTotal", "groupRefs", "nuskInvoiceRefs", "pilgrimCount"
      FROM umrah_sales_invoices
      WHERE "companyId" = $1 AND "subAgentId" = $2 AND "deletedAt" IS NULL
@@ -447,7 +448,7 @@ export async function generateStatement(scope: Scope, subAgentId: number, type: 
     [scope.companyId, subAgentId, dateFilter.fromDate, dateFilter.toDate]
   );
 
-  const payments = await rawQuery<any>(
+  const payments = await rawQuery<Record<string, unknown>>(
     `SELECT p.id, p.ref, p."paymentDate" AS date, p."sarAmount", p.method
      FROM umrah_payments p
      WHERE p."companyId" = $1 AND p."subAgentId" = $2 AND p."deletedAt" IS NULL
@@ -456,7 +457,7 @@ export async function generateStatement(scope: Scope, subAgentId: number, type: 
     [scope.companyId, subAgentId, dateFilter.fromDate, dateFilter.toDate]
   );
 
-  const violations = await rawQuery<any>(
+  const violations = await rawQuery<Record<string, unknown>>(
     `SELECT v.id, v.type, v."penaltyAmount", v."createdAt"::date AS date, v."groupId"
      FROM umrah_violations v
      WHERE v."subAgentId" = $1 AND v."companyId" = $2 AND v."deletedAt" IS NULL
@@ -467,19 +468,19 @@ export async function generateStatement(scope: Scope, subAgentId: number, type: 
     [subAgentId, scope.companyId, dateFilter.fromDate, dateFilter.toDate]
   );
 
-  const openingInvoices = await rawQuery<any>(
+  const openingInvoices = await rawQuery<Record<string, unknown>>(
     `SELECT COALESCE(SUM(total), 0) AS total FROM umrah_sales_invoices
      WHERE "companyId" = $1 AND "subAgentId" = $2 AND "deletedAt" IS NULL
        AND "invoiceDate" < $3`,
     [scope.companyId, subAgentId, dateFilter.fromDate]
   );
-  const openingPayments = await rawQuery<any>(
+  const openingPayments = await rawQuery<Record<string, unknown>>(
     `SELECT COALESCE(SUM("sarAmount"), 0) AS total FROM umrah_payments
      WHERE "companyId" = $1 AND "subAgentId" = $2 AND "deletedAt" IS NULL
        AND "paymentDate" < $3`,
     [scope.companyId, subAgentId, dateFilter.fromDate]
   );
-  const openingViolations = await rawQuery<any>(
+  const openingViolations = await rawQuery<Record<string, unknown>>(
     `SELECT COALESCE(SUM("penaltyAmount"), 0) AS total FROM umrah_violations
      WHERE "subAgentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
        AND "linkedInvoiceId" IS NULL AND "createdAt"::date < $3`,
@@ -611,7 +612,7 @@ function buildSummaryStatement(
 // ────────────────────────────────────────────────────────────────────────────
 
 export async function getDashboard(scope: Scope, seasonId: number) {
-  const pilgrimStats = await rawQuery<any>(
+  const pilgrimStats = await rawQuery<Record<string, unknown>>(
     `SELECT
        COUNT(*)::int AS "totalMutamers",
        COUNT(*) FILTER (WHERE "isInsideKingdom" = TRUE)::int AS "insideKingdom",
@@ -622,7 +623,7 @@ export async function getDashboard(scope: Scope, seasonId: number) {
     [scope.companyId, seasonId]
   );
 
-  const revenueStats = await rawQuery<any>(
+  const revenueStats = await rawQuery<Record<string, unknown>>(
     `SELECT COALESCE(SUM(total), 0) AS "totalRevenue",
             COALESCE(SUM("paidAmount"), 0) AS "totalPaid"
      FROM umrah_sales_invoices
@@ -631,7 +632,7 @@ export async function getDashboard(scope: Scope, seasonId: number) {
     [scope.companyId, seasonId]
   );
 
-  const costStats = await rawQuery<any>(
+  const costStats = await rawQuery<Record<string, unknown>>(
     `SELECT COALESCE(SUM("netCost"), 0) AS "totalCost"
      FROM umrah_nusk_invoices ni
      JOIN umrah_groups g ON g.id = ni."groupId"
@@ -639,7 +640,7 @@ export async function getDashboard(scope: Scope, seasonId: number) {
     [scope.companyId, seasonId]
   );
 
-  const penaltyStats = await rawQuery<any>(
+  const penaltyStats = await rawQuery<Record<string, unknown>>(
     `SELECT COALESCE(SUM("penaltyAmount"), 0) AS "unpaidPenalties"
      FROM umrah_violations
      WHERE "companyId" = $1 AND status IN ('open','detected') AND "deletedAt" IS NULL
@@ -647,7 +648,7 @@ export async function getDashboard(scope: Scope, seasonId: number) {
     [scope.companyId, seasonId]
   );
 
-  const agentPerformance = await rawQuery<any>(
+  const agentPerformance = await rawQuery<Record<string, unknown>>(
     `SELECT
        sa.id AS "subAgentId", sa.name AS "subAgentName",
        (SELECT COUNT(*)::int FROM umrah_groups g2

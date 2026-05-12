@@ -175,7 +175,7 @@ async function postJson(
   body: string,
   headers: Record<string, string>,
   externalSignal?: AbortSignal,
-): Promise<any> {
+): Promise<Record<string, unknown>> {
   const controller = new AbortController();
   const timeoutId = setTimeout(
     () => controller.abort(new Error(`ZATCA request timed out after ${DEFAULT_TIMEOUT_MS}ms`)),
@@ -215,7 +215,7 @@ async function postJson(
       );
     }
 
-    return parsed;
+    return parsed as Record<string, unknown>;
   } finally {
     clearTimeout(timeoutId);
   }

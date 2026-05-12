@@ -81,7 +81,7 @@ interface ZatcaInvoiceLineRow {
   description: string | null;
   quantity: number | string;
   unitPrice: number | string;
-  total: number | string;
+  lineTotal: number | string;
   vatRate: number | string | null;
   vatAmount: number | string | null;
 }
@@ -560,7 +560,7 @@ zatcaRouter.get("/zatca/invoice/:id/xml", authorize({ feature: "finance.zatca", 
       taxPercent: String(invoice.vatRate || 15),
       exemptionReason: invoice.exemptionReason || undefined,
       payableAmount: Number(invoice.total || 0).toFixed(2),
-      lines: lines.length > 0 ? lines.map((l: any) => ({
+      lines: lines.length > 0 ? lines.map((l) => ({
         description: l.description || "خدمة",
         quantity: Number(l.quantity),
         unitPrice: Number(l.unitPrice),
@@ -650,7 +650,7 @@ zatcaRouter.post("/zatca/invoice/:id/submit", authorize({ feature: "finance.zatc
       taxPercent: String(invoice.vatRate || 15),
       exemptionReason: invoice.exemptionReason || undefined,
       payableAmount: Number(invoice.total || 0).toFixed(2),
-      lines: lines.length > 0 ? lines.map((l: any) => ({
+      lines: lines.length > 0 ? lines.map((l) => ({
         description: l.description || "خدمة",
         quantity: Number(l.quantity),
         unitPrice: Number(l.unitPrice),
@@ -800,7 +800,7 @@ zatcaRouter.get("/zatca/submissions", authorize({ feature: "finance.zatca", acti
   try {
     const scope = req.scope!;
 
-    const { page = "1", limit: lim = "20", status = "" } = req.query as any;
+    const { page = "1", limit: lim = "20", status = "" } = req.query as Record<string, string | undefined>;
     const safeLim = Math.min(Number(lim) || 50, 500);
     const offset = (Math.max(Number(page) || 1, 1) - 1) * safeLim;
 

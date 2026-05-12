@@ -34,7 +34,7 @@ export async function buildEmployeeSchedule(
   );
   const employeeName = empRow?.name ?? `Employee ${employeeId}`;
 
-  const tasks = await rawQuery<any>(
+  const tasks = await rawQuery<Record<string, unknown>>(
     `SELECT t.id, t.title, t."scheduledDate" as "scheduledTime",
             t."estimatedDuration", t.priority, t.status
      FROM tasks t
@@ -46,7 +46,7 @@ export async function buildEmployeeSchedule(
     [companyId, date, employeeId]
   );
 
-  const tickets = await rawQuery<any>(
+  const tickets = await rawQuery<Record<string, unknown>>(
     `SELECT st.id, st.title, st."createdAt" as "scheduledTime",
             st."escalationLevel", st."slaBreached"
      FROM support_tickets st
@@ -58,7 +58,7 @@ export async function buildEmployeeSchedule(
     [companyId, employeeId]
   );
 
-  const maintenance = await rawQuery<any>(
+  const maintenance = await rawQuery<Record<string, unknown>>(
     `SELECT mr.id, mr.description AS title, mr."createdAt" as "scheduledTime", mr.priority
      FROM maintenance_requests mr
      WHERE mr."companyId"=$1
@@ -73,21 +73,21 @@ export async function buildEmployeeSchedule(
   for (const t of tasks) {
     items.push({
       type: "task",
-      id: t.id,
-      title: t.title,
+      id: t.id as number,
+      title: t.title as string,
       priority: t.priority === "urgent" ? 4 : t.priority === "high" ? 3 : t.priority === "normal" ? 2 : 1,
-      scheduledTime: t.scheduledTime,
-      estimatedDuration: t.estimatedDuration ?? 60,
+      scheduledTime: t.scheduledTime as string | undefined,
+      estimatedDuration: (t.estimatedDuration as number | undefined) ?? 60,
     });
   }
 
   for (const t of tickets) {
     items.push({
       type: "ticket",
-      id: t.id,
-      title: t.title,
-      priority: t.slaBreached ? 5 : t.escalationLevel > 1 ? 4 : 2,
-      scheduledTime: t.scheduledTime,
+      id: t.id as number,
+      title: t.title as string,
+      priority: t.slaBreached ? 5 : Number(t.escalationLevel) > 1 ? 4 : 2,
+      scheduledTime: t.scheduledTime as string | undefined,
       estimatedDuration: 30,
     });
   }
@@ -95,10 +95,10 @@ export async function buildEmployeeSchedule(
   for (const m of maintenance) {
     items.push({
       type: "maintenance",
-      id: m.id,
-      title: m.title,
+      id: m.id as number,
+      title: m.title as string,
       priority: m.priority === "urgent" ? 4 : 2,
-      scheduledTime: m.scheduledTime,
+      scheduledTime: m.scheduledTime as string | undefined,
       estimatedDuration: 90,
     });
   }

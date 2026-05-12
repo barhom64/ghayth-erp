@@ -498,7 +498,7 @@ vendorsRouter.patch("/commitments/:id/approve", authorize({ feature: "finance.ve
     const { approved, notes } = zodParse(approvalSchema.safeParse(req.body ?? {}));
     const newStatus = approved === "returned" ? "returned" : approved === true ? "approved" : "rejected";
     if (newStatus === "rejected" && !notes) throw new ValidationError("يجب ذكر سبب الرفض");
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "purchase_orders",
       id,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
@@ -525,7 +525,7 @@ vendorsRouter.patch("/receivables/:id/approve", authorize({ feature: "finance.ve
     const { approved, notes } = zodParse(approvalSchema.safeParse(req.body ?? {}));
     const newStatus = approved === "returned" ? "returned" : approved === true ? "approved" : "rejected";
     if (newStatus === "rejected" && !notes) throw new ValidationError("يجب ذكر سبب الرفض");
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "invoices",
       id,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
@@ -552,7 +552,7 @@ vendorsRouter.patch("/vouchers/:id/approve", authorize({ feature: "finance.vendo
     const { approved, notes } = zodParse(approvalSchema.safeParse(req.body ?? {}));
     const newStatus = approved === "returned" ? "returned" : approved === true ? "approved" : "rejected";
     if (newStatus === "rejected" && !notes) throw new ValidationError("يجب ذكر سبب الرفض");
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "journal_entries",
       id,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
@@ -579,7 +579,7 @@ vendorsRouter.patch("/financial-requests/:id/approve", authorize({ feature: "fin
     const { approved, notes } = zodParse(approvalSchema.safeParse(req.body ?? {}));
     const newStatus = approved === "returned" ? "returned" : approved === true ? "approved" : "rejected";
     if (newStatus === "rejected" && !notes) throw new ValidationError("يجب ذكر سبب الرفض");
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "workflow_instances",
       id,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
@@ -605,7 +605,7 @@ vendorsRouter.patch("/budgets/:id/approve", authorize({ feature: "finance.vendor
     const { approved, notes } = zodParse(approvalSchema.safeParse(req.body ?? {}));
     const newStatus = approved === "returned" ? "returned" : approved === true ? "approved" : "rejected";
     if (newStatus === "rejected" && !notes) throw new ValidationError("يجب ذكر سبب الرفض");
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "budgets",
       id,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },

@@ -11,7 +11,7 @@ const router = Router();
 router.get("/cron-jobs", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(`SELECT * FROM cron_jobs ORDER BY name LIMIT 500`, []);
+    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM cron_jobs ORDER BY name LIMIT 500`, []);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Cron jobs error:"); }
 });
@@ -22,7 +22,7 @@ router.post("/cron-jobs/:id/toggle", authorize({ feature: "admin", action: "upda
     const id = parseId(req.params.id, "id");
     const { affectedRows } = await rawExecute(`UPDATE cron_jobs SET "isActive" = NOT "isActive" WHERE id=$1`, [id]);
     if (!affectedRows) throw new NotFoundError("المهمة غير موجودة");
-    const [row] = await rawQuery<any>(`SELECT * FROM cron_jobs WHERE id=$1`, [id]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM cron_jobs WHERE id=$1`, [id]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "cron_jobs", entityId: id, after: { isActive: row?.isActive } }).catch((e) => logger.error(e, "automation background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "automation.cron_job.toggled", entity: "cron_jobs", entityId: id, details: JSON.stringify({ isActive: row?.isActive }) }).catch((e) => logger.error(e, "automation background task failed"));
     res.json(row);
@@ -33,10 +33,10 @@ router.post("/cron-jobs/:id/trigger", authorize({ feature: "admin", action: "upd
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [job] = await rawQuery<any>(`SELECT * FROM cron_jobs WHERE id=$1`, [id]);
+    const [job] = await rawQuery<Record<string, unknown>>(`SELECT * FROM cron_jobs WHERE id=$1`, [id]);
     if (!job) throw new NotFoundError("المهمة غير موجودة");
 
-    const result = await triggerJobByName(job.name);
+    const result = await triggerJobByName(job.name as string);
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "cron_jobs", entityId: id, after: { jobName: job.name, success: result.success } }).catch((e) => logger.error(e, "automation background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "automation.cron_job.triggered", entity: "cron_jobs", entityId: id, details: JSON.stringify({ jobName: job.name, success: result.success }) }).catch((e) => logger.error(e, "automation background task failed"));
@@ -51,12 +51,12 @@ router.post("/cron-jobs/:id/trigger", authorize({ feature: "admin", action: "upd
 router.get("/cron-logs", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { jobId } = req.query as any;
+    const { jobId } = req.query as Record<string, string | undefined>;
     const conditions: string[] = [`"companyId" = $1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (jobId) { params.push(Number(jobId) || 0); conditions.push(`"jobId" = $${params.length}`); }
     const where = conditions.join(" AND ");
-    const rows = await rawQuery<any>(`SELECT * FROM cron_logs WHERE ${where} ORDER BY "createdAt" DESC LIMIT 100`, params);
+    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM cron_logs WHERE ${where} ORDER BY "createdAt" DESC LIMIT 100`, params);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "Cron logs error:"); }
 });
@@ -65,11 +65,11 @@ router.get("/notification-stats", authorize({ feature: "admin", action: "list" }
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT channel, status, COUNT(*) as count FROM notification_log WHERE "companyId"=$1 GROUP BY channel, status ORDER BY channel`,
       [cid]
     );
-    const [total] = await rawQuery<any>(`SELECT COUNT(*) as total FROM notification_log WHERE "companyId"=$1`, [cid]);
+    const [total] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as total FROM notification_log WHERE "companyId"=$1`, [cid]);
     res.json({ breakdown: rows, total: Number(total?.total || 0) });
   } catch (err) { handleRouteError(err, res, "Notification stats error:"); }
 });
@@ -77,16 +77,16 @@ router.get("/notification-stats", authorize({ feature: "admin", action: "list" }
 router.get("/event-logs", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { action, limit: lim, offset: off } = req.query as any;
+    const { action, limit: lim, offset: off } = req.query as Record<string, string | undefined>;
     const pageLimit = Math.min(Number(lim) || 50, 200);
     const pageOffset = Number(off) || 0;
     const conditions = [`"companyId" = $1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (action) { params.push(action); conditions.push(`action = $${params.length}`); }
     const where = conditions.join(" AND ");
-    const [countRow] = await rawQuery<any>(`SELECT COUNT(*) AS total FROM event_logs WHERE ${where}`, params);
+    const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM event_logs WHERE ${where}`, params);
     params.push(pageLimit, pageOffset);
-    const rows = await rawQuery<any>(`SELECT * FROM event_logs WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
+    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM event_logs WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
     res.json({ data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset });
   } catch (err) { handleRouteError(err, res, "Event logs error:"); }
 });
@@ -94,7 +94,7 @@ router.get("/event-logs", authorize({ feature: "admin", action: "list" }), async
 router.get("/proactive-rules", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM proactive_rules WHERE "companyId" = $1 ORDER BY module, name LIMIT 500`,
       [scope.companyId]
     );
@@ -110,7 +110,7 @@ router.post("/proactive-rules/:id/toggle", authorize({ feature: "admin", action:
       `UPDATE proactive_rules SET "isActive" = NOT "isActive" WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
     );
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM proactive_rules WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
     );
@@ -124,18 +124,18 @@ router.post("/proactive-rules/:id/toggle", authorize({ feature: "admin", action:
 router.get("/automation-logs", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { type, page: pg, limit: lim } = req.query as any;
+    const { type, page: pg, limit: lim } = req.query as Record<string, string | undefined>;
     const page = Number(pg) || 1;
     const limit = Math.min(Number(lim) || 50, 200);
     const offset = (page - 1) * limit;
     const conditions = [`"companyId" = $1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (type) { params.push(type); conditions.push(`"automationType" = $${params.length}`); }
     const where = conditions.join(" AND ");
-    const [countRow] = await rawQuery<any>(`SELECT COUNT(*) as total FROM automation_logs WHERE ${where}`, params);
+    const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as total FROM automation_logs WHERE ${where}`, params);
     const total = Number(countRow?.total || 0);
     params.push(limit, offset);
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM automation_logs WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
     );
@@ -148,23 +148,23 @@ router.get("/automation-stats", authorize({ feature: "admin", action: "list" }),
     const scope = req.scope!;
     const cid = scope.companyId;
     const [[totalRow], [todayRow], [weekRow], byType, byModule, recent] = await Promise.all([
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT COUNT(*) as total FROM automation_logs WHERE "companyId" = $1`,
         [cid]
       ),
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT COUNT(*) as total FROM automation_logs WHERE "companyId" = $1 AND "createdAt"::date = CURRENT_DATE`,
         [cid]
       ),
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT COUNT(*) as total FROM automation_logs WHERE "companyId" = $1 AND "createdAt" >= CURRENT_DATE - INTERVAL '7 days'`,
         [cid]
       ),
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT "automationType", COUNT(*) as count FROM automation_logs WHERE "companyId" = $1 GROUP BY "automationType" ORDER BY count DESC`,
         [cid]
       ),
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT pr.module, COUNT(al.id) as count
          FROM automation_logs al
          LEFT JOIN proactive_rules pr ON pr.name = al."automationType"
@@ -172,7 +172,7 @@ router.get("/automation-stats", authorize({ feature: "admin", action: "list" }),
          GROUP BY pr.module ORDER BY count DESC`,
         [cid]
       ),
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT "automationType", "triggerReason", "actionTaken", "createdAt"
          FROM automation_logs WHERE "companyId" = $1 ORDER BY "createdAt" DESC LIMIT 5`,
         [cid]

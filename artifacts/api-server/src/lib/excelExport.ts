@@ -48,7 +48,7 @@ export async function exportTrialBalanceExcel(companyId: number, startDate?: str
   if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
   if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
 
-  const rows = await rawQuery<any>(
+  const rows = await rawQuery<Record<string, unknown>>(
     `SELECT coa.code, coa.name, coa.type,
             COALESCE(SUM(jl.debit), 0) AS "totalDebit",
             COALESCE(SUM(jl.credit), 0) AS "totalCredit",
@@ -66,7 +66,7 @@ export async function exportTrialBalanceExcel(companyId: number, startDate?: str
   const sheet: ExcelSheet = {
     name: "ميزان المراجعة",
     headers: ["الرمز", "اسم الحساب", "نوع الحساب", "المدين", "الدائن", "الرصيد"],
-    rows: rows.map((r: any) => [r.code, r.name, typeMap[r.type] || r.type, Number(r.totalDebit), Number(r.totalCredit), Number(r.balance)]),
+    rows: rows.map((r) => [r.code as string, r.name as string, typeMap[r.type as string] || (r.type as string), Number(r.totalDebit), Number(r.totalCredit), Number(r.balance)]),
     colWidths: [12, 35, 16, 15, 15, 15],
   };
 
@@ -84,8 +84,8 @@ export async function exportIncomeStatementExcel(companyId: number, startDate?: 
   if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
   if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
 
-  const revenues = await rawQuery<any>(`SELECT coa.code, coa.name, COALESCE(SUM(jl.credit) - SUM(jl.debit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code LEFT JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL ${dateFilter} WHERE coa."companyId" = $1 AND coa.type = 'revenue' GROUP BY coa.code, coa.name ORDER BY coa.code`, params);
-  const expenses = await rawQuery<any>(`SELECT coa.code, coa.name, COALESCE(SUM(jl.debit) - SUM(jl.credit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code LEFT JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL ${dateFilter} WHERE coa."companyId" = $1 AND coa.type = 'expense' GROUP BY coa.code, coa.name ORDER BY coa.code`, params);
+  const revenues = await rawQuery<Record<string, unknown>>(`SELECT coa.code, coa.name, COALESCE(SUM(jl.credit) - SUM(jl.debit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code LEFT JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL ${dateFilter} WHERE coa."companyId" = $1 AND coa.type = 'revenue' GROUP BY coa.code, coa.name ORDER BY coa.code`, params);
+  const expenses = await rawQuery<Record<string, unknown>>(`SELECT coa.code, coa.name, COALESCE(SUM(jl.debit) - SUM(jl.credit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code LEFT JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL ${dateFilter} WHERE coa."companyId" = $1 AND coa.type = 'expense' GROUP BY coa.code, coa.name ORDER BY coa.code`, params);
 
   const totalRevenue = revenues.reduce((s: number, r: any) => s + Number(r.amount), 0);
   const totalExpenses = expenses.reduce((s: number, r: any) => s + Number(r.amount), 0);
@@ -94,7 +94,7 @@ export async function exportIncomeStatementExcel(companyId: number, startDate?: 
     name: "الإيرادات",
     headers: ["الرمز", "اسم الحساب", "المبلغ"],
     rows: [
-      ...revenues.map((r: any) => [r.code, r.name, Number(r.amount)]),
+      ...revenues.map((r) => [r.code as string, r.name as string, Number(r.amount)]),
       ["", "إجمالي الإيرادات", totalRevenue],
     ],
     colWidths: [12, 40, 18],
@@ -104,7 +104,7 @@ export async function exportIncomeStatementExcel(companyId: number, startDate?: 
     name: "المصروفات",
     headers: ["الرمز", "اسم الحساب", "المبلغ"],
     rows: [
-      ...expenses.map((r: any) => [r.code, r.name, Number(r.amount)]),
+      ...expenses.map((r) => [r.code as string, r.name as string, Number(r.amount)]),
       ["", "إجمالي المصروفات", totalExpenses],
       ["", "صافي الدخل", totalRevenue - totalExpenses],
     ],
@@ -121,7 +121,7 @@ export async function exportInvoicesExcel(companyId: number, startDate?: string,
   if (startDate) { params.push(startDate); dateFilter += ` AND i."createdAt" >= $${params.length}`; }
   if (endDate) { params.push(endDate); dateFilter += ` AND i."createdAt" <= $${params.length}`; }
 
-  const invoices = await rawQuery<any>(
+  const invoices = await rawQuery<Record<string, unknown>>(
     `SELECT i.ref, c.name AS "clientName", i.status, i.subtotal, i."vatAmount", i.total, i."paidAmount",
             i.total - i."paidAmount" AS remaining, i."createdAt", i."dueDate"
      FROM invoices i
@@ -136,12 +136,12 @@ export async function exportInvoicesExcel(companyId: number, startDate?: string,
   const sheet: ExcelSheet = {
     name: "الفواتير",
     headers: ["الرقم المرجعي", "العميل", "الحالة", "قبل الضريبة", "الضريبة", "الإجمالي", "المدفوع", "المتبقي", "تاريخ الإنشاء", "تاريخ الاستحقاق"],
-    rows: invoices.map((i: any) => [
-      i.ref, i.clientName, statusMap[i.status] || i.status,
+    rows: invoices.map((i) => [
+      i.ref as string, i.clientName as string, statusMap[i.status as string] || (i.status as string),
       Number(i.subtotal || 0), Number(i.vatAmount || 0), Number(i.total || 0),
       Number(i.paidAmount || 0), Number(i.remaining || 0),
-      i.createdAt ? new Date(i.createdAt).toLocaleDateString("ar-SA") : "",
-      i.dueDate ? new Date(i.dueDate).toLocaleDateString("ar-SA") : "",
+      i.createdAt ? new Date(i.createdAt as string | Date).toLocaleDateString("ar-SA") : "",
+      i.dueDate ? new Date(i.dueDate as string | Date).toLocaleDateString("ar-SA") : "",
     ]),
     colWidths: [14, 30, 12, 14, 12, 14, 14, 14, 16, 16],
   };
@@ -155,7 +155,7 @@ export async function exportPayrollExcel(companyId: number, period?: string): Pr
   const params: any[] = [companyId];
   if (period) { params.push(period); filter = ` AND pr.period = $${params.length}`; }
 
-  const records = await rawQuery<any>(
+  const records = await rawQuery<Record<string, unknown>>(
     `SELECT pr.period, e.name AS "employeeName", ea."jobTitle" AS position, ea.salary AS "baseSalary",
             pr."grossSalary", pr."totalDeductions", pr."netSalary",
             pr.status, pr."createdAt" AS "paidAt"
@@ -167,11 +167,11 @@ export async function exportPayrollExcel(companyId: number, period?: string): Pr
     params
   );
 
-  const periods = [...new Set(records.map((r: any) => r.period as string))];
+  const periods = [...new Set(records.map((r) => r.period as string))];
   const sheets: ExcelSheet[] = [];
 
   for (const p of periods.slice(0, 12)) {
-    const periodRows = records.filter((r: any) => r.period === p);
+    const periodRows = records.filter((r) => r.period === p);
     const totalGross = periodRows.reduce((s: number, r: any) => s + Number(r.grossSalary || 0), 0);
     const totalNet = periodRows.reduce((s: number, r: any) => s + Number(r.netSalary || 0), 0);
 
@@ -179,8 +179,8 @@ export async function exportPayrollExcel(companyId: number, period?: string): Pr
       name: `رواتب ${p}`,
       headers: ["الموظف", "المسمى الوظيفي", "الراتب الأساسي", "بدل سكن", "بدل نقل", "أوفرتايم", "الراتب الإجمالي", "الاستقطاعات", "صافي الراتب", "الحالة"],
       rows: [
-        ...periodRows.map((r: any) => [
-          r.employeeName, r.position || "",
+        ...periodRows.map((r) => [
+          r.employeeName as string, (r.position as string | null) || "",
           Number(r.baseSalary || 0), Number(r.housingAllowance || 0), Number(r.transportAllowance || 0),
           Number(r.overtime || 0), Number(r.grossSalary || 0),
           Number(r.totalDeductions || 0), Number(r.netSalary || 0),
@@ -210,7 +210,7 @@ export async function exportAttendanceExcel(companyId: number, startDate?: strin
   if (startDate) { params.push(startDate); dateFilter += ` AND a.date >= $${params.length}`; }
   if (endDate) { params.push(endDate); dateFilter += ` AND a.date <= $${params.length}`; }
 
-  const records = await rawQuery<any>(
+  const records = await rawQuery<Record<string, unknown>>(
     `SELECT e.name AS "employeeName", ea."jobTitle" AS position, a.date, a.status,
             a."checkIn", a."checkOut",
             CASE WHEN a."checkIn" IS NOT NULL AND a."checkOut" IS NOT NULL
@@ -233,13 +233,13 @@ export async function exportAttendanceExcel(companyId: number, startDate?: strin
   const sheet: ExcelSheet = {
     name: "سجل الحضور",
     headers: ["الموظف", "المسمى الوظيفي", "التاريخ", "الحالة", "وقت الحضور", "وقت الانصراف", "ساعات العمل", "ملاحظات"],
-    rows: records.map((r: any) => [
-      r.employeeName, r.position || "",
-      r.date ? new Date(r.date).toLocaleDateString("ar-SA") : "",
-      statusMap[r.status] || r.status,
-      r.checkIn || "", r.checkOut || "",
+    rows: records.map((r) => [
+      r.employeeName as string, (r.position as string | null) || "",
+      r.date ? new Date(r.date as string | Date).toLocaleDateString("ar-SA") : "",
+      statusMap[r.status as string] || (r.status as string),
+      (r.checkIn as string | null) || "", (r.checkOut as string | null) || "",
       r.workHours ? Number(r.workHours).toFixed(1) : "",
-      r.notes || "",
+      (r.notes as string | null) || "",
     ]),
     colWidths: [25, 20, 14, 12, 12, 12, 12, 30],
   };
@@ -249,7 +249,7 @@ export async function exportAttendanceExcel(companyId: number, startDate?: strin
 }
 
 export async function exportFleetExcel(companyId: number): Promise<Buffer> {
-  const vehicles = await rawQuery<any>(
+  const vehicles = await rawQuery<Record<string, unknown>>(
     `SELECT v."plateNumber", v.make, v.model, v.year, v.status,
             fd.name AS "driverName",
             v."nextServiceDate", v."currentMileage", v.color,
@@ -273,18 +273,18 @@ export async function exportFleetExcel(companyId: number): Promise<Buffer> {
   const vehicleSheet: ExcelSheet = {
     name: "المركبات",
     headers: ["رقم اللوحة", "الماركة", "الموديل", "السنة", "الحالة", "السائق", "الكيلومتر", "الرحلات", "تكلفة الوقود", "طلبات الصيانة", "موعد الصيانة القادم"],
-    rows: vehicles.map((v: any) => [
-      v.plateNumber, v.make, v.model, v.year,
-      statusMap[v.status] || v.status,
-      v.driverName || "", Number(v.currentMileage || 0),
+    rows: vehicles.map((v) => [
+      v.plateNumber as string, v.make as string, v.model as string, v.year as number,
+      statusMap[v.status as string] || (v.status as string),
+      (v.driverName as string | null) || "", Number(v.currentMileage || 0),
       Number(v.totalTrips || 0), Number(v.totalFuelCost || 0),
       Number(v.maintenanceCount || 0),
-      v.nextServiceDate ? new Date(v.nextServiceDate).toLocaleDateString("ar-SA") : "",
+      v.nextServiceDate ? new Date(v.nextServiceDate as string | Date).toLocaleDateString("ar-SA") : "",
     ]),
     colWidths: [14, 12, 12, 8, 14, 20, 12, 10, 14, 12, 18],
   };
 
-  const trips = await rawQuery<any>(
+  const trips = await rawQuery<Record<string, unknown>>(
     `SELECT v."plateNumber", d.name AS "driverName", t."fromLocation", t."toLocation",
             t."startTime", t."endTime", t.distance, t.status
      FROM fleet_trips t
@@ -299,11 +299,11 @@ export async function exportFleetExcel(companyId: number): Promise<Buffer> {
   const tripSheet: ExcelSheet = {
     name: "الرحلات",
     headers: ["اللوحة", "السائق", "من", "إلى", "وقت الانطلاق", "وقت الوصول", "المسافة (كم)", "الحالة"],
-    rows: trips.map((t: any) => [
-      t.plateNumber, t.driverName || "", t.fromLocation || "", t.toLocation || "",
-      t.startTime ? new Date(t.startTime).toLocaleString("ar-SA") : "",
-      t.endTime ? new Date(t.endTime).toLocaleString("ar-SA") : "",
-      Number(t.distance || 0), t.status || "",
+    rows: trips.map((t) => [
+      t.plateNumber as string, (t.driverName as string | null) || "", (t.fromLocation as string | null) || "", (t.toLocation as string | null) || "",
+      t.startTime ? new Date(t.startTime as string | Date).toLocaleString("ar-SA") : "",
+      t.endTime ? new Date(t.endTime as string | Date).toLocaleString("ar-SA") : "",
+      Number(t.distance || 0), (t.status as string | null) || "",
     ]),
     colWidths: [12, 20, 20, 20, 18, 18, 12, 12],
   };

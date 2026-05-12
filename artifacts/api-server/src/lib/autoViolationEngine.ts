@@ -83,7 +83,7 @@ const DEFAULT_SETTINGS: AutoDetectionSettings = {
 };
 
 export async function getAutoDetectionSettings(companyId: number): Promise<AutoDetectionSettings> {
-  const [row] = await rawQuery<any>(
+  const [row] = await rawQuery<Record<string, unknown>>(
     `SELECT value FROM system_settings
      WHERE "companyId" = $1 AND key = 'auto_violation_detection'`,
     [companyId]
@@ -155,7 +155,7 @@ export async function runAutoDetection(
   };
 
   // ── فحص: هل اليوم عطلة رسمية؟ ──
-  const [holiday] = await rawQuery<any>(
+  const [holiday] = await rawQuery<Record<string, unknown>>(
     `SELECT id FROM public_holidays
      WHERE "companyId" = $1 AND $2::date BETWEEN "startDate"::date AND "endDate"::date
        AND "deletedAt" IS NULL`,
@@ -172,7 +172,7 @@ export async function runAutoDetection(
   // 1. رصد التأخر
   // ═══════════════════════════════════════════════════════════════════════════
   if (settings.enableLateDetection) {
-    const lateRecords = await rawQuery<any>(
+    const lateRecords = await rawQuery<Record<string, unknown>>(
       `SELECT a."assignmentId", ea."employeeId", ea."branchId", e.name AS "employeeName",
               a."lateMinutes", a."checkIn", a.status
        FROM attendance a
@@ -196,10 +196,10 @@ export async function runAutoDetection(
 
     for (const rec of lateRecords) {
       incidents.push({
-        assignmentId: rec.assignmentId,
-        employeeId: rec.employeeId,
-        employeeName: rec.employeeName,
-        branchId: rec.branchId,
+        assignmentId: rec.assignmentId as number,
+        employeeId: rec.employeeId as number,
+        employeeName: rec.employeeName as string,
+        branchId: rec.branchId as number | null,
         type: "late",
         description: `تأخر ${rec.lateMinutes} دقيقة عن موعد بداية الدوام بتاريخ ${date}`,
         durationMinutes: Number(rec.lateMinutes),
@@ -213,7 +213,7 @@ export async function runAutoDetection(
   // ═══════════════════════════════════════════════════════════════════════════
   if (settings.enableEarlyLeaveDetection) {
     // نحتاج لحساب المغادرة المبكرة من وقت الانصراف مقابل نهاية الوردية
-    const checkouts = await rawQuery<any>(
+    const checkouts = await rawQuery<Record<string, unknown>>(
       `SELECT a."assignmentId", ea."employeeId", ea."branchId", e.name AS "employeeName",
               a."checkOut", a.status,
               COALESCE(
@@ -250,7 +250,7 @@ export async function runAutoDetection(
 
     for (const rec of checkouts) {
       if (!rec.checkOut || !rec.shiftEndTime) continue;
-      const checkoutTime = new Date(rec.checkOut);
+      const checkoutTime = new Date(rec.checkOut as string | Date);
       const [endH, endM] = String(rec.shiftEndTime).split(":").map(Number);
       const shiftEnd = new Date(date + "T00:00:00");
       shiftEnd.setHours(endH, endM, 0, 0);
@@ -260,10 +260,10 @@ export async function runAutoDetection(
       if (earlyMinutes < settings.earlyLeaveThresholdMinutes) continue;
 
       incidents.push({
-        assignmentId: rec.assignmentId,
-        employeeId: rec.employeeId,
-        employeeName: rec.employeeName,
-        branchId: rec.branchId,
+        assignmentId: rec.assignmentId as number,
+        employeeId: rec.employeeId as number,
+        employeeName: rec.employeeName as string,
+        branchId: rec.branchId as number | null,
         type: "early_leave",
         description: `مغادرة مبكرة بمقدار ${earlyMinutes} دقيقة عن موعد نهاية الدوام بتاريخ ${date}`,
         durationMinutes: earlyMinutes,
@@ -276,7 +276,7 @@ export async function runAutoDetection(
   // 3. رصد الغياب
   // ═══════════════════════════════════════════════════════════════════════════
   if (settings.enableAbsenceDetection) {
-    const absentees = await rawQuery<any>(
+    const absentees = await rawQuery<Record<string, unknown>>(
       `SELECT a."assignmentId", ea."employeeId", ea."branchId", e.name AS "employeeName"
        FROM attendance a
        JOIN employee_assignments ea ON ea.id = a."assignmentId"
@@ -303,10 +303,10 @@ export async function runAutoDetection(
 
     for (const rec of absentees) {
       incidents.push({
-        assignmentId: rec.assignmentId,
-        employeeId: rec.employeeId,
-        employeeName: rec.employeeName,
-        branchId: rec.branchId,
+        assignmentId: rec.assignmentId as number,
+        employeeId: rec.employeeId as number,
+        employeeName: rec.employeeName as string,
+        branchId: rec.branchId as number | null,
         type: "absence",
         description: `غياب عن العمل بتاريخ ${date} دون إذن مسبق أو إجازة معتمدة`,
         severity: "high",
@@ -318,7 +318,7 @@ export async function runAutoDetection(
   // 4. رصد خروج GPS (مخالفات GPS بدون محاضر)
   // ═══════════════════════════════════════════════════════════════════════════
   if (settings.enableGpsDetection) {
-    const gpsViolations = await rawQuery<any>(
+    const gpsViolations = await rawQuery<Record<string, unknown>>(
       `SELECT ev.id, ev."assignmentId", ea."employeeId", ea."branchId", e.name AS "employeeName",
               ev.description
        FROM employee_violations ev
@@ -334,12 +334,12 @@ export async function runAutoDetection(
 
     for (const rec of gpsViolations) {
       incidents.push({
-        assignmentId: rec.assignmentId,
-        employeeId: rec.employeeId,
-        employeeName: rec.employeeName,
-        branchId: rec.branchId,
+        assignmentId: rec.assignmentId as number,
+        employeeId: rec.employeeId as number,
+        employeeName: rec.employeeName as string,
+        branchId: rec.branchId as number | null,
         type: "gps_out_of_range",
-        description: rec.description || `خروج عن النطاق الجغرافي المسموح بتاريخ ${date}`,
+        description: (rec.description as string | null) || `خروج عن النطاق الجغرافي المسموح بتاريخ ${date}`,
         severity: "medium",
       });
     }
@@ -563,7 +563,7 @@ export async function getDetectionLog(
   const offset = options?.offset ?? 0;
 
   let whereExtra = "";
-  const params: any[] = [companyId];
+  const params: unknown[] = [companyId];
   let paramIdx = 2;
 
   if (options?.fromDate) {
@@ -588,7 +588,7 @@ export async function getDetectionLog(
     const offsetParamIdx = paramIdx++;
     params.push(limit, offset);
 
-    const data = await rawQuery<any>(
+    const data = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM auto_detection_log
        WHERE "companyId" = $1 ${whereExtra}
        ORDER BY "createdAt" DESC

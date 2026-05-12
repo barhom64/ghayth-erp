@@ -191,7 +191,7 @@ export async function applyTransition<TRow = any>(
 
     // 2. Build the UPDATE SET list.
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (toState !== undefined) {
       params.push(toState);
       sets.push(`${statusColId} = $${params.length}`);

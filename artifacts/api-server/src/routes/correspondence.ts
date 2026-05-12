@@ -109,7 +109,7 @@ correspondenceRouter.get("/", authorize({ feature: "communications", action: "li
   try {
     const scope = req.scope!;
     const { direction, entityType, entityId, search, status } = req.query as Record<string, string>;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     let where = `c."companyId" = $1`;
 
     if (direction) {
@@ -225,7 +225,7 @@ correspondenceRouter.patch("/:id", authorize({ feature: "communications", action
       "recipientName", "recipientOrg", "channel", "notes", "branchId",
     ] as const;
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     for (const key of allowed) {
       if ((validated as any)[key] !== undefined) {
         params.push((validated as any)[key]);

@@ -54,7 +54,7 @@ contractsRouter.get("/", authorize({ feature: "hr.contracts", action: "list" }),
   try {
     const scope = req.scope!;
     const { status, employeeId, search } = req.query as Record<string, string>;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     let where = `ec."companyId" = $1 AND ec."deletedAt" IS NULL`;
 
     if (status) {
@@ -187,7 +187,7 @@ contractsRouter.patch("/:id", authorize({ feature: "hr.contracts", action: "upda
       "templateId", "branchId", "notes",
     ];
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     const body = zodParse(updateContractSchema.safeParse(req.body));
     for (const key of allowed) {
       if ((body as any)[key] !== undefined) {

@@ -160,13 +160,13 @@ export async function sendViaIntegration(options: SendOptions): Promise<{ succes
 
 export async function retryFailedMessages(companyId?: number): Promise<{ retried: number; succeeded: number }> {
   const conditions = [`il.status IN ('failed','pending')`, `il."retryAttempt" < COALESCE(i."maxRetries", 3)`];
-  const params: any[] = [];
+  const params: unknown[] = [];
   if (companyId) {
     params.push(companyId);
     conditions.push(`il."companyId"=$${params.length}`);
   }
 
-  const failedLogs = await rawQuery<any>(
+  const failedLogs = await rawQuery<Record<string, unknown>>(
     `SELECT il.*, i.config, i.type FROM integration_logs il
      LEFT JOIN integrations i ON i.id = il."integrationId"
      WHERE ${conditions.join(" AND ")}
@@ -179,12 +179,12 @@ export async function retryFailedMessages(companyId?: number): Promise<{ retried
   for (const log of failedLogs) {
     retried++;
     const result = await sendViaIntegration({
-      companyId: log.companyId,
-      channel: log.channel,
-      recipient: log.recipient,
-      subject: log.subject,
-      body: log.body,
-      metadata: log.metadata,
+      companyId: log.companyId as number,
+      channel: log.channel as "email" | "webhook" | "sms" | "whatsapp",
+      recipient: log.recipient as string,
+      subject: log.subject as string | undefined,
+      body: log.body as string,
+      metadata: log.metadata as Record<string, any> | undefined,
     });
 
     if (result.success) succeeded++;

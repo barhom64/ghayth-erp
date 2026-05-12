@@ -5,13 +5,13 @@ import { logger } from "./logger.js";
 import { OPS_CLOSE_ROLES } from "./rbacCatalog.js";
 
 async function handleLeaveApproval(refId: number, companyId: number, approvedBy?: number | null): Promise<void> {
-  const approveResult = await rawQuery<any>(
+  const approveResult = await rawQuery<Record<string, unknown>>(
     `UPDATE hr_leave_requests SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status = 'pending' RETURNING id`,
     [approvedBy ?? null, refId, companyId]
   );
   if (approveResult.length === 0) return;
 
-  const [request] = await rawQuery<any>(
+  const [request] = await rawQuery<Record<string, unknown>>(
     `SELECT lr."employeeId", lr."leaveTypeId", lr.days, lr."startDate", lr."endDate",
             lt.name AS "leaveTypeName"
      FROM hr_leave_requests lr
@@ -21,16 +21,16 @@ async function handleLeaveApproval(refId: number, companyId: number, approvedBy?
   );
   if (!request) return;
 
-  const year = new Date(request.startDate).getFullYear();
+  const year = new Date(request.startDate as string | Date).getFullYear();
 
-  const allAssignments = await rawQuery<any>(
+  const allAssignments = await rawQuery<Record<string, unknown>>(
     `SELECT ea.id, ea."companyId", ea."branchId"
      FROM employee_assignments ea
      WHERE ea."employeeId" = $1 AND ea.status = 'active'`,
     [request.employeeId]
   );
 
-  const allCompanyIds = [...new Set(allAssignments.map((a: any) => a.companyId))];
+  const allCompanyIds = [...new Set(allAssignments.map((a: Record<string, unknown>) => a.companyId))];
   for (const cId of allCompanyIds) {
     await rawExecute(
       `UPDATE hr_leave_balances
@@ -40,8 +40,8 @@ async function handleLeaveApproval(refId: number, companyId: number, approvedBy?
     );
   }
 
-  const leaveStart = new Date(request.startDate);
-  const leaveEnd = new Date(request.endDate);
+  const leaveStart = new Date(request.startDate as string | Date);
+  const leaveEnd = new Date(request.endDate as string | Date);
   for (const asn of allAssignments) {
     for (let d = new Date(leaveStart); d <= leaveEnd; d.setDate(d.getDate() + 1)) {
       const dateStr = toDateISO(d);
@@ -62,19 +62,19 @@ async function handleLeaveApproval(refId: number, companyId: number, approvedBy?
 }
 
 async function handleLeaveRejection(refId: number, companyId: number): Promise<void> {
-  const rejectResult = await rawQuery<any>(
+  const rejectResult = await rawQuery<Record<string, unknown>>(
     `UPDATE hr_leave_requests SET status = 'rejected', "approvedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND status = 'pending' RETURNING id`,
     [refId, companyId]
   );
   if (rejectResult.length === 0) return;
 
-  const [request] = await rawQuery<any>(
+  const [request] = await rawQuery<Record<string, unknown>>(
     `SELECT "employeeId", "companyId", "leaveTypeId", days, "startDate" FROM hr_leave_requests WHERE id = $1 AND "deletedAt" IS NULL`,
     [refId]
   );
   if (!request) return;
 
-  const year = new Date(request.startDate).getFullYear();
+  const year = new Date(request.startDate as string | Date).getFullYear();
   await rawExecute(
     `UPDATE hr_leave_balances
      SET reserved = GREATEST(reserved - $1, 0)
@@ -243,7 +243,7 @@ async function validatePreApproval(
   if (data._requiresAttachments) {
     const hasCurrentAttachments = currentAttachments && currentAttachments.length > 0;
     if (!hasCurrentAttachments) {
-      const existingAttachments = await rawQuery<any>(
+      const existingAttachments = await rawQuery<Record<string, unknown>>(
         `SELECT COUNT(*) as count FROM workflow_step_actions WHERE "instanceId" = $1 AND attachments IS NOT NULL AND attachments != '[]'`,
         [instance.id]
       );
@@ -256,7 +256,7 @@ async function validatePreApproval(
 
   if (data._budgetAccountCode && data._budgetAmount) {
     const period = currentPeriod();
-    const [budget] = await rawQuery<any>(
+    const [budget] = await rawQuery<Record<string, unknown>>(
       `SELECT amount, used FROM budgets WHERE "companyId" = $1 AND "accountCode" = $2 AND period = $3 AND "deletedAt" IS NULL`,
       [companyId, data._budgetAccountCode, period]
     );
@@ -318,7 +318,7 @@ export async function submitWorkflow(params: SubmitParams) {
     title, submittedBy, submittedByName, data,
   } = params;
 
-  const [def] = await rawQuery<any>(
+  const [def] = await rawQuery<Record<string, unknown>>(
     `SELECT * FROM workflow_definitions WHERE "companyId" = $1 AND "requestType" = $2 AND "isActive" = true`,
     [companyId, requestType]
   );
@@ -326,19 +326,19 @@ export async function submitWorkflow(params: SubmitParams) {
   const definitionId = def?.id ?? null;
   const label = def?.requestTypeLabel ?? requestType;
 
-  const steps = def ? await rawQuery<any>(
+  const steps = def ? await rawQuery<Record<string, unknown>>(
     `SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder" ASC`,
     [def.id]
   ) : [];
 
   const firstStep = steps[0] ?? null;
 
-  const [sla] = await rawQuery<any>(
+  const [sla] = await rawQuery<Record<string, unknown>>(
     `SELECT * FROM sla_definitions WHERE "companyId" = $1 AND "requestType" = $2 AND "isActive" = true`,
     [companyId, requestType]
   );
 
-  const slaHours = firstStep?.slaHours ?? sla?.deadlineHours ?? def?.defaultSlaHours ?? 48;
+  const slaHours = Number(firstStep?.slaHours ?? sla?.deadlineHours ?? def?.defaultSlaHours ?? 48);
   const expectedCompletion = new Date(Date.now() + slaHours * 3600000);
 
   let currentAssignee: number | null = null;
@@ -346,7 +346,7 @@ export async function submitWorkflow(params: SubmitParams) {
     // First: try to resolve the submitter's direct manager via managerId on the assignment
     if (submittedBy) {
       try {
-        const [directMgrRow] = await rawQuery<any>(
+        const [directMgrRow] = await rawQuery<Record<string, unknown>>(
           `SELECT ea2.id AS "assignmentId"
            FROM employee_assignments ea
            JOIN employee_assignments ea2
@@ -358,14 +358,14 @@ export async function submitWorkflow(params: SubmitParams) {
           [submittedBy, companyId]
         );
         if (directMgrRow?.assignmentId) {
-          currentAssignee = directMgrRow.assignmentId;
+          currentAssignee = directMgrRow.assignmentId as number;
         }
       } catch (e) { logger.warn(e, "workflow: failed to resolve direct manager assignee"); }
     }
     // Fallback: resolve by required role at branch/company level
     if (!currentAssignee) {
       try {
-        currentAssignee = await getAssignmentIdByRole(companyId, branchId ?? 0, firstStep.requiredRole);
+        currentAssignee = await getAssignmentIdByRole(companyId, branchId ?? 0, firstStep.requiredRole as string);
       } catch (e) { logger.warn(e, "workflow: no assignee found for required role"); }
     }
     // Final fallback: any active HR/GM/owner in the company. Never leave a
@@ -373,7 +373,7 @@ export async function submitWorkflow(params: SubmitParams) {
     // to every inbox and no escalation job will route it.
     if (!currentAssignee) {
       try {
-        const [fallback] = await rawQuery<any>(
+        const [fallback] = await rawQuery<Record<string, unknown>>(
           `SELECT id FROM employee_assignments
            WHERE "companyId" = $1 AND status = 'active'
              AND role IN ('hr_manager','general_manager','owner')
@@ -381,7 +381,7 @@ export async function submitWorkflow(params: SubmitParams) {
            LIMIT 1`,
           [companyId]
         );
-        if (fallback?.id) currentAssignee = fallback.id;
+        if (fallback?.id) currentAssignee = fallback.id as number;
       } catch (e) { logger.warn(e, "workflow: failed to resolve fallback assignee"); }
     }
   }
@@ -442,7 +442,7 @@ export async function rejectWorkflow(params: ActionParams) {
 
 export async function referWorkflow(params: ActionParams) {
   if (!params.referredTo) throw new ValidationError("يجب تحديد الشخص المحال إليه");
-  const [targetAssignment] = await rawQuery<any>(
+  const [targetAssignment] = await rawQuery<Record<string, unknown>>(
     `SELECT id FROM employee_assignments WHERE id = $1 AND "companyId" = $2 AND status = 'active'`,
     [params.referredTo, params.companyId]
   );
@@ -465,7 +465,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
     overrideReason,
   } = params;
 
-  const [instance] = await rawQuery<any>(
+  const [instance] = await rawQuery<Record<string, unknown>>(
     `SELECT * FROM workflow_instances WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL FOR UPDATE`,
     [instanceId, companyId]
   );
@@ -473,7 +473,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
 
   const targetStatus = ACTION_TO_STATUS[action];
   if (targetStatus && targetStatus !== "__same__") {
-    if (!isTransitionAllowed(instance.status, targetStatus)) {
+    if (!isTransitionAllowed(instance.status as string, targetStatus)) {
       const nextStepExists = action === "approve" &&
         instance.definitionId &&
         (instance.status === "pending" || instance.status === "in_review");
@@ -490,13 +490,13 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
   const privilegedRoles = OPS_CLOSE_ROLES;
   let isOverride = false;
 
-  const [actorAssignment] = await rawQuery<any>(
+  const [actorAssignment] = await rawQuery<Record<string, unknown>>(
     `SELECT role FROM employee_assignments WHERE id = $1 AND status = 'active'`,
     [actionBy]
   );
 
   if (!instance.currentAssignee) {
-    if (!actorAssignment || !privilegedRoles.includes(actorAssignment.role)) {
+    if (!actorAssignment || !privilegedRoles.includes(actorAssignment.role as string)) {
       throw new ForbiddenError("المعاملة غير مسندة لأحد — يلزم دور إداري للتدخل");
     }
     isOverride = true;
@@ -504,7 +504,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
       throw new ValidationError("يجب تحديد سبب التدخل في معاملة غير مسندة");
     }
   } else if (instance.currentAssignee !== actionBy) {
-    if (!actorAssignment || !privilegedRoles.includes(actorAssignment.role)) {
+    if (!actorAssignment || !privilegedRoles.includes(actorAssignment.role as string)) {
       throw new ForbiddenError("غير مصرح لك باتخاذ هذا الإجراء على هذه المعاملة");
     }
     isOverride = true;
@@ -525,7 +525,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
   if (isOverride) {
     await createAuditLog({
       companyId,
-      branchId: branchId ?? instance.branchId ?? undefined,
+      branchId: branchId ?? (instance.branchId as number | undefined) ?? undefined,
       userId: actionBy,
       action: "workflow_override",
       entity: "workflow_instance",
@@ -537,13 +537,13 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
   }
 
   const steps = instance.definitionId
-    ? await rawQuery<any>(
+    ? await rawQuery<Record<string, unknown>>(
         `SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder" ASC`,
         [instance.definitionId]
       )
     : [];
 
-  const currentStep = steps.find((s: any) => s.stepOrder === instance.currentStepOrder);
+  const currentStep = steps.find((s) => s.stepOrder === instance.currentStepOrder);
 
   const beforeData = { status: instance.status, currentStepOrder: instance.currentStepOrder };
 
@@ -564,26 +564,26 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
     ]
   );
 
-  let newStatus = instance.status;
-  let newStepOrder = instance.currentStepOrder;
-  let newAssignee: number | null = instance.currentAssignee;
+  let newStatus = instance.status as string;
+  let newStepOrder = instance.currentStepOrder as number;
+  let newAssignee: number | null = (instance.currentAssignee as number | null);
   let message = "";
   const actualImpact: ActualImpact = { notifications: [] };
 
   switch (action) {
     case "approve": {
-      const nextStep = steps.find((s: any) => s.stepOrder > instance.currentStepOrder);
+      const nextStep = steps.find((s) => Number(s.stepOrder) > Number(instance.currentStepOrder));
       if (nextStep) {
-        newStepOrder = nextStep.stepOrder;
+        newStepOrder = Number(nextStep.stepOrder);
         newStatus = "pending";
         try {
-          newAssignee = await getAssignmentIdByRole(companyId, branchId ?? instance.branchId ?? 0, nextStep.requiredRole);
+          newAssignee = await getAssignmentIdByRole(companyId, branchId ?? (instance.branchId as number | null) ?? 0, nextStep.requiredRole as string);
         } catch (e) { logger.warn(e, "workflow: failed to resolve next step assignee"); newAssignee = null; }
         // Never advance to a step with NULL assignee — fall back to any active
         // HR/GM/owner so the request stays actionable somewhere.
         if (!newAssignee) {
           try {
-            const [fallback] = await rawQuery<any>(
+            const [fallback] = await rawQuery<Record<string, unknown>>(
               `SELECT id FROM employee_assignments
                WHERE "companyId" = $1 AND status = 'active'
                  AND role IN ('hr_manager','general_manager','owner')
@@ -591,15 +591,15 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
                LIMIT 1`,
               [companyId]
             );
-            if (fallback?.id) newAssignee = fallback.id;
+            if (fallback?.id) newAssignee = fallback.id as number;
           } catch (e) { logger.warn(e, "workflow: failed to resolve fallback assignee for next step"); }
         }
 
-        const [sla] = await rawQuery<any>(
+        const [sla] = await rawQuery<Record<string, unknown>>(
           `SELECT * FROM sla_definitions WHERE "companyId" = $1 AND "requestType" = $2 AND "isActive" = true`,
           [companyId, instance.requestType]
         );
-        const slaHours = nextStep.slaHours ?? sla?.deadlineHours ?? 48;
+        const slaHours = Number(nextStep.slaHours ?? sla?.deadlineHours ?? 48);
         const expectedCompletion = new Date(Date.now() + slaHours * 3600000);
 
         await rawExecute(
@@ -615,8 +615,8 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
             title: `طلب ينتظر موافقتك (${nextStep.stepName})`,
             body: `${instance.requestTypeLabel}: ${instance.title}`,
             priority: "high",
-            refType: instance.refTable ?? instance.requestType,
-            refId: instance.refId ?? instanceId,
+            refType: (instance.refTable as string | null) ?? (instance.requestType as string),
+            refId: (instance.refId as number | null) ?? instanceId,
           }).catch((e) => logger.error(e, "[workflowEngine] background task failed"));
           actualImpact.notifications!.push(`إشعار للمعتمد التالي (${nextStep.stepName})`);
         }
@@ -629,7 +629,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
         // actor can retry — instead of being stuck with a green workflow on
         // top of a stale domain row.
         try {
-          await propagateDomainStatus(instance.refTable, instance.refId, "approved", companyId, actionBy);
+          await propagateDomainStatus(instance.refTable as string | null, instance.refId as number | null, "approved", companyId, actionBy);
         } catch (err) {
           logger.error(
             err as Error,
@@ -645,13 +645,13 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
         );
         if (instance.submittedBy) {
           createNotification({
-            companyId, assignmentId: instance.submittedBy,
+            companyId, assignmentId: instance.submittedBy as number,
             type: "workflow_approved",
             title: "تمت الموافقة على طلبك",
             body: `${instance.requestTypeLabel}: ${instance.title}`,
             priority: "normal",
-            refType: instance.refTable ?? instance.requestType,
-            refId: instance.refId ?? instanceId,
+            refType: (instance.refTable as string | null) ?? (instance.requestType as string),
+            refId: (instance.refId as number | null) ?? instanceId,
           }).catch((e) => logger.error(e, "[workflowEngine] background task failed"));
           actualImpact.notifications!.push("إشعار لمقدم الطلب بالموافقة النهائية");
         }
@@ -666,7 +666,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
       // Propagate rejection to the linked domain first so a handler failure
       // keeps the workflow pending and the rejection can be retried.
       try {
-        await propagateDomainStatus(instance.refTable, instance.refId, "rejected", companyId);
+        await propagateDomainStatus(instance.refTable as string | null, instance.refId as number | null, "rejected", companyId);
       } catch (err) {
         logger.error(
           err as Error,
@@ -681,13 +681,13 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
       );
       if (instance.submittedBy) {
         createNotification({
-          companyId, assignmentId: instance.submittedBy,
+          companyId, assignmentId: instance.submittedBy as number,
           type: "workflow_rejected",
           title: "تم رفض طلبك",
           body: `${instance.requestTypeLabel}: ${instance.title}${notes ? ` - السبب: ${notes}` : ""}`,
           priority: "high",
-          refType: instance.refTable ?? instance.requestType,
-          refId: instance.refId ?? instanceId,
+          refType: (instance.refTable as string | null) ?? (instance.requestType as string),
+          refId: (instance.refId as number | null) ?? instanceId,
         }).catch((e) => logger.error(e, "[workflowEngine] background task failed"));
         actualImpact.notifications!.push("إشعار لمقدم الطلب بالرفض");
       }
@@ -699,7 +699,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
     case "return": {
       newStatus = "returned";
       try {
-        await propagateDomainStatus(instance.refTable, instance.refId, "returned", companyId);
+        await propagateDomainStatus(instance.refTable as string | null, instance.refId as number | null, "returned", companyId);
       } catch (err) {
         logger.error(
           err as Error,
@@ -714,13 +714,13 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
       );
       if (instance.submittedBy) {
         createNotification({
-          companyId, assignmentId: instance.submittedBy,
+          companyId, assignmentId: instance.submittedBy as number,
           type: "workflow_returned",
           title: "تم إرجاع طلبك للتعديل",
           body: `${instance.requestTypeLabel}: ${instance.title}${notes ? ` - السبب: ${notes}` : ""}`,
           priority: "normal",
-          refType: instance.refTable ?? instance.requestType,
-          refId: instance.refId ?? instanceId,
+          refType: (instance.refTable as string | null) ?? (instance.requestType as string),
+          refId: (instance.refId as number | null) ?? instanceId,
         }).catch((e) => logger.error(e, "[workflowEngine] background task failed"));
         actualImpact.notifications!.push("إشعار لمقدم الطلب بالإرجاع");
       }
@@ -741,8 +741,8 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
         title: "تمت إحالة طلب إليك",
         body: `${instance.requestTypeLabel}: ${instance.title}`,
         priority: "high",
-        refType: instance.refTable ?? instance.requestType,
-        refId: instance.refId ?? instanceId,
+        refType: (instance.refTable as string | null) ?? (instance.requestType as string),
+        refId: (instance.refId as number | null) ?? instanceId,
       }).catch((e) => logger.error(e, "[workflowEngine] background task failed"));
       actualImpact.notifications!.push(`إشعار إحالة إلى ${referredToName || "المعني"}`);
       message = `تمت الإحالة إلى ${referredToName || "المعني"}`;
@@ -750,14 +750,14 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
     }
 
     case "escalate": {
-      const [sla] = await rawQuery<any>(
+      const [sla] = await rawQuery<Record<string, unknown>>(
         `SELECT "escalateTo" FROM sla_definitions WHERE "companyId" = $1 AND "requestType" = $2 AND "isActive" = true`,
         [companyId, instance.requestType]
       );
-      const escalateRole = sla?.escalateTo ?? "hr_manager";
+      const escalateRole = (sla?.escalateTo as string | null) ?? "hr_manager";
       let escalateAssignee: number | null = null;
       try {
-        escalateAssignee = await getAssignmentIdByRole(companyId, branchId ?? instance.branchId ?? 0, escalateRole);
+        escalateAssignee = await getAssignmentIdByRole(companyId, branchId ?? (instance.branchId as number | null) ?? 0, escalateRole);
       } catch (e) { logger.warn(e, "workflow: failed to resolve escalation assignee"); }
 
       await rawExecute(
@@ -772,8 +772,8 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
           title: "تصعيد طلب متأخر",
           body: `${instance.requestTypeLabel}: ${instance.title} - تجاوز المهلة المحددة`,
           priority: "urgent",
-          refType: instance.refTable ?? instance.requestType,
-          refId: instance.refId ?? instanceId,
+          refType: (instance.refTable as string | null) ?? (instance.requestType as string),
+          refId: (instance.refId as number | null) ?? instanceId,
         }).catch((e) => logger.error(e, "[workflowEngine] background task failed"));
         actualImpact.notifications!.push(`تصعيد إلى ${escalateRole}`);
       }
@@ -798,7 +798,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
   // audit_logs and event_logs so reporting + listeners can see it.
   createAuditLog({
     companyId,
-    branchId: branchId ?? instance.branchId ?? undefined,
+    branchId: branchId ?? (instance.branchId as number | undefined) ?? undefined,
     userId: actionBy,
     action: `workflow_${action}`,
     entity: "workflow_instance",
@@ -823,13 +823,13 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
 }
 
 export async function getTimeline(instanceId: number, companyId: number) {
-  const [instance] = await rawQuery<any>(
+  const [instance] = await rawQuery<Record<string, unknown>>(
     `SELECT * FROM workflow_instances WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
     [instanceId, companyId]
   );
   if (!instance) throw new NotFoundError("المعاملة غير موجودة");
 
-  const actions = await rawQuery<any>(
+  const actions = await rawQuery<Record<string, unknown>>(
     `SELECT wsa.*, u.email AS "actionByEmail"
      FROM workflow_step_actions wsa
      LEFT JOIN employee_assignments ea2 ON ea2.id = wsa."actionBy"
@@ -841,7 +841,7 @@ export async function getTimeline(instanceId: number, companyId: number) {
   );
 
   const steps = instance.definitionId
-    ? await rawQuery<any>(
+    ? await rawQuery<Record<string, unknown>>(
         `SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder" ASC`,
         [instance.definitionId]
       )
@@ -855,19 +855,19 @@ export async function getTimeline(instanceId: number, companyId: number) {
 }
 
 export async function getTimelineByRef(refTable: string, refId: number, companyId: number) {
-  const [instance] = await rawQuery<any>(
+  const [instance] = await rawQuery<Record<string, unknown>>(
     `SELECT * FROM workflow_instances WHERE "refTable" = $1 AND "refId" = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
     [refTable, refId, companyId]
   );
   if (!instance) return { instance: null, actions: [], steps: [] };
-  return getTimeline(instance.id, companyId);
+  return getTimeline(instance.id as number, companyId);
 }
 
 export async function checkSlaStatus(companyId: number) {
   const now = new Date();
   let warnings = 0, escalations = 0, autoApprovals = 0;
 
-  const pendingInstances = await rawQuery<any>(
+  const pendingInstances = await rawQuery<Record<string, unknown>>(
     `SELECT wi.*, sd."warningHours", sd."deadlineHours", sd."escalationHours",
             sd."autoApproveOnTimeout", sd."escalateTo"
      FROM workflow_instances wi
@@ -879,16 +879,16 @@ export async function checkSlaStatus(companyId: number) {
 
   for (const inst of pendingInstances) {
     const stepBaseTime = inst.expectedCompletionAt
-      ? new Date(inst.expectedCompletionAt)
-      : new Date(inst.createdAt);
-    const stepSlaHours = inst.deadlineHours ?? 48;
+      ? new Date(inst.expectedCompletionAt as string | Date)
+      : new Date(inst.createdAt as string | Date);
+    const stepSlaHours = Number(inst.deadlineHours ?? 48);
     const stepStartTime = inst.expectedCompletionAt
       ? new Date(stepBaseTime.getTime() - stepSlaHours * 3600000)
-      : new Date(inst.createdAt);
+      : new Date(inst.createdAt as string | Date);
     const hoursSince = (now.getTime() - stepStartTime.getTime()) / 3600000;
-    const warningH = inst.warningHours ?? 24;
-    const deadlineH = inst.deadlineHours ?? 48;
-    const escalationH = inst.escalationHours ?? 72;
+    const warningH = Number(inst.warningHours ?? 24);
+    const deadlineH = Number(inst.deadlineHours ?? 48);
+    const escalationH = Number(inst.escalationHours ?? 72);
 
     if (hoursSince >= escalationH && inst.slaStatus !== "escalated") {
       if (inst.autoApproveOnTimeout) {
@@ -904,21 +904,21 @@ export async function checkSlaStatus(companyId: number) {
         );
         if (inst.submittedBy) {
           createNotification({
-            companyId, assignmentId: inst.submittedBy,
+            companyId, assignmentId: inst.submittedBy as number,
             type: "workflow_auto_approved",
             title: "موافقة تلقائية على طلبك",
             body: `${inst.requestTypeLabel}: ${inst.title} - تمت الموافقة تلقائياً بعد تجاوز المهلة`,
             priority: "normal",
-            refType: inst.refTable ?? inst.requestType,
-            refId: inst.refId ?? inst.id,
+            refType: (inst.refTable as string | null) ?? (inst.requestType as string),
+            refId: (inst.refId as number | null) ?? (inst.id as number),
           }).catch((e) => logger.error(e, "[workflowEngine] background task failed"));
         }
         autoApprovals++;
       } else {
-        const escalateRole = inst.escalateTo ?? "hr_manager";
+        const escalateRole = (inst.escalateTo as string | null) ?? "hr_manager";
         let escalateAssignee: number | null = null;
         try {
-          escalateAssignee = await getAssignmentIdByRole(companyId, inst.branchId ?? 0, escalateRole);
+          escalateAssignee = await getAssignmentIdByRole(companyId, (inst.branchId as number | null) ?? 0, escalateRole);
         } catch (e) { logger.warn(e, "workflow SLA: failed to resolve escalation assignee"); }
 
         await rawExecute(
@@ -937,8 +937,8 @@ export async function checkSlaStatus(companyId: number) {
             title: "تصعيد طلب متأخر",
             body: `${inst.requestTypeLabel}: ${inst.title} - تجاوز المهلة`,
             priority: "urgent",
-            refType: inst.refTable ?? inst.requestType,
-            refId: inst.refId ?? inst.id,
+            refType: (inst.refTable as string | null) ?? (inst.requestType as string),
+            refId: (inst.refId as number | null) ?? (inst.id as number),
           }).catch((e) => logger.error(e, "[workflowEngine] background task failed"));
         }
         escalations++;
@@ -950,13 +950,13 @@ export async function checkSlaStatus(companyId: number) {
       );
       if (inst.currentAssignee) {
         createNotification({
-          companyId, assignmentId: inst.currentAssignee,
+          companyId, assignmentId: inst.currentAssignee as number,
           type: "workflow_sla_exceeded",
           title: "تجاوز المهلة المحددة",
           body: `${inst.requestTypeLabel}: ${inst.title} - تجاوز المهلة، سيتم التصعيد قريباً`,
           priority: "urgent",
-          refType: inst.refTable ?? inst.requestType,
-          refId: inst.refId ?? inst.id,
+          refType: (inst.refTable as string | null) ?? (inst.requestType as string),
+          refId: (inst.refId as number | null) ?? (inst.id as number),
         }).catch((e) => logger.error(e, "[workflowEngine] background task failed"));
       }
       warnings++;
@@ -967,13 +967,13 @@ export async function checkSlaStatus(companyId: number) {
       );
       if (inst.currentAssignee) {
         createNotification({
-          companyId, assignmentId: inst.currentAssignee,
+          companyId, assignmentId: inst.currentAssignee as number,
           type: "workflow_sla_warning",
           title: "تنبيه - اقتراب المهلة",
           body: `${inst.requestTypeLabel}: ${inst.title} - المهلة تقترب`,
           priority: "high",
-          refType: inst.refTable ?? inst.requestType,
-          refId: inst.refId ?? inst.id,
+          refType: (inst.refTable as string | null) ?? (inst.requestType as string),
+          refId: (inst.refId as number | null) ?? (inst.id as number),
         }).catch((e) => logger.error(e, "[workflowEngine] background task failed"));
       }
       warnings++;

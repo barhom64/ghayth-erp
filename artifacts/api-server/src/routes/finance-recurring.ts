@@ -159,8 +159,8 @@ function validateTemplateLines(lines: any): { ok: true; lines: any[] } | { ok: f
   if (!Array.isArray(lines) || lines.length < 2) {
     return { ok: false, error: "يجب إدخال بندين على الأقل" };
   }
-  const totalDebit = lines.reduce((s: number, l: any) => s + Number(l.debit || 0), 0);
-  const totalCredit = lines.reduce((s: number, l: any) => s + Number(l.credit || 0), 0);
+  const totalDebit = lines.reduce((s: number, l: Record<string, unknown>) => s + Number(l.debit || 0), 0);
+  const totalCredit = lines.reduce((s: number, l: Record<string, unknown>) => s + Number(l.credit || 0), 0);
   if (Math.abs(totalDebit - totalCredit) > 0.01 || totalDebit <= 0) {
     return { ok: false, error: `القالب غير متوازن: مدين=${totalDebit.toFixed(2)} ≠ دائن=${totalCredit.toFixed(2)}` };
   }
@@ -169,7 +169,7 @@ function validateTemplateLines(lines: any): { ok: true; lines: any[] } | { ok: f
   }
   return {
     ok: true,
-    lines: lines.map((l: any) => ({
+    lines: lines.map((l: Record<string, unknown>) => ({
       accountCode: String(l.accountCode),
       debit: Number(l.debit || 0),
       credit: Number(l.credit || 0),
@@ -257,7 +257,7 @@ recurringRouter.patch("/recurring-journals/:id", authorize({ feature: "finance.r
     if (!existing) throw new NotFoundError("القيد الدوري غير موجود");
 
     const fields: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     const addField = (col: string, val: any, cast = "") => {
       if (val !== undefined) {
         params.push(val);
