@@ -27,45 +27,6 @@ export { computeNextRunDate, runRecurringJournal, processDueRecurringJournals };
 
 export const recurringRouter = Router();
 
-interface RecurringJournalRow {
-  id: number;
-  companyId: number;
-  branchId: number | null;
-  name: string;
-  description: string | null;
-  frequency: string;
-  startDate: string;
-  nextRunDate: string | null;
-  lastRunDate: string | null;
-  active: boolean;
-  templateLines: unknown;
-  templateRef: string | null;
-  templateDescription: string | null;
-  createdBy: number | null;
-  runsCount: number | null;
-  createdAt: string;
-  updatedAt: string | null;
-  deletedAt: string | null;
-}
-
-interface RecurringRunHistoryRow {
-  id: number;
-  recurringJournalId: number;
-  companyId: number;
-  journalEntryId: number | null;
-  status: string;
-  triggeredBy: string;
-  errorMessage: string | null;
-  createdAt: string;
-  journalRef: string | null;
-  journalDescription: string | null;
-}
-
-interface RecurringNameRow {
-  id: number;
-  name: string;
-}
-
 const VALID_FREQUENCIES = ["daily", "weekly", "monthly", "quarterly", "yearly"] as const;
 
 const recurringJournalLineSchema = z.object({
@@ -115,7 +76,7 @@ recurringRouter.get("/recurring-journals", authorize({ feature: "finance.recurri
     if (active === "false") extra += ` AND active = FALSE`;
     if (frequency) { params.push(frequency); extra += ` AND frequency = $${params.length}`; }
 
-    const rows = await rawQuery<RecurringJournalRow>(
+    const rows = await rawQuery<any>(
       `SELECT id, "companyId", "branchId", name, description, frequency,
               "startDate", "nextRunDate", "lastRunDate", active,
               "templateLines", "templateRef", "templateDescription",
@@ -136,12 +97,12 @@ recurringRouter.get("/recurring-journals/:id", authorize({ feature: "finance.rec
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<RecurringJournalRow>(
+    const [row] = await rawQuery<any>(
       `SELECT * FROM recurring_journals WHERE id = $1 AND "companyId" = ANY($2) AND "deletedAt" IS NULL`,
       [id, scope.allowedCompanies]
     );
     if (!row) throw new NotFoundError("القيد الدوري غير موجود");
-    const history = await rawQuery<RecurringRunHistoryRow>(
+    const history = await rawQuery<any>(
       `SELECT rr.*, je.ref AS "journalRef", je.description AS "journalDescription"
        FROM recurring_journal_runs rr
        LEFT JOIN journal_entries je ON je.id = rr."journalEntryId"
@@ -250,7 +211,7 @@ recurringRouter.patch("/recurring-journals/:id", authorize({ feature: "finance.r
     const id = parseId(req.params.id, "id");
     const b = zodParse(updateRecurringJournalSchema.safeParse(req.body ?? {}));
 
-    const [existing] = await rawQuery<RecurringJournalRow>(
+    const [existing] = await rawQuery<any>(
       `SELECT * FROM recurring_journals WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -335,7 +296,7 @@ recurringRouter.post("/recurring-journals/:id/run-now", authorize({ feature: "fi
     const scope = req.scope!;
 
     const id = parseId(req.params.id, "id");
-    const [recurring] = await rawQuery<RecurringJournalRow>(
+    const [recurring] = await rawQuery<any>(
       `SELECT * FROM recurring_journals WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -388,7 +349,7 @@ recurringRouter.delete("/recurring-journals/:id", authorize({ feature: "finance.
 
     const id = parseId(req.params.id, "id");
 
-    const [existing] = await rawQuery<RecurringNameRow>(
+    const [existing] = await rawQuery<any>(
       `SELECT id, name FROM recurring_journals WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
