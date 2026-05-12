@@ -4,6 +4,7 @@ import { Link, useLocation } from "wouter";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import {
@@ -261,10 +262,10 @@ export default function Employees() {
       actions={
         (canWrite || canManage) ? (
           <Link href="/employees/create">
-            <Button className="gap-2">
+            <GuardedButton perm="hr:create" className="gap-2">
               <Plus className="h-4 w-4" />
               إضافة موظف
-            </Button>
+            </GuardedButton>
           </Link>
         ) : null
       }

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -150,7 +151,8 @@ export function UsersTab() {
       header: "إجراءات",
       render: (u) => (
         <div className="flex gap-1">
-          <Button
+          <GuardedButton
+            perm="admin:create"
             variant="ghost" size="sm"
             className="h-7 text-xs gap-1"
             title={u.isActive ? "تعليق الحساب" : "تفعيل الحساب"}
@@ -159,14 +161,15 @@ export function UsersTab() {
             {u.isActive
               ? <ToggleRight className="h-4 w-4 text-green-500" />
               : <ToggleLeft className="h-4 w-4 text-gray-400" />}
-          </Button>
-          <Button
+          </GuardedButton>
+          <GuardedButton
+            perm="admin:create"
             variant="ghost" size="sm"
             className="h-7 text-xs gap-1 text-orange-600"
             onClick={(e) => { e.stopPropagation(); setResetUserId(u.id); setResetPassword(""); setCreatedUser(null); setShowForm(false); }}
           >
             <KeySquare className="h-3.5 w-3.5" />
-          </Button>
+          </GuardedButton>
         </div>
       ),
     },
@@ -176,9 +179,9 @@ export function UsersTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">المستخدمين</h1>
-        <Button size="sm" onClick={() => { setShowForm(!showForm); setCreatedUser(null); }}>
+        <GuardedButton perm="admin:create" size="sm" onClick={() => { setShowForm(!showForm); setCreatedUser(null); }}>
           {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة مستخدم</>}
-        </Button>
+        </GuardedButton>
       </div>
 
       {showForm && !createdUser && (
@@ -257,7 +260,7 @@ export function UsersTab() {
                   {showResetPw ? <EyeOff className="h-4 w-4 text-gray-400" /> : <Eye className="h-4 w-4 text-gray-400" />}
                 </button>
               </div>
-              <Button onClick={resetUserPassword} disabled={resetPassword.length < 6}>تأكيد</Button>
+              <GuardedButton perm="admin:create" onClick={resetUserPassword} disabled={resetPassword.length < 6}>تأكيد</GuardedButton>
               <Button variant="outline" onClick={() => { setResetUserId(null); setResetPassword(""); }}>إلغاء</Button>
             </div>
           </CardContent>

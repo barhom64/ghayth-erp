@@ -788,71 +788,90 @@ router.get("/system-health", authorize({ feature: "admin", action: "list" }), as
     const scope = req.scope!;
     const cid = scope.companyId;
 
-    const [cronJobs] = await rawQuery<any>(
-      `SELECT
-        COUNT(*) as total,
-        COUNT(*) FILTER (WHERE "isActive" = true) as active,
-        COUNT(*) FILTER (WHERE "lastStatus" = 'failed') as failed
-       FROM cron_jobs`
-    ).catch((e) => { logger.error(e, "admin query failed"); return [{ total: 0, active: 0, failed: 0 }]; });
+    const [
+      cronJobsRow,
+      recentCrons,
+      recentCronLogs,
+      recentErrors,
+      failedLoginsRow,
+      userCountRow,
+      companyCountRow,
+      employeeCountRow,
+      sizeRow,
+      tableCountRow,
+      integrationStatsRow,
+      pendingMessagesRow,
+    ] = await Promise.all([
+      rawQuery<any>(
+        `SELECT
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE "isActive" = true) as active,
+          COUNT(*) FILTER (WHERE "lastStatus" = 'failed') as failed
+         FROM cron_jobs`
+      ).catch((e) => { logger.error(e, "admin query failed"); return [{ total: 0, active: 0, failed: 0 }]; }),
 
-    const recentCrons = await rawQuery<any>(
-      `SELECT name, "lastRunAt", "lastStatus", "lastError", schedule, "isActive"
-       FROM cron_jobs ORDER BY "lastRunAt" DESC NULLS LAST LIMIT 20`
-    ).catch((e) => { logger.error(e, "admin query failed"); return []; });
+      rawQuery<any>(
+        `SELECT name, "lastRunAt", "lastStatus", "lastError", schedule, "isActive"
+         FROM cron_jobs ORDER BY "lastRunAt" DESC NULLS LAST LIMIT 20`
+      ).catch((e) => { logger.error(e, "admin query failed"); return []; }),
 
-    const recentCronLogs = await rawQuery<any>(
-      `SELECT "jobName", status, duration, result, error, "createdAt"
-       FROM cron_logs ORDER BY "createdAt" DESC LIMIT 20`
-    ).catch((e) => { logger.error(e, "admin query failed"); return []; });
+      rawQuery<any>(
+        `SELECT "jobName", status, duration, result, error, "createdAt"
+         FROM cron_logs ORDER BY "createdAt" DESC LIMIT 20`
+      ).catch((e) => { logger.error(e, "admin query failed"); return []; }),
 
-    const recentErrors = await rawQuery<any>(
-      `SELECT action, entity, details, "createdAt"
-       FROM event_logs WHERE (action LIKE '%error%' OR action LIKE '%failed%')
-         AND ("companyId"=$1 OR "companyId" IS NULL)
-       ORDER BY "createdAt" DESC LIMIT 20`,
-      [cid]
-    ).catch((e) => { logger.error(e, "admin query failed"); return []; });
+      rawQuery<any>(
+        `SELECT action, entity, details, "createdAt"
+         FROM event_logs WHERE (action LIKE '%error%' OR action LIKE '%failed%')
+           AND ("companyId"=$1 OR "companyId" IS NULL)
+         ORDER BY "createdAt" DESC LIMIT 20`,
+        [cid]
+      ).catch((e) => { logger.error(e, "admin query failed"); return []; }),
 
-    const [failedLogins] = await rawQuery<any>(
-      `SELECT COUNT(*) as count FROM event_logs
-       WHERE action IN ('login.failed','auth.failed') AND "createdAt" > NOW() - INTERVAL '24 hours'
-         AND ("companyId"=$1 OR "companyId" IS NULL)`,
-      [cid]
-    ).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; });
+      rawQuery<any>(
+        `SELECT COUNT(*) as count FROM event_logs
+         WHERE action IN ('login.failed','auth.failed') AND "createdAt" > NOW() - INTERVAL '24 hours'
+           AND ("companyId"=$1 OR "companyId" IS NULL)`,
+        [cid]
+      ).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; }),
 
-    const [userCount] = await rawQuery<any>(`SELECT COUNT(*) as count FROM users`).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; });
-    const [companyCount] = await rawQuery<any>(`SELECT COUNT(*) as count FROM companies`).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; });
-    const [employeeCount] = await rawQuery<any>(
-      `SELECT COUNT(DISTINCT e.id) as count FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id WHERE ea."companyId"=$1 AND e."deletedAt" IS NULL`,
-      [cid]
-    ).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; });
+      rawQuery<any>(`SELECT COUNT(*) as count FROM users`).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; }),
 
-    let dbSize = "N/A";
-    try {
-      const [sizeRow] = await rawQuery<any>(`SELECT pg_size_pretty(pg_database_size(current_database())) as size`);
-      dbSize = sizeRow?.size || "N/A";
-    } catch (e) { logger.error(e, "admin stats: db size query failed"); }
+      rawQuery<any>(`SELECT COUNT(*) as count FROM companies`).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; }),
 
-    let tableCount = 0;
-    try {
-      const [tc] = await rawQuery<any>(`SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema='public'`);
-      tableCount = Number(tc?.count || 0);
-    } catch (e) { logger.error(e, "admin stats: table count query failed"); }
+      rawQuery<any>(
+        `SELECT COUNT(DISTINCT e.id) as count FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id WHERE ea."companyId"=$1 AND e."deletedAt" IS NULL`,
+        [cid]
+      ).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; }),
 
-    const [integrationStats] = await rawQuery<any>(
-      `SELECT
-        COUNT(*) as total,
-        COUNT(*) FILTER (WHERE status = 'active') as active,
-        COUNT(*) FILTER (WHERE status = 'error') as errored
-       FROM integrations WHERE "companyId"=$1`,
-      [cid]
-    ).catch((e) => { logger.error(e, "admin query failed"); return [{ total: 0, active: 0, errored: 0 }]; });
+      rawQuery<any>(`SELECT pg_size_pretty(pg_database_size(current_database())) as size`).catch((e) => { logger.error(e, "admin stats: db size query failed"); return [{ size: "N/A" }]; }),
 
-    const [pendingMessages] = await rawQuery<any>(
-      `SELECT COUNT(*) as count FROM integration_logs WHERE status IN ('pending','retrying') AND "companyId"=$1`,
-      [cid]
-    ).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; });
+      rawQuery<any>(`SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema='public'`).catch((e) => { logger.error(e, "admin stats: table count query failed"); return [{ count: 0 }]; }),
+
+      rawQuery<any>(
+        `SELECT
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE status = 'active') as active,
+          COUNT(*) FILTER (WHERE status = 'error') as errored
+         FROM integrations WHERE "companyId"=$1`,
+        [cid]
+      ).catch((e) => { logger.error(e, "admin query failed"); return [{ total: 0, active: 0, errored: 0 }]; }),
+
+      rawQuery<any>(
+        `SELECT COUNT(*) as count FROM integration_logs WHERE status IN ('pending','retrying') AND "companyId"=$1`,
+        [cid]
+      ).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; }),
+    ]);
+
+    const [cronJobs] = cronJobsRow;
+    const [failedLogins] = failedLoginsRow;
+    const [userCount] = userCountRow;
+    const [companyCount] = companyCountRow;
+    const [employeeCount] = employeeCountRow;
+    const dbSize = sizeRow[0]?.size || "N/A";
+    const tableCount = Number(tableCountRow[0]?.count || 0);
+    const [integrationStats] = integrationStatsRow;
+    const [pendingMessages] = pendingMessagesRow;
 
     res.json({
       timestamp: new Date().toISOString(),
@@ -913,50 +932,62 @@ router.get("/violations-report", authorize({ feature: "admin", action: "list" })
     const whereClause = conditions.join(" AND ");
 
     const paginated = [...params, pageLimit, pageOffset];
-    const violations = await rawQuery(
-      `SELECT * FROM audit_violations WHERE ${whereClause} ORDER BY "createdAt" DESC LIMIT $${paginated.length - 1} OFFSET $${paginated.length}`,
-      paginated
-    );
+    const [
+      violations,
+      totalCountRow,
+      summaryRow,
+      byType,
+      byDepartment,
+      trend,
+    ] = await Promise.all([
+      rawQuery(
+        `SELECT * FROM audit_violations WHERE ${whereClause} ORDER BY "createdAt" DESC LIMIT $${paginated.length - 1} OFFSET $${paginated.length}`,
+        paginated
+      ),
 
-    const [totalCount] = await rawQuery<any>(
-      `SELECT COUNT(*)::int AS count FROM audit_violations WHERE ${whereClause}`,
-      params
-    );
+      rawQuery<any>(
+        `SELECT COUNT(*)::int AS count FROM audit_violations WHERE ${whereClause}`,
+        params
+      ),
 
-    const [summary] = await rawQuery<any>(
-      `SELECT
-         COUNT(*) AS total,
-         COUNT(*) FILTER (WHERE status='open') AS open,
-         COUNT(*) FILTER (WHERE status='resolved') AS resolved,
-         COUNT(*) FILTER (WHERE priority='critical') AS critical,
-         COUNT(*) FILTER (WHERE priority='high') AS high,
-         COUNT(*) FILTER (WHERE priority='medium') AS medium,
-         COUNT(*) FILTER (WHERE priority='low') AS low
-       FROM audit_violations WHERE "companyId"=$1 AND "auditDate"=CURRENT_DATE`,
-      [scope.companyId]
-    );
+      rawQuery<any>(
+        `SELECT
+           COUNT(*) AS total,
+           COUNT(*) FILTER (WHERE status='open') AS open,
+           COUNT(*) FILTER (WHERE status='resolved') AS resolved,
+           COUNT(*) FILTER (WHERE priority='critical') AS critical,
+           COUNT(*) FILTER (WHERE priority='high') AS high,
+           COUNT(*) FILTER (WHERE priority='medium') AS medium,
+           COUNT(*) FILTER (WHERE priority='low') AS low
+         FROM audit_violations WHERE "companyId"=$1 AND "auditDate"=CURRENT_DATE`,
+        [scope.companyId]
+      ),
 
-    const byType = await rawQuery<any>(
-      `SELECT type, COUNT(*)::int AS count
-       FROM audit_violations WHERE "companyId"=$1 AND status='open'
-       GROUP BY type ORDER BY count DESC`,
-      [scope.companyId]
-    );
+      rawQuery<any>(
+        `SELECT type, COUNT(*)::int AS count
+         FROM audit_violations WHERE "companyId"=$1 AND status='open'
+         GROUP BY type ORDER BY count DESC`,
+        [scope.companyId]
+      ),
 
-    const byDepartment = await rawQuery<any>(
-      `SELECT department, COUNT(*)::int AS count
-       FROM audit_violations WHERE "companyId"=$1 AND status='open' AND department IS NOT NULL
-       GROUP BY department ORDER BY count DESC`,
-      [scope.companyId]
-    );
+      rawQuery<any>(
+        `SELECT department, COUNT(*)::int AS count
+         FROM audit_violations WHERE "companyId"=$1 AND status='open' AND department IS NOT NULL
+         GROUP BY department ORDER BY count DESC`,
+        [scope.companyId]
+      ),
 
-    const trend = await rawQuery<any>(
-      `SELECT "auditDate"::text AS date, COUNT(*)::int AS count
-       FROM audit_violations WHERE "companyId"=$1
-         AND "auditDate" >= CURRENT_DATE - INTERVAL '30 days'
-       GROUP BY "auditDate" ORDER BY "auditDate"`,
-      [scope.companyId]
-    );
+      rawQuery<any>(
+        `SELECT "auditDate"::text AS date, COUNT(*)::int AS count
+         FROM audit_violations WHERE "companyId"=$1
+           AND "auditDate" >= CURRENT_DATE - INTERVAL '30 days'
+         GROUP BY "auditDate" ORDER BY "auditDate"`,
+        [scope.companyId]
+      ),
+    ]);
+
+    const [totalCount] = totalCountRow;
+    const [summary] = summaryRow;
 
     res.json({ data: violations, summary, byType, byDepartment, trend, total: totalCount?.count || violations.length });
   } catch (err) { handleRouteError(err, res, "admin"); }
@@ -1783,8 +1814,8 @@ router.post("/system-stops", authorize({ feature: "admin", action: "update" }), 
        VALUES ($1, $2, $3, $4) RETURNING id`,
       [scope.companyId, s, reason, scope.userId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.activated", entity: "system_stops", entityId: row.id, after: { scope: s, reason } }).catch(() => {});
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.activated", entity: "system_stops", entityId: row.id, details: `إيقاف نظام (${s}): ${reason}` }).catch(() => {});
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.activated", entity: "system_stops", entityId: row.id, after: { scope: s, reason } }).catch((e) => logger.error(e, "audit log failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.activated", entity: "system_stops", entityId: row.id, details: `إيقاف نظام (${s}): ${reason}` }).catch((e) => logger.error(e, "emit event failed"));
     res.status(201).json({ id: row.id, message: `تم تفعيل إيقاف النظام — النطاق: ${s}` });
   } catch (err) { handleRouteError(err, res, "Create system stop"); }
 });
@@ -1798,8 +1829,8 @@ router.patch("/system-stops/:id/deactivate", authorize({ feature: "admin", actio
        WHERE id=$2 AND "companyId"=$3 AND active=true`,
       [scope.userId, id, scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.deactivated", entity: "system_stops", entityId: id, after: {} }).catch(() => {});
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.deactivated", entity: "system_stops", entityId: id, details: "إلغاء إيقاف النظام" }).catch(() => {});
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.deactivated", entity: "system_stops", entityId: id, after: {} }).catch((e) => logger.error(e, "audit log failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.deactivated", entity: "system_stops", entityId: id, details: "إلغاء إيقاف النظام" }).catch((e) => logger.error(e, "emit event failed"));
     res.json({ message: "تم إلغاء تفعيل الإيقاف" });
   } catch (err) { handleRouteError(err, res, "Deactivate system stop"); }
 });

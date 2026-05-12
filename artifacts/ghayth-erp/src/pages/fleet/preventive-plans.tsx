@@ -4,6 +4,7 @@ import { useApiQuery, asList, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Wrench, Plus, AlertCircle, Clock } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -186,9 +187,9 @@ export default function PreventivePlansPage() {
         <>
           {overdueCount > 0 && <Badge className="bg-red-100 text-red-700">{overdueCount} متأخر</Badge>}
           {dueSoonCount > 0 && <Badge className="bg-yellow-100 text-yellow-700">{dueSoonCount} قريب</Badge>}
-          <Button onClick={() => setShowForm(!showForm)} size="sm">
+          <GuardedButton perm="fleet:create" onClick={() => setShowForm(!showForm)} size="sm">
             <Plus className="w-4 h-4 me-1" /> إضافة خطة
-          </Button>
+          </GuardedButton>
         </>
       }
     >

@@ -12,6 +12,7 @@ import {
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -204,14 +205,15 @@ export default function InventoryCountPage() {
       render: (row) => (
         <div className="flex items-center gap-1">
           {row.status !== "approved" && (
-            <Button
+            <GuardedButton
+              perm="warehouse:create"
               size="sm"
               variant="outline"
               className="h-7 px-2 text-green-700 hover:bg-green-50"
               onClick={(e) => { e.stopPropagation(); setApproveTargetId(row.id); }}
             >
               <CheckCircle className="w-3.5 h-3.5 me-1" /> اعتماد
-            </Button>
+            </GuardedButton>
           )}
           <Button
             size="sm"
@@ -308,14 +310,15 @@ export default function InventoryCountPage() {
           const existing = (countItems[count.id] || []).find((i: any) => i.productId === _row.id);
           const sysStock = existing?.systemStock ?? _row.currentStock;
           return (
-            <Button
+            <GuardedButton
+              perm="warehouse:create"
               size="sm"
               variant="ghost"
               className="h-6 text-xs"
               onClick={(e) => { e.stopPropagation(); handleSaveItem(count.id, _row.id, sysStock); }}
             >
               حفظ
-            </Button>
+            </GuardedButton>
           );
         },
       });
@@ -356,9 +359,9 @@ export default function InventoryCountPage() {
       subtitle="إجراء جلسات الجرد الدوري ومطابقة المخزون الفعلي"
       breadcrumbs={[{ href: "/warehouse", label: "إدارة المخازن" }]}
       actions={
-        <Button onClick={() => setShowForm(!showForm)} size="sm" className="gap-1.5">
+        <GuardedButton perm="warehouse:create" onClick={() => setShowForm(!showForm)} size="sm" className="gap-1.5">
           <Plus className="w-4 h-4" /> جلسة جرد جديدة
-        </Button>
+        </GuardedButton>
       }
     >
       <KpiGrid items={kpis} />

@@ -4,6 +4,7 @@ import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { formatDateAr } from "@/lib/formatters";
 import { useMemo, useState } from "react";
@@ -37,14 +38,15 @@ export default function AdminPostingFailures() {
       <Badge className="bg-red-100 text-red-800">مفتوح</Badge>
     )},
     { key: "actions", header: "إجراء", hidden: showResolved, render: (r: any) => (
-      <Button
+      <GuardedButton
+        perm="admin:create"
         variant="outline"
         size="sm"
         disabled={resolveMutation.isPending}
         onClick={() => resolveMutation.mutate(r.id)}
       >
         حل
-      </Button>
+      </GuardedButton>
     )},
   ], [showResolved, resolveMutation]);
 

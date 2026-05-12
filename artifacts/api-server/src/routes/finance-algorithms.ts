@@ -13,7 +13,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
-import { checkFinancialPeriodOpen, updateAccountBalances, todayISO, currentPeriod, toDateISO, roundTo2, roundTo4, generateTimeRef } from "../lib/businessHelpers.js";
+import { checkFinancialPeriodOpen, updateAccountBalances, todayISO, currentPeriod, toDateISO, roundTo2, roundTo4, generateTimeRef, emitEvent } from "../lib/businessHelpers.js";
 import { FINANCE_ROLES } from "../lib/rbacCatalog.js";
 
 export const financeAlgorithmsRouter = Router();
@@ -380,6 +380,16 @@ financeAlgorithmsRouter.post("/bank-reconciliation/import", authorize({ feature:
       }
     });
 
+    await emitEvent({
+      action: "finance.bank_reconciliation.imported",
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      entity: "bank_reconciliation",
+      entityId: 0,
+      details: `imported ${imported} rows, batch ${batchId}`,
+      after: { batchId, accountCode, imported },
+    });
     res.status(201).json({ batchId, imported, message: `تم استيراد ${imported} سطر من الكشف البنكي` });
   } catch (err) {
     handleRouteError(err, res, "Bank reconciliation import error:");
@@ -445,6 +455,16 @@ financeAlgorithmsRouter.post("/bank-reconciliation/auto-match", authorize({ feat
     }
 
     const unmatched = bankRows.length - matched;
+    await emitEvent({
+      action: "finance.bank_reconciliation.matched",
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      entity: "bank_reconciliation",
+      entityId: 0,
+      details: `auto-matched ${matched}/${bankRows.length}, batch ${batchId}`,
+      after: { batchId, matched, method: "auto" },
+    });
     res.json({ matched, unmatched, total: bankRows.length, message: `تمت المطابقة التلقائية: ${matched} متطابق، ${unmatched} غير متطابق` });
   } catch (err) {
     handleRouteError(err, res, "Auto-match error:");
@@ -519,6 +539,16 @@ financeAlgorithmsRouter.post("/bank-reconciliation/manual-match", authorize({ fe
       `UPDATE bank_statements SET "matchStatus"='matched', "matchedJournalLineId"=$1 WHERE id=$2 AND "companyId"=$3`,
       [journalLineId, bankStatementId, scope.companyId]
     );
+    await emitEvent({
+      action: "finance.bank_reconciliation.matched",
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      entity: "bank_statements",
+      entityId: bankStatementId,
+      details: `manually matched bank_statement=${bankStatementId} ↔ journal_line=${journalLineId}`,
+      after: { bankStatementId, journalLineId, method: "manual" },
+    });
     res.json({ success: true, message: "تمت المطابقة اليدوية" });
   } catch (err) {
     handleRouteError(err, res, "Manual match error:");
@@ -942,6 +972,17 @@ financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", authorize({ feature
       processed++;
     }
 
+    const totalDepreciation = results.reduce((s: number, r: any) => s + Number(r.depAmount || 0), 0);
+    await emitEvent({
+      action: "finance.fixed_assets.batch_depreciated",
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      entity: "fixed_assets",
+      entityId: 0,
+      details: `period=${targetPeriod} processed=${processed} skipped=${skipped} total=${roundTo2(totalDepreciation)}`,
+      after: { period: targetPeriod, assetsCount: processed, totalDepreciation: roundTo2(totalDepreciation) },
+    });
     res.json({
       period: targetPeriod,
       processed,
@@ -1088,6 +1129,16 @@ financeAlgorithmsRouter.post("/rounding-account/setup", authorize({ feature: "fi
       [scope.companyId]
     );
     const [row] = await rawQuery<any>(`SELECT * FROM chart_of_accounts WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    await emitEvent({
+      action: "finance.rounding_account.configured",
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      entity: "chart_of_accounts",
+      entityId: row?.id ?? 0,
+      details: `created rounding account 9999`,
+      after: { accountCode: "9999" },
+    });
     res.status(201).json({ account: row, message: "تم إنشاء حساب فروقات التقريب (9999)" });
   } catch (err) {
     handleRouteError(err, res, "Setup rounding account error:");
@@ -1274,15 +1325,16 @@ financeAlgorithmsRouter.get("/fx/revaluation/preview", authorize({ feature: "fin
       new Set<string>([...openInvoices.map((i: any) => i.currency), ...openPOs.map((p: any) => p.currency)])
     );
     const rateMap: Record<string, number> = {};
-    for (const cur of currencies) {
-      const [r] = await rawQuery<any>(
-        `SELECT rate FROM fx_rates
-         WHERE "companyId"=$1 AND "fromCurrency"=$2 AND "toCurrency"='SAR'
+    if (currencies.length > 0) {
+      const rateRows = await rawQuery<any>(
+        `SELECT DISTINCT ON ("fromCurrency") "fromCurrency", rate FROM fx_rates
+         WHERE "companyId"=$1 AND "fromCurrency" = ANY($2::text[]) AND "toCurrency"='SAR'
            AND "effectiveDate"::date <= $3::date
-         ORDER BY (source='period_end') DESC, "effectiveDate" DESC LIMIT 1`,
-        [scope.companyId, cur, periodEnd]
+         ORDER BY "fromCurrency", (source='period_end') DESC, "effectiveDate" DESC`,
+        [scope.companyId, currencies, periodEnd]
       );
-      rateMap[cur] = r ? Number(r.rate) : 0;
+      for (const r of rateRows) rateMap[r.fromCurrency] = Number(r.rate);
+      for (const cur of currencies) if (!(cur in rateMap)) rateMap[cur] = 0;
     }
 
     let totalGain = 0;
@@ -1403,15 +1455,16 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
       ...openPOs.map((p: any) => p.currency),
     ]));
     const rateMap: Record<string, number> = {};
-    for (const cur of currencies) {
-      const [r] = await rawQuery<any>(
-        `SELECT rate FROM fx_rates
-         WHERE "companyId"=$1 AND "fromCurrency"=$2 AND "toCurrency"='SAR'
+    if (currencies.length > 0) {
+      const rateRows = await rawQuery<any>(
+        `SELECT DISTINCT ON ("fromCurrency") "fromCurrency", rate FROM fx_rates
+         WHERE "companyId"=$1 AND "fromCurrency" = ANY($2::text[]) AND "toCurrency"='SAR'
            AND "effectiveDate"::date <= $3::date
-         ORDER BY (source='period_end') DESC, "effectiveDate" DESC LIMIT 1`,
-        [scope.companyId, cur, periodEnd]
+         ORDER BY "fromCurrency", (source='period_end') DESC, "effectiveDate" DESC`,
+        [scope.companyId, currencies, periodEnd]
       );
-      rateMap[cur] = r ? Number(r.rate) : 0;
+      for (const r of rateRows) rateMap[r.fromCurrency] = Number(r.rate);
+      for (const cur of currencies) if (!(cur in rateMap)) rateMap[cur] = 0;
     }
 
     let arDiff = 0; // net AR adjustment (DR if positive → asset up)
