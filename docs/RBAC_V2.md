@@ -328,3 +328,100 @@ For each unmigrated route handler:
 4. For approval handlers with a financial threshold, add `amount: { from: "body", field: "amount" }`.
 5. Wrap the response in `maskFields(req, payload)`.
 6. Run `pnpm --filter @workspace/api-server lint:permissions` and the route's smoke test.
+
+---
+
+## Appendix A — Route migration grid (snapshot 11 May 2026)
+
+**Final state**: 1152/1152 endpoints across 68 route files use `authorize()` — **100% migration coverage**. PR #260 (11 May 2026) closed the gap.
+
+| Route file | `authorize()` | `requirePermission()` |
+| --- | ---: | ---: |
+| `accounting-engine.ts` | 13 | 0 |
+| `activityLog.ts` | 2 | 0 |
+| `admin.ts` | 51 | 0 |
+| `auditLogs.ts` | 3 | 0 |
+| `automation.ts` | 10 | 0 |
+| `bi.ts` | 31 | 0 |
+| `calendar.ts` | 1 | 0 |
+| `clients.ts` | 9 | 0 |
+| `communications.ts` | 13 | 0 |
+| `correspondence.ts` | 7 | 0 |
+| `crm.ts` | 13 | 0 |
+| `digital-signature.ts` | 3 | 0 |
+| `documents.ts` | 23 | 0 |
+| `employees.ts` | 10 | 0 |
+| `entityMeta.ts` | 9 | 0 |
+| `finance-accounts.ts` | 10 | 0 |
+| `finance-algorithms.ts` | 27 | 0 |
+| `finance-budget.ts` | 13 | 0 |
+| `finance-collection.ts` | 3 | 0 |
+| `finance-cost-centers.ts` | 5 | 0 |
+| `finance-custodies.ts` | 8 | 0 |
+| `finance-gl-helpers.ts` | 10 | 0 |
+| `finance-hardening.ts` | 28 | 0 |
+| `finance-invoices.ts` | 26 | 0 |
+| `finance-journal.ts` | 23 | 0 |
+| `finance-purchase.ts` | 22 | 0 |
+| `finance-recurring.ts` | 6 | 0 |
+| `finance-reports.ts` | 14 | 0 |
+| `finance-vendors.ts` | 18 | 0 |
+| `finance-zatca.ts` | 9 | 0 |
+| `fleet.ts` | 46 | 0 |
+| `gov-integrations.ts` | 9 | 0 |
+| `governance.ts` | 35 | 0 |
+| `hr-contracts.ts` | 11 | 0 |
+| `hr-discipline.ts` | 24 | 0 |
+| `hr-exit.ts` | 6 | 0 |
+| `hr-loans.ts` | 6 | 0 |
+| `hr-overtime.ts` | 7 | 0 |
+| `hr.ts` | 111 | 0 |
+| `impactPreview.ts` | 1 | 0 |
+| `import.ts` | 6 | 0 |
+| `intelligence.ts` | 18 | 0 |
+| `legal.ts` | 30 | 0 |
+| `marketing.ts` | 10 | 0 |
+| `moduleDashboards.ts` | 5 | 0 |
+| `notification-engine.ts` | 20 | 0 |
+| `notifications.ts` | 6 | 0 |
+| `obligations.ts` | 8 | 0 |
+| `operationsCenter.ts` | 3 | 0 |
+| `pdpl.ts` | 3 | 0 |
+| `permissions.ts` | 6 | 0 |
+| `projects.ts` | 26 | 0 |
+| `properties.ts` | 55 | 0 |
+| `rbacV2.ts` | 27 | 0 |
+| `recruitment.ts` | 13 | 0 |
+| `requests.ts` | 16 | 0 |
+| `rules.ts` | 6 | 0 |
+| `scheduled-reports.ts` | 5 | 0 |
+| `search.ts` | 1 | 0 |
+| `settings.ts` | 31 | 0 |
+| `storage.ts` | 2 | 0 |
+| `store.ts` | 11 | 0 |
+| `support.ts` | 18 | 0 |
+| `tasks.ts` | 6 | 0 |
+| `training.ts` | 13 | 0 |
+| `umrah-entities.ts` | 40 | 0 |
+| `umrah.ts` | 48 | 0 |
+| `warehouse.ts` | 25 | 0 |
+| `workflows.ts` | 18 | 0 |
+| **Totals** | **1152** | **0** |
+
+### How to regenerate this table
+
+The numbers will drift as new routes land. Regenerate from the source of truth:
+
+```bash
+for f in artifacts/api-server/src/routes/*.ts; do
+  name=$(basename "$f" .ts)
+  auth=$(grep -c "authorize(" "$f")
+  req=$(grep -c "requirePermission(" "$f")
+  total=$((auth + req))
+  if [ "$total" -gt 0 ]; then
+    echo "| \`$name.ts\` | $auth | $req |"
+  fi
+done
+```
+
+§11 above is kept as the historical 9-May-2026 snapshot (102/1024 / 9.2%) so the migration journey is auditable.

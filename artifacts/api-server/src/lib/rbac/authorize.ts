@@ -27,6 +27,7 @@ import type { Request, Response, NextFunction } from "express";
 import { rawQuery, rawExecute } from "../rawdb.js";
 import { checkAccess, applyFieldPolicy, type AccessResult, type AccessSpec, type ResourceRecord } from "./authzEngine.js";
 import type { Action } from "./featureCatalog.js";
+import { forwardDenial } from "./siemForwarder.js";
 
 declare global {
   namespace Express {
@@ -69,9 +70,17 @@ export function authorize(opts: AuthorizeOptions) {
       return;
     }
 
+    // Extract caller IP — used by the `ipPrefixIn` ABAC condition.
+    // Order: x-forwarded-for first hop (proxy chain) → socket peer.
+    const ipAddress =
+      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
+      req.socket?.remoteAddress ||
+      null;
+
     const spec: AccessSpec = {
       feature: opts.feature,
       action: opts.action,
+      ipAddress,
     };
 
     // Resolve resource record (for scope checks).
@@ -109,7 +118,8 @@ export function authorize(opts: AuthorizeOptions) {
     const result = await checkAccess(scope, spec);
 
     if (!result.allowed) {
-      // Audit denial (best-effort).
+      const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket?.remoteAddress || null;
+      // Audit denial — local DB log (source of truth).
       void rawExecute(
         `INSERT INTO security_log ("userId","companyId",role,path,method,"requiredPerms",reason,ip,"createdAt")
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())`,
@@ -118,9 +128,23 @@ export function authorize(opts: AuthorizeOptions) {
           req.path, req.method,
           JSON.stringify([`${opts.feature}:${opts.action}`]),
           result.code || "denied",
-          (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket?.remoteAddress || null,
+          ip,
         ]
       ).catch(() => undefined);
+      // Mirror to external SIEM (Splunk/Sentinel/Datadog) when configured.
+      // Fire-and-forget, never blocks the response.
+      forwardDenial({
+        userId: scope.userId,
+        companyId: scope.companyId,
+        role: scope.role,
+        path: req.path,
+        method: req.method,
+        feature: opts.feature,
+        action: opts.action,
+        reason: result.code || "denied",
+        ip,
+        meta: { diagnostics: result.diagnostics },
+      });
 
       res.status(403).json({
         error: result.reasonAr || "لا تملك الصلاحية اللازمة",

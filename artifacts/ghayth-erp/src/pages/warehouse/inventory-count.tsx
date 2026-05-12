@@ -1,11 +1,10 @@
 import { useState, useMemo } from "react";
+import { z } from "zod";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import {
   ClipboardCheck, Plus, Package, CheckCircle, ChevronDown, ChevronUp,
   ArrowUp, ArrowDown, FileText, Clock, AlertTriangle,
@@ -13,9 +12,33 @@ import {
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { KpiGrid } from "@/components/shared/kpi-card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  FormShell, FormTextField, FormDateField, FormGrid,
+} from "@/components/form-shell";
+
+// New count session — schema enforces countDate required (was no
+// validation at all on the create form). `Input` per-item edits inside
+// the table are NOT migrated here (different UX, different form).
+const createCountSchema = z.object({
+  countDate: z.string().min(1, "تاريخ الجرد مطلوب"),
+  warehouseLocation: z.string().trim(),
+  notes: z.string().trim(),
+});
+type CreateCountForm = z.infer<typeof createCountSchema>;
 
 const STATUS_OPTIONS = [
   { value: "draft", label: "مسودة" },
@@ -27,8 +50,12 @@ export default function InventoryCountPage() {
   const [expandedCount, setExpandedCount] = useState<number | null>(null);
   const [countItems, setCountItems] = useState<Record<number, any[]>>({});
   const [physicalCounts, setPhysicalCounts] = useState<Record<string, string>>({});
-  const [form, setForm] = useState({ countDate: new Date().toISOString().split("T")[0], notes: "", warehouseLocation: "" });
   const [filters, setFilters] = useFilters();
+  // Tracks the count being approved. Replaces a native window.confirm()
+  // that blocked the event loop and ignored RTL/dark mode. Approval
+  // is a destructive operation (updates inventory directly) so it
+  // deserves a proper confirmation surface.
+  const [approveTargetId, setApproveTargetId] = useState<number | null>(null);
 
   const { data, refetch } = useApiQuery<any>(["inventory-counts"], "/warehouse/inventory-counts");
   const counts = asList(data?.data || data);
@@ -36,12 +63,11 @@ export default function InventoryCountPage() {
   const { data: products } = useApiQuery<any>(["warehouse-products"], "/warehouse/products?limit=500");
   const productList = asList(products?.data || products);
 
-  const handleCreate = async () => {
+  const handleCreate = async (values: CreateCountForm) => {
     try {
-      await apiFetch("/warehouse/inventory-counts", { method: "POST", body: JSON.stringify(form) });
+      await apiFetch("/warehouse/inventory-counts", { method: "POST", body: JSON.stringify(values) });
       toast({ title: "تم إنشاء جلسة الجرد" });
       setShowForm(false);
-      setForm({ countDate: new Date().toISOString().split("T")[0], notes: "", warehouseLocation: "" });
       refetch();
     } catch (e: any) { toast({ title: e.message || "خطأ", variant: "destructive" }); }
   };
@@ -49,8 +75,7 @@ export default function InventoryCountPage() {
   const loadItems = async (countId: number) => {
     if (expandedCount === countId) { setExpandedCount(null); return; }
     try {
-      const resp = await fetch(`/api/warehouse/inventory-counts/${countId}/items`, { credentials: "include" });
-      const json = await resp.json();
+      const json = await apiFetch<any>(`/warehouse/inventory-counts/${countId}/items`);
       setCountItems((prev) => ({ ...prev, [countId]: json.data || json }));
       setExpandedCount(countId);
     } catch (e) { toast({ title: "خطأ في جلب العناصر", variant: "destructive" }); }
@@ -62,15 +87,13 @@ export default function InventoryCountPage() {
     if (physical === undefined || physical === "") { toast({ title: "أدخل الكمية الفعلية", variant: "destructive" }); return; }
     try {
       await apiFetch(`/warehouse/inventory-counts/${countId}/items`, { method: "POST", body: JSON.stringify({ productId, physicalCount: Number(physical) }) });
-      const resp = await fetch(`/api/warehouse/inventory-counts/${countId}/items`, { credentials: "include" });
-      const json = await resp.json();
+      const json = await apiFetch<any>(`/warehouse/inventory-counts/${countId}/items`);
       setCountItems((prev) => ({ ...prev, [countId]: json.data || json }));
       toast({ title: "تم حفظ الجرد" });
     } catch (e: any) { toast({ title: e.message, variant: "destructive" }); }
   };
 
-  const handleApprove = async (countId: number) => {
-    if (!confirm("اعتماد الجرد وتحديث المخزون تلقائياً؟")) return;
+  const confirmApprove = async (countId: number) => {
     try {
       const res = await apiFetch<any>(`/warehouse/inventory-counts/${countId}/approve`, { method: "POST", body: JSON.stringify({}) });
       if (res?.warning) {
@@ -182,14 +205,15 @@ export default function InventoryCountPage() {
       render: (row) => (
         <div className="flex items-center gap-1">
           {row.status !== "approved" && (
-            <Button
+            <GuardedButton
+              perm="warehouse:create"
               size="sm"
               variant="outline"
               className="h-7 px-2 text-green-700 hover:bg-green-50"
-              onClick={(e) => { e.stopPropagation(); handleApprove(row.id); }}
+              onClick={(e) => { e.stopPropagation(); setApproveTargetId(row.id); }}
             >
               <CheckCircle className="w-3.5 h-3.5 me-1" /> اعتماد
-            </Button>
+            </GuardedButton>
           )}
           <Button
             size="sm"
@@ -286,14 +310,15 @@ export default function InventoryCountPage() {
           const existing = (countItems[count.id] || []).find((i: any) => i.productId === _row.id);
           const sysStock = existing?.systemStock ?? _row.currentStock;
           return (
-            <Button
+            <GuardedButton
+              perm="warehouse:create"
               size="sm"
               variant="ghost"
               className="h-6 text-xs"
               onClick={(e) => { e.stopPropagation(); handleSaveItem(count.id, _row.id, sysStock); }}
             >
               حفظ
-            </Button>
+            </GuardedButton>
           );
         },
       });
@@ -334,9 +359,9 @@ export default function InventoryCountPage() {
       subtitle="إجراء جلسات الجرد الدوري ومطابقة المخزون الفعلي"
       breadcrumbs={[{ href: "/warehouse", label: "إدارة المخازن" }]}
       actions={
-        <Button onClick={() => setShowForm(!showForm)} size="sm" className="gap-1.5">
+        <GuardedButton perm="warehouse:create" onClick={() => setShowForm(!showForm)} size="sm" className="gap-1.5">
           <Plus className="w-4 h-4" /> جلسة جرد جديدة
-        </Button>
+        </GuardedButton>
       }
     >
       <KpiGrid items={kpis} />
@@ -353,23 +378,31 @@ export default function InventoryCountPage() {
       {showForm && (
         <Card className="border-2 border-primary/20">
           <CardHeader className="pb-2"><CardTitle className="text-base">جلسة جرد جديدة</CardTitle></CardHeader>
-          <CardContent className="grid grid-cols-3 gap-4">
-            <div>
-              <Label>تاريخ الجرد</Label>
-              <UnifiedDateInput value={form.countDate} onChange={(v) => setForm({ ...form, countDate: v })} showDualCalendar showPresets />
-            </div>
-            <div>
-              <Label>موقع المستودع</Label>
-              <Input value={form.warehouseLocation} onChange={(e) => setForm({ ...form, warehouseLocation: e.target.value })} placeholder="اسم المستودع أو القسم" />
-            </div>
-            <div>
-              <Label>ملاحظات</Label>
-              <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-            </div>
-            <div className="col-span-3 flex gap-2">
-              <Button onClick={handleCreate} rateLimitAware>بدء الجرد</Button>
-              <Button variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>
-            </div>
+          <CardContent>
+            <FormShell
+              schema={createCountSchema}
+              defaultValues={{
+                countDate: new Date().toISOString().split("T")[0],
+                warehouseLocation: "",
+                notes: "",
+              }}
+              submitLabel="بدء الجرد"
+              secondaryActions={
+                <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
+                  إلغاء
+                </Button>
+              }
+              onSubmit={async (values, ctx) => {
+                await handleCreate(values);
+                ctx.reset();
+              }}
+            >
+              <FormGrid cols={3}>
+                <FormDateField name="countDate" label="تاريخ الجرد" required />
+                <FormTextField name="warehouseLocation" label="موقع المستودع" placeholder="اسم المستودع أو القسم" />
+                <FormTextField name="notes" label="ملاحظات" />
+              </FormGrid>
+            </FormShell>
           </CardContent>
         </Card>
       )}
@@ -394,6 +427,35 @@ export default function InventoryCountPage() {
         renderRowExtras={renderRowExtras}
         onRowClick={(row) => loadItems(row.id)}
       />
+
+      <AlertDialog
+        open={approveTargetId !== null}
+        onOpenChange={(next) => { if (!next) setApproveTargetId(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>اعتماد جلسة الجرد</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيؤدي اعتماد الجرد إلى تحديث رصيد المخزون تلقائيًا وفق العدّ الفعلي.
+              لا يمكن التراجع عن هذا الإجراء.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setApproveTargetId(null)}>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (approveTargetId != null) {
+                  const id = approveTargetId;
+                  setApproveTargetId(null);
+                  confirmApprove(id);
+                }
+              }}
+            >
+              اعتماد
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageShell>
   );
 }

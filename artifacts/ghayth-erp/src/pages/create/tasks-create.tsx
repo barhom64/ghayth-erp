@@ -13,7 +13,6 @@ import { useFieldErrors } from "@/hooks/use-field-errors";
 import { Badge } from "@/components/ui/badge";
 import { Link2 } from "lucide-react";
 import { Autocomplete, type AutocompleteOption } from "@/components/ui/autocomplete";
-import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { TextField, TextAreaField, DateField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const ENTITY_TYPE_OPTIONS = [
@@ -36,7 +35,6 @@ export default function TasksCreate() {
   const clients = clientsData?.data || [];
   const searchStr = useSearch();
   const searchParams = new URLSearchParams(searchStr);
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [entitySearch, setEntitySearch] = useState("");
 
   const getInitial = () => {
@@ -193,7 +191,6 @@ export default function TasksCreate() {
           </div>
         </div>
       </div>
-      <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/tasks")}>إلغاء</Button>
         <Button onClick={handleSubmit} disabled={!form.title || createMut.isPending} rateLimitAware>

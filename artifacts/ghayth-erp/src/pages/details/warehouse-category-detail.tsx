@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +21,7 @@ export default function WarehouseCategoryDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/warehouse/categories/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("warehouse-category", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["warehouse-category", String(id)],
@@ -146,6 +148,8 @@ export default function WarehouseCategoryDetail() {
       relatedEntities={relatedEntities}
       entityType="warehouse-category"
       entityId={id ?? 0}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       overview={overview}
       isLoading={isLoading}
       error={error}

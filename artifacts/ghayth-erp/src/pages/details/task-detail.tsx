@@ -11,6 +11,7 @@ import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "معلقة",
@@ -51,6 +52,7 @@ export default function TaskDetail() {
   const [, params] = useRoute("/tasks/:id");
   const id = params?.id ? Number(params.id) : null;
   const { toast } = useToast();
+  const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("task", id ?? 0);
 
   const { data: task, isLoading, error, refetch } = useApiQuery<any>(
     ["task", String(id)],
@@ -182,6 +184,8 @@ export default function TaskDetail() {
       onRetry={() => refetch()}
       backPath="/tasks"
       backLabel="المهام"
+      extraTabs={registryExtraTabs}
+      hideTabs={registryHideTabs}
       actions={
         <div className="flex items-center gap-2">
           {canComplete && (

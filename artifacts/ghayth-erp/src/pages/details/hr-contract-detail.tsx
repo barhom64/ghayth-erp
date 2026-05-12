@@ -10,10 +10,10 @@ import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { Edit, FileText } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import { EntityDocuments } from "@/components/shared/entity-documents";
-import { ApprovalTimeline } from "@/components/shared/approval-timeline";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+
 
 /**
  * HrContractDetail — detail page for a single HR contract.
@@ -34,6 +34,7 @@ const CONTRACT_TYPE_LABELS: Record<string, string> = {
   full_time: "دوام كامل",
   part_time: "دوام جزئي",
   temporary: "مؤقت",
+  contract: "عقد مؤقت",
   probation: "تجربة",
 };
 
@@ -86,7 +87,7 @@ export default function HrContractDetail() {
           { label: "تاريخ البداية", value: formatDateAr(contract.startDate) },
           { label: "تاريخ النهاية", value: formatDateAr(contract.endDate) },
           { label: "الراتب", value: formatCurrency(contract.salary) },
-          ...(contract.allowances ? [{ label: "البدلات", value: formatCurrency(contract.allowances) }] : []),
+          ...((contract.housingAllowance || contract.transportAllowance) ? [{ label: "البدلات", value: formatCurrency((Number(contract.housingAllowance) || 0) + (Number(contract.transportAllowance) || 0)) }] : []),
           ...(contract.jobTitle ? [{ label: "المسمى الوظيفي", value: contract.jobTitle }] : []),
           ...(contract.department ? [{ label: "القسم", value: contract.department }] : []),
           { label: "الحالة", value: STATUS_LABELS[contract.status] || contract.status || "-" },
@@ -102,6 +103,8 @@ export default function HrContractDetail() {
     });
     return sections;
   }, [contract, id]);
+
+  const { extraTabs, hideTabs } = useRegistryTabs("employee_contract", id ?? 0);
 
   const handleEdit = () => {
     setLocation(`/hr/contracts/${id}/edit`);
@@ -215,11 +218,10 @@ export default function HrContractDetail() {
         )}
       </div>
 
-      {id && <ApprovalTimeline entityType="hr-contract" entityId={id} />}
-      {id && <EntityDocuments entityType="hr-contract" entityId={id} />}
-
-      {id && <EntityComments entityType="hr-contract" entityId={id} />}
-      {id && <EntityTags entityType="hr-contract" entityId={id} />}
+      {/* Tags */}
+      {id && (
+        <EntityTags entityType="hr-contract" entityId={id} />
+      )}
     </div>
   );
 
@@ -250,6 +252,8 @@ export default function HrContractDetail() {
       entityType="hr-contract"
       entityId={id ?? 0}
       overview={overview}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       isLoading={isLoading}
       error={error}
       onRetry={refetch}

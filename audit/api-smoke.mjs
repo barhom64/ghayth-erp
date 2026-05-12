@@ -43,12 +43,14 @@ async function worker(queue) {
     if (!ep) break;
     i++;
     try {
+      const t0 = performance.now();
       const r = await fetch(`${BASE}${ep.testPath}`, {
         headers: { Cookie: cookieHeader },
         signal: AbortSignal.timeout(15000),
         redirect: "manual",
       });
-      const entry = { ...ep, status: r.status };
+      const elapsed = Math.round(performance.now() - t0);
+      const entry = { ...ep, status: r.status, ms: elapsed };
       if (r.status >= 500) {
         let body = "";
         try { body = (await r.text()).slice(0, 600); } catch {}
@@ -85,6 +87,42 @@ console.log(`  ⚠️  404 Not Found:  ${results.notFound.length}`);
 console.log(`  ❌ 5xx Server Err:  ${results.serverError.length}`);
 console.log(`  ❓ Other (4xx):     ${results.other.length}`);
 
+// Latency stats — only over OK responses (5xx / 4xx fail-fast distort).
+const sortedMs = results.ok
+  .map((r) => r.ms)
+  .filter((n) => typeof n === "number")
+  .sort((a, b) => a - b);
+
+function pct(p) {
+  if (sortedMs.length === 0) return null;
+  const idx = Math.min(sortedMs.length - 1, Math.floor((p / 100) * sortedMs.length));
+  return sortedMs[idx];
+}
+
+const latency = {
+  count: sortedMs.length,
+  p50: pct(50),
+  p95: pct(95),
+  p99: pct(99),
+  max: sortedMs.length ? sortedMs[sortedMs.length - 1] : null,
+  mean: sortedMs.length
+    ? Math.round(sortedMs.reduce((a, b) => a + b, 0) / sortedMs.length)
+    : null,
+};
+
+// Top-10 slowest endpoints — useful signal for perf hot-spots.
+const slowest = [...results.ok]
+  .sort((a, b) => (b.ms ?? 0) - (a.ms ?? 0))
+  .slice(0, 10)
+  .map((r) => ({ ms: r.ms, status: r.status, path: r.testPath, file: r.file }));
+
+console.log(`\n⏱️  Latency over ${latency.count} OK responses:`);
+console.log(`  p50: ${latency.p50}ms · p95: ${latency.p95}ms · p99: ${latency.p99}ms · max: ${latency.max}ms`);
+if (slowest.length) {
+  console.log(`\n🐢 Top ${slowest.length} slowest:`);
+  for (const s of slowest) console.log(`   ${s.ms}ms  ${s.path}  (${s.file})`);
+}
+
 const summary = {
   testedAt: new Date().toISOString(),
   total: allEndpoints.length,
@@ -96,6 +134,8 @@ const summary = {
     serverError: results.serverError.length,
     other: results.other.length,
   },
+  latency,
+  slowest,
   serverErrors: results.serverError,
   notFoundSamples: results.notFound.slice(0, 30),
   otherSamples: results.other.slice(0, 30),

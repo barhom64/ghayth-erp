@@ -34,7 +34,9 @@ class ProjectsEngineImpl implements DomainEngine {
     if (srcType === "ap" || srcType === "vendor" || srcType === "supplier" || srcType === "invoice")
       creditFallback = "2100";
     else if (srcType === "inventory" || srcType === "material" || srcType === "materials" || srcType === "stock")
-      creditFallback = "1300";
+      // Task #190 fix: 1300 doesn't exist in the seeded chart_of_accounts.
+      // 1150 ("المخزون") is the canonical inventory asset code.
+      creditFallback = "1151";
 
     const [debitCode, creditCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "project_wip", "debit", "1350"),

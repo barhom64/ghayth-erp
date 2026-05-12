@@ -139,8 +139,15 @@ export async function emitEvent(params: {
     logger.warn(`[emitEvent] payload warnings for ${params.action}: ${validation.warnings.join("; ")}`);
   }
 
-  // Critical events: persist to event_logs BEFORE emitting to listeners
-  if (isCritical) {
+  // Critical events: persist to event_logs BEFORE emitting to listeners.
+  // Non-critical events: persist iff the operator has opted in via
+  // PERSIST_ALL_EVENTS — defaults off because every emitEvent() call
+  // would otherwise write a row, and that bloats event_logs fast on
+  // a busy tenant. The original audit flagged "event_logs is empty";
+  // turning the env flag on is the supported way to fix that without
+  // surprising existing deployments with a behaviour change.
+  const persistAll = process.env.PERSIST_ALL_EVENTS === "true";
+  if (isCritical || persistAll) {
     await rawExecute(
       `INSERT INTO event_logs ("companyId","userId",action,entity,"entityId",details)
        VALUES ($1,$2,$3,$4,$5,$6)`,
@@ -498,7 +505,7 @@ export async function softDeleteJournalEntry(
   );
 }
 
-type ApprovalChainType = "leaves" | "purchases" | "expenses" | "advances" | "letters" | "procurement" | "loans" | "overtime" | "exit";
+type ApprovalChainType = "leaves" | "purchases" | "expenses" | "advances" | "letters" | "procurement" | "loans" | "overtime" | "exit" | "umrah_commission_plan";
 
 interface ApprovalChainResult {
   requiresApproval: boolean;
@@ -686,6 +693,7 @@ function chainTypeLabel(t: ApprovalChainType): string {
     leaves: "إجازات", purchases: "مشتريات", expenses: "مصروفات",
     advances: "سلفة/عهدة", letters: "خطاب رسمي", procurement: "مشتريات",
     loans: "سلفة موظف", overtime: "وقت إضافي", exit: "نهاية خدمة",
+    umrah_commission_plan: "خطة عمولة عمرة",
   };
   return map[t] ?? t;
 }
@@ -698,6 +706,10 @@ export function refTypeToChainType(refType: string): ApprovalChainType | null {
     purchase_request: "procurement",
     hr_employee_loan: "loans", hr_overtime_request: "overtime",
     hr_exit_request: "exit",
+    // Umrah commission plans pass through an approval chain when the
+    // base salary or tier bonuses exceed company thresholds — invoked
+    // by umrah-entities.ts: POST /umrah/commission-plans.
+    employee_commission_plan: "umrah_commission_plan",
   };
   return map[refType] ?? null;
 }

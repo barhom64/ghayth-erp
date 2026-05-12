@@ -1,47 +1,72 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GitBranch, Plus, X, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import {
+  FormShell,
+  FormTextField,
+  FormNumberField,
+  FormSelectField,
+  FormGrid,
+} from "@/components/form-shell";
+
+const entityTypes = [
+  { value: "leave", label: "الإجازات" },
+  { value: "purchase_request", label: "طلبات الشراء" },
+  { value: "expense", label: "المصروفات" },
+  { value: "general_request", label: "الطلبات العامة" },
+];
+
+// Old: minAmount tracked as plain number, maxAmount as `number | null`
+// with manual `e.target.value ? Number(...) : null` coercion in onChange.
+// New: zod coerces both. Convention: maxAmount = 0 means "no upper
+// bound" — the submit handler maps 0 → null when sending to the API.
+const approvalChainSchema = z
+  .object({
+    chainType: z.enum(["leave", "purchase_request", "expense", "general_request"]),
+    name: z.string().trim(),
+    minAmount: z.coerce.number({ invalid_type_error: "أدخل رقمًا" }).min(0, "الحد الأدنى لا يقل عن 0"),
+    maxAmount: z.coerce.number({ invalid_type_error: "أدخل رقمًا" }).min(0, "الحد الأقصى لا يقل عن 0"),
+  })
+  .refine(
+    (v) => v.maxAmount === 0 || v.maxAmount > v.minAmount,
+    { path: ["maxAmount"], message: "الحد الأقصى يجب أن يكون 0 (بدون حد) أو أكبر من الحد الأدنى" },
+  );
+type ApprovalChainForm = z.infer<typeof approvalChainSchema>;
+const defaultApprovalChain: ApprovalChainForm = {
+  chainType: "leave",
+  name: "",
+  minAmount: 0,
+  maxAmount: 0,
+};
 
 export function ApprovalWorkflowsTab() {
   const { data, refetch, isLoading, isError } = useApiQuery<any>(["approval-config"], "/settings/approval-config");
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ entityType: "leave", chainOrder: 1, approverRole: "manager", label: "" });
   const chains = data?.data || [];
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
-  const entityTypes = [
-    { value: "leave", label: "الإجازات" },
-    { value: "purchase_request", label: "طلبات الشراء" },
-    { value: "expense", label: "المصروفات" },
-    { value: "general_request", label: "الطلبات العامة" },
-  ];
-
-  const approverRoles = [
-    { value: "manager", label: "المدير المباشر" },
-    { value: "hr", label: "الموارد البشرية" },
-    { value: "finance", label: "المالية" },
-    { value: "owner", label: "المالك" },
-    { value: "director", label: "المدير العام" },
-  ];
-
-  const handleSubmit = async () => {
+  const handleSubmit = async (values: ApprovalChainForm) => {
     try {
       await apiFetch("/settings/approval-config", {
         method: "POST",
-        body: JSON.stringify({ ...form, label: form.label || entityTypes.find(e => e.value === form.entityType)?.label }),
+        body: JSON.stringify({
+          ...values,
+          // 0 means "no upper bound" — the API expects null, not 0.
+          maxAmount: values.maxAmount === 0 ? null : values.maxAmount,
+          name: values.name || entityTypes.find((e) => e.value === values.chainType)?.label,
+        }),
       });
-      toast({ title: "تمت إضافة مرحلة الموافقة" });
+      toast({ title: "تمت إضافة سلسلة الموافقة" });
       setShowForm(false);
-      setForm({ entityType: "leave", chainOrder: 1, approverRole: "manager", label: "" });
       refetch();
     } catch (e: any) {
       toast({ variant: "destructive", title: e.message || "خطأ" });
@@ -60,7 +85,7 @@ export function ApprovalWorkflowsTab() {
 
   const grouped = entityTypes.map(et => ({
     ...et,
-    chains: chains.filter((c: any) => c.entityType === et.value).sort((a: any, b: any) => a.chainOrder - b.chainOrder),
+    chains: chains.filter((c: any) => c.chainType === et.value).sort((a: any, b: any) => (a.minAmount ?? 0) - (b.minAmount ?? 0)),
   }));
 
   return (
@@ -70,36 +95,34 @@ export function ApprovalWorkflowsTab() {
           <GitBranch className="h-5 w-5" />
           سلاسل الموافقة
         </h3>
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>
+        <GuardedButton perm="settings:create" size="sm" onClick={() => setShowForm(!showForm)}>
           {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة مرحلة</>}
-        </Button>
+        </GuardedButton>
       </div>
 
       {showForm && (
-        <Card><CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label>نوع الطلب</Label>
-            <select className="w-full border rounded-md p-2" value={form.entityType} onChange={(e) => setForm({ ...form, entityType: e.target.value })}>
-              {entityTypes.map(et => <option key={et.value} value={et.value}>{et.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <Label>المرحلة (الترتيب)</Label>
-            <Input type="number" min={1} max={10} value={form.chainOrder} onChange={(e) => setForm({ ...form, chainOrder: Number(e.target.value) })} />
-          </div>
-          <div>
-            <Label>الدور المطلوب للموافقة</Label>
-            <select className="w-full border rounded-md p-2" value={form.approverRole} onChange={(e) => setForm({ ...form, approverRole: e.target.value })}>
-              {approverRoles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <Label>التسمية (اختياري)</Label>
-            <Input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="مثال: موافقة المدير" />
-          </div>
-          <div className="md:col-span-2">
-            <Button onClick={handleSubmit} rateLimitAware>حفظ</Button>
-          </div>
+        <Card><CardContent className="p-4">
+          <FormShell
+            schema={approvalChainSchema}
+            defaultValues={defaultApprovalChain}
+            submitLabel="حفظ"
+            secondaryActions={
+              <Button type="button" size="sm" variant="ghost" onClick={() => setShowForm(false)}>
+                إلغاء
+              </Button>
+            }
+            onSubmit={async (values, ctx) => {
+              await handleSubmit(values);
+              ctx.reset();
+            }}
+          >
+            <FormGrid cols={2}>
+              <FormSelectField name="chainType" label="نوع الطلب" options={entityTypes} />
+              <FormTextField name="name" label="التسمية (اختياري)" placeholder="مثال: موافقة المدير" />
+              <FormNumberField name="minAmount" label="الحد الأدنى للمبلغ" required />
+              <FormNumberField name="maxAmount" label="الحد الأقصى للمبلغ (0 = بلا حد)" />
+            </FormGrid>
+          </FormShell>
         </CardContent></Card>
       )}
 
@@ -114,18 +137,20 @@ export function ApprovalWorkflowsTab() {
                 {group.chains.map((chain: any, idx: number) => (
                   <div key={chain.id} className="flex items-center gap-3 py-2 border-b last:border-0">
                     <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-sm font-bold">
-                      {chain.chainOrder}
+                      {idx + 1}
                     </div>
                     <div className="flex-1">
-                      <span className="font-medium text-sm">{chain.label || `المرحلة ${chain.chainOrder}`}</span>
-                      <span className="text-xs text-gray-500 ms-2">
-                        ({approverRoles.find(r => r.value === chain.approverRole)?.label || chain.approverRole})
-                      </span>
+                      <span className="font-medium text-sm">{chain.name || `سلسلة ${idx + 1}`}</span>
+                      {(chain.minAmount > 0 || chain.maxAmount) && (
+                        <span className="text-xs text-gray-500 ms-2">
+                          ({chain.minAmount ?? 0} - {chain.maxAmount ?? "∞"})
+                        </span>
+                      )}
                     </div>
                     {idx < group.chains.length - 1 && <span className="text-gray-300 text-xs">→</span>}
-                    <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => handleDelete(chain.id)}>
+                    <GuardedButton perm="settings:create" variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => handleDelete(chain.id)}>
                       <Trash2 className="h-4 w-4" />
-                    </Button>
+                    </GuardedButton>
                   </div>
                 ))}
               </div>

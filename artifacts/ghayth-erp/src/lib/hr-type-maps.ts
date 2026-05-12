@@ -170,10 +170,12 @@ export const SALARY_COMPONENT_TYPES: Record<string, string> = {
   fixed: "ثابت",
   percentage: "نسبة",
   variable: "متغير",
+  formula: "معادلة",
 };
 
 export const SALARY_CATEGORIES: Record<string, string> = {
   allowance: "بدل",
+  earning: "استحقاق",
   deduction: "خصم",
   benefit: "مزايا",
 };
