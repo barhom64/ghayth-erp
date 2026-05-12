@@ -23,13 +23,25 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/hr.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+ساعات إضافية. من الكشف التلقائي إلى الراتب.
+
+| الحركة | الوحدة الهدف | مدخل API | مدخل DB | الحالة |
+|--------|--------------|----------|---------|--------|
+| كشف تلقائي من attendance | hr/attendance | عند `checkOut > workEnd + threshold` → `overtimeMinutes` | `attendance.overtimeMinutes` | ✅ |
+| طلب overtime مسبق (يدوي) | hr/overtime | `hr-overtime.ts` POST `/hr/overtime` | `hr_overtime` | ✅ |
+| سير موافقة | governance/workflows | `business_rules.overtime_approval` (≥X ساعات → موافقة) | `approval_chains` | ✅ |
+| **حساب القيمة** | hr | basic_hourly × 1.5 (عادي) أو ×2 (عطلة) | logic في `payroll` | ✅ |
+| إضافة لمسير الراتب | hr/payroll | `payroll_lines.overtime` = aggregate من فترة | ✅ موجود |
+| قيد محاسبي | finance/GL | جزء من قيد الراتب الكلي (DR Salary Expense) | `gl_entries` | ✅ |
+| تأثير على ميزانية القسم | finance/budget | يُخصم من `budgets.spent` للقسم | ⚠ تحقق |
+| إشعار للموظف + المدير | comms | event=`overtime_approved\|overtime_rejected` | `notifications` | ✅ |
+| تقارير departmental | bi | aggregation per department/month | views | ✅ |
+| Audit log | core | `auditMiddleware` (`/hr/overtime` لو مضاف) | `audit_logs` | ⚠ |
+
+تحقق يدوي:
+- [ ] هل overtime > N ساعات/شهر يولّد تنبيه HR (عبء عمل)؟
+- [ ] هل ساعات الجمعة/السبت تُحسب ×2 تلقائياً؟
+- [ ] هل التداخل مع leave_requests يُمنع (لا يمكن overtime أثناء إجازة)؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `overtime` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

@@ -9,7 +9,7 @@
 
 | الصفحة | المسار | الكيان | سطور | API calls | أزرار | مشاكل |
 |--------|--------|--------|------|-----------|--------|--------|
-| [/finance](./finance.md) | `/finance` | `finance` | 514 | 1 | 5 | 0 |
+| [/finance](./finance.md) | `/finance` | `finance` | 515 | 1 | 4 | 0 |
 | [/finance/accounts](./finance-accounts.md) | `/finance/accounts` | `accounts` | 430 | 1 | 3 | 0 |
 | [/finance/accounts/create](./finance-accounts-create.md) | `/finance/accounts/create` | `create` | 111 | 1 | 3 | 0 |
 | [/finance/accounts/:id/edit](./finance-accounts-byid-edit.md) | `/finance/accounts/:id/edit` | `edit` | 104 | 1 | 3 | 0 |
@@ -21,7 +21,7 @@
 | [/finance/journal/create](./finance-journal-create.md) | `/finance/journal/create` | `create` | 193 | 1 | 5 | 0 |
 | [/finance/invoices](./finance-invoices.md) | `/finance/invoices` | `invoices` | 278 | 0 | 4 | 0 |
 | [/finance/invoices/create](./finance-invoices-create.md) | `/finance/invoices/create` | `create` | 320 | 1 | 5 | 0 |
-| [/finance/invoices/:id](./finance-invoices-byid.md) | `/finance/invoices/:id` | `:id` | 648 | 0 | 5 | 0 |
+| [/finance/invoices/:id](./finance-invoices-byid.md) | `/finance/invoices/:id` | `:id` | 650 | 0 | 2 | 0 |
 | [/finance/expenses](./finance-expenses.md) | `/finance/expenses` | `expenses` | 362 | 0 | 1 | 0 |
 | [/finance/expenses/create](./finance-expenses-create.md) | `/finance/expenses/create` | `create` | 749 | 1 | 3 | 0 |
 | [/finance/expenses/:id](./finance-expenses-byid.md) | `/finance/expenses/:id` | `:id` | 474 | 0 | 0 | 0 |
@@ -50,23 +50,23 @@
 | [/finance/salary-advances](./finance-salary-advances.md) | `/finance/salary-advances` | `salary-advances` | 286 | 0 | 1 | 0 |
 | [/finance/salary-advances/:id](./finance-salary-advances-byid.md) | `/finance/salary-advances/:id` | `:id` | 276 | 0 | 0 | 0 |
 | [/finance/ledger/:code](./finance-ledger-byid.md) | `/finance/ledger/:code` | `:code` | 174 | 0 | 1 | 0 |
-| [/finance/ar-aging](./finance-ar-aging.md) | `/finance/ar-aging` | `ar-aging` | 174 | 0 | 1 | 0 |
-| [/finance/ap-aging](./finance-ap-aging.md) | `/finance/ap-aging` | `ap-aging` | 164 | 0 | 1 | 0 |
+| [/finance/ar-aging](./finance-ar-aging.md) | `/finance/ar-aging` | `ar-aging` | 175 | 0 | 0 | 0 |
+| [/finance/ap-aging](./finance-ap-aging.md) | `/finance/ap-aging` | `ap-aging` | 165 | 0 | 0 | 0 |
 | [/finance/bank-reconciliation](./finance-bank-reconciliation.md) | `/finance/bank-reconciliation` | `bank-reconciliation` | 288 | 4 | 1 | 0 |
 | [/finance/bank-reconciliation/manual-match/:batchId/:rowId](./finance-bank-reconciliation-manual-match-byid-byid.md) | `/finance/bank-reconciliation/manual-match/:batchId/:rowId` | `:rowId` | 191 | 1 | 4 | 0 |
 | [/finance/fixed-assets](./finance-fixed-assets.md) | `/finance/fixed-assets` | `fixed-assets` | 253 | 2 | 3 | 0 |
 | [/finance/fixed-assets/batch-depreciate](./finance-fixed-assets-batch-depreciate.md) | `/finance/fixed-assets/batch-depreciate` | `batch-depreciate` | 76 | 1 | 2 | 0 |
 | [/finance/fixed-assets/:id](./finance-fixed-assets-byid.md) | `/finance/fixed-assets/:id` | `:id` | 290 | 0 | 0 | 0 |
-| [/finance/inventory-costing](./finance-inventory-costing.md) | `/finance/inventory-costing` | `inventory-costing` | 236 | 3 | 1 | 0 |
+| [/finance/inventory-costing](./finance-inventory-costing.md) | `/finance/inventory-costing` | `inventory-costing` | 238 | 3 | 0 | 0 |
 | [/finance/bank-guarantees](./finance-bank-guarantees.md) | `/finance/bank-guarantees` | `bank-guarantees` | 762 | 0 | 2 | 0 |
 | [/finance/journal-manual](./finance-journal-manual.md) | `/finance/journal-manual` | `journal-manual` | 355 | 0 | 1 | 0 |
 | [/finance/journal-manual/create](./finance-journal-manual-create.md) | `/finance/journal-manual/create` | `create` | 195 | 1 | 4 | 0 |
-| [/finance/journal-manual/:id](./finance-journal-manual-byid.md) | `/finance/journal-manual/:id` | `:id` | 279 | 0 | 1 | 0 |
+| [/finance/journal-manual/:id](./finance-journal-manual-byid.md) | `/finance/journal-manual/:id` | `:id` | 280 | 0 | 0 | 0 |
 | [/finance/gl-posting-queue](./finance-gl-posting-queue.md) | `/finance/gl-posting-queue` | `gl-posting-queue` | 634 | 0 | 0 | 0 |
 | [/finance/intercompany](./finance-intercompany.md) | `/finance/intercompany` | `intercompany` | 201 | 2 | 1 | 0 |
 | [/finance/intercompany/consolidation/create](./finance-intercompany-consolidation-create.md) | `/finance/intercompany/consolidation/create` | `create` | 93 | 1 | 0 | 0 |
 | [/finance/cash-flow-forecast](./finance-cash-flow-forecast.md) | `/finance/cash-flow-forecast` | `cash-flow-forecast` | 159 | 1 | 0 | 0 |
-| [/finance/project-costing](./finance-project-costing.md) | `/finance/project-costing` | `project-costing` | 217 | 1 | 2 | 0 |
+| [/finance/project-costing](./finance-project-costing.md) | `/finance/project-costing` | `project-costing` | 218 | 1 | 1 | 0 |
 | [/finance/project-costing/:id](./finance-project-costing-byid.md) | `/finance/project-costing/:id` | `:id` | 146 | 0 | 0 | 0 |
 | [/finance/cashflow](./finance-cashflow.md) | `/finance/cashflow` | `cashflow` | 413 | 2 | 4 | 0 |
 | [/finance/opening-balances](./finance-opening-balances.md) | `/finance/opening-balances` | `opening-balances` | 147 | 0 | 0 | 0 |

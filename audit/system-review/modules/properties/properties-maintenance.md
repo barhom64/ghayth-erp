@@ -23,13 +23,28 @@ _لم تُلتقط أزرار._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/properties.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+طلبات الصيانة للعقارات.
+
+| الحركة | الوحدة الهدف | مدخل API | مدخل DB | الحالة |
+|--------|--------------|----------|---------|--------|
+| تقديم طلب (من المستأجر/المالك/إدارة) | properties | `properties.ts` POST `/maintenance-requests` | `maintenance_requests` | ✅ |
+| إسناد لمقاول/فني | properties | `requests.assignedTo` (vendor أو employee) | ✅ |
+| تقدير التكلفة | properties | يدوي عبر `requests.estimatedCost` | ⚠ |
+| سير موافقة (للتكلفة > حد) | governance/workflows | `business_rules.maintenance_approval_threshold` | `approval_chains` | ✅ |
+| تنفيذ + رفع صور (before/after) | properties + storage | `requests.attachments[]` → object storage | ✅ |
+| فاتورة المقاول | finance/expenses | عند الإغلاق → POST `/finance/expenses` مع ربط | `expenses`, `gl_entries` | ✅ |
+| **قيد محاسبي** | finance/GL | DR Maintenance Expense / CR Cash أو AP | `gl_entries`, `gl_lines` | ✅ |
+| تأثير على ميزانية العقار | finance/budget | `budgets.spent` للقسم/المبنى | ⚠ تحقق |
+| ربط بفحص دوري (inspection) | properties | عند `inspection.findings` → ينشئ maintenance_request تلقائياً | ✅ |
+| تغيير حالة الوحدة (إن out of service) | properties | `property_units.status='maintenance'` خلال الفترة | يعكس على occupancy_rate | ✅ |
+| إشعارات (المستأجر + المقاول + المالك) | comms | event=`maintenance_requested\|assigned\|completed` | `notifications` | ✅ |
+| Audit log | core | `auditMiddleware` (`/properties`) | `audit_logs` | ✅ |
+
+تحقق يدوي:
+- [ ] هل صيانة متكررة على نفس الوحدة تطلق تنبيه "وحدة مشكلة"؟
+- [ ] هل التكلفة المتجاوزة للتقدير الأولي بنسبة >20% تطلب موافقة إضافية؟
+- [ ] هل تقييم المقاول (rating) ينعكس على فرص الإسناد المستقبلية؟
+- [ ] هل الصيانة الطارئة تتخطى سير الموافقة (emergency override)؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `maintenance` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

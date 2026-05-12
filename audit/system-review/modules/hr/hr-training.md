@@ -25,13 +25,26 @@ _لم تُلتقط أزرار._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/hr.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+برامج التدريب. من التخطيط إلى الشهادة.
+
+| الحركة | الوحدة الهدف | مدخل API | مدخل DB | الحالة |
+|--------|--------------|----------|---------|--------|
+| إنشاء برنامج تدريبي | hr/training | `training.ts` POST `/programs` | `training_programs` | ✅ |
+| ميزانية البرنامج | finance/budget | `programs.budgetAllocated` → `budgets.committed` | ⚠ تحقق |
+| تسجيل موظفين | hr/training | POST `/programs/:id/enrollments` | `training_enrollments` | ✅ |
+| ربط بـ IDP (خطة التطوير) | hr/development-plans | `idp_items.trainingId` → program | ✅ |
+| دفع تكلفة (للمدرب الخارجي) | finance/expenses | POST `/finance/expenses` مع ربط برنامج | `expenses`, `gl_entries` | ✅ |
+| تتبّع الحضور | hr/training | `training_attendance` (per session) | ✅ |
+| تقييم نهائي + شهادة | hr/training | `training_certificates` ينشأ عند `passed=true` | يُربط بـ `employees.certifications` | ✅ |
+| تأثير على KPIs الموظف | hr/performance | عدد الشهادات يدخل في تقييم الأداء | ✅ |
+| إشعارات | comms | event=`training_enrolled\|completed\|certificate_issued` | `notifications` | ✅ |
+| ربط بـ HRDF (صندوق تنمية الموارد) | gov-integrations | اختياري | `gov_submissions` | ⚠ |
+| Audit log | core | `auditMiddleware` (`/hr/training` لو مضاف) | `audit_logs` | ⚠ |
+
+تحقق يدوي:
+- [ ] هل البرنامج تجاوز الميزانية يطلق تنبيه/يمنع تسجيلات جديدة؟
+- [ ] هل شهادة الموظف ترتبط تلقائياً بـ `documents.entityType='employee'`?
+- [ ] هل الموظف الذي فشل في الـ assessment يُعاد تسجيله تلقائياً أم يدوي؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `training` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

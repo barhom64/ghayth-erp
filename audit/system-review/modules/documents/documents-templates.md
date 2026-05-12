@@ -8,7 +8,7 @@
 - الكومبوننت: `DocumentsTemplates`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `templates`
-- سطور الملف: 515
+- سطور الملف: 516
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
@@ -17,15 +17,10 @@
 | _(write)_ | `/documents/templates` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-- L234: "(بلا تسمية)" → `() => { setViewMode("list"); setEditingId(null);`
-- L240: "معاينة" → `handleLivePreview` 🔒
-- L243: "حفظ" → `handleSave`
-- L345: "(بلا تسمية)" → `() => removeVariable(i)`
-- L356: "إضافة متغير" → `addVariable` 🔒
-- L417: "(بلا تسمية)" → `() => openEditor()`
-- L476: "معاينة" → `() => handlePreview(t)`
-- L479: "تعديل" → `() => openEditor(t)`
-- L483: "حذف" → `() => handleDelete(t.id)`
+- L235: "(بلا تسمية)" → `() => { setViewMode("list"); setEditingId(null);`
+- L241: "معاينة" → `handleLivePreview` 🔒
+- L346: "(بلا تسمية)" → `() => removeVariable(i)`
+- L477: "معاينة" → `() => handlePreview(t)`
 
 ### القراءات (GET)
 - GET `/documents/templates`

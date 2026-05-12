@@ -16,9 +16,9 @@
 | [/bi/kpis/create](./bi-kpis-create.md) | `/bi/kpis/create` | `create` | 101 | 0 | 3 | 0 |
 | [/bi/reports](./bi-reports.md) | `/bi/reports` | `reports` | 48 | 0 | 0 | 0 |
 | [/bi/reports/create](./bi-reports-create.md) | `/bi/reports/create` | `create` | 101 | 0 | 3 | 0 |
-| [/bi/operations](./bi-operations.md) | `/bi/operations` | `operations` | 519 | 0 | 3 | 0 |
-| [/bi/admin-reports](./bi-admin-reports.md) | `/bi/admin-reports` | `admin-reports` | 374 | 2 | 1 | 0 |
+| [/bi/operations](./bi-operations.md) | `/bi/operations` | `operations` | 520 | 0 | 1 | 0 |
+| [/bi/admin-reports](./bi-admin-reports.md) | `/bi/admin-reports` | `admin-reports` | 375 | 2 | 0 | 0 |
 | [/intelligence](./intelligence.md) | `/intelligence` | `intelligence` | 127 | 3 | 0 | 0 |
-| [/insights](./insights.md) | `/insights` | `insights` | 509 | 2 | 2 | 0 |
+| [/insights](./insights.md) | `/insights` | `insights` | 510 | 2 | 1 | 0 |
 | [/module-dashboards](./module-dashboards.md) | `/module-dashboards` | `module-dashboards` | 698 | 11 | 0 | 0 |
-| [/reports/scheduled](./reports-scheduled.md) | `/reports/scheduled` | `scheduled` | 289 | 2 | 3 | 0 |
+| [/reports/scheduled](./reports-scheduled.md) | `/reports/scheduled` | `scheduled` | 290 | 2 | 1 | 0 |

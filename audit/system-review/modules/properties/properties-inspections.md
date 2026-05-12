@@ -8,18 +8,16 @@
 - الكومبوننت: `PropertyInspections`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `inspections`
-- سطور الملف: 311
+- سطور الملف: 312
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L126: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L148: "(بلا تسمية)" → `() => setShowForm(false)`
-- L187: "(بلا تسمية)" → `() => setStatusFilter(s)`
-- L222: "(بلا تسمية)" → `() => setCompletingId(insp.id)`
-- L288: "إلغاء" → `props.onClose`
+- L149: "(بلا تسمية)" → `() => setShowForm(false)`
+- L188: "(بلا تسمية)" → `() => setStatusFilter(s)`
+- L289: "إلغاء" → `props.onClose`
 
 ### القراءات (GET)
 - GET `/properties/units?limit=200`

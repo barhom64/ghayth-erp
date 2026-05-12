@@ -8,21 +8,19 @@
 - الكومبوننت: `EmployeeDetail`
 - subKey: `employees` | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 963
+- سطور الملف: 964
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L347: "(بلا تسمية)" → `() => setActiveTab("attendance")`
-- L357: "(بلا تسمية)" → `() => setActiveTab("leaves")`
-- L387: "(بلا تسمية)" → `() => setActiveTab("tasks")`
-- L422: "(بلا تسمية)" → `() => setActiveTab("payroll")`
-- L474: "تعديل" → `govStartEdit`
-- L535: "حفظ" → `govSaveEdit`
-- L538: "(بلا تسمية)" → `() => setGovEditing(false)`
-- L854: "(بلا تسمية)" → `() => setShowPrintMenu(!showPrintMenu)`
+- L348: "(بلا تسمية)" → `() => setActiveTab("attendance")`
+- L358: "(بلا تسمية)" → `() => setActiveTab("leaves")`
+- L388: "(بلا تسمية)" → `() => setActiveTab("tasks")`
+- L423: "(بلا تسمية)" → `() => setActiveTab("payroll")`
+- L539: "(بلا تسمية)" → `() => setGovEditing(false)`
+- L855: "(بلا تسمية)" → `() => setShowPrintMenu(!showPrintMenu)`
 
 ### القراءات (GET)
 - GET `/documents/templates`

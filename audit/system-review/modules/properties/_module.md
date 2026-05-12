@@ -9,7 +9,7 @@
 
 | الصفحة | المسار | الكيان | سطور | API calls | أزرار | مشاكل |
 |--------|--------|--------|------|-----------|--------|--------|
-| [/properties/dashboard](./properties-dashboard.md) | `/properties/dashboard` | `dashboard` | 382 | 0 | 7 | 0 |
+| [/properties/dashboard](./properties-dashboard.md) | `/properties/dashboard` | `dashboard` | 383 | 0 | 5 | 0 |
 | [/properties/buildings/create](./properties-buildings-create.md) | `/properties/buildings/create` | `create` | 156 | 1 | 3 | 0 |
 | [/properties/buildings/:id](./properties-buildings-byid.md) | `/properties/buildings/:id` | `:id` | 205 | 0 | 2 | 0 |
 | [/properties/buildings](./properties-buildings.md) | `/properties/buildings` | `buildings` | 233 | 0 | 2 | 0 |
@@ -22,7 +22,7 @@
 | [/properties/owners](./properties-owners.md) | `/properties/owners` | `owners` | 182 | 0 | 2 | 0 |
 | [/properties/contracts/create](./properties-contracts-create.md) | `/properties/contracts/create` | `create` | 542 | 3 | 3 | 0 |
 | [/properties/contracts/:contractId/pay/:installmentId](./properties-contracts-byid-pay-byid.md) | `/properties/contracts/:contractId/pay/:installmentId` | `:installmentId` | 120 | 0 | 3 | 0 |
-| [/properties/contracts/:id](./properties-contracts-byid.md) | `/properties/contracts/:id` | `:id` | 326 | 0 | 2 | 0 |
+| [/properties/contracts/:id](./properties-contracts-byid.md) | `/properties/contracts/:id` | `:id` | 327 | 0 | 0 | 0 |
 | [/properties/contracts](./properties-contracts.md) | `/properties/contracts` | `contracts` | 373 | 0 | 1 | 0 |
 | [/properties/payments/:paymentId/pay](./properties-payments-byid-pay.md) | `/properties/payments/:paymentId/pay` | `pay` | 131 | 1 | 3 | 0 |
 | [/properties/payments/:id](./properties-payments-byid.md) | `/properties/payments/:id` | `:id` | 396 | 0 | 0 | 0 |
@@ -31,11 +31,11 @@
 | [/properties/maintenance/:id](./properties-maintenance-byid.md) | `/properties/maintenance/:id` | `:id` | 255 | 0 | 0 | 0 |
 | [/properties/maintenance](./properties-maintenance.md) | `/properties/maintenance` | `maintenance` | 112 | 1 | 0 | 0 |
 | [/properties/create](./properties-create.md) | `/properties/create` | `create` | 298 | 3 | 3 | 0 |
-| [/properties/inspections](./properties-inspections.md) | `/properties/inspections` | `inspections` | 311 | 1 | 5 | 0 |
-| [/properties/deposits](./properties-deposits.md) | `/properties/deposits` | `deposits` | 292 | 1 | 5 | 0 |
+| [/properties/inspections](./properties-inspections.md) | `/properties/inspections` | `inspections` | 312 | 1 | 3 | 0 |
+| [/properties/deposits](./properties-deposits.md) | `/properties/deposits` | `deposits` | 293 | 1 | 3 | 0 |
 | [/properties/occupancy-report](./properties-occupancy-report.md) | `/properties/occupancy-report` | `occupancy-report` | 184 | 1 | 0 | 0 |
 | [/guide/properties](./guide-properties.md) | `/guide/properties` | `properties` | 1430 | 0 | 1 | 0 |
 | [/properties/guide](./properties-guide.md) | `/properties/guide` | `guide` | 1430 | 0 | 1 | 0 |
 | [/properties/:id/status](./properties-byid-status.md) | `/properties/:id/status` | `status` | 196 | 0 | 3 | 0 |
 | [/properties/:id](./properties-byid.md) | `/properties/:id` | `:id` | 682 | 0 | 1 | 0 |
-| [/properties](./properties.md) | `/properties` | `properties` | 169 | 0 | 2 | 0 |
+| [/properties](./properties.md) | `/properties` | `properties` | 170 | 0 | 1 | 0 |

@@ -8,16 +8,14 @@
 - الكومبوننت: `BiOperations`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `operations`
-- سطور الملف: 519
+- سطور الملف: 520
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L89: "(بلا تسمية)" → `() => exportChart(chartRef.current, "sla-delays.png")`
-- L470: "(بلا تسمية)" → `() => window.print()`
-- L492: "(بلا تسمية)" → `() => { setFrom(""); setTo(""); setDepartmentId("");`
+- L493: "(بلا تسمية)" → `() => { setFrom(""); setTo(""); setDepartmentId("");`
 
 ### القراءات (GET)
 _لا قراءات._

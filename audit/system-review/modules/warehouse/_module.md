@@ -21,4 +21,4 @@
 | [/warehouse/movements](./warehouse-movements.md) | `/warehouse/movements` | `movements` | 388 | 0 | 0 | 0 |
 | [/warehouse/categories](./warehouse-categories.md) | `/warehouse/categories` | `categories` | 388 | 0 | 0 | 0 |
 | [/warehouse/suppliers](./warehouse-suppliers.md) | `/warehouse/suppliers` | `suppliers` | 388 | 0 | 0 | 0 |
-| [/warehouse/inventory-count](./warehouse-inventory-count.md) | `/warehouse/inventory-count` | `inventory-count` | 459 | 2 | 5 | 0 |
+| [/warehouse/inventory-count](./warehouse-inventory-count.md) | `/warehouse/inventory-count` | `inventory-count` | 462 | 2 | 2 | 0 |

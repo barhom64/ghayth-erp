@@ -8,16 +8,14 @@
 - الكومبوننت: `ScheduledReports`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `scheduled`
-- سطور الملف: 289
+- سطور الملف: 290
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L103: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L124: "(بلا تسمية)" → `() => setShowForm(false)`
-- L263: "(بلا تسمية)" → `handleDelete` 🔒
+- L125: "(بلا تسمية)" → `() => setShowForm(false)`
 
 ### القراءات (GET)
 - GET `/scheduled-reports`

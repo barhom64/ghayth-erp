@@ -20,5 +20,5 @@
 | [/legal/correspondence](./legal-correspondence.md) | `/legal/correspondence` | `correspondence` | 55 | 1 | 0 | 0 |
 | [/legal/cases](./legal-cases.md) | `/legal/cases` | `cases` | 397 | 4 | 1 | 0 |
 | [/legal/cases/create](./legal-cases-create.md) | `/legal/cases/create` | `create` | 136 | 1 | 3 | 0 |
-| [/legal/cases/:id](./legal-cases-byid.md) | `/legal/cases/:id` | `:id` | 544 | 0 | 2 | 0 |
+| [/legal/cases/:id](./legal-cases-byid.md) | `/legal/cases/:id` | `:id` | 546 | 0 | 0 | 0 |
 | [/legal/documents](./legal-documents.md) | `/legal/documents` | `documents` | 397 | 4 | 1 | 0 |

@@ -14,5 +14,5 @@
 | [/documents/:docId/versions](./documents-byid-versions.md) | `/documents/:docId/versions` | `versions` | 166 | 0 | 2 | 0 |
 | [/documents/upload](./documents-upload.md) | `/documents/upload` | `upload` | 229 | 0 | 3 | 0 |
 | [/documents/folders](./documents-folders.md) | `/documents/folders` | `folders` | 429 | 3 | 6 | 0 |
-| [/documents/templates](./documents-templates.md) | `/documents/templates` | `templates` | 515 | 3 | 9 | 0 |
+| [/documents/templates](./documents-templates.md) | `/documents/templates` | `templates` | 516 | 3 | 4 | 0 |
 | [/documents/archive](./documents-archive.md) | `/documents/archive` | `archive` | 85 | 1 | 0 | 0 |

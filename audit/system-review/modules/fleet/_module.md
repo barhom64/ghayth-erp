@@ -16,7 +16,7 @@
 | [/fleet/drivers/:id](./fleet-drivers-byid.md) | `/fleet/drivers/:id` | `:id` | 346 | 1 | 0 | 0 |
 | [/fleet/trips](./fleet-trips.md) | `/fleet/trips` | `trips` | 120 | 1 | 0 | 0 |
 | [/fleet/trips/create](./fleet-trips-create.md) | `/fleet/trips/create` | `create` | 118 | 1 | 3 | 0 |
-| [/fleet/trips/:id](./fleet-trips-byid.md) | `/fleet/trips/:id` | `:id` | 298 | 0 | 2 | 0 |
+| [/fleet/trips/:id](./fleet-trips-byid.md) | `/fleet/trips/:id` | `:id` | 301 | 0 | 0 | 0 |
 | [/fleet/maintenance](./fleet-maintenance.md) | `/fleet/maintenance` | `maintenance` | 94 | 1 | 0 | 0 |
 | [/fleet/maintenance/create](./fleet-maintenance-create.md) | `/fleet/maintenance/create` | `create` | 129 | 1 | 3 | 0 |
 | [/fleet/maintenance/:id](./fleet-maintenance-byid.md) | `/fleet/maintenance/:id` | `:id` | 305 | 0 | 0 | 0 |
@@ -29,7 +29,7 @@
 | [/fleet/alerts](./fleet-alerts.md) | `/fleet/alerts` | `alerts` | 125 | 1 | 0 | 0 |
 | [/fleet/alerts/create](./fleet-alerts-create.md) | `/fleet/alerts/create` | `create` | 97 | 1 | 3 | 0 |
 | [/fleet/reports](./fleet-reports.md) | `/fleet/reports` | `reports` | 81 | 1 | 0 | 0 |
-| [/fleet/preventive-plans](./fleet-preventive-plans.md) | `/fleet/preventive-plans` | `preventive-plans` | 287 | 1 | 2 | 0 |
+| [/fleet/preventive-plans](./fleet-preventive-plans.md) | `/fleet/preventive-plans` | `preventive-plans` | 288 | 1 | 1 | 0 |
 | [/fleet/traffic-violations](./fleet-traffic-violations.md) | `/fleet/traffic-violations` | `traffic-violations` | 288 | 3 | 1 | 0 |
 | [/fleet/traffic-violations/:id](./fleet-traffic-violations-byid.md) | `/fleet/traffic-violations/:id` | `:id` | 213 | 0 | 0 | 0 |
 | [/fleet/tco](./fleet-tco.md) | `/fleet/tco` | `tco` | 168 | 1 | 0 | 0 |
