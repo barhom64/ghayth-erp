@@ -3,6 +3,7 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Package, Calculator, TrendingUp, CheckCircle, Info } from "lucide-react";
@@ -214,13 +215,14 @@ export default function InventoryCostingPage() {
               ) : (
                 <div className="space-y-2">
                   <p className="text-sm text-gray-600">لم يتم إنشاء حساب فروقات التقريب بعد.</p>
-                  <Button
+                  <GuardedButton
+                    perm="finance:create"
                     onClick={handleSetupRounding}
                     disabled={roundingSetup.isPending}
                     className="w-full bg-purple-600 hover:bg-purple-700"
                   >
                     {roundingSetup.isPending ? "جارٍ الإنشاء..." : "إنشاء حساب التقريب (9999)"}
-                  </Button>
+                  </GuardedButton>
                 </div>
               )}
               {setupResult && (

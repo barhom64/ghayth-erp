@@ -141,6 +141,7 @@ export const hrLeaveBalances = pgTable("hr_leave_balances", {
   used: integer("used").default(0),
   reserved: integer("reserved").default(0),
   remaining: integer("remaining").default(21),
+  createdAt: timestamp("createdAt").defaultNow(),
 });
 
 export const journalEntries = pgTable("journal_entries", {
@@ -173,6 +174,7 @@ export const journalLines = pgTable("journal_lines", {
   debit: numeric("debit", { precision: 14, scale: 2 }).default("0"),
   credit: numeric("credit", { precision: 14, scale: 2 }).default("0"),
   description: text("description"),
+  createdAt: timestamp("createdAt").defaultNow(),
 }, (t) => ({
   journalIdx: index("jl_journal_idx").on(t.journalId),
   accountCodeIdx: index("jl_account_code_idx").on(t.accountCode),
@@ -328,6 +330,7 @@ export const payrollLines = pgTable("payroll_lines", {
   overtimeHours: numeric("overtimeHours", { precision: 6, scale: 2 }).default("0"),
   netSalary: numeric("netSalary", { precision: 14, scale: 2 }).default("0"),
   deletedAt: timestamp("deletedAt"),
+  createdAt: timestamp("createdAt").defaultNow(),
 }, (t) => ({
   runIdx: index("pl_run_idx").on(t.runId),
   assignmentIdx: index("pl_assignment_idx").on(t.assignmentId),
@@ -372,6 +375,7 @@ export const approvalChainSteps = pgTable("approval_chain_steps", {
   requiredRole: text("requiredRole").notNull(),
   timeoutHours: integer("timeoutHours").default(48),
   autoApproveOnTimeout: boolean("autoApproveOnTimeout").default(false),
+  createdAt: timestamp("createdAt").defaultNow(),
 });
 
 export const eventDlq = pgTable("event_dlq", {

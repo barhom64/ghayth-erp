@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Plus, ScrollText, ArrowLeftRight, Undo2, Calendar, FileEdit } from "lucide-react";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
@@ -150,7 +151,8 @@ export default function JournalPage() {
       key: "actions",
       header: "",
       render: (j) => (
-        <Button
+        <GuardedButton
+          perm="finance:approve"
           variant="ghost"
           size="icon"
           title="عكس القيد"
@@ -162,7 +164,7 @@ export default function JournalPage() {
           }}
         >
           <Undo2 className="h-4 w-4" />
-        </Button>
+        </GuardedButton>
       ),
     },
   ];
@@ -180,12 +182,12 @@ export default function JournalPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "القيود اليومية" }]}
       loading={isLoading}
       actions={
-        <Button size="sm" asChild>
+        <GuardedButton perm="finance:create" size="sm" asChild>
           <Link href="/finance/journal/create">
             <Plus className="h-4 w-4 me-1" />
             قيد جديد
           </Link>
-        </Button>
+        </GuardedButton>
       }
     >
       <FinanceTabsNav />

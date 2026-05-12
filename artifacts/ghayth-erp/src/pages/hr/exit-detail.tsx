@@ -5,6 +5,7 @@ import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import {
   LogOut, Calendar, DollarSign, CheckCircle, Clock,
   User, AlertTriangle,
@@ -247,7 +248,8 @@ export default function ExitDetail() {
       updatedAt={item?.updatedAt}
       actions={
         item?.status === "pending" ? (
-          <Button
+          <GuardedButton
+            perm="hr:approve"
             size="sm"
             className="bg-green-600 hover:bg-green-700"
             onClick={handleApprove}
@@ -256,7 +258,7 @@ export default function ExitDetail() {
           >
             <CheckCircle className="h-4 w-4 ml-1" />
             اعتماد
-          </Button>
+          </GuardedButton>
         ) : undefined
       }
       overview={overviewContent}

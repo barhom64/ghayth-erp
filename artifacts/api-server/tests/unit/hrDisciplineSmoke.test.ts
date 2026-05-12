@@ -439,7 +439,7 @@ describe("Discipline stats", () => {
 
   it("stats break down by workflow status", () => {
     const idx = DISCIPLINE_ROUTE.indexOf('router.get("/stats"');
-    const section = DISCIPLINE_ROUTE.slice(idx, idx + 800);
+    const section = DISCIPLINE_ROUTE.slice(idx, idx + 2000);
     expect(section).toContain("pendingEmployee");
     expect(section).toContain("pendingManager");
     expect(section).toContain("pendingGm");

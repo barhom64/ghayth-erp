@@ -8,6 +8,7 @@ import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/compon
 import { PageShell } from "@/components/page-shell";
 import { ApprovalActions } from "@/components/approval-actions";
 import { Wrench, Plus } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { useAppContext } from "@/contexts/app-context";
 
 export default function PropertiesMaintenance() {
@@ -60,7 +61,7 @@ export default function PropertiesMaintenance() {
       breadcrumbs={[{ href: "/properties", label: "إدارة الأملاك" }]}
       actions={
         <Link href="/properties/maintenance/create">
-          <Button className="gap-2"><Plus className="h-4 w-4" /> طلب صيانة جديد</Button>
+          <GuardedButton perm="property:create" className="gap-2"><Plus className="h-4 w-4" /> طلب صيانة جديد</GuardedButton>
         </Link>
       }
     >
