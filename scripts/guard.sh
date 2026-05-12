@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# scripts/guard.sh — unified pre-commit / CI guard.
+# scripts/guard.sh — unified pre-commit / CI guard. (diag PR)
 #
 # Runs the full defensive stack in a fixed order, failing fast on the
 # first red check. The goal is to catch every class of bug we have
