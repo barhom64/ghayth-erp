@@ -61,6 +61,11 @@ export default function DisciplineRegulationPage() {
     total: number;
   }>(["discipline-regulation"], "/hr/discipline/regulation");
   const [editing, setEditing] = useState<Article | null>(null);
+  // BUG FIX: this was declared after the early returns below, which violates
+  // Rules of Hooks (the hook count differs between render passes once data
+  // arrives → "Invalid hook call" + "change in order of Hooks" errors). Must
+  // stay above any conditional return.
+  const [reseedAsk, setReseedAsk] = useState(false);
 
   const grouped = data?.grouped ?? { work_time: [], work_organization: [], conduct: [] };
   const total = data?.total ?? 0;
@@ -105,8 +110,8 @@ export default function DisciplineRegulationPage() {
 
   // Native confirm() was unreadable in RTL + dark mode. The
   // AlertDialog below preserves the same yes/no flow with proper
-  // localised buttons.
-  const [reseedAsk, setReseedAsk] = useState(false);
+  // localised buttons. (reseedAsk state declared above the early
+  // returns to satisfy Rules of Hooks.)
   const reseedDefaults = () => {
     setReseedAsk(true);
   };
