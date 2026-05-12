@@ -8,26 +8,15 @@
 - الكومبوننت: `FinancialReports`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `reports`
-- سطور الملف: 1171
+- سطور الملف: 1172
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L35: "(بلا تسمية)" → `() => window.print()`
-- L201: "(بلا تسمية)" → `() => setViewMode("tree")`
-- L202: "(بلا تسمية)" → `() => setViewMode("flat")`
-- L206: "(بلا تسمية)" → `() => exportCSV(rows, ["code", "name", "type", "totalDebit", "totalCredit", "bal`
-- L367: "(بلا تسمية)" → `() => exportCSV([...revenues.map((r: any) => ({ ...r, section: "إيرادات"`
-- L505: "(بلا تسمية)" → `() => exportCSV([...assets, ...liabilities, ...equity], ["code", "name", "type",`
-- L575: "(بلا تسمية)" → `() => exportCSV([...inflows.map((f: any) => ({ ...f, type: "وارد"`
-- L670: "(بلا تسمية)" → `() => exportCSV(entries, ["ref", "description", "debit", "credit", "runningBalan`
-- L728: "(بلا تسمية)" → `() => exportCSV([...custodies, ...advances], ["ref", "description", "amount", "e`
-- L824: "(بلا تسمية)" → `() => exportCSV(rows, ["key", "label", "amount", "entryCount"], "expenses-analys`
-- L886: "(بلا تسمية)" → `() => exportCSV(byAccount, ["code", "name", "amount", "entryCount"], "revenue-an`
-- L981: "(بلا تسمية)" → `() => exportCSV(rows, ["accountCode", "accountName", "budget", "actual", "varian`
-- L1102: "(بلا تسمية)" → `() => exportCSV(rowsWithBalance, ["ref", "description", "debit", "credit", "runn`
+- L202: "(بلا تسمية)" → `() => setViewMode("tree")`
+- L203: "(بلا تسمية)" → `() => setViewMode("flat")`
 
 ### القراءات (GET)
 _لا قراءات._

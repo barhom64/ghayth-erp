@@ -8,15 +8,14 @@
 - الكومبوننت: `ProjectCosting`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `project-costing`
-- سطور الملف: 217
+- سطور الملف: 218
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L91: "(بلا تسمية)" → `() => setShowAddCost(true)` 🔒
-- L185: "(بلا تسمية)" → `() => setShowAddCost(false)`
+- L186: "(بلا تسمية)" → `() => setShowAddCost(false)`
 
 ### القراءات (GET)
 - GET `/finance/projects${scopeSuffix}`

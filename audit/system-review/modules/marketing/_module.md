@@ -9,5 +9,5 @@
 
 | الصفحة | المسار | الكيان | سطور | API calls | أزرار | مشاكل |
 |--------|--------|--------|------|-----------|--------|--------|
-| [/marketing](./marketing.md) | `/marketing` | `marketing` | 286 | 3 | 2 | 0 |
+| [/marketing](./marketing.md) | `/marketing` | `marketing` | 287 | 3 | 1 | 0 |
 | [/marketing/create](./marketing-create.md) | `/marketing/create` | `create` | 124 | 1 | 3 | 0 |

@@ -8,15 +8,14 @@
 - الكومبوننت: `ShiftsManagement`
 - subKey: `shifts` | minRoleLevel: —
 - الكيان المستنبط: `management`
-- سطور الملف: 186
+- سطور الملف: 187
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L113: "(بلا تسمية)" → `() => setShowAssignForm(!showAssignForm)`
-- L125: "(بلا تسمية)" → `() => setShowAssignForm(false)`
+- L126: "(بلا تسمية)" → `() => setShowAssignForm(false)`
 
 ### القراءات (GET)
 - GET `/hr/shifts`

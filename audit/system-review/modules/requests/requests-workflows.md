@@ -8,21 +8,18 @@
 - الكومبوننت: `RequestsPage`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `workflows`
-- سطور الملف: 707
+- سطور الملف: 708
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L134: "(بلا تسمية)"
-- L428: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L478: "(بلا تسمية)" → `() => { setFilterStatus(""); setFilterType(""); setFilterDateFrom(""); setFilter`
-- L497: "(بلا تسمية)" → `() => setShowForm(false)`
-- L563: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L572: "(بلا تسمية)" → `() => setShowForm(false)`
-- L623: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L632: "(بلا تسمية)" → `() => setShowForm(false)`
+- L135: "(بلا تسمية)"
+- L479: "(بلا تسمية)" → `() => { setFilterStatus(""); setFilterType(""); setFilterDateFrom(""); setFilter`
+- L498: "(بلا تسمية)" → `() => setShowForm(false)`
+- L573: "(بلا تسمية)" → `() => setShowForm(false)`
+- L633: "(بلا تسمية)" → `() => setShowForm(false)`
 
 ### القراءات (GET)
 - GET `/requests/catalog`
@@ -46,7 +43,7 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `workflows` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L95 _(inline-data-array)_: `const CONVERT_OPTIONS = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
 - Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS

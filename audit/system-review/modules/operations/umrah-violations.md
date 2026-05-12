@@ -3,26 +3,21 @@
 ## 1. الميتاداتا
 - المسار: `/umrah/violations`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/violations.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:62`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:71`
 - المجموعة: `operations`
 - الكومبوننت: `UmrahViolations`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `violations`
-- سطور الملف: 519
+- سطور الملف: 522
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L254: "(بلا تسمية)"
-- L259: "(بلا تسمية)" → `() => openEdit(v)`
-- L263: "(بلا تسمية)" → `() => setDeleteId(v.id)`
-- L280: "مخالفة جديدة" → `openCreate`
-- L493: "(بلا تسمية)" → `() => setEditing(null)` 🔒
-- L494: "(بلا تسمية)" → `handleSave` 🔒
-- L509: "(بلا تسمية)" → `() => setDeleteId(null)` 🔒
-- L510: "(بلا تسمية)" → `() => deleteMut.mutate({` 🔒
+- L255: "(بلا تسمية)"
+- L496: "(بلا تسمية)" → `() => setEditing(null)` 🔒
+- L512: "(بلا تسمية)" → `() => setDeleteId(null)` 🔒
 
 ### القراءات (GET)
 _لا قراءات._

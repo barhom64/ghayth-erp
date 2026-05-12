@@ -3,19 +3,19 @@
 ## 1. الميتاداتا
 - المسار: `/umrah/commission-plans/:id/edit`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/commission-plan-editor.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:61`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:70`
 - المجموعة: `operations`
 - الكومبوننت: `UmrahCommissionPlanEditor`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `edit`
-- سطور الملف: 634
+- سطور الملف: 629
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L192: "(بلا تسمية)"
+- L210: "(بلا تسمية)"
 
 ### القراءات (GET)
 _لا قراءات._

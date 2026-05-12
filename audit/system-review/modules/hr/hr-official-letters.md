@@ -8,16 +8,15 @@
 - الكومبوننت: `OfficialLetters`
 - subKey: `employees` | minRoleLevel: —
 - الكيان المستنبط: `official-letters`
-- سطور الملف: 247
+- سطور الملف: 248
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L88: "معاينة وطباعة" → `() => setPreviewLetter(l)`
-- L129: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L163: "(بلا تسمية)" → `() => setShowForm(false)`
+- L89: "معاينة وطباعة" → `() => setPreviewLetter(l)`
+- L164: "(بلا تسمية)" → `() => setShowForm(false)`
 
 ### القراءات (GET)
 - GET `/hr/official-letters`
