@@ -8,63 +8,7 @@ import { Router } from "express";
 import { LOAN_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { authorize, maskFields } from "../lib/rbac/authorize.js";
-
-// Local row shapes — hr_employee_loans / hr_loan_installments not in
-// @workspace/db Drizzle schema yet.
-
-interface LoanRow extends Record<string, unknown> {
-  id: number;
-  companyId: number;
-  branchId?: number | null;
-  assignmentId: number;
-  employeeId?: number | null;
-  loanNumber?: string | null;
-  loanType?: string | null;
-  amount: number | string;
-  paidAmount?: number | string | null;
-  remainingAmount?: number | string | null;
-  installmentCount?: number | null;
-  installmentAmount?: number | string | null;
-  startDate?: string | null;
-  endDate?: string | null;
-  status: string;
-  reason?: string | null;
-  approvedBy?: number | null;
-  approvedAt?: string | null;
-  rejectedReason?: string | null;
-  createdBy?: number | null;
-  createdAt: string;
-  updatedAt?: string | null;
-  deletedAt?: string | null;
-  employeeName?: string | null;
-}
-
-interface LoanInstallmentRow {
-  id: number;
-  loanId: number;
-  period: string;
-  amount: number | string;
-  status: string;
-  paidAt?: string | null;
-  createdAt: string;
-}
-
-interface LoanStatsRow {
-  totalAmount: number | string;
-  totalPaid: number | string;
-  totalRemaining: number | string;
-  activeCount: number | string;
-}
-
-interface EmployeeAssignmentLookup {
-  id: number;
-  employeeId: number;
-  companyId: number;
-  branchId?: number | null;
-  name?: string | null;
-  salary?: number | string | null;
-}
+import { authorize } from "../lib/rbac/authorize.js";
 import {
   handleRouteError,
   NotFoundError,
@@ -174,7 +118,7 @@ router.get("/loans", authorize({ feature: "hr.loans", action: "list" }), async (
     const { status, assignmentId } = req.query as any;
 
     let where = `l."companyId" = $1 AND l."deletedAt" IS NULL`;
-    const params: unknown[] = [scope.companyId];
+    const params: any[] = [scope.companyId];
     let idx = 2;
 
     if (status) {
@@ -188,7 +132,7 @@ router.get("/loans", authorize({ feature: "hr.loans", action: "list" }), async (
       idx++;
     }
 
-    const data = await rawQuery<LoanRow & { empNumber?: string | null; jobTitle?: string | null; branchName?: string | null }>(
+    const data = await rawQuery<any>(
       `SELECT l.*, e.name AS "employeeName", e."empNumber",
               ea."jobTitle", b.name AS "branchName"
        FROM hr_employee_loans l
@@ -202,17 +146,7 @@ router.get("/loans", authorize({ feature: "hr.loans", action: "list" }), async (
     );
 
     // إحصائيات
-    interface LoanStatsAgg {
-      total: number | string;
-      pending: number | string;
-      approved: number | string;
-      active: number | string;
-      completed: number | string;
-      totalAmount: number | string;
-      totalPaid: number | string;
-      totalRemaining: number | string;
-    }
-    const [stats] = await rawQuery<LoanStatsAgg>(
+    const [stats] = await rawQuery<any>(
       `SELECT
          COUNT(*) AS total,
          COUNT(*) FILTER (WHERE status = 'pending') AS pending,
@@ -227,7 +161,7 @@ router.get("/loans", authorize({ feature: "hr.loans", action: "list" }), async (
       [scope.companyId]
     );
 
-    res.json(maskFields(req, { data, stats: stats ?? {}, total: data.length }));
+    res.json({ data, stats: stats ?? {}, total: data.length });
   } catch (err) {
     handleRouteError(err, res, "خطأ في قراءة السلف");
   }
@@ -240,7 +174,7 @@ router.get("/loans/my", authorize({ feature: "hr.loans.my", action: "list" }), a
   try {
     await ensureLoanTables();
     const scope = req.scope!;
-    const data = await rawQuery<LoanRow>(
+    const data = await rawQuery<any>(
       `SELECT l.*, e.name AS "employeeName"
        FROM hr_employee_loans l
        JOIN employees e ON e.id = l."employeeId"
@@ -262,7 +196,7 @@ router.get("/loans/:id", authorize({ feature: "hr.loans", action: "view" }), asy
     await ensureLoanTables();
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [loan] = await rawQuery<LoanRow & { empNumber?: string | null; jobTitle?: string | null; salary?: number | string | null; branchName?: string | null }>(
+    const [loan] = await rawQuery<any>(
       `SELECT l.*, e.name AS "employeeName", e."empNumber",
               ea."jobTitle", ea.salary, b.name AS "branchName"
        FROM hr_employee_loans l
@@ -274,14 +208,14 @@ router.get("/loans/:id", authorize({ feature: "hr.loans", action: "view" }), asy
     );
     if (!loan) throw new NotFoundError("السلفة غير موجودة");
 
-    const installments = await rawQuery<LoanInstallmentRow>(
+    const installments = await rawQuery<any>(
       `SELECT * FROM hr_loan_installments
        WHERE "loanId" = $1 AND "companyId" = $2
        ORDER BY "installmentNumber" ASC`,
       [loan.id, scope.companyId]
     );
 
-    res.json(maskFields(req, { ...loan, installments }));
+    res.json({ ...loan, installments });
   } catch (err) {
     handleRouteError(err, res, "خطأ في قراءة تفاصيل السلفة");
   }
@@ -302,7 +236,7 @@ router.post("/loans", authorize({ feature: "hr.loans", action: "create" }), asyn
     const installmentAmount = roundTo2(amount / installmentCount);
 
     // التحقق من عدم وجود سلفة نشطة
-    const [existing] = await rawQuery<{ id: number }>(
+    const [existing] = await rawQuery<any>(
       `SELECT id FROM hr_employee_loans
        WHERE "assignmentId" = $1 AND "companyId" = $2
          AND status IN ('pending','approved','active') AND "deletedAt" IS NULL`,
@@ -316,7 +250,7 @@ router.post("/loans", authorize({ feature: "hr.loans", action: "create" }), asyn
     }
 
     // التحقق من أن المبلغ لا يتجاوز 3 أضعاف الراتب
-    const [emp] = await rawQuery<{ salary: number | string | null; employeeId: number; branchId: number | null }>(
+    const [emp] = await rawQuery<any>(
       `SELECT ea.salary, ea."employeeId", ea."branchId"
        FROM employee_assignments ea WHERE ea.id = $1 AND ea."companyId" = $2`,
       [b.assignmentId, scope.companyId]
@@ -396,7 +330,7 @@ router.post("/loans", authorize({ feature: "hr.loans", action: "create" }), asyn
       details: JSON.stringify({ loanNumber, amount, installmentCount, assignmentId: b.assignmentId }),
     }).catch((e) => logger.error(e, "hr-loans background task failed"));
 
-    const [row] = await rawQuery<LoanRow>(`SELECT * FROM hr_employee_loans WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM hr_employee_loans WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json({ ...row, approval: approvalResult ?? { requiresApproval: false } });
   } catch (err) {
     handleRouteError(err, res, "خطأ في إنشاء السلفة");
@@ -422,7 +356,7 @@ router.patch("/loans/:id/approve", authorize({ feature: "hr.loans", action: "upd
       );
     }
 
-    const [loan] = await rawQuery<LoanRow>(
+    const [loan] = await rawQuery<any>(
       `SELECT * FROM hr_employee_loans WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -450,13 +384,13 @@ router.patch("/loans/:id/approve", authorize({ feature: "hr.loans", action: "upd
         type: "loan_rejected", title: "تم رفض طلب السلفة",
         body: `تم رفض السلفة ${loan.loanNumber}${rejectionReason ? " — السبب: " + rejectionReason : ""}`,
         priority: "normal", refType: "hr_employee_loan", refId: loan.id,
-      }).catch((e) => logger.error(e, "hr-loans notification failed"));
+      }).catch(console.error);
       try {
         await rawExecute(
           `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('hr_employee_loan',$1,'rejected',$2,$3,$4)`,
           [loan.id, rejectionReason || null, scope.userId, scope.companyId]
         );
-      } catch (e) { logger.error(e, "Failed to log approval action"); }
+      } catch (e) { console.error("Failed to log approval action:", e); }
       emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "hr.loan.rejected", entity: "hr_employee_loans", entityId: loan.id, details: JSON.stringify({ loanNumber: loan.loanNumber, reason: rejectionReason }) }).catch((e) => logger.error(e, "hr-loans background task failed"));
       res.json({ success: true, message: "تم رفض السلفة" });
       return;
@@ -489,16 +423,7 @@ router.patch("/loans/:id/approve", authorize({ feature: "hr.loans", action: "upd
       );
       if (!upd.rowCount) throw new ConflictError("تم تحديث السلفة مسبقاً — أعد التحميل");
 
-      // Narrow installmentCount once so the rest of the block can read
-      // `loan.installmentCount` as a plain `number` (matches the original
-      // contract: an approved loan always has an installment count). The
-      // smoke test in tests/unit/hrExitLoansOvertimeSmoke.test.ts asserts
-      // the literal `loan.installmentCount - 1` substring, so we keep
-      // property access here rather than aliasing to a local.
-      if (loan.installmentCount == null) {
-        throw new ValidationError("عدد الأقساط مطلوب لاعتماد السلفة", { field: "installmentCount" });
-      }
-      let period = String(loan.startDeductionPeriod ?? nextPeriod());
+      let period = loan.startDeductionPeriod || nextPeriod();
       for (let i = 1; i <= loan.installmentCount; i++) {
         const isLast = i === loan.installmentCount;
         const amt = isLast
@@ -518,7 +443,7 @@ router.patch("/loans/:id/approve", authorize({ feature: "hr.loans", action: "upd
     const { hrEngine } = await import("../lib/engines/index.js");
     hrEngine.postLoanDisbursementGL(
       { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
-      { id: loan.id, employeeId: loan.employeeId ?? 0, amount: Number(loan.amount) },
+      { id: loan.id, employeeId: loan.employeeId, amount: Number(loan.amount) },
     ).catch((e: unknown) => logger.error(e, "Loan disbursement GL error:"));
 
     createNotification({
@@ -533,7 +458,7 @@ router.patch("/loans/:id/approve", authorize({ feature: "hr.loans", action: "upd
         `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('hr_employee_loan',$1,'approved',$2,$3,$4)`,
         [loan.id, notes || null, scope.userId, scope.companyId]
       );
-    } catch (e) { logger.error(e, "Failed to log approval action"); }
+    } catch (e) { console.error("Failed to log approval action:", e); }
 
     await createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
@@ -568,7 +493,7 @@ router.patch("/loans/:id/reject", authorize({ feature: "hr.loans", action: "upda
     }
 
     const b = zodParse(rejectLoanSchema.safeParse(req.body));
-    const [loan] = await rawQuery<LoanRow>(
+    const [loan] = await rawQuery<any>(
       `SELECT * FROM hr_employee_loans WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
