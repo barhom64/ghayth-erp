@@ -49,18 +49,23 @@ describe("settings/communication-channels-tab — 3 FormShells on the same tab",
   });
 
   it("BooleanToggle is a generic subcomponent reused by all 3 sections", () => {
+    // After PR #471's typed-queries cleanup, callers no longer pass
+    // the type parameter explicitly — TypeScript infers it from the
+    // surrounding FormShell. Verify the generic definition + 3 call
+    // sites (each with the right `name` prop).
     expect(SRC).toContain("function BooleanToggle<TForm");
-    expect(SRC).toContain('BooleanToggle<SmsForm>');
-    expect(SRC).toContain('BooleanToggle<WhatsappForm>');
-    expect(SRC).toContain('BooleanToggle<PushForm>');
+    expect(SRC).toContain('<BooleanToggle name="sms_enabled" />');
+    expect(SRC).toContain('<BooleanToggle name="whatsapp_enabled" />');
+    expect(SRC).toContain('<BooleanToggle name="push_enabled" />');
   });
 
   it("SecretField wraps FormTextField with configured-sentinel UX", () => {
     expect(SRC).toContain("function SecretField<TForm");
     expect(SRC).toContain('configured && !value');
-    // Both forms (SMS + WhatsApp) use SecretField:
-    expect(SRC).toMatch(/<SecretField<SmsForm>/);
-    expect(SRC).toMatch(/<SecretField<WhatsappForm>/);
+    // Both forms (SMS + WhatsApp) use SecretField — names identify
+    // which schema each call belongs to.
+    expect(SRC).toContain('name="sms_auth_token"');
+    expect(SRC).toContain('name="whatsapp_access_token"');
   });
 
   it("save() normalises booleans to 'true'/'false' strings for the server", () => {
