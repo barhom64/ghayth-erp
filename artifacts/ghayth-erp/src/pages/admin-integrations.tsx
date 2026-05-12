@@ -4,6 +4,7 @@ import { PageShell } from "@/components/page-shell";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import {
   FormShell,
@@ -110,9 +111,9 @@ function IntegrationsList() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">التكاملات المُعدّة</h3>
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>
+        <GuardedButton perm="admin:create" size="sm" onClick={() => setShowForm(!showForm)}>
           {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة تكامل</>}
-        </Button>
+        </GuardedButton>
       </div>
       {showForm && (
         <Card>
@@ -189,13 +190,13 @@ function IntegrationsList() {
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Button variant="outline" size="sm" onClick={() => handleToggleStatus(intg.id, intg.status)}>
+                  <GuardedButton perm="admin:create" variant="outline" size="sm" onClick={() => handleToggleStatus(intg.id, intg.status)}>
                     {intg.status === "active" ? "تعطيل" : "تفعيل"}
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleTest(intg.id)}>
+                  </GuardedButton>
+                  <GuardedButton perm="admin:create" variant="outline" size="sm" onClick={() => handleTest(intg.id)}>
                     <Play className="h-3 w-3 me-1" />اختبار
-                  </Button>
-                  <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => handleDelete(intg.id)}>حذف</Button>
+                  </GuardedButton>
+                  <GuardedButton perm="admin:create" variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => handleDelete(intg.id)}>حذف</GuardedButton>
                 </div>
               </CardContent>
             </Card>
@@ -205,9 +206,9 @@ function IntegrationsList() {
           <div className="col-span-2 text-center py-12 text-gray-400">
             <Plug className="w-12 h-12 mx-auto mb-3 text-gray-300" />
             <p>لا توجد تكاملات مُعدّة</p>
-            <Button variant="outline" size="sm" className="mt-3" onClick={() => setShowForm(true)}>
+            <GuardedButton perm="admin:create" variant="outline" size="sm" className="mt-3" onClick={() => setShowForm(true)}>
               <Plus className="h-4 w-4 me-1" />إضافة تكامل
-            </Button>
+            </GuardedButton>
           </div>
         )}
       </div>
@@ -266,9 +267,9 @@ function IntegrationLogs() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">سجل الإرسال</h3>
-        <Button variant="outline" size="sm" onClick={handleRetry}>
+        <GuardedButton perm="admin:create" variant="outline" size="sm" onClick={handleRetry}>
           <RefreshCw className="h-4 w-4 me-1" />إعادة المحاولة للفاشلة
-        </Button>
+        </GuardedButton>
       </div>
       <Card>
         <CardContent className="p-0">

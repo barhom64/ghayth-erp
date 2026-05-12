@@ -30,6 +30,38 @@ interface CommissionPlan {
   partialTiersAllowed: boolean;
   violationBlocksCommission: boolean;
   status: string;
+  version: number;
+}
+
+// Only the shaping fields — what actually influences the number.
+// Stored as planSnapshot on each calculation row so re-reading a
+// historical calc is always reproducible.
+function buildPlanSnapshot(plan: CommissionPlan) {
+  return {
+    planName: plan.planName,
+    commissionType: plan.commissionType,
+    percentageRate: plan.percentageRate,
+    fixedAmount: plan.fixedAmount,
+    conditionType: plan.conditionType,
+    minProfitPerVisa: plan.minProfitPerVisa,
+    minSalesPercent: plan.minSalesPercent,
+    minAvgPrice: plan.minAvgPrice,
+    excludedMonths: plan.excludedMonths,
+    tierUnit: plan.tierUnit,
+    partialTiersAllowed: plan.partialTiersAllowed,
+    violationBlocksCommission: plan.violationBlocksCommission,
+    baseSalary: plan.baseSalary,
+  };
+}
+
+function buildTiersSnapshot(tiers: CommissionTier[]) {
+  return tiers.map((t) => ({
+    fromCount: t.fromCount,
+    toCount: t.toCount,
+    bonusPerUnit: t.bonusPerUnit,
+    isCumulative: t.isCumulative,
+    tierOrder: t.tierOrder,
+  }));
 }
 
 interface CommissionTier {
@@ -82,6 +114,10 @@ export async function calculateCommissionForPlan(
     [planId]
   );
 
+  const planSnapshot = JSON.stringify(buildPlanSnapshot(plan));
+  const tiersSnapshot = JSON.stringify(buildTiersSnapshot(tiers));
+  const planVersion = plan.version ?? 1;
+
   return withTransaction(async (client) => {
     const txQuery: QueryFn = (sql, params) => client.query(sql, params);
     const result = await compute(txQuery, plan, tiers, month, year);
@@ -98,12 +134,14 @@ export async function calculateCommissionForPlan(
          "totalMutamers"=$1, "avgProfitPerVisa"=$2, "salesPercent"=$3, "avgSalePrice"=$4,
          "conditionMet"=$5, "conditionDetails"=$6, "completedTiers"=$7, "commissionAmount"=$8,
          "hasViolations"=$9, "finalAmount"=$10, "isExcludedMonth"=$11, status='calculated',
-         "updatedBy"=$12, "updatedAt"=NOW()
-         WHERE id=$13 AND "companyId"=$14`,
+         "planVersion"=$12, "planSnapshot"=$13::jsonb, "tiersSnapshot"=$14::jsonb,
+         "updatedBy"=$15, "updatedAt"=NOW()
+         WHERE id=$16 AND "companyId"=$17`,
         [
           result.totalMutamers, result.avgProfitPerVisa, result.salesPercent, result.avgSalePrice,
           result.conditionMet, result.conditionDetails, result.completedTiers, result.commissionAmount,
           result.hasViolations, result.finalAmount, result.isExcludedMonth,
+          planVersion, planSnapshot, tiersSnapshot,
           userId, existing.id, plan.companyId,
         ]
       );
@@ -113,13 +151,16 @@ export async function calculateCommissionForPlan(
          ("companyId","branchId","planId","employeeId",month,year,
           "totalMutamers","avgProfitPerVisa","salesPercent","avgSalePrice",
           "conditionMet","conditionDetails","completedTiers","commissionAmount",
-          "hasViolations","finalAmount","isExcludedMonth",status,"createdBy","createdAt","updatedAt")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'calculated',$18,NOW(),NOW())`,
+          "hasViolations","finalAmount","isExcludedMonth",
+          "planVersion","planSnapshot","tiersSnapshot",
+          status,"createdBy","createdAt","updatedAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19::jsonb,$20::jsonb,'calculated',$21,NOW(),NOW())`,
         [
           plan.companyId, plan.branchId, planId, plan.employeeId, month, year,
           result.totalMutamers, result.avgProfitPerVisa, result.salesPercent, result.avgSalePrice,
           result.conditionMet, result.conditionDetails, result.completedTiers, result.commissionAmount,
           result.hasViolations, result.finalAmount, result.isExcludedMonth,
+          planVersion, planSnapshot, tiersSnapshot,
           userId,
         ]
       );

@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "mode": "dry-run",
+  "intervalMs": 300000,
+  "model": "claude-sonnet-4-6",
+  "maxTokens": 4096,
+  "rateLimit": {
+    "maxFixesPerDay": 10,
+    "maxFixesPerHour": 3
+  },
+  "cooldown": {
+    "perErrorMinHours": 6,
+    "maxRetriesPerError": 2
+  },
+  "allowList": {
+    "filePathPatterns": [
+      "^artifacts/api-server/src/routes/[^/]+\\.ts$",
+      "^artifacts/api-server/src/migrations/\\d{4}_[a-z0-9_]+\\.sql$",
+      "^lib/db/src/schema/index\\.ts$"
+    ]
+  },
+  "blockList": {
+    "patchContentPatterns": [
+      "DROP\\s+TABLE",
+      "DROP\\s+DATABASE",
+      "TRUNCATE\\s+",
+      "DELETE\\s+FROM\\s+\\w+\\s*;",
+      "DELETE\\s+FROM\\s+\\w+\\s*$",
+      "DROP\\s+SCHEMA",
+      "ALTER\\s+SYSTEM"
+    ],
+    "filePathPatterns": [
+      "package\\.json",
+      "pnpm-lock\\.yaml",
+      "\\.github/workflows/",
+      "\\.replit",
+      "scripts/_self_heal",
+      "scripts/self-heal/"
+    ]
+  },
+  "collectors": {
+    "schemaDrift": { "enabled": true }
+  },
+  "branchPrefix": "self-heal/",
+  "prLabel": "self-heal"
+}
