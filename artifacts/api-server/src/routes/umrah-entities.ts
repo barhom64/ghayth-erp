@@ -849,23 +849,25 @@ router.get("/commission-plans/:id", authorize({ feature: "umrah", action: "view"
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [plan] = await rawQuery(
-      `SELECT cp.*, s.title AS "seasonTitle"
-       FROM employee_commission_plans cp
-       LEFT JOIN umrah_seasons s ON cp."seasonId" = s.id AND s."deletedAt" IS NULL
-       WHERE cp.id = $1 AND cp."companyId" = $2 AND cp."deletedAt" IS NULL`,
-      [id, scope.companyId]
-    );
+    const [[plan], tiers, calculations] = await Promise.all([
+      rawQuery(
+        `SELECT cp.*, s.title AS "seasonTitle"
+         FROM employee_commission_plans cp
+         LEFT JOIN umrah_seasons s ON cp."seasonId" = s.id AND s."deletedAt" IS NULL
+         WHERE cp.id = $1 AND cp."companyId" = $2 AND cp."deletedAt" IS NULL`,
+        [id, scope.companyId]
+      ),
+      rawQuery(
+        `SELECT * FROM employee_commission_tiers WHERE "planId" = $1 ORDER BY "tierOrder"`,
+        [id]
+      ),
+      rawQuery(
+        `SELECT * FROM employee_commission_calculations
+         WHERE "planId" = $1 AND "deletedAt" IS NULL ORDER BY year DESC, month DESC LIMIT 12`,
+        [id]
+      ),
+    ]);
     if (!plan) { throw new NotFoundError("الخطة غير موجودة"); }
-    const tiers = await rawQuery(
-      `SELECT * FROM employee_commission_tiers WHERE "planId" = $1 ORDER BY "tierOrder"`,
-      [id]
-    );
-    const calculations = await rawQuery(
-      `SELECT * FROM employee_commission_calculations
-       WHERE "planId" = $1 AND "deletedAt" IS NULL ORDER BY year DESC, month DESC LIMIT 12`,
-      [id]
-    );
     res.json({ ...plan, tiers, calculations });
   } catch (err) { handleRouteError(err, res, "Get commission plan"); }
 });

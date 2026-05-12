@@ -1814,8 +1814,8 @@ router.post("/system-stops", authorize({ feature: "admin", action: "update" }), 
        VALUES ($1, $2, $3, $4) RETURNING id`,
       [scope.companyId, s, reason, scope.userId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.activated", entity: "system_stops", entityId: row.id, after: { scope: s, reason } }).catch(() => {});
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.activated", entity: "system_stops", entityId: row.id, details: `إيقاف نظام (${s}): ${reason}` }).catch(() => {});
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.activated", entity: "system_stops", entityId: row.id, after: { scope: s, reason } }).catch((e) => logger.error(e, "audit log failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.activated", entity: "system_stops", entityId: row.id, details: `إيقاف نظام (${s}): ${reason}` }).catch((e) => logger.error(e, "emit event failed"));
     res.status(201).json({ id: row.id, message: `تم تفعيل إيقاف النظام — النطاق: ${s}` });
   } catch (err) { handleRouteError(err, res, "Create system stop"); }
 });
@@ -1829,8 +1829,8 @@ router.patch("/system-stops/:id/deactivate", authorize({ feature: "admin", actio
        WHERE id=$2 AND "companyId"=$3 AND active=true`,
       [scope.userId, id, scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.deactivated", entity: "system_stops", entityId: id, after: {} }).catch(() => {});
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.deactivated", entity: "system_stops", entityId: id, details: "إلغاء إيقاف النظام" }).catch(() => {});
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.deactivated", entity: "system_stops", entityId: id, after: {} }).catch((e) => logger.error(e, "audit log failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.deactivated", entity: "system_stops", entityId: id, details: "إلغاء إيقاف النظام" }).catch((e) => logger.error(e, "emit event failed"));
     res.json({ message: "تم إلغاء تفعيل الإيقاف" });
   } catch (err) { handleRouteError(err, res, "Deactivate system stop"); }
 });
