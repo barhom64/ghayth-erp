@@ -11,6 +11,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
@@ -132,7 +133,8 @@ export default function DailyClose() {
       {!closedToday && (
         <div className="flex flex-col items-center gap-3">
           {allPassed ? (
-            <Button
+            <GuardedButton
+              perm="finance:approve"
               size="lg"
               className="gap-2 px-8"
               disabled={isClosing}
@@ -149,14 +151,15 @@ export default function DailyClose() {
                   إقفال اليوم
                 </>
               )}
-            </Button>
+            </GuardedButton>
           ) : (
             <>
               <p className="text-sm text-amber-600 flex items-center gap-1">
                 <AlertTriangle className="w-4 h-4" />
                 توجد بنود لم تكتمل — يمكن للمالك أو المدير العام أو المدير التنفيذي التجاوز القسري
               </p>
-              <Button
+              <GuardedButton
+                perm="finance:approve"
                 size="lg"
                 variant="destructive"
                 className="gap-2 px-8"
@@ -174,7 +177,7 @@ export default function DailyClose() {
                     تجاوز وإقفال اليوم (قسري)
                   </>
                 )}
-              </Button>
+              </GuardedButton>
             </>
           )}
         </div>

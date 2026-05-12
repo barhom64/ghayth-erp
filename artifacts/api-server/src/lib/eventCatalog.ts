@@ -157,6 +157,43 @@ export const EVENT_CATALOG: EventDefinition[] = [
     consumers: ["execDashboard", "fxReporter"],
     sideEffects: ["gl_post", "audit"],
   },
+  {
+    name: "finance.bank_reconciliation.imported",
+    label: "استيراد كشف بنكي",
+    domain: "finance",
+    description: "تُصدر بعد استيراد دفعة سطور من كشف بنكي للمطابقة",
+    payload: { batchId: "string", accountCode: "string", imported: "number" },
+    consumers: ["execDashboard"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "finance.bank_reconciliation.matched",
+    label: "مطابقة بنكية",
+    domain: "finance",
+    description: "تُصدر بعد تنفيذ مطابقة (auto أو manual) لسطور كشف بنكي",
+    payload: { batchId: "string", matched: "number", method: "string" },
+    consumers: ["execDashboard"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "finance.fixed_assets.batch_depreciated",
+    label: "إهلاك دفعة أصول ثابتة",
+    domain: "finance",
+    description: "تُصدر بعد تشغيل الإهلاك الشهري لمجموعة أصول ثابتة",
+    payload: { period: "string", assetsCount: "number", totalDepreciation: "number" },
+    consumers: ["execDashboard"],
+    sideEffects: ["gl_post", "audit"],
+    critical: true,
+  },
+  {
+    name: "finance.rounding_account.configured",
+    label: "إعداد حساب التقريب",
+    domain: "finance",
+    description: "تُصدر عند تعيين أو تغيير حساب التقريب للجرد",
+    payload: { accountCode: "string" },
+    consumers: [],
+    sideEffects: ["audit"],
+  },
 
   // ─── HR ──────────────────────────────────────────────────────────────────
   {
@@ -519,6 +556,58 @@ export const EVENT_CATALOG: EventDefinition[] = [
     description: "تُصدر عند تسجيل مخالفة تنظيمية",
     payload: { violationId: "number", type: "string", severity: "string" },
     consumers: ["legalEngine", "execDashboard"],
+    sideEffects: ["notification", "audit"],
+  },
+  // ── Events fired by PRs #303 / #305 / #312 — backfilled here so the
+  //    automation rule builder (rulesEngine.ts) lists them as triggers
+  //    and the audit dashboard renders the Arabic label.
+  //    umrah.penalty.created and umrah.penalty.waived already exist later
+  //    in this file (auto-generated batch) — only the new bulk waive +
+  //    group / attachment / letter events are added here.
+  {
+    name: "umrah.group.split",
+    label: "تقسيم مجموعة عمرة",
+    domain: "umrah",
+    description: "تُصدر عند تقسيم مجموعة لإنشاء مجموعة فرعية بـ N معتمرين",
+    payload: { sourceGroupId: "number", newGroupId: "number", movedCount: "number" },
+    consumers: ["invoicingEngine", "execDashboard"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "umrah.group.merged",
+    label: "دمج مجموعات عمرة",
+    domain: "umrah",
+    description: "تُصدر عند دمج N مجموعات مصدر في مجموعة هدف واحدة",
+    payload: { targetGroupId: "number", mergedSourceIds: "number[]", movedCount: "number" },
+    consumers: ["invoicingEngine", "execDashboard"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "umrah.penalty.waived_bulk",
+    label: "إعفاء جماعي للغرامات",
+    domain: "umrah",
+    description: "تُصدر مرة واحدة بعد batch إعفاء — تحوي ملخص العدد الناجح + المتجاوز + المبلغ الكلي",
+    payload: { successCount: "number", totalAmount: "number", reason: "string", skipped: "number", errors: "number" },
+    consumers: ["invoicingEngine", "execDashboard"],
+    sideEffects: ["gl_post", "audit"],
+    critical: true,
+  },
+  {
+    name: "umrah.attachment.created",
+    label: "إضافة مرفق عمرة",
+    domain: "umrah",
+    description: "تُصدر عند إضافة وثيقة polymorphic لـ (mutamer / sub_agent / group / nusk_invoice / ...)",
+    payload: { attachmentId: "number", entityType: "string", entityId: "number", type: "string" },
+    consumers: ["execDashboard"],
+    sideEffects: ["audit"],
+  },
+  {
+    name: "umrah.letter.dispatched",
+    label: "إرسال خطاب عمرة",
+    domain: "umrah",
+    description: "تُصدر عند تثبيت إرسال خطاب رسمي للجهة (طباعة / بريد / واتساب / يدوي)",
+    payload: { letterId: "number", dispatchedVia: "string", recipient: "string" },
+    consumers: ["correspondence", "execDashboard"],
     sideEffects: ["notification", "audit"],
   },
 

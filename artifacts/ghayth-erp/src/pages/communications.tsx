@@ -17,6 +17,7 @@ import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 export default function Communications() {
   const [tab, setTab] = useState("monitor");
@@ -136,20 +137,20 @@ function PushNotificationsCard() {
         )}
         <div className="flex gap-2 flex-wrap">
           {!isSubscribed ? (
-            <Button size="sm" onClick={handleSubscribe} disabled={isLoading || permission === "denied"}>
+            <GuardedButton perm="communications:create" size="sm" onClick={handleSubscribe} disabled={isLoading || permission === "denied"}>
               <Bell className="h-3.5 w-3.5 me-1" />
               {isLoading ? "جاري التفعيل..." : "تفعيل الإشعارات"}
-            </Button>
+            </GuardedButton>
           ) : (
             <>
-              <Button size="sm" variant="outline" onClick={handleTest} disabled={isLoading}>
+              <GuardedButton perm="communications:create" size="sm" variant="outline" onClick={handleTest} disabled={isLoading}>
                 <BellRing className="h-3.5 w-3.5 me-1" />
                 إرسال تجريبي
-              </Button>
-              <Button size="sm" variant="ghost" onClick={handleUnsubscribe} disabled={isLoading} className="text-red-600 hover:text-red-700">
+              </GuardedButton>
+              <GuardedButton perm="communications:create" size="sm" variant="ghost" onClick={handleUnsubscribe} disabled={isLoading} className="text-red-600 hover:text-red-700">
                 <BellOff className="h-3.5 w-3.5 me-1" />
                 إلغاء الاشتراك
-              </Button>
+              </GuardedButton>
             </>
           )}
         </div>
@@ -412,7 +413,8 @@ function ConvertCommButton({ logEntry, onSuccess }: { logEntry: any; onSuccess: 
       {show && (
         <div className="flex items-center gap-1">
           {options.map((opt) => (
-            <Button
+            <GuardedButton
+              perm="communications:create"
               key={opt.key}
               variant="outline"
               size="sm"
@@ -422,7 +424,7 @@ function ConvertCommButton({ logEntry, onSuccess }: { logEntry: any; onSuccess: 
             >
               <opt.icon className="h-3 w-3" />
               {opt.label}
-            </Button>
+            </GuardedButton>
           ))}
         </div>
       )}

@@ -23,6 +23,27 @@ const verifySignatureSchema = z.object({
 
 const router = Router();
 
+interface OtpRecordRow {
+  id: number;
+}
+
+interface SignatureLogRow {
+  id: number;
+  companyId: number;
+  userId: number | null;
+  documentId: string | null;
+  entityType: string;
+  entityId: string;
+  action: string;
+  signatureRef: string;
+  ipAddress: string | null;
+  deviceFingerprint: string | null;
+  userAgent: string | null;
+  otpRef: number | null;
+  createdAt: string;
+  userName: string | null;
+}
+
 function generateOTP(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
@@ -97,8 +118,8 @@ router.post("/verify", authorize({ feature: "documents", action: "create" }), as
     const deviceFingerprint = getDeviceFingerprint(req);
     const userAgent = req.headers["user-agent"] || "";
 
-    const [record] = await rawQuery<any>(
-      `SELECT * FROM digital_signature_otps WHERE "companyId"=$1 AND "userId"=$2 AND "entityType"=$3 AND "entityId"=$4 AND action=$5 AND otp=$6 AND used=false AND "expiresAt" > NOW() ORDER BY "createdAt" DESC LIMIT 1`,
+    const [record] = await rawQuery<OtpRecordRow>(
+      `SELECT id FROM digital_signature_otps WHERE "companyId"=$1 AND "userId"=$2 AND "entityType"=$3 AND "entityId"=$4 AND action=$5 AND otp=$6 AND used=false AND "expiresAt" > NOW() ORDER BY "createdAt" DESC LIMIT 1`,
       [scope.companyId, scope.userId, entityType, String(entityId), action, String(otp)]
     );
 
@@ -150,7 +171,7 @@ router.get("/logs", authorize({ feature: "documents", action: "create" }), async
     const params: any[] = [scope.companyId];
     if (entityType) { params.push(entityType); conditions.push(`dsl."entityType"=$${params.length}`); }
     if (entityId) { params.push(String(entityId)); conditions.push(`dsl."entityId"=$${params.length}`); }
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<SignatureLogRow>(
       `SELECT dsl.*, e.name AS "userName" FROM digital_signature_logs dsl LEFT JOIN users u ON u.id=dsl."userId" LEFT JOIN employees e ON e.id=u."employeeId" WHERE ${conditions.join(" AND ")} ORDER BY dsl."createdAt" DESC LIMIT 100`,
       params
     );

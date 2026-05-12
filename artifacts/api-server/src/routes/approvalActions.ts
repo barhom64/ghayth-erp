@@ -2,6 +2,7 @@ import { Router } from "express";
 import { APPROVAL_AUDIT_ROLES } from "../lib/rbacCatalog.js";
 import { rawQuery } from "../lib/rawdb.js";
 import { handleRouteError, ForbiddenError, parseId } from "../lib/errorHandler.js";
+import { authorize } from "../lib/rbac/authorize.js";
 
 // Local row shapes — neither table has a Drizzle definition yet, so the
 // types live next to the route file. Move to dbTypes.ts when ≥3 routes
@@ -41,7 +42,7 @@ interface ApprovalActionRow {
 
 const router = Router();
 
-router.get("/overrides/report", async (req, res) => {
+router.get("/overrides/report", authorize({ feature: "admin.approvals", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const allowedRoles = APPROVAL_AUDIT_ROLES;
@@ -74,7 +75,7 @@ router.get("/overrides/report", async (req, res) => {
   }
 });
 
-router.get("/:entityType/:entityId", async (req, res) => {
+router.get("/:entityType/:entityId", authorize({ feature: "admin.approvals", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType } = req.params;

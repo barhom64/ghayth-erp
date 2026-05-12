@@ -94,7 +94,7 @@ describe("Fleet vehicle state machine", () => {
   });
 
   it("validates vehicle status transitions", () => {
-    expect(FLEET_ROUTE).toContain("VEHICLE_TRANSITIONS[existing.status]");
+    expect(FLEET_ROUTE).toMatch(/VEHICLE_TRANSITIONS\[existing\.status/);
   });
 });
 

@@ -9,6 +9,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { PageShell } from "@/components/page-shell";
 import { Crown, Plus, Pencil, Phone, Building2, Home, Trash2 } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { useAppContext } from "@/contexts/app-context";
 
 export default function PropertiesOwners() {
@@ -119,9 +120,9 @@ export default function PropertiesOwners() {
       breadcrumbs={[{ href: "/properties", label: "إدارة الأملاك" }]}
       actions={canManage && (
         <Link href="/properties/owners/create">
-          <Button className="gap-2">
+          <GuardedButton perm="property:create" className="gap-2">
             <Plus className="h-4 w-4" /> إضافة مالك
-          </Button>
+          </GuardedButton>
         </Link>
       )}
     >

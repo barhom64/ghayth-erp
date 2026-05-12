@@ -103,12 +103,78 @@ artifacts/api-server/src/lib/fx/
 ├── convert.ts          — convert(amount, from, to, asOfDate) — pure
 ├── revaluation.ts      — runPeriodEndRevaluation() — IAS 21 per-line
 ├── realized.ts         — recordRealizedFx() — on payment of foreign invoice
-├── source-fetchers/    — daily rate pullers
+├── providers/          — daily rate sources (vendor-neutral)
+│   ├── provider.ts     — `FxRateProvider` interface
+│   ├── registry.ts     — config-driven dispatch
 │   ├── sama.ts         — Saudi Central Bank (default for SAR base)
 │   ├── ecb.ts          — European Central Bank (free, daily)
 │   └── manual.ts       — operator entry (fallback)
 └── jobs.ts             — daily rate fetch + alert if missing
 ```
+
+### 4.1 The `FxRateProvider` contract
+
+Finance code does **not** import a specific rate source. Every rate lookup goes through the registry so swapping SAMA → ECB → manual is a config change, not a code change.
+
+```ts
+// lib/fx/providers/provider.ts
+export interface FxRateProvider {
+  /** Stable id, e.g. `"sama"`, `"ecb"`, `"manual"`. */
+  readonly id: string;
+
+  /**
+   * Fetch rates effective on `asOfDate`. Returns a map keyed by
+   * `"<from>:<to>"`. Implementations should return at minimum the
+   * direct rates for every currency in `wanted`; cross-rate inversion
+   * is the caller's job (handled by `rate-lookup.ts`).
+   */
+  fetch(asOfDate: string, wanted: Currency[]): Promise<Map<string, number>>;
+
+  /** Lightweight reachability test (no rate fetch). */
+  health(): Promise<{ ok: boolean; details: string }>;
+}
+
+// lib/fx/providers/registry.ts
+const PROVIDERS: Record<string, () => FxRateProvider> = {
+  sama: () => new SamaProvider(),
+  ecb: () => new EcbProvider(),
+  manual: () => new ManualProvider(),
+};
+
+export function getFxProvider(companyId: number): FxRateProvider {
+  const id = readFxProviderConfig(companyId)
+    ?? process.env.FX_PROVIDER_DEFAULT
+    ?? "sama";
+  const factory = PROVIDERS[id];
+  if (!factory) throw new Error(`Unknown FX provider: ${id}`);
+  return factory();
+}
+```
+
+### 4.2 What finance code may import
+
+```ts
+// ✅ allowed
+import { convert } from "../lib/fx/convert.js";
+import { getRateForDate } from "../lib/fx/rate-lookup.js";
+
+// ❌ forbidden — couples finance to a specific provider
+import { fetchSamaRates } from "../lib/fx/providers/sama.js";
+```
+
+A guardrail in `scripts/lint-patterns.mjs` enforces this — any `import` of `providers/<vendor>` from outside `lib/fx/providers/` is a CI failure.
+
+### 4.3 Functional vs presentation currency
+
+| Concept | Lives on | Purpose |
+| --- | --- | --- |
+| `companies.functionalCurrency` | per-company, IAS 21 §9 | Currency every GL row is recorded in (immutable once set; SAR for KSA tenants) |
+| `companies.presentationCurrency` | per-company, optional | What the dashboard shows; if null, same as functional |
+| `invoices.currency` | per-row | Transactional currency (USD invoice booked in SAR-functional company) |
+| `invoices.fxRateAtPosting` | per-row | The rate used when this invoice was posted; locks the booked SAR value |
+| `fx_revaluation_log` | per-period | Snapshot of closing rates + the period's gain/loss journal |
+
+**Rule**: a row in `journal_entries` is **always** stored in its company's functional currency. Anything denominated otherwise also carries the original currency + the rate-at-posting so realised vs unrealised FX can be split cleanly.
 
 ## 5) خطة التنفيذ (2-3 أسابيع)
 
