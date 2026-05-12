@@ -1,27 +1,27 @@
-# /finance/inventory-costing — `artifacts/ghayth-erp/src/pages/create/finance/batch-depreciate.tsx`
+# /finance/inventory-costing — `artifacts/ghayth-erp/src/pages/finance/inventory-costing.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/inventory-costing`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/finance/batch-depreciate.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/inventory-costing.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:128`
 - المجموعة: `finance`
-- الكومبوننت: `BatchDepreciate`
+- الكومبوننت: `InventoryCosting`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `inventory-costing`
-- سطور الملف: 76
+- سطور الملف: 236
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 | الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
 |------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/finance/fixed-assets/depreciate-all` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+| _(write)_ | `/finance/rounding-account/setup` | POST | — | — | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-- L48: "مسح المسودة" → `clearDraft`
-- L62: "(بلا تسمية)" → `handleBatchDepreciate` 🔒
+- L217: "(بلا تسمية)" → `handleSetupRounding` 🔒
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/finance/inventory-costing`
+- GET `/finance/rounding-account`
 
 
 
@@ -41,8 +41,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/inventory-costing`
-- لقطة: `audit/screenshots/finance_inventory_costing.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/inventory-costing`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

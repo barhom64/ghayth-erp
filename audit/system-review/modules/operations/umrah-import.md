@@ -1,28 +1,25 @@
-# /umrah/import — `artifacts/ghayth-erp/src/pages/umrah/violations.tsx`
+# /umrah/import — `artifacts/ghayth-erp/src/pages/umrah/import-wizard.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/umrah/import`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/violations.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/import-wizard.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:64`
 - المجموعة: `operations`
-- الكومبوننت: `UmrahViolations`
+- الكومبوننت: `UmrahImportWizard`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `import`
-- سطور الملف: 519
+- سطور الملف: 491
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L254: "(بلا تسمية)"
-- L259: "(بلا تسمية)" → `() => openEdit(v)`
-- L263: "(بلا تسمية)" → `() => setDeleteId(v.id)`
-- L280: "مخالفة جديدة" → `openCreate`
-- L493: "(بلا تسمية)" → `() => setEditing(null)` 🔒
-- L494: "(بلا تسمية)" → `handleSave` 🔒
-- L509: "(بلا تسمية)" → `() => setDeleteId(null)` 🔒
-- L510: "(بلا تسمية)" → `() => deleteMut.mutate({` 🔒
+- L257: "تغيير الملف" → `clearFile`
+- L398: "(بلا تسمية)" → `() => setStep(1)`
+- L425: "عرض تفاصيل الدفعة"
+- L433: "(بلا تسمية)"
+- L477: "(بلا تسمية)" → `() => { setLinkingSubAgent(null); setLinkClientId("");` 🔒
 
 ### القراءات (GET)
 _لا قراءات._
@@ -45,8 +42,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/umrah/import`
-- لقطة: `audit/screenshots/umrah_import.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/umrah/import`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

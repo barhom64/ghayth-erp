@@ -1,28 +1,30 @@
-# /umrah/agents — `artifacts/ghayth-erp/src/pages/umrah/pilgrim-create.tsx`
+# /umrah/agents — `artifacts/ghayth-erp/src/pages/umrah/agents.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/umrah/agents`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/pilgrim-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/agents.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:42`
 - المجموعة: `operations`
-- الكومبوننت: `PilgrimCreate`
+- الكومبوننت: `UmrahAgents`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `agents`
-- سطور الملف: 103
+- سطور الملف: 237
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L47: "(بلا تسمية)"
-- L95: "إلغاء" → `save` 🔒
-- L96: "(بلا تسمية)" → `save` 🔒
+- L121: "(بلا تسمية)" → `() => openEdit(a)`
+- L122: "(بلا تسمية)" → `() => setDeleteId(a.id)`
+- L133: "إضافة وكيل" → `openCreate`
+- L214: "إلغاء" → `closeDialog` 🔒
+- L215: "(بلا تسمية)" → `handleSubmit` 🔒
+- L227: "(بلا تسمية)" → `() => setDeleteId(null)` 🔒
+- L228: "(بلا تسمية)" → `() => deleteMut.mutate({` 🔒
 
 ### القراءات (GET)
-- GET `/umrah/seasons`
 - GET `/umrah/agents`
-- GET `/umrah/packages`
 
 
 
@@ -39,11 +41,9 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `agents` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L104 _(inline-data-array)_: `const kpiCards = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/umrah/agents`
-- لقطة: `audit/screenshots/umrah_agents.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/umrah/agents`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

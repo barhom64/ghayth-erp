@@ -1,24 +1,24 @@
-# /admin/system-governor — `artifacts/ghayth-erp/src/pages/admin-monitoring.tsx`
+# /admin/system-governor — `artifacts/ghayth-erp/src/pages/admin-system-governor.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/admin/system-governor`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin-monitoring.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin-system-governor.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/adminRoutes.tsx:28`
 - المجموعة: `admin`
-- الكومبوننت: `AdminMonitoring`
+- الكومبوننت: `AdminSystemGovernor`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `system-governor`
-- سطور الملف: 321
+- سطور الملف: 105
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L90: "(بلا تسمية)" → `() => refetch()`
+- L25: "(بلا تسمية)" → `() => refetch()`
 
 ### القراءات (GET)
-- GET `/admin/system-health`
+- GET `/admin/governance/system-guards`
 
 
 
@@ -38,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/admin/system-governor`
-- لقطة: `audit/screenshots/admin_system_governor.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/admin/system-governor`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

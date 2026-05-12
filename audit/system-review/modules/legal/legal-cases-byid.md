@@ -1,29 +1,25 @@
-# /legal/cases/:id — `artifacts/ghayth-erp/src/pages/legal.tsx`
+# /legal/cases/:id — `artifacts/ghayth-erp/src/pages/legal-case-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/legal/cases/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/legal.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/legal-case-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/legalRoutes.tsx:26`
 - المجموعة: `legal`
-- الكومبوننت: `Legal`
+- الكومبوننت: `LegalCaseDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 396
+- سطور الملف: 544
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L104: "نسخ العقد"
-- L150: "عقد جديد"
-- L270: "قضية جديدة"
+- L280: "(بلا تسمية)"
+- L376: "(بلا تسمية)" → `() => setShowAddSession(!showAddSession)`
 
 ### القراءات (GET)
-- GET `/legal/stats`
-- GET `/legal/stats`
-- GET `/legal/cases`
-- GET `/legal/financial-report`
+_لا قراءات._
 
 
 
@@ -43,7 +39,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/legal/cases → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/legal/cases/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

@@ -1,26 +1,25 @@
-# /projects/create — `artifacts/ghayth-erp/src/pages/details/opportunity-detail.tsx`
+# /projects/create — `artifacts/ghayth-erp/src/pages/create/projects-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/projects/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/opportunity-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/projects-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:90`
-- المجموعة: `crm`
-- الكومبوننت: `OpportunityDetail`
+- المجموعة: `operations`
+- الكومبوننت: `ProjectsCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 333
+- سطور الملف: 146
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/projects` | POST | ✅ | ✅ | — | — | ✅ | ✅ | ✅ |
 
 ### تفاصيل الأزرار المرئية
-- L98: "تعديل" → `startEdit`
-- L101: "تأكيد الحذف" → `handleDelete`
-- L102: "(بلا تسمية)" → `() => setDeleting(false)`
-- L105: "(بلا تسمية)" → `() => setDeleting(true)`
-- L136: "حفظ" → `saveEdit`
-- L137: "(بلا تسمية)" → `() => setEditing(false)`
+- L70: "مسح المسودة" → `clearDraft`
+- L139: "(بلا تسمية)" → `() => setLocation("/projects")` 🔒
+- L140: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
 _لا قراءات._
@@ -28,7 +27,7 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/crm.md` (إن وُجد) وعدّد:
+- [ ] **TBD** — راجع `docs/blueprints/operations.md` (إن وُجد) وعدّد:
   - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
   - تأثير الأرصدة (balances, balances_history)
   - الإشعارات (notifications)
@@ -43,8 +42,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/projects/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/projects_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/projects/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

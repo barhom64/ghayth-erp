@@ -1,31 +1,31 @@
-# /automation — `artifacts/ghayth-erp/src/pages/intelligence.tsx`
+# /automation — `artifacts/ghayth-erp/src/pages/automation.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/automation`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/intelligence.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/automation.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:121`
-- المجموعة: `bi`
-- الكومبوننت: `Intelligence`
+- المجموعة: `admin`
+- الكومبوننت: `Automation`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `automation`
-- سطور الملف: 127
+- سطور الملف: 293
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L112: "(بلا تسمية)" → `() => handleTrigger(j.id)`
 
 ### القراءات (GET)
-- GET `/intelligence/overview`
-- GET `/intelligence/alerts`
-- GET `/intelligence/daily-schedule`
+- GET `/automation/notification-stats`
+- GET `/automation/proactive-rules`
+- GET `/automation/automation-stats`
 
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/bi.md` (إن وُجد) وعدّد:
+- [ ] **TBD** — راجع `docs/blueprints/admin.md` (إن وُجد) وعدّد:
   - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
   - تأثير الأرصدة (balances, balances_history)
   - الإشعارات (notifications)
@@ -40,8 +40,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/automation`
-- لقطة: `audit/screenshots/automation.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/automation`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

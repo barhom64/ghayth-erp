@@ -1,23 +1,21 @@
-# /properties/tenants/:id — `artifacts/ghayth-erp/src/pages/properties-buildings.tsx`
+# /properties/tenants/:id — `artifacts/ghayth-erp/src/pages/details/tenant-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/properties/tenants/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/properties-buildings.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/tenant-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/propertyRoutes.tsx:39`
 - المجموعة: `properties`
-- الكومبوننت: `PropertiesBuildings`
+- الكومبوننت: `TenantDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 232
+- سطور الملف: 328
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L177: "عرض"
-- L183: "(بلا تسمية)"
-- L202: "إضافة مبنى"
+- L309: "خطاب جديد"
 
 ### القراءات (GET)
 _لا قراءات._
@@ -40,7 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/properties/tenants → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/properties/tenants/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

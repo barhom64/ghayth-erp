@@ -1,28 +1,28 @@
-# /hr/violations — `artifacts/ghayth-erp/src/pages/create/hr/exit-create.tsx`
+# /hr/violations — `artifacts/ghayth-erp/src/pages/hr/violations.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/violations`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/hr/exit-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/violations.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:131`
 - المجموعة: `hr`
-- الكومبوننت: `ExitCreate`
-- subKey: `employees` | minRoleLevel: —
+- الكومبوننت: `Violations`
+- subKey: `violations` | minRoleLevel: —
 - الكيان المستنبط: `violations`
-- سطور الملف: 234
+- سطور الملف: 502
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/hr/exit` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L123: "مسح المسودة" → `clearDraft`
-- L222: "(بلا تسمية)" 🔒
-- L226: "(بلا تسمية)" → `() => setLocation("/hr/exit")`
+- L134: "تشغيل الرصد"
+- L139: "تسجيل مخالفة"
+- L231: "عرض الكل"
+- L473: "فتح صفحة الرصد التلقائي"
+- L493: "فتح لائحة الانضباط"
 
 ### القراءات (GET)
-- GET `/employees?limit=500`
+- GET `/hr/discipline/stats`
 
 
 
@@ -39,11 +39,9 @@
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `violations` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L182 _(inline-data-array)_: `const byStage = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/violations`
-- لقطة: `audit/screenshots/hr_violations.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/violations`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

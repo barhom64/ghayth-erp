@@ -1,24 +1,27 @@
-# /finance/intercompany — `artifacts/ghayth-erp/src/pages/finance/journal-manual-detail.tsx`
+# /finance/intercompany — `artifacts/ghayth-erp/src/pages/finance/intercompany.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/intercompany`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/journal-manual-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/intercompany.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:134`
 - المجموعة: `finance`
-- الكومبوننت: `JournalManualDetail`
+- الكومبوننت: `Intercompany`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `intercompany`
-- سطور الملف: 279
+- سطور الملف: 200
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L192: "(بلا تسمية)" → `() => setReversalOpen(true)`
+- L118: "القوائم الموحدة"
+- L123: "(بلا تسمية)" → `() => setShowCreate(true)`
+- L165: "(بلا تسمية)" → `() => setShowCreate(false)`
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/finance/intercompany${scopeSuffix}`
+- GET `/settings/companies${scopeSuffix}`
 
 
 
@@ -38,8 +41,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/intercompany`
-- لقطة: `audit/screenshots/finance_intercompany.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/intercompany`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

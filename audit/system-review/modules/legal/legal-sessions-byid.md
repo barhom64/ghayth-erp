@@ -1,14 +1,14 @@
-# /legal/sessions/:id — `artifacts/ghayth-erp/src/pages/details/legal-contract-detail.tsx`
+# /legal/sessions/:id — `artifacts/ghayth-erp/src/pages/details/legal-session-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/legal/sessions/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/legal-contract-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/legal-session-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/legalRoutes.tsx:20`
 - المجموعة: `legal`
-- الكومبوننت: `LegalContractDetail`
+- الكومبوننت: `LegalSessionDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 324
+- سطور الملف: 327
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
@@ -38,7 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/legal/sessions → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/legal/sessions/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

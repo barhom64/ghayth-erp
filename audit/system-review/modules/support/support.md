@@ -1,24 +1,29 @@
-# /support — `artifacts/ghayth-erp/src/pages/support/kb.tsx`
+# /support — `artifacts/ghayth-erp/src/pages/support.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/support`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/support/kb.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/support.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:112`
 - المجموعة: `support`
-- الكومبوننت: `KnowledgeBase`
+- الكومبوننت: `Support`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `support`
-- سطور الملف: 49
+- سطور الملف: 462
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L106: "(بلا تسمية)" → `() => setPreviewItem(t)`
+- L133: "تذكرة جديدة"
+- L304: "(بلا تسمية)" → `() => setShowNew(!showNew)`
+- L315: "(بلا تسمية)" → `() => setShowNew(false)`
 
 ### القراءات (GET)
+- GET `/support/stats`
 - GET `/support/kb`
+- GET `/support/csat`
 
 
 
@@ -38,8 +43,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/support`
-- لقطة: `audit/screenshots/support.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/support`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

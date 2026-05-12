@@ -1,27 +1,27 @@
-# /hr/discipline/regulation — `artifacts/ghayth-erp/src/pages/hr/auto-detection.tsx`
+# /hr/discipline/regulation — `artifacts/ghayth-erp/src/pages/hr/discipline-regulation.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/discipline/regulation`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/auto-detection.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/discipline-regulation.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:137`
 - المجموعة: `hr`
-- الكومبوننت: `AutoDetection`
+- الكومبوننت: `DisciplineRegulation`
 - subKey: `violations` | minRoleLevel: —
 - الكيان المستنبط: `regulation`
-- سطور الملف: 597
+- سطور الملف: 303
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L225: "(بلا تسمية)"
-- L261: "(بلا تسمية)"
-- L270: "(بلا تسمية)" → `handleRun`
+- L153: "(بلا تسمية)" → `() => setEditing(a)`
+- L171: "استنساخ اللائحة الافتراضية" → `reseedDefaults` 🔒
+- L269: "(بلا تسمية)" → `() => setEditing(null)` 🔒
+- L272: "(بلا تسمية)" → `saveEdit` 🔒
 
 ### القراءات (GET)
-- GET `/hr/discipline/auto-detection/settings`
-- GET `/hr/discipline/auto-detection/summary`
+_لا قراءات._
 
 
 
@@ -41,8 +41,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/discipline/regulation`
-- لقطة: `audit/screenshots/hr_discipline_regulation.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/discipline/regulation`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

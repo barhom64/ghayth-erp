@@ -1,30 +1,25 @@
-# /calendar — `artifacts/ghayth-erp/src/pages/action-center.tsx`
+# /calendar — `artifacts/ghayth-erp/src/pages/calendar.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/calendar`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/action-center.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/calendar.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:75`
-- المجموعة: `operations`
-- الكومبوننت: `ActionCenter`
-- subKey: — | minRoleLevel: 60
+- المجموعة: `misc`
+- الكومبوننت: `CalendarPage`
+- subKey: — | minRoleLevel: —
 - الكيان المستنبط: `calendar`
-- سطور الملف: 693
+- سطور الملف: 310
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L359: "مساحتي"
-- L414: "(بلا تسمية)"
-- L454: "(بلا تسمية)"
-- L463: "(بلا تسمية)"
-- L472: "(بلا تسمية)"
-- L484: "(بلا تسمية)"
-- L493: "(بلا تسمية)"
-- L514: "عرض الكل في الصفحة المخصصة"
-- L589: "عرض الكل"
-- L637: "عرض الكل"
+- L108: "(بلا تسمية)"
+- L116: "(بلا تسمية)"
+- L262: "(بلا تسمية)" → `onPrev`
+- L265: "اليوم" → `onToday`
+- L266: "(بلا تسمية)" → `onNext`
 
 ### القراءات (GET)
 _لا قراءات._
@@ -32,7 +27,7 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/operations.md` (إن وُجد) وعدّد:
+- [ ] **TBD** — راجع `docs/blueprints/misc.md` (إن وُجد) وعدّد:
   - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
   - تأثير الأرصدة (balances, balances_history)
   - الإشعارات (notifications)
@@ -47,8 +42,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/calendar`
-- لقطة: `audit/screenshots/calendar.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/calendar`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

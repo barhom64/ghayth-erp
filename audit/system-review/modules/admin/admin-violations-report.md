@@ -1,31 +1,24 @@
-# /admin/violations-report — `artifacts/ghayth-erp/src/pages/admin-integrations.tsx`
+# /admin/violations-report — `artifacts/ghayth-erp/src/pages/admin-violations-report.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/admin/violations-report`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin-integrations.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin-violations-report.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/adminRoutes.tsx:27`
 - المجموعة: `admin`
-- الكومبوننت: `AdminIntegrations`
+- الكومبوننت: `AdminViolationsReport`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `violations-report`
-- سطور الملف: 310
+- سطور الملف: 346
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L113: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L125: "(بلا تسمية)" → `() => setShowForm(false)`
-- L192: "(بلا تسمية)" → `() => handleToggleStatus(intg.id, intg.status)`
-- L195: "(بلا تسمية)" → `() => handleTest(intg.id)`
-- L198: "(بلا تسمية)" → `() => handleDelete(intg.id)`
-- L208: "(بلا تسمية)" → `() => setShowForm(true)`
-- L269: "إعادة المحاولة للفاشلة" → `handleRetry`
+- L158: "(بلا تسمية)"
 
 ### القراءات (GET)
-- GET `/admin/integrations`
-- GET `/admin/integration-logs`
+_لا قراءات._
 
 
 
@@ -42,11 +35,9 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `violations-report` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L172 _(inline-data-array)_: `const summaryCards = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/admin/violations-report`
-- لقطة: `audit/screenshots/admin_violations_report.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/admin/violations-report`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

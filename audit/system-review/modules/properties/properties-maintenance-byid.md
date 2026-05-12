@@ -1,22 +1,21 @@
-# /properties/maintenance/:id — `artifacts/ghayth-erp/src/pages/properties-payments.tsx`
+# /properties/maintenance/:id — `artifacts/ghayth-erp/src/pages/details/property-maintenance-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/properties/maintenance/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/properties-payments.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/property-maintenance-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/propertyRoutes.tsx:53`
 - المجموعة: `properties`
-- الكومبوننت: `PropertiesPayments`
+- الكومبوننت: `PropertyMaintenanceDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 117
+- سطور الملف: 255
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L44: "(بلا تسمية)"
-- L64: "تسجيل دفعة"
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
 _لا قراءات._
@@ -39,7 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/properties/units → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/properties/maintenance/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

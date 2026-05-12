@@ -1,24 +1,27 @@
-# /operations-center — `artifacts/ghayth-erp/src/pages/exec-dashboard.tsx`
+# /operations-center — `artifacts/ghayth-erp/src/pages/operations-center.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/operations-center`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/exec-dashboard.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/operations-center.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:78`
 - المجموعة: `operations`
-- الكومبوننت: `ExecDashboard`
-- subKey: — | minRoleLevel: 60
+- الكومبوننت: `OperationsCenter`
+- subKey: — | minRoleLevel: 40
 - الكيان المستنبط: `operations-center`
-- سطور الملف: 263
+- سطور الملف: 284
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L117: "الإقفال اليومي"
+- L122: "(بلا تسمية)" → `() => { setRefreshKey(k => k + 1); refetch();`
+- L174: "(بلا تسمية)"
+- L245: "عرض الكل"
 
 ### القراءات (GET)
-- GET `/exec-dashboard/overview`
+_لا قراءات._
 
 
 
@@ -38,8 +41,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/operations-center`
-- لقطة: `audit/screenshots/operations_center.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/operations-center`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

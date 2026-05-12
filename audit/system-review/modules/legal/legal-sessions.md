@@ -1,29 +1,24 @@
-# /legal/sessions — `artifacts/ghayth-erp/src/pages/legal.tsx`
+# /legal/sessions — `artifacts/ghayth-erp/src/pages/legal/sessions.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/legal/sessions`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/legal.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/legal/sessions.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/legalRoutes.tsx:19`
 - المجموعة: `legal`
-- الكومبوننت: `Legal`
+- الكومبوننت: `LegalSessions`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `sessions`
-- سطور الملف: 396
+- سطور الملف: 65
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L104: "نسخ العقد"
-- L150: "عقد جديد"
-- L270: "قضية جديدة"
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/legal/stats`
-- GET `/legal/stats`
-- GET `/legal/cases`
-- GET `/legal/financial-report`
+- GET `/legal/sessions/upcoming`
 
 
 
@@ -43,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/legal/sessions`
-- لقطة: `audit/screenshots/legal_sessions.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/legal/sessions`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

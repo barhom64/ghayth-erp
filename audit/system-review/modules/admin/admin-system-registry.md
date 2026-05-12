@@ -1,24 +1,31 @@
-# /admin/system-registry — `artifacts/ghayth-erp/src/pages/admin-rbac-matrix.tsx`
+# /admin/system-registry — `artifacts/ghayth-erp/src/pages/admin-system-registry.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/admin/system-registry`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin-rbac-matrix.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin-system-registry.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/adminRoutes.tsx:36`
 - المجموعة: `admin`
-- الكومبوننت: `AdminRbacMatrix`
+- الكومبوننت: `AdminSystemRegistry`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `system-registry`
-- سطور الملف: 187
+- سطور الملف: 689
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L58: "(بلا تسمية)" → `() => refetch()`
+- L174: "(بلا تسمية)" → `() => refetchReg()`
 
 ### القراءات (GET)
-- GET `/admin/governance/rbac-matrix`
+- GET `/admin/system-registry`
+- GET `/admin/system-registry/entities`
+- GET `/admin/system-registry/actions`
+- GET `/admin/system-registry/missing`
+- GET `/admin/system-registry/coverage`
+- GET `/admin/system-registry/notifications`
+- GET `/admin/system-registry/reports`
+- GET `/admin/system-registry/print-templates`
 
 
 
@@ -38,8 +45,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/admin/system-registry`
-- لقطة: `audit/screenshots/admin_system_registry.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/admin/system-registry`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

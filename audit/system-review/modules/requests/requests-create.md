@@ -1,35 +1,26 @@
-# /requests/create — `artifacts/ghayth-erp/src/pages/requests-page.tsx`
+# /requests/create — `artifacts/ghayth-erp/src/pages/create/requests/items-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/requests/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/requests-page.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/requests/items-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/requestsRoutes.tsx:10`
 - المجموعة: `requests`
-- الكومبوننت: `RequestsPage`
+- الكومبوننت: `RequestsItemCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 707
+- سطور الملف: 95
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L134: "(بلا تسمية)"
-- L428: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L478: "(بلا تسمية)" → `() => { setFilterStatus(""); setFilterType(""); setFilterDateFrom(""); setFilter`
-- L497: "(بلا تسمية)" → `() => setShowForm(false)`
-- L563: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L572: "(بلا تسمية)" → `() => setShowForm(false)`
-- L623: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L632: "(بلا تسمية)" → `() => setShowForm(false)`
+- L55: "مسح المسودة" → `clearDraft`
+- L88: "(بلا تسمية)" → `() => setLocation("/requests")` 🔒
+- L89: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
-- GET `/requests/catalog`
-- GET `/requests`
-- GET `/requests/types`
-- GET `/requests/workflows`
-- GET `/requests/stats`
+_لا قراءات._
 
 
 
@@ -46,11 +37,9 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `create` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L95 _(inline-data-array)_: `const CONVERT_OPTIONS = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/requests/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/requests_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/requests/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

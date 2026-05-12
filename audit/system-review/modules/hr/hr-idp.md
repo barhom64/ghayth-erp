@@ -1,24 +1,28 @@
-# /hr/idp — `artifacts/ghayth-erp/src/pages/details/transfer-detail.tsx`
+# /hr/idp — `artifacts/ghayth-erp/src/pages/hr/idp.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/idp`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/transfer-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/idp.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:157`
 - المجموعة: `hr`
-- الكومبوننت: `TransferDetail`
-- subKey: `employees` | minRoleLevel: —
+- الكومبوننت: `IDP`
+- subKey: `performance` | minRoleLevel: —
 - الكيان المستنبط: `idp`
-- سطور الملف: 272
+- سطور الملف: 279
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/hr/idp` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L197: "(بلا تسمية)" → `() => setShowForm(true)`
+- L238: "(بلا تسمية)" → `() => setShowForm(false)`
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/hr/idp`
+- GET `/employees?status=active&limit=200`
 
 
 
@@ -35,11 +39,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `idp` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L92 _(inline-data-array)_: `const kpis = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/idp`
-- لقطة: `audit/screenshots/hr_idp.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/idp`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

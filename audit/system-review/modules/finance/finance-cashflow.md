@@ -1,25 +1,28 @@
-# /finance/cashflow — `artifacts/ghayth-erp/src/pages/finance/project-costing.tsx`
+# /finance/cashflow — `artifacts/ghayth-erp/src/pages/finance/cashflow-dashboard.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/cashflow`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/project-costing.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/cashflow-dashboard.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:139`
 - المجموعة: `finance`
-- الكومبوننت: `ProjectCosting`
+- الكومبوننت: `CashflowDashboard`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `cashflow`
-- سطور الملف: 217
+- سطور الملف: 413
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L91: "(بلا تسمية)" → `() => setShowAddCost(true)` 🔒
-- L185: "(بلا تسمية)" → `() => setShowAddCost(false)`
+- L86: "الوحدة المالية" → `() => refetchSummary()`
+- L88: "الوحدة المالية"
+- L325: "عرض الكل"
+- L361: "عرض الكل"
 
 ### القراءات (GET)
-- GET `/finance/projects${scopeSuffix}`
+- GET `/finance/invoices?status=draft&limit=5${qstr ? `
+- GET `/finance/expenses?limit=5${qstr ? `
 
 
 
@@ -39,8 +42,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/cashflow`
-- لقطة: `audit/screenshots/finance_cashflow.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/cashflow`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

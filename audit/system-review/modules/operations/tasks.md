@@ -1,25 +1,30 @@
-# /tasks — `artifacts/ghayth-erp/src/pages/create/tasks-create.tsx`
+# /tasks — `artifacts/ghayth-erp/src/pages/tasks.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/tasks`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/tasks-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/tasks.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:117`
 - المجموعة: `operations`
-- الكومبوننت: `TasksCreate`
+- الكومبوننت: `Tasks`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `tasks`
-- سطور الملف: 203
+- سطور الملف: 422
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(write)_ | `/:id/tasks` | POST | ✅ | ✅ | — | — | ✅ | ✅ | ✅ |
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L116: "مسح المسودة" → `clearDraft`
-- L195: "(بلا تسمية)" → `() => setLocation("/tasks")` 🔒
-- L196: "(بلا تسمية)" → `handleSubmit` 🔒
+- L186: "(بلا تسمية)"
+- L196: "(بلا تسمية)"
+- L207: "(بلا تسمية)"
+- L218: "نسخ"
+- L222: "(بلا تسمية)"
+- L231: "(بلا تسمية)"
+- L241: "(بلا تسمية)"
+- L263: "مهمة جديدة"
+- L389: "(بلا تسمية)" → `saveEdit` 🔒
+- L393: "إلغاء" → `cancelEdit`
 
 ### القراءات (GET)
 _لا قراءات._
@@ -39,11 +44,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `tasks` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L24 _(inline-data-array)_: `const statusOptions = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/tasks`
-- لقطة: `audit/screenshots/tasks.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/tasks`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

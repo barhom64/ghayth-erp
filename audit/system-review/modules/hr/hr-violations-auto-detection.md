@@ -1,25 +1,27 @@
-# /hr/violations/auto-detection — `artifacts/ghayth-erp/src/pages/hr/violations-management.tsx`
+# /hr/violations/auto-detection — `artifacts/ghayth-erp/src/pages/hr/auto-detection.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/violations/auto-detection`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/violations-management.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/auto-detection.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:135`
 - المجموعة: `hr`
-- الكومبوننت: `ViolationsManagement`
+- الكومبوننت: `AutoDetection`
 - subKey: `violations` | minRoleLevel: —
 - الكيان المستنبط: `auto-detection`
-- سطور الملف: 153
+- سطور الملف: 597
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L73: "(بلا تسمية)"
+- L225: "(بلا تسمية)"
+- L261: "(بلا تسمية)"
+- L270: "(بلا تسمية)" → `handleRun`
 
 ### القراءات (GET)
-- GET `/hr/violations`
-- GET `/hr/violations-stats`
+- GET `/hr/discipline/auto-detection/settings`
+- GET `/hr/discipline/auto-detection/summary`
 
 
 
@@ -39,8 +41,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/violations/auto-detection`
-- لقطة: `audit/screenshots/hr_violations_auto_detection.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/violations/auto-detection`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

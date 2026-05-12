@@ -1,34 +1,29 @@
-# /support/replies — `artifacts/ghayth-erp/src/pages/warehouse/inventory-count.tsx`
+# /support/replies — `artifacts/ghayth-erp/src/pages/support/replies.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/support/replies`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/warehouse/inventory-count.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/support/replies.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:109`
-- المجموعة: `warehouse`
-- الكومبوننت: `InventoryCount`
+- المجموعة: `support`
+- الكومبوننت: `SupportReplies`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `replies`
-- سطور الملف: 459
+- سطور الملف: 94
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L207: "(بلا تسمية)"
-- L216: "(بلا تسمية)"
-- L311: "(بلا تسمية)"
-- L359: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L388: "(بلا تسمية)" → `() => setShowForm(false)`
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/warehouse/inventory-counts`
-- GET `/warehouse/products?limit=500`
+- GET `/support/replies`
 
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/warehouse.md` (إن وُجد) وعدّد:
+- [ ] **TBD** — راجع `docs/blueprints/support.md` (إن وُجد) وعدّد:
   - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
   - تأثير الأرصدة (balances, balances_history)
   - الإشعارات (notifications)
@@ -43,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/support/replies`
-- لقطة: `audit/screenshots/support_replies.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/support/replies`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

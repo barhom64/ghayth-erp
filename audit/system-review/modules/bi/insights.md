@@ -1,24 +1,26 @@
-# /insights — `artifacts/ghayth-erp/src/pages/notifications.tsx`
+# /insights — `artifacts/ghayth-erp/src/pages/insights.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/insights`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/notifications.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/insights.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:120`
 - المجموعة: `bi`
-- الكومبوننت: `Notifications`
+- الكومبوننت: `Insights`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `insights`
-- سطور الملف: 128
+- سطور الملف: 509
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L108: "(بلا تسمية)"
+- L141: "تحديث التحليل" → `handleRecalculate` 🔒
+- L489: "(بلا تسمية)"
 
 ### القراءات (GET)
-- GET `/notifications`
+- GET `/intelligence/insights-summary`
+- GET `/intelligence/recommendations`
 
 
 
@@ -38,8 +40,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/insights`
-- لقطة: `audit/screenshots/insights.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/insights`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

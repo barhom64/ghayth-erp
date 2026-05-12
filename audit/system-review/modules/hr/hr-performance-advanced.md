@@ -1,21 +1,21 @@
-# /hr/performance/advanced — `artifacts/ghayth-erp/src/pages/hr/performance.tsx`
+# /hr/performance/advanced — `artifacts/ghayth-erp/src/pages/hr/performance-advanced.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/performance/advanced`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/performance.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/performance-advanced.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:108`
 - المجموعة: `hr`
-- الكومبوننت: `Performance`
+- الكومبوننت: `PerformanceAdvanced`
 - subKey: `performance` | minRoleLevel: —
 - الكيان المستنبط: `advanced`
-- سطور الملف: 137
+- سطور الملف: 94
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L103: "تقييم جديد"
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
 - GET `/hr/performance`
@@ -35,11 +35,9 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `advanced` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L29 _(inline-data-array)_: `const kpis = [`
+- ⚠ L24 _(inline-data-array)_: `const kpis = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/performance/advanced`
-- لقطة: `audit/screenshots/hr_performance_advanced.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/performance/advanced`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

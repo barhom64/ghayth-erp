@@ -1,24 +1,25 @@
-# /fleet/trips/:id — `artifacts/ghayth-erp/src/pages/fleet/trips.tsx`
+# /fleet/trips/:id — `artifacts/ghayth-erp/src/pages/fleet/trip-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/fleet/trips/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/fleet/trips.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/fleet/trip-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/fleetRoutes.tsx:38`
 - المجموعة: `fleet`
-- الكومبوننت: `Trips`
+- الكومبوننت: `TripDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 119
+- سطور الملف: 298
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L56: "رحلة جديدة"
+- L218: "(بلا تسمية)" → `handleComplete` 🔒
+- L227: "(بلا تسمية)" → `handleCancel`
 
 ### القراءات (GET)
-- GET `/fleet/trips`
+_لا قراءات._
 
 
 
@@ -38,7 +39,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/fleet/trips → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/fleet/trips/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

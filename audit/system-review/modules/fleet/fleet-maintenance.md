@@ -1,28 +1,24 @@
-# /fleet/maintenance — `artifacts/ghayth-erp/src/pages/create/fleet/trips-create.tsx`
+# /fleet/maintenance — `artifacts/ghayth-erp/src/pages/fleet/maintenance.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/fleet/maintenance`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/fleet/trips-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/fleet/maintenance.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/fleetRoutes.tsx:39`
 - المجموعة: `fleet`
-- الكومبوننت: `TripsCreate`
+- الكومبوننت: `FleetMaintenance`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `maintenance`
-- سطور الملف: 118
+- سطور الملف: 93
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/fleet/trips` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L71: "مسح المسودة" → `clearDraft`
-- L110: "(بلا تسمية)" → `() => setLocation("/fleet/trips")` 🔒
-- L111: "(بلا تسمية)" → `handleSubmit` 🔒
+- L47: "إضافة صيانة"
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/fleet/maintenance`
 
 
 
@@ -42,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/fleet/maintenance`
-- لقطة: `audit/screenshots/fleet_maintenance.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/fleet/maintenance`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

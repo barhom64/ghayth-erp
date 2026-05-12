@@ -1,26 +1,27 @@
-# /finance/journal-manual/create — `artifacts/ghayth-erp/src/pages/finance/bank-guarantees.tsx`
+# /finance/journal-manual/create — `artifacts/ghayth-erp/src/pages/create/finance/journal-manual-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/journal-manual/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/bank-guarantees.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/finance/journal-manual-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:131`
 - المجموعة: `finance`
-- الكومبوننت: `BankGuarantees`
+- الكومبوننت: `JournalManualCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 761
+- سطور الملف: 195
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L457: "ضمان جديد" → `openNew`
-- L654: "(بلا تسمية)" 🔒
-- L665: "(بلا تسمية)" → `() => setShowForm(false)`
+- L94: "مسح المسودة" → `clearDraft`
+- L177: "+ إضافة سطر" → `addLine`
+- L185: "(بلا تسمية)" → `() => navigate("/finance/journal-manual")` 🔒
+- L186: "(بلا تسمية)" 🔒
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/finance/chart-of-accounts${scopeSuffix}`
 
 
 
@@ -40,8 +41,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/journal-manual/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/finance_journal_manual_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/journal-manual/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

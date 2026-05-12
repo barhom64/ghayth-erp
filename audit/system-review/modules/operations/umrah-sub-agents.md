@@ -1,26 +1,25 @@
-# /umrah/sub-agents — `artifacts/ghayth-erp/src/pages/umrah/import.tsx`
+# /umrah/sub-agents — `artifacts/ghayth-erp/src/pages/umrah/sub-agents.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/umrah/sub-agents`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/import.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/sub-agents.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:57`
 - المجموعة: `operations`
-- الكومبوننت: `UmrahImport`
+- الكومبوننت: `UmrahSubAgents`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `sub-agents`
-- سطور الملف: 263
+- سطور الملف: 387
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L159: "تغيير الملف" → `clearFile`
-- L227: "(بلا تسمية)" → `doImport` 🔒
+- L334: "(بلا تسمية)" → `() => setEditing(null)` 🔒
+- L370: "(بلا تسمية)" → `() => setLinking(null)` 🔒
 
 ### القراءات (GET)
-- GET `/umrah/seasons`
-- GET `/umrah/import-logs`
+_لا قراءات._
 
 
 
@@ -40,8 +39,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/umrah/sub-agents`
-- لقطة: `audit/screenshots/umrah_sub_agents.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/umrah/sub-agents`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

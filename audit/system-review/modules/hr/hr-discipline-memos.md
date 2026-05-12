@@ -1,14 +1,14 @@
-# /hr/discipline/memos — `artifacts/ghayth-erp/src/pages/hr/violation-detail.tsx`
+# /hr/discipline/memos — `artifacts/ghayth-erp/src/pages/hr/discipline-memos.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/discipline/memos`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/violation-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/discipline-memos.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:138`
 - المجموعة: `hr`
-- الكومبوننت: `ViolationDetail`
+- الكومبوننت: `DisciplineMemos`
 - subKey: `violations` | minRoleLevel: —
 - الكيان المستنبط: `memos`
-- سطور الملف: 222
+- سطور الملف: 25
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
@@ -38,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/discipline/memos`
-- لقطة: `audit/screenshots/hr_discipline_memos.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/discipline/memos`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

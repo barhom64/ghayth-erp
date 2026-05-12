@@ -1,25 +1,24 @@
-# /admin/event-monitor — `artifacts/ghayth-erp/src/pages/admin-policy-engine.tsx`
+# /admin/event-monitor — `artifacts/ghayth-erp/src/pages/admin-event-monitor.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/admin/event-monitor`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin-policy-engine.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin-event-monitor.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/adminRoutes.tsx:31`
 - المجموعة: `admin`
-- الكومبوننت: `AdminPolicyEngine`
+- الكومبوننت: `AdminEventMonitor`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `event-monitor`
-- سطور الملف: 200
+- سطور الملف: 149
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L71: "(بلا تسمية)" → `() => refetchAudit()`
+- L49: "(بلا تسمية)" → `() => refetch()`
 
 ### القراءات (GET)
-- GET `/admin/governance/policy-audit`
-- GET `/admin/governance/role-strategies`
+- GET `/admin/governance/event-catalog`
 
 
 
@@ -39,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/admin/event-monitor`
-- لقطة: `audit/screenshots/admin_event_monitor.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/admin/event-monitor`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

@@ -1,20 +1,20 @@
-# /tasks/:id — `artifacts/ghayth-erp/src/pages/create/marketing-create.tsx`
+# /marketing/create — `artifacts/ghayth-erp/src/pages/create/marketing-create.tsx`
 
 ## 1. الميتاداتا
-- المسار: `/tasks/:id`
+- المسار: `/marketing/create`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/marketing-create.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:116`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:114`
 - المجموعة: `marketing`
 - الكومبوننت: `MarketingCreate`
 - subKey: — | minRoleLevel: —
-- الكيان المستنبط: `:id`
+- الكيان المستنبط: `create`
 - سطور الملف: 124
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 | الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
 |------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/marketing/campaigns` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+| _(write)_ | `/marketing/campaigns` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
 - L55: "مسح المسودة" → `clearDraft`
@@ -36,13 +36,12 @@ _لا قراءات._
 - يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
 
 ## 4. النمذجة
-_لم يتم العثور على جدول Drizzle بالاسم المستنبط `:id` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
+_لم يتم العثور على جدول Drizzle بالاسم المستنبط `create` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: no id resolver for /tasks/:id`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/marketing/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

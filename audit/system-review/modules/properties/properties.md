@@ -1,23 +1,22 @@
-# /properties — `artifacts/ghayth-erp/src/pages/create/properties/unit-status-change.tsx`
+# /properties — `artifacts/ghayth-erp/src/pages/properties.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/properties`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/properties/unit-status-change.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/properties.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/propertyRoutes.tsx:63`
 - المجموعة: `properties`
-- الكومبوننت: `UnitStatusChange`
+- الكومبوننت: `Properties`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `properties`
-- سطور الملف: 196
+- سطور الملف: 169
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L113: "مسح المسودة" → `clearDraft`
-- L184: "(بلا تسمية)" → `() => setLocation(`/properties/${id` 🔒
-- L185: "(بلا تسمية)" → `applyStatusChange` 🔒
+- L74: "(بلا تسمية)"
+- L101: "إضافة وحدة"
 
 ### القراءات (GET)
 _لا قراءات._
@@ -40,8 +39,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/properties`
-- لقطة: `audit/screenshots/properties.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/properties`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

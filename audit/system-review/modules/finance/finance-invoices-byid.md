@@ -1,24 +1,25 @@
-# /finance/invoices/:id — `artifacts/ghayth-erp/src/pages/finance/invoices.tsx`
+# /finance/invoices/:id — `artifacts/ghayth-erp/src/pages/finance/invoice-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/invoices/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/invoices.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/invoice-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:92`
 - المجموعة: `finance`
-- الكومبوننت: `Invoices`
+- الكومبوننت: `InvoiceDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 278
+- سطور الملف: 648
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L130: "عرض" → `(e) => { e.stopPropagation(); setPreviewItem(inv);`
-- L132: "عرض"
-- L134: "(بلا تسمية)"
-- L146: "نسخ الفاتورة"
+- L192: "نسخ"
+- L198: "(بلا تسمية)" → `() => setShowPayment(!showPayment)`
+- L311: "(بلا تسمية)" → `handleZatcaSubmit` 🔒
+- L355: "(بلا تسمية)" → `() => setShowPayment(false)` 🔒
+- L358: "(بلا تسمية)" → `() => setShowPayment(false)`
 
 ### القراءات (GET)
 _لا قراءات._
@@ -41,8 +42,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=SKIP
-- ملاحظة: `landed=/dashboard expected=/finance/invoices/1`
-- لقطة: `audit/screenshots/finance_invoices_id.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/invoices/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

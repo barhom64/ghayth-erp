@@ -1,27 +1,27 @@
-# /finance/gl-posting-queue — `artifacts/ghayth-erp/src/pages/create/finance/journal-manual-create.tsx`
+# /finance/gl-posting-queue — `artifacts/ghayth-erp/src/pages/finance/gl-posting-queue.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/gl-posting-queue`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/finance/journal-manual-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/gl-posting-queue.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:133`
 - المجموعة: `finance`
-- الكومبوننت: `JournalManualCreate`
+- الكومبوننت: `GLPostingQueue`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `gl-posting-queue`
-- سطور الملف: 195
+- سطور الملف: 629
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L94: "مسح المسودة" → `clearDraft`
-- L177: "+ إضافة سطر" → `addLine`
-- L185: "(بلا تسمية)" → `() => navigate("/finance/journal-manual")` 🔒
-- L186: "(بلا تسمية)" 🔒
+- L241: "(بلا تسمية)" 🔒
+- L297: "(بلا تسمية)" 🔒
+- L348: "(بلا تسمية)" 🔒
+- L398: "(بلا تسمية)" 🔒
 
 ### القراءات (GET)
-- GET `/finance/chart-of-accounts${scopeSuffix}`
+_لا قراءات._
 
 
 
@@ -41,5 +41,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **N/A** — لم يُشغّل بعد لهذا المسار.
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/gl-posting-queue`)
 - توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

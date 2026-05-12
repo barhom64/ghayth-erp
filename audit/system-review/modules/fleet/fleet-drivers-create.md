@@ -1,24 +1,24 @@
-# /fleet/drivers/create — `artifacts/ghayth-erp/src/pages/create/fleet/vehicles-create.tsx`
+# /fleet/drivers/create — `artifacts/ghayth-erp/src/pages/create/fleet/drivers-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/fleet/drivers/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/fleet/vehicles-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/fleet/drivers-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/fleetRoutes.tsx:34`
 - المجموعة: `fleet`
-- الكومبوننت: `VehiclesCreate`
+- الكومبوننت: `DriversCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 159
+- سطور الملف: 160
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 | الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
 |------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/fleet/vehicles` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+| _(write)_ | `/fleet/drivers` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-- L75: "مسح المسودة" → `clearDraft`
-- L152: "(بلا تسمية)" → `() => setLocation("/fleet")` 🔒
+- L70: "مسح المسودة" → `clearDraft`
+- L152: "(بلا تسمية)" → `() => setLocation("/fleet/drivers")` 🔒
 - L153: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
@@ -42,8 +42,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/fleet/drivers/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/fleet_drivers_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/fleet/drivers/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

@@ -1,25 +1,28 @@
-# /umrah/pilgrims/create — `artifacts/ghayth-erp/src/pages/umrah/dashboard.tsx`
+# /umrah/pilgrims/create — `artifacts/ghayth-erp/src/pages/umrah/pilgrim-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/umrah/pilgrims/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/dashboard.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/pilgrim-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:40`
 - المجموعة: `operations`
-- الكومبوننت: `UmrahDashboard`
+- الكومبوننت: `PilgrimCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 170
+- سطور الملف: 103
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L58: "تحديث الحالات" → `runDaily`
-- L59: "تشغيل الغرامات" → `runPenalties`
+- L47: "(بلا تسمية)"
+- L95: "إلغاء" → `save` 🔒
+- L96: "(بلا تسمية)" → `save` 🔒
 
 ### القراءات (GET)
 - GET `/umrah/seasons`
+- GET `/umrah/agents`
+- GET `/umrah/packages`
 
 
 
@@ -39,8 +42,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/umrah/pilgrims/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/umrah_pilgrims_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/umrah/pilgrims/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

@@ -1,26 +1,25 @@
-# /fleet/drivers — `artifacts/ghayth-erp/src/pages/fleet.tsx`
+# /fleet/drivers — `artifacts/ghayth-erp/src/pages/fleet/drivers.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/fleet/drivers`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/fleet.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/fleet/drivers.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/fleetRoutes.tsx:33`
 - المجموعة: `fleet`
-- الكومبوننت: `Fleet`
+- الكومبوننت: `Drivers`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `drivers`
-- سطور الملف: 519
+- سطور الملف: 153
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L140: "(بلا تسمية)" → `() => setPreviewItem(v)`
-- L187: "إضافة مركبة"
-- L299: "إضافة سائق"
+- L72: "(بلا تسمية)" → `() => setPreviewDriver(d)`
+- L92: "إضافة سائق"
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/fleet/drivers`
 
 
 
@@ -40,8 +39,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/fleet/drivers`
-- لقطة: `audit/screenshots/fleet_drivers.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/fleet/drivers`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

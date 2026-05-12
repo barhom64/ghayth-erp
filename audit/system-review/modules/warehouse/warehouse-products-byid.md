@@ -1,25 +1,21 @@
-# /warehouse/products/:id — `artifacts/ghayth-erp/src/pages/create/warehouse/categories-create.tsx`
+# /warehouse/products/:id — `artifacts/ghayth-erp/src/pages/details/warehouse-product-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/warehouse/products/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/warehouse/categories-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/warehouse-product-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:100`
 - المجموعة: `warehouse`
-- الكومبوننت: `WarehouseCategoriesCreate`
+- الكومبوننت: `WarehouseProductDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 60
+- سطور الملف: 297
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/warehouse/categories` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L44: "مسح المسودة" → `clearDraft`
-- L53: "(بلا تسمية)" → `() => setLocation("/warehouse")` 🔒
-- L54: "(بلا تسمية)" → `handleSubmit` 🔒
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
 _لا قراءات._
@@ -42,7 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/warehouse/products → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/warehouse/products/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

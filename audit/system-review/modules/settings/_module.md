@@ -14,4 +14,4 @@
 | [/settings/departments](./settings-departments.md) | `/settings/departments` | `departments` | 352 | 2 | 5 | 0 |
 | [/settings/companies](./settings-companies.md) | `/settings/companies` | `companies` | 352 | 2 | 5 | 0 |
 | [/settings/audit-log](./settings-audit-log.md) | `/settings/audit-log` | `audit-log` | 352 | 2 | 5 | 0 |
-| [/settings/rules](./settings-rules.md) | `/settings/rules` | `rules` | 352 | 2 | 5 | 0 |
+| [/settings/rules](./settings-rules.md) | `/settings/rules` | `rules` | 475 | 0 | 3 | 0 |

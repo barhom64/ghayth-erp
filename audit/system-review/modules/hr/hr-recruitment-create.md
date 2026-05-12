@@ -1,25 +1,28 @@
-# /hr/recruitment/create — `artifacts/ghayth-erp/src/pages/hr/organization-structure.tsx`
+# /hr/recruitment/create — `artifacts/ghayth-erp/src/pages/create/hr/recruitment-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/recruitment/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/organization-structure.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/hr/recruitment-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:117`
 - المجموعة: `hr`
-- الكومبوننت: `OrganizationStructure`
-- subKey: `organization` | minRoleLevel: —
+- الكومبوننت: `RecruitmentCreate`
+- subKey: `recruitment` | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 84
+- سطور الملف: 212
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/hr/recruitment/postings` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L90: "مسح المسودة" → `clearDraft`
+- L204: "(بلا تسمية)" → `() => setLocation("/hr/recruitment")` 🔒
+- L205: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
-- GET `/settings/departments`
-- GET `/employees?limit=200`
+_لا قراءات._
 
 
 
@@ -36,11 +39,9 @@ _لم تُلتقط أزرار._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `create` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L23 _(inline-data-array)_: `const kpis = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/recruitment/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/hr_recruitment_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/recruitment/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

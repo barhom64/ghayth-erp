@@ -1,27 +1,24 @@
-# /finance/cash-flow-forecast — `artifacts/ghayth-erp/src/pages/finance/intercompany.tsx`
+# /finance/cash-flow-forecast — `artifacts/ghayth-erp/src/pages/finance/cash-flow-forecast.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/cash-flow-forecast`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/intercompany.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/cash-flow-forecast.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:136`
 - المجموعة: `finance`
-- الكومبوننت: `Intercompany`
+- الكومبوننت: `CashFlowForecast`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `cash-flow-forecast`
-- سطور الملف: 200
+- سطور الملف: 159
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L118: "القوائم الموحدة"
-- L123: "(بلا تسمية)" → `() => setShowCreate(true)`
-- L165: "(بلا تسمية)" → `() => setShowCreate(false)`
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/finance/intercompany${scopeSuffix}`
-- GET `/settings/companies${scopeSuffix}`
+- GET `/finance/cash-flow-forecast${scopeSuffix}`
 
 
 
@@ -41,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/cash-flow-forecast`
-- لقطة: `audit/screenshots/finance_cash_flow_forecast.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/cash-flow-forecast`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

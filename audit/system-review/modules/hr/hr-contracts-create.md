@@ -1,21 +1,23 @@
-# /hr/contracts/create — `artifacts/ghayth-erp/src/pages/hr/expiring-documents.tsx`
+# /hr/contracts/create — `artifacts/ghayth-erp/src/pages/create/hr/contracts-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/contracts/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/expiring-documents.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/hr/contracts-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:162`
 - المجموعة: `hr`
-- الكومبوننت: `ExpiringDocuments`
+- الكومبوننت: `ContractsCreate`
 - subKey: `employees` | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 174
+- سطور الملف: 114
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L66: "مسح المسودة" → `clearDraft`
+- L107: "(بلا تسمية)" → `() => setLocation("/hr/contracts")` 🔒
+- L108: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
 _لا قراءات._
@@ -35,11 +37,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `create` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L47 _(inline-data-array)_: `const kpis = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/contracts/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/hr_contracts_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/contracts/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

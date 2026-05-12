@@ -1,23 +1,21 @@
-# /hr/overtime/:id — `artifacts/ghayth-erp/src/pages/hr/overtime.tsx`
+# /hr/overtime/:id — `artifacts/ghayth-erp/src/pages/hr/overtime-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/overtime/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/overtime.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/overtime-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:127`
 - المجموعة: `hr`
-- الكومبوننت: `Overtime`
+- الكومبوننت: `OvertimeDetail`
 - subKey: `attendance` | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 306
+- سطور الملف: 231
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L200: "(بلا تسمية)"
-- L210: "(بلا تسمية)"
-- L236: "طلب وقت إضافي"
+- L64: "(بلا تسمية)" → `() => navigate("/hr/overtime")`
 
 ### القراءات (GET)
 _لا قراءات._
@@ -37,10 +35,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `:id` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L77 _(inline-data-array)_: `const kpis = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/hr/overtime → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/overtime/:id`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

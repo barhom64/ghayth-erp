@@ -1,23 +1,23 @@
-# /documents/upload — `artifacts/ghayth-erp/src/pages/create/documents/documents-create.tsx`
+# /documents/upload — `artifacts/ghayth-erp/src/pages/documents/documents-upload.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/documents/upload`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/documents/documents-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/documents/documents-upload.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/documentsRoutes.tsx:14`
 - المجموعة: `documents`
-- الكومبوننت: `DocumentsCreate`
+- الكومبوننت: `DocumentsUpload`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `upload`
-- سطور الملف: 97
+- سطور الملف: 229
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L51: "مسح المسودة" → `clearDraft`
-- L90: "(بلا تسمية)" → `() => setLocation("/documents")` 🔒
-- L91: "(بلا تسمية)" → `handleSubmit` 🔒
+- L136: "(بلا تسمية)" → `() => setLocation("/documents")`
+- L159: "إضافة ربط" → `addEntityLink`
+- L177: "(بلا تسمية)" → `() => removeEntityLink(idx)`
 
 ### القراءات (GET)
 _لا قراءات._
@@ -40,8 +40,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/documents/upload`
-- لقطة: `audit/screenshots/documents_upload.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/documents/upload`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

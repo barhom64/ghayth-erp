@@ -1,25 +1,24 @@
-# /finance/receivables/:id — `artifacts/ghayth-erp/src/pages/finance/tax-system.tsx`
+# /finance/receivables/:id — `artifacts/ghayth-erp/src/pages/details/receivable-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/receivables/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/tax-system.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/receivable-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:108`
 - المجموعة: `finance`
-- الكومبوننت: `TaxSystem`
+- الكومبوننت: `ReceivableDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 320
+- سطور الملف: 430
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L280: "(بلا تسمية)" → `() => refetchSubmissions()`
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/finance/tax/declarations`
-- GET `/finance/zatca/settings`
+_لا قراءات._
 
 
 
@@ -39,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=SKIP
-- ملاحظة: `landed=/dashboard expected=/finance/receivables/3`
-- لقطة: `audit/screenshots/finance_receivables_id.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/receivables/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

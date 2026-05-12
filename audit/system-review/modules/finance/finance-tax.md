@@ -1,25 +1,25 @@
-# /finance/tax — `artifacts/ghayth-erp/src/pages/finance/purchase-order-detail.tsx`
+# /finance/tax — `artifacts/ghayth-erp/src/pages/finance/tax-system.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/tax`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/purchase-order-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/tax-system.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:106`
 - المجموعة: `finance`
-- الكومبوننت: `PurchaseOrderDetail`
+- الكومبوننت: `TaxSystem`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `tax`
-- سطور الملف: 262
+- سطور الملف: 320
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L29: "العودة لطلبات الشراء"
-- L121: "نسخ"
+- L280: "(بلا تسمية)" → `() => refetchSubmissions()`
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/finance/tax/declarations`
+- GET `/finance/zatca/settings`
 
 
 
@@ -39,8 +39,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/tax`
-- لقطة: `audit/screenshots/finance_tax.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/tax`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

@@ -1,29 +1,29 @@
-# /notifications — `artifacts/ghayth-erp/src/pages/details/task-detail.tsx`
+# /notifications — `artifacts/ghayth-erp/src/pages/notifications.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/notifications`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/task-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/notifications.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:118`
-- المجموعة: `operations`
-- الكومبوننت: `TaskDetail`
+- المجموعة: `misc`
+- الكومبوننت: `Notifications`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `notifications`
-- سطور الملف: 223
+- سطور الملف: 128
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L108: "(بلا تسمية)"
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/notifications`
 
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/operations.md` (إن وُجد) وعدّد:
+- [ ] **TBD** — راجع `docs/blueprints/misc.md` (إن وُجد) وعدّد:
   - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
   - تأثير الأرصدة (balances, balances_history)
   - الإشعارات (notifications)
@@ -38,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/notifications`
-- لقطة: `audit/screenshots/notifications.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/notifications`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

@@ -1,24 +1,30 @@
-# /admin/roles — `artifacts/ghayth-erp/src/pages/admin.tsx`
+# /admin/roles — `artifacts/ghayth-erp/src/pages/admin/roles.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/admin/roles`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin/roles.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/adminRoutes.tsx:23`
 - المجموعة: `admin`
-- الكومبوننت: `Admin`
+- الكومبوننت: `AdminRoles`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `roles`
-- سطور الملف: 104
+- سطور الملف: 393
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L218: "(بلا تسمية)" → `() => setActiveTab(activeTab === "create" ? "modules" : "create")`
+- L256: "(بلا تسمية)" → `saveModules` 🔒
+- L257: "(بلا تسمية)" → `() => setEditingRole(null)`
+- L260: "(بلا تسمية)" → `() => startEdit(r)`
+- L380: "(بلا تسمية)" → `createNewRole` 🔒
+- L383: "(بلا تسمية)" → `() => setNewRole({ roleKey: "", label: "", level: "10", modules: []`
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/admin/predefined-roles`
+- GET `/settings/role-modules`
 
 
 
@@ -38,8 +44,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/admin/roles`
-- لقطة: `audit/screenshots/admin_roles.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/admin/roles`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

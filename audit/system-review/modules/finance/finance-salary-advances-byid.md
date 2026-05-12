@@ -1,14 +1,14 @@
-# /finance/salary-advances/:id — `artifacts/ghayth-erp/src/pages/finance/fiscal-periods.tsx`
+# /finance/salary-advances/:id — `artifacts/ghayth-erp/src/pages/details/salary-advance-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/salary-advances/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/fiscal-periods.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/salary-advance-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:119`
 - المجموعة: `finance`
-- الكومبوننت: `FiscalPeriods`
+- الكومبوننت: `SalaryAdvanceDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 164
+- سطور الملف: 276
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
@@ -38,7 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: no row in /api/finance/salary-advances`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/salary-advances/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

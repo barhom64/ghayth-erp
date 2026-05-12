@@ -37,7 +37,7 @@ _لا قراءات._
 - يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
 
 ## 4. النمذجة
-- الجدول: `suppliers` (export: `suppliers`, 13 عمود)
+- الجدول: `suppliers` (export: `suppliers`, 12 عمود)
 - tenant col: ✅ | createdBy: — | createdAt: ✅ | updatedAt: — | softDelete: ✅ | lifecycle col: —
 - FKs: companies.id
 
@@ -45,8 +45,6 @@ _لا قراءات._
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/warehouse/suppliers`
-- لقطة: `audit/screenshots/warehouse_suppliers.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/warehouse/suppliers`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

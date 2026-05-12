@@ -1,21 +1,21 @@
-# /finance/vendors/:id — `artifacts/ghayth-erp/src/pages/finance/vendors.tsx`
+# /finance/vendors/:id — `artifacts/ghayth-erp/src/pages/finance/vendor-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/vendors/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/vendors.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/vendor-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:101`
 - المجموعة: `finance`
-- الكومبوننت: `Vendors`
+- الكومبوننت: `VendorDetail`
 - subKey: `vendors` | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 193
+- سطور الملف: 257
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L120: "(بلا تسمية)"
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
 _لا قراءات._
@@ -38,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=SKIP
-- ملاحظة: `landed=/dashboard expected=/finance/vendors/1`
-- لقطة: `audit/screenshots/finance_vendors_id.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/vendors/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

@@ -1,23 +1,23 @@
-# /bi/kpis/create — `artifacts/ghayth-erp/src/pages/create/bi/dashboards-create.tsx`
+# /bi/kpis/create — `artifacts/ghayth-erp/src/pages/create/bi/kpis-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/bi/kpis/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/bi/dashboards-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/bi/kpis-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/biRoutes.tsx:15`
 - المجموعة: `bi`
-- الكومبوننت: `DashboardsCreate`
+- الكومبوننت: `KpisCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 70
+- سطور الملف: 101
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L43: "مسح المسودة" → `clearDraft`
-- L63: "(بلا تسمية)" → `() => setLocation("/bi/dashboards")` 🔒
-- L64: "(بلا تسمية)" → `handleSubmit` 🔒
+- L52: "مسح المسودة" → `clearDraft`
+- L94: "(بلا تسمية)" → `() => setLocation("/bi/kpis")` 🔒
+- L95: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
 _لا قراءات._
@@ -40,8 +40,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/bi/kpis/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/bi_kpis_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/bi/kpis/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

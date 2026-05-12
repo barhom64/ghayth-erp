@@ -1,29 +1,38 @@
-# /action-center — `artifacts/ghayth-erp/src/pages/my-loans.tsx`
+# /action-center — `artifacts/ghayth-erp/src/pages/action-center.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/action-center`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/my-loans.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/action-center.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:73`
-- المجموعة: `operations`
-- الكومبوننت: `MyLoans`
-- subKey: — | minRoleLevel: 60
+- المجموعة: `misc`
+- الكومبوننت: `ActionCenter`
+- subKey: — | minRoleLevel: —
 - الكيان المستنبط: `action-center`
-- سطور الملف: 122
+- سطور الملف: 693
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L80: "طلب سلفة جديدة"
+- L359: "مساحتي"
+- L414: "(بلا تسمية)"
+- L454: "(بلا تسمية)"
+- L463: "(بلا تسمية)"
+- L472: "(بلا تسمية)"
+- L484: "(بلا تسمية)"
+- L493: "(بلا تسمية)"
+- L514: "عرض الكل في الصفحة المخصصة"
+- L589: "عرض الكل"
+- L637: "عرض الكل"
 
 ### القراءات (GET)
-- GET `/hr/loans/my`
+_لا قراءات._
 
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/operations.md` (إن وُجد) وعدّد:
+- [ ] **TBD** — راجع `docs/blueprints/misc.md` (إن وُجد) وعدّد:
   - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
   - تأثير الأرصدة (balances, balances_history)
   - الإشعارات (notifications)
@@ -38,8 +47,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/action-center`
-- لقطة: `audit/screenshots/action_center.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/action-center`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

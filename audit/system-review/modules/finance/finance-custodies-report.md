@@ -1,24 +1,24 @@
-# /finance/custodies/report — `artifacts/ghayth-erp/src/pages/details/financial-request-detail.tsx`
+# /finance/custodies/report — `artifacts/ghayth-erp/src/pages/finance/custody-aging-report.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/custodies/report`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/financial-request-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/custody-aging-report.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:115`
 - المجموعة: `finance`
-- الكومبوننت: `FinancialRequestDetail`
+- الكومبوننت: `CustodyAgingReport`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `report`
-- سطور الملف: 273
+- سطور الملف: 152
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L33: "العهد"
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/finance/custodies/report`
 
 
 
@@ -38,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/custodies/report`
-- لقطة: `audit/screenshots/finance_custodies_report.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/custodies/report`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

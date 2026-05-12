@@ -1,22 +1,21 @@
-# /hr/contracts/:id — `artifacts/ghayth-erp/src/pages/hr/contracts.tsx`
+# /hr/contracts/:id — `artifacts/ghayth-erp/src/pages/details/hr-contract-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/contracts/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/contracts.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/hr-contract-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:163`
 - المجموعة: `hr`
-- الكومبوننت: `Contracts`
+- الكومبوننت: `HrContractDetail`
 - subKey: `employees` | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 238
+- سطور الملف: 288
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L148: "عقد جديد"
-- L223: "(بلا تسمية)"
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
 _لا قراءات._
@@ -39,7 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/hr/contracts → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/contracts/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

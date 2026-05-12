@@ -1,25 +1,37 @@
-# /documents/folders — `artifacts/ghayth-erp/src/pages/create/documents/version-upload.tsx`
+# /documents/folders — `artifacts/ghayth-erp/src/pages/documents-page.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/documents/folders`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/documents/version-upload.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/documents-page.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/documentsRoutes.tsx:15`
 - المجموعة: `documents`
-- الكومبوننت: `VersionUpload`
+- الكومبوننت: `DocumentsPage`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `folders`
-- سطور الملف: 166
+- سطور الملف: 428
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L106: "مسح المسودة" → `clearDraft`
-- L133: "(بلا تسمية)" → `handleUploadVersion` 🔒
+- L137: "رفع مستند"
+- L138: "إنشاء مستند"
+- L200: "(بلا تسمية)" → `() => handleDownload(d.id, d.fileName)`
+- L205: "الإصدارات"
+- L210: "(بلا تسمية)" → `() => handleStatusChange(d.id, "approved")`
+- L215: "(بلا تسمية)" → `() => handleStatusChange(d.id, "cancelled")`
+- L220: "(بلا تسمية)" → `() => handleStatusChange(d.id, "draft")`
+- L268: "(بلا تسمية)" → `() => setShowForm(!showForm)`
+- L279: "(بلا تسمية)" → `() => setShowForm(false)`
+- L304: "(بلا تسمية)" → `() => setShowForm(true)`
+- L346: "(بلا تسمية)" → `() => setShowForm(!showForm)`
+- L357: "(بلا تسمية)" → `() => setShowForm(false)`
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/documents/folders`
+- GET `/documents/templates`
+- GET `/documents/stats`
 
 
 
@@ -39,8 +51,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/documents/folders`
-- لقطة: `audit/screenshots/documents_folders.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/documents/folders`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

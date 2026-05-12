@@ -1,21 +1,22 @@
-# /finance/salary-advances — `artifacts/ghayth-erp/src/pages/finance/custody-detail.tsx`
+# /finance/salary-advances — `artifacts/ghayth-erp/src/pages/finance/salary-advances.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/salary-advances`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/custody-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/salary-advances.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:118`
 - المجموعة: `finance`
-- الكومبوننت: `CustodyDetail`
+- الكومبوننت: `SalaryAdvances`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `salary-advances`
-- سطور الملف: 340
+- سطور الملف: 285
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L141: "(بلا تسمية)" → `() => setShowForm((v) => !v)`
+- L255: "إلغاء" → `onDone`
 
 ### القراءات (GET)
 _لا قراءات._
@@ -38,8 +39,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/salary-advances`
-- لقطة: `audit/screenshots/finance_salary_advances.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/salary-advances`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

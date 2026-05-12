@@ -1,25 +1,22 @@
-# /finance/journal — `artifacts/ghayth-erp/src/pages/create/finance/vouchers-create.tsx`
+# /finance/journal — `artifacts/ghayth-erp/src/pages/finance/journal.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/journal`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/finance/vouchers-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/journal.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:88`
 - المجموعة: `finance`
-- الكومبوننت: `VouchersCreate`
+- الكومبوننت: `Journal`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `journal`
-- سطور الملف: 475
+- سطور الملف: 333
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/finance/vouchers` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L204: "مسح المسودة" → `clearDraft`
-- L467: "(بلا تسمية)" → `() => setLocation("/finance/vouchers")` 🔒
-- L468: "(بلا تسمية)" → `handleSubmit` 🔒
+- L153: "عكس القيد"
+- L183: "(بلا تسمية)"
 
 ### القراءات (GET)
 _لا قراءات._
@@ -39,11 +36,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `journal` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L44 _(inline-data-array)_: `const PAYMENT_METHODS = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/journal`
-- لقطة: `audit/screenshots/finance_journal.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/journal`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

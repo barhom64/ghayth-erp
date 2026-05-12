@@ -1,27 +1,23 @@
-# /hr/attendance — `artifacts/ghayth-erp/src/pages/create/employees-create.tsx`
+# /hr/attendance — `artifacts/ghayth-erp/src/pages/hr/attendance.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/attendance`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/employees-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/attendance.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:91`
 - المجموعة: `hr`
-- الكومبوننت: `EmployeesCreate`
-- subKey: `employees` | minRoleLevel: —
+- الكومبوننت: `Attendance`
+- subKey: `attendance` | minRoleLevel: —
 - الكيان المستنبط: `attendance`
-- سطور الملف: 483
+- سطور الملف: 365
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/employees` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L185: "(بلا تسمية)"
-- L206: "(بلا تسمية)" → `() => setLocation("/employees")`
-- L219: "مسح المسودة" → `clearDraft`
-- L475: "(بلا تسمية)" → `() => setLocation("/employees")` 🔒
-- L476: "(بلا تسمية)" → `handleSubmit` 🔒
+- L239: "الاستئذانات"
+- L245: "تسجيل حضور"
+- L266: "تسجيل حضور"
 
 ### القراءات (GET)
 _لا قراءات._
@@ -29,25 +25,31 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/hr.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+دورة Check-in/out. المرجع: `docs/blueprints/hr-attendance.md` + `docs/blueprints/hr-discipline.md`.
+
+| الحركة | الوحدة الهدف | مدخل API | مدخل DB | الحالة |
+|--------|--------------|----------|---------|--------|
+| Check-in / Check-out | hr | `hr.ts` POST `/check-in`, `/check-out` | `attendance` (+ geo `checkInLat/Lon`) | ✅ موجودة في api-server |
+| كشف Late/Overtime | hr/discipline | تلقائي عبر `lateMinutes`/`overtimeMinutes` | `attendance.lateMinutes`, `employee_violations` (لـ late > threshold) | ⚠ تحقق من `auto-detection` (`hr/auto-detection`) |
+| إنذار تأديبي تلقائي | hr/discipline | `hr-discipline.ts` عبر `penalty-escalation` rules | `employee_violations`, `discipline_memos` | ✅ موجود (راجع `docs/blueprints/hr-discipline.md`) |
+| تأثير الراتب (ساعات إضافية / خصم) | hr/payroll | `payroll_runs` يقرأ `attendance` لحساب OT/خصم تأخير | `payroll_lines` | ✅ متوقّع |
+| إشعار للمدير عند مخالفة | comms | `notification-engine.ts` event=`violation_created` | `notifications` | ✅ |
+| Audit log | core | `auditMiddleware` | `audit_logs` (entity=`attendance`) | ✅ |
+
+تحقق يدوي:
+- [ ] هل `check-in/check-out` يُغلق تلقائياً عند آخر النهار (cron)؟
+- [ ] هل التحقق من الموقع الجغرافي (`field-tracking`) إلزامي أم اختياري حسب `business_rules`؟
+- [ ] هل تتزامن قراءات `attendance` مع `leave_requests` بحيث لا تُحسب الإجازات تأخيراً؟
 
 ## 4. النمذجة
-- الجدول: `attendance` (export: `attendance`, 12 عمود)
-- tenant col: ✅ | createdBy: — | createdAt: — | updatedAt: — | softDelete: — | lifecycle col: ✅
+- الجدول: `attendance` (export: `attendance`, 16 عمود)
+- tenant col: ✅ | createdBy: — | createdAt: ✅ | updatedAt: — | softDelete: — | lifecycle col: ✅
 - FKs: employeeAssignments.id, companies.id, branches.id
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L23 _(inline-data-array)_: `const OPERATIONS = [`
+- ⚠ L133 _(inline-data-array)_: `const kpis = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/attendance`
-- لقطة: `audit/screenshots/hr_attendance.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/attendance`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

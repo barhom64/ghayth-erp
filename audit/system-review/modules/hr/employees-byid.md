@@ -1,27 +1,31 @@
-# /employees/:id — `artifacts/ghayth-erp/src/pages/employees.tsx`
+# /employees/:id — `artifacts/ghayth-erp/src/pages/employee-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/employees/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/employees.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/employee-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:90`
 - المجموعة: `hr`
-- الكومبوننت: `Employees`
+- الكومبوننت: `EmployeeDetail`
 - subKey: `employees` | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 359
+- سطور الملف: 963
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L197: "(بلا تسمية)" → `() => setPreviewItem(employee)`
-- L206: "عرض التفاصيل"
-- L223: "(بلا تسمية)"
-- L264: "إضافة موظف"
+- L347: "(بلا تسمية)" → `() => setActiveTab("attendance")`
+- L357: "(بلا تسمية)" → `() => setActiveTab("leaves")`
+- L387: "(بلا تسمية)" → `() => setActiveTab("tasks")`
+- L422: "(بلا تسمية)" → `() => setActiveTab("payroll")`
+- L474: "تعديل" → `govStartEdit`
+- L535: "حفظ" → `govSaveEdit`
+- L538: "(بلا تسمية)" → `() => setGovEditing(false)`
+- L854: "(بلا تسمية)" → `() => setShowPrintMenu(!showPrintMenu)`
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/documents/templates`
 
 
 
@@ -41,8 +45,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=SKIP
-- ملاحظة: `landed=/dashboard expected=/employees/3`
-- لقطة: `audit/screenshots/employees_id.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/employees/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

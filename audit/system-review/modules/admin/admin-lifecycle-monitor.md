@@ -1,24 +1,24 @@
-# /admin/lifecycle-monitor — `artifacts/ghayth-erp/src/pages/admin-event-monitor.tsx`
+# /admin/lifecycle-monitor — `artifacts/ghayth-erp/src/pages/admin-lifecycle-monitor.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/admin/lifecycle-monitor`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin-event-monitor.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin-lifecycle-monitor.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/adminRoutes.tsx:33`
 - المجموعة: `admin`
-- الكومبوننت: `AdminEventMonitor`
+- الكومبوننت: `AdminLifecycleMonitor`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `lifecycle-monitor`
-- سطور الملف: 149
+- سطور الملف: 152
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L49: "(بلا تسمية)" → `() => refetch()`
+- L27: "(بلا تسمية)" → `() => refetch()`
 
 ### القراءات (GET)
-- GET `/admin/governance/event-catalog`
+- GET `/admin/governance/lifecycle-machines`
 
 
 
@@ -38,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/admin/lifecycle-monitor`
-- لقطة: `audit/screenshots/admin_lifecycle_monitor.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/admin/lifecycle-monitor`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

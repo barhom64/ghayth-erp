@@ -1,24 +1,44 @@
-# /projects/:id — `artifacts/ghayth-erp/src/pages/projects/gantt.tsx`
+# /projects/:id — `artifacts/ghayth-erp/src/pages/details/project-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/projects/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/projects/gantt.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/project-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:94`
 - المجموعة: `operations`
-- الكومبوننت: `ProjectGantt`
+- الكومبوننت: `ProjectDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 182
+- سطور الملف: 734
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L248: "غانت"
+- L251: "المخاطر"
+- L254: "التقويم" → `() => setClosingProject(true)`
+- L257: "(بلا تسمية)" → `() => setClosingProject(true)`
+- L263: "تأكيد الإقفال" → `closeProject`
+- L264: "تعديل" → `() => setClosingProject(false)`
+- L267: "تعديل" → `startEdit`
+- L270: "تأكيد الحذف" → `handleDelete`
+- L271: "(بلا تسمية)" → `() => setDeleting(false)`
+- L274: "(بلا تسمية)" → `() => setDeleting(true)`
+- L295: "(بلا تسمية)" → `() => setEditing(false)`
+- L368: "(بلا تسمية)" → `() => setShowPhaseForm(!showPhaseForm)`
+- L381: "(بلا تسمية)" → `() => setShowPhaseForm(false)`
+- L413: "(بلا تسمية)" → `() => completePhase(p.id)`
+- L429: "غانت"
+- L458: "إدارة"
+- L487: "(بلا تسمية)" → `() => setShowTaskForm(!showTaskForm)`
+- L500: "(بلا تسمية)" → `() => setShowTaskForm(false)`
+- L598: "(بلا تسمية)" → `() => setShowCostForm(!showCostForm)`
+- L611: "(بلا تسمية)" → `() => setShowCostForm(false)`
+- L683: "خطاب جديد"
 
 ### القراءات (GET)
-- GET `/projects?limit=100`
+_لا قراءات._
 
 
 
@@ -35,10 +55,9 @@ _لم تُلتقط أزرار._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `:id` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L74 _(inline-data-array)_: `const PROJECT_TABS = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: no id resolver for /projects/:id`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/projects/:id`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

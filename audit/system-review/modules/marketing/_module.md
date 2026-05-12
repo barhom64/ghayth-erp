@@ -3,11 +3,11 @@
 > الموجة: **—** | عدد الصفحات: **2** | أوراق منشأة: **2**
 
 ## KPIs
-- مشاكل إجمالية: **1** (🔴 1 / ⚠ 0 / ℹ 0)
+- مشاكل إجمالية: **0** (🔴 0 / ⚠ 0 / ℹ 0)
 
 ## الصفحات
 
 | الصفحة | المسار | الكيان | سطور | API calls | أزرار | مشاكل |
 |--------|--------|--------|------|-----------|--------|--------|
-| [/tasks/create](./tasks-create.md) | `/tasks/create` | `create` | 286 | 3 | 2 | 0 |
-| [/tasks/:id](./tasks-byid.md) | `/tasks/:id` | `:id` | 124 | 1 | 3 | 1 |
+| [/marketing](./marketing.md) | `/marketing` | `marketing` | 286 | 3 | 2 | 0 |
+| [/marketing/create](./marketing-create.md) | `/marketing/create` | `create` | 124 | 1 | 3 | 0 |

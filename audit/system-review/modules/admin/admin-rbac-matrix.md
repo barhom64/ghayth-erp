@@ -1,26 +1,24 @@
-# /admin/rbac-matrix — `artifacts/ghayth-erp/src/pages/admin-posting-failures.tsx`
+# /admin/rbac-matrix — `artifacts/ghayth-erp/src/pages/admin-rbac-matrix.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/admin/rbac-matrix`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin-posting-failures.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin-rbac-matrix.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/adminRoutes.tsx:34`
 - المجموعة: `admin`
-- الكومبوننت: `AdminPostingFailures`
+- الكومبوننت: `AdminRbacMatrix`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `rbac-matrix`
-- سطور الملف: 119
+- سطور الملف: 187
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L40: "(بلا تسمية)" 🔒
-- L58: "(بلا تسمية)" → `() => setShowResolved(!showResolved)`
-- L65: "(بلا تسمية)" → `() => refetch()`
+- L58: "(بلا تسمية)" → `() => refetch()`
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/admin/governance/rbac-matrix`
 
 
 
@@ -40,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/admin/rbac-matrix`
-- لقطة: `audit/screenshots/admin_rbac_matrix.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/admin/rbac-matrix`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

@@ -1,25 +1,29 @@
-# /hr/leaves/create — `artifacts/ghayth-erp/src/pages/hr/qr-scanner.tsx`
+# /hr/leaves/create — `artifacts/ghayth-erp/src/pages/create/hr/leaves-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/leaves/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/qr-scanner.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/hr/leaves-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:98`
 - المجموعة: `hr`
-- الكومبوننت: `QRScanner`
-- subKey: `attendance` | minRoleLevel: —
+- الكومبوننت: `LeavesCreate`
+- subKey: `leaves` | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 152
+- سطور الملف: 222
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/hr/leave-requests` | POST | — | — | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-- L111: "(بلا تسمية)" → `handleCheckIn` 🔒
-- L119: "(بلا تسمية)" → `handleCheckOut`
+- L112: "مسح المسودة" → `clearDraft`
+- L214: "(بلا تسمية)" → `() => setLocation("/hr/leaves")` 🔒
+- L215: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/hr/leave-types`
+- GET `/hr/leave-balance`
 
 
 
@@ -39,8 +43,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/leaves/create; write POST /api/intelligence/activity → 200; consoleErr=2`
-- لقطة: `audit/screenshots/hr_leaves_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/leaves/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

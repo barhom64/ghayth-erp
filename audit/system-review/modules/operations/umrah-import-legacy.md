@@ -1,24 +1,26 @@
-# /umrah/import/legacy — `artifacts/ghayth-erp/src/pages/details/umrah-transport-detail.tsx`
+# /umrah/import/legacy — `artifacts/ghayth-erp/src/pages/umrah/import.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/umrah/import/legacy`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/umrah-transport-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/import.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:55`
 - المجموعة: `operations`
-- الكومبوننت: `UmrahTransportDetail`
+- الكومبوننت: `UmrahImport`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `legacy`
-- سطور الملف: 151
+- سطور الملف: 263
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L159: "تغيير الملف" → `clearFile`
+- L227: "(بلا تسمية)" → `doImport` 🔒
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/umrah/seasons`
+- GET `/umrah/import-logs`
 
 
 
@@ -38,8 +40,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/umrah/import/legacy`
-- لقطة: `audit/screenshots/umrah_import_legacy.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/umrah/import/legacy`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

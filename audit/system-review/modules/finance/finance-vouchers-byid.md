@@ -1,14 +1,14 @@
-# /finance/vouchers/:id — `artifacts/ghayth-erp/src/pages/finance/vouchers.tsx`
+# /finance/vouchers/:id — `artifacts/ghayth-erp/src/pages/details/voucher-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/vouchers/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/vouchers.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/voucher-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:87`
 - المجموعة: `finance`
-- الكومبوننت: `Vouchers`
+- الكومبوننت: `VoucherDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 273
+- سطور الملف: 372
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
@@ -38,7 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: no row in /api/finance/vouchers`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/vouchers/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

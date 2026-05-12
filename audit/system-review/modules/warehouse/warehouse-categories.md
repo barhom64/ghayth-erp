@@ -1,21 +1,26 @@
-# /warehouse/categories — `artifacts/ghayth-erp/src/pages/details/warehouse-supplier-detail.tsx`
+# /warehouse/categories — `artifacts/ghayth-erp/src/pages/warehouse.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/warehouse/categories`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/warehouse-supplier-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/warehouse.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:105`
 - المجموعة: `warehouse`
-- الكومبوننت: `WarehouseSupplierDetail`
+- الكومبوننت: `Warehouse`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `categories`
-- سطور الملف: 243
+- سطور الملف: 387
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L30: "حركة جديدة"
+- L36: "منتج جديد"
+- L153: "إضافة منتج"
+- L238: "إضافة حركة"
+- L298: "تصنيف جديد"
+- L365: "إضافة مورد"
 
 ### القراءات (GET)
 _لا قراءات._
@@ -38,8 +43,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/warehouse/categories`
-- لقطة: `audit/screenshots/warehouse_categories.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/warehouse/categories`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

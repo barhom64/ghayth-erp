@@ -1,24 +1,24 @@
-# /admin/gl-reconciliation — `artifacts/ghayth-erp/src/pages/admin-lifecycle-monitor.tsx`
+# /admin/gl-reconciliation — `artifacts/ghayth-erp/src/pages/admin-gl-reconciliation.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/admin/gl-reconciliation`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin-lifecycle-monitor.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin-gl-reconciliation.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/adminRoutes.tsx:35`
 - المجموعة: `admin`
-- الكومبوننت: `AdminLifecycleMonitor`
+- الكومبوننت: `AdminGlReconciliation`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `gl-reconciliation`
-- سطور الملف: 152
+- سطور الملف: 107
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L27: "(بلا تسمية)" → `() => refetch()`
+- L45: "(بلا تسمية)" → `() => refetch()`
 
 ### القراءات (GET)
-- GET `/admin/governance/lifecycle-machines`
+- GET `/admin/governance/gl-reconciliation`
 
 
 
@@ -38,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/admin/gl-reconciliation`
-- لقطة: `audit/screenshots/admin_gl_reconciliation.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/admin/gl-reconciliation`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

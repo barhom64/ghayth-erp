@@ -1,21 +1,22 @@
-# /hr/contracts — `artifacts/ghayth-erp/src/pages/hr/turnover-report.tsx`
+# /hr/contracts — `artifacts/ghayth-erp/src/pages/hr/contracts.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/contracts`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/turnover-report.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/contracts.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:161`
 - المجموعة: `hr`
-- الكومبوننت: `TurnoverReport`
-- subKey: `performance` | minRoleLevel: —
+- الكومبوننت: `Contracts`
+- subKey: `employees` | minRoleLevel: —
 - الكيان المستنبط: `contracts`
-- سطور الملف: 221
+- سطور الملف: 238
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L148: "عقد جديد"
+- L223: "(بلا تسمية)"
 
 ### القراءات (GET)
 _لا قراءات._
@@ -38,8 +39,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/contracts`
-- لقطة: `audit/screenshots/hr_contracts.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/contracts`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

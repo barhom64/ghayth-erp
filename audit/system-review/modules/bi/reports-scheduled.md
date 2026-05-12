@@ -1,32 +1,30 @@
-# /reports/scheduled — `artifacts/ghayth-erp/src/pages/activity-log.tsx`
+# /reports/scheduled — `artifacts/ghayth-erp/src/pages/reports/scheduled-reports.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/reports/scheduled`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/activity-log.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/reports/scheduled-reports.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:124`
 - المجموعة: `bi`
-- الكومبوننت: `ActivityLog`
+- الكومبوننت: `ScheduledReports`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `scheduled`
-- سطور الملف: 515
+- سطور الملف: 262
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/scheduled-reports` | POST | — | — | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-- L300: "(بلا تسمية)" → `() => refetch()`
-- L366: "(بلا تسمية)"
-- L398: "(بلا تسمية)" → `() => refetch()`
-- L410: "مسح الفلاتر" → `clearFilters`
-- L470: "(بلا تسمية)"
-- L482: "عرض"
-- L503: "(بلا تسمية)" → `() => setPage(p => p - 1)` 🔒
-- L506: "(بلا تسمية)" → `() => setPage(p => p + 1)` 🔒
+- L89: "(بلا تسمية)" → `() => setShowForm(!showForm)`
+- L140: "(بلا تسمية)" → `handleSubmit` 🔒
+- L144: "(بلا تسمية)" → `() => setShowForm(false)`
+- L253: "(بلا تسمية)" → `handleDelete` 🔒
 
 ### القراءات (GET)
-- GET `/employees?limit=200`
-- GET `/activity-log/summary`
+- GET `/scheduled-reports`
+- GET `/scheduled-reports/history`
 
 
 
@@ -43,11 +41,9 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `scheduled` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L273 _(inline-data-array)_: `const alertCards = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/reports/scheduled`
-- لقطة: `audit/screenshots/reports_scheduled.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/reports/scheduled`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

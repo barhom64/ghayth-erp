@@ -1,21 +1,25 @@
-# /fleet/fuel/create — `artifacts/ghayth-erp/src/pages/details/maintenance-detail.tsx`
+# /fleet/fuel/create — `artifacts/ghayth-erp/src/pages/create/fleet/fuel-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/fleet/fuel/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/maintenance-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/fleet/fuel-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/fleetRoutes.tsx:43`
 - المجموعة: `fleet`
-- الكومبوننت: `MaintenanceDetail`
+- الكومبوننت: `FuelCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 305
+- سطور الملف: 102
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/fleet/fuel-logs` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L64: "مسح المسودة" → `clearDraft`
+- L94: "(بلا تسمية)" → `() => setLocation("/fleet/fuel")` 🔒
+- L95: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
 _لا قراءات._
@@ -38,8 +42,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/fleet/fuel/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/fleet_fuel_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/fleet/fuel/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

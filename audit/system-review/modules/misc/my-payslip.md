@@ -1,21 +1,21 @@
-# /my-payslip — `artifacts/ghayth-erp/src/pages/my-leave-request.tsx`
+# /my-payslip — `artifacts/ghayth-erp/src/pages/my-payslip.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/my-payslip`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/my-leave-request.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/my-payslip.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:68`
 - المجموعة: `misc`
-- الكومبوننت: `MyLeaveRequest`
+- الكومبوننت: `MyPayslip`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `my-payslip`
-- سطور الملف: 11
+- سطور الملف: 124
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L33: "(بلا تسمية)" → `() => window.print()`
 
 ### القراءات (GET)
 _لا قراءات._
@@ -38,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/my-payslip`
-- لقطة: `audit/screenshots/my_payslip.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/my-payslip`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

@@ -1,24 +1,30 @@
-# /finance/bank-reconciliation — `artifacts/ghayth-erp/src/pages/finance/ar-aging.tsx`
+# /finance/bank-reconciliation — `artifacts/ghayth-erp/src/pages/finance/bank-reconciliation.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/bank-reconciliation`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/ar-aging.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/bank-reconciliation.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:123`
 - المجموعة: `finance`
-- الكومبوننت: `ArAging`
+- الكومبوننت: `BankReconciliation`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `bank-reconciliation`
-- سطور الملف: 174
+- سطور الملف: 287
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/finance/bank-reconciliation/import` | POST | — | — | — | — | ✅ | ✅ | ✅ |
+| _(write)_ | `/finance/bank-reconciliation/auto-match` | POST | — | — | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-- L86: "(بلا تسمية)" → `() => exportCSV(clients, `ar-aging-${asOfDate`
+- L150: "(بلا تسمية)" → `() => fileRef.current?.click()` 🔒
+- L210: "(بلا تسمية)" → `handleAutoMatch` 🔒
+- L243: "(بلا تسمية)"
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/finance/accounts?type=asset&search=11`
+- GET `/finance/bank-reconciliation`
 
 
 
@@ -35,11 +41,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `bank-reconciliation` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L34 _(inline-data-array)_: `const BUCKETS = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/bank-reconciliation`
-- لقطة: `audit/screenshots/finance_bank_reconciliation.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/bank-reconciliation`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

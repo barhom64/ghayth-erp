@@ -1,30 +1,24 @@
-# /store/orders/:id — `artifacts/ghayth-erp/src/pages/store.tsx`
+# /store/orders/:id — `artifacts/ghayth-erp/src/pages/store/order-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/store/orders/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/store.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/store/order-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/storeRoutes.tsx:15`
 - المجموعة: `store`
-- الكومبوننت: `Store`
+- الكومبوننت: `OrderDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 347
+- سطور الملف: 210
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L118: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L127: "(بلا تسمية)" → `() => setShowForm(false)`
-- L214: "(بلا تسمية)"
-- L252: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L261: "(بلا تسمية)" → `() => setShowForm(false)`
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/store/products`
-- GET `/store/orders`
-- GET `/store/stats`
+_لا قراءات._
 
 
 
@@ -41,10 +35,9 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `:id` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L314 _(inline-data-array)_: `const statCards = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: no id resolver for /store/orders/:id`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/store/orders/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

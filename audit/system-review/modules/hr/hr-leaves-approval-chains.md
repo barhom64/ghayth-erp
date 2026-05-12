@@ -1,14 +1,14 @@
-# /hr/leaves/approval-chains — `artifacts/ghayth-erp/src/pages/details/leave-detail.tsx`
+# /hr/leaves/approval-chains — `artifacts/ghayth-erp/src/pages/hr/approval-chains.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/leaves/approval-chains`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/leave-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/approval-chains.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:101`
 - المجموعة: `hr`
-- الكومبوننت: `LeaveDetail`
+- الكومبوننت: `ApprovalChains`
 - subKey: `leaves` | minRoleLevel: —
 - الكيان المستنبط: `approval-chains`
-- سطور الملف: 293
+- سطور الملف: 134
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
@@ -18,7 +18,7 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم تُلتقط أزرار._
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/hr/approval-chains`
 
 
 
@@ -35,11 +35,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `approval-chains` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L30 _(inline-data-array)_: `const kpis = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/leaves/approval-chains`
-- لقطة: `audit/screenshots/hr_leaves_approval_chains.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/leaves/approval-chains`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

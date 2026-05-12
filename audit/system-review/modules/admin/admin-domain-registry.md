@@ -1,14 +1,14 @@
-# /admin/domain-registry — `artifacts/ghayth-erp/src/pages/admin-system-governor.tsx`
+# /admin/domain-registry — `artifacts/ghayth-erp/src/pages/admin-domain-registry.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/admin/domain-registry`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin-system-governor.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin-domain-registry.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/adminRoutes.tsx:30`
 - المجموعة: `admin`
-- الكومبوننت: `AdminSystemGovernor`
+- الكومبوننت: `AdminDomainRegistry`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `domain-registry`
-- سطور الملف: 105
+- سطور الملف: 157
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
@@ -18,7 +18,7 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 - L25: "(بلا تسمية)" → `() => refetch()`
 
 ### القراءات (GET)
-- GET `/admin/governance/system-guards`
+- GET `/admin/governance/domain-registry`
 
 
 
@@ -38,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/admin/domain-registry`
-- لقطة: `audit/screenshots/admin_domain_registry.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/admin/domain-registry`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

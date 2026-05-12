@@ -1,31 +1,29 @@
-# /exec-dashboard — `artifacts/ghayth-erp/src/pages/obligations.tsx`
+# /exec-dashboard — `artifacts/ghayth-erp/src/pages/exec-dashboard.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/exec-dashboard`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/obligations.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/exec-dashboard.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:76`
-- المجموعة: `operations`
-- الكومبوننت: `Obligations`
+- المجموعة: `misc`
+- الكومبوننت: `ExecDashboard`
 - subKey: — | minRoleLevel: 60
 - الكيان المستنبط: `exec-dashboard`
-- سطور الملف: 226
+- سطور الملف: 263
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L119: "(بلا تسمية)" → `handleScan` 🔒
-- L198: "(بلا تسمية)"
-- L206: "(بلا تسمية)"
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/obligations/summary`
+- GET `/exec-dashboard/overview`
 
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/operations.md` (إن وُجد) وعدّد:
+- [ ] **TBD** — راجع `docs/blueprints/misc.md` (إن وُجد) وعدّد:
   - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
   - تأثير الأرصدة (balances, balances_history)
   - الإشعارات (notifications)
@@ -40,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/exec-dashboard`
-- لقطة: `audit/screenshots/exec_dashboard.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/exec-dashboard`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

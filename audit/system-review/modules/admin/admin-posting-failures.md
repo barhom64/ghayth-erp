@@ -1,24 +1,26 @@
-# /admin/posting-failures — `artifacts/ghayth-erp/src/pages/admin-domain-registry.tsx`
+# /admin/posting-failures — `artifacts/ghayth-erp/src/pages/admin-posting-failures.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/admin/posting-failures`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin-domain-registry.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin-posting-failures.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/adminRoutes.tsx:32`
 - المجموعة: `admin`
-- الكومبوننت: `AdminDomainRegistry`
+- الكومبوننت: `AdminPostingFailures`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `posting-failures`
-- سطور الملف: 157
+- سطور الملف: 119
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L25: "(بلا تسمية)" → `() => refetch()`
+- L40: "(بلا تسمية)" 🔒
+- L58: "(بلا تسمية)" → `() => setShowResolved(!showResolved)`
+- L65: "(بلا تسمية)" → `() => refetch()`
 
 ### القراءات (GET)
-- GET `/admin/governance/domain-registry`
+_لا قراءات._
 
 
 
@@ -38,8 +40,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/admin/posting-failures`
-- لقطة: `audit/screenshots/admin_posting_failures.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/admin/posting-failures`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

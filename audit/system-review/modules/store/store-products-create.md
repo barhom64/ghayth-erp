@@ -1,30 +1,26 @@
-# /store/products/create — `artifacts/ghayth-erp/src/pages/store.tsx`
+# /store/products/create — `artifacts/ghayth-erp/src/pages/create/store/products-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/store/products/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/store.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/store/products-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/storeRoutes.tsx:11`
 - المجموعة: `store`
-- الكومبوننت: `Store`
+- الكومبوننت: `ProductsCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 347
+- سطور الملف: 96
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L118: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L127: "(بلا تسمية)" → `() => setShowForm(false)`
-- L214: "(بلا تسمية)"
-- L252: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L261: "(بلا تسمية)" → `() => setShowForm(false)`
+- L59: "مسح المسودة" → `clearDraft`
+- L88: "(بلا تسمية)" → `() => setLocation("/store")` 🔒
+- L89: "(بلا تسمية)" 🔒
 
 ### القراءات (GET)
-- GET `/store/products`
-- GET `/store/orders`
-- GET `/store/stats`
+_لا قراءات._
 
 
 
@@ -41,11 +37,9 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `create` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L314 _(inline-data-array)_: `const statCards = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/store/products/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/store_products_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/store/products/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

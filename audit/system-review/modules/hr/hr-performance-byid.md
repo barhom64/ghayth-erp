@@ -1,25 +1,21 @@
-# /hr/performance/:id — `artifacts/ghayth-erp/src/pages/create/hr/performance-create.tsx`
+# /hr/performance/:id — `artifacts/ghayth-erp/src/pages/details/performance-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/performance/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/hr/performance-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/performance-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:109`
 - المجموعة: `hr`
-- الكومبوننت: `PerformanceCreate`
+- الكومبوننت: `PerformanceDetail`
 - subKey: `performance` | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 254
+- سطور الملف: 451
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/hr/performance` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L142: "مسح المسودة" → `clearDraft`
-- L246: "(بلا تسمية)" → `() => setLocation("/hr/performance")` 🔒
-- L247: "(بلا تسمية)" → `handleSubmit` 🔒
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
 _لا قراءات._
@@ -42,7 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/hr/performance → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/performance/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

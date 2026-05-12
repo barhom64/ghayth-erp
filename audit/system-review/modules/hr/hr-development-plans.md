@@ -1,29 +1,24 @@
-# /hr/development-plans — `artifacts/ghayth-erp/src/pages/hr/transfers.tsx`
+# /hr/development-plans — `artifacts/ghayth-erp/src/pages/hr/development-plans.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/development-plans`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/transfers.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/development-plans.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:156`
 - المجموعة: `hr`
-- الكومبوننت: `Transfers`
-- subKey: `employees` | minRoleLevel: —
+- الكومبوننت: `DevelopmentPlans`
+- subKey: `performance` | minRoleLevel: —
 - الكيان المستنبط: `development-plans`
-- سطور الملف: 298
+- سطور الملف: 2
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/hr/transfers` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L206: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L238: "(بلا تسمية)" → `() => setShowForm(false)`
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/hr/transfers`
-- GET `/employees?status=active&limit=200`
-- GET `/settings/branches`
+_لا قراءات._
 
 
 
@@ -43,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/development-plans; consoleErr=2`
-- لقطة: `audit/screenshots/hr_development_plans.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/development-plans`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

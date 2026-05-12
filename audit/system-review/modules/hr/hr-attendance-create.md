@@ -1,31 +1,30 @@
-# /hr/attendance/create — `artifacts/ghayth-erp/src/pages/employee-detail.tsx`
+# /hr/attendance/create — `artifacts/ghayth-erp/src/pages/create/hr/attendance-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/attendance/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/employee-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/hr/attendance-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:92`
 - المجموعة: `hr`
-- الكومبوننت: `EmployeeDetail`
-- subKey: `employees` | minRoleLevel: —
+- الكومبوننت: `AttendanceCreate`
+- subKey: `attendance` | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 963
+- سطور الملف: 180
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/hr/check-in` | POST | — | — | — | — | ✅ | ✅ | — |
+| _(write)_ | `/hr/check-out` | POST | — | — | — | — | ✅ | ✅ | ✅ |
 
 ### تفاصيل الأزرار المرئية
-- L347: "(بلا تسمية)" → `() => setActiveTab("attendance")`
-- L357: "(بلا تسمية)" → `() => setActiveTab("leaves")`
-- L387: "(بلا تسمية)" → `() => setActiveTab("tasks")`
-- L422: "(بلا تسمية)" → `() => setActiveTab("payroll")`
-- L474: "تعديل" → `govStartEdit`
-- L535: "حفظ" → `govSaveEdit`
-- L538: "(بلا تسمية)" → `() => setGovEditing(false)`
-- L854: "(بلا تسمية)" → `() => setShowPrintMenu(!showPrintMenu)`
+- L101: "مسح المسودة" → `clearDraft`
+- L141: "(بلا تسمية)" → `handleGetLocation` 🔒
+- L172: "(بلا تسمية)" → `() => setLocation("/hr/attendance")` 🔒
+- L173: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
-- GET `/documents/templates`
+_لا قراءات._
 
 
 
@@ -45,8 +44,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/attendance/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/hr_attendance_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/attendance/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

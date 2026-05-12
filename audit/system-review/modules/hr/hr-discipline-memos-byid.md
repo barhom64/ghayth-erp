@@ -1,24 +1,32 @@
-# /hr/discipline/memos/:id — `artifacts/ghayth-erp/src/pages/hr/discipline-regulation.tsx`
+# /hr/discipline/memos/:id — `artifacts/ghayth-erp/src/pages/hr/discipline-memo-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/discipline/memos/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/discipline-regulation.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/discipline-memo-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:139`
 - المجموعة: `hr`
-- الكومبوننت: `DisciplineRegulation`
+- الكومبوننت: `DisciplineMemoDetail`
 - subKey: `violations` | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 303
+- سطور الملف: 491
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L153: "(بلا تسمية)" → `() => setEditing(a)`
-- L171: "استنساخ اللائحة الافتراضية" → `reseedDefaults` 🔒
-- L269: "(بلا تسمية)" → `() => setEditing(null)` 🔒
-- L272: "(بلا تسمية)" → `saveEdit` 🔒
+- L204: "(بلا تسمية)" → `() => act("/justify", { justification, declined` 🔒
+- L246: "(بلا تسمية)"
+- L300: "(بلا تسمية)"
+- L319: "(بلا تسمية)" → `() => setShowCancelDialog(true)`
+- L342: "(بلا تسمية)" → `() => setShowAppeal(true)`
+- L354: "(بلا تسمية)" → `() => act("/appeal", { reason: appealReason` 🔒
+- L357: "(بلا تسمية)" → `() => setShowAppeal(false)`
+- L381: "(بلا تسمية)" → `() => act("/appeal-decision", { decision: "accepted", comment: ""` 🔒
+- L384: "(بلا تسمية)" → `() => act("/appeal-decision", { decision: "rejected", comment: ""` 🔒
+- L396: "(بلا تسمية)" → `() => act("/close", { note: "إقفال عادي"` 🔒
+- L400: "إصدار خطاب تأديبي"
+- L449: "خطاب تأديبي"
 
 ### القراءات (GET)
 _لا قراءات._
@@ -41,7 +49,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: no id resolver for /hr/discipline/memos/:id`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/discipline/memos/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

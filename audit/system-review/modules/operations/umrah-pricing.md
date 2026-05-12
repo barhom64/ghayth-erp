@@ -1,22 +1,22 @@
-# /umrah/pricing — `artifacts/ghayth-erp/src/pages/umrah/sub-agents.tsx`
+# /umrah/pricing — `artifacts/ghayth-erp/src/pages/umrah/pricing.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/umrah/pricing`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/sub-agents.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/pricing.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:58`
 - المجموعة: `operations`
-- الكومبوننت: `UmrahSubAgents`
+- الكومبوننت: `UmrahPricing`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `pricing`
-- سطور الملف: 387
+- سطور الملف: 407
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L334: "(بلا تسمية)" → `() => setEditing(null)` 🔒
-- L370: "(بلا تسمية)" → `() => setLinking(null)` 🔒
+- L363: "(بلا تسمية)" → `() => setEditing(null)`
+- L392: "(بلا تسمية)" → `() => setDeleteId(null)`
 
 ### القراءات (GET)
 _لا قراءات._
@@ -39,8 +39,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/umrah/pricing`
-- لقطة: `audit/screenshots/umrah_pricing.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/umrah/pricing`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

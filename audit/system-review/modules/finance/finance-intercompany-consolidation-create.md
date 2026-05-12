@@ -1,27 +1,24 @@
-# /finance/intercompany/consolidation/create — `artifacts/ghayth-erp/src/pages/finance/gl-posting-queue.tsx`
+# /finance/intercompany/consolidation/create — `artifacts/ghayth-erp/src/pages/create/finance/intercompany-consolidation-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/intercompany/consolidation/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/gl-posting-queue.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/finance/intercompany-consolidation-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:135`
 - المجموعة: `finance`
-- الكومبوننت: `GLPostingQueue`
+- الكومبوننت: `IntercompanyConsolidationCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 629
+- سطور الملف: 93
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L241: "(بلا تسمية)" 🔒
-- L297: "(بلا تسمية)" 🔒
-- L348: "(بلا تسمية)" 🔒
-- L398: "(بلا تسمية)" 🔒
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/finance/intercompany/consolidation${scopeSuffix}`
 
 
 
@@ -41,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/intercompany/consolidation/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/finance_intercompany_consolidation_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/intercompany/consolidation/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

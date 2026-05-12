@@ -1,14 +1,14 @@
-# /hr/organization — `artifacts/ghayth-erp/src/pages/hr/training-advanced.tsx`
+# /hr/organization — `artifacts/ghayth-erp/src/pages/hr/organization.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/organization`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/training-advanced.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/organization.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:114`
 - المجموعة: `hr`
-- الكومبوننت: `TrainingAdvanced`
-- subKey: `training` | minRoleLevel: —
+- الكومبوننت: `Organization`
+- subKey: `organization` | minRoleLevel: —
 - الكيان المستنبط: `organization`
-- سطور الملف: 86
+- سطور الملف: 90
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
@@ -18,9 +18,8 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/hr/training/stats`
-- GET `/hr/training/programs`
-- GET `/hr/training/enrollments`
+- GET `/settings/departments`
+- GET `/employees`
 
 
 
@@ -37,11 +36,9 @@ _لم تُلتقط أزرار._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `organization` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L31 _(inline-data-array)_: `const kpis = [`
+- ⚠ L18 _(inline-data-array)_: `const kpis = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/organization`
-- لقطة: `audit/screenshots/hr_organization.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/organization`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

@@ -1,27 +1,27 @@
-# /finance/invoices/create — `artifacts/ghayth-erp/src/pages/create/finance/journal-create.tsx`
+# /finance/invoices/create — `artifacts/ghayth-erp/src/pages/create/finance/invoices-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/invoices/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/finance/journal-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/finance/invoices-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:91`
 - المجموعة: `finance`
-- الكومبوننت: `JournalCreate`
+- الكومبوننت: `InvoicesCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 193
+- سطور الملف: 320
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 | الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
 |------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/finance/journal` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+| _(write)_ | `/finance/invoices` | POST | ✅ | ✅ | — | — | ✅ | ✅ | ✅ |
 
 ### تفاصيل الأزرار المرئية
-- L107: "مسح المسودة" → `clearDraft`
-- L120: "إضافة بند" → `addLine`
-- L139: "(بلا تسمية)" → `() => removeLine(idx)` 🔒
-- L185: "(بلا تسمية)" → `() => setLocation("/finance/journal")` 🔒
-- L186: "(بلا تسمية)" → `handleSubmit` 🔒
+- L169: "مسح المسودة" → `clearDraft`
+- L230: "+ إضافة بند" → `() => removeLine(idx)` 🔒
+- L233: "+ إضافة بند" → `addLine`
+- L311: "(بلا تسمية)" → `() => setLocation("/finance/invoices")` 🔒
+- L312: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
 _لا قراءات._
@@ -41,11 +41,10 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `create` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L21 _(inline-data-array)_: `const INVOICE_TYPE_CODES = [`
+- ⚠ L34 _(inline-data-array)_: `const PAYMENT_TERMS_OPTIONS = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/invoices/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/finance_invoices_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/invoices/create`)
+- توصية: **TBD**
+- المشاكل: 2 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

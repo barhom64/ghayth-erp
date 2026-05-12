@@ -1,28 +1,25 @@
-# /hr/violations/management — `artifacts/ghayth-erp/src/pages/hr/violations.tsx`
+# /hr/violations/management — `artifacts/ghayth-erp/src/pages/hr/violations-management.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/violations/management`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/violations.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/violations-management.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:133`
 - المجموعة: `hr`
-- الكومبوننت: `Violations`
+- الكومبوننت: `ViolationsManagement`
 - subKey: `violations` | minRoleLevel: —
 - الكيان المستنبط: `management`
-- سطور الملف: 502
+- سطور الملف: 153
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L134: "تشغيل الرصد"
-- L139: "تسجيل مخالفة"
-- L231: "عرض الكل"
-- L473: "فتح صفحة الرصد التلقائي"
-- L493: "فتح لائحة الانضباط"
+- L73: "(بلا تسمية)"
 
 ### القراءات (GET)
-- GET `/hr/discipline/stats`
+- GET `/hr/violations`
+- GET `/hr/violations-stats`
 
 
 
@@ -39,11 +36,9 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `management` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L182 _(inline-data-array)_: `const byStage = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/violations/management`
-- لقطة: `audit/screenshots/hr_violations_management.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/violations/management`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

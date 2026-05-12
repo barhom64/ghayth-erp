@@ -1,21 +1,26 @@
-# /finance/treasury — `artifacts/ghayth-erp/src/pages/finance/recurring-journal-detail.tsx`
+# /finance/treasury — `artifacts/ghayth-erp/src/pages/finance/treasury.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/treasury`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/recurring-journal-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/treasury.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:146`
 - المجموعة: `finance`
-- الكومبوننت: `RecurringJournalDetail`
+- الكومبوننت: `Treasury`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `treasury`
-- سطور الملف: 160
+- سطور الملف: 319
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L74: "دفتر الأستاذ"
+- L168: "(بلا تسمية)"
+- L173: "(بلا تسمية)"
+- L252: "(بلا تسمية)" → `() => setActiveTab("accounts")`
+- L259: "(بلا تسمية)" → `() => setActiveTab("movements")`
+- L266: "(بلا تسمية)" → `() => setActiveTab("daily")`
 
 ### القراءات (GET)
 _لا قراءات._
@@ -38,8 +43,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/treasury`
-- لقطة: `audit/screenshots/finance_treasury.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/treasury`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

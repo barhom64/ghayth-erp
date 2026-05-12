@@ -1,29 +1,29 @@
-# /warehouse/inventory-count — `artifacts/ghayth-erp/src/pages/warehouse.tsx`
+# /warehouse/inventory-count — `artifacts/ghayth-erp/src/pages/warehouse/inventory-count.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/warehouse/inventory-count`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/warehouse.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/warehouse/inventory-count.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:107`
 - المجموعة: `warehouse`
-- الكومبوننت: `Warehouse`
+- الكومبوننت: `InventoryCount`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `inventory-count`
-- سطور الملف: 387
+- سطور الملف: 459
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L30: "حركة جديدة"
-- L36: "منتج جديد"
-- L153: "إضافة منتج"
-- L238: "إضافة حركة"
-- L298: "تصنيف جديد"
-- L365: "إضافة مورد"
+- L207: "(بلا تسمية)"
+- L216: "(بلا تسمية)"
+- L311: "(بلا تسمية)"
+- L359: "(بلا تسمية)" → `() => setShowForm(!showForm)`
+- L388: "(بلا تسمية)" → `() => setShowForm(false)`
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/warehouse/inventory-counts`
+- GET `/warehouse/products?limit=500`
 
 
 
@@ -43,8 +43,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/warehouse/inventory-count`
-- لقطة: `audit/screenshots/warehouse_inventory_count.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/warehouse/inventory-count`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

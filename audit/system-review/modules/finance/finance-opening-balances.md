@@ -1,11 +1,11 @@
-# /finance/opening-balances — `artifacts/ghayth-erp/src/pages/finance/project-costing-detail.tsx`
+# /finance/opening-balances — `artifacts/ghayth-erp/src/pages/finance/opening-balances.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/opening-balances`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/project-costing-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/opening-balances.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:140`
 - المجموعة: `finance`
-- الكومبوننت: `ProjectCostingDetail`
+- الكومبوننت: `OpeningBalances`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `opening-balances`
 - سطور الملف: 146
@@ -15,7 +15,7 @@
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L99: "قيد أرصدة افتتاحية جديد"
 
 ### القراءات (GET)
 _لا قراءات._
@@ -38,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/opening-balances`
-- لقطة: `audit/screenshots/finance_opening_balances.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/opening-balances`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

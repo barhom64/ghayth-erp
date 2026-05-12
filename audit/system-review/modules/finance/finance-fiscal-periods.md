@@ -1,24 +1,24 @@
-# /finance/fiscal-periods — `artifacts/ghayth-erp/src/pages/finance/custody-aging-report.tsx`
+# /finance/fiscal-periods — `artifacts/ghayth-erp/src/pages/finance/fiscal-periods.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/fiscal-periods`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/custody-aging-report.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/fiscal-periods.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:117`
 - المجموعة: `finance`
-- الكومبوننت: `CustodyAgingReport`
+- الكومبوننت: `FiscalPeriods`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `fiscal-periods`
-- سطور الملف: 152
+- سطور الملف: 164
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L33: "العهد"
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/finance/custodies/report`
+_لا قراءات._
 
 
 
@@ -38,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/fiscal-periods`
-- لقطة: `audit/screenshots/finance_fiscal_periods.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/fiscal-periods`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

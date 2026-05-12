@@ -1,25 +1,24 @@
-# /admin/monitoring — `artifacts/ghayth-erp/src/pages/admin/logs.tsx`
+# /admin/monitoring — `artifacts/ghayth-erp/src/pages/admin-monitoring.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/admin/monitoring`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin/logs.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin-monitoring.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/adminRoutes.tsx:26`
 - المجموعة: `admin`
-- الكومبوننت: `AdminLogs`
+- الكومبوننت: `AdminMonitoring`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `monitoring`
-- سطور الملف: 272
+- سطور الملف: 321
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L172: "تصدير جدولي" → `exportCSV`
-- L175: "(بلا تسمية)" → `() => refetch()`
+- L90: "(بلا تسمية)" → `() => refetch()`
 
 ### القراءات (GET)
-- GET `/audit-logs/entities`
+- GET `/admin/system-health`
 
 
 
@@ -39,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/admin/monitoring`
-- لقطة: `audit/screenshots/admin_monitoring.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/admin/monitoring`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

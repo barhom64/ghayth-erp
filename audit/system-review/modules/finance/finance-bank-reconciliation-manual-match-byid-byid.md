@@ -1,21 +1,26 @@
-# /finance/bank-reconciliation/manual-match/:batchId/:rowId — `artifacts/ghayth-erp/src/pages/finance/ap-aging.tsx`
+# /finance/bank-reconciliation/manual-match/:batchId/:rowId — `artifacts/ghayth-erp/src/pages/create/finance/bank-manual-match.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/bank-reconciliation/manual-match/:batchId/:rowId`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/ap-aging.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/finance/bank-manual-match.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:124`
 - المجموعة: `finance`
-- الكومبوننت: `ApAging`
+- الكومبوننت: `BankManualMatch`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:rowId`
-- سطور الملف: 164
+- سطور الملف: 191
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/finance/bank-reconciliation/manual-match` | POST | — | — | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-- L86: "(بلا تسمية)" → `() => exportCSV(suppliers, `ap-aging-${asOfDate`
+- L80: "مسح المسودة" → `clearDraft`
+- L109: "بحث" → `searchJournalLines` 🔒
+- L154: "(بلا تسمية)" → `() => handleManualMatch(jl.id)` 🔒
+- L183: "(بلا تسمية)" → `() => setLocation("/finance/bank-reconciliation")`
 
 ### القراءات (GET)
 _لا قراءات._
@@ -35,10 +40,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `:rowId` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L34 _(inline-data-array)_: `const BUCKETS = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: no id resolver for /finance/bank-reconciliation/manual-match/:batchId/:rowId`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/bank-reconciliation/manual-match/:batchId/:rowId`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

@@ -1,23 +1,21 @@
-# /properties/owners/:id — `artifacts/ghayth-erp/src/pages/create/properties/owners-create.tsx`
+# /properties/owners/:id — `artifacts/ghayth-erp/src/pages/details/owner-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/properties/owners/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/properties/owners-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/owner-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/propertyRoutes.tsx:43`
 - المجموعة: `properties`
-- الكومبوننت: `OwnersCreate`
+- الكومبوننت: `OwnerDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 125
+- سطور الملف: 326
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L58: "مسح المسودة" → `clearDraft`
-- L117: "(بلا تسمية)" → `() => setLocation("/properties/owners")` 🔒
-- L118: "(بلا تسمية)" → `handleSave` 🔒
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
 _لا قراءات._
@@ -37,10 +35,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `:id` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L88 _(dummy-iban)_: `<TextField label="رقم الآيبان" dir="ltr" value={form.iban} onChange={v => setForm({ ...form, iban: v })} placeholder="SA`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/properties/owners → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/properties/owners/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

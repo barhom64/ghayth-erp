@@ -1,24 +1,29 @@
-# /properties/create — `artifacts/ghayth-erp/src/pages/details/property-maintenance-detail.tsx`
+# /properties/create — `artifacts/ghayth-erp/src/pages/create/properties-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/properties/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/property-maintenance-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/properties-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/propertyRoutes.tsx:55`
 - المجموعة: `properties`
-- الكومبوننت: `PropertyMaintenanceDetail`
+- الكومبوننت: `PropertiesCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 255
+- سطور الملف: 298
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/properties/units` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L135: "مسح المسودة" → `clearDraft`
+- L291: "(بلا تسمية)" → `() => setLocation("/properties")` 🔒
+- L292: "(بلا تسمية)" 🔒
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/properties/buildings`
+- GET `/properties/owners`
 
 
 
@@ -38,8 +43,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/properties/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/properties_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/properties/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

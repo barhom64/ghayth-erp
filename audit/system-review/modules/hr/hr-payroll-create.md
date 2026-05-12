@@ -1,24 +1,29 @@
-# /hr/payroll/create — `artifacts/ghayth-erp/src/pages/hr/approval-chains.tsx`
+# /hr/payroll/create — `artifacts/ghayth-erp/src/pages/create/hr/payroll-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/payroll/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/approval-chains.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/hr/payroll-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:103`
 - المجموعة: `hr`
-- الكومبوننت: `ApprovalChains`
-- subKey: `leaves` | minRoleLevel: —
+- الكومبوننت: `PayrollCreate`
+- subKey: `payroll` | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 134
+- سطور الملف: 191
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/hr/payroll` | POST | — | — | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L85: "مسح المسودة" → `clearDraft`
+- L183: "(بلا تسمية)" → `() => setLocation("/hr/payroll")` 🔒
+- L184: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
-- GET `/hr/approval-chains`
+- GET `/employees${scopeSuffix}`
+- GET `/settings/branches`
 
 
 
@@ -35,11 +40,9 @@ _لم تُلتقط أزرار._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `create` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L30 _(inline-data-array)_: `const kpis = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/payroll/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/hr_payroll_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/payroll/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

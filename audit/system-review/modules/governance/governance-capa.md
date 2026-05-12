@@ -1,14 +1,14 @@
-# /governance/capa — `artifacts/ghayth-erp/src/pages/details/compliance-detail.tsx`
+# /governance/capa — `artifacts/ghayth-erp/src/pages/governance/capa.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/governance/capa`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/compliance-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/governance/capa.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/governanceRoutes.tsx:28`
 - المجموعة: `governance`
-- الكومبوننت: `ComplianceDetail`
+- الكومبوننت: `GovernanceCapa`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `capa`
-- سطور الملف: 310
+- سطور الملف: 55
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
@@ -18,7 +18,7 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم تُلتقط أزرار._
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/governance/capa`
 
 
 
@@ -38,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/governance/capa`
-- لقطة: `audit/screenshots/governance_capa.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/governance/capa`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

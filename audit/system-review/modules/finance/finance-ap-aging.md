@@ -1,23 +1,21 @@
-# /finance/ap-aging — `artifacts/ghayth-erp/src/pages/finance/ledger.tsx`
+# /finance/ap-aging — `artifacts/ghayth-erp/src/pages/finance/ap-aging.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/ap-aging`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/ledger.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/ap-aging.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:122`
 - المجموعة: `finance`
-- الكومبوننت: `Ledger`
+- الكومبوننت: `ApAging`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `ap-aging`
-- سطور الملف: 173
+- سطور الملف: 164
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L65: "(بلا تسمية)"
-- L70: "(بلا تسمية)" → `() => window.print()`
-- L73: "(بلا تسمية)" → `() => exportCSV(entries, ["date", "ref", "description", "debit", "credit", "runn`
+- L86: "(بلا تسمية)" → `() => exportCSV(suppliers, `ap-aging-${asOfDate`
 
 ### القراءات (GET)
 _لا قراءات._
@@ -37,11 +35,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `ap-aging` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L34 _(inline-data-array)_: `const BUCKETS = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/ap-aging`
-- لقطة: `audit/screenshots/finance_ap_aging.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/ap-aging`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

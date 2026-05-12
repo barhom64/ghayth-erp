@@ -1,50 +1,25 @@
-# /correspondence — `artifacts/ghayth-erp/src/pages/notification-engine.tsx`
+# /correspondence — `artifacts/ghayth-erp/src/pages/comms/correspondence.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/correspondence`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/notification-engine.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/comms/correspondence.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/commsRoutes.tsx:14`
 - المجموعة: `communications`
-- الكومبوننت: `NotificationEngine`
+- الكومبوننت: `Correspondence`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `correspondence`
-- سطور الملف: 969
+- سطور الملف: 228
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L138: "حفظ" → `saveRule`
-- L139: "(بلا تسمية)" → `() => setEditId(null)`
-- L153: "(بلا تسمية)" → `() => startEdit(rule)`
-- L235: "(بلا تسمية)" → `() => setShowNew(!showNew)`
-- L270: "إنشاء" → `() => setShowNew(false)`
-- L271: "إنشاء" → `createTemplate`
-- L304: "حفظ" → `saveEdit`
-- L305: "(بلا تسمية)" → `() => setEditId(null)`
-- L309: "(بلا تسمية)"
-- L315: "(بلا تسمية)" → `() => deleteTemplate(tId)`
-- L408: "(بلا تسمية)" → `() => setShowNew(!showNew)`
-- L448: "(بلا تسمية)" → `() => removeStep(idx)`
-- L455: "خطوة" → `addStep`
-- L457: "إنشاء" → `() => setShowNew(false)`
-- L458: "إنشاء" → `createChain`
-- L482: "(بلا تسمية)" → `() => deleteChain(chain.id as number)`
-- L561: "(بلا تسمية)" → `() => setShowNew(!showNew)`
-- L593: "إنشاء" → `() => setShowNew(false)`
-- L594: "إنشاء" → `createWebhook`
-- L632: "(بلا تسمية)" → `() => deleteWebhook(wh.id as number)`
-- L894: "حفظ التفضيلات" → `saveAll` 🔒
+- L162: "(بلا تسمية)"
+- L192: "مراسلة جديدة"
 
 ### القراءات (GET)
-- GET `/notification-engine/routing-rules`
-- GET `/notification-engine/fallback-chains`
-- GET `/notification-engine/templates`
-- GET `/notification-engine/fallback-chains`
-- GET `/notification-engine/webhooks`
-- GET `/notification-engine/delivery-log?limit=20`
-- GET `/notification-engine/preferences`
+- GET `/correspondence/stats/summary`
 
 
 
@@ -64,8 +39,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/correspondence`
-- لقطة: `audit/screenshots/correspondence.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/correspondence`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

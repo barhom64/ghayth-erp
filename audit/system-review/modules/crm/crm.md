@@ -1,26 +1,25 @@
-# /crm — `artifacts/ghayth-erp/src/pages/create/clients-create.tsx`
+# /crm — `artifacts/ghayth-erp/src/pages/crm.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/crm`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/clients-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/crm.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:83`
 - المجموعة: `crm`
-- الكومبوننت: `ClientsCreate`
+- الكومبوننت: `CRM`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `crm`
-- سطور الملف: 180
+- سطور الملف: 263
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L81: "مسح المسودة" → `clearDraft`
-- L172: "(بلا تسمية)" → `() => setLocation("/clients")` 🔒
-- L173: "(بلا تسمية)" → `handleSubmit` 🔒
+- L132: "(بلا تسمية)" → `() => setPreviewItem(o)`
+- L180: "فرصة جديدة"
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/crm/pipeline`
 
 
 
@@ -40,8 +39,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/crm`
-- لقطة: `audit/screenshots/crm.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/crm`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

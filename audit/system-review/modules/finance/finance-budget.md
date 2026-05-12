@@ -1,25 +1,21 @@
-# /finance/budget — `artifacts/ghayth-erp/src/pages/create/finance/expenses-create.tsx`
+# /finance/budget — `artifacts/ghayth-erp/src/pages/finance/budget.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/budget`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/finance/expenses-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/budget.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:96`
 - المجموعة: `finance`
-- الكومبوننت: `ExpensesCreate`
+- الكومبوننت: `Budget`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `budget`
-- سطور الملف: 749
+- سطور الملف: 152
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/finance/expenses` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L328: "مسح المسودة" → `clearDraft`
-- L740: "(بلا تسمية)" → `() => setLocation("/finance/expenses")` 🔒
-- L741: "(بلا تسمية)" → `handleSubmit` 🔒
+- L103: "(بلا تسمية)"
 
 ### القراءات (GET)
 _لا قراءات._
@@ -36,17 +32,14 @@ _لا قراءات._
 - يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
 
 ## 4. النمذجة
-- الجدول: `budgets` (export: `budgets`, 6 عمود)
-- tenant col: ✅ | createdBy: — | createdAt: — | updatedAt: — | softDelete: — | lifecycle col: —
+- الجدول: `budgets` (export: `budgets`, 8 عمود)
+- tenant col: ✅ | createdBy: — | createdAt: ✅ | updatedAt: — | softDelete: — | lifecycle col: —
 - FKs: companies.id
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L69 _(inline-data-array)_: `const TAX_CATEGORIES = [`
-- ⚠ L79 _(inline-data-array)_: `const INVOICE_TYPE_CODES = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/budget`
-- لقطة: `audit/screenshots/finance_budget.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/budget`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

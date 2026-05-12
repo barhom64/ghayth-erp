@@ -1,22 +1,22 @@
-# /finance/purchase-orders/:id — `artifacts/ghayth-erp/src/pages/finance/purchase-orders.tsx`
+# /finance/purchase-orders/:id — `artifacts/ghayth-erp/src/pages/finance/purchase-order-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/purchase-orders/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/purchase-orders.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/purchase-order-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:104`
 - المجموعة: `finance`
-- الكومبوننت: `PurchaseOrders`
+- الكومبوننت: `PurchaseOrderDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 288
+- سطور الملف: 262
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L139: "عرض"
-- L145: "(بلا تسمية)"
+- L29: "العودة لطلبات الشراء"
+- L121: "نسخ"
 
 ### القراءات (GET)
 _لا قراءات._
@@ -39,7 +39,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: no row in /api/finance/purchase-orders`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/purchase-orders/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

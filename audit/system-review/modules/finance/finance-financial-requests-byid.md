@@ -1,14 +1,14 @@
-# /finance/financial-requests/:id — `artifacts/ghayth-erp/src/pages/details/commitment-detail.tsx`
+# /finance/financial-requests/:id — `artifacts/ghayth-erp/src/pages/details/financial-request-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/financial-requests/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/commitment-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/financial-request-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:113`
 - المجموعة: `finance`
-- الكومبوننت: `CommitmentDetail`
+- الكومبوننت: `FinancialRequestDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 380
+- سطور الملف: 273
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
@@ -38,7 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: no row in /api/finance/financial-requests`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/financial-requests/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

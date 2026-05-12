@@ -1,28 +1,24 @@
-# /umrah/reconciliation — `artifacts/ghayth-erp/src/pages/umrah/import-wizard.tsx`
+# /umrah/reconciliation — `artifacts/ghayth-erp/src/pages/umrah/reconciliation.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/umrah/reconciliation`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/import-wizard.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/reconciliation.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:66`
 - المجموعة: `operations`
-- الكومبوننت: `UmrahImportWizard`
+- الكومبوننت: `UmrahReconciliation`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `reconciliation`
-- سطور الملف: 491
+- سطور الملف: 186
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L257: "تغيير الملف" → `clearFile`
-- L398: "(بلا تسمية)" → `() => setStep(1)`
-- L425: "عرض تفاصيل الدفعة"
-- L433: "(بلا تسمية)"
-- L477: "(بلا تسمية)" → `() => { setLinkingSubAgent(null); setLinkClientId("");` 🔒
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/umrah/reports/reconciliation`
 
 
 
@@ -42,5 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **N/A** — لم يُشغّل بعد لهذا المسار.
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/umrah/reconciliation`)
 - توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

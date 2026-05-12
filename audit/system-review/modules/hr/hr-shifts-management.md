@@ -1,25 +1,27 @@
-# /hr/shifts/management — `artifacts/ghayth-erp/src/pages/hr/shifts.tsx`
+# /hr/shifts/management — `artifacts/ghayth-erp/src/pages/hr/shifts-management.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/shifts/management`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/shifts.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/shifts-management.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:142`
 - المجموعة: `hr`
-- الكومبوننت: `Shifts`
+- الكومبوننت: `ShiftsManagement`
 - subKey: `shifts` | minRoleLevel: —
 - الكيان المستنبط: `management`
-- سطور الملف: 192
+- سطور الملف: 186
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L77: "إضافة وردية"
+- L113: "(بلا تسمية)" → `() => setShowAssignForm(!showAssignForm)`
+- L125: "(بلا تسمية)" → `() => setShowAssignForm(false)`
 
 ### القراءات (GET)
 - GET `/hr/shifts`
 - GET `/hr/shift-assignments`
+- GET `/employees?limit=200`
 
 
 
@@ -36,11 +38,9 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `management` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L47 _(inline-data-array)_: `const kpis = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/shifts/management`
-- لقطة: `audit/screenshots/hr_shifts_management.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/shifts/management`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

@@ -1,21 +1,23 @@
-# /bi/dashboards/create — `artifacts/ghayth-erp/src/pages/bi.tsx`
+# /bi/dashboards/create — `artifacts/ghayth-erp/src/pages/create/bi/dashboards-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/bi/dashboards/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/bi.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/bi/dashboards-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/biRoutes.tsx:13`
 - المجموعة: `bi`
-- الكومبوننت: `BI`
+- الكومبوننت: `DashboardsCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 48
+- سطور الملف: 70
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L43: "مسح المسودة" → `clearDraft`
+- L63: "(بلا تسمية)" → `() => setLocation("/bi/dashboards")` 🔒
+- L64: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
 _لا قراءات._
@@ -38,8 +40,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/bi/dashboards/create; write POST /api/intelligence/activity → 200; consoleErr=2`
-- لقطة: `audit/screenshots/bi_dashboards_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/bi/dashboards/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

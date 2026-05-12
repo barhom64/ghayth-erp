@@ -1,25 +1,28 @@
-# /hr/loans/create — `artifacts/ghayth-erp/src/pages/hr/job-detail.tsx`
+# /hr/loans/create — `artifacts/ghayth-erp/src/pages/create/hr/loans-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/loans/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/job-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/hr/loans-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:123`
 - المجموعة: `hr`
-- الكومبوننت: `JobDetail`
-- subKey: `recruitment` | minRoleLevel: —
+- الكومبوننت: `LoansCreate`
+- subKey: `payroll` | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 246
+- سطور الملف: 236
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/hr/loans` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-- L134: "(بلا تسمية)"
-- L160: "(بلا تسمية)"
+- L113: "مسح المسودة" → `clearDraft`
+- L224: "(بلا تسمية)" 🔒
+- L228: "(بلا تسمية)" → `() => setLocation("/hr/loans")`
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/employees?limit=500`
 
 
 
@@ -39,8 +42,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/loans/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/hr_loans_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/loans/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

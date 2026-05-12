@@ -1,27 +1,25 @@
-# /umrah/penalties — `artifacts/ghayth-erp/src/pages/umrah/seasons.tsx`
+# /umrah/penalties — `artifacts/ghayth-erp/src/pages/umrah/penalties.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/umrah/penalties`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/seasons.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/penalties.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:46`
 - المجموعة: `operations`
-- الكومبوننت: `UmrahSeasons`
+- الكومبوننت: `UmrahPenalties`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `penalties`
-- سطور الملف: 93
+- سطور الملف: 142
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L54: "(بلا تسمية)" → `(e) => { e.stopPropagation(); closeSeason(r.id);`
-- L65: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L82: "حفظ" → `() => setShowForm(false)` 🔒
-- L83: "حفظ" → `save` 🔒
+- L78: "(بلا تسمية)" → `(e) => handleWaive(e, p.id)`
+- L89: "تشغيل محرك الغرامات" → `runPenaltyEngine`
 
 ### القراءات (GET)
-- GET `/umrah/seasons`
+- GET `/umrah/penalties`
 
 
 
@@ -38,11 +36,9 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `penalties` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L54 _(inline-data-array)_: `const kpiCards = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/umrah/penalties`
-- لقطة: `audit/screenshots/umrah_penalties.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/umrah/penalties`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

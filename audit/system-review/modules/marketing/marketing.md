@@ -1,13 +1,13 @@
-# /tasks/create — `artifacts/ghayth-erp/src/pages/marketing.tsx`
+# /marketing — `artifacts/ghayth-erp/src/pages/marketing.tsx`
 
 ## 1. الميتاداتا
-- المسار: `/tasks/create`
+- المسار: `/marketing`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/marketing.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:115`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:113`
 - المجموعة: `marketing`
 - الكومبوننت: `Marketing`
 - subKey: — | minRoleLevel: —
-- الكيان المستنبط: `create`
+- الكيان المستنبط: `marketing`
 - سطور الملف: 286
 - مصدر موجود: ✅
 
@@ -35,14 +35,12 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 - يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
 
 ## 4. النمذجة
-_لم يتم العثور على جدول Drizzle بالاسم المستنبط `create` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
+_لم يتم العثور على جدول Drizzle بالاسم المستنبط `marketing` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/tasks/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/tasks_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/marketing`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

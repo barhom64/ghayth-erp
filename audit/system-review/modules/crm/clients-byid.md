@@ -1,22 +1,24 @@
-# /clients/:id — `artifacts/ghayth-erp/src/pages/clients.tsx`
+# /clients/:id — `artifacts/ghayth-erp/src/pages/client-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/clients/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/clients.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/client-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:82`
 - المجموعة: `crm`
-- الكومبوننت: `Clients`
+- الكومبوننت: `ClientDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 233
+- سطور الملف: 945
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L125: "(بلا تسمية)" → `() => setPreviewItem(client)`
-- L145: "إضافة عميل"
+- L705: "(بلا تسمية)" → `() => setShowCreate(true)`
+- L717: "(بلا تسمية)" → `() => setShowCreate(false)`
+- L749: "(بلا تسمية)" → `handleToggleActive`
+- L770: "تعيين" → `handleResetPassword` 🔒
 
 ### القراءات (GET)
 _لا قراءات._
@@ -39,8 +41,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=SKIP
-- ملاحظة: `landed=/dashboard expected=/clients/3`
-- لقطة: `audit/screenshots/clients_id.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/clients/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

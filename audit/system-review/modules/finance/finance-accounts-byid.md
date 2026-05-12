@@ -1,28 +1,24 @@
-# /finance/accounts/:id — `artifacts/ghayth-erp/src/pages/create/finance/accounts-create.tsx`
+# /finance/accounts/:id — `artifacts/ghayth-erp/src/pages/details/account-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/accounts/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/finance/accounts-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/account-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:84`
 - المجموعة: `finance`
-- الكومبوننت: `AccountsCreate`
+- الكومبوننت: `AccountDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 111
+- سطور الملف: 83
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/finance/accounts` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L58: "مسح المسودة" → `clearDraft`
-- L103: "(بلا تسمية)" → `() => setLocation("/finance/accounts")` 🔒
-- L104: "(بلا تسمية)" → `handleSubmit` 🔒
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/finance/accounts`
 
 
 
@@ -42,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=SKIP
-- ملاحظة: `landed=/dashboard expected=/finance/accounts/2`
-- لقطة: `audit/screenshots/finance_accounts_id.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/accounts/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

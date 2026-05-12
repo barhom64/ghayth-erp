@@ -1,26 +1,24 @@
-# /my-attendance — `artifacts/ghayth-erp/src/pages/my-requests.tsx`
+# /my-attendance — `artifacts/ghayth-erp/src/pages/my-attendance.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/my-attendance`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/my-requests.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/my-attendance.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:67`
 - المجموعة: `misc`
-- الكومبوننت: `MyRequests`
+- الكومبوننت: `MyAttendance`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `my-attendance`
-- سطور الملف: 194
+- سطور الملف: 144
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L90: "(بلا تسمية)" → `() => refetch()`
-- L105: "طلب إجازة"
-- L158: "طلب إجازة جديدة"
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/my-space/requests`
+_لا قراءات._
 
 
 
@@ -40,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/my-attendance`
-- لقطة: `audit/screenshots/my_attendance.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/my-attendance`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

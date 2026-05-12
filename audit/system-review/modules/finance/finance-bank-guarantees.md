@@ -1,21 +1,23 @@
-# /finance/bank-guarantees — `artifacts/ghayth-erp/src/pages/details/fixed-asset-detail.tsx`
+# /finance/bank-guarantees — `artifacts/ghayth-erp/src/pages/finance/bank-guarantees.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/bank-guarantees`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/fixed-asset-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/bank-guarantees.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:129`
 - المجموعة: `finance`
-- الكومبوننت: `FixedAssetDetail`
+- الكومبوننت: `BankGuarantees`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `bank-guarantees`
-- سطور الملف: 290
+- سطور الملف: 761
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L457: "ضمان جديد" → `openNew`
+- L654: "(بلا تسمية)" 🔒
+- L665: "(بلا تسمية)" → `() => setShowForm(false)`
 
 ### القراءات (GET)
 _لا قراءات._
@@ -38,8 +40,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/bank-guarantees`
-- لقطة: `audit/screenshots/finance_bank_guarantees.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/bank-guarantees`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

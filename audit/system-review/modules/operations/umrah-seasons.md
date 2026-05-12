@@ -1,30 +1,27 @@
-# /umrah/seasons — `artifacts/ghayth-erp/src/pages/umrah/agents.tsx`
+# /umrah/seasons — `artifacts/ghayth-erp/src/pages/umrah/seasons.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/umrah/seasons`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/agents.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/seasons.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:44`
 - المجموعة: `operations`
-- الكومبوننت: `UmrahAgents`
+- الكومبوننت: `UmrahSeasons`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `seasons`
-- سطور الملف: 237
+- سطور الملف: 93
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L121: "(بلا تسمية)" → `() => openEdit(a)`
-- L122: "(بلا تسمية)" → `() => setDeleteId(a.id)`
-- L133: "إضافة وكيل" → `openCreate`
-- L214: "إلغاء" → `closeDialog` 🔒
-- L215: "(بلا تسمية)" → `handleSubmit` 🔒
-- L227: "(بلا تسمية)" → `() => setDeleteId(null)` 🔒
-- L228: "(بلا تسمية)" → `() => deleteMut.mutate({` 🔒
+- L54: "(بلا تسمية)" → `(e) => { e.stopPropagation(); closeSeason(r.id);`
+- L65: "(بلا تسمية)" → `() => setShowForm(!showForm)`
+- L82: "حفظ" → `() => setShowForm(false)` 🔒
+- L83: "حفظ" → `save` 🔒
 
 ### القراءات (GET)
-- GET `/umrah/agents`
+- GET `/umrah/seasons`
 
 
 
@@ -41,11 +38,9 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `seasons` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L104 _(inline-data-array)_: `const kpiCards = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/umrah/seasons`
-- لقطة: `audit/screenshots/umrah_seasons.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/umrah/seasons`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

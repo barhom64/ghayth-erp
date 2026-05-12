@@ -1,25 +1,24 @@
-# /fleet/traffic-violations/:id — `artifacts/ghayth-erp/src/pages/fleet/preventive-plans.tsx`
+# /fleet/traffic-violations/:id — `artifacts/ghayth-erp/src/pages/details/traffic-violation-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/fleet/traffic-violations/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/fleet/preventive-plans.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/traffic-violation-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/fleetRoutes.tsx:53`
 - المجموعة: `fleet`
-- الكومبوننت: `PreventivePlans`
+- الكومبوننت: `TrafficViolationDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 287
+- سطور الملف: 213
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L189: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L214: "(بلا تسمية)" → `() => setShowForm(false)`
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/fleet/vehicles?limit=200`
+_لا قراءات._
 
 
 
@@ -39,7 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/fleet/traffic-violations → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/fleet/traffic-violations/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

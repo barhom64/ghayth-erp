@@ -1,33 +1,25 @@
-# /projects/risks — `artifacts/ghayth-erp/src/pages/tasks.tsx`
+# /projects/risks — `artifacts/ghayth-erp/src/pages/projects/risks.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/projects/risks`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/tasks.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/projects/risks.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:93`
 - المجموعة: `operations`
-- الكومبوننت: `Tasks`
+- الكومبوننت: `ProjectRisks`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `risks`
-- سطور الملف: 422
+- سطور الملف: 287
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L186: "(بلا تسمية)"
-- L196: "(بلا تسمية)"
-- L207: "(بلا تسمية)"
-- L218: "نسخ"
-- L222: "(بلا تسمية)"
-- L231: "(بلا تسمية)"
-- L241: "(بلا تسمية)"
-- L263: "مهمة جديدة"
-- L389: "(بلا تسمية)" → `saveEdit` 🔒
-- L393: "إلغاء" → `cancelEdit`
+- L203: "(بلا تسمية)" → `() => setShowForm(!showForm)` 🔒
+- L228: "(بلا تسمية)" → `() => setShowForm(false)`
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/projects?limit=100`
 
 
 
@@ -44,11 +36,10 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `risks` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L24 _(inline-data-array)_: `const statusOptions = [`
+- ⚠ L41 _(inline-data-array)_: `const PROBABILITY_OPTIONS = [`
+- ⚠ L48 _(inline-data-array)_: `const IMPACT_OPTIONS = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/projects/risks`
-- لقطة: `audit/screenshots/projects_risks.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/projects/risks`)
+- توصية: **TBD**
+- المشاكل: 2 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

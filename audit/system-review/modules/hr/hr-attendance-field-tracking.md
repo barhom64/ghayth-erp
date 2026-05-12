@@ -1,14 +1,14 @@
-# /hr/attendance/field-tracking — `artifacts/ghayth-erp/src/pages/details/attendance-detail.tsx`
+# /hr/attendance/field-tracking — `artifacts/ghayth-erp/src/pages/hr/field-tracking.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/attendance/field-tracking`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/attendance-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/field-tracking.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:95`
 - المجموعة: `hr`
-- الكومبوننت: `AttendanceDetail`
+- الكومبوننت: `FieldTracking`
 - subKey: `attendance` | minRoleLevel: —
 - الكيان المستنبط: `field-tracking`
-- سطور الملف: 292
+- سطور الملف: 125
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
@@ -18,7 +18,7 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم تُلتقط أزرار._
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/hr/attendance`
 
 
 
@@ -35,11 +35,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `field-tracking` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L85 _(inline-data-array)_: `const kpis = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/attendance/field-tracking`
-- لقطة: `audit/screenshots/hr_attendance_field_tracking.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/attendance/field-tracking`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

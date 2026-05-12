@@ -1,28 +1,24 @@
-# /properties/occupancy-report — `artifacts/ghayth-erp/src/pages/properties/inspections.tsx`
+# /properties/occupancy-report — `artifacts/ghayth-erp/src/pages/properties/occupancy-report.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/properties/occupancy-report`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/properties/inspections.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/properties/occupancy-report.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/propertyRoutes.tsx:58`
 - المجموعة: `properties`
-- الكومبوننت: `PropertyInspections`
+- الكومبوننت: `OccupancyReport`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `occupancy-report`
-- سطور الملف: 311
+- سطور الملف: 184
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L126: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L148: "(بلا تسمية)" → `() => setShowForm(false)`
-- L187: "(بلا تسمية)" → `() => setStatusFilter(s)`
-- L222: "(بلا تسمية)" → `() => setCompletingId(insp.id)`
-- L288: "إلغاء" → `props.onClose`
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/properties/units?limit=200`
+- GET `/properties/occupancy-report`
 
 
 
@@ -39,11 +35,9 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `occupancy-report` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L30 _(inline-data-array)_: `const pieData = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/properties/occupancy-report`
-- لقطة: `audit/screenshots/properties_occupancy_report.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/properties/occupancy-report`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

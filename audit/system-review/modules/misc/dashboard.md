@@ -1,24 +1,35 @@
-# /dashboard — `any`
+# /dashboard — `artifacts/ghayth-erp/src/pages/dashboard.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/dashboard`
-- ملف الصفحة: `—`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/dashboard.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:63`
 - المجموعة: `misc`
-- الكومبوننت: `any`
+- الكومبوننت: `Dashboard`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `dashboard`
-- سطور الملف: 0
-- مصدر موجود: —
+- سطور الملف: 979
+- مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/hr/check-in` | POST | — | — | — | — | ✅ | ✅ | — |
+| _(write)_ | `/hr/check-out` | POST | — | — | — | — | ✅ | ✅ | ✅ |
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L272: "(بلا تسمية)" → `handleCheckIn` 🔒
+- L282: "(بلا تسمية)" → `handleCheckOut` 🔒
+- L519: "عرض الكل"
+- L530: "(بلا تسمية)" → `() => setLocation("/tasks")`
+- L576: "عرض الكل"
+- L734: "(بلا تسمية)"
+- L838: "(بلا تسمية)" → `() => setLocation("/finance/invoices/create")`
+- L879: "(بلا تسمية)" → `() => setLocation("/hr/attendance")`
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/my-space`
+- GET `/intelligence/suggestions`
 
 
 
@@ -38,6 +49,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=PASS | fetch=PASS | CTA=SKIP | nav=PASS | smoke=PASS
-- landedUrl: `http://localhost/dashboard`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/dashboard`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

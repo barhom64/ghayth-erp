@@ -1,33 +1,21 @@
-# /finance/receivables — `artifacts/ghayth-erp/src/pages/finance/reports.tsx`
+# /finance/receivables — `artifacts/ghayth-erp/src/pages/finance/receivables.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/receivables`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/reports.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/receivables.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:107`
 - المجموعة: `finance`
-- الكومبوننت: `FinancialReports`
+- الكومبوننت: `Receivables`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `receivables`
-- سطور الملف: 1171
+- سطور الملف: 153
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L35: "(بلا تسمية)" → `() => window.print()`
-- L201: "(بلا تسمية)" → `() => setViewMode("tree")`
-- L202: "(بلا تسمية)" → `() => setViewMode("flat")`
-- L206: "(بلا تسمية)" → `() => exportCSV(rows, ["code", "name", "type", "totalDebit", "totalCredit", "bal`
-- L367: "(بلا تسمية)" → `() => exportCSV([...revenues.map((r: any) => ({ ...r, section: "إيرادات"`
-- L505: "(بلا تسمية)" → `() => exportCSV([...assets, ...liabilities, ...equity], ["code", "name", "type",`
-- L575: "(بلا تسمية)" → `() => exportCSV([...inflows.map((f: any) => ({ ...f, type: "وارد"`
-- L670: "(بلا تسمية)" → `() => exportCSV(entries, ["ref", "description", "debit", "credit", "runningBalan`
-- L728: "(بلا تسمية)" → `() => exportCSV([...custodies, ...advances], ["ref", "description", "amount", "e`
-- L824: "(بلا تسمية)" → `() => exportCSV(rows, ["key", "label", "amount", "entryCount"], "expenses-analys`
-- L886: "(بلا تسمية)" → `() => exportCSV(byAccount, ["code", "name", "amount", "entryCount"], "revenue-an`
-- L981: "(بلا تسمية)" → `() => exportCSV(rows, ["accountCode", "accountName", "budget", "actual", "varian`
-- L1102: "(بلا تسمية)" → `() => exportCSV(rowsWithBalance, ["ref", "description", "debit", "credit", "runn`
+- L81: "(بلا تسمية)"
 
 ### القراءات (GET)
 _لا قراءات._
@@ -50,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/receivables`
-- لقطة: `audit/screenshots/finance_receivables.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/receivables`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

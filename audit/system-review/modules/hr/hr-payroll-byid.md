@@ -1,29 +1,24 @@
-# /hr/payroll/:id — `artifacts/ghayth-erp/src/pages/create/hr/payroll-create.tsx`
+# /hr/payroll/:id — `artifacts/ghayth-erp/src/pages/details/payroll-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/payroll/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/hr/payroll-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/payroll-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:105`
 - المجموعة: `hr`
-- الكومبوننت: `PayrollCreate`
+- الكومبوننت: `PayrollDetail`
 - subKey: `payroll` | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 191
+- سطور الملف: 368
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/hr/payroll` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L85: "مسح المسودة" → `clearDraft`
-- L183: "(بلا تسمية)" → `() => setLocation("/hr/payroll")` 🔒
-- L184: "(بلا تسمية)" → `handleSubmit` 🔒
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/employees${scopeSuffix}`
-- GET `/settings/branches`
+_لا قراءات._
 
 
 
@@ -43,7 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/hr/payroll → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/payroll/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

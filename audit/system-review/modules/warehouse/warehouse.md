@@ -1,30 +1,34 @@
-# /warehouse — `artifacts/ghayth-erp/src/pages/projects/risks.tsx`
+# /warehouse — `artifacts/ghayth-erp/src/pages/warehouse.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/warehouse`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/projects/risks.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/warehouse.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:95`
-- المجموعة: `operations`
-- الكومبوننت: `ProjectRisks`
+- المجموعة: `warehouse`
+- الكومبوننت: `Warehouse`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `warehouse`
-- سطور الملف: 287
+- سطور الملف: 387
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L203: "(بلا تسمية)" → `() => setShowForm(!showForm)` 🔒
-- L228: "(بلا تسمية)" → `() => setShowForm(false)`
+- L30: "حركة جديدة"
+- L36: "منتج جديد"
+- L153: "إضافة منتج"
+- L238: "إضافة حركة"
+- L298: "تصنيف جديد"
+- L365: "إضافة مورد"
 
 ### القراءات (GET)
-- GET `/projects?limit=100`
+_لا قراءات._
 
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/operations.md` (إن وُجد) وعدّد:
+- [ ] **TBD** — راجع `docs/blueprints/warehouse.md` (إن وُجد) وعدّد:
   - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
   - تأثير الأرصدة (balances, balances_history)
   - الإشعارات (notifications)
@@ -36,12 +40,9 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `warehouse` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L41 _(inline-data-array)_: `const PROBABILITY_OPTIONS = [`
-- ⚠ L48 _(inline-data-array)_: `const IMPACT_OPTIONS = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/warehouse`
-- لقطة: `audit/screenshots/warehouse.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/warehouse`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

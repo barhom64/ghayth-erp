@@ -1,28 +1,24 @@
-# /governance/risks — `artifacts/ghayth-erp/src/pages/create/governance/risks-create.tsx`
+# /governance/risks — `artifacts/ghayth-erp/src/pages/governance.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/governance/risks`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/governance/risks-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/governance.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/governanceRoutes.tsx:21`
 - المجموعة: `governance`
-- الكومبوننت: `RisksCreate`
+- الكومبوننت: `Governance`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `risks`
-- سطور الملف: 149
+- سطور الملف: 51
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/governance/risks` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L61: "مسح المسودة" → `clearDraft`
-- L142: "(بلا تسمية)" → `() => setLocation("/governance/risks")` 🔒
-- L143: "(بلا تسمية)" → `handleSubmit` 🔒
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/governance/stats`
 
 
 
@@ -42,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/governance/risks`
-- لقطة: `audit/screenshots/governance_risks.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/governance/risks`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

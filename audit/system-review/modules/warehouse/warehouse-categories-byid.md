@@ -1,14 +1,14 @@
-# /warehouse/categories/:id — `artifacts/ghayth-erp/src/pages/details/warehouse-product-detail.tsx`
+# /warehouse/categories/:id — `artifacts/ghayth-erp/src/pages/details/warehouse-category-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/warehouse/categories/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/warehouse-product-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/warehouse-category-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:102`
 - المجموعة: `warehouse`
-- الكومبوننت: `WarehouseProductDetail`
+- الكومبوننت: `WarehouseCategoryDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 297
+- سطور الملف: 166
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
@@ -38,7 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/warehouse/categories → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/warehouse/categories/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

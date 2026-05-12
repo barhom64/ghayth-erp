@@ -1,21 +1,21 @@
-# /umrah/pilgrims/:id — `artifacts/ghayth-erp/src/pages/umrah/pilgrims.tsx`
+# /umrah/pilgrims/:id — `artifacts/ghayth-erp/src/pages/umrah/pilgrim-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/umrah/pilgrims/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/pilgrims.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/pilgrim-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:41`
 - المجموعة: `operations`
-- الكومبوننت: `UmrahPilgrims`
+- الكومبوننت: `PilgrimDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 145
+- سطور الملف: 168
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L81: "إضافة معتمر"
+- L141: "تحديث" → `updateStatus` 🔒
 
 ### القراءات (GET)
 _لا قراءات._
@@ -35,10 +35,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `:id` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L26 _(inline-data-array)_: `const kpiCards = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: no id resolver for /umrah/pilgrims/:id`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/umrah/pilgrims/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

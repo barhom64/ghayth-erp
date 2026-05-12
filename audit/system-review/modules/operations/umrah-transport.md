@@ -1,31 +1,26 @@
-# /umrah/transport — `artifacts/ghayth-erp/src/pages/umrah/packages.tsx`
+# /umrah/transport — `artifacts/ghayth-erp/src/pages/umrah/transport.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/umrah/transport`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/packages.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/transport.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:52`
 - المجموعة: `operations`
-- الكومبوننت: `UmrahPackages`
+- الكومبوننت: `UmrahTransport`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `transport`
-- سطور الملف: 243
+- سطور الملف: 112
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L144: "(بلا تسمية)" → `() => openEdit(r)`
-- L145: "(بلا تسمية)" → `() => setDeleteId(r.id)`
-- L159: "إضافة باقة" → `openCreate`
-- L220: "إلغاء" → `closeDialog` 🔒
-- L221: "(بلا تسمية)" → `handleSubmit` 🔒
-- L233: "(بلا تسمية)" → `() => setDeleteId(null)` 🔒
-- L234: "(بلا تسمية)" → `() => deleteMut.mutate({` 🔒
+- L83: "(بلا تسمية)" → `() => setShowForm(!showForm)`
+- L96: "حفظ" → `() => { setShowForm(false); setForm({` 🔒
+- L97: "حفظ" → `save` 🔒
 
 ### القراءات (GET)
-- GET `/umrah/packages`
-- GET `/umrah/seasons`
+- GET `/umrah/transport`
 
 
 
@@ -45,8 +40,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/umrah/transport`
-- لقطة: `audit/screenshots/umrah_transport.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/umrah/transport`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

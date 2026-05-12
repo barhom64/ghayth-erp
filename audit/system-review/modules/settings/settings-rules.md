@@ -1,29 +1,26 @@
-# /settings/rules — `artifacts/ghayth-erp/src/pages/settings.tsx`
+# /settings/rules — `artifacts/ghayth-erp/src/pages/settings-rules.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/settings/rules`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/settings.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/settings-rules.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/settingsRoutes.tsx:12`
 - المجموعة: `settings`
-- الكومبوننت: `Settings`
+- الكومبوننت: `SettingsRules`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `rules`
-- سطور الملف: 352
+- سطور الملف: 475
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L106: "(بلا تسمية)" → `handleSave` 🔒
-- L186: "(بلا تسمية)" → `() => { if (showForm) resetForm(); else setShowForm(true);`
-- L193: "(بلا تسمية)" → `handleSave` 🔒
-- L205: "تعديل" → `() => handleEdit(item)` 🔒
-- L206: "حذف" → `() => setDeletingItem({ id: item.id, label: (fields[0] && item[fields[0].name]) ` 🔒
+- L165: "(بلا تسمية)" → `() => setExpanded(!expanded)`
+- L168: "(بلا تسمية)" → `onToggle`
+- L172: "(بلا تسمية)" → `onDelete`
 
 ### القراءات (GET)
-- GET `/settings/resolved`
-- GET `/settings/audit-log`
+_لا قراءات._
 
 
 
@@ -43,8 +40,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/settings/rules`
-- لقطة: `audit/screenshots/settings_rules.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/settings/rules`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

@@ -1,25 +1,22 @@
-# /finance/year-end-close — `artifacts/ghayth-erp/src/pages/create/finance/recurring-journals-create.tsx`
+# /finance/year-end-close — `artifacts/ghayth-erp/src/pages/finance/year-end-close.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/year-end-close`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/finance/recurring-journals-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/year-end-close.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:145`
 - المجموعة: `finance`
-- الكومبوننت: `RecurringJournalsCreate`
+- الكومبوننت: `YearEndClose`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `year-end-close`
-- سطور الملف: 228
+- سطور الملف: 287
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L127: "مسح المسودة" → `clearDraft`
-- L162: "إضافة بند" → `addLine`
-- L196: "(بلا تسمية)" → `() => removeLine(idx)` 🔒
-- L218: "(بلا تسمية)" → `() => setLocation("/finance/recurring-journals")` 🔒
-- L221: "(بلا تسمية)" → `handleSubmit` 🔒
+- L136: "(بلا تسمية)" → `() => previewMut.mutate({ retainedEarningsAccountCode, force` 🔒
+- L140: "(بلا تسمية)" → `() => {                 if (!preview) {                   toast({ variant: "dest`
 
 ### القراءات (GET)
 _لا قراءات._
@@ -42,8 +39,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/year-end-close`
-- لقطة: `audit/screenshots/finance_year_end_close.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/year-end-close`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

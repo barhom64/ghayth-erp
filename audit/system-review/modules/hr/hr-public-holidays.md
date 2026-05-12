@@ -1,26 +1,22 @@
-# /hr/public-holidays — `artifacts/ghayth-erp/src/pages/hr/evaluation-360-upward.tsx`
+# /hr/public-holidays — `artifacts/ghayth-erp/src/pages/hr/public-holidays.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/public-holidays`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/evaluation-360-upward.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/public-holidays.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:153`
 - المجموعة: `hr`
-- الكومبوننت: `Evaluation360Upward`
-- subKey: `performance` | minRoleLevel: —
+- الكومبوننت: `PublicHolidays`
+- subKey: `leaves` | minRoleLevel: —
 - الكيان المستنبط: `public-holidays`
-- سطور الملف: 236
+- سطور الملف: 226
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/hr/evaluation-cycles/${cycleId}/upward-review` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L114: "العودة إلى الدورة"
-- L127: "عودة"
-- L221: "إلغاء" → `handleSubmit`
-- L223: "(بلا تسمية)" → `handleSubmit` 🔒
+- L123: "(بلا تسمية)" → `() => { setShowForm(!showForm); setEditingId(null); setFormInitial(defaultHolida`
+- L141: "(بلا تسمية)" → `() => { setShowForm(false); setEditingId(null);`
 
 ### القراءات (GET)
 _لا قراءات._
@@ -43,8 +39,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/public-holidays`
-- لقطة: `audit/screenshots/hr_public_holidays.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/public-holidays`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

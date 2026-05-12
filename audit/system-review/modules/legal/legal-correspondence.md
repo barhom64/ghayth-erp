@@ -1,14 +1,14 @@
-# /legal/correspondence — `artifacts/ghayth-erp/src/pages/legal/judgments.tsx`
+# /legal/correspondence — `artifacts/ghayth-erp/src/pages/legal/correspondence.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/legal/correspondence`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/legal/judgments.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/legal/correspondence.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/legalRoutes.tsx:23`
 - المجموعة: `legal`
-- الكومبوننت: `LegalJudgments`
+- الكومبوننت: `LegalCorrespondence`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `correspondence`
-- سطور الملف: 73
+- سطور الملف: 55
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
@@ -18,7 +18,7 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/legal/judgments/financial-report`
+- GET `/legal/cases`
 
 
 
@@ -38,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/legal/correspondence`
-- لقطة: `audit/screenshots/legal_correspondence.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/legal/correspondence`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

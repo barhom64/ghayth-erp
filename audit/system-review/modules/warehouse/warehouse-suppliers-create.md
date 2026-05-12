@@ -1,25 +1,25 @@
-# /warehouse/suppliers/create — `artifacts/ghayth-erp/src/pages/create/warehouse/movements-create.tsx`
+# /warehouse/suppliers/create — `artifacts/ghayth-erp/src/pages/create/warehouse/suppliers-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/warehouse/suppliers/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/warehouse/movements-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/warehouse/suppliers-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:99`
 - المجموعة: `warehouse`
-- الكومبوننت: `WarehouseMovementsCreate`
+- الكومبوننت: `WarehouseSuppliersCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 113
+- سطور الملف: 83
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 | الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
 |------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/warehouse/movements` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+| _(write)_ | `/warehouse/suppliers` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-- L61: "مسح المسودة" → `clearDraft`
-- L105: "(بلا تسمية)" → `() => setLocation("/warehouse")` 🔒
-- L106: "(بلا تسمية)" → `handleSubmit` 🔒
+- L47: "مسح المسودة" → `clearDraft`
+- L76: "(بلا تسمية)" → `() => setLocation("/warehouse")` 🔒
+- L77: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
 _لا قراءات._
@@ -42,8 +42,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/warehouse/suppliers/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/warehouse_suppliers_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/warehouse/suppliers/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

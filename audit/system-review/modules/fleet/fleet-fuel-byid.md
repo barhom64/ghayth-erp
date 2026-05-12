@@ -1,21 +1,21 @@
-# /fleet/fuel/:id — `artifacts/ghayth-erp/src/pages/fleet/fuel.tsx`
+# /fleet/fuel/:id — `artifacts/ghayth-erp/src/pages/details/fuel-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/fleet/fuel/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/fleet/fuel.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/fuel-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/fleetRoutes.tsx:44`
 - المجموعة: `fleet`
-- الكومبوننت: `Fuel`
+- الكومبوننت: `FuelDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 65
+- سطور الملف: 239
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L39: "تسجيل تعبئة"
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
 _لا قراءات._
@@ -38,7 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/fleet/fuel-logs → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/fleet/fuel/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

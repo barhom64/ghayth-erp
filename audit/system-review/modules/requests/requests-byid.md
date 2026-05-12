@@ -1,26 +1,24 @@
-# /requests/:id — `artifacts/ghayth-erp/src/pages/create/requests/types-create.tsx`
+# /requests/:id — `artifacts/ghayth-erp/src/pages/details/request-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/requests/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/requests/types-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/request-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/requestsRoutes.tsx:14`
 - المجموعة: `requests`
-- الكومبوننت: `RequestsTypeCreate`
+- الكومبوننت: `RequestDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 85
+- سطور الملف: 342
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L49: "مسح المسودة" → `clearDraft`
-- L78: "(بلا تسمية)" → `() => setLocation("/requests/types")` 🔒
-- L79: "(بلا تسمية)" → `handleSubmit` 🔒
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/requests/types`
 
 
 
@@ -40,7 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: no id resolver for /requests/:id`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/requests/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

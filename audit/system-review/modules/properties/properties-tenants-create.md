@@ -1,22 +1,24 @@
-# /properties/tenants/create — `artifacts/ghayth-erp/src/pages/details/building-detail.tsx`
+# /properties/tenants/create — `artifacts/ghayth-erp/src/pages/create/properties/tenants-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/properties/tenants/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/building-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/properties/tenants-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/propertyRoutes.tsx:38`
 - المجموعة: `properties`
-- الكومبوننت: `BuildingDetail`
+- الكومبوننت: `TenantsCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 205
+- سطور الملف: 220
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/properties/tenants` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-- L101: "إضافة وحدة"
-- L114: "إضافة وحدة"
+- L87: "مسح المسودة" → `clearDraft`
+- L212: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
 _لا قراءات._
@@ -36,11 +38,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `create` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L109 _(dummy-name)_: `<TextField label="البريد الإلكتروني" type="email" dir="ltr" value={form.email} onChange={v => set("email", v)} placehold`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/properties/tenants/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/properties_tenants_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/properties/tenants/create`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

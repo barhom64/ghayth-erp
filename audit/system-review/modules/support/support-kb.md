@@ -1,28 +1,24 @@
-# /support/kb — `artifacts/ghayth-erp/src/pages/create/support-create.tsx`
+# /support/kb — `artifacts/ghayth-erp/src/pages/support/kb.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/support/kb`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/support-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/support/kb.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:110`
 - المجموعة: `support`
-- الكومبوننت: `SupportCreate`
+- الكومبوننت: `KnowledgeBase`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `kb`
-- سطور الملف: 136
+- سطور الملف: 49
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/support/tickets` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L59: "مسح المسودة" → `clearDraft`
-- L129: "(بلا تسمية)" → `() => setLocation("/support")` 🔒
-- L130: "(بلا تسمية)" → `handleSubmit` 🔒
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/support/kb`
 
 
 
@@ -42,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/support/kb`
-- لقطة: `audit/screenshots/support_kb.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/support/kb`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

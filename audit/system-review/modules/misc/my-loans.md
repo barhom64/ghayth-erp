@@ -1,29 +1,29 @@
-# /my-loans — `artifacts/ghayth-erp/src/pages/my-performance.tsx`
+# /my-loans — `artifacts/ghayth-erp/src/pages/my-loans.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/my-loans`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/my-performance.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/my-loans.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:71`
-- المجموعة: `operations`
-- الكومبوننت: `MyPerformance`
+- المجموعة: `misc`
+- الكومبوننت: `MyLoans`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `my-loans`
-- سطور الملف: 103
+- سطور الملف: 122
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L80: "طلب سلفة جديدة"
 
 ### القراءات (GET)
-- GET `/my-space/performance`
+- GET `/hr/loans/my`
 
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/operations.md` (إن وُجد) وعدّد:
+- [ ] **TBD** — راجع `docs/blueprints/misc.md` (إن وُجد) وعدّد:
   - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
   - تأثير الأرصدة (balances, balances_history)
   - الإشعارات (notifications)
@@ -38,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/my-loans`
-- لقطة: `audit/screenshots/my_loans.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/my-loans`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

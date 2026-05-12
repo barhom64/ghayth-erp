@@ -1,23 +1,23 @@
-# /properties/contracts/:contractId/pay/:installmentId — `artifacts/ghayth-erp/src/pages/properties-owners.tsx`
+# /properties/contracts/:contractId/pay/:installmentId — `artifacts/ghayth-erp/src/pages/create/properties/payment-record.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/properties/contracts/:contractId/pay/:installmentId`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/properties-owners.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/properties/payment-record.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/propertyRoutes.tsx:46`
 - المجموعة: `properties`
-- الكومبوننت: `PropertiesOwners`
+- الكومبوننت: `PaymentRecord`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:installmentId`
-- سطور الملف: 181
+- سطور الملف: 120
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L101: "تعديل"
-- L105: "(بلا تسمية)" → `() => setDeletingOwner({ id: o.id, name: o.name || "—"`
-- L122: "إضافة مالك"
+- L81: "مسح المسودة" → `clearDraft`
+- L112: "(بلا تسمية)" → `() => setLocation("/properties/contracts")` 🔒
+- L113: "(بلا تسمية)" → `handleSave` 🔒
 
 ### القراءات (GET)
 _لا قراءات._
@@ -40,7 +40,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/properties/contracts → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/properties/contracts/:contractId/pay/:installmentId`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

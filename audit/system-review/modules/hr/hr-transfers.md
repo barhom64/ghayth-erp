@@ -1,27 +1,29 @@
-# /hr/transfers — `artifacts/ghayth-erp/src/pages/hr/evaluation-360-detail.tsx`
+# /hr/transfers — `artifacts/ghayth-erp/src/pages/hr/transfers.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/transfers`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/evaluation-360-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/transfers.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:154`
 - المجموعة: `hr`
-- الكومبوننت: `Evaluation360Detail`
-- subKey: `performance` | minRoleLevel: —
+- الكومبوننت: `Transfers`
+- subKey: `employees` | minRoleLevel: —
 - الكيان المستنبط: `transfers`
-- سطور الملف: 481
+- سطور الملف: 298
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/hr/transfers` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-- L156: "إضافة تقييم مدير/زميل"
-- L159: "تقييم عكسي سري"
-- L343: "إضافة تقييم"
-- L417: "إرسال تقييم عكسي سري"
+- L206: "(بلا تسمية)" → `() => setShowForm(!showForm)`
+- L238: "(بلا تسمية)" → `() => setShowForm(false)`
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/hr/transfers`
+- GET `/employees?status=active&limit=200`
+- GET `/settings/branches`
 
 
 
@@ -38,11 +40,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `transfers` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L146 _(inline-data-array)_: `const tabs = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/transfers`
-- لقطة: `audit/screenshots/hr_transfers.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/transfers`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

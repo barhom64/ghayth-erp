@@ -1,24 +1,25 @@
-# /umrah — `any`
+# /umrah — `artifacts/ghayth-erp/src/pages/umrah/dashboard.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/umrah`
-- ملف الصفحة: `—`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/dashboard.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:38`
 - المجموعة: `operations`
-- الكومبوننت: `any`
+- الكومبوننت: `UmrahDashboard`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `umrah`
-- سطور الملف: 0
-- مصدر موجود: —
+- سطور الملف: 170
+- مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L58: "تحديث الحالات" → `runDaily`
+- L59: "تشغيل الغرامات" → `runPenalties`
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/umrah/seasons`
 
 
 
@@ -38,8 +39,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/umrah`
-- لقطة: `audit/screenshots/umrah.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/umrah`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

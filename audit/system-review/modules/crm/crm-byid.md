@@ -1,24 +1,29 @@
-# /crm/:id — `artifacts/ghayth-erp/src/pages/crm/activities.tsx`
+# /crm/:id — `artifacts/ghayth-erp/src/pages/details/opportunity-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/crm/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/crm/activities.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/opportunity-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:88`
 - المجموعة: `crm`
-- الكومبوننت: `CrmActivities`
+- الكومبوننت: `OpportunityDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 132
+- سطور الملف: 333
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L98: "تعديل" → `startEdit`
+- L101: "تأكيد الحذف" → `handleDelete`
+- L102: "(بلا تسمية)" → `() => setDeleting(false)`
+- L105: "(بلا تسمية)" → `() => setDeleting(true)`
+- L136: "حفظ" → `saveEdit`
+- L137: "(بلا تسمية)" → `() => setEditing(false)`
 
 ### القراءات (GET)
-- GET `/crm/opportunities`
+_لا قراءات._
 
 
 
@@ -35,10 +40,9 @@ _لم تُلتقط أزرار._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `:id` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L40 _(inline-data-array)_: `const kpis = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/crm/leads → 404`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/crm/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

@@ -1,28 +1,24 @@
-# /hr/shifts/:id — `artifacts/ghayth-erp/src/pages/create/hr/shifts-create.tsx`
+# /hr/shifts/:id — `artifacts/ghayth-erp/src/pages/details/shift-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/shifts/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/hr/shifts-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/shift-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:143`
 - المجموعة: `hr`
-- الكومبوننت: `ShiftsCreate`
+- الكومبوننت: `ShiftDetail`
 - subKey: `shifts` | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 215
+- سطور الملف: 84
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/hr/shifts` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L115: "مسح المسودة" → `clearDraft`
-- L207: "(بلا تسمية)" → `() => setLocation("/hr/shifts")` 🔒
-- L208: "(بلا تسمية)" → `handleSubmit` 🔒
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/settings/branches`
+- GET `/hr/shifts`
 
 
 
@@ -39,10 +35,9 @@
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `:id` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L23 _(inline-data-array)_: `const daysOfWeek = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: no id resolver for /hr/shifts/:id`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/shifts/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

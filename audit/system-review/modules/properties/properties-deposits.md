@@ -1,29 +1,28 @@
-# /properties/deposits — `artifacts/ghayth-erp/src/pages/create/properties-create.tsx`
+# /properties/deposits — `artifacts/ghayth-erp/src/pages/properties/deposits.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/properties/deposits`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/properties-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/properties/deposits.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/propertyRoutes.tsx:57`
 - المجموعة: `properties`
-- الكومبوننت: `PropertiesCreate`
+- الكومبوننت: `PropertyDeposits`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `deposits`
-- سطور الملف: 298
+- سطور الملف: 292
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/properties/units` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L135: "مسح المسودة" → `clearDraft`
-- L291: "(بلا تسمية)" → `() => setLocation("/properties")` 🔒
-- L292: "(بلا تسمية)" 🔒
+- L109: "(بلا تسمية)" → `() => setShowForm(!showForm)`
+- L140: "(بلا تسمية)" → `() => setShowForm(false)`
+- L172: "(بلا تسمية)" → `() => setStatusFilter(v)`
+- L202: "(بلا تسمية)" → `() => setRefundTarget({ id: d.id, originalAmount: Number(d.amount)`
+- L266: "إلغاء" → `props.onClose`
 
 ### القراءات (GET)
-- GET `/properties/buildings`
-- GET `/properties/owners`
+- GET `/properties/contracts?status=active&limit=200`
 
 
 
@@ -43,8 +42,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/properties/deposits`
-- لقطة: `audit/screenshots/properties_deposits.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/properties/deposits`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

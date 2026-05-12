@@ -1,21 +1,24 @@
-# /finance/recurring-journals — `artifacts/ghayth-erp/src/pages/finance/opening-balances.tsx`
+# /finance/recurring-journals — `artifacts/ghayth-erp/src/pages/finance/recurring-journals.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/recurring-journals`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/opening-balances.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/recurring-journals.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:142`
 - المجموعة: `finance`
-- الكومبوننت: `OpeningBalances`
+- الكومبوننت: `RecurringJournals`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `recurring-journals`
-- سطور الملف: 146
+- سطور الملف: 268
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L99: "قيد أرصدة افتتاحية جديد"
+- L158: "تنفيذ الآن"
+- L167: "(بلا تسمية)"
+- L176: "حذف"
+- L198: "(بلا تسمية)"
 
 ### القراءات (GET)
 _لا قراءات._
@@ -38,8 +41,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/recurring-journals`
-- لقطة: `audit/screenshots/finance_recurring_journals.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/recurring-journals`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

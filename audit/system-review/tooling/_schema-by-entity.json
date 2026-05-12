@@ -32,7 +32,7 @@
   "branches": {
     "exportName": "branches",
     "tableName": "branches",
-    "columnCount": 8,
+    "columnCount": 17,
     "columns": [
       "id",
       "companyId",
@@ -41,16 +41,25 @@
       "address",
       "phone",
       "email",
-      "lat"
+      "lat",
+      "lon",
+      "taxNumber",
+      "crNumber",
+      "logoUrl",
+      "footerText",
+      "city",
+      "website",
+      "status",
+      "createdAt"
     ],
     "audit": {
       "tenant": true,
       "createdBy": false,
       "updatedBy": false,
-      "createdAt": false,
+      "createdAt": true,
       "updatedAt": false,
       "softDelete": false,
-      "lifecycle": false
+      "lifecycle": true
     },
     "fks": [
       {
@@ -92,7 +101,7 @@
   "employee_assignments": {
     "exportName": "employeeAssignments",
     "tableName": "employee_assignments",
-    "columnCount": 8,
+    "columnCount": 12,
     "columns": [
       "id",
       "employeeId",
@@ -101,16 +110,20 @@
       "role",
       "jobTitle",
       "departmentId",
-      "salary"
+      "salary",
+      "status",
+      "startDate",
+      "endDate",
+      "createdAt"
     ],
     "audit": {
       "tenant": true,
       "createdBy": false,
       "updatedBy": false,
-      "createdAt": false,
+      "createdAt": true,
       "updatedAt": false,
       "softDelete": false,
-      "lifecycle": false
+      "lifecycle": true
     },
     "fks": [
       {
@@ -130,7 +143,7 @@
   "attendance": {
     "exportName": "attendance",
     "tableName": "attendance",
-    "columnCount": 12,
+    "columnCount": 16,
     "columns": [
       "id",
       "assignmentId",
@@ -143,13 +156,17 @@
       "overtimeMinutes",
       "status",
       "notes",
-      "checkInLat"
+      "checkInLat",
+      "checkInLon",
+      "checkOutLat",
+      "checkOutLon",
+      "createdAt"
     ],
     "audit": {
       "tenant": true,
       "createdBy": false,
       "updatedBy": false,
-      "createdAt": false,
+      "createdAt": true,
       "updatedAt": false,
       "softDelete": false,
       "lifecycle": true
@@ -172,7 +189,7 @@
   "hr_leave_types": {
     "exportName": "hrLeaveTypes",
     "tableName": "hr_leave_types",
-    "columnCount": 8,
+    "columnCount": 7,
     "columns": [
       "id",
       "companyId",
@@ -180,8 +197,7 @@
       "annualDays",
       "isPaid",
       "requiresApproval",
-      "createdAt",
-      "companyIdx"
+      "createdAt"
     ],
     "audit": {
       "tenant": true,
@@ -202,7 +218,7 @@
   "hr_leave_requests": {
     "exportName": "hrLeaveRequests",
     "tableName": "hr_leave_requests",
-    "columnCount": 16,
+    "columnCount": 13,
     "columns": [
       "id",
       "employeeId",
@@ -216,10 +232,7 @@
       "approvedBy",
       "approvedAt",
       "rejectedReason",
-      "createdAt",
-      "companyIdx",
-      "statusIdx",
-      "employeeIdx"
+      "createdAt"
     ],
     "audit": {
       "tenant": true,
@@ -288,7 +301,7 @@
   "journal_entries": {
     "exportName": "journalEntries",
     "tableName": "journal_entries",
-    "columnCount": 18,
+    "columnCount": 12,
     "columns": [
       "id",
       "companyId",
@@ -301,13 +314,7 @@
       "sourceType",
       "sourceId",
       "deletedAt",
-      "createdAt",
-      "companyIdx",
-      "branchIdx",
-      "statusIdx",
-      "createdAtIdx",
-      "companyBranchIdx",
-      "refIdx"
+      "createdAt"
     ],
     "audit": {
       "tenant": true,
@@ -332,13 +339,15 @@
   "journal_lines": {
     "exportName": "journalLines",
     "tableName": "journal_lines",
-    "columnCount": 5,
+    "columnCount": 7,
     "columns": [
       "id",
       "journalId",
       "accountCode",
       "accountId",
-      "debit"
+      "debit",
+      "credit",
+      "description"
     ],
     "audit": {
       "tenant": false,
@@ -359,7 +368,7 @@
   "chart_of_accounts": {
     "exportName": "chartOfAccounts",
     "tableName": "chart_of_accounts",
-    "columnCount": 9,
+    "columnCount": 8,
     "columns": [
       "id",
       "companyId",
@@ -368,8 +377,7 @@
       "type",
       "parentCode",
       "status",
-      "createdAt",
-      "companyCodeIdx"
+      "createdAt"
     ],
     "audit": {
       "tenant": true,
@@ -390,20 +398,22 @@
   "budgets": {
     "exportName": "budgets",
     "tableName": "budgets",
-    "columnCount": 6,
+    "columnCount": 8,
     "columns": [
       "id",
       "companyId",
       "branchId",
       "accountCode",
       "period",
-      "amount"
+      "amount",
+      "used",
+      "createdAt"
     ],
     "audit": {
       "tenant": true,
       "createdBy": false,
       "updatedBy": false,
-      "createdAt": false,
+      "createdAt": true,
       "updatedAt": false,
       "softDelete": false,
       "lifecycle": false
@@ -418,7 +428,7 @@
   "purchase_requests": {
     "exportName": "purchaseRequests",
     "tableName": "purchase_requests",
-    "columnCount": 8,
+    "columnCount": 13,
     "columns": [
       "id",
       "companyId",
@@ -427,13 +437,18 @@
       "requestedBy",
       "supplierId",
       "status",
-      "totalAmount"
+      "totalAmount",
+      "notes",
+      "expectedDelivery",
+      "approvedBy",
+      "approvedAt",
+      "createdAt"
     ],
     "audit": {
       "tenant": true,
       "createdBy": false,
       "updatedBy": false,
-      "createdAt": false,
+      "createdAt": true,
       "updatedAt": false,
       "softDelete": false,
       "lifecycle": true
@@ -448,7 +463,7 @@
   "purchase_orders": {
     "exportName": "purchaseOrders",
     "tableName": "purchase_orders",
-    "columnCount": 8,
+    "columnCount": 12,
     "columns": [
       "id",
       "companyId",
@@ -457,13 +472,17 @@
       "supplierId",
       "requestId",
       "status",
-      "totalAmount"
+      "totalAmount",
+      "notes",
+      "expectedDelivery",
+      "createdBy",
+      "createdAt"
     ],
     "audit": {
       "tenant": true,
-      "createdBy": false,
+      "createdBy": true,
       "updatedBy": false,
-      "createdAt": false,
+      "createdAt": true,
       "updatedAt": false,
       "softDelete": false,
       "lifecycle": true
@@ -478,7 +497,7 @@
   "suppliers": {
     "exportName": "suppliers",
     "tableName": "suppliers",
-    "columnCount": 13,
+    "columnCount": 12,
     "columns": [
       "id",
       "companyId",
@@ -491,8 +510,7 @@
       "paymentTerms",
       "category",
       "deletedAt",
-      "createdAt",
-      "companyIdx"
+      "createdAt"
     ],
     "audit": {
       "tenant": true,
@@ -513,7 +531,7 @@
   "clients": {
     "exportName": "clients",
     "tableName": "clients",
-    "columnCount": 11,
+    "columnCount": 10,
     "columns": [
       "id",
       "companyId",
@@ -524,8 +542,7 @@
       "address",
       "status",
       "deletedAt",
-      "createdAt",
-      "companyIdx"
+      "createdAt"
     ],
     "audit": {
       "tenant": true,
@@ -546,7 +563,7 @@
   "invoices": {
     "exportName": "invoices",
     "tableName": "invoices",
-    "columnCount": 7,
+    "columnCount": 12,
     "columns": [
       "id",
       "companyId",
@@ -554,16 +571,21 @@
       "clientId",
       "ref",
       "description",
-      "total"
+      "total",
+      "paidAmount",
+      "dueDate",
+      "status",
+      "deletedAt",
+      "createdAt"
     ],
     "audit": {
       "tenant": true,
       "createdBy": false,
       "updatedBy": false,
-      "createdAt": false,
+      "createdAt": true,
       "updatedAt": false,
-      "softDelete": false,
-      "lifecycle": false
+      "softDelete": true,
+      "lifecycle": true
     },
     "fks": [
       {
@@ -579,21 +601,24 @@
   "payroll_runs": {
     "exportName": "payrollRuns",
     "tableName": "payroll_runs",
-    "columnCount": 5,
+    "columnCount": 8,
     "columns": [
       "id",
       "companyId",
       "period",
       "status",
-      "totalNet"
+      "totalNet",
+      "runBy",
+      "deletedAt",
+      "createdAt"
     ],
     "audit": {
       "tenant": true,
       "createdBy": false,
       "updatedBy": false,
-      "createdAt": false,
+      "createdAt": true,
       "updatedAt": false,
-      "softDelete": false,
+      "softDelete": true,
       "lifecycle": true
     },
     "fks": [
@@ -606,13 +631,26 @@
   "payroll_lines": {
     "exportName": "payrollLines",
     "tableName": "payroll_lines",
-    "columnCount": 5,
+    "columnCount": 18,
     "columns": [
       "id",
       "runId",
       "assignmentId",
       "employeeId",
-      "basic"
+      "basic",
+      "housingAllowance",
+      "transportAllowance",
+      "grossSalary",
+      "gosi",
+      "gosiEmployer",
+      "lateDeduction",
+      "absenceDeduction",
+      "violationDeduction",
+      "loanDeduction",
+      "overtime",
+      "overtimeHours",
+      "netSalary",
+      "deletedAt"
     ],
     "audit": {
       "tenant": true,
@@ -620,7 +658,7 @@
       "updatedBy": false,
       "createdAt": false,
       "updatedAt": false,
-      "softDelete": false,
+      "softDelete": true,
       "lifecycle": false
     },
     "fks": [
@@ -641,7 +679,7 @@
   "employee_violations": {
     "exportName": "employeeViolations",
     "tableName": "employee_violations",
-    "columnCount": 7,
+    "columnCount": 10,
     "columns": [
       "id",
       "companyId",
@@ -649,15 +687,18 @@
       "type",
       "description",
       "severity",
-      "deduction"
+      "deduction",
+      "period",
+      "deletedAt",
+      "createdAt"
     ],
     "audit": {
       "tenant": true,
       "createdBy": false,
       "updatedBy": false,
-      "createdAt": false,
+      "createdAt": true,
       "updatedAt": false,
-      "softDelete": false,
+      "softDelete": true,
       "lifecycle": false
     },
     "fks": [
@@ -674,19 +715,22 @@
   "approval_chains": {
     "exportName": "approvalChains",
     "tableName": "approval_chains",
-    "columnCount": 5,
+    "columnCount": 8,
     "columns": [
       "id",
       "companyId",
       "name",
       "chainType",
-      "minAmount"
+      "minAmount",
+      "maxAmount",
+      "isActive",
+      "createdAt"
     ],
     "audit": {
       "tenant": true,
       "createdBy": false,
       "updatedBy": false,
-      "createdAt": false,
+      "createdAt": true,
       "updatedAt": false,
       "softDelete": false,
       "lifecycle": false
@@ -729,7 +773,7 @@
   "event_dlq": {
     "exportName": "eventDlq",
     "tableName": "event_dlq",
-    "columnCount": 11,
+    "columnCount": 9,
     "columns": [
       "id",
       "type",
@@ -739,9 +783,7 @@
       "retryCount",
       "resolved",
       "createdAt",
-      "resolvedAt",
-      "typeIdx",
-      "resolvedIdx"
+      "resolvedAt"
     ],
     "audit": {
       "tenant": true,

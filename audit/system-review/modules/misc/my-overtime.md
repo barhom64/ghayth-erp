@@ -1,0 +1,43 @@
+# /my-overtime — `artifacts/ghayth-erp/src/pages/my-overtime.tsx`
+
+## 1. الميتاداتا
+- المسار: `/my-overtime`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/my-overtime.tsx`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:72`
+- المجموعة: `misc`
+- الكومبوننت: `MyOvertime`
+- subKey: — | minRoleLevel: —
+- الكيان المستنبط: `my-overtime`
+- سطور الملف: 128
+- مصدر موجود: ✅
+
+## 2. الأزرار والإجراءات
+_لا توجد طلبات كتابة من هذه الصفحة._
+
+### تفاصيل الأزرار المرئية
+_لم تُلتقط أزرار._
+
+### القراءات (GET)
+_لا قراءات._
+
+
+
+## 3. الحركات ذات الصلة (Cross-Module Transactions)
+- [ ] **TBD** — راجع `docs/blueprints/misc.md` (إن وُجد) وعدّد:
+  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
+  - تأثير الأرصدة (balances, balances_history)
+  - الإشعارات (notifications)
+  - سير الموافقات (approval_chains)
+  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
+- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+## 4. النمذجة
+_لم يتم العثور على جدول Drizzle بالاسم المستنبط `my-overtime` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
+
+## 5. البيانات الوهمية الثابتة
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+
+## 6. النتيجة (Verdict)
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/my-overtime`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

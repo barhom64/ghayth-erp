@@ -1,5 +1,5 @@
 {
-  "/admin/policy-engine": {
+  "/admin/violations-report": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin-violations-report.tsx",
     "module": "admin",
     "hits": [
@@ -21,29 +21,29 @@
       }
     ]
   },
-  "/communications/notification-engine": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/communications.tsx",
-    "module": "communications",
+  "/documents/templates": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/documents/templates.tsx",
+    "module": "documents",
     "hits": [
       {
-        "line": 379,
+        "line": 94,
         "kind": "inline-data-array",
-        "text": "const options = ["
+        "text": "const statCards = ["
       }
     ]
   },
-  "/communications/letters/create": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/communications.tsx",
-    "module": "communications",
+  "/documents/archive": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/documents/archive.tsx",
+    "module": "documents",
     "hits": [
       {
-        "line": 379,
+        "line": 49,
         "kind": "inline-data-array",
-        "text": "const options = ["
+        "text": "const statCards = ["
       }
     ]
   },
-  "/finance/journal": {
+  "/finance/vouchers/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/vouchers-create.tsx",
     "module": "finance",
     "hits": [
@@ -54,7 +54,7 @@
       }
     ]
   },
-  "/finance/expenses": {
+  "/finance/invoices/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/invoices-create.tsx",
     "module": "finance",
     "hits": [
@@ -70,7 +70,7 @@
       }
     ]
   },
-  "/finance/budget": {
+  "/finance/expenses/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/expenses-create.tsx",
     "module": "finance",
     "hits": [
@@ -86,7 +86,7 @@
       }
     ]
   },
-  "/finance/bank-reconciliation": {
+  "/finance/ar-aging": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/ar-aging.tsx",
     "module": "finance",
     "hits": [
@@ -97,7 +97,7 @@
       }
     ]
   },
-  "/finance/bank-reconciliation/manual-match/:batchId/:rowId": {
+  "/finance/ap-aging": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/ap-aging.tsx",
     "module": "finance",
     "hits": [
@@ -108,7 +108,7 @@
       }
     ]
   },
-  "/fleet/traffic-violations": {
+  "/fleet/reports": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet/reports.tsx",
     "module": "fleet",
     "hits": [
@@ -119,7 +119,7 @@
       }
     ]
   },
-  "/hr/attendance": {
+  "/employees/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/employees-create.tsx",
     "module": "hr",
     "hits": [
@@ -130,7 +130,7 @@
       }
     ]
   },
-  "/hr/attendance/:id": {
+  "/hr/attendance": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/attendance.tsx",
     "module": "hr",
     "hits": [
@@ -141,7 +141,7 @@
       }
     ]
   },
-  "/hr/attendance/qr-scanner": {
+  "/hr/attendance/reports": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/attendance-reports.tsx",
     "module": "hr",
     "hits": [
@@ -152,7 +152,7 @@
       }
     ]
   },
-  "/hr/leaves": {
+  "/hr/attendance/field-tracking": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/field-tracking.tsx",
     "module": "hr",
     "hits": [
@@ -163,7 +163,7 @@
       }
     ]
   },
-  "/hr/leaves/:id": {
+  "/hr/leaves": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/leaves.tsx",
     "module": "hr",
     "hits": [
@@ -174,7 +174,7 @@
       }
     ]
   },
-  "/hr/payroll": {
+  "/hr/leaves/management": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/leave-management.tsx",
     "module": "hr",
     "hits": [
@@ -185,7 +185,7 @@
       }
     ]
   },
-  "/hr/payroll/create": {
+  "/hr/leaves/approval-chains": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/approval-chains.tsx",
     "module": "hr",
     "hits": [
@@ -196,7 +196,7 @@
       }
     ]
   },
-  "/hr/payroll/salary-components": {
+  "/hr/payroll": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/payroll.tsx",
     "module": "hr",
     "hits": [
@@ -207,7 +207,7 @@
       }
     ]
   },
-  "/hr/performance/advanced": {
+  "/hr/performance": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/performance.tsx",
     "module": "hr",
     "hits": [
@@ -218,7 +218,7 @@
       }
     ]
   },
-  "/hr/training": {
+  "/hr/performance/advanced": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/performance-advanced.tsx",
     "module": "hr",
     "hits": [
@@ -229,7 +229,7 @@
       }
     ]
   },
-  "/hr/training/advanced": {
+  "/hr/training": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/training.tsx",
     "module": "hr",
     "hits": [
@@ -240,7 +240,7 @@
       }
     ]
   },
-  "/hr/organization": {
+  "/hr/training/advanced": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/training-advanced.tsx",
     "module": "hr",
     "hits": [
@@ -251,7 +251,7 @@
       }
     ]
   },
-  "/hr/recruitment": {
+  "/hr/organization": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/organization.tsx",
     "module": "hr",
     "hits": [
@@ -262,7 +262,7 @@
       }
     ]
   },
-  "/hr/recruitment/create": {
+  "/hr/organization/structure": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/organization-structure.tsx",
     "module": "hr",
     "hits": [
@@ -273,7 +273,7 @@
       }
     ]
   },
-  "/hr/recruitment/applicants/create": {
+  "/hr/recruitment": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/recruitment.tsx",
     "module": "hr",
     "hits": [
@@ -284,7 +284,7 @@
       }
     ]
   },
-  "/hr/recruitment/jobs/:id": {
+  "/hr/recruitment/applications": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/application-list.tsx",
     "module": "hr",
     "hits": [
@@ -295,7 +295,7 @@
       }
     ]
   },
-  "/hr/loans": {
+  "/hr/recruitment/advanced": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/recruitment-advanced.tsx",
     "module": "hr",
     "hits": [
@@ -306,7 +306,7 @@
       }
     ]
   },
-  "/hr/exit/create": {
+  "/hr/overtime/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/overtime-detail.tsx",
     "module": "hr",
     "hits": [
@@ -317,7 +317,7 @@
       }
     ]
   },
-  "/hr/violations/management": {
+  "/hr/violations": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/violations.tsx",
     "module": "hr",
     "hits": [
@@ -328,7 +328,7 @@
       }
     ]
   },
-  "/hr/violations/:id": {
+  "/hr/violations/penalty-escalation": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/penalty-escalation.tsx",
     "module": "hr",
     "hits": [
@@ -339,7 +339,7 @@
       }
     ]
   },
-  "/hr/shifts/management": {
+  "/hr/shifts": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/shifts.tsx",
     "module": "hr",
     "hits": [
@@ -350,7 +350,7 @@
       }
     ]
   },
-  "/hr/shifts/:id": {
+  "/hr/shifts/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/shifts-create.tsx",
     "module": "hr",
     "hits": [
@@ -361,7 +361,7 @@
       }
     ]
   },
-  "/hr/evaluation-360/create": {
+  "/hr/employee-activation": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/employee-activation.tsx",
     "module": "hr",
     "hits": [
@@ -372,7 +372,7 @@
       }
     ]
   },
-  "/hr/evaluation-360/history/:employeeId": {
+  "/hr/onboarding-review": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/onboarding-review.tsx",
     "module": "hr",
     "hits": [
@@ -383,7 +383,7 @@
       }
     ]
   },
-  "/hr/evaluation-360/:id/upward": {
+  "/hr/evaluation-360": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/evaluation-360.tsx",
     "module": "hr",
     "hits": [
@@ -394,7 +394,7 @@
       }
     ]
   },
-  "/hr/transfers": {
+  "/hr/evaluation-360/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/evaluation-360-detail.tsx",
     "module": "hr",
     "hits": [
@@ -405,7 +405,7 @@
       }
     ]
   },
-  "/hr/turnover-report": {
+  "/hr/idp": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/idp.tsx",
     "module": "hr",
     "hits": [
@@ -416,7 +416,7 @@
       }
     ]
   },
-  "/hr/contracts/create": {
+  "/hr/expiring-documents": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/expiring-documents.tsx",
     "module": "hr",
     "hits": [
@@ -427,7 +427,7 @@
       }
     ]
   },
-  "/hr/excuse-requests/:id": {
+  "/hr/excuse-requests": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/excuse-requests.tsx",
     "module": "hr",
     "hits": [
@@ -438,7 +438,7 @@
       }
     ]
   },
-  "/crm/:id": {
+  "/crm/activities": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/crm/activities.tsx",
     "module": "crm",
     "hits": [
@@ -449,7 +449,7 @@
       }
     ]
   },
-  "/projects/risks": {
+  "/projects/tasks": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/tasks.tsx",
     "module": "operations",
     "hits": [
@@ -460,7 +460,7 @@
       }
     ]
   },
-  "/warehouse": {
+  "/projects/risks": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/projects/risks.tsx",
     "module": "operations",
     "hits": [
@@ -476,7 +476,7 @@
       }
     ]
   },
-  "/warehouse/create": {
+  "/projects/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/project-detail.tsx",
     "module": "operations",
     "hits": [
@@ -487,7 +487,7 @@
       }
     ]
   },
-  "/intelligence": {
+  "/tasks": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/tasks.tsx",
     "module": "operations",
     "hits": [
@@ -498,9 +498,9 @@
       }
     ]
   },
-  "/reports/scheduled": {
+  "/activity-log": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/activity-log.tsx",
-    "module": "bi",
+    "module": "misc",
     "hits": [
       {
         "line": 273,
@@ -509,7 +509,18 @@
       }
     ]
   },
-  "/properties/tenants": {
+  "/module-dashboards": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/module-dashboards.tsx",
+    "module": "bi",
+    "hits": [
+      {
+        "line": 660,
+        "kind": "inline-data-array",
+        "text": "const tabConfig = ["
+      }
+    ]
+  },
+  "/properties/tenants/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/properties/tenants-create.tsx",
     "module": "properties",
     "hits": [
@@ -520,7 +531,7 @@
       }
     ]
   },
-  "/properties/owners/:id": {
+  "/properties/owners/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/properties/owners-create.tsx",
     "module": "properties",
     "hits": [
@@ -531,7 +542,7 @@
       }
     ]
   },
-  "/properties/owners": {
+  "/properties/owners/:id/edit": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/properties/owners-edit.tsx",
     "module": "properties",
     "hits": [
@@ -542,7 +553,7 @@
       }
     ]
   },
-  "/properties/guide": {
+  "/properties/occupancy-report": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/properties/occupancy-report.tsx",
     "module": "properties",
     "hits": [
@@ -553,7 +564,7 @@
       }
     ]
   },
-  "/properties/:id/status": {
+  "/guide/properties": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/properties-guide.tsx",
     "module": "properties",
     "hits": [
@@ -584,7 +595,7 @@
       }
     ]
   },
-  "/properties/:id": {
+  "/properties/guide": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/properties-guide.tsx",
     "module": "properties",
     "hits": [
@@ -616,17 +627,6 @@
     ]
   },
   "/requests": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/requests-page.tsx",
-    "module": "requests",
-    "hits": [
-      {
-        "line": 95,
-        "kind": "inline-data-array",
-        "text": "const CONVERT_OPTIONS = ["
-      }
-    ]
-  },
-  "/requests/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/requests-page.tsx",
     "module": "requests",
     "hits": [
@@ -670,7 +670,7 @@
       }
     ]
   },
-  "/store/products/create": {
+  "/store/orders": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/store.tsx",
     "module": "store",
     "hits": [
@@ -681,29 +681,7 @@
       }
     ]
   },
-  "/store/products/:id": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/store.tsx",
-    "module": "store",
-    "hits": [
-      {
-        "line": 314,
-        "kind": "inline-data-array",
-        "text": "const statCards = ["
-      }
-    ]
-  },
-  "/store/orders/:id": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/store.tsx",
-    "module": "store",
-    "hits": [
-      {
-        "line": 314,
-        "kind": "inline-data-array",
-        "text": "const statCards = ["
-      }
-    ]
-  },
-  "/umrah/pilgrims/:id": {
+  "/umrah/pilgrims": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/pilgrims.tsx",
     "module": "operations",
     "hits": [
@@ -714,7 +692,7 @@
       }
     ]
   },
-  "/umrah/seasons": {
+  "/umrah/agents": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/agents.tsx",
     "module": "operations",
     "hits": [
@@ -725,7 +703,7 @@
       }
     ]
   },
-  "/umrah/invoices": {
+  "/umrah/penalties": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/penalties.tsx",
     "module": "operations",
     "hits": [
@@ -736,7 +714,7 @@
       }
     ]
   },
-  "/umrah/packages": {
+  "/umrah/invoices": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/invoices.tsx",
     "module": "operations",
     "hits": [
@@ -744,6 +722,17 @@
         "line": 52,
         "kind": "inline-data-array",
         "text": "const kpiCards = ["
+      }
+    ]
+  },
+  "/umrah/daily-runsheet": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/daily-runsheet.tsx",
+    "module": "operations",
+    "hits": [
+      {
+        "line": 110,
+        "kind": "inline-data-array",
+        "text": "const kpis = ["
       }
     ]
   }

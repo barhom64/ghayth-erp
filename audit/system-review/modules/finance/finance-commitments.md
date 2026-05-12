@@ -1,14 +1,14 @@
-# /finance/commitments — `artifacts/ghayth-erp/src/pages/details/receivable-detail.tsx`
+# /finance/commitments — `artifacts/ghayth-erp/src/pages/finance/commitments.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/commitments`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/receivable-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/commitments.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:110`
 - المجموعة: `finance`
-- الكومبوننت: `ReceivableDetail`
+- الكومبوننت: `Commitments`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `commitments`
-- سطور الملف: 430
+- سطور الملف: 125
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
@@ -18,7 +18,7 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم تُلتقط أزرار._
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/finance/commitments`
 
 
 
@@ -38,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/commitments`
-- لقطة: `audit/screenshots/finance_commitments.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/commitments`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

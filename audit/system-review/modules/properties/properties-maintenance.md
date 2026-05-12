@@ -1,28 +1,24 @@
-# /properties/maintenance — `artifacts/ghayth-erp/src/pages/create/properties/maintenance-create.tsx`
+# /properties/maintenance — `artifacts/ghayth-erp/src/pages/properties-maintenance.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/properties/maintenance`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/properties/maintenance-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/properties-maintenance.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/propertyRoutes.tsx:54`
 - المجموعة: `properties`
-- الكومبوننت: `PropertyMaintenanceCreate`
+- الكومبوننت: `PropertiesMaintenance`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `maintenance`
-- سطور الملف: 118
+- سطور الملف: 111
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/properties/maintenance-requests` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L61: "مسح المسودة" → `clearDraft`
-- L110: "(بلا تسمية)" → `() => setLocation("/properties/maintenance")` 🔒
-- L111: "(بلا تسمية)" → `handleSubmit` 🔒
+- L63: "طلب صيانة جديد"
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/properties/maintenance-requests`
 
 
 
@@ -42,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/properties/maintenance`
-- لقطة: `audit/screenshots/properties_maintenance.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/properties/maintenance`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

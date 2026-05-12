@@ -1,37 +1,24 @@
-# /documents/archive — `artifacts/ghayth-erp/src/pages/documents-page.tsx`
+# /documents/archive — `artifacts/ghayth-erp/src/pages/documents/archive.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/documents/archive`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/documents-page.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/documents/archive.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/documentsRoutes.tsx:17`
 - المجموعة: `documents`
-- الكومبوننت: `DocumentsPage`
+- الكومبوننت: `DocumentsArchive`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `archive`
-- سطور الملف: 428
+- سطور الملف: 85
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L137: "رفع مستند"
-- L138: "إنشاء مستند"
-- L200: "(بلا تسمية)" → `() => handleDownload(d.id, d.fileName)`
-- L205: "الإصدارات"
-- L210: "(بلا تسمية)" → `() => handleStatusChange(d.id, "approved")`
-- L215: "(بلا تسمية)" → `() => handleStatusChange(d.id, "cancelled")`
-- L220: "(بلا تسمية)" → `() => handleStatusChange(d.id, "draft")`
-- L268: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L279: "(بلا تسمية)" → `() => setShowForm(false)`
-- L304: "(بلا تسمية)" → `() => setShowForm(true)`
-- L346: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L357: "(بلا تسمية)" → `() => setShowForm(false)`
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/documents/folders`
-- GET `/documents/templates`
-- GET `/documents/stats`
+- GET `/documents`
 
 
 
@@ -48,11 +35,9 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `archive` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L49 _(inline-data-array)_: `const statCards = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/documents/archive`
-- لقطة: `audit/screenshots/documents_archive.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/documents/archive`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

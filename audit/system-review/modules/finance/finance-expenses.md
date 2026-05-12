@@ -1,27 +1,21 @@
-# /finance/expenses — `artifacts/ghayth-erp/src/pages/create/finance/invoices-create.tsx`
+# /finance/expenses — `artifacts/ghayth-erp/src/pages/finance/expenses.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/expenses`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/finance/invoices-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/expenses.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:93`
 - المجموعة: `finance`
-- الكومبوننت: `InvoicesCreate`
+- الكومبوننت: `Expenses`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `expenses`
-- سطور الملف: 320
+- سطور الملف: 362
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/finance/invoices` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L169: "مسح المسودة" → `clearDraft`
-- L230: "+ إضافة بند" → `() => removeLine(idx)` 🔒
-- L233: "+ إضافة بند" → `addLine`
-- L311: "(بلا تسمية)" → `() => setLocation("/finance/invoices")` 🔒
-- L312: "(بلا تسمية)" → `handleSubmit` 🔒
+- L349: "عرض الصفحة الكاملة"
 
 ### القراءات (GET)
 _لا قراءات._
@@ -41,12 +35,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `expenses` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L21 _(inline-data-array)_: `const INVOICE_TYPE_CODES = [`
-- ⚠ L34 _(inline-data-array)_: `const PAYMENT_TERMS_OPTIONS = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/expenses`
-- لقطة: `audit/screenshots/finance_expenses.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/expenses`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

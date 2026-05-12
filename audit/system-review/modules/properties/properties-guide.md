@@ -1,24 +1,24 @@
-# /properties/guide — `artifacts/ghayth-erp/src/pages/properties/occupancy-report.tsx`
+# /properties/guide — `artifacts/ghayth-erp/src/pages/properties-guide.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/properties/guide`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/properties/occupancy-report.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/properties-guide.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/propertyRoutes.tsx:60`
 - المجموعة: `properties`
-- الكومبوننت: `OccupancyReport`
+- الكومبوننت: `PropertiesGuide`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `guide`
-- سطور الملف: 184
+- سطور الملف: 1430
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L1273: "العودة للنظام"
 
 ### القراءات (GET)
-- GET `/properties/occupancy-report`
+_لا قراءات._
 
 
 
@@ -35,11 +35,13 @@ _لم تُلتقط أزرار._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `guide` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L30 _(inline-data-array)_: `const pieData = [`
+- ⚠ L429 _(dummy-phone)_: `{ name: "أحمد محمد السعيد", phone: "0551234567", id: "1234567890", contracts: "2 نشط", unit: "A-101", paid: "42,000 ر.س"`
+- ⚠ L430 _(dummy-phone)_: `{ name: "سارة عبدالله الغامدي", phone: "0557654321", id: "0987654321", contracts: "1 نشط", unit: "B-201", paid: "96,000 `
+- ⚠ L431 _(dummy-phone)_: `{ name: "خالد إبراهيم العمري", phone: "0501112233", id: "2345678901", contracts: "1 نشط", unit: "C-305", paid: "28,000 ر`
+- ⚠ L475 _(dummy-phone)_: `{ name: "عبدالرحمن الحربي", type: "فرد", phone: "0501234567", buildings: 2, units: 20, contracts: 18 },`
+- ⚠ L477 _(dummy-phone)_: `{ name: "فاطمة القحطاني", type: "فرد", phone: "0559876543", buildings: 1, units: 13, contracts: 13 },`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/properties/guide`
-- لقطة: `audit/screenshots/properties_guide.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/properties/guide`)
+- توصية: **TBD**
+- المشاكل: 5 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

@@ -1,21 +1,22 @@
-# /hr/attendance/qr-scanner — `artifacts/ghayth-erp/src/pages/hr/attendance-reports.tsx`
+# /hr/attendance/qr-scanner — `artifacts/ghayth-erp/src/pages/hr/qr-scanner.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/attendance/qr-scanner`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/attendance-reports.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/qr-scanner.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:96`
 - المجموعة: `hr`
-- الكومبوننت: `AttendanceReports`
+- الكومبوننت: `QRScanner`
 - subKey: `attendance` | minRoleLevel: —
 - الكيان المستنبط: `qr-scanner`
-- سطور الملف: 118
+- سطور الملف: 152
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L111: "(بلا تسمية)" → `handleCheckIn` 🔒
+- L119: "(بلا تسمية)" → `handleCheckOut`
 
 ### القراءات (GET)
 _لا قراءات._
@@ -35,11 +36,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `qr-scanner` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L43 _(inline-data-array)_: `const kpis = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/attendance/qr-scanner`
-- لقطة: `audit/screenshots/hr_attendance_qr_scanner.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/attendance/qr-scanner`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

@@ -1,25 +1,25 @@
-# /hr/evaluation-360/history/:employeeId — `artifacts/ghayth-erp/src/pages/hr/onboarding-review.tsx`
+# /hr/evaluation-360/history/:employeeId — `artifacts/ghayth-erp/src/pages/hr/evaluation-360-history.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/evaluation-360/history/:employeeId`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/onboarding-review.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/evaluation-360-history.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:148`
 - المجموعة: `hr`
-- الكومبوننت: `OnboardingReview`
-- subKey: `employees` | minRoleLevel: —
+- الكومبوننت: `Evaluation360History`
+- subKey: `performance` | minRoleLevel: —
 - الكيان المستنبط: `:employeeId`
-- سطور الملف: 178
+- سطور الملف: 116
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L50: "عودة"
+- L104: "عرض"
 
 ### القراءات (GET)
-- GET `/employees?limit=200`
-- GET `/hr/onboarding-steps`
+_لا قراءات._
 
 
 
@@ -36,10 +36,9 @@ _لم تُلتقط أزرار._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `:employeeId` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L70 _(inline-data-array)_: `const kpis = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/hr/evaluation-360 → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/evaluation-360/history/:employeeId`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

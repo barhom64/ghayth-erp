@@ -1,26 +1,30 @@
-# /store/orders — `artifacts/ghayth-erp/src/pages/create/store/products-create.tsx`
+# /store/orders — `artifacts/ghayth-erp/src/pages/store.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/store/orders`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/store/products-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/store.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/storeRoutes.tsx:13`
 - المجموعة: `store`
-- الكومبوننت: `ProductsCreate`
+- الكومبوننت: `Store`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `orders`
-- سطور الملف: 96
+- سطور الملف: 347
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L59: "مسح المسودة" → `clearDraft`
-- L88: "(بلا تسمية)" → `() => setLocation("/store")` 🔒
-- L89: "(بلا تسمية)" 🔒
+- L118: "(بلا تسمية)" → `() => setShowForm(!showForm)`
+- L127: "(بلا تسمية)" → `() => setShowForm(false)`
+- L214: "(بلا تسمية)"
+- L252: "(بلا تسمية)" → `() => setShowForm(!showForm)`
+- L261: "(بلا تسمية)" → `() => setShowForm(false)`
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/store/products`
+- GET `/store/orders`
+- GET `/store/stats`
 
 
 
@@ -37,11 +41,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `orders` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L314 _(inline-data-array)_: `const statCards = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/store/orders`
-- لقطة: `audit/screenshots/store_orders.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/store/orders`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

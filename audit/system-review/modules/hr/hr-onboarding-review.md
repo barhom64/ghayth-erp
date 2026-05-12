@@ -1,14 +1,14 @@
-# /hr/onboarding-review — `artifacts/ghayth-erp/src/pages/hr/employee-profile.tsx`
+# /hr/onboarding-review — `artifacts/ghayth-erp/src/pages/hr/onboarding-review.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/onboarding-review`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/employee-profile.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/onboarding-review.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:146`
 - المجموعة: `hr`
-- الكومبوننت: `EmployeeProfile`
+- الكومبوننت: `OnboardingReview`
 - subKey: `employees` | minRoleLevel: —
 - الكيان المستنبط: `onboarding-review`
-- سطور الملف: 18
+- سطور الملف: 178
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
@@ -18,7 +18,8 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم تُلتقط أزرار._
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/employees?limit=200`
+- GET `/hr/onboarding-steps`
 
 
 
@@ -35,11 +36,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `onboarding-review` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L70 _(inline-data-array)_: `const kpis = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/onboarding-review`
-- لقطة: `audit/screenshots/hr_onboarding_review.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/onboarding-review`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

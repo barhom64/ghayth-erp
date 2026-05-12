@@ -1,24 +1,26 @@
-# /obligations — `artifacts/ghayth-erp/src/pages/my-overtime.tsx`
+# /obligations — `artifacts/ghayth-erp/src/pages/obligations.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/obligations`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/my-overtime.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/obligations.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:74`
 - المجموعة: `operations`
-- الكومبوننت: `MyOvertime`
-- subKey: — | minRoleLevel: 60
+- الكومبوننت: `Obligations`
+- subKey: — | minRoleLevel: —
 - الكيان المستنبط: `obligations`
-- سطور الملف: 128
+- سطور الملف: 226
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L119: "(بلا تسمية)" → `handleScan` 🔒
+- L198: "(بلا تسمية)"
+- L206: "(بلا تسمية)"
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/obligations/summary`
 
 
 
@@ -38,8 +40,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/obligations`
-- لقطة: `audit/screenshots/obligations.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/obligations`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

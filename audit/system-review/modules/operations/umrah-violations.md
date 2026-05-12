@@ -1,21 +1,28 @@
-# /umrah/violations — `artifacts/ghayth-erp/src/pages/umrah/commission-plan-editor.tsx`
+# /umrah/violations — `artifacts/ghayth-erp/src/pages/umrah/violations.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/umrah/violations`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/commission-plan-editor.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/violations.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:62`
 - المجموعة: `operations`
-- الكومبوننت: `UmrahCommissionPlanEditor`
+- الكومبوننت: `UmrahViolations`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `violations`
-- سطور الملف: 634
+- سطور الملف: 519
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L192: "(بلا تسمية)"
+- L254: "(بلا تسمية)"
+- L259: "(بلا تسمية)" → `() => openEdit(v)`
+- L263: "(بلا تسمية)" → `() => setDeleteId(v.id)`
+- L280: "مخالفة جديدة" → `openCreate`
+- L493: "(بلا تسمية)" → `() => setEditing(null)` 🔒
+- L494: "(بلا تسمية)" → `handleSave` 🔒
+- L509: "(بلا تسمية)" → `() => setDeleteId(null)` 🔒
+- L510: "(بلا تسمية)" → `() => deleteMut.mutate({` 🔒
 
 ### القراءات (GET)
 _لا قراءات._
@@ -38,8 +45,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/umrah/violations`
-- لقطة: `audit/screenshots/umrah_violations.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/umrah/violations`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

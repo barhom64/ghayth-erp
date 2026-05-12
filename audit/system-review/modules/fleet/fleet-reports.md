@@ -1,24 +1,24 @@
-# /fleet/reports — `artifacts/ghayth-erp/src/pages/fleet/alerts.tsx`
+# /fleet/reports — `artifacts/ghayth-erp/src/pages/fleet/reports.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/fleet/reports`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/fleet/alerts.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/fleet/reports.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/fleetRoutes.tsx:50`
 - المجموعة: `fleet`
-- الكومبوننت: `FleetAlerts`
+- الكومبوننت: `FleetReports`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `reports`
-- سطور الملف: 124
+- سطور الملف: 81
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L81: "إضافة تنبيه"
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/fleet/alerts`
+- GET `/fleet/stats`
 
 
 
@@ -35,11 +35,9 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `reports` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L15 _(inline-data-array)_: `const statCards = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/fleet/reports`
-- لقطة: `audit/screenshots/fleet_reports.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/fleet/reports`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

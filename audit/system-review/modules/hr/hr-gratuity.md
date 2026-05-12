@@ -1,14 +1,14 @@
-# /hr/gratuity — `artifacts/ghayth-erp/src/pages/hr/development-plans.tsx`
+# /hr/gratuity — `artifacts/ghayth-erp/src/pages/hr/gratuity.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/gratuity`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/development-plans.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/gratuity.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:158`
 - المجموعة: `hr`
-- الكومبوننت: `DevelopmentPlans`
-- subKey: `performance` | minRoleLevel: —
+- الكومبوننت: `Gratuity`
+- subKey: `payroll` | minRoleLevel: —
 - الكيان المستنبط: `gratuity`
-- سطور الملف: 2
+- سطور الملف: 178
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
@@ -18,7 +18,7 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم تُلتقط أزرار._
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/employees?status=active&limit=200`
 
 
 
@@ -38,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/gratuity`
-- لقطة: `audit/screenshots/hr_gratuity.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/gratuity`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

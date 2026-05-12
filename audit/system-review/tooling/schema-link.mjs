@@ -19,14 +19,38 @@ const SCHEMA = join(REPO, "lib/db/src/schema/index.ts");
 
 const src = readFileSync(SCHEMA, "utf8");
 
-// Match: export const usersT = pgTable("users", { ... })
-const tableRe = /export\s+const\s+(\w+)\s*=\s*pgTable\(\s*["']([^"']+)["']\s*,\s*\{([\s\S]*?)\}\s*\)/g;
+// Manual brace-aware extraction. The previous non-greedy regex stopped at the
+// first inner `}` it saw (e.g. inside `numeric("x", { precision: 14 })`),
+// truncating the body and losing columns like createdAt that came after.
+//
+// Algorithm: locate `pgTable("name", {`, then walk forward counting `{`/`}`
+// (with string/comment awareness) until depth returns to zero.
+const headerRe = /export\s+const\s+(\w+)\s*=\s*pgTable\(\s*["']([^"']+)["']\s*,\s*\{/g;
+function extractBody(start) {
+  let depth = 1;
+  let i = start;
+  let inStr = null;
+  while (i < src.length && depth > 0) {
+    const ch = src[i];
+    const prev = src[i - 1];
+    if (inStr) {
+      if (ch === inStr && prev !== "\\") inStr = null;
+    } else {
+      if (ch === '"' || ch === "'" || ch === "`") inStr = ch;
+      else if (ch === "{") depth++;
+      else if (ch === "}") depth--;
+    }
+    i++;
+  }
+  return src.slice(start, i - 1);
+}
+
 const out = {};
 let m;
-while ((m = tableRe.exec(src))) {
+while ((m = headerRe.exec(src))) {
   const exportName = m[1];
   const tableName = m[2];
-  const body = m[3];
+  const body = extractBody(headerRe.lastIndex);
 
   const cols = [];
   for (const cm of body.matchAll(/(\w+):\s*([\w]+)\(["']?([^"',\)]*)["']?/g)) {

@@ -1,23 +1,25 @@
-# /clients/create — `artifacts/ghayth-erp/src/pages/daily-close.tsx`
+# /tasks/create — `artifacts/ghayth-erp/src/pages/create/tasks-create.tsx`
 
 ## 1. الميتاداتا
-- المسار: `/clients/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/daily-close.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:81`
+- المسار: `/tasks/create`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/tasks-create.tsx`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:115`
 - المجموعة: `operations`
-- الكومبوننت: `DailyClose`
-- subKey: — | minRoleLevel: 40
+- الكومبوننت: `TasksCreate`
+- subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 215
+- سطور الملف: 203
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/tasks` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-- L70: "مركز العمليات"
-- L135: "(بلا تسمية)" 🔒
-- L159: "(بلا تسمية)"
+- L116: "مسح المسودة" → `clearDraft`
+- L195: "(بلا تسمية)" → `() => setLocation("/tasks")` 🔒
+- L196: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
 _لا قراءات._
@@ -40,8 +42,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/clients/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/clients_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/tasks/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

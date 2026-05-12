@@ -1,35 +1,26 @@
-# /my-requests — `artifacts/ghayth-erp/src/pages/dashboard.tsx`
+# /my-requests — `artifacts/ghayth-erp/src/pages/my-requests.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/my-requests`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/dashboard.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/my-requests.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:65`
 - المجموعة: `misc`
-- الكومبوننت: `Dashboard`
+- الكومبوننت: `MyRequests`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `my-requests`
-- سطور الملف: 979
+- سطور الملف: 194
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/hr/check-in` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
-| _(call)_ | `/hr/check-out` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L272: "(بلا تسمية)" → `handleCheckIn` 🔒
-- L282: "(بلا تسمية)" → `handleCheckOut` 🔒
-- L519: "عرض الكل"
-- L530: "(بلا تسمية)" → `() => setLocation("/tasks")`
-- L576: "عرض الكل"
-- L734: "(بلا تسمية)"
-- L838: "(بلا تسمية)" → `() => setLocation("/finance/invoices/create")`
-- L879: "(بلا تسمية)" → `() => setLocation("/hr/attendance")`
+- L90: "(بلا تسمية)" → `() => refetch()`
+- L105: "طلب إجازة"
+- L158: "طلب إجازة جديدة"
 
 ### القراءات (GET)
-- GET `/my-space`
-- GET `/intelligence/suggestions`
+- GET `/my-space/requests`
 
 
 
@@ -49,8 +40,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/my-requests`
-- لقطة: `audit/screenshots/my_requests.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/my-requests`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

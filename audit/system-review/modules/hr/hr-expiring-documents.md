@@ -1,14 +1,14 @@
-# /hr/expiring-documents — `artifacts/ghayth-erp/src/pages/hr/gratuity.tsx`
+# /hr/expiring-documents — `artifacts/ghayth-erp/src/pages/hr/expiring-documents.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/expiring-documents`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/gratuity.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/expiring-documents.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:160`
 - المجموعة: `hr`
-- الكومبوننت: `Gratuity`
-- subKey: `payroll` | minRoleLevel: —
+- الكومبوننت: `ExpiringDocuments`
+- subKey: `employees` | minRoleLevel: —
 - الكيان المستنبط: `expiring-documents`
-- سطور الملف: 178
+- سطور الملف: 174
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
@@ -18,7 +18,7 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/employees?status=active&limit=200`
+_لا قراءات._
 
 
 
@@ -35,11 +35,9 @@ _لم تُلتقط أزرار._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `expiring-documents` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L47 _(inline-data-array)_: `const kpis = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/expiring-documents`
-- لقطة: `audit/screenshots/hr_expiring_documents.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/expiring-documents`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

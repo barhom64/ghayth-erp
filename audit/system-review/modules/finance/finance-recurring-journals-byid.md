@@ -1,24 +1,21 @@
-# /finance/recurring-journals/:id — `artifacts/ghayth-erp/src/pages/finance/recurring-journals.tsx`
+# /finance/recurring-journals/:id — `artifacts/ghayth-erp/src/pages/finance/recurring-journal-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/recurring-journals/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/recurring-journals.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/recurring-journal-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:144`
 - المجموعة: `finance`
-- الكومبوننت: `RecurringJournals`
+- الكومبوننت: `RecurringJournalDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 268
+- سطور الملف: 160
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L158: "تنفيذ الآن"
-- L167: "(بلا تسمية)"
-- L176: "حذف"
-- L198: "(بلا تسمية)"
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
 _لا قراءات._
@@ -41,7 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: no row in /api/finance/recurring-journals`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/recurring-journals/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

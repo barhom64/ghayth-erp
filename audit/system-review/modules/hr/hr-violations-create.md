@@ -1,21 +1,24 @@
-# /hr/violations/create — `artifacts/ghayth-erp/src/pages/hr/exit-detail.tsx`
+# /hr/violations/create — `artifacts/ghayth-erp/src/pages/create/hr/violations-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/violations/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/exit-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/hr/violations-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:132`
 - المجموعة: `hr`
-- الكومبوننت: `ExitDetail`
-- subKey: `employees` | minRoleLevel: —
+- الكومبوننت: `ViolationsCreate`
+- subKey: `violations` | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 266
+- سطور الملف: 454
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/hr/violations` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-- L250: "(بلا تسمية)" → `handleApprove`
+- L162: "(بلا تسمية)"
+- L363: "(بلا تسمية)" → `() => setLocation("/hr/violations")`
 
 ### القراءات (GET)
 _لا قراءات._
@@ -38,8 +41,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/violations/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/hr_violations_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/violations/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

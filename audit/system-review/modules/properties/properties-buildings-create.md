@@ -1,30 +1,26 @@
-# /properties/buildings/create — `artifacts/ghayth-erp/src/pages/properties-dashboard.tsx`
+# /properties/buildings/create — `artifacts/ghayth-erp/src/pages/create/properties/buildings-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/properties/buildings/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/properties-dashboard.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/properties/buildings-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/propertyRoutes.tsx:35`
 - المجموعة: `properties`
-- الكومبوننت: `PropertiesDashboard`
+- الكومبوننت: `BuildingsCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 382
+- سطور الملف: 156
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L159: "مبنى جديد"
-- L164: "وحدة جديدة"
-- L239: "عرض العقود"
-- L255: "عرض الكل"
-- L270: "طلب صيانة جديد"
-- L315: "(بلا تسمية)"
-- L333: "عرض الكل"
+- L77: "مسح المسودة" → `clearDraft`
+- L148: "(بلا تسمية)" → `() => setLocation("/properties/buildings")` 🔒
+- L149: "(بلا تسمية)" → `handleSave` 🔒
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/properties/owners`
 
 
 
@@ -44,8 +40,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/properties/buildings/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/properties_buildings_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/properties/buildings/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

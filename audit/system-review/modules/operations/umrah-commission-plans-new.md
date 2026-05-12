@@ -1,22 +1,21 @@
-# /umrah/commission-plans/new — `artifacts/ghayth-erp/src/pages/umrah/pricing.tsx`
+# /umrah/commission-plans/new — `artifacts/ghayth-erp/src/pages/umrah/commission-plan-editor.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/umrah/commission-plans/new`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/pricing.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/commission-plan-editor.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:60`
 - المجموعة: `operations`
-- الكومبوننت: `UmrahPricing`
+- الكومبوننت: `UmrahCommissionPlanEditor`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `new`
-- سطور الملف: 407
+- سطور الملف: 634
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L363: "(بلا تسمية)" → `() => setEditing(null)`
-- L392: "(بلا تسمية)" → `() => setDeleteId(null)`
+- L192: "(بلا تسمية)"
 
 ### القراءات (GET)
 _لا قراءات._
@@ -39,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/umrah/commission-plans/new`
-- لقطة: `audit/screenshots/umrah_commission_plans_new.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/umrah/commission-plans/new`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

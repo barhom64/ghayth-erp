@@ -1,25 +1,26 @@
-# /hr/loans — `artifacts/ghayth-erp/src/pages/hr/recruitment-advanced.tsx`
+# /hr/loans — `artifacts/ghayth-erp/src/pages/hr/loans.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/loans`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/recruitment-advanced.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/loans.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:122`
 - المجموعة: `hr`
-- الكومبوننت: `RecruitmentAdvanced`
-- subKey: `recruitment` | minRoleLevel: —
+- الكومبوننت: `Loans`
+- subKey: `payroll` | minRoleLevel: —
 - الكيان المستنبط: `loans`
-- سطور الملف: 85
+- سطور الملف: 330
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L221: "(بلا تسمية)"
+- L231: "(بلا تسمية)"
+- L257: "طلب سلفة"
 
 ### القراءات (GET)
-- GET `/hr/recruitment/stats`
-- GET `/hr/recruitment/applications`
+_لا قراءات._
 
 
 
@@ -36,11 +37,9 @@ _لم تُلتقط أزرار._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `loans` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L32 _(inline-data-array)_: `const kpis = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/loans`
-- لقطة: `audit/screenshots/hr_loans.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/loans`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

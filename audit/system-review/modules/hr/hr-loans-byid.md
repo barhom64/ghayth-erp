@@ -1,23 +1,21 @@
-# /hr/loans/:id — `artifacts/ghayth-erp/src/pages/hr/loans.tsx`
+# /hr/loans/:id — `artifacts/ghayth-erp/src/pages/hr/loan-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/loans/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/loans.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/loan-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:124`
 - المجموعة: `hr`
-- الكومبوننت: `Loans`
+- الكومبوننت: `LoanDetail`
 - subKey: `payroll` | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 330
+- سطور الملف: 212
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L221: "(بلا تسمية)"
-- L231: "(بلا تسمية)"
-- L257: "طلب سلفة"
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
 _لا قراءات._
@@ -40,7 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/hr/loans → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/loans/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

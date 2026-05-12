@@ -1,37 +1,26 @@
-# /documents/create — `artifacts/ghayth-erp/src/pages/documents-page.tsx`
+# /documents/create — `artifacts/ghayth-erp/src/pages/create/documents/documents-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/documents/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/documents-page.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/documents/documents-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/documentsRoutes.tsx:12`
 - المجموعة: `documents`
-- الكومبوننت: `DocumentsPage`
+- الكومبوننت: `DocumentsCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 428
+- سطور الملف: 97
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L137: "رفع مستند"
-- L138: "إنشاء مستند"
-- L200: "(بلا تسمية)" → `() => handleDownload(d.id, d.fileName)`
-- L205: "الإصدارات"
-- L210: "(بلا تسمية)" → `() => handleStatusChange(d.id, "approved")`
-- L215: "(بلا تسمية)" → `() => handleStatusChange(d.id, "cancelled")`
-- L220: "(بلا تسمية)" → `() => handleStatusChange(d.id, "draft")`
-- L268: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L279: "(بلا تسمية)" → `() => setShowForm(false)`
-- L304: "(بلا تسمية)" → `() => setShowForm(true)`
-- L346: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L357: "(بلا تسمية)" → `() => setShowForm(false)`
+- L51: "مسح المسودة" → `clearDraft`
+- L90: "(بلا تسمية)" → `() => setLocation("/documents")` 🔒
+- L91: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
-- GET `/documents/folders`
-- GET `/documents/templates`
-- GET `/documents/stats`
+_لا قراءات._
 
 
 
@@ -51,8 +40,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/documents/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/documents_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/documents/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

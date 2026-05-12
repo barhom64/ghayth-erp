@@ -1,24 +1,26 @@
-# /governance/policies/create — `artifacts/ghayth-erp/src/pages/governance.tsx`
+# /governance/policies/create — `artifacts/ghayth-erp/src/pages/create/governance/policies-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/governance/policies/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/governance.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/governance/policies-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/governanceRoutes.tsx:16`
 - المجموعة: `governance`
-- الكومبوننت: `Governance`
+- الكومبوننت: `PoliciesCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 51
+- سطور الملف: 98
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L49: "مسح المسودة" → `clearDraft`
+- L91: "(بلا تسمية)" → `() => setLocation("/governance/policies")` 🔒
+- L92: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
-- GET `/governance/stats`
+_لا قراءات._
 
 
 
@@ -38,8 +40,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/governance/policies/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/governance_policies_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/governance/policies/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

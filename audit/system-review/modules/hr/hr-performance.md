@@ -1,25 +1,24 @@
-# /hr/performance — `artifacts/ghayth-erp/src/pages/hr/salary-components.tsx`
+# /hr/performance — `artifacts/ghayth-erp/src/pages/hr/performance.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/performance`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/salary-components.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/performance.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:106`
 - المجموعة: `hr`
-- الكومبوننت: `SalaryComponents`
-- subKey: `payroll` | minRoleLevel: —
+- الكومبوننت: `Performance`
+- subKey: `performance` | minRoleLevel: —
 - الكيان المستنبط: `performance`
-- سطور الملف: 179
+- سطور الملف: 137
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L99: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L132: "(بلا تسمية)" → `() => setShowForm(false)`
+- L103: "تقييم جديد"
 
 ### القراءات (GET)
-- GET `/hr/salary-components`
+- GET `/hr/performance`
 
 
 
@@ -36,11 +35,9 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `performance` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L29 _(inline-data-array)_: `const kpis = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/performance`
-- لقطة: `audit/screenshots/hr_performance.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/performance`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

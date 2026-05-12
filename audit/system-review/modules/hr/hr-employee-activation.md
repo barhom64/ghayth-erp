@@ -1,24 +1,26 @@
-# /hr/employee-activation — `artifacts/ghayth-erp/src/pages/details/shift-detail.tsx`
+# /hr/employee-activation — `artifacts/ghayth-erp/src/pages/hr/employee-activation.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/employee-activation`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/shift-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/employee-activation.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:145`
 - المجموعة: `hr`
-- الكومبوننت: `ShiftDetail`
-- subKey: `shifts` | minRoleLevel: —
+- الكومبوننت: `EmployeeActivation`
+- subKey: `employees` | minRoleLevel: —
 - الكيان المستنبط: `employee-activation`
-- سطور الملف: 84
+- سطور الملف: 324
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L217: "(بلا تسمية)"
+- L228: "(بلا تسمية)"
+- L239: "(بلا تسمية)"
 
 ### القراءات (GET)
-- GET `/hr/shifts`
+- GET `/employees?limit=200`
 
 
 
@@ -35,11 +37,9 @@ _لم تُلتقط أزرار._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `employee-activation` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L116 _(inline-data-array)_: `const kpis = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/employee-activation`
-- لقطة: `audit/screenshots/hr_employee_activation.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/employee-activation`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

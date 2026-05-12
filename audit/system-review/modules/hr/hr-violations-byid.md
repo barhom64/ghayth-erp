@@ -1,14 +1,14 @@
-# /hr/violations/:id — `artifacts/ghayth-erp/src/pages/hr/penalty-escalation.tsx`
+# /hr/violations/:id — `artifacts/ghayth-erp/src/pages/hr/violation-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/violations/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/penalty-escalation.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/violation-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:136`
 - المجموعة: `hr`
-- الكومبوننت: `PenaltyEscalation`
+- الكومبوننت: `ViolationDetail`
 - subKey: `violations` | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 102
+- سطور الملف: 222
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
@@ -18,7 +18,7 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/hr/violations`
+_لا قراءات._
 
 
 
@@ -35,10 +35,9 @@ _لم تُلتقط أزرار._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `:id` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L34 _(inline-data-array)_: `const kpis = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/hr/violations → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/violations/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

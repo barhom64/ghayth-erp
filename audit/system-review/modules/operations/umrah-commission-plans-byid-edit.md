@@ -1,22 +1,21 @@
-# /umrah/commission-plans/:id/edit — `artifacts/ghayth-erp/src/pages/umrah/commission-plans.tsx`
+# /umrah/commission-plans/:id/edit — `artifacts/ghayth-erp/src/pages/umrah/commission-plan-editor.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/umrah/commission-plans/:id/edit`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/commission-plans.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/commission-plan-editor.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:61`
 - المجموعة: `operations`
-- الكومبوننت: `UmrahCommissionPlans`
+- الكومبوننت: `UmrahCommissionPlanEditor`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `edit`
-- سطور الملف: 327
+- سطور الملف: 634
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L145: "(بلا تسمية)"
-- L305: "(بلا تسمية)" → `() => setConfirmAction(null)`
+- L192: "(بلا تسمية)"
 
 ### القراءات (GET)
 _لا قراءات._
@@ -39,7 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/umrah/commission-plans → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/umrah/commission-plans/:id/edit`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

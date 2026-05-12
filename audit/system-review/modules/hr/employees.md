@@ -1,21 +1,24 @@
-# /employees — `artifacts/ghayth-erp/src/pages/hr.tsx`
+# /employees — `artifacts/ghayth-erp/src/pages/employees.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/employees`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/employees.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:88`
 - المجموعة: `hr`
-- الكومبوننت: `HR`
+- الكومبوننت: `Employees`
 - subKey: `employees` | minRoleLevel: —
 - الكيان المستنبط: `employees`
-- سطور الملف: 317
+- سطور الملف: 359
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L118: "(بلا تسمية)" → `() => navigate("/employees/create")`
+- L197: "(بلا تسمية)" → `() => setPreviewItem(employee)`
+- L206: "عرض التفاصيل"
+- L223: "(بلا تسمية)"
+- L264: "إضافة موظف"
 
 ### القراءات (GET)
 _لا قراءات._
@@ -39,8 +42,6 @@ _لا قراءات._
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/employees`
-- لقطة: `audit/screenshots/employees.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/employees`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

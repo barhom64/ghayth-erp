@@ -1,14 +1,14 @@
-# /finance/financial-requests — `artifacts/ghayth-erp/src/pages/finance/commitments.tsx`
+# /finance/financial-requests — `artifacts/ghayth-erp/src/pages/finance/financial-requests.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/financial-requests`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/commitments.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/financial-requests.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:112`
 - المجموعة: `finance`
-- الكومبوننت: `Commitments`
+- الكومبوننت: `FinancialRequests`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `financial-requests`
-- سطور الملف: 125
+- سطور الملف: 132
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
@@ -18,7 +18,7 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/finance/commitments`
+- GET `/finance/financial-requests`
 
 
 
@@ -38,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/financial-requests`
-- لقطة: `audit/screenshots/finance_financial_requests.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/financial-requests`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

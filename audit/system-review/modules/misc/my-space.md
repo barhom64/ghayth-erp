@@ -1,24 +1,24 @@
-# /my-space — `any`
+# /my-space — `artifacts/ghayth-erp/src/pages/my-space.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/my-space`
-- ملف الصفحة: `—`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/my-space.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:64`
 - المجموعة: `misc`
-- الكومبوننت: `any`
+- الكومبوننت: `MySpace`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `my-space`
-- سطور الملف: 0
-- مصدر موجود: —
+- سطور الملف: 129
+- مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L72: "مركز القرارات"
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/intelligence/suggestions`
 
 
 
@@ -38,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/my-space`
-- لقطة: `audit/screenshots/my_space.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/my-space`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

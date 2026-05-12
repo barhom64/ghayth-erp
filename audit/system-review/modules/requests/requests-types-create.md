@@ -1,23 +1,23 @@
-# /requests/types/create — `artifacts/ghayth-erp/src/pages/create/requests/items-create.tsx`
+# /requests/types/create — `artifacts/ghayth-erp/src/pages/create/requests/types-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/requests/types/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/requests/items-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/requests/types-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/requestsRoutes.tsx:12`
 - المجموعة: `requests`
-- الكومبوننت: `RequestsItemCreate`
+- الكومبوننت: `RequestsTypeCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 95
+- سطور الملف: 85
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L55: "مسح المسودة" → `clearDraft`
-- L88: "(بلا تسمية)" → `() => setLocation("/requests")` 🔒
-- L89: "(بلا تسمية)" → `handleSubmit` 🔒
+- L49: "مسح المسودة" → `clearDraft`
+- L78: "(بلا تسمية)" → `() => setLocation("/requests/types")` 🔒
+- L79: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
 _لا قراءات._
@@ -40,8 +40,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/requests/types/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/requests_types_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/requests/types/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

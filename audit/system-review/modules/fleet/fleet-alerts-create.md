@@ -1,21 +1,25 @@
-# /fleet/alerts/create — `artifacts/ghayth-erp/src/pages/details/insurance-detail.tsx`
+# /fleet/alerts/create — `artifacts/ghayth-erp/src/pages/create/fleet/alerts-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/fleet/alerts/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/insurance-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/fleet/alerts-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/fleetRoutes.tsx:49`
 - المجموعة: `fleet`
-- الكومبوننت: `InsuranceDetail`
+- الكومبوننت: `FleetAlertsCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 306
+- سطور الملف: 97
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/fleet/maintenance` | POST | ✅ | ✅ | — | — | ✅ | ✅ | ✅ |
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L57: "مسح المسودة" → `clearDraft`
+- L89: "(بلا تسمية)" → `() => setLocation("/fleet/alerts")` 🔒
+- L90: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
 _لا قراءات._
@@ -38,8 +42,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/fleet/alerts/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/fleet_alerts_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/fleet/alerts/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

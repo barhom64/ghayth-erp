@@ -1,24 +1,28 @@
-# /legal/cases/create — `artifacts/ghayth-erp/src/pages/legal/correspondence.tsx`
+# /legal/cases/create — `artifacts/ghayth-erp/src/pages/create/legal-cases-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/legal/cases/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/legal/correspondence.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/legal-cases-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/legalRoutes.tsx:25`
 - المجموعة: `legal`
-- الكومبوننت: `LegalCorrespondence`
+- الكومبوننت: `LegalCasesCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 55
+- سطور الملف: 136
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/legal/cases` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L61: "مسح المسودة" → `clearDraft`
+- L129: "(بلا تسمية)" → `() => setLocation("/legal")` 🔒
+- L130: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
-- GET `/legal/cases`
+_لا قراءات._
 
 
 
@@ -38,8 +42,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/legal/cases/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/legal_cases_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/legal/cases/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

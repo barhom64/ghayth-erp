@@ -1,24 +1,24 @@
-# /fleet/maintenance/:id — `artifacts/ghayth-erp/src/pages/fleet/maintenance.tsx`
+# /fleet/maintenance/:id — `artifacts/ghayth-erp/src/pages/details/maintenance-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/fleet/maintenance/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/fleet/maintenance.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/maintenance-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/fleetRoutes.tsx:41`
 - المجموعة: `fleet`
-- الكومبوننت: `FleetMaintenance`
+- الكومبوننت: `MaintenanceDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 93
+- سطور الملف: 305
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L47: "إضافة صيانة"
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/fleet/maintenance`
+_لا قراءات._
 
 
 
@@ -38,7 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/fleet/maintenance → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/fleet/maintenance/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

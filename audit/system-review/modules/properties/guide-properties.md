@@ -1,28 +1,24 @@
-# /guide/properties — `artifacts/ghayth-erp/src/pages/properties/deposits.tsx`
+# /guide/properties — `artifacts/ghayth-erp/src/pages/properties-guide.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/guide/properties`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/properties/deposits.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/properties-guide.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/propertyRoutes.tsx:59`
 - المجموعة: `properties`
-- الكومبوننت: `PropertyDeposits`
+- الكومبوننت: `PropertiesGuide`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `properties`
-- سطور الملف: 292
+- سطور الملف: 1430
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L109: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L140: "(بلا تسمية)" → `() => setShowForm(false)`
-- L172: "(بلا تسمية)" → `() => setStatusFilter(v)`
-- L202: "(بلا تسمية)" → `() => setRefundTarget({ id: d.id, originalAmount: Number(d.amount)`
-- L266: "إلغاء" → `props.onClose`
+- L1273: "العودة للنظام"
 
 ### القراءات (GET)
-- GET `/properties/contracts?status=active&limit=200`
+_لا قراءات._
 
 
 
@@ -39,11 +35,13 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `properties` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L429 _(dummy-phone)_: `{ name: "أحمد محمد السعيد", phone: "0551234567", id: "1234567890", contracts: "2 نشط", unit: "A-101", paid: "42,000 ر.س"`
+- ⚠ L430 _(dummy-phone)_: `{ name: "سارة عبدالله الغامدي", phone: "0557654321", id: "0987654321", contracts: "1 نشط", unit: "B-201", paid: "96,000 `
+- ⚠ L431 _(dummy-phone)_: `{ name: "خالد إبراهيم العمري", phone: "0501112233", id: "2345678901", contracts: "1 نشط", unit: "C-305", paid: "28,000 ر`
+- ⚠ L475 _(dummy-phone)_: `{ name: "عبدالرحمن الحربي", type: "فرد", phone: "0501234567", buildings: 2, units: 20, contracts: 18 },`
+- ⚠ L477 _(dummy-phone)_: `{ name: "فاطمة القحطاني", type: "فرد", phone: "0559876543", buildings: 1, units: 13, contracts: 13 },`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/guide/properties`
-- لقطة: `audit/screenshots/guide_properties.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/guide/properties`)
+- توصية: **TBD**
+- المشاكل: 5 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

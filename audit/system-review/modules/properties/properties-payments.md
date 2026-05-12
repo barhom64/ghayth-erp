@@ -1,26 +1,25 @@
-# /properties/payments — `artifacts/ghayth-erp/src/pages/create/properties/payment-register.tsx`
+# /properties/payments — `artifacts/ghayth-erp/src/pages/properties-payments.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/properties/payments`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/properties/payment-register.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/properties-payments.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/propertyRoutes.tsx:51`
 - المجموعة: `properties`
-- الكومبوننت: `PaymentRegister`
+- الكومبوننت: `PropertiesPayments`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `payments`
-- سطور الملف: 131
+- سطور الملف: 117
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L84: "مسح المسودة" → `clearDraft`
-- L123: "(بلا تسمية)" → `() => setLocation("/properties/payments")` 🔒
-- L124: "(بلا تسمية)" → `handleSave` 🔒
+- L44: "(بلا تسمية)"
+- L64: "تسجيل دفعة"
 
 ### القراءات (GET)
-- GET `/properties/payments`
+_لا قراءات._
 
 
 
@@ -40,8 +39,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/properties/payments`
-- لقطة: `audit/screenshots/properties_payments.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/properties/payments`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

@@ -1,26 +1,25 @@
-# /warehouse/movements/create — `artifacts/ghayth-erp/src/pages/warehouse.tsx`
+# /warehouse/movements/create — `artifacts/ghayth-erp/src/pages/create/warehouse/movements-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/warehouse/movements/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/warehouse.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/warehouse/movements-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:97`
 - المجموعة: `warehouse`
-- الكومبوننت: `Warehouse`
+- الكومبوننت: `WarehouseMovementsCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 387
+- سطور الملف: 113
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/warehouse/movements` | POST | — | ✅ | — | — | ✅ | ✅ | ✅ |
 
 ### تفاصيل الأزرار المرئية
-- L30: "حركة جديدة"
-- L36: "منتج جديد"
-- L153: "إضافة منتج"
-- L238: "إضافة حركة"
-- L298: "تصنيف جديد"
-- L365: "إضافة مورد"
+- L61: "مسح المسودة" → `clearDraft`
+- L105: "(بلا تسمية)" → `() => setLocation("/warehouse")` 🔒
+- L106: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
 _لا قراءات._
@@ -43,8 +42,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/warehouse/movements/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/warehouse_movements_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/warehouse/movements/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

@@ -11,28 +11,6 @@
     ]
   },
   "/admin/users": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/admin.tsx",
-    "module": "admin",
-    "apiCalls": [],
-    "buttonCount": 0,
-    "buttons": [],
-    "lineCount": 104,
-    "crossDomainImports": [
-      "lib/utils"
-    ]
-  },
-  "/admin/roles": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/admin.tsx",
-    "module": "admin",
-    "apiCalls": [],
-    "buttonCount": 0,
-    "buttons": [],
-    "lineCount": 104,
-    "crossDomainImports": [
-      "lib/utils"
-    ]
-  },
-  "/admin/logs": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin/users.tsx",
     "module": "admin",
     "apiCalls": [
@@ -134,7 +112,7 @@
       "lib/formatters"
     ]
   },
-  "/admin/integrations": {
+  "/admin/roles": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin/roles.tsx",
     "module": "admin",
     "apiCalls": [
@@ -195,7 +173,7 @@
       "lib/module-labels"
     ]
   },
-  "/admin/monitoring": {
+  "/admin/logs": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin/logs.tsx",
     "module": "admin",
     "apiCalls": [
@@ -227,7 +205,7 @@
       "lib/formatters"
     ]
   },
-  "/admin/violations-report": {
+  "/admin/integrations": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin-integrations.tsx",
     "module": "admin",
     "apiCalls": [
@@ -294,7 +272,7 @@
       "lib/utils"
     ]
   },
-  "/admin/system-governor": {
+  "/admin/monitoring": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin-monitoring.tsx",
     "module": "admin",
     "apiCalls": [
@@ -320,7 +298,7 @@
       "lib/utils"
     ]
   },
-  "/admin/policy-engine": {
+  "/admin/violations-report": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin-violations-report.tsx",
     "module": "admin",
     "apiCalls": [],
@@ -340,7 +318,7 @@
       "lib/formatters"
     ]
   },
-  "/admin/domain-registry": {
+  "/admin/system-governor": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin-system-governor.tsx",
     "module": "admin",
     "apiCalls": [
@@ -364,7 +342,7 @@
       "lib/api"
     ]
   },
-  "/admin/event-monitor": {
+  "/admin/policy-engine": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin-policy-engine.tsx",
     "module": "admin",
     "apiCalls": [
@@ -393,7 +371,7 @@
       "lib/api"
     ]
   },
-  "/admin/posting-failures": {
+  "/admin/domain-registry": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin-domain-registry.tsx",
     "module": "admin",
     "apiCalls": [
@@ -417,7 +395,7 @@
       "lib/api"
     ]
   },
-  "/admin/lifecycle-monitor": {
+  "/admin/event-monitor": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin-event-monitor.tsx",
     "module": "admin",
     "apiCalls": [
@@ -442,7 +420,7 @@
       "lib/formatters"
     ]
   },
-  "/admin/rbac-matrix": {
+  "/admin/posting-failures": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin-posting-failures.tsx",
     "module": "admin",
     "apiCalls": [],
@@ -473,7 +451,7 @@
       "lib/formatters"
     ]
   },
-  "/admin/gl-reconciliation": {
+  "/admin/lifecycle-monitor": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin-lifecycle-monitor.tsx",
     "module": "admin",
     "apiCalls": [
@@ -497,7 +475,7 @@
       "lib/api"
     ]
   },
-  "/admin/system-registry": {
+  "/admin/rbac-matrix": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin-rbac-matrix.tsx",
     "module": "admin",
     "apiCalls": [
@@ -521,6 +499,89 @@
       "lib/api"
     ]
   },
+  "/admin/gl-reconciliation": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/admin-gl-reconciliation.tsx",
+    "module": "admin",
+    "apiCalls": [
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/admin/governance/gl-reconciliation"
+      }
+    ],
+    "buttonCount": 1,
+    "buttons": [
+      {
+        "line": 45,
+        "label": null,
+        "onClick": "() => refetch()",
+        "disabledHinted": false
+      }
+    ],
+    "lineCount": 107,
+    "crossDomainImports": [
+      "lib/api"
+    ]
+  },
+  "/admin/system-registry": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/admin-system-registry.tsx",
+    "module": "admin",
+    "apiCalls": [
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/admin/system-registry"
+      },
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/admin/system-registry/entities"
+      },
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/admin/system-registry/actions"
+      },
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/admin/system-registry/missing"
+      },
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/admin/system-registry/coverage"
+      },
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/admin/system-registry/notifications"
+      },
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/admin/system-registry/reports"
+      },
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/admin/system-registry/print-templates"
+      }
+    ],
+    "buttonCount": 1,
+    "buttons": [
+      {
+        "line": 174,
+        "label": null,
+        "onClick": "() => refetchReg()",
+        "disabledHinted": false
+      }
+    ],
+    "lineCount": 689,
+    "crossDomainImports": [
+      "lib/api"
+    ]
+  },
   "/bi": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/bi.tsx",
     "module": "bi",
@@ -540,24 +601,6 @@
     "crossDomainImports": []
   },
   "/bi/dashboards/create": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/bi.tsx",
-    "module": "bi",
-    "apiCalls": [],
-    "buttonCount": 0,
-    "buttons": [],
-    "lineCount": 48,
-    "crossDomainImports": []
-  },
-  "/bi/kpis": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/bi.tsx",
-    "module": "bi",
-    "apiCalls": [],
-    "buttonCount": 0,
-    "buttons": [],
-    "lineCount": 48,
-    "crossDomainImports": []
-  },
-  "/bi/kpis/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/bi/dashboards-create.tsx",
     "module": "bi",
     "apiCalls": [],
@@ -587,7 +630,7 @@
       "lib/api"
     ]
   },
-  "/bi/reports": {
+  "/bi/kpis": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/bi.tsx",
     "module": "bi",
     "apiCalls": [],
@@ -596,7 +639,7 @@
     "lineCount": 48,
     "crossDomainImports": []
   },
-  "/bi/reports/create": {
+  "/bi/kpis/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/bi/kpis-create.tsx",
     "module": "bi",
     "apiCalls": [],
@@ -627,7 +670,7 @@
       "lib/api"
     ]
   },
-  "/bi/operations": {
+  "/bi/reports": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/bi.tsx",
     "module": "bi",
     "apiCalls": [],
@@ -636,7 +679,7 @@
     "lineCount": 48,
     "crossDomainImports": []
   },
-  "/bi/admin-reports": {
+  "/bi/reports/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/bi/reports-create.tsx",
     "module": "bi",
     "apiCalls": [],
@@ -664,6 +707,68 @@
     "lineCount": 101,
     "crossDomainImports": [
       "lib/api"
+    ]
+  },
+  "/bi/operations": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/bi-operations.tsx",
+    "module": "bi",
+    "apiCalls": [],
+    "buttonCount": 3,
+    "buttons": [
+      {
+        "line": 89,
+        "label": null,
+        "onClick": "() => exportChart(chartRef.current, \"sla-delays.png\")",
+        "disabledHinted": false
+      },
+      {
+        "line": 470,
+        "label": null,
+        "onClick": "() => window.print()",
+        "disabledHinted": false
+      },
+      {
+        "line": 492,
+        "label": null,
+        "onClick": "() => { setFrom(\"\"); setTo(\"\"); setDepartmentId(\"\");",
+        "disabledHinted": false
+      }
+    ],
+    "lineCount": 519,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters"
+    ]
+  },
+  "/bi/admin-reports": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/bi-admin-reports.tsx",
+    "module": "bi",
+    "apiCalls": [
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/bi/admin-reports/weekly"
+      },
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/bi/admin-reports/monthly"
+      }
+    ],
+    "buttonCount": 1,
+    "buttons": [
+      {
+        "line": 355,
+        "label": null,
+        "onClick": "() => window.print()",
+        "disabledHinted": false
+      }
+    ],
+    "lineCount": 374,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters",
+      "lib/utils"
     ]
   },
   "/communications": {
@@ -723,118 +828,6 @@
     ]
   },
   "/communications/notification-engine": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/communications.tsx",
-    "module": "communications",
-    "apiCalls": [
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/communications/stats"
-      }
-    ],
-    "buttonCount": 6,
-    "buttons": [
-      {
-        "line": 139,
-        "label": null,
-        "onClick": "handleSubscribe",
-        "disabledHinted": true
-      },
-      {
-        "line": 145,
-        "label": "إرسال تجريبي",
-        "onClick": "handleTest",
-        "disabledHinted": true
-      },
-      {
-        "line": 149,
-        "label": "إلغاء الاشتراك",
-        "onClick": "handleUnsubscribe",
-        "disabledHinted": true
-      },
-      {
-        "line": 236,
-        "label": null,
-        "onClick": "() => refetch()",
-        "disabledHinted": false
-      },
-      {
-        "line": 407,
-        "label": null,
-        "onClick": "() => setShow(!show)",
-        "disabledHinted": false
-      },
-      {
-        "line": 415,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false
-      }
-    ],
-    "lineCount": 648,
-    "crossDomainImports": [
-      "lib/formatters",
-      "lib/api",
-      "lib/utils"
-    ]
-  },
-  "/communications/letters/create": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/communications.tsx",
-    "module": "communications",
-    "apiCalls": [
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/communications/stats"
-      }
-    ],
-    "buttonCount": 6,
-    "buttons": [
-      {
-        "line": 139,
-        "label": null,
-        "onClick": "handleSubscribe",
-        "disabledHinted": true
-      },
-      {
-        "line": 145,
-        "label": "إرسال تجريبي",
-        "onClick": "handleTest",
-        "disabledHinted": true
-      },
-      {
-        "line": 149,
-        "label": "إلغاء الاشتراك",
-        "onClick": "handleUnsubscribe",
-        "disabledHinted": true
-      },
-      {
-        "line": 236,
-        "label": null,
-        "onClick": "() => refetch()",
-        "disabledHinted": false
-      },
-      {
-        "line": 407,
-        "label": null,
-        "onClick": "() => setShow(!show)",
-        "disabledHinted": false
-      },
-      {
-        "line": 415,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false
-      }
-    ],
-    "lineCount": 648,
-    "crossDomainImports": [
-      "lib/formatters",
-      "lib/api",
-      "lib/utils"
-    ]
-  },
-  "/correspondence": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/notification-engine.tsx",
     "module": "communications",
     "apiCalls": [
@@ -1009,7 +1002,7 @@
       "lib/formatters"
     ]
   },
-  "/correspondence/create": {
+  "/communications/letters/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/communications/letters-create.tsx",
     "module": "communications",
     "apiCalls": [],
@@ -1039,7 +1032,7 @@
       "lib/api"
     ]
   },
-  "/correspondence/:id": {
+  "/correspondence": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/comms/correspondence.tsx",
     "module": "communications",
     "apiCalls": [
@@ -1065,6 +1058,48 @@
       }
     ],
     "lineCount": 228,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters"
+    ]
+  },
+  "/correspondence/create": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/comms/correspondence-create.tsx",
+    "module": "communications",
+    "apiCalls": [],
+    "buttonCount": 3,
+    "buttons": [
+      {
+        "line": 82,
+        "label": null,
+        "onClick": null,
+        "disabledHinted": false
+      },
+      {
+        "line": 197,
+        "label": null,
+        "onClick": "() => setLocation(\"/correspondence\")",
+        "disabledHinted": true
+      },
+      {
+        "line": 200,
+        "label": null,
+        "onClick": "handleSubmit",
+        "disabledHinted": true
+      }
+    ],
+    "lineCount": 208,
+    "crossDomainImports": [
+      "lib/api"
+    ]
+  },
+  "/correspondence/:id": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/details/correspondence-detail.tsx",
+    "module": "communications",
+    "apiCalls": [],
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 379,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -1173,210 +1208,6 @@
     ]
   },
   "/documents/create": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/documents-page.tsx",
-    "module": "documents",
-    "apiCalls": [
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/documents/folders"
-      },
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/documents/templates"
-      },
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/documents/stats"
-      }
-    ],
-    "buttonCount": 12,
-    "buttons": [
-      {
-        "line": 137,
-        "label": "رفع مستند",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 138,
-        "label": "إنشاء مستند",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 200,
-        "label": null,
-        "onClick": "() => handleDownload(d.id, d.fileName)",
-        "disabledHinted": false
-      },
-      {
-        "line": 205,
-        "label": "الإصدارات",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 210,
-        "label": null,
-        "onClick": "() => handleStatusChange(d.id, \"approved\")",
-        "disabledHinted": false
-      },
-      {
-        "line": 215,
-        "label": null,
-        "onClick": "() => handleStatusChange(d.id, \"cancelled\")",
-        "disabledHinted": false
-      },
-      {
-        "line": 220,
-        "label": null,
-        "onClick": "() => handleStatusChange(d.id, \"draft\")",
-        "disabledHinted": false
-      },
-      {
-        "line": 268,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false
-      },
-      {
-        "line": 279,
-        "label": null,
-        "onClick": "() => setShowForm(false)",
-        "disabledHinted": false
-      },
-      {
-        "line": 304,
-        "label": null,
-        "onClick": "() => setShowForm(true)",
-        "disabledHinted": false
-      },
-      {
-        "line": 346,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false
-      },
-      {
-        "line": 357,
-        "label": null,
-        "onClick": "() => setShowForm(false)",
-        "disabledHinted": false
-      }
-    ],
-    "lineCount": 428,
-    "crossDomainImports": [
-      "lib/api",
-      "lib/utils",
-      "lib/formatters"
-    ]
-  },
-  "/documents/:docId/versions": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/documents-page.tsx",
-    "module": "documents",
-    "apiCalls": [
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/documents/folders"
-      },
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/documents/templates"
-      },
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/documents/stats"
-      }
-    ],
-    "buttonCount": 12,
-    "buttons": [
-      {
-        "line": 137,
-        "label": "رفع مستند",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 138,
-        "label": "إنشاء مستند",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 200,
-        "label": null,
-        "onClick": "() => handleDownload(d.id, d.fileName)",
-        "disabledHinted": false
-      },
-      {
-        "line": 205,
-        "label": "الإصدارات",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 210,
-        "label": null,
-        "onClick": "() => handleStatusChange(d.id, \"approved\")",
-        "disabledHinted": false
-      },
-      {
-        "line": 215,
-        "label": null,
-        "onClick": "() => handleStatusChange(d.id, \"cancelled\")",
-        "disabledHinted": false
-      },
-      {
-        "line": 220,
-        "label": null,
-        "onClick": "() => handleStatusChange(d.id, \"draft\")",
-        "disabledHinted": false
-      },
-      {
-        "line": 268,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false
-      },
-      {
-        "line": 279,
-        "label": null,
-        "onClick": "() => setShowForm(false)",
-        "disabledHinted": false
-      },
-      {
-        "line": 304,
-        "label": null,
-        "onClick": "() => setShowForm(true)",
-        "disabledHinted": false
-      },
-      {
-        "line": 346,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false
-      },
-      {
-        "line": 357,
-        "label": null,
-        "onClick": "() => setShowForm(false)",
-        "disabledHinted": false
-      }
-    ],
-    "lineCount": 428,
-    "crossDomainImports": [
-      "lib/api",
-      "lib/utils",
-      "lib/formatters"
-    ]
-  },
-  "/documents/upload": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/documents/documents-create.tsx",
     "module": "documents",
     "apiCalls": [],
@@ -1406,7 +1237,7 @@
       "lib/api"
     ]
   },
-  "/documents/folders": {
+  "/documents/:docId/versions": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/documents/version-upload.tsx",
     "module": "documents",
     "apiCalls": [],
@@ -1433,7 +1264,7 @@
       "lib/utils"
     ]
   },
-  "/documents/templates": {
+  "/documents/upload": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/documents/documents-upload.tsx",
     "module": "documents",
     "apiCalls": [],
@@ -1465,7 +1296,7 @@
       "lib/utils"
     ]
   },
-  "/documents/archive": {
+  "/documents/folders": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/documents-page.tsx",
     "module": "documents",
     "apiCalls": [
@@ -1565,6 +1396,110 @@
       "lib/api",
       "lib/utils",
       "lib/formatters"
+    ]
+  },
+  "/documents/templates": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/documents/templates.tsx",
+    "module": "documents",
+    "apiCalls": [
+      {
+        "kind": "mutation",
+        "method": "POST",
+        "path": "/documents/templates"
+      },
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/documents/templates"
+      },
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/settings/branches"
+      }
+    ],
+    "buttonCount": 9,
+    "buttons": [
+      {
+        "line": 234,
+        "label": null,
+        "onClick": "() => { setViewMode(\"list\"); setEditingId(null);",
+        "disabledHinted": false
+      },
+      {
+        "line": 240,
+        "label": "معاينة",
+        "onClick": "handleLivePreview",
+        "disabledHinted": true
+      },
+      {
+        "line": 243,
+        "label": "حفظ",
+        "onClick": "handleSave",
+        "disabledHinted": false
+      },
+      {
+        "line": 345,
+        "label": null,
+        "onClick": "() => removeVariable(i)",
+        "disabledHinted": false
+      },
+      {
+        "line": 356,
+        "label": "إضافة متغير",
+        "onClick": "addVariable",
+        "disabledHinted": true
+      },
+      {
+        "line": 417,
+        "label": null,
+        "onClick": "() => openEditor()",
+        "disabledHinted": false
+      },
+      {
+        "line": 476,
+        "label": "معاينة",
+        "onClick": "() => handlePreview(t)",
+        "disabledHinted": false
+      },
+      {
+        "line": 479,
+        "label": "تعديل",
+        "onClick": "() => openEditor(t)",
+        "disabledHinted": false
+      },
+      {
+        "line": 483,
+        "label": "حذف",
+        "onClick": "() => handleDelete(t.id)",
+        "disabledHinted": false
+      }
+    ],
+    "lineCount": 515,
+    "crossDomainImports": [
+      "lib/formatters",
+      "lib/utils",
+      "lib/api",
+      "lib/auth"
+    ]
+  },
+  "/documents/archive": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/documents/archive.tsx",
+    "module": "documents",
+    "apiCalls": [
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/documents"
+      }
+    ],
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 85,
+    "crossDomainImports": [
+      "lib/formatters",
+      "lib/utils",
+      "lib/api"
     ]
   },
   "/finance": {
@@ -1618,106 +1553,6 @@
     ]
   },
   "/finance/accounts": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/dashboard.tsx",
-    "module": "finance",
-    "apiCalls": [
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "summary"
-      }
-    ],
-    "buttonCount": 5,
-    "buttons": [
-      {
-        "line": 266,
-        "label": "شجرة الحسابات",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 269,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 336,
-        "label": "إدارة الفترات",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 358,
-        "label": "عرض الكل",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 403,
-        "label": "جميع الضمانات",
-        "onClick": null,
-        "disabledHinted": false
-      }
-    ],
-    "lineCount": 514,
-    "crossDomainImports": [
-      "lib/api",
-      "lib/formatters",
-      "lib/utils"
-    ]
-  },
-  "/finance/accounts/create": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/dashboard.tsx",
-    "module": "finance",
-    "apiCalls": [
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "summary"
-      }
-    ],
-    "buttonCount": 5,
-    "buttons": [
-      {
-        "line": 266,
-        "label": "شجرة الحسابات",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 269,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 336,
-        "label": "إدارة الفترات",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 358,
-        "label": "عرض الكل",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 403,
-        "label": "جميع الضمانات",
-        "onClick": null,
-        "disabledHinted": false
-      }
-    ],
-    "lineCount": 514,
-    "crossDomainImports": [
-      "lib/api",
-      "lib/formatters",
-      "lib/utils"
-    ]
-  },
-  "/finance/accounts/:id/edit": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/accounts.tsx",
     "module": "finance",
     "apiCalls": [
@@ -1754,7 +1589,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/accounts/:id": {
+  "/finance/accounts/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/accounts-create.tsx",
     "module": "finance",
     "apiCalls": [
@@ -1790,7 +1625,7 @@
       "lib/api"
     ]
   },
-  "/finance/vouchers": {
+  "/finance/accounts/:id/edit": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/accounts-edit.tsx",
     "module": "finance",
     "apiCalls": [
@@ -1826,7 +1661,7 @@
       "lib/api"
     ]
   },
-  "/finance/vouchers/create": {
+  "/finance/accounts/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/account-detail.tsx",
     "module": "finance",
     "apiCalls": [
@@ -1843,7 +1678,7 @@
       "lib/api"
     ]
   },
-  "/finance/vouchers/:id": {
+  "/finance/vouchers": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/vouchers.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -1856,7 +1691,7 @@
       "lib/finance-type-maps"
     ]
   },
-  "/finance/journal": {
+  "/finance/vouchers/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/vouchers-create.tsx",
     "module": "finance",
     "apiCalls": [
@@ -1893,7 +1728,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/journal/create": {
+  "/finance/vouchers/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/voucher-detail.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -1906,7 +1741,7 @@
       "lib/finance-type-maps"
     ]
   },
-  "/finance/invoices": {
+  "/finance/journal": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/journal.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -1931,7 +1766,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/invoices/create": {
+  "/finance/journal/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/journal-create.tsx",
     "module": "finance",
     "apiCalls": [
@@ -1980,7 +1815,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/invoices/:id": {
+  "/finance/invoices": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/invoices.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -2017,7 +1852,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/expenses": {
+  "/finance/invoices/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/invoices-create.tsx",
     "module": "finance",
     "apiCalls": [
@@ -2066,7 +1901,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/expenses/create": {
+  "/finance/invoices/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/invoice-detail.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -2110,7 +1945,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/expenses/:id": {
+  "/finance/expenses": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/expenses.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -2130,7 +1965,7 @@
       "lib/finance-type-maps"
     ]
   },
-  "/finance/budget": {
+  "/finance/expenses/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/expenses-create.tsx",
     "module": "finance",
     "apiCalls": [
@@ -2167,7 +2002,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/budget/create": {
+  "/finance/expenses/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/expense-detail.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -2180,7 +2015,7 @@
       "lib/finance-type-maps"
     ]
   },
-  "/finance/budget/:id": {
+  "/finance/budget": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/budget.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -2199,7 +2034,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/vendors": {
+  "/finance/budget/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/budget-create.tsx",
     "module": "finance",
     "apiCalls": [
@@ -2235,7 +2070,7 @@
       "lib/api"
     ]
   },
-  "/finance/vendors/create": {
+  "/finance/budget/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/budget-detail.tsx",
     "module": "finance",
     "apiCalls": [
@@ -2253,7 +2088,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/vendors/:id": {
+  "/finance/vendors": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/vendors.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -2271,7 +2106,7 @@
       "lib/api"
     ]
   },
-  "/finance/purchase-orders": {
+  "/finance/vendors/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/vendors-create.tsx",
     "module": "finance",
     "apiCalls": [
@@ -2308,7 +2143,7 @@
       "lib/api"
     ]
   },
-  "/finance/purchase-orders/create": {
+  "/finance/vendors/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/vendor-detail.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -2320,7 +2155,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/purchase-orders/:id": {
+  "/finance/purchase-orders": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/purchase-orders.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -2345,7 +2180,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/reports": {
+  "/finance/purchase-orders/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/purchase-orders-create.tsx",
     "module": "finance",
     "apiCalls": [
@@ -2394,7 +2229,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/tax": {
+  "/finance/purchase-orders/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/purchase-order-detail.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -2420,7 +2255,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/receivables": {
+  "/finance/reports": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/reports.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -2511,7 +2346,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/receivables/:id": {
+  "/finance/tax": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/tax-system.tsx",
     "module": "finance",
     "apiCalls": [
@@ -2541,7 +2376,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/payments": {
+  "/finance/receivables": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/receivables.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -2560,7 +2395,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/commitments": {
+  "/finance/receivables/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/receivable-detail.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -2572,7 +2407,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/commitments/:id": {
+  "/finance/payments": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/payments-page.tsx",
     "module": "finance",
     "apiCalls": [
@@ -2590,7 +2425,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/financial-requests": {
+  "/finance/commitments": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/commitments.tsx",
     "module": "finance",
     "apiCalls": [
@@ -2608,7 +2443,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/financial-requests/:id": {
+  "/finance/commitments/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/commitment-detail.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -2620,7 +2455,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/custodies": {
+  "/finance/financial-requests": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/financial-requests.tsx",
     "module": "finance",
     "apiCalls": [
@@ -2638,7 +2473,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/custodies/report": {
+  "/finance/financial-requests/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/financial-request-detail.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -2650,7 +2485,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/custodies/:id": {
+  "/finance/custodies": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/custodies.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -2693,7 +2528,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/fiscal-periods": {
+  "/finance/custodies/report": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/custody-aging-report.tsx",
     "module": "finance",
     "apiCalls": [
@@ -2718,7 +2553,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/salary-advances": {
+  "/finance/custodies/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/custody-detail.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -2730,7 +2565,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/salary-advances/:id": {
+  "/finance/fiscal-periods": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/fiscal-periods.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -2742,7 +2577,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/ledger/:code": {
+  "/finance/salary-advances": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/salary-advances.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -2767,7 +2602,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/ar-aging": {
+  "/finance/salary-advances/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/salary-advance-detail.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -2779,7 +2614,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/ap-aging": {
+  "/finance/ledger/:code": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/ledger.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -2810,7 +2645,7 @@
       "lib/api"
     ]
   },
-  "/finance/bank-reconciliation": {
+  "/finance/ar-aging": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/ar-aging.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -2829,7 +2664,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/bank-reconciliation/manual-match/:batchId/:rowId": {
+  "/finance/ap-aging": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/ap-aging.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -2848,7 +2683,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/fixed-assets": {
+  "/finance/bank-reconciliation": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/bank-reconciliation.tsx",
     "module": "finance",
     "apiCalls": [
@@ -2900,7 +2735,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/fixed-assets/batch-depreciate": {
+  "/finance/bank-reconciliation/manual-match/:batchId/:rowId": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/bank-manual-match.tsx",
     "module": "finance",
     "apiCalls": [
@@ -2943,7 +2778,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/fixed-assets/:id": {
+  "/finance/fixed-assets": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/fixed-assets.tsx",
     "module": "finance",
     "apiCalls": [
@@ -3003,7 +2838,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/inventory-costing": {
+  "/finance/fixed-assets/batch-depreciate": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/batch-depreciate.tsx",
     "module": "finance",
     "apiCalls": [
@@ -3033,7 +2868,7 @@
       "lib/api"
     ]
   },
-  "/finance/bank-guarantees": {
+  "/finance/fixed-assets/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/fixed-asset-detail.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -3045,7 +2880,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/journal-manual": {
+  "/finance/inventory-costing": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/inventory-costing.tsx",
     "module": "finance",
     "apiCalls": [
@@ -3080,7 +2915,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/journal-manual/create": {
+  "/finance/bank-guarantees": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/bank-guarantees.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -3112,7 +2947,7 @@
       "lib/utils"
     ]
   },
-  "/finance/journal-manual/:id": {
+  "/finance/journal-manual": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/journal-manual.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -3138,7 +2973,7 @@
       "lib/utils"
     ]
   },
-  "/finance/gl-posting-queue": {
+  "/finance/journal-manual/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/journal-manual-create.tsx",
     "module": "finance",
     "apiCalls": [
@@ -3181,7 +3016,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/intercompany": {
+  "/finance/journal-manual/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/journal-manual-detail.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -3200,7 +3035,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/intercompany/consolidation/create": {
+  "/finance/gl-posting-queue": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/gl-posting-queue.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -3237,7 +3072,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/cash-flow-forecast": {
+  "/finance/intercompany": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/intercompany.tsx",
     "module": "finance",
     "apiCalls": [
@@ -3279,7 +3114,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/project-costing": {
+  "/finance/intercompany/consolidation/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/intercompany-consolidation-create.tsx",
     "module": "finance",
     "apiCalls": [
@@ -3297,7 +3132,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/project-costing/:id": {
+  "/finance/cash-flow-forecast": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/cash-flow-forecast.tsx",
     "module": "finance",
     "apiCalls": [
@@ -3315,7 +3150,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/cashflow": {
+  "/finance/project-costing": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/project-costing.tsx",
     "module": "finance",
     "apiCalls": [
@@ -3346,7 +3181,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/opening-balances": {
+  "/finance/project-costing/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/project-costing-detail.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -3358,7 +3193,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/opening-balances/create": {
+  "/finance/cashflow": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/cashflow-dashboard.tsx",
     "module": "finance",
     "apiCalls": [
@@ -3407,7 +3242,7 @@
       "lib/utils"
     ]
   },
-  "/finance/recurring-journals": {
+  "/finance/opening-balances": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/opening-balances.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -3426,7 +3261,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/recurring-journals/create": {
+  "/finance/opening-balances/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/opening-balances-create.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -3475,7 +3310,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/recurring-journals/:id": {
+  "/finance/recurring-journals": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/recurring-journals.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -3512,7 +3347,7 @@
       "lib/formatters"
     ]
   },
-  "/finance/year-end-close": {
+  "/finance/recurring-journals/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/recurring-journals-create.tsx",
     "module": "finance",
     "apiCalls": [],
@@ -3555,13 +3390,87 @@
       "lib/formatters"
     ]
   },
-  "/finance/treasury": {
+  "/finance/recurring-journals/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/recurring-journal-detail.tsx",
     "module": "finance",
     "apiCalls": [],
     "buttonCount": 0,
     "buttons": [],
     "lineCount": 160,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters"
+    ]
+  },
+  "/finance/year-end-close": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/year-end-close.tsx",
+    "module": "finance",
+    "apiCalls": [],
+    "buttonCount": 2,
+    "buttons": [
+      {
+        "line": 136,
+        "label": null,
+        "onClick": "() => previewMut.mutate({ retainedEarningsAccountCode, force",
+        "disabledHinted": true
+      },
+      {
+        "line": 140,
+        "label": null,
+        "onClick": "() => {                 if (!preview) {                   toast({ variant: \"dest",
+        "disabledHinted": false
+      }
+    ],
+    "lineCount": 287,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters"
+    ]
+  },
+  "/finance/treasury": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/treasury.tsx",
+    "module": "finance",
+    "apiCalls": [],
+    "buttonCount": 6,
+    "buttons": [
+      {
+        "line": 74,
+        "label": "دفتر الأستاذ",
+        "onClick": null,
+        "disabledHinted": false
+      },
+      {
+        "line": 168,
+        "label": null,
+        "onClick": null,
+        "disabledHinted": false
+      },
+      {
+        "line": 173,
+        "label": null,
+        "onClick": null,
+        "disabledHinted": false
+      },
+      {
+        "line": 252,
+        "label": null,
+        "onClick": "() => setActiveTab(\"accounts\")",
+        "disabledHinted": false
+      },
+      {
+        "line": 259,
+        "label": null,
+        "onClick": "() => setActiveTab(\"movements\")",
+        "disabledHinted": false
+      },
+      {
+        "line": 266,
+        "label": null,
+        "onClick": "() => setActiveTab(\"daily\")",
+        "disabledHinted": false
+      }
+    ],
+    "lineCount": 319,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -3599,68 +3508,6 @@
     ]
   },
   "/fleet/vehicles/create": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/fleet.tsx",
-    "module": "fleet",
-    "apiCalls": [],
-    "buttonCount": 3,
-    "buttons": [
-      {
-        "line": 140,
-        "label": null,
-        "onClick": "() => setPreviewItem(v)",
-        "disabledHinted": false
-      },
-      {
-        "line": 187,
-        "label": "إضافة مركبة",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 299,
-        "label": "إضافة سائق",
-        "onClick": null,
-        "disabledHinted": false
-      }
-    ],
-    "lineCount": 519,
-    "crossDomainImports": [
-      "lib/api",
-      "lib/formatters"
-    ]
-  },
-  "/fleet/drivers": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/fleet.tsx",
-    "module": "fleet",
-    "apiCalls": [],
-    "buttonCount": 3,
-    "buttons": [
-      {
-        "line": 140,
-        "label": null,
-        "onClick": "() => setPreviewItem(v)",
-        "disabledHinted": false
-      },
-      {
-        "line": 187,
-        "label": "إضافة مركبة",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 299,
-        "label": "إضافة سائق",
-        "onClick": null,
-        "disabledHinted": false
-      }
-    ],
-    "lineCount": 519,
-    "crossDomainImports": [
-      "lib/api",
-      "lib/formatters"
-    ]
-  },
-  "/fleet/drivers/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/fleet/vehicles-create.tsx",
     "module": "fleet",
     "apiCalls": [
@@ -3696,7 +3543,7 @@
       "lib/api"
     ]
   },
-  "/fleet/drivers/:id": {
+  "/fleet/drivers": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet/drivers.tsx",
     "module": "fleet",
     "apiCalls": [
@@ -3726,7 +3573,7 @@
       "lib/api"
     ]
   },
-  "/fleet/trips": {
+  "/fleet/drivers/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/fleet/drivers-create.tsx",
     "module": "fleet",
     "apiCalls": [
@@ -3762,7 +3609,7 @@
       "lib/api"
     ]
   },
-  "/fleet/trips/create": {
+  "/fleet/drivers/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/driver-detail.tsx",
     "module": "fleet",
     "apiCalls": [
@@ -3780,7 +3627,7 @@
       "lib/formatters"
     ]
   },
-  "/fleet/trips/:id": {
+  "/fleet/trips": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet/trips.tsx",
     "module": "fleet",
     "apiCalls": [
@@ -3804,7 +3651,7 @@
       "lib/api"
     ]
   },
-  "/fleet/maintenance": {
+  "/fleet/trips/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/fleet/trips-create.tsx",
     "module": "fleet",
     "apiCalls": [
@@ -3840,7 +3687,7 @@
       "lib/api"
     ]
   },
-  "/fleet/maintenance/create": {
+  "/fleet/trips/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet/trip-detail.tsx",
     "module": "fleet",
     "apiCalls": [],
@@ -3865,7 +3712,7 @@
       "lib/formatters"
     ]
   },
-  "/fleet/maintenance/:id": {
+  "/fleet/maintenance": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet/maintenance.tsx",
     "module": "fleet",
     "apiCalls": [
@@ -3890,7 +3737,7 @@
       "lib/api"
     ]
   },
-  "/fleet/fuel": {
+  "/fleet/maintenance/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/fleet/maintenance-create.tsx",
     "module": "fleet",
     "apiCalls": [
@@ -3927,7 +3774,7 @@
       "lib/api"
     ]
   },
-  "/fleet/fuel/create": {
+  "/fleet/maintenance/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/maintenance-detail.tsx",
     "module": "fleet",
     "apiCalls": [],
@@ -3939,7 +3786,7 @@
       "lib/formatters"
     ]
   },
-  "/fleet/fuel/:id": {
+  "/fleet/fuel": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet/fuel.tsx",
     "module": "fleet",
     "apiCalls": [],
@@ -3958,7 +3805,7 @@
       "lib/api"
     ]
   },
-  "/fleet/insurance": {
+  "/fleet/fuel/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/fleet/fuel-create.tsx",
     "module": "fleet",
     "apiCalls": [
@@ -3995,7 +3842,7 @@
       "lib/formatters"
     ]
   },
-  "/fleet/insurance/create": {
+  "/fleet/fuel/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/fuel-detail.tsx",
     "module": "fleet",
     "apiCalls": [],
@@ -4007,7 +3854,7 @@
       "lib/formatters"
     ]
   },
-  "/fleet/insurance/:id": {
+  "/fleet/insurance": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet/insurance.tsx",
     "module": "fleet",
     "apiCalls": [
@@ -4032,7 +3879,7 @@
       "lib/formatters"
     ]
   },
-  "/fleet/alerts": {
+  "/fleet/insurance/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/fleet/insurance-create.tsx",
     "module": "fleet",
     "apiCalls": [
@@ -4068,7 +3915,7 @@
       "lib/api"
     ]
   },
-  "/fleet/alerts/create": {
+  "/fleet/insurance/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/insurance-detail.tsx",
     "module": "fleet",
     "apiCalls": [],
@@ -4080,7 +3927,7 @@
       "lib/formatters"
     ]
   },
-  "/fleet/reports": {
+  "/fleet/alerts": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet/alerts.tsx",
     "module": "fleet",
     "apiCalls": [
@@ -4104,7 +3951,7 @@
       "lib/api"
     ]
   },
-  "/fleet/preventive-plans": {
+  "/fleet/alerts/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/fleet/alerts-create.tsx",
     "module": "fleet",
     "apiCalls": [
@@ -4140,7 +3987,7 @@
       "lib/api"
     ]
   },
-  "/fleet/traffic-violations": {
+  "/fleet/reports": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet/reports.tsx",
     "module": "fleet",
     "apiCalls": [
@@ -4158,7 +4005,7 @@
       "lib/api"
     ]
   },
-  "/fleet/traffic-violations/:id": {
+  "/fleet/preventive-plans": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet/preventive-plans.tsx",
     "module": "fleet",
     "apiCalls": [
@@ -4188,7 +4035,7 @@
       "lib/api"
     ]
   },
-  "/fleet/tco": {
+  "/fleet/traffic-violations": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet/traffic-violations.tsx",
     "module": "fleet",
     "apiCalls": [
@@ -4235,7 +4082,7 @@
       "lib/api"
     ]
   },
-  "/fleet/:id/status": {
+  "/fleet/traffic-violations/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/traffic-violation-detail.tsx",
     "module": "fleet",
     "apiCalls": [],
@@ -4247,7 +4094,7 @@
       "lib/formatters"
     ]
   },
-  "/fleet/:id": {
+  "/fleet/tco": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet/tco.tsx",
     "module": "fleet",
     "apiCalls": [
@@ -4263,6 +4110,93 @@
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
+    ]
+  },
+  "/fleet/:id/status": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/fleet/vehicle-status-change.tsx",
+    "module": "fleet",
+    "apiCalls": [],
+    "buttonCount": 3,
+    "buttons": [
+      {
+        "line": 99,
+        "label": "مسح المسودة",
+        "onClick": "clearDraft",
+        "disabledHinted": false
+      },
+      {
+        "line": 170,
+        "label": null,
+        "onClick": "() => setLocation(`/fleet/${id",
+        "disabledHinted": true
+      },
+      {
+        "line": 171,
+        "label": null,
+        "onClick": "applyStatusChange",
+        "disabledHinted": true
+      }
+    ],
+    "lineCount": 182,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/utils"
+    ]
+  },
+  "/fleet/:id": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/details/vehicle-detail.tsx",
+    "module": "fleet",
+    "apiCalls": [],
+    "buttonCount": 7,
+    "buttons": [
+      {
+        "line": 159,
+        "label": "تغيير الحالة",
+        "onClick": null,
+        "disabledHinted": false
+      },
+      {
+        "line": 163,
+        "label": "تعديل",
+        "onClick": "startEdit",
+        "disabledHinted": false
+      },
+      {
+        "line": 166,
+        "label": "تأكيد الحذف",
+        "onClick": "handleDelete",
+        "disabledHinted": false
+      },
+      {
+        "line": 167,
+        "label": null,
+        "onClick": "() => setDeleting(false)",
+        "disabledHinted": false
+      },
+      {
+        "line": 170,
+        "label": null,
+        "onClick": "() => setDeleting(true)",
+        "disabledHinted": false
+      },
+      {
+        "line": 248,
+        "label": "حفظ",
+        "onClick": "saveEdit",
+        "disabledHinted": false
+      },
+      {
+        "line": 249,
+        "label": null,
+        "onClick": "() => setEditing(false)",
+        "disabledHinted": false
+      }
+    ],
+    "lineCount": 826,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters",
+      "lib/utils"
     ]
   },
   "/governance": {
@@ -4283,40 +4217,6 @@
     ]
   },
   "/governance/policies/create": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/governance.tsx",
-    "module": "governance",
-    "apiCalls": [
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/governance/stats"
-      }
-    ],
-    "buttonCount": 0,
-    "buttons": [],
-    "lineCount": 51,
-    "crossDomainImports": [
-      "lib/api"
-    ]
-  },
-  "/governance/policies/:id": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/governance.tsx",
-    "module": "governance",
-    "apiCalls": [
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/governance/stats"
-      }
-    ],
-    "buttonCount": 0,
-    "buttons": [],
-    "lineCount": 51,
-    "crossDomainImports": [
-      "lib/api"
-    ]
-  },
-  "/governance/policies": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/governance/policies-create.tsx",
     "module": "governance",
     "apiCalls": [],
@@ -4346,7 +4246,7 @@
       "lib/api"
     ]
   },
-  "/governance/risks/create": {
+  "/governance/policies/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/policy-detail.tsx",
     "module": "governance",
     "apiCalls": [],
@@ -4358,7 +4258,7 @@
       "lib/formatters"
     ]
   },
-  "/governance/risks/:id": {
+  "/governance/policies": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/governance.tsx",
     "module": "governance",
     "apiCalls": [
@@ -4375,7 +4275,7 @@
       "lib/api"
     ]
   },
-  "/governance/risks": {
+  "/governance/risks/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/governance/risks-create.tsx",
     "module": "governance",
     "apiCalls": [
@@ -4411,7 +4311,7 @@
       "lib/api"
     ]
   },
-  "/governance/audits/create": {
+  "/governance/risks/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/risk-detail.tsx",
     "module": "governance",
     "apiCalls": [],
@@ -4423,7 +4323,7 @@
       "lib/formatters"
     ]
   },
-  "/governance/audits/:id": {
+  "/governance/risks": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/governance.tsx",
     "module": "governance",
     "apiCalls": [
@@ -4440,7 +4340,7 @@
       "lib/api"
     ]
   },
-  "/governance/audits": {
+  "/governance/audits/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/governance/audits-create.tsx",
     "module": "governance",
     "apiCalls": [],
@@ -4470,7 +4370,7 @@
       "lib/api"
     ]
   },
-  "/governance/compliance/create": {
+  "/governance/audits/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/audit-detail.tsx",
     "module": "governance",
     "apiCalls": [],
@@ -4482,7 +4382,7 @@
       "lib/formatters"
     ]
   },
-  "/governance/compliance/:id": {
+  "/governance/audits": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/governance.tsx",
     "module": "governance",
     "apiCalls": [
@@ -4499,7 +4399,7 @@
       "lib/api"
     ]
   },
-  "/governance/compliance": {
+  "/governance/compliance/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/governance/compliance-create.tsx",
     "module": "governance",
     "apiCalls": [],
@@ -4529,13 +4429,48 @@
       "lib/api"
     ]
   },
-  "/governance/capa": {
+  "/governance/compliance/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/compliance-detail.tsx",
     "module": "governance",
     "apiCalls": [],
     "buttonCount": 0,
     "buttons": [],
     "lineCount": 310,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters"
+    ]
+  },
+  "/governance/compliance": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/governance.tsx",
+    "module": "governance",
+    "apiCalls": [
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/governance/stats"
+      }
+    ],
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 51,
+    "crossDomainImports": [
+      "lib/api"
+    ]
+  },
+  "/governance/capa": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/governance/capa.tsx",
+    "module": "governance",
+    "apiCalls": [
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/governance/capa"
+      }
+    ],
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 55,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -4561,44 +4496,6 @@
     ]
   },
   "/employees": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/hr.tsx",
-    "module": "hr",
-    "apiCalls": [],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 118,
-        "label": null,
-        "onClick": "() => navigate(\"/employees/create\")",
-        "disabledHinted": false
-      }
-    ],
-    "lineCount": 317,
-    "crossDomainImports": [
-      "lib/api",
-      "lib/formatters"
-    ]
-  },
-  "/employees/create": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/hr.tsx",
-    "module": "hr",
-    "apiCalls": [],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 118,
-        "label": null,
-        "onClick": "() => navigate(\"/employees/create\")",
-        "disabledHinted": false
-      }
-    ],
-    "lineCount": 317,
-    "crossDomainImports": [
-      "lib/api",
-      "lib/formatters"
-    ]
-  },
-  "/employees/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/employees.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -4636,7 +4533,7 @@
       "lib/constants"
     ]
   },
-  "/hr/attendance": {
+  "/employees/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/employees-create.tsx",
     "module": "hr",
     "apiCalls": [
@@ -4686,7 +4583,7 @@
       "lib/constants"
     ]
   },
-  "/hr/attendance/create": {
+  "/employees/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/employee-detail.tsx",
     "module": "hr",
     "apiCalls": [
@@ -4755,7 +4652,7 @@
       "lib/auth"
     ]
   },
-  "/hr/attendance/:id": {
+  "/hr/attendance": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/attendance.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -4788,7 +4685,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/attendance/reports": {
+  "/hr/attendance/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/attendance-create.tsx",
     "module": "hr",
     "apiCalls": [
@@ -4836,7 +4733,7 @@
       "lib/auth"
     ]
   },
-  "/hr/attendance/field-tracking": {
+  "/hr/attendance/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/attendance-detail.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -4849,7 +4746,7 @@
       "lib/utils"
     ]
   },
-  "/hr/attendance/qr-scanner": {
+  "/hr/attendance/reports": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/attendance-reports.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -4861,7 +4758,7 @@
       "lib/api"
     ]
   },
-  "/hr/leaves": {
+  "/hr/attendance/field-tracking": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/field-tracking.tsx",
     "module": "hr",
     "apiCalls": [
@@ -4879,7 +4776,7 @@
       "lib/formatters"
     ]
   },
-  "/hr/leaves/create": {
+  "/hr/attendance/qr-scanner": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/qr-scanner.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -4905,7 +4802,7 @@
       "lib/auth"
     ]
   },
-  "/hr/leaves/:id": {
+  "/hr/leaves": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/leaves.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -4931,7 +4828,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/leaves/management": {
+  "/hr/leaves/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/leaves-create.tsx",
     "module": "hr",
     "apiCalls": [
@@ -4979,7 +4876,7 @@
       "lib/api"
     ]
   },
-  "/hr/leaves/approval-chains": {
+  "/hr/leaves/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/leave-detail.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -4991,7 +4888,7 @@
       "lib/formatters"
     ]
   },
-  "/hr/payroll": {
+  "/hr/leaves/management": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/leave-management.tsx",
     "module": "hr",
     "apiCalls": [
@@ -5024,7 +4921,7 @@
       "lib/api"
     ]
   },
-  "/hr/payroll/create": {
+  "/hr/leaves/approval-chains": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/approval-chains.tsx",
     "module": "hr",
     "apiCalls": [
@@ -5043,7 +4940,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/payroll/salary-components": {
+  "/hr/payroll": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/payroll.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -5068,7 +4965,7 @@
       "lib/api"
     ]
   },
-  "/hr/payroll/:id": {
+  "/hr/payroll/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/payroll-create.tsx",
     "module": "hr",
     "apiCalls": [
@@ -5115,7 +5012,7 @@
       "lib/formatters"
     ]
   },
-  "/hr/performance": {
+  "/hr/payroll/salary-components": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/salary-components.tsx",
     "module": "hr",
     "apiCalls": [
@@ -5147,7 +5044,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/performance/create": {
+  "/hr/payroll/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/payroll-detail.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -5160,7 +5057,7 @@
       "lib/finance-type-maps"
     ]
   },
-  "/hr/performance/advanced": {
+  "/hr/performance": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/performance.tsx",
     "module": "hr",
     "apiCalls": [
@@ -5185,7 +5082,7 @@
       "lib/utils"
     ]
   },
-  "/hr/performance/:id": {
+  "/hr/performance/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/performance-create.tsx",
     "module": "hr",
     "apiCalls": [
@@ -5222,7 +5119,7 @@
       "lib/utils"
     ]
   },
-  "/hr/training": {
+  "/hr/performance/advanced": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/performance-advanced.tsx",
     "module": "hr",
     "apiCalls": [
@@ -5240,7 +5137,7 @@
       "lib/utils"
     ]
   },
-  "/hr/training/create": {
+  "/hr/performance/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/performance-detail.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -5253,7 +5150,7 @@
       "lib/utils"
     ]
   },
-  "/hr/training/advanced": {
+  "/hr/training": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/training.tsx",
     "module": "hr",
     "apiCalls": [
@@ -5288,7 +5185,7 @@
       "lib/api"
     ]
   },
-  "/hr/training/:id": {
+  "/hr/training/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/training-create.tsx",
     "module": "hr",
     "apiCalls": [
@@ -5327,7 +5224,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/organization": {
+  "/hr/training/advanced": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/training-advanced.tsx",
     "module": "hr",
     "apiCalls": [
@@ -5355,7 +5252,7 @@
       "lib/utils"
     ]
   },
-  "/hr/organization/structure": {
+  "/hr/training/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/training-detail.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -5368,7 +5265,7 @@
       "lib/utils"
     ]
   },
-  "/hr/recruitment": {
+  "/hr/organization": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/organization.tsx",
     "module": "hr",
     "apiCalls": [
@@ -5390,7 +5287,7 @@
       "lib/api"
     ]
   },
-  "/hr/recruitment/create": {
+  "/hr/organization/structure": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/organization-structure.tsx",
     "module": "hr",
     "apiCalls": [
@@ -5412,7 +5309,7 @@
       "lib/api"
     ]
   },
-  "/hr/recruitment/applicants/create": {
+  "/hr/recruitment": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/recruitment.tsx",
     "module": "hr",
     "apiCalls": [
@@ -5453,7 +5350,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/recruitment/applications": {
+  "/hr/recruitment/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/recruitment-create.tsx",
     "module": "hr",
     "apiCalls": [
@@ -5492,7 +5389,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/recruitment/advanced": {
+  "/hr/recruitment/applicants/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/applicants-create.tsx",
     "module": "hr",
     "apiCalls": [
@@ -5529,7 +5426,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/recruitment/jobs/:id": {
+  "/hr/recruitment/applications": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/application-list.tsx",
     "module": "hr",
     "apiCalls": [
@@ -5555,7 +5452,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/loans": {
+  "/hr/recruitment/advanced": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/recruitment-advanced.tsx",
     "module": "hr",
     "apiCalls": [
@@ -5579,7 +5476,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/loans/create": {
+  "/hr/recruitment/jobs/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/job-detail.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -5604,7 +5501,7 @@
       "lib/formatters"
     ]
   },
-  "/hr/loans/:id": {
+  "/hr/loans": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/loans.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -5637,7 +5534,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/overtime": {
+  "/hr/loans/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/loans-create.tsx",
     "module": "hr",
     "apiCalls": [
@@ -5680,7 +5577,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/overtime/create": {
+  "/hr/loans/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/loan-detail.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -5694,7 +5591,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/overtime/:id": {
+  "/hr/overtime": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/overtime.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -5727,7 +5624,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/exit": {
+  "/hr/overtime/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/overtime-create.tsx",
     "module": "hr",
     "apiCalls": [
@@ -5770,7 +5667,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/exit/create": {
+  "/hr/overtime/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/overtime-detail.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -5791,7 +5688,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/exit/:id": {
+  "/hr/exit": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/exit-requests.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -5818,7 +5715,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/violations": {
+  "/hr/exit/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/exit-create.tsx",
     "module": "hr",
     "apiCalls": [
@@ -5861,7 +5758,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/violations/create": {
+  "/hr/exit/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/exit-detail.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -5882,7 +5779,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/violations/management": {
+  "/hr/violations": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/violations.tsx",
     "module": "hr",
     "apiCalls": [
@@ -5933,7 +5830,7 @@
       "lib/utils"
     ]
   },
-  "/hr/violations/penalty-escalation": {
+  "/hr/violations/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/violations-create.tsx",
     "module": "hr",
     "apiCalls": [
@@ -5965,7 +5862,7 @@
       "lib/formatters"
     ]
   },
-  "/hr/violations/auto-detection": {
+  "/hr/violations/management": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/violations-management.tsx",
     "module": "hr",
     "apiCalls": [
@@ -5996,7 +5893,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/violations/:id": {
+  "/hr/violations/penalty-escalation": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/penalty-escalation.tsx",
     "module": "hr",
     "apiCalls": [
@@ -6015,7 +5912,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/discipline/regulation": {
+  "/hr/violations/auto-detection": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/auto-detection.tsx",
     "module": "hr",
     "apiCalls": [
@@ -6058,7 +5955,7 @@
       "lib/utils"
     ]
   },
-  "/hr/discipline/memos": {
+  "/hr/violations/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/violation-detail.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -6072,7 +5969,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/discipline/memos/:id": {
+  "/hr/discipline/regulation": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/discipline-regulation.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -6108,7 +6005,7 @@
       "lib/api"
     ]
   },
-  "/hr/shifts": {
+  "/hr/discipline/memos": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/discipline-memos.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -6117,7 +6014,7 @@
     "lineCount": 25,
     "crossDomainImports": []
   },
-  "/hr/shifts/create": {
+  "/hr/discipline/memos/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/discipline-memo-detail.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -6203,7 +6100,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/shifts/management": {
+  "/hr/shifts": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/shifts.tsx",
     "module": "hr",
     "apiCalls": [
@@ -6233,7 +6130,7 @@
       "lib/utils"
     ]
   },
-  "/hr/shifts/:id": {
+  "/hr/shifts/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/shifts-create.tsx",
     "module": "hr",
     "apiCalls": [
@@ -6275,7 +6172,7 @@
       "lib/utils"
     ]
   },
-  "/hr/employee-profile/:id": {
+  "/hr/shifts/management": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/shifts-management.tsx",
     "module": "hr",
     "apiCalls": [
@@ -6315,7 +6212,7 @@
       "lib/api"
     ]
   },
-  "/hr/employee-activation": {
+  "/hr/shifts/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/shift-detail.tsx",
     "module": "hr",
     "apiCalls": [
@@ -6333,7 +6230,7 @@
       "lib/formatters"
     ]
   },
-  "/hr/onboarding-review": {
+  "/hr/employee-profile/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/employee-profile.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -6342,7 +6239,7 @@
     "lineCount": 18,
     "crossDomainImports": []
   },
-  "/hr/evaluation-360/create": {
+  "/hr/employee-activation": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/employee-activation.tsx",
     "module": "hr",
     "apiCalls": [
@@ -6380,7 +6277,7 @@
       "lib/utils"
     ]
   },
-  "/hr/evaluation-360/history/:employeeId": {
+  "/hr/onboarding-review": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/onboarding-review.tsx",
     "module": "hr",
     "apiCalls": [
@@ -6403,7 +6300,7 @@
       "lib/formatters"
     ]
   },
-  "/hr/evaluation-360": {
+  "/hr/evaluation-360/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/evaluation-360-create.tsx",
     "module": "hr",
     "apiCalls": [
@@ -6445,7 +6342,7 @@
       "lib/api"
     ]
   },
-  "/hr/evaluation-360/:id/peer": {
+  "/hr/evaluation-360/history/:employeeId": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/evaluation-360-history.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -6471,7 +6368,7 @@
       "lib/utils"
     ]
   },
-  "/hr/evaluation-360/:id/upward": {
+  "/hr/evaluation-360": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/evaluation-360.tsx",
     "module": "hr",
     "apiCalls": [
@@ -6496,7 +6393,7 @@
       "lib/utils"
     ]
   },
-  "/hr/evaluation-360/:id": {
+  "/hr/evaluation-360/:id/peer": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/evaluation-360-peer.tsx",
     "module": "hr",
     "apiCalls": [
@@ -6533,7 +6430,7 @@
       "lib/utils"
     ]
   },
-  "/hr/public-holidays": {
+  "/hr/evaluation-360/:id/upward": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/evaluation-360-upward.tsx",
     "module": "hr",
     "apiCalls": [
@@ -6576,7 +6473,7 @@
       "lib/utils"
     ]
   },
-  "/hr/transfers": {
+  "/hr/evaluation-360/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/evaluation-360-detail.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -6613,7 +6510,7 @@
       "lib/utils"
     ]
   },
-  "/hr/transfers/:id": {
+  "/hr/public-holidays": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/public-holidays.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -6638,7 +6535,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/development-plans": {
+  "/hr/transfers": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/transfers.tsx",
     "module": "hr",
     "apiCalls": [
@@ -6685,7 +6582,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/idp": {
+  "/hr/transfers/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/transfer-detail.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -6697,7 +6594,7 @@
       "lib/formatters"
     ]
   },
-  "/hr/gratuity": {
+  "/hr/development-plans": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/development-plans.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -6706,7 +6603,7 @@
     "lineCount": 2,
     "crossDomainImports": []
   },
-  "/hr/turnover-report": {
+  "/hr/idp": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/idp.tsx",
     "module": "hr",
     "apiCalls": [
@@ -6748,7 +6645,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/expiring-documents": {
+  "/hr/gratuity": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/gratuity.tsx",
     "module": "hr",
     "apiCalls": [
@@ -6767,7 +6664,7 @@
       "lib/formatters"
     ]
   },
-  "/hr/contracts": {
+  "/hr/turnover-report": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/turnover-report.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -6780,7 +6677,7 @@
       "lib/formatters"
     ]
   },
-  "/hr/contracts/create": {
+  "/hr/expiring-documents": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/expiring-documents.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -6794,7 +6691,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/contracts/:id": {
+  "/hr/contracts": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/contracts.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -6819,7 +6716,7 @@
       "lib/formatters"
     ]
   },
-  "/hr/official-letters": {
+  "/hr/contracts/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/contracts-create.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -6849,7 +6746,7 @@
       "lib/api"
     ]
   },
-  "/hr/excuse-requests": {
+  "/hr/contracts/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/hr-contract-detail.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -6861,7 +6758,7 @@
       "lib/formatters"
     ]
   },
-  "/hr/excuse-requests/create": {
+  "/hr/official-letters": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/official-letters.tsx",
     "module": "hr",
     "apiCalls": [
@@ -6900,7 +6797,7 @@
       "lib/hr-type-maps"
     ]
   },
-  "/hr/excuse-requests/:id": {
+  "/hr/excuse-requests": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/excuse-requests.tsx",
     "module": "hr",
     "apiCalls": [],
@@ -6914,6 +6811,55 @@
       }
     ],
     "lineCount": 197,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters"
+    ]
+  },
+  "/hr/excuse-requests/create": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/excuse-create.tsx",
+    "module": "hr",
+    "apiCalls": [
+      {
+        "kind": "mutation",
+        "method": "POST",
+        "path": "/hr/excuse-requests"
+      }
+    ],
+    "buttonCount": 3,
+    "buttons": [
+      {
+        "line": 80,
+        "label": "مسح المسودة",
+        "onClick": "clearDraft",
+        "disabledHinted": false
+      },
+      {
+        "line": 123,
+        "label": null,
+        "onClick": "() => setLocation(\"/hr/excuse-requests\")",
+        "disabledHinted": true
+      },
+      {
+        "line": 124,
+        "label": null,
+        "onClick": "handleSubmit",
+        "disabledHinted": true
+      }
+    ],
+    "lineCount": 131,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/auth"
+    ]
+  },
+  "/hr/excuse-requests/:id": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/details/excuse-detail.tsx",
+    "module": "hr",
+    "apiCalls": [],
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 266,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -6972,52 +6918,37 @@
     ]
   },
   "/legal/create": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/legal.tsx",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/legal-create.tsx",
     "module": "legal",
     "apiCalls": [
       {
-        "kind": "query",
-        "method": "GET",
-        "path": "/legal/stats"
-      },
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/legal/stats"
-      },
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/legal/cases"
-      },
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/legal/financial-report"
+        "kind": "mutation",
+        "method": "POST",
+        "path": "/legal/contracts"
       }
     ],
     "buttonCount": 3,
     "buttons": [
       {
         "line": 104,
-        "label": "نسخ العقد",
-        "onClick": null,
+        "label": "مسح المسودة",
+        "onClick": "clearDraft",
         "disabledHinted": false
       },
       {
-        "line": 150,
-        "label": "عقد جديد",
-        "onClick": null,
-        "disabledHinted": false
+        "line": 191,
+        "label": null,
+        "onClick": "() => setLocation(\"/legal\")",
+        "disabledHinted": true
       },
       {
-        "line": 270,
-        "label": "قضية جديدة",
+        "line": 192,
+        "label": null,
         "onClick": null,
-        "disabledHinted": false
+        "disabledHinted": true
       }
     ],
-    "lineCount": 396,
+    "lineCount": 199,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -7076,95 +7007,6 @@
     ]
   },
   "/legal/contracts/:id": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/create/legal-create.tsx",
-    "module": "legal",
-    "apiCalls": [
-      {
-        "kind": "mutation",
-        "method": "POST",
-        "path": "/legal/contracts"
-      }
-    ],
-    "buttonCount": 3,
-    "buttons": [
-      {
-        "line": 104,
-        "label": "مسح المسودة",
-        "onClick": "clearDraft",
-        "disabledHinted": false
-      },
-      {
-        "line": 191,
-        "label": null,
-        "onClick": "() => setLocation(\"/legal\")",
-        "disabledHinted": true
-      },
-      {
-        "line": 192,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": true
-      }
-    ],
-    "lineCount": 199,
-    "crossDomainImports": [
-      "lib/api",
-      "lib/formatters"
-    ]
-  },
-  "/legal/sessions": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/legal.tsx",
-    "module": "legal",
-    "apiCalls": [
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/legal/stats"
-      },
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/legal/stats"
-      },
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/legal/cases"
-      },
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/legal/financial-report"
-      }
-    ],
-    "buttonCount": 3,
-    "buttons": [
-      {
-        "line": 104,
-        "label": "نسخ العقد",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 150,
-        "label": "عقد جديد",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 270,
-        "label": "قضية جديدة",
-        "onClick": null,
-        "disabledHinted": false
-      }
-    ],
-    "lineCount": 396,
-    "crossDomainImports": [
-      "lib/api",
-      "lib/formatters"
-    ]
-  },
-  "/legal/sessions/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/legal-contract-detail.tsx",
     "module": "legal",
     "apiCalls": [],
@@ -7176,7 +7018,7 @@
       "lib/formatters"
     ]
   },
-  "/legal/judgments": {
+  "/legal/sessions": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/legal/sessions.tsx",
     "module": "legal",
     "apiCalls": [
@@ -7194,7 +7036,7 @@
       "lib/formatters"
     ]
   },
-  "/legal/judgments/:id": {
+  "/legal/sessions/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/legal-session-detail.tsx",
     "module": "legal",
     "apiCalls": [],
@@ -7206,7 +7048,7 @@
       "lib/formatters"
     ]
   },
-  "/legal/correspondence": {
+  "/legal/judgments": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/legal/judgments.tsx",
     "module": "legal",
     "apiCalls": [
@@ -7224,7 +7066,7 @@
       "lib/formatters"
     ]
   },
-  "/legal/cases": {
+  "/legal/judgments/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/legal-judgment-detail.tsx",
     "module": "legal",
     "apiCalls": [],
@@ -7236,7 +7078,7 @@
       "lib/formatters"
     ]
   },
-  "/legal/cases/create": {
+  "/legal/correspondence": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/legal/correspondence.tsx",
     "module": "legal",
     "apiCalls": [
@@ -7253,7 +7095,7 @@
       "lib/api"
     ]
   },
-  "/legal/cases/:id": {
+  "/legal/cases": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/legal.tsx",
     "module": "legal",
     "apiCalls": [
@@ -7305,7 +7147,7 @@
       "lib/formatters"
     ]
   },
-  "/legal/documents": {
+  "/legal/cases/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/legal-cases-create.tsx",
     "module": "legal",
     "apiCalls": [
@@ -7341,7 +7183,85 @@
       "lib/api"
     ]
   },
-  "/my-requests": {
+  "/legal/cases/:id": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/legal-case-detail.tsx",
+    "module": "legal",
+    "apiCalls": [],
+    "buttonCount": 2,
+    "buttons": [
+      {
+        "line": 280,
+        "label": null,
+        "onClick": null,
+        "disabledHinted": false
+      },
+      {
+        "line": 376,
+        "label": null,
+        "onClick": "() => setShowAddSession(!showAddSession)",
+        "disabledHinted": false
+      }
+    ],
+    "lineCount": 544,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters",
+      "lib/utils"
+    ]
+  },
+  "/legal/documents": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/legal.tsx",
+    "module": "legal",
+    "apiCalls": [
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/legal/stats"
+      },
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/legal/stats"
+      },
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/legal/cases"
+      },
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/legal/financial-report"
+      }
+    ],
+    "buttonCount": 3,
+    "buttons": [
+      {
+        "line": 104,
+        "label": "نسخ العقد",
+        "onClick": null,
+        "disabledHinted": false
+      },
+      {
+        "line": 150,
+        "label": "عقد جديد",
+        "onClick": null,
+        "disabledHinted": false
+      },
+      {
+        "line": 270,
+        "label": "قضية جديدة",
+        "onClick": null,
+        "disabledHinted": false
+      }
+    ],
+    "lineCount": 396,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters"
+    ]
+  },
+  "/dashboard": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/dashboard.tsx",
     "module": "misc",
     "apiCalls": [
@@ -7425,7 +7345,7 @@
       "lib/formatters"
     ]
   },
-  "/my-leave-request": {
+  "/my-space": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/my-space.tsx",
     "module": "misc",
     "apiCalls": [
@@ -7450,7 +7370,7 @@
       "lib/auth"
     ]
   },
-  "/my-attendance": {
+  "/my-requests": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/my-requests.tsx",
     "module": "misc",
     "apiCalls": [
@@ -7489,7 +7409,7 @@
       "lib/utils"
     ]
   },
-  "/my-payslip": {
+  "/my-leave-request": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/my-leave-request.tsx",
     "module": "misc",
     "apiCalls": [],
@@ -7498,7 +7418,7 @@
     "lineCount": 11,
     "crossDomainImports": []
   },
-  "/my-performance": {
+  "/my-attendance": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/my-attendance.tsx",
     "module": "misc",
     "apiCalls": [],
@@ -7511,7 +7431,7 @@
       "lib/utils"
     ]
   },
-  "/my-documents": {
+  "/my-payslip": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/my-payslip.tsx",
     "module": "misc",
     "apiCalls": [],
@@ -7532,9 +7452,9 @@
       "lib/utils"
     ]
   },
-  "/my-loans": {
+  "/my-performance": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/my-performance.tsx",
-    "module": "operations",
+    "module": "misc",
     "apiCalls": [
       {
         "kind": "query",
@@ -7551,9 +7471,9 @@
       "lib/utils"
     ]
   },
-  "/my-overtime": {
+  "/my-documents": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/my-documents.tsx",
-    "module": "operations",
+    "module": "misc",
     "apiCalls": [
       {
         "kind": "query",
@@ -7583,9 +7503,9 @@
       "lib/utils"
     ]
   },
-  "/action-center": {
+  "/my-loans": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/my-loans.tsx",
-    "module": "operations",
+    "module": "misc",
     "apiCalls": [
       {
         "kind": "query",
@@ -7609,9 +7529,9 @@
       "lib/utils"
     ]
   },
-  "/obligations": {
+  "/my-overtime": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/my-overtime.tsx",
-    "module": "operations",
+    "module": "misc",
     "apiCalls": [],
     "buttonCount": 0,
     "buttons": [],
@@ -7622,9 +7542,9 @@
       "lib/utils"
     ]
   },
-  "/calendar": {
+  "/action-center": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/action-center.tsx",
-    "module": "operations",
+    "module": "misc",
     "apiCalls": [],
     "buttonCount": 10,
     "buttons": [
@@ -7698,7 +7618,7 @@
       "lib/utils"
     ]
   },
-  "/exec-dashboard": {
+  "/obligations": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/obligations.tsx",
     "module": "operations",
     "apiCalls": [
@@ -7735,9 +7655,9 @@
       "lib/formatters"
     ]
   },
-  "/manager-board": {
+  "/calendar": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/calendar.tsx",
-    "module": "operations",
+    "module": "misc",
     "apiCalls": [],
     "buttonCount": 5,
     "buttons": [
@@ -7778,9 +7698,9 @@
       "lib/formatters"
     ]
   },
-  "/operations-center": {
+  "/exec-dashboard": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/exec-dashboard.tsx",
-    "module": "operations",
+    "module": "misc",
     "apiCalls": [
       {
         "kind": "query",
@@ -7797,9 +7717,9 @@
       "lib/utils"
     ]
   },
-  "/daily-close": {
+  "/manager-board": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/manager-board.tsx",
-    "module": "operations",
+    "module": "misc",
     "apiCalls": [],
     "buttonCount": 7,
     "buttons": [
@@ -7854,7 +7774,7 @@
       "lib/approval-registry"
     ]
   },
-  "/clients": {
+  "/operations-center": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/operations-center.tsx",
     "module": "operations",
     "apiCalls": [],
@@ -7891,7 +7811,7 @@
       "lib/utils"
     ]
   },
-  "/clients/create": {
+  "/daily-close": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/daily-close.tsx",
     "module": "operations",
     "apiCalls": [],
@@ -7923,7 +7843,7 @@
       "lib/utils"
     ]
   },
-  "/clients/:id": {
+  "/clients": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/clients.tsx",
     "module": "crm",
     "apiCalls": [],
@@ -7949,7 +7869,7 @@
       "lib/formatters"
     ]
   },
-  "/crm": {
+  "/clients/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/clients-create.tsx",
     "module": "crm",
     "apiCalls": [],
@@ -7979,7 +7899,7 @@
       "lib/api"
     ]
   },
-  "/crm/create": {
+  "/clients/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/client-detail.tsx",
     "module": "crm",
     "apiCalls": [],
@@ -8018,7 +7938,7 @@
       "lib/formatters"
     ]
   },
-  "/crm/pipeline": {
+  "/crm": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/crm.tsx",
     "module": "crm",
     "apiCalls": [
@@ -8049,7 +7969,7 @@
       "lib/formatters"
     ]
   },
-  "/crm/activities": {
+  "/crm/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/crm-create.tsx",
     "module": "crm",
     "apiCalls": [
@@ -8087,7 +8007,7 @@
       "lib/formatters"
     ]
   },
-  "/crm/leads/:id": {
+  "/crm/pipeline": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/crm.tsx",
     "module": "crm",
     "apiCalls": [
@@ -8118,7 +8038,7 @@
       "lib/formatters"
     ]
   },
-  "/crm/:id": {
+  "/crm/activities": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/crm/activities.tsx",
     "module": "crm",
     "apiCalls": [
@@ -8138,7 +8058,7 @@
       "lib/crm-type-maps"
     ]
   },
-  "/projects": {
+  "/crm/leads/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/crm/lead-detail.tsx",
     "module": "crm",
     "apiCalls": [],
@@ -8163,7 +8083,7 @@
       "lib/formatters"
     ]
   },
-  "/projects/create": {
+  "/crm/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/opportunity-detail.tsx",
     "module": "crm",
     "apiCalls": [],
@@ -8214,7 +8134,7 @@
       "lib/auth"
     ]
   },
-  "/projects/tasks": {
+  "/projects": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/projects.tsx",
     "module": "operations",
     "apiCalls": [
@@ -8275,7 +8195,7 @@
       "lib/formatters"
     ]
   },
-  "/projects/gantt": {
+  "/projects/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/projects-create.tsx",
     "module": "operations",
     "apiCalls": [
@@ -8312,7 +8232,7 @@
       "lib/formatters"
     ]
   },
-  "/projects/risks": {
+  "/projects/tasks": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/tasks.tsx",
     "module": "operations",
     "apiCalls": [],
@@ -8386,7 +8306,7 @@
       "lib/priority-labels"
     ]
   },
-  "/projects/:id": {
+  "/projects/gantt": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/projects/gantt.tsx",
     "module": "operations",
     "apiCalls": [
@@ -8403,7 +8323,7 @@
       "lib/api"
     ]
   },
-  "/warehouse": {
+  "/projects/risks": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/projects/risks.tsx",
     "module": "operations",
     "apiCalls": [
@@ -8434,7 +8354,7 @@
       "lib/api"
     ]
   },
-  "/warehouse/create": {
+  "/projects/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/project-detail.tsx",
     "module": "operations",
     "apiCalls": [],
@@ -8574,7 +8494,7 @@
       "lib/utils"
     ]
   },
-  "/warehouse/movements/create": {
+  "/warehouse": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/warehouse.tsx",
     "module": "warehouse",
     "apiCalls": [],
@@ -8623,7 +8543,7 @@
       "lib/formatters"
     ]
   },
-  "/warehouse/categories/create": {
+  "/warehouse/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/warehouse-create.tsx",
     "module": "warehouse",
     "apiCalls": [
@@ -8659,7 +8579,7 @@
       "lib/api"
     ]
   },
-  "/warehouse/suppliers/create": {
+  "/warehouse/movements/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/warehouse/movements-create.tsx",
     "module": "warehouse",
     "apiCalls": [
@@ -8695,7 +8615,7 @@
       "lib/api"
     ]
   },
-  "/warehouse/products/:id": {
+  "/warehouse/categories/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/warehouse/categories-create.tsx",
     "module": "warehouse",
     "apiCalls": [
@@ -8731,7 +8651,7 @@
       "lib/api"
     ]
   },
-  "/warehouse/movements/:id": {
+  "/warehouse/suppliers/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/warehouse/suppliers-create.tsx",
     "module": "warehouse",
     "apiCalls": [
@@ -8767,7 +8687,7 @@
       "lib/api"
     ]
   },
-  "/warehouse/categories/:id": {
+  "/warehouse/products/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/warehouse-product-detail.tsx",
     "module": "warehouse",
     "apiCalls": [],
@@ -8779,7 +8699,7 @@
       "lib/formatters"
     ]
   },
-  "/warehouse/suppliers/:id": {
+  "/warehouse/movements/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/warehouse-movement-detail.tsx",
     "module": "warehouse",
     "apiCalls": [],
@@ -8791,7 +8711,7 @@
       "lib/formatters"
     ]
   },
-  "/warehouse/movements": {
+  "/warehouse/categories/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/warehouse-category-detail.tsx",
     "module": "warehouse",
     "apiCalls": [],
@@ -8803,13 +8723,111 @@
       "lib/formatters"
     ]
   },
-  "/warehouse/categories": {
+  "/warehouse/suppliers/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/warehouse-supplier-detail.tsx",
     "module": "warehouse",
     "apiCalls": [],
     "buttonCount": 0,
     "buttons": [],
     "lineCount": 243,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters"
+    ]
+  },
+  "/warehouse/movements": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/warehouse.tsx",
+    "module": "warehouse",
+    "apiCalls": [],
+    "buttonCount": 6,
+    "buttons": [
+      {
+        "line": 30,
+        "label": "حركة جديدة",
+        "onClick": null,
+        "disabledHinted": false
+      },
+      {
+        "line": 36,
+        "label": "منتج جديد",
+        "onClick": null,
+        "disabledHinted": false
+      },
+      {
+        "line": 153,
+        "label": "إضافة منتج",
+        "onClick": null,
+        "disabledHinted": false
+      },
+      {
+        "line": 238,
+        "label": "إضافة حركة",
+        "onClick": null,
+        "disabledHinted": false
+      },
+      {
+        "line": 298,
+        "label": "تصنيف جديد",
+        "onClick": null,
+        "disabledHinted": false
+      },
+      {
+        "line": 365,
+        "label": "إضافة مورد",
+        "onClick": null,
+        "disabledHinted": false
+      }
+    ],
+    "lineCount": 387,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters"
+    ]
+  },
+  "/warehouse/categories": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/warehouse.tsx",
+    "module": "warehouse",
+    "apiCalls": [],
+    "buttonCount": 6,
+    "buttons": [
+      {
+        "line": 30,
+        "label": "حركة جديدة",
+        "onClick": null,
+        "disabledHinted": false
+      },
+      {
+        "line": 36,
+        "label": "منتج جديد",
+        "onClick": null,
+        "disabledHinted": false
+      },
+      {
+        "line": 153,
+        "label": "إضافة منتج",
+        "onClick": null,
+        "disabledHinted": false
+      },
+      {
+        "line": 238,
+        "label": "إضافة حركة",
+        "onClick": null,
+        "disabledHinted": false
+      },
+      {
+        "line": 298,
+        "label": "تصنيف جديد",
+        "onClick": null,
+        "disabledHinted": false
+      },
+      {
+        "line": 365,
+        "label": "إضافة مورد",
+        "onClick": null,
+        "disabledHinted": false
+      }
+    ],
+    "lineCount": 387,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"
@@ -8865,104 +8883,6 @@
     ]
   },
   "/warehouse/inventory-count": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/warehouse.tsx",
-    "module": "warehouse",
-    "apiCalls": [],
-    "buttonCount": 6,
-    "buttons": [
-      {
-        "line": 30,
-        "label": "حركة جديدة",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 36,
-        "label": "منتج جديد",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 153,
-        "label": "إضافة منتج",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 238,
-        "label": "إضافة حركة",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 298,
-        "label": "تصنيف جديد",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 365,
-        "label": "إضافة مورد",
-        "onClick": null,
-        "disabledHinted": false
-      }
-    ],
-    "lineCount": 387,
-    "crossDomainImports": [
-      "lib/api",
-      "lib/formatters"
-    ]
-  },
-  "/support/create": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/warehouse.tsx",
-    "module": "warehouse",
-    "apiCalls": [],
-    "buttonCount": 6,
-    "buttons": [
-      {
-        "line": 30,
-        "label": "حركة جديدة",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 36,
-        "label": "منتج جديد",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 153,
-        "label": "إضافة منتج",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 238,
-        "label": "إضافة حركة",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 298,
-        "label": "تصنيف جديد",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 365,
-        "label": "إضافة مورد",
-        "onClick": null,
-        "disabledHinted": false
-      }
-    ],
-    "lineCount": 387,
-    "crossDomainImports": [
-      "lib/api",
-      "lib/formatters"
-    ]
-  },
-  "/support/replies": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/warehouse/inventory-count.tsx",
     "module": "warehouse",
     "apiCalls": [
@@ -9016,7 +8936,7 @@
       "lib/api"
     ]
   },
-  "/support/kb": {
+  "/support/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/support-create.tsx",
     "module": "support",
     "apiCalls": [
@@ -9053,7 +8973,7 @@
       "lib/auth"
     ]
   },
-  "/support/:id": {
+  "/support/replies": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/support/replies.tsx",
     "module": "support",
     "apiCalls": [
@@ -9072,7 +8992,7 @@
       "lib/api"
     ]
   },
-  "/support": {
+  "/support/kb": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/support/kb.tsx",
     "module": "support",
     "apiCalls": [
@@ -9090,7 +9010,7 @@
       "lib/formatters"
     ]
   },
-  "/marketing": {
+  "/support/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/ticket-detail.tsx",
     "module": "support",
     "apiCalls": [],
@@ -9127,7 +9047,7 @@
       "lib/formatters"
     ]
   },
-  "/marketing/create": {
+  "/support": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/support.tsx",
     "module": "support",
     "apiCalls": [
@@ -9180,7 +9100,7 @@
       "lib/formatters"
     ]
   },
-  "/tasks/create": {
+  "/marketing": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/marketing.tsx",
     "module": "marketing",
     "apiCalls": [
@@ -9222,7 +9142,7 @@
       "lib/formatters"
     ]
   },
-  "/tasks/:id": {
+  "/marketing/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/marketing-create.tsx",
     "module": "marketing",
     "apiCalls": [
@@ -9259,7 +9179,7 @@
       "lib/formatters"
     ]
   },
-  "/tasks": {
+  "/tasks/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/tasks-create.tsx",
     "module": "operations",
     "apiCalls": [
@@ -9296,7 +9216,7 @@
       "lib/auth"
     ]
   },
-  "/notifications": {
+  "/tasks/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/task-detail.tsx",
     "module": "operations",
     "apiCalls": [],
@@ -9308,7 +9228,7 @@
       "lib/formatters"
     ]
   },
-  "/intelligence": {
+  "/tasks": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/tasks.tsx",
     "module": "operations",
     "apiCalls": [],
@@ -9382,9 +9302,9 @@
       "lib/priority-labels"
     ]
   },
-  "/insights": {
+  "/notifications": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/notifications.tsx",
-    "module": "bi",
+    "module": "misc",
     "apiCalls": [
       {
         "kind": "query",
@@ -9407,7 +9327,7 @@
       "lib/formatters"
     ]
   },
-  "/automation": {
+  "/intelligence": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/intelligence.tsx",
     "module": "bi",
     "apiCalls": [
@@ -9435,7 +9355,7 @@
       "lib/formatters"
     ]
   },
-  "/activity-log": {
+  "/insights": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/insights.tsx",
     "module": "bi",
     "apiCalls": [
@@ -9472,7 +9392,7 @@
       "lib/api"
     ]
   },
-  "/module-dashboards": {
+  "/automation": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/automation.tsx",
     "module": "admin",
     "apiCalls": [
@@ -9508,9 +9428,9 @@
       "lib/module-labels"
     ]
   },
-  "/reports/scheduled": {
+  "/activity-log": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/activity-log.tsx",
-    "module": "bi",
+    "module": "misc",
     "apiCalls": [
       {
         "kind": "query",
@@ -9580,6 +9500,128 @@
       "lib/formatters"
     ]
   },
+  "/module-dashboards": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/module-dashboards.tsx",
+    "module": "bi",
+    "apiCalls": [
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/module-dashboards/hr"
+      },
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/module-dashboards/finance"
+      },
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/module-dashboards/fleet"
+      },
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/module-dashboards/legal"
+      },
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/module-dashboards/properties"
+      },
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/module-dashboards/projects"
+      },
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/module-dashboards/crm"
+      },
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/module-dashboards/store"
+      },
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/module-dashboards/support"
+      },
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/module-dashboards/tasks"
+      },
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/module-dashboards/warehouse"
+      }
+    ],
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 698,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters"
+    ]
+  },
+  "/reports/scheduled": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/reports/scheduled-reports.tsx",
+    "module": "bi",
+    "apiCalls": [
+      {
+        "kind": "mutation",
+        "method": "POST",
+        "path": "/scheduled-reports"
+      },
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/scheduled-reports"
+      },
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/scheduled-reports/history"
+      }
+    ],
+    "buttonCount": 4,
+    "buttons": [
+      {
+        "line": 89,
+        "label": null,
+        "onClick": "() => setShowForm(!showForm)",
+        "disabledHinted": false
+      },
+      {
+        "line": 140,
+        "label": null,
+        "onClick": "handleSubmit",
+        "disabledHinted": true
+      },
+      {
+        "line": 144,
+        "label": null,
+        "onClick": "() => setShowForm(false)",
+        "disabledHinted": false
+      },
+      {
+        "line": 253,
+        "label": null,
+        "onClick": "handleDelete",
+        "disabledHinted": true
+      }
+    ],
+    "lineCount": 262,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters",
+      "lib/api"
+    ]
+  },
   "/properties/dashboard": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/properties-dashboard.tsx",
     "module": "properties",
@@ -9637,118 +9679,6 @@
     ]
   },
   "/properties/buildings/create": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/properties-dashboard.tsx",
-    "module": "properties",
-    "apiCalls": [],
-    "buttonCount": 7,
-    "buttons": [
-      {
-        "line": 159,
-        "label": "مبنى جديد",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 164,
-        "label": "وحدة جديدة",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 239,
-        "label": "عرض العقود",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 255,
-        "label": "عرض الكل",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 270,
-        "label": "طلب صيانة جديد",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 315,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 333,
-        "label": "عرض الكل",
-        "onClick": null,
-        "disabledHinted": false
-      }
-    ],
-    "lineCount": 382,
-    "crossDomainImports": [
-      "lib/api",
-      "lib/formatters",
-      "lib/utils"
-    ]
-  },
-  "/properties/buildings/:id": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/properties-dashboard.tsx",
-    "module": "properties",
-    "apiCalls": [],
-    "buttonCount": 7,
-    "buttons": [
-      {
-        "line": 159,
-        "label": "مبنى جديد",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 164,
-        "label": "وحدة جديدة",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 239,
-        "label": "عرض العقود",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 255,
-        "label": "عرض الكل",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 270,
-        "label": "طلب صيانة جديد",
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 315,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 333,
-        "label": "عرض الكل",
-        "onClick": null,
-        "disabledHinted": false
-      }
-    ],
-    "lineCount": 382,
-    "crossDomainImports": [
-      "lib/api",
-      "lib/formatters",
-      "lib/utils"
-    ]
-  },
-  "/properties/buildings": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/properties/buildings-create.tsx",
     "module": "properties",
     "apiCalls": [
@@ -9784,7 +9714,7 @@
       "lib/api"
     ]
   },
-  "/properties/tenants/create": {
+  "/properties/buildings/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/building-detail.tsx",
     "module": "properties",
     "apiCalls": [],
@@ -9810,7 +9740,7 @@
       "lib/utils"
     ]
   },
-  "/properties/tenants/:id": {
+  "/properties/buildings": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/properties-buildings.tsx",
     "module": "properties",
     "apiCalls": [],
@@ -9842,7 +9772,7 @@
       "lib/utils"
     ]
   },
-  "/properties/tenants": {
+  "/properties/tenants/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/properties/tenants-create.tsx",
     "module": "properties",
     "apiCalls": [
@@ -9873,7 +9803,7 @@
       "lib/formatters"
     ]
   },
-  "/properties/owners/create": {
+  "/properties/tenants/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/tenant-detail.tsx",
     "module": "properties",
     "apiCalls": [],
@@ -9893,7 +9823,7 @@
       "lib/utils"
     ]
   },
-  "/properties/owners/:id/edit": {
+  "/properties/tenants": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/properties-tenants.tsx",
     "module": "properties",
     "apiCalls": [],
@@ -9918,7 +9848,7 @@
       "lib/formatters"
     ]
   },
-  "/properties/owners/:id": {
+  "/properties/owners/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/properties/owners-create.tsx",
     "module": "properties",
     "apiCalls": [],
@@ -9948,7 +9878,7 @@
       "lib/api"
     ]
   },
-  "/properties/owners": {
+  "/properties/owners/:id/edit": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/properties/owners-edit.tsx",
     "module": "properties",
     "apiCalls": [],
@@ -9972,7 +9902,7 @@
       "lib/api"
     ]
   },
-  "/properties/contracts/create": {
+  "/properties/owners/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/owner-detail.tsx",
     "module": "properties",
     "apiCalls": [],
@@ -9984,7 +9914,7 @@
       "lib/formatters"
     ]
   },
-  "/properties/contracts/:contractId/pay/:installmentId": {
+  "/properties/owners": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/properties-owners.tsx",
     "module": "properties",
     "apiCalls": [],
@@ -10014,7 +9944,7 @@
       "lib/api"
     ]
   },
-  "/properties/contracts/:id": {
+  "/properties/contracts/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/properties/contracts-create.tsx",
     "module": "properties",
     "apiCalls": [
@@ -10061,7 +9991,7 @@
       "lib/formatters"
     ]
   },
-  "/properties/contracts": {
+  "/properties/contracts/:contractId/pay/:installmentId": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/properties/payment-record.tsx",
     "module": "properties",
     "apiCalls": [],
@@ -10092,7 +10022,7 @@
       "lib/formatters"
     ]
   },
-  "/properties/payments/:paymentId/pay": {
+  "/properties/contracts/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/properties/contract-detail.tsx",
     "module": "properties",
     "apiCalls": [],
@@ -10117,7 +10047,7 @@
       "lib/formatters"
     ]
   },
-  "/properties/payments/:id": {
+  "/properties/contracts": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/properties-contracts.tsx",
     "module": "properties",
     "apiCalls": [],
@@ -10142,7 +10072,7 @@
       "lib/formatters"
     ]
   },
-  "/properties/payments": {
+  "/properties/payments/:paymentId/pay": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/properties/payment-register.tsx",
     "module": "properties",
     "apiCalls": [
@@ -10179,7 +10109,7 @@
       "lib/formatters"
     ]
   },
-  "/properties/maintenance/create": {
+  "/properties/payments/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/property-payment-detail.tsx",
     "module": "properties",
     "apiCalls": [],
@@ -10192,7 +10122,7 @@
       "lib/finance-type-maps"
     ]
   },
-  "/properties/maintenance/:id": {
+  "/properties/payments": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/properties-payments.tsx",
     "module": "properties",
     "apiCalls": [],
@@ -10217,7 +10147,7 @@
       "lib/formatters"
     ]
   },
-  "/properties/maintenance": {
+  "/properties/maintenance/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/properties/maintenance-create.tsx",
     "module": "properties",
     "apiCalls": [
@@ -10253,7 +10183,7 @@
       "lib/api"
     ]
   },
-  "/properties/create": {
+  "/properties/maintenance/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/property-maintenance-detail.tsx",
     "module": "properties",
     "apiCalls": [],
@@ -10265,7 +10195,7 @@
       "lib/formatters"
     ]
   },
-  "/properties/inspections": {
+  "/properties/maintenance": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/properties-maintenance.tsx",
     "module": "properties",
     "apiCalls": [
@@ -10289,7 +10219,7 @@
       "lib/api"
     ]
   },
-  "/properties/deposits": {
+  "/properties/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/properties-create.tsx",
     "module": "properties",
     "apiCalls": [
@@ -10336,7 +10266,7 @@
       "lib/formatters"
     ]
   },
-  "/properties/occupancy-report": {
+  "/properties/inspections": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/properties/inspections.tsx",
     "module": "properties",
     "apiCalls": [
@@ -10386,7 +10316,7 @@
       "lib/api"
     ]
   },
-  "/guide/properties": {
+  "/properties/deposits": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/properties/deposits.tsx",
     "module": "properties",
     "apiCalls": [
@@ -10436,7 +10366,7 @@
       "lib/api"
     ]
   },
-  "/properties/guide": {
+  "/properties/occupancy-report": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/properties/occupancy-report.tsx",
     "module": "properties",
     "apiCalls": [
@@ -10454,45 +10384,45 @@
       "lib/formatters"
     ]
   },
+  "/guide/properties": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/properties-guide.tsx",
+    "module": "properties",
+    "apiCalls": [],
+    "buttonCount": 1,
+    "buttons": [
+      {
+        "line": 1273,
+        "label": "العودة للنظام",
+        "onClick": null,
+        "disabledHinted": false
+      }
+    ],
+    "lineCount": 1430,
+    "crossDomainImports": [
+      "lib/formatters",
+      "lib/utils"
+    ]
+  },
+  "/properties/guide": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/properties-guide.tsx",
+    "module": "properties",
+    "apiCalls": [],
+    "buttonCount": 1,
+    "buttons": [
+      {
+        "line": 1273,
+        "label": "العودة للنظام",
+        "onClick": null,
+        "disabledHinted": false
+      }
+    ],
+    "lineCount": 1430,
+    "crossDomainImports": [
+      "lib/formatters",
+      "lib/utils"
+    ]
+  },
   "/properties/:id/status": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/properties-guide.tsx",
-    "module": "properties",
-    "apiCalls": [],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 1273,
-        "label": "العودة للنظام",
-        "onClick": null,
-        "disabledHinted": false
-      }
-    ],
-    "lineCount": 1430,
-    "crossDomainImports": [
-      "lib/formatters",
-      "lib/utils"
-    ]
-  },
-  "/properties/:id": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/properties-guide.tsx",
-    "module": "properties",
-    "apiCalls": [],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 1273,
-        "label": "العودة للنظام",
-        "onClick": null,
-        "disabledHinted": false
-      }
-    ],
-    "lineCount": 1430,
-    "crossDomainImports": [
-      "lib/formatters",
-      "lib/utils"
-    ]
-  },
-  "/properties": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/properties/unit-status-change.tsx",
     "module": "properties",
     "apiCalls": [],
@@ -10521,6 +10451,51 @@
     "crossDomainImports": [
       "lib/api",
       "lib/utils"
+    ]
+  },
+  "/properties/:id": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/details/unit-detail.tsx",
+    "module": "properties",
+    "apiCalls": [],
+    "buttonCount": 1,
+    "buttons": [
+      {
+        "line": 126,
+        "label": "تغيير الحالة",
+        "onClick": null,
+        "disabledHinted": false
+      }
+    ],
+    "lineCount": 682,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters",
+      "lib/utils"
+    ]
+  },
+  "/properties": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/properties.tsx",
+    "module": "properties",
+    "apiCalls": [],
+    "buttonCount": 2,
+    "buttons": [
+      {
+        "line": 74,
+        "label": null,
+        "onClick": null,
+        "disabledHinted": false
+      },
+      {
+        "line": 101,
+        "label": "إضافة وحدة",
+        "onClick": null,
+        "disabledHinted": false
+      }
+    ],
+    "lineCount": 169,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters"
     ]
   },
   "/requests": {
@@ -10611,90 +10586,33 @@
     ]
   },
   "/requests/create": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/requests-page.tsx",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/requests/items-create.tsx",
     "module": "requests",
-    "apiCalls": [
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/requests/catalog"
-      },
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/requests"
-      },
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/requests/types"
-      },
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/requests/workflows"
-      },
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/requests/stats"
-      }
-    ],
-    "buttonCount": 8,
+    "apiCalls": [],
+    "buttonCount": 3,
     "buttons": [
       {
-        "line": 134,
-        "label": null,
-        "onClick": null,
+        "line": 55,
+        "label": "مسح المسودة",
+        "onClick": "clearDraft",
         "disabledHinted": false
       },
       {
-        "line": 428,
+        "line": 88,
         "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false
+        "onClick": "() => setLocation(\"/requests\")",
+        "disabledHinted": true
       },
       {
-        "line": 478,
+        "line": 89,
         "label": null,
-        "onClick": "() => { setFilterStatus(\"\"); setFilterType(\"\"); setFilterDateFrom(\"\"); setFilter",
-        "disabledHinted": false
-      },
-      {
-        "line": 497,
-        "label": null,
-        "onClick": "() => setShowForm(false)",
-        "disabledHinted": false
-      },
-      {
-        "line": 563,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false
-      },
-      {
-        "line": 572,
-        "label": null,
-        "onClick": "() => setShowForm(false)",
-        "disabledHinted": false
-      },
-      {
-        "line": 623,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false
-      },
-      {
-        "line": 632,
-        "label": null,
-        "onClick": "() => setShowForm(false)",
-        "disabledHinted": false
+        "onClick": "handleSubmit",
+        "disabledHinted": true
       }
     ],
-    "lineCount": 707,
+    "lineCount": 95,
     "crossDomainImports": [
-      "lib/api",
-      "lib/utils"
+      "lib/api"
     ]
   },
   "/requests/types": {
@@ -10785,31 +10703,31 @@
     ]
   },
   "/requests/types/create": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/create/requests/items-create.tsx",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/requests/types-create.tsx",
     "module": "requests",
     "apiCalls": [],
     "buttonCount": 3,
     "buttons": [
       {
-        "line": 55,
+        "line": 49,
         "label": "مسح المسودة",
         "onClick": "clearDraft",
         "disabledHinted": false
       },
       {
-        "line": 88,
+        "line": 78,
         "label": null,
-        "onClick": "() => setLocation(\"/requests\")",
+        "onClick": "() => setLocation(\"/requests/types\")",
         "disabledHinted": true
       },
       {
-        "line": 89,
+        "line": 79,
         "label": null,
         "onClick": "handleSubmit",
         "disabledHinted": true
       }
     ],
-    "lineCount": 95,
+    "lineCount": 85,
     "crossDomainImports": [
       "lib/api"
     ]
@@ -10902,33 +10820,21 @@
     ]
   },
   "/requests/:id": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/create/requests/types-create.tsx",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/details/request-detail.tsx",
     "module": "requests",
-    "apiCalls": [],
-    "buttonCount": 3,
-    "buttons": [
+    "apiCalls": [
       {
-        "line": 49,
-        "label": "مسح المسودة",
-        "onClick": "clearDraft",
-        "disabledHinted": false
-      },
-      {
-        "line": 78,
-        "label": null,
-        "onClick": "() => setLocation(\"/requests/types\")",
-        "disabledHinted": true
-      },
-      {
-        "line": 79,
-        "label": null,
-        "onClick": "handleSubmit",
-        "disabledHinted": true
+        "kind": "query",
+        "method": "GET",
+        "path": "/requests/types"
       }
     ],
-    "lineCount": 85,
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 342,
     "crossDomainImports": [
-      "lib/api"
+      "lib/api",
+      "lib/formatters"
     ]
   },
   "/settings": {
@@ -11207,58 +11113,35 @@
     ]
   },
   "/settings/rules": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/settings.tsx",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/settings-rules.tsx",
     "module": "settings",
-    "apiCalls": [
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/settings/resolved"
-      },
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/settings/audit-log"
-      }
-    ],
-    "buttonCount": 5,
+    "apiCalls": [],
+    "buttonCount": 3,
     "buttons": [
       {
-        "line": 106,
+        "line": 165,
         "label": null,
-        "onClick": "handleSave",
-        "disabledHinted": true
-      },
-      {
-        "line": 186,
-        "label": null,
-        "onClick": "() => { if (showForm) resetForm(); else setShowForm(true);",
+        "onClick": "() => setExpanded(!expanded)",
         "disabledHinted": false
       },
       {
-        "line": 193,
+        "line": 168,
         "label": null,
-        "onClick": "handleSave",
-        "disabledHinted": true
+        "onClick": "onToggle",
+        "disabledHinted": false
       },
       {
-        "line": 205,
-        "label": "تعديل",
-        "onClick": "() => handleEdit(item)",
-        "disabledHinted": true
-      },
-      {
-        "line": 206,
-        "label": "حذف",
-        "onClick": "() => setDeletingItem({ id: item.id, label: (fields[0] && item[fields[0].name]) ",
-        "disabledHinted": true
+        "line": 172,
+        "label": null,
+        "onClick": "onDelete",
+        "disabledHinted": false
       }
     ],
-    "lineCount": 352,
+    "lineCount": 475,
     "crossDomainImports": [
       "lib/api",
-      "lib/utils",
-      "lib/formatters"
+      "lib/formatters",
+      "lib/module-labels"
     ]
   },
   "/store": {
@@ -11322,126 +11205,6 @@
     ]
   },
   "/store/products/create": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/store.tsx",
-    "module": "store",
-    "apiCalls": [
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/store/products"
-      },
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/store/orders"
-      },
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/store/stats"
-      }
-    ],
-    "buttonCount": 5,
-    "buttons": [
-      {
-        "line": 118,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false
-      },
-      {
-        "line": 127,
-        "label": null,
-        "onClick": "() => setShowForm(false)",
-        "disabledHinted": false
-      },
-      {
-        "line": 214,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 252,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false
-      },
-      {
-        "line": 261,
-        "label": null,
-        "onClick": "() => setShowForm(false)",
-        "disabledHinted": false
-      }
-    ],
-    "lineCount": 347,
-    "crossDomainImports": [
-      "lib/api",
-      "lib/utils",
-      "lib/formatters"
-    ]
-  },
-  "/store/products/:id": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/store.tsx",
-    "module": "store",
-    "apiCalls": [
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/store/products"
-      },
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/store/orders"
-      },
-      {
-        "kind": "query",
-        "method": "GET",
-        "path": "/store/stats"
-      }
-    ],
-    "buttonCount": 5,
-    "buttons": [
-      {
-        "line": 118,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false
-      },
-      {
-        "line": 127,
-        "label": null,
-        "onClick": "() => setShowForm(false)",
-        "disabledHinted": false
-      },
-      {
-        "line": 214,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false
-      },
-      {
-        "line": 252,
-        "label": null,
-        "onClick": "() => setShowForm(!showForm)",
-        "disabledHinted": false
-      },
-      {
-        "line": 261,
-        "label": null,
-        "onClick": "() => setShowForm(false)",
-        "disabledHinted": false
-      }
-    ],
-    "lineCount": 347,
-    "crossDomainImports": [
-      "lib/api",
-      "lib/utils",
-      "lib/formatters"
-    ]
-  },
-  "/store/orders": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/store/products-create.tsx",
     "module": "store",
     "apiCalls": [],
@@ -11471,7 +11234,7 @@
       "lib/api"
     ]
   },
-  "/store/orders/create": {
+  "/store/products/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/store/product-detail.tsx",
     "module": "store",
     "apiCalls": [],
@@ -11483,7 +11246,7 @@
       "lib/formatters"
     ]
   },
-  "/store/orders/:id": {
+  "/store/orders": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/store.tsx",
     "module": "store",
     "apiCalls": [
@@ -11543,7 +11306,63 @@
       "lib/formatters"
     ]
   },
-  "/umrah/pilgrims/create": {
+  "/store/orders/create": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/store/orders-create.tsx",
+    "module": "store",
+    "apiCalls": [],
+    "buttonCount": 5,
+    "buttons": [
+      {
+        "line": 106,
+        "label": "مسح المسودة",
+        "onClick": "clearDraft",
+        "disabledHinted": false
+      },
+      {
+        "line": 144,
+        "label": "+ إضافة عنصر",
+        "onClick": "addItem",
+        "disabledHinted": false
+      },
+      {
+        "line": 174,
+        "label": null,
+        "onClick": "() => removeItem(idx)",
+        "disabledHinted": false
+      },
+      {
+        "line": 188,
+        "label": null,
+        "onClick": "() => setLocation(\"/store\")",
+        "disabledHinted": true
+      },
+      {
+        "line": 189,
+        "label": null,
+        "onClick": "handleSubmit",
+        "disabledHinted": true
+      }
+    ],
+    "lineCount": 194,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters"
+    ]
+  },
+  "/store/orders/:id": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/store/order-detail.tsx",
+    "module": "store",
+    "apiCalls": [],
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 210,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/branch-utils",
+      "lib/formatters"
+    ]
+  },
+  "/umrah": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/dashboard.tsx",
     "module": "operations",
     "apiCalls": [
@@ -11574,7 +11393,7 @@
       "lib/formatters"
     ]
   },
-  "/umrah/pilgrims/:id": {
+  "/umrah/pilgrims": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/pilgrims.tsx",
     "module": "operations",
     "apiCalls": [],
@@ -11594,7 +11413,7 @@
       "lib/utils"
     ]
   },
-  "/umrah/agents": {
+  "/umrah/pilgrims/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/pilgrim-create.tsx",
     "module": "operations",
     "apiCalls": [
@@ -11640,7 +11459,7 @@
       "lib/api"
     ]
   },
-  "/umrah/agents/:id": {
+  "/umrah/pilgrims/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/pilgrim-detail.tsx",
     "module": "operations",
     "apiCalls": [],
@@ -11659,7 +11478,7 @@
       "lib/api"
     ]
   },
-  "/umrah/seasons": {
+  "/umrah/agents": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/agents.tsx",
     "module": "operations",
     "apiCalls": [
@@ -11720,7 +11539,7 @@
       "lib/utils"
     ]
   },
-  "/umrah/seasons/:id": {
+  "/umrah/agents/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-agent-detail.tsx",
     "module": "operations",
     "apiCalls": [],
@@ -11732,7 +11551,7 @@
       "lib/formatters"
     ]
   },
-  "/umrah/penalties": {
+  "/umrah/seasons": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/seasons.tsx",
     "module": "operations",
     "apiCalls": [
@@ -11775,7 +11594,7 @@
       "lib/formatters"
     ]
   },
-  "/umrah/penalties/:id": {
+  "/umrah/seasons/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-season-detail.tsx",
     "module": "operations",
     "apiCalls": [],
@@ -11787,7 +11606,7 @@
       "lib/formatters"
     ]
   },
-  "/umrah/invoices": {
+  "/umrah/penalties": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/penalties.tsx",
     "module": "operations",
     "apiCalls": [
@@ -11819,7 +11638,7 @@
       "lib/utils"
     ]
   },
-  "/umrah/invoices/:id": {
+  "/umrah/penalties/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-penalty-detail.tsx",
     "module": "operations",
     "apiCalls": [],
@@ -11831,7 +11650,7 @@
       "lib/formatters"
     ]
   },
-  "/umrah/packages": {
+  "/umrah/invoices": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/invoices.tsx",
     "module": "operations",
     "apiCalls": [
@@ -11867,7 +11686,7 @@
       "lib/utils"
     ]
   },
-  "/umrah/packages/:id": {
+  "/umrah/invoices/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-invoice-detail.tsx",
     "module": "operations",
     "apiCalls": [],
@@ -11879,7 +11698,7 @@
       "lib/formatters"
     ]
   },
-  "/umrah/transport": {
+  "/umrah/packages": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/packages.tsx",
     "module": "operations",
     "apiCalls": [
@@ -11945,7 +11764,7 @@
       "lib/formatters"
     ]
   },
-  "/umrah/transport/:id": {
+  "/umrah/packages/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-package-detail.tsx",
     "module": "operations",
     "apiCalls": [],
@@ -11957,7 +11776,44 @@
       "lib/formatters"
     ]
   },
-  "/umrah/import/legacy": {
+  "/umrah/transport": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/transport.tsx",
+    "module": "operations",
+    "apiCalls": [
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/umrah/transport"
+      }
+    ],
+    "buttonCount": 3,
+    "buttons": [
+      {
+        "line": 83,
+        "label": null,
+        "onClick": "() => setShowForm(!showForm)",
+        "disabledHinted": false
+      },
+      {
+        "line": 96,
+        "label": "حفظ",
+        "onClick": "() => { setShowForm(false); setForm({",
+        "disabledHinted": true
+      },
+      {
+        "line": 97,
+        "label": "حفظ",
+        "onClick": "save",
+        "disabledHinted": true
+      }
+    ],
+    "lineCount": 112,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters"
+    ]
+  },
+  "/umrah/transport/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-transport-detail.tsx",
     "module": "operations",
     "apiCalls": [],
@@ -11969,7 +11825,7 @@
       "lib/formatters"
     ]
   },
-  "/umrah/sub-agents": {
+  "/umrah/import/legacy": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/import.tsx",
     "module": "operations",
     "apiCalls": [
@@ -12005,57 +11861,32 @@
       "lib/formatters"
     ]
   },
+  "/umrah/sub-agents": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/sub-agents.tsx",
+    "module": "operations",
+    "apiCalls": [],
+    "buttonCount": 2,
+    "buttons": [
+      {
+        "line": 334,
+        "label": null,
+        "onClick": "() => setEditing(null)",
+        "disabledHinted": true
+      },
+      {
+        "line": 370,
+        "label": null,
+        "onClick": "() => setLinking(null)",
+        "disabledHinted": true
+      }
+    ],
+    "lineCount": 387,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters"
+    ]
+  },
   "/umrah/pricing": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/sub-agents.tsx",
-    "module": "operations",
-    "apiCalls": [],
-    "buttonCount": 2,
-    "buttons": [
-      {
-        "line": 334,
-        "label": null,
-        "onClick": "() => setEditing(null)",
-        "disabledHinted": true
-      },
-      {
-        "line": 370,
-        "label": null,
-        "onClick": "() => setLinking(null)",
-        "disabledHinted": true
-      }
-    ],
-    "lineCount": 387,
-    "crossDomainImports": [
-      "lib/api",
-      "lib/formatters"
-    ]
-  },
-  "/umrah/commission-plans": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/sub-agents.tsx",
-    "module": "operations",
-    "apiCalls": [],
-    "buttonCount": 2,
-    "buttons": [
-      {
-        "line": 334,
-        "label": null,
-        "onClick": "() => setEditing(null)",
-        "disabledHinted": true
-      },
-      {
-        "line": 370,
-        "label": null,
-        "onClick": "() => setLinking(null)",
-        "disabledHinted": true
-      }
-    ],
-    "lineCount": 387,
-    "crossDomainImports": [
-      "lib/api",
-      "lib/formatters"
-    ]
-  },
-  "/umrah/commission-plans/new": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/pricing.tsx",
     "module": "operations",
     "apiCalls": [],
@@ -12080,7 +11911,7 @@
       "lib/formatters"
     ]
   },
-  "/umrah/commission-plans/:id/edit": {
+  "/umrah/commission-plans": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/commission-plans.tsx",
     "module": "operations",
     "apiCalls": [],
@@ -12105,45 +11936,45 @@
       "lib/formatters"
     ]
   },
+  "/umrah/commission-plans/new": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/commission-plan-editor.tsx",
+    "module": "operations",
+    "apiCalls": [],
+    "buttonCount": 1,
+    "buttons": [
+      {
+        "line": 192,
+        "label": null,
+        "onClick": null,
+        "disabledHinted": false
+      }
+    ],
+    "lineCount": 634,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters"
+    ]
+  },
+  "/umrah/commission-plans/:id/edit": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/commission-plan-editor.tsx",
+    "module": "operations",
+    "apiCalls": [],
+    "buttonCount": 1,
+    "buttons": [
+      {
+        "line": 192,
+        "label": null,
+        "onClick": null,
+        "disabledHinted": false
+      }
+    ],
+    "lineCount": 634,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters"
+    ]
+  },
   "/umrah/violations": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/commission-plan-editor.tsx",
-    "module": "operations",
-    "apiCalls": [],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 192,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false
-      }
-    ],
-    "lineCount": 634,
-    "crossDomainImports": [
-      "lib/api",
-      "lib/formatters"
-    ]
-  },
-  "/umrah/violations/:id": {
-    "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/commission-plan-editor.tsx",
-    "module": "operations",
-    "apiCalls": [],
-    "buttonCount": 1,
-    "buttons": [
-      {
-        "line": 192,
-        "label": null,
-        "onClick": null,
-        "disabledHinted": false
-      }
-    ],
-    "lineCount": 634,
-    "crossDomainImports": [
-      "lib/api",
-      "lib/formatters"
-    ]
-  },
-  "/umrah/import": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/violations.tsx",
     "module": "operations",
     "apiCalls": [],
@@ -12204,7 +12035,7 @@
       "lib/formatters"
     ]
   },
-  "/umrah/daily-runsheet": {
+  "/umrah/violations/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-violation-detail.tsx",
     "module": "operations",
     "apiCalls": [],
@@ -12216,7 +12047,7 @@
       "lib/formatters"
     ]
   },
-  "/umrah/reconciliation": {
+  "/umrah/import": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/import-wizard.tsx",
     "module": "operations",
     "apiCalls": [],
@@ -12254,6 +12085,54 @@
       }
     ],
     "lineCount": 491,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters"
+    ]
+  },
+  "/umrah/daily-runsheet": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/daily-runsheet.tsx",
+    "module": "operations",
+    "apiCalls": [
+      {
+        "kind": "fetch",
+        "method": "?",
+        "path": "/api/umrah/reports/daily-runsheet/pdf?date=${date}"
+      }
+    ],
+    "buttonCount": 2,
+    "buttons": [
+      {
+        "line": 134,
+        "label": null,
+        "onClick": "() => refetch()",
+        "disabledHinted": false
+      },
+      {
+        "line": 137,
+        "label": "تصدير PDF",
+        "onClick": "handleExport",
+        "disabledHinted": false
+      }
+    ],
+    "lineCount": 176,
+    "crossDomainImports": [
+      "lib/api"
+    ]
+  },
+  "/umrah/reconciliation": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/reconciliation.tsx",
+    "module": "operations",
+    "apiCalls": [
+      {
+        "kind": "query",
+        "method": "GET",
+        "path": "/umrah/reports/reconciliation"
+      }
+    ],
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 186,
     "crossDomainImports": [
       "lib/api",
       "lib/formatters"

@@ -6,7 +6,7 @@
 // One file per page. Pages in the same module share a folder.
 // Skips routes whose module is "root" or "misc" unless --include-all is passed.
 
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join, dirname, resolve, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -161,16 +161,42 @@ const filtered = inventory.filter((r) => {
   return wave1Modules.has(r.module);
 });
 
-const stats = { written: 0, byModule: {} };
+// Preserve human-authored §3 (Cross-Module Transactions). If the existing
+// sheet has a §3 that has been hand-filled (any content other than the TBD
+// template), we splice it back in so manual research isn't clobbered on
+// every rerun. Detection: the auto-template's first content line starts
+// with "- [ ] **TBD**".
+function extractSection3(existing) {
+  if (!existing) return null;
+  const m = existing.match(/## 3\. الحركات ذات الصلة[^\n]*\n([\s\S]*?)\n## 4\./);
+  if (!m) return null;
+  const body = m[1].trim();
+  if (body.startsWith("- [ ] **TBD**")) return null; // still the template
+  return body;
+}
+
+function splice(generated, customSec3) {
+  if (!customSec3) return generated;
+  return generated.replace(
+    /(## 3\. الحركات ذات الصلة[^\n]*\n)[\s\S]*?(\n## 4\.)/,
+    `$1${customSec3}\n$2`
+  );
+}
+
+const stats = { written: 0, preserved: 0, byModule: {} };
 for (const row of filtered) {
   const folder = join(ROOT, "modules", row.module);
   mkdirSync(folder, { recursive: true });
   const slug = pageSlug(row.path);
   const file = join(folder, `${slug}.md`);
-  writeFileSync(file, buildPage(row));
+  const existing = existsSync(file) ? readFileSync(file, "utf8") : null;
+  const customSec3 = extractSection3(existing);
+  const generated = buildPage(row);
+  writeFileSync(file, splice(generated, customSec3));
   stats.written++;
+  if (customSec3) stats.preserved++;
   stats.byModule[row.module] = (stats.byModule[row.module] || 0) + 1;
 }
 
-console.log(`generate-pages: ${stats.written} files written`);
+console.log(`generate-pages: ${stats.written} files written, ${stats.preserved} §3 hand-filled preserved`);
 for (const [m, n] of Object.entries(stats.byModule)) console.log(`  ${m.padEnd(16)} ${n}`);

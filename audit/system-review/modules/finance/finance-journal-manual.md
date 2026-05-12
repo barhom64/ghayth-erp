@@ -1,27 +1,25 @@
-# /finance/journal-manual — `artifacts/ghayth-erp/src/pages/finance/inventory-costing.tsx`
+# /finance/journal-manual — `artifacts/ghayth-erp/src/pages/finance/journal-manual.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/journal-manual`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/inventory-costing.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/journal-manual.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:130`
 - المجموعة: `finance`
-- الكومبوننت: `InventoryCosting`
+- الكومبوننت: `JournalManual`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `journal-manual`
-- سطور الملف: 236
+- سطور الملف: 342
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/finance/rounding-account/setup` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L217: "(بلا تسمية)" → `handleSetupRounding` 🔒
+- L215: "(بلا تسمية)"
+- L298: "(بلا تسمية)" 🔒
 
 ### القراءات (GET)
-- GET `/finance/inventory-costing`
-- GET `/finance/rounding-account`
+_لا قراءات._
 
 
 
@@ -41,8 +39,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/journal-manual`
-- لقطة: `audit/screenshots/finance_journal_manual.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/journal-manual`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

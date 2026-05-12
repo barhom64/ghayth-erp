@@ -1,21 +1,27 @@
-# /finance/purchase-orders/create — `artifacts/ghayth-erp/src/pages/finance/vendor-detail.tsx`
+# /finance/purchase-orders/create — `artifacts/ghayth-erp/src/pages/create/finance/purchase-orders-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/purchase-orders/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/vendor-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/finance/purchase-orders-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:103`
 - المجموعة: `finance`
-- الكومبوننت: `VendorDetail`
-- subKey: `vendors` | minRoleLevel: —
+- الكومبوننت: `PurchaseOrdersCreate`
+- subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 257
+- سطور الملف: 207
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/finance/purchase-requests` | POST | — | ✅ | ✅ | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L113: "مسح المسودة" → `clearDraft`
+- L172: "+ إضافة بند" → `() => removeItem(idx)` 🔒
+- L175: "+ إضافة بند" → `addItem`
+- L199: "(بلا تسمية)" → `() => setLocation("/finance/purchase-orders")` 🔒
+- L200: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
 _لا قراءات._
@@ -38,8 +44,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/purchase-orders/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/finance_purchase_orders_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/purchase-orders/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

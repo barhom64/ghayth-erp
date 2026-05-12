@@ -1,22 +1,22 @@
-# /properties/owners/:id/edit — `artifacts/ghayth-erp/src/pages/properties-tenants.tsx`
+# /properties/owners/:id/edit — `artifacts/ghayth-erp/src/pages/create/properties/owners-edit.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/properties/owners/:id/edit`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/properties-tenants.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/properties/owners-edit.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/propertyRoutes.tsx:42`
 - المجموعة: `properties`
-- الكومبوننت: `PropertiesTenants`
+- الكومبوننت: `OwnersEdit`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `edit`
-- سطور الملف: 213
+- سطور الملف: 158
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L109: "ملف"
-- L135: "مستأجر جديد"
+- L150: "(بلا تسمية)" → `() => setLocation("/properties/owners")` 🔒
+- L151: "(بلا تسمية)" → `handleSave` 🔒
 
 ### القراءات (GET)
 _لا قراءات._
@@ -36,10 +36,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `edit` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L121 _(dummy-iban)_: `<TextField label="رقم الآيبان" dir="ltr" value={form.iban} onChange={v => setForm({ ...form, iban: v })} placeholder="SA`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/properties/owners → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/properties/owners/:id/edit`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

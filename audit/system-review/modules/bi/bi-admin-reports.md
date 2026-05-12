@@ -1,26 +1,25 @@
-# /bi/admin-reports — `artifacts/ghayth-erp/src/pages/create/bi/reports-create.tsx`
+# /bi/admin-reports — `artifacts/ghayth-erp/src/pages/bi-admin-reports.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/bi/admin-reports`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/bi/reports-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/bi-admin-reports.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/biRoutes.tsx:19`
 - المجموعة: `bi`
-- الكومبوننت: `BiReportsCreate`
+- الكومبوننت: `BiAdminReports`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `admin-reports`
-- سطور الملف: 101
+- سطور الملف: 374
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L47: "مسح المسودة" → `clearDraft`
-- L94: "(بلا تسمية)" → `() => setLocation("/bi/reports")` 🔒
-- L95: "(بلا تسمية)" → `handleSubmit` 🔒
+- L355: "(بلا تسمية)" → `() => window.print()`
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/bi/admin-reports/weekly`
+- GET `/bi/admin-reports/monthly`
 
 
 
@@ -40,8 +39,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/bi/admin-reports`
-- لقطة: `audit/screenshots/bi_admin_reports.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/bi/admin-reports`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

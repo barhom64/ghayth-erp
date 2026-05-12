@@ -1,30 +1,31 @@
-# /admin/integrations — `artifacts/ghayth-erp/src/pages/admin/roles.tsx`
+# /admin/integrations — `artifacts/ghayth-erp/src/pages/admin-integrations.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/admin/integrations`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin/roles.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin-integrations.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/adminRoutes.tsx:25`
 - المجموعة: `admin`
-- الكومبوننت: `AdminRoles`
+- الكومبوننت: `AdminIntegrations`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `integrations`
-- سطور الملف: 393
+- سطور الملف: 310
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L218: "(بلا تسمية)" → `() => setActiveTab(activeTab === "create" ? "modules" : "create")`
-- L256: "(بلا تسمية)" → `saveModules` 🔒
-- L257: "(بلا تسمية)" → `() => setEditingRole(null)`
-- L260: "(بلا تسمية)" → `() => startEdit(r)`
-- L380: "(بلا تسمية)" → `createNewRole` 🔒
-- L383: "(بلا تسمية)" → `() => setNewRole({ roleKey: "", label: "", level: "10", modules: []`
+- L113: "(بلا تسمية)" → `() => setShowForm(!showForm)`
+- L125: "(بلا تسمية)" → `() => setShowForm(false)`
+- L192: "(بلا تسمية)" → `() => handleToggleStatus(intg.id, intg.status)`
+- L195: "(بلا تسمية)" → `() => handleTest(intg.id)`
+- L198: "(بلا تسمية)" → `() => handleDelete(intg.id)`
+- L208: "(بلا تسمية)" → `() => setShowForm(true)`
+- L269: "إعادة المحاولة للفاشلة" → `handleRetry`
 
 ### القراءات (GET)
-- GET `/admin/predefined-roles`
-- GET `/settings/role-modules`
+- GET `/admin/integrations`
+- GET `/admin/integration-logs`
 
 
 
@@ -44,8 +45,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/admin/integrations`
-- لقطة: `audit/screenshots/admin_integrations.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/admin/integrations`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

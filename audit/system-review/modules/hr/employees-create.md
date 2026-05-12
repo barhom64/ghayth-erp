@@ -1,21 +1,27 @@
-# /employees/create — `artifacts/ghayth-erp/src/pages/hr.tsx`
+# /employees/create — `artifacts/ghayth-erp/src/pages/create/employees-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/employees/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/employees-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:89`
 - المجموعة: `hr`
-- الكومبوننت: `HR`
+- الكومبوننت: `EmployeesCreate`
 - subKey: `employees` | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 317
+- سطور الملف: 483
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/employees` | POST | — | — | — | — | ✅ | ✅ | ✅ |
 
 ### تفاصيل الأزرار المرئية
-- L118: "(بلا تسمية)" → `() => navigate("/employees/create")`
+- L185: "(بلا تسمية)"
+- L206: "(بلا تسمية)" → `() => setLocation("/employees")`
+- L219: "مسح المسودة" → `clearDraft`
+- L475: "(بلا تسمية)" → `() => setLocation("/employees")` 🔒
+- L476: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
 _لا قراءات._
@@ -35,11 +41,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `create` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L23 _(inline-data-array)_: `const OPERATIONS = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/employees/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/employees_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/employees/create`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

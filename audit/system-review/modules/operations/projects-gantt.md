@@ -1,28 +1,24 @@
-# /projects/gantt — `artifacts/ghayth-erp/src/pages/create/projects-create.tsx`
+# /projects/gantt — `artifacts/ghayth-erp/src/pages/projects/gantt.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/projects/gantt`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/projects-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/projects/gantt.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:92`
 - المجموعة: `operations`
-- الكومبوننت: `ProjectsCreate`
+- الكومبوننت: `ProjectGantt`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `gantt`
-- سطور الملف: 146
+- سطور الملف: 182
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/projects` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L70: "مسح المسودة" → `clearDraft`
-- L139: "(بلا تسمية)" → `() => setLocation("/projects")` 🔒
-- L140: "(بلا تسمية)" → `handleSubmit` 🔒
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/projects?limit=100`
 
 
 
@@ -42,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/projects/gantt`
-- لقطة: `audit/screenshots/projects_gantt.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/projects/gantt`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

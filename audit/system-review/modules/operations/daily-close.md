@@ -1,27 +1,23 @@
-# /daily-close — `artifacts/ghayth-erp/src/pages/manager-board.tsx`
+# /daily-close — `artifacts/ghayth-erp/src/pages/daily-close.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/daily-close`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/manager-board.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/daily-close.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:79`
 - المجموعة: `operations`
-- الكومبوننت: `ManagerBoard`
+- الكومبوننت: `DailyClose`
 - subKey: — | minRoleLevel: 40
 - الكيان المستنبط: `daily-close`
-- سطور الملف: 491
+- سطور الملف: 215
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L177: "(بلا تسمية)" → `() => doApprove(item)` 🔒
-- L180: "(بلا تسمية)" → `() => doReject(item)` 🔒
-- L195: "مركز القرارات الكامل"
-- L244: "(بلا تسمية)" → `() => doApprove(item)` 🔒
-- L248: "(بلا تسمية)" → `() => doReject(item)` 🔒
-- L268: "التفاصيل"
-- L325: "الكل"
+- L70: "مركز العمليات"
+- L135: "(بلا تسمية)" 🔒
+- L159: "(بلا تسمية)"
 
 ### القراءات (GET)
 _لا قراءات._
@@ -44,8 +40,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/daily-close`
-- لقطة: `audit/screenshots/daily_close.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/daily-close`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

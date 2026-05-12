@@ -1,29 +1,24 @@
-# /hr/evaluation-360 — `artifacts/ghayth-erp/src/pages/create/hr/evaluation-360-create.tsx`
+# /hr/evaluation-360 — `artifacts/ghayth-erp/src/pages/hr/evaluation-360.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/evaluation-360`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/hr/evaluation-360-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/evaluation-360.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:149`
 - المجموعة: `hr`
-- الكومبوننت: `Evaluation360Create`
+- الكومبوننت: `Evaluation360`
 - subKey: `performance` | minRoleLevel: —
 - الكيان المستنبط: `evaluation-360`
-- سطور الملف: 200
+- سطور الملف: 179
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/hr/evaluation-cycles` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L102: "مسح المسودة" → `clearDraft`
-- L163: "إضافة" → `addParticipant`
-- L192: "(بلا تسمية)" → `() => setLocation("/hr/evaluation-360")` 🔒
-- L193: "(بلا تسمية)" → `handleSave` 🔒
+- L145: "بدء دورة تقييم"
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/hr/evaluation-cycles`
 
 
 
@@ -40,11 +35,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `evaluation-360` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L62 _(inline-data-array)_: `const kpis = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/evaluation-360`
-- لقطة: `audit/screenshots/hr_evaluation_360.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/evaluation-360`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

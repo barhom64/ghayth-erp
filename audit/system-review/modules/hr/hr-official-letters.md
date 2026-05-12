@@ -1,26 +1,26 @@
-# /hr/official-letters — `artifacts/ghayth-erp/src/pages/create/hr/contracts-create.tsx`
+# /hr/official-letters — `artifacts/ghayth-erp/src/pages/hr/official-letters.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/official-letters`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/hr/contracts-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/official-letters.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:164`
 - المجموعة: `hr`
-- الكومبوننت: `ContractsCreate`
+- الكومبوننت: `OfficialLetters`
 - subKey: `employees` | minRoleLevel: —
 - الكيان المستنبط: `official-letters`
-- سطور الملف: 114
+- سطور الملف: 247
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L66: "مسح المسودة" → `clearDraft`
-- L107: "(بلا تسمية)" → `() => setLocation("/hr/contracts")` 🔒
-- L108: "(بلا تسمية)" → `handleSubmit` 🔒
+- L88: "معاينة وطباعة" → `() => setPreviewLetter(l)`
+- L129: "(بلا تسمية)" → `() => setShowForm(!showForm)`
+- L163: "(بلا تسمية)" → `() => setShowForm(false)`
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/hr/official-letters`
 
 
 
@@ -40,8 +40,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/official-letters`
-- لقطة: `audit/screenshots/hr_official_letters.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/official-letters`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

@@ -1,21 +1,23 @@
-# /fleet/:id/status — `artifacts/ghayth-erp/src/pages/details/traffic-violation-detail.tsx`
+# /fleet/:id/status — `artifacts/ghayth-erp/src/pages/create/fleet/vehicle-status-change.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/fleet/:id/status`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/traffic-violation-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/fleet/vehicle-status-change.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/fleetRoutes.tsx:55`
 - المجموعة: `fleet`
-- الكومبوننت: `TrafficViolationDetail`
+- الكومبوننت: `VehicleStatusChange`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `status`
-- سطور الملف: 213
+- سطور الملف: 182
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L99: "مسح المسودة" → `clearDraft`
+- L170: "(بلا تسمية)" → `() => setLocation(`/fleet/${id` 🔒
+- L171: "(بلا تسمية)" → `applyStatusChange` 🔒
 
 ### القراءات (GET)
 _لا قراءات._
@@ -38,8 +40,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/fleet/7/status`
-- لقطة: `audit/screenshots/fleet_id_status.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/fleet/:id/status`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

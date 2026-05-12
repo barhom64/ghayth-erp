@@ -1,22 +1,21 @@
-# /fleet/drivers/:id — `artifacts/ghayth-erp/src/pages/fleet/drivers.tsx`
+# /fleet/drivers/:id — `artifacts/ghayth-erp/src/pages/details/driver-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/fleet/drivers/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/fleet/drivers.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/driver-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/fleetRoutes.tsx:35`
 - المجموعة: `fleet`
-- الكومبوننت: `Drivers`
+- الكومبوننت: `DriverDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 153
+- سطور الملف: 346
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L72: "(بلا تسمية)" → `() => setPreviewDriver(d)`
-- L92: "إضافة سائق"
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
 - GET `/fleet/drivers`
@@ -39,7 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/fleet/drivers → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/fleet/drivers/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

@@ -1,24 +1,22 @@
-# /clients — `artifacts/ghayth-erp/src/pages/operations-center.tsx`
+# /clients — `artifacts/ghayth-erp/src/pages/clients.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/clients`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/operations-center.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/clients.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:80`
-- المجموعة: `operations`
-- الكومبوننت: `OperationsCenter`
-- subKey: — | minRoleLevel: 40
+- المجموعة: `crm`
+- الكومبوننت: `Clients`
+- subKey: — | minRoleLevel: —
 - الكيان المستنبط: `clients`
-- سطور الملف: 284
+- سطور الملف: 233
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L117: "الإقفال اليومي"
-- L122: "(بلا تسمية)" → `() => { setRefreshKey(k => k + 1); refetch();`
-- L174: "(بلا تسمية)"
-- L245: "عرض الكل"
+- L125: "(بلا تسمية)" → `() => setPreviewItem(client)`
+- L145: "إضافة عميل"
 
 ### القراءات (GET)
 _لا قراءات._
@@ -26,7 +24,7 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/operations.md` (إن وُجد) وعدّد:
+- [ ] **TBD** — راجع `docs/blueprints/crm.md` (إن وُجد) وعدّد:
   - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
   - تأثير الأرصدة (balances, balances_history)
   - الإشعارات (notifications)
@@ -35,7 +33,7 @@ _لا قراءات._
 - يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
 
 ## 4. النمذجة
-- الجدول: `clients` (export: `clients`, 11 عمود)
+- الجدول: `clients` (export: `clients`, 10 عمود)
 - tenant col: ✅ | createdBy: — | createdAt: ✅ | updatedAt: — | softDelete: ✅ | lifecycle col: ✅
 - FKs: companies.id
 
@@ -43,8 +41,6 @@ _لا قراءات._
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/clients`
-- لقطة: `audit/screenshots/clients.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/clients`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

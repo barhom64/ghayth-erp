@@ -1,31 +1,24 @@
-# /finance/fixed-assets/:id — `artifacts/ghayth-erp/src/pages/finance/fixed-assets.tsx`
+# /finance/fixed-assets/:id — `artifacts/ghayth-erp/src/pages/details/fixed-asset-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/fixed-assets/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/fixed-assets.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/fixed-asset-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:127`
 - المجموعة: `finance`
-- الكومبوننت: `FixedAssets`
+- الكومبوننت: `FixedAssetDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 251
+- سطور الملف: 290
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/finance/fixed-assets/depreciate-all` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L107: "إهلاك دفعي"
-- L111: "(بلا تسمية)" → `() => setShowCreate(true)`
-- L141: "(بلا تسمية)" → `() => { setSelectedAsset(a); setDepResult(null); setShowDepreciate(true);`
-- L182: "(بلا تسمية)" → `() => setShowCreate(false)`
-- L239: "(بلا تسمية)" → `() => { setShowDepreciate(false); setDepResult(null);` 🔒
-- L240: "(بلا تسمية)" → `handleDepreciate` 🔒
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/finance/fixed-assets`
+_لا قراءات._
 
 
 
@@ -45,7 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: no row in /api/finance/fixed-assets`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/fixed-assets/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

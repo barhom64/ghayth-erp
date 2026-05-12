@@ -1,28 +1,25 @@
-# /hr/exit — `artifacts/ghayth-erp/src/pages/create/hr/overtime-create.tsx`
+# /hr/exit — `artifacts/ghayth-erp/src/pages/hr/exit-requests.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/exit`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/hr/overtime-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/exit-requests.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:128`
 - المجموعة: `hr`
-- الكومبوننت: `OvertimeCreate`
-- subKey: `attendance` | minRoleLevel: —
+- الكومبوننت: `ExitRequests`
+- subKey: `employees` | minRoleLevel: —
 - الكيان المستنبط: `exit`
-- سطور الملف: 247
+- سطور الملف: 249
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/hr/overtime` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L129: "مسح المسودة" → `clearDraft`
-- L235: "(بلا تسمية)" 🔒
-- L239: "(بلا تسمية)" → `() => setLocation("/hr/overtime")`
+- L187: "(بلا تسمية)"
+- L209: "طلب نهاية خدمة"
 
 ### القراءات (GET)
-- GET `/employees?limit=500`
+_لا قراءات._
 
 
 
@@ -42,8 +39,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/exit`
-- لقطة: `audit/screenshots/hr_exit.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/exit`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

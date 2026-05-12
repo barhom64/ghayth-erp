@@ -1,24 +1,24 @@
-# /fleet/insurance/:id — `artifacts/ghayth-erp/src/pages/fleet/insurance.tsx`
+# /fleet/insurance/:id — `artifacts/ghayth-erp/src/pages/details/insurance-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/fleet/insurance/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/fleet/insurance.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/insurance-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/fleetRoutes.tsx:47`
 - المجموعة: `fleet`
-- الكومبوننت: `Insurance`
+- الكومبوننت: `InsuranceDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 89
+- سطور الملف: 306
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L43: "إضافة تأمين"
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/fleet/insurance`
+_لا قراءات._
 
 
 
@@ -38,7 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/fleet/insurance → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/fleet/insurance/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

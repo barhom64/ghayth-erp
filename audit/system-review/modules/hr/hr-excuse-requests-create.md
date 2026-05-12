@@ -1,26 +1,28 @@
-# /hr/excuse-requests/create — `artifacts/ghayth-erp/src/pages/hr/official-letters.tsx`
+# /hr/excuse-requests/create — `artifacts/ghayth-erp/src/pages/create/hr/excuse-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/excuse-requests/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/official-letters.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/hr/excuse-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:166`
 - المجموعة: `hr`
-- الكومبوننت: `OfficialLetters`
-- subKey: `employees` | minRoleLevel: —
+- الكومبوننت: `ExcuseCreate`
+- subKey: `attendance` | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 247
+- سطور الملف: 131
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/hr/excuse-requests` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-- L88: "معاينة وطباعة" → `() => setPreviewLetter(l)`
-- L129: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L163: "(بلا تسمية)" → `() => setShowForm(false)`
+- L80: "مسح المسودة" → `clearDraft`
+- L123: "(بلا تسمية)" → `() => setLocation("/hr/excuse-requests")` 🔒
+- L124: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
-- GET `/hr/official-letters`
+_لا قراءات._
 
 
 
@@ -40,8 +42,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/excuse-requests/create; write POST /api/intelligence/activity → 200; consoleErr=2`
-- لقطة: `audit/screenshots/hr_excuse_requests_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/excuse-requests/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

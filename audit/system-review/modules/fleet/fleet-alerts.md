@@ -1,28 +1,24 @@
-# /fleet/alerts — `artifacts/ghayth-erp/src/pages/create/fleet/insurance-create.tsx`
+# /fleet/alerts — `artifacts/ghayth-erp/src/pages/fleet/alerts.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/fleet/alerts`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/fleet/insurance-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/fleet/alerts.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/fleetRoutes.tsx:48`
 - المجموعة: `fleet`
-- الكومبوننت: `InsuranceCreate`
+- الكومبوننت: `FleetAlerts`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `alerts`
-- سطور الملف: 118
+- سطور الملف: 124
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/fleet/insurance` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L72: "مسح المسودة" → `clearDraft`
-- L110: "(بلا تسمية)" → `() => setLocation("/fleet/insurance")` 🔒
-- L111: "(بلا تسمية)" → `handleSubmit` 🔒
+- L81: "إضافة تنبيه"
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/fleet/alerts`
 
 
 
@@ -42,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/fleet/alerts`
-- لقطة: `audit/screenshots/fleet_alerts.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/fleet/alerts`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

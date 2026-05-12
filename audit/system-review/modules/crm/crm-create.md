@@ -1,24 +1,25 @@
-# /crm/create — `artifacts/ghayth-erp/src/pages/client-detail.tsx`
+# /crm/create — `artifacts/ghayth-erp/src/pages/create/crm-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/crm/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/client-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/crm-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:84`
 - المجموعة: `crm`
-- الكومبوننت: `ClientDetail`
+- الكومبوننت: `CrmCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 945
+- سطور الملف: 163
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/crm/opportunities` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-- L705: "(بلا تسمية)" → `() => setShowCreate(true)`
-- L717: "(بلا تسمية)" → `() => setShowCreate(false)`
-- L749: "(بلا تسمية)" → `handleToggleActive`
-- L770: "تعيين" → `handleResetPassword` 🔒
+- L81: "مسح المسودة" → `clearDraft`
+- L156: "(بلا تسمية)" → `() => setLocation("/crm")` 🔒
+- L157: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
 _لا قراءات._
@@ -41,8 +42,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/crm/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/crm_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/crm/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

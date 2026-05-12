@@ -1,37 +1,25 @@
-# /documents/:docId/versions — `artifacts/ghayth-erp/src/pages/documents-page.tsx`
+# /documents/:docId/versions — `artifacts/ghayth-erp/src/pages/create/documents/version-upload.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/documents/:docId/versions`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/documents-page.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/documents/version-upload.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/documentsRoutes.tsx:13`
 - المجموعة: `documents`
-- الكومبوننت: `DocumentsPage`
+- الكومبوننت: `VersionUpload`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `versions`
-- سطور الملف: 428
+- سطور الملف: 166
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L137: "رفع مستند"
-- L138: "إنشاء مستند"
-- L200: "(بلا تسمية)" → `() => handleDownload(d.id, d.fileName)`
-- L205: "الإصدارات"
-- L210: "(بلا تسمية)" → `() => handleStatusChange(d.id, "approved")`
-- L215: "(بلا تسمية)" → `() => handleStatusChange(d.id, "cancelled")`
-- L220: "(بلا تسمية)" → `() => handleStatusChange(d.id, "draft")`
-- L268: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L279: "(بلا تسمية)" → `() => setShowForm(false)`
-- L304: "(بلا تسمية)" → `() => setShowForm(true)`
-- L346: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L357: "(بلا تسمية)" → `() => setShowForm(false)`
+- L106: "مسح المسودة" → `clearDraft`
+- L133: "(بلا تسمية)" → `handleUploadVersion` 🔒
 
 ### القراءات (GET)
-- GET `/documents/folders`
-- GET `/documents/templates`
-- GET `/documents/stats`
+_لا قراءات._
 
 
 
@@ -51,8 +39,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/documents/1/versions`
-- لقطة: `audit/screenshots/documents_docId_versions.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/documents/:docId/versions`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

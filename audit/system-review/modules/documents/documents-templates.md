@@ -1,26 +1,35 @@
-# /documents/templates — `artifacts/ghayth-erp/src/pages/documents/documents-upload.tsx`
+# /documents/templates — `artifacts/ghayth-erp/src/pages/documents/templates.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/documents/templates`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/documents/documents-upload.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/documents/templates.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/documentsRoutes.tsx:16`
 - المجموعة: `documents`
-- الكومبوننت: `DocumentsUpload`
+- الكومبوننت: `DocumentsTemplates`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `templates`
-- سطور الملف: 229
+- سطور الملف: 515
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/documents/templates` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-- L136: "(بلا تسمية)" → `() => setLocation("/documents")`
-- L159: "إضافة ربط" → `addEntityLink`
-- L177: "(بلا تسمية)" → `() => removeEntityLink(idx)`
+- L234: "(بلا تسمية)" → `() => { setViewMode("list"); setEditingId(null);`
+- L240: "معاينة" → `handleLivePreview` 🔒
+- L243: "حفظ" → `handleSave`
+- L345: "(بلا تسمية)" → `() => removeVariable(i)`
+- L356: "إضافة متغير" → `addVariable` 🔒
+- L417: "(بلا تسمية)" → `() => openEditor()`
+- L476: "معاينة" → `() => handlePreview(t)`
+- L479: "تعديل" → `() => openEditor(t)`
+- L483: "حذف" → `() => handleDelete(t.id)`
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/documents/templates`
+- GET `/settings/branches`
 
 
 
@@ -37,11 +46,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `templates` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L94 _(inline-data-array)_: `const statCards = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/documents/templates`
-- لقطة: `audit/screenshots/documents_templates.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/documents/templates`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

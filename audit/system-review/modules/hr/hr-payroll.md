@@ -1,27 +1,25 @@
-# /hr/payroll — `artifacts/ghayth-erp/src/pages/hr/leave-management.tsx`
+# /hr/payroll — `artifacts/ghayth-erp/src/pages/hr/payroll.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/payroll`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/leave-management.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/payroll.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:102`
 - المجموعة: `hr`
-- الكومبوننت: `LeaveManagement`
-- subKey: `leaves` | minRoleLevel: —
+- الكومبوننت: `Payroll`
+- subKey: `payroll` | minRoleLevel: —
 - الكيان المستنبط: `payroll`
-- سطور الملف: 176
+- سطور الملف: 172
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L100: "(بلا تسمية)" → `(e) => { e.stopPropagation(); setSelectedRun(p.id);`
+- L119: "تشغيل مسير رواتب"
 
 ### القراءات (GET)
-- GET `/hr/leave-requests?status=pending`
-- GET `/hr/leave-balance`
-- GET `/hr/leave-types`
-- GET `/hr/leave-stats`
+_لا قراءات._
 
 
 
@@ -38,11 +36,9 @@ _لم تُلتقط أزرار._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `payroll` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L104 _(inline-data-array)_: `const kpis = [`
+- ⚠ L57 _(inline-data-array)_: `const kpis = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/payroll`
-- لقطة: `audit/screenshots/hr_payroll.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/payroll`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

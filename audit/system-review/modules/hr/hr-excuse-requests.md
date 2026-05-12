@@ -1,21 +1,21 @@
-# /hr/excuse-requests — `artifacts/ghayth-erp/src/pages/details/hr-contract-detail.tsx`
+# /hr/excuse-requests — `artifacts/ghayth-erp/src/pages/hr/excuse-requests.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/excuse-requests`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/hr-contract-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/excuse-requests.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:165`
 - المجموعة: `hr`
-- الكومبوننت: `HrContractDetail`
-- subKey: `employees` | minRoleLevel: —
+- الكومبوننت: `ExcuseRequests`
+- subKey: `attendance` | minRoleLevel: —
 - الكيان المستنبط: `excuse-requests`
-- سطور الملف: 288
+- سطور الملف: 197
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L140: "طلب استئذان"
 
 ### القراءات (GET)
 _لا قراءات._
@@ -35,11 +35,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `excuse-requests` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L44 _(inline-data-array)_: `const kpis = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/excuse-requests`
-- لقطة: `audit/screenshots/hr_excuse_requests.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/excuse-requests`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

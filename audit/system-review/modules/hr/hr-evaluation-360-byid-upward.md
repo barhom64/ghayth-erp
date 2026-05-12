@@ -1,24 +1,29 @@
-# /hr/evaluation-360/:id/upward — `artifacts/ghayth-erp/src/pages/hr/evaluation-360.tsx`
+# /hr/evaluation-360/:id/upward — `artifacts/ghayth-erp/src/pages/hr/evaluation-360-upward.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/evaluation-360/:id/upward`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/evaluation-360.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/evaluation-360-upward.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:151`
 - المجموعة: `hr`
-- الكومبوننت: `Evaluation360`
+- الكومبوننت: `Evaluation360Upward`
 - subKey: `performance` | minRoleLevel: —
 - الكيان المستنبط: `upward`
-- سطور الملف: 179
+- سطور الملف: 236
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(call)_ | `/hr/evaluation-cycles/${cycleId}/upward-review` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
 
 ### تفاصيل الأزرار المرئية
-- L145: "بدء دورة تقييم"
+- L114: "العودة إلى الدورة"
+- L127: "عودة"
+- L221: "إلغاء" → `handleSubmit`
+- L223: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
-- GET `/hr/evaluation-cycles`
+_لا قراءات._
 
 
 
@@ -35,10 +40,9 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `upward` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L62 _(inline-data-array)_: `const kpis = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/hr/evaluation-360 → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/evaluation-360/:id/upward`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

@@ -1,22 +1,23 @@
-# /finance/ledger/:code — `artifacts/ghayth-erp/src/pages/finance/salary-advances.tsx`
+# /finance/ledger/:code — `artifacts/ghayth-erp/src/pages/finance/ledger.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/ledger/:code`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/salary-advances.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/ledger.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:120`
 - المجموعة: `finance`
-- الكومبوننت: `SalaryAdvances`
+- الكومبوننت: `Ledger`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:code`
-- سطور الملف: 285
+- سطور الملف: 173
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L141: "(بلا تسمية)" → `() => setShowForm((v) => !v)`
-- L255: "إلغاء" → `onDone`
+- L65: "(بلا تسمية)"
+- L70: "(بلا تسمية)" → `() => window.print()`
+- L73: "(بلا تسمية)" → `() => exportCSV(entries, ["date", "ref", "description", "debit", "credit", "runn`
 
 ### القراءات (GET)
 _لا قراءات._
@@ -39,7 +40,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: no id resolver for /finance/ledger/:code`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/ledger/:code`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

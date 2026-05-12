@@ -1,24 +1,28 @@
-# /properties/inspections — `artifacts/ghayth-erp/src/pages/properties-maintenance.tsx`
+# /properties/inspections — `artifacts/ghayth-erp/src/pages/properties/inspections.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/properties/inspections`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/properties-maintenance.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/properties/inspections.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/propertyRoutes.tsx:56`
 - المجموعة: `properties`
-- الكومبوننت: `PropertiesMaintenance`
+- الكومبوننت: `PropertyInspections`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `inspections`
-- سطور الملف: 111
+- سطور الملف: 311
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L63: "طلب صيانة جديد"
+- L126: "(بلا تسمية)" → `() => setShowForm(!showForm)`
+- L148: "(بلا تسمية)" → `() => setShowForm(false)`
+- L187: "(بلا تسمية)" → `() => setStatusFilter(s)`
+- L222: "(بلا تسمية)" → `() => setCompletingId(insp.id)`
+- L288: "إلغاء" → `props.onClose`
 
 ### القراءات (GET)
-- GET `/properties/maintenance-requests`
+- GET `/properties/units?limit=200`
 
 
 
@@ -38,8 +42,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/properties/inspections`
-- لقطة: `audit/screenshots/properties_inspections.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/properties/inspections`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

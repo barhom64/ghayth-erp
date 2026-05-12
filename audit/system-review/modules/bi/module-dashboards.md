@@ -1,31 +1,39 @@
-# /module-dashboards — `artifacts/ghayth-erp/src/pages/automation.tsx`
+# /module-dashboards — `artifacts/ghayth-erp/src/pages/module-dashboards.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/module-dashboards`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/automation.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/module-dashboards.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:123`
-- المجموعة: `admin`
-- الكومبوننت: `Automation`
+- المجموعة: `bi`
+- الكومبوننت: `ModuleDashboards`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `module-dashboards`
-- سطور الملف: 293
+- سطور الملف: 698
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L112: "(بلا تسمية)" → `() => handleTrigger(j.id)`
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/automation/notification-stats`
-- GET `/automation/proactive-rules`
-- GET `/automation/automation-stats`
+- GET `/module-dashboards/hr`
+- GET `/module-dashboards/finance`
+- GET `/module-dashboards/fleet`
+- GET `/module-dashboards/legal`
+- GET `/module-dashboards/properties`
+- GET `/module-dashboards/projects`
+- GET `/module-dashboards/crm`
+- GET `/module-dashboards/store`
+- GET `/module-dashboards/support`
+- GET `/module-dashboards/tasks`
+- GET `/module-dashboards/warehouse`
 
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/admin.md` (إن وُجد) وعدّد:
+- [ ] **TBD** — راجع `docs/blueprints/bi.md` (إن وُجد) وعدّد:
   - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
   - تأثير الأرصدة (balances, balances_history)
   - الإشعارات (notifications)
@@ -37,11 +45,9 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `module-dashboards` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L660 _(inline-data-array)_: `const tabConfig = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/module-dashboards`
-- لقطة: `audit/screenshots/module_dashboards.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/module-dashboards`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

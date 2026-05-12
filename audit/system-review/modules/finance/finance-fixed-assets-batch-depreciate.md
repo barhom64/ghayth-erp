@@ -1,26 +1,24 @@
-# /finance/fixed-assets/batch-depreciate — `artifacts/ghayth-erp/src/pages/create/finance/bank-manual-match.tsx`
+# /finance/fixed-assets/batch-depreciate — `artifacts/ghayth-erp/src/pages/create/finance/batch-depreciate.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/fixed-assets/batch-depreciate`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/finance/bank-manual-match.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/finance/batch-depreciate.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:126`
 - المجموعة: `finance`
-- الكومبوننت: `BankManualMatch`
+- الكومبوننت: `BatchDepreciate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `batch-depreciate`
-- سطور الملف: 191
+- سطور الملف: 76
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 | الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
 |------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/finance/bank-reconciliation/manual-match` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+| _(write)_ | `/finance/fixed-assets/depreciate-all` | POST | — | — | — | — | ✅ | ✅ | ✅ |
 
 ### تفاصيل الأزرار المرئية
-- L80: "مسح المسودة" → `clearDraft`
-- L109: "بحث" → `searchJournalLines` 🔒
-- L154: "(بلا تسمية)" → `() => handleManualMatch(jl.id)` 🔒
-- L183: "(بلا تسمية)" → `() => setLocation("/finance/bank-reconciliation")`
+- L48: "مسح المسودة" → `clearDraft`
+- L62: "(بلا تسمية)" → `handleBatchDepreciate` 🔒
 
 ### القراءات (GET)
 _لا قراءات._
@@ -43,8 +41,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/fixed-assets/batch-depreciate`
-- لقطة: `audit/screenshots/finance_fixed_assets_batch_depreciate.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/fixed-assets/batch-depreciate`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

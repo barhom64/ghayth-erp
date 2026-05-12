@@ -1,28 +1,24 @@
-# /fleet/tco — `artifacts/ghayth-erp/src/pages/fleet/traffic-violations.tsx`
+# /fleet/tco — `artifacts/ghayth-erp/src/pages/fleet/tco.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/fleet/tco`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/fleet/traffic-violations.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/fleet/tco.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/fleetRoutes.tsx:54`
 - المجموعة: `fleet`
-- الكومبوننت: `TrafficViolations`
+- الكومبوننت: `TCO`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `tco`
-- سطور الملف: 287
+- سطور الملف: 168
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L158: "(بلا تسمية)" → `() => handlePay(v.id)`
-- L173: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L212: "(بلا تسمية)" → `() => setShowForm(false)`
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/fleet/traffic-violations`
 - GET `/fleet/vehicles?limit=200`
-- GET `/fleet/drivers?limit=200`
 
 
 
@@ -42,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/fleet/tco`
-- لقطة: `audit/screenshots/fleet_tco.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/fleet/tco`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

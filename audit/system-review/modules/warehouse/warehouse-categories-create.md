@@ -1,25 +1,25 @@
-# /warehouse/categories/create — `artifacts/ghayth-erp/src/pages/create/warehouse-create.tsx`
+# /warehouse/categories/create — `artifacts/ghayth-erp/src/pages/create/warehouse/categories-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/warehouse/categories/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/warehouse-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/warehouse/categories-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:98`
 - المجموعة: `warehouse`
-- الكومبوننت: `WarehouseCreate`
+- الكومبوننت: `WarehouseCategoriesCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 114
+- سطور الملف: 60
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 | الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
 |------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/warehouse/products` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+| _(write)_ | `/warehouse/categories` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-- L68: "مسح المسودة" → `clearDraft`
-- L107: "(بلا تسمية)" → `() => setLocation("/warehouse")` 🔒
-- L108: "(بلا تسمية)" → `handleSubmit` 🔒
+- L44: "مسح المسودة" → `clearDraft`
+- L53: "(بلا تسمية)" → `() => setLocation("/warehouse")` 🔒
+- L54: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
 _لا قراءات._
@@ -42,8 +42,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/warehouse/categories/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/warehouse_categories_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/warehouse/categories/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

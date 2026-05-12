@@ -1,28 +1,24 @@
-# /crm/activities — `artifacts/ghayth-erp/src/pages/create/crm-create.tsx`
+# /crm/activities — `artifacts/ghayth-erp/src/pages/crm/activities.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/crm/activities`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/crm-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/crm/activities.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:86`
 - المجموعة: `crm`
-- الكومبوننت: `CrmCreate`
+- الكومبوننت: `CrmActivities`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `activities`
-- سطور الملف: 163
+- سطور الملف: 132
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/crm/opportunities` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L81: "مسح المسودة" → `clearDraft`
-- L156: "(بلا تسمية)" → `() => setLocation("/crm")` 🔒
-- L157: "(بلا تسمية)" → `handleSubmit` 🔒
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/crm/opportunities`
 
 
 
@@ -39,11 +35,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `activities` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L40 _(inline-data-array)_: `const kpis = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/crm/activities`
-- لقطة: `audit/screenshots/crm_activities.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/crm/activities`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

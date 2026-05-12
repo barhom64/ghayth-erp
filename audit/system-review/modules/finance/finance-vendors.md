@@ -1,25 +1,21 @@
-# /finance/vendors — `artifacts/ghayth-erp/src/pages/create/finance/budget-create.tsx`
+# /finance/vendors — `artifacts/ghayth-erp/src/pages/finance/vendors.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/vendors`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/finance/budget-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/vendors.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:99`
 - المجموعة: `finance`
-- الكومبوننت: `BudgetCreate`
-- subKey: `vendors` | minRoleLevel: —
+- الكومبوننت: `Vendors`
+- subKey: — | minRoleLevel: —
 - الكيان المستنبط: `vendors`
-- سطور الملف: 97
+- سطور الملف: 193
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/finance/budget` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L68: "مسح المسودة" → `clearDraft`
-- L89: "(بلا تسمية)" → `() => setLocation("/finance/budget")` 🔒
-- L90: "(بلا تسمية)" → `handleSubmit` 🔒
+- L120: "(بلا تسمية)"
 
 ### القراءات (GET)
 _لا قراءات._
@@ -42,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/vendors`
-- لقطة: `audit/screenshots/finance_vendors.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/vendors`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

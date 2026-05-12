@@ -1,25 +1,25 @@
-# /hr/payroll/salary-components — `artifacts/ghayth-erp/src/pages/hr/payroll.tsx`
+# /hr/payroll/salary-components — `artifacts/ghayth-erp/src/pages/hr/salary-components.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/payroll/salary-components`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/payroll.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/salary-components.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:104`
 - المجموعة: `hr`
-- الكومبوننت: `Payroll`
+- الكومبوننت: `SalaryComponents`
 - subKey: `payroll` | minRoleLevel: —
 - الكيان المستنبط: `salary-components`
-- سطور الملف: 172
+- سطور الملف: 179
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L100: "(بلا تسمية)" → `(e) => { e.stopPropagation(); setSelectedRun(p.id);`
-- L119: "تشغيل مسير رواتب"
+- L99: "(بلا تسمية)" → `() => setShowForm(!showForm)`
+- L132: "(بلا تسمية)" → `() => setShowForm(false)`
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/hr/salary-components`
 
 
 
@@ -36,11 +36,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `salary-components` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L57 _(inline-data-array)_: `const kpis = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/payroll/salary-components`
-- لقطة: `audit/screenshots/hr_payroll_salary_components.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/payroll/salary-components`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

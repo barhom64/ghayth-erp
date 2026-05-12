@@ -1,21 +1,23 @@
-# /bi/operations — `artifacts/ghayth-erp/src/pages/bi.tsx`
+# /bi/operations — `artifacts/ghayth-erp/src/pages/bi-operations.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/bi/operations`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/bi.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/bi-operations.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/biRoutes.tsx:18`
 - المجموعة: `bi`
-- الكومبوننت: `BI`
+- الكومبوننت: `BiOperations`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `operations`
-- سطور الملف: 48
+- سطور الملف: 519
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L89: "(بلا تسمية)" → `() => exportChart(chartRef.current, "sla-delays.png")`
+- L470: "(بلا تسمية)" → `() => window.print()`
+- L492: "(بلا تسمية)" → `() => { setFrom(""); setTo(""); setDepartmentId("");`
 
 ### القراءات (GET)
 _لا قراءات._
@@ -38,8 +40,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/bi/operations`
-- لقطة: `audit/screenshots/bi_operations.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/bi/operations`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

@@ -1,22 +1,25 @@
-# /hr/evaluation-360/:id/peer — `artifacts/ghayth-erp/src/pages/hr/evaluation-360-history.tsx`
+# /hr/evaluation-360/:id/peer — `artifacts/ghayth-erp/src/pages/hr/evaluation-360-peer.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/evaluation-360/:id/peer`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/evaluation-360-history.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/evaluation-360-peer.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:150`
 - المجموعة: `hr`
-- الكومبوننت: `Evaluation360History`
+- الكومبوننت: `Evaluation360Peer`
 - subKey: `performance` | minRoleLevel: —
 - الكيان المستنبط: `peer`
-- سطور الملف: 116
+- سطور الملف: 195
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(call)_ | `/hr/evaluation-cycles/${cycleId}/peer-evaluation` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
 
 ### تفاصيل الأزرار المرئية
-- L50: "عودة"
-- L104: "عرض"
+- L92: "عودة"
+- L186: "إلغاء" → `handleSubmit` 🔒
+- L188: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
 _لا قراءات._
@@ -39,7 +42,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/hr/evaluation-360 → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/evaluation-360/:id/peer`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

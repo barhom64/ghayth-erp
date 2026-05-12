@@ -1,35 +1,28 @@
-# /hr/shifts/create — `artifacts/ghayth-erp/src/pages/hr/discipline-memo-detail.tsx`
+# /hr/shifts/create — `artifacts/ghayth-erp/src/pages/create/hr/shifts-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/shifts/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/discipline-memo-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/hr/shifts-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:141`
 - المجموعة: `hr`
-- الكومبوننت: `DisciplineMemoDetail`
-- subKey: `violations` | minRoleLevel: —
+- الكومبوننت: `ShiftsCreate`
+- subKey: `shifts` | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 491
+- سطور الملف: 215
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/hr/shifts` | POST | ✅ | ✅ | — | — | ✅ | ✅ | ✅ |
 
 ### تفاصيل الأزرار المرئية
-- L204: "(بلا تسمية)" → `() => act("/justify", { justification, declined` 🔒
-- L246: "(بلا تسمية)"
-- L300: "(بلا تسمية)"
-- L319: "(بلا تسمية)" → `() => setShowCancelDialog(true)`
-- L342: "(بلا تسمية)" → `() => setShowAppeal(true)`
-- L354: "(بلا تسمية)" → `() => act("/appeal", { reason: appealReason` 🔒
-- L357: "(بلا تسمية)" → `() => setShowAppeal(false)`
-- L381: "(بلا تسمية)" → `() => act("/appeal-decision", { decision: "accepted", comment: ""` 🔒
-- L384: "(بلا تسمية)" → `() => act("/appeal-decision", { decision: "rejected", comment: ""` 🔒
-- L396: "(بلا تسمية)" → `() => act("/close", { note: "إقفال عادي"` 🔒
-- L400: "إصدار خطاب تأديبي"
-- L449: "خطاب تأديبي"
+- L115: "مسح المسودة" → `clearDraft`
+- L207: "(بلا تسمية)" → `() => setLocation("/hr/shifts")` 🔒
+- L208: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/settings/branches`
 
 
 
@@ -46,11 +39,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `create` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L23 _(inline-data-array)_: `const daysOfWeek = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/shifts/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/hr_shifts_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/shifts/create`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

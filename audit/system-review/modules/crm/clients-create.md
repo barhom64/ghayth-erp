@@ -1,34 +1,31 @@
-# /marketing/create — `artifacts/ghayth-erp/src/pages/support.tsx`
+# /clients/create — `artifacts/ghayth-erp/src/pages/create/clients-create.tsx`
 
 ## 1. الميتاداتا
-- المسار: `/marketing/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/support.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:114`
-- المجموعة: `support`
-- الكومبوننت: `Support`
+- المسار: `/clients/create`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/clients-create.tsx`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:81`
+- المجموعة: `crm`
+- الكومبوننت: `ClientsCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 462
+- سطور الملف: 180
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L106: "(بلا تسمية)" → `() => setPreviewItem(t)`
-- L133: "تذكرة جديدة"
-- L304: "(بلا تسمية)" → `() => setShowNew(!showNew)`
-- L315: "(بلا تسمية)" → `() => setShowNew(false)`
+- L81: "مسح المسودة" → `clearDraft`
+- L172: "(بلا تسمية)" → `() => setLocation("/clients")` 🔒
+- L173: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
-- GET `/support/stats`
-- GET `/support/kb`
-- GET `/support/csat`
+_لا قراءات._
 
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/support.md` (إن وُجد) وعدّد:
+- [ ] **TBD** — راجع `docs/blueprints/crm.md` (إن وُجد) وعدّد:
   - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
   - تأثير الأرصدة (balances, balances_history)
   - الإشعارات (notifications)
@@ -43,8 +40,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/marketing/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/marketing_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/clients/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

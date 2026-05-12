@@ -1,25 +1,30 @@
-# /my-overtime — `artifacts/ghayth-erp/src/pages/my-documents.tsx`
+# /projects — `artifacts/ghayth-erp/src/pages/projects.tsx`
 
 ## 1. الميتاداتا
-- المسار: `/my-overtime`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/my-documents.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:72`
+- المسار: `/projects`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/projects.tsx`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:89`
 - المجموعة: `operations`
-- الكومبوننت: `MyDocuments`
+- الكومبوننت: `Projects`
 - subKey: — | minRoleLevel: —
-- الكيان المستنبط: `my-overtime`
-- سطور الملف: 90
+- الكيان المستنبط: `projects`
+- سطور الملف: 399
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L61: "(بلا تسمية)"
-- L69: "(بلا تسمية)"
+- L204: "مشروع جديد"
+- L205: "مخطط غانت"
+- L206: "إدارة المخاطر"
+- L207: "تكاليف المشاريع"
+- L208: "المهام"
+- L276: "(بلا تسمية)"
+- L382: "مشروع جديد"
 
 ### القراءات (GET)
-- GET `/my-space/documents`
+- GET `/projects/stats/overview`
 
 
 
@@ -33,14 +38,12 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 - يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
 
 ## 4. النمذجة
-_لم يتم العثور على جدول Drizzle بالاسم المستنبط `my-overtime` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
+_لم يتم العثور على جدول Drizzle بالاسم المستنبط `projects` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/my-overtime`
-- لقطة: `audit/screenshots/my_overtime.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/projects`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

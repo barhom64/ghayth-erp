@@ -1,24 +1,25 @@
-# /hr/recruitment/jobs/:id — `artifacts/ghayth-erp/src/pages/hr/application-list.tsx`
+# /hr/recruitment/jobs/:id — `artifacts/ghayth-erp/src/pages/hr/job-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/recruitment/jobs/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/application-list.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/job-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:121`
 - المجموعة: `hr`
-- الكومبوننت: `ApplicationList`
+- الكومبوننت: `JobDetail`
 - subKey: `recruitment` | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 154
+- سطور الملف: 246
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L121: "إضافة متقدم"
+- L134: "(بلا تسمية)"
+- L160: "(بلا تسمية)"
 
 ### القراءات (GET)
-- GET `/hr/recruitment/applications`
+_لا قراءات._
 
 
 
@@ -35,10 +36,9 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `:id` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L32 _(inline-data-array)_: `const kpis = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/hr/recruitment → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/recruitment/jobs/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

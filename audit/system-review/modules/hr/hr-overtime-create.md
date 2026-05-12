@@ -1,24 +1,28 @@
-# /hr/overtime/create — `artifacts/ghayth-erp/src/pages/hr/loan-detail.tsx`
+# /hr/overtime/create — `artifacts/ghayth-erp/src/pages/create/hr/overtime-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/overtime/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/loan-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/hr/overtime-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:126`
 - المجموعة: `hr`
-- الكومبوننت: `LoanDetail`
-- subKey: `payroll` | minRoleLevel: —
+- الكومبوننت: `OvertimeCreate`
+- subKey: `attendance` | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 212
+- سطور الملف: 247
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/hr/overtime` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L129: "مسح المسودة" → `clearDraft`
+- L235: "(بلا تسمية)" 🔒
+- L239: "(بلا تسمية)" → `() => setLocation("/hr/overtime")`
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/employees?limit=500`
 
 
 
@@ -38,8 +42,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/overtime/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/hr_overtime_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/overtime/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

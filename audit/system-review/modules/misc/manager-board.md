@@ -1,25 +1,27 @@
-# /manager-board — `artifacts/ghayth-erp/src/pages/calendar.tsx`
+# /manager-board — `artifacts/ghayth-erp/src/pages/manager-board.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/manager-board`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/calendar.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/manager-board.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:77`
-- المجموعة: `operations`
-- الكومبوننت: `CalendarPage`
-- subKey: — | minRoleLevel: 60
+- المجموعة: `misc`
+- الكومبوننت: `ManagerBoard`
+- subKey: — | minRoleLevel: 40
 - الكيان المستنبط: `manager-board`
-- سطور الملف: 310
+- سطور الملف: 491
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L108: "(بلا تسمية)"
-- L116: "(بلا تسمية)"
-- L262: "(بلا تسمية)" → `onPrev`
-- L265: "اليوم" → `onToday`
-- L266: "(بلا تسمية)" → `onNext`
+- L177: "(بلا تسمية)" → `() => doApprove(item)` 🔒
+- L180: "(بلا تسمية)" → `() => doReject(item)` 🔒
+- L195: "مركز القرارات الكامل"
+- L244: "(بلا تسمية)" → `() => doApprove(item)` 🔒
+- L248: "(بلا تسمية)" → `() => doReject(item)` 🔒
+- L268: "التفاصيل"
+- L325: "الكل"
 
 ### القراءات (GET)
 _لا قراءات._
@@ -27,7 +29,7 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/operations.md` (إن وُجد) وعدّد:
+- [ ] **TBD** — راجع `docs/blueprints/misc.md` (إن وُجد) وعدّد:
   - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
   - تأثير الأرصدة (balances, balances_history)
   - الإشعارات (notifications)
@@ -42,8 +44,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/manager-board`
-- لقطة: `audit/screenshots/manager_board.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/manager-board`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

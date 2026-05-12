@@ -1,24 +1,25 @@
-# /admin/policy-engine — `artifacts/ghayth-erp/src/pages/admin-violations-report.tsx`
+# /admin/policy-engine — `artifacts/ghayth-erp/src/pages/admin-policy-engine.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/admin/policy-engine`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin-violations-report.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin-policy-engine.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/adminRoutes.tsx:29`
 - المجموعة: `admin`
-- الكومبوننت: `AdminViolationsReport`
+- الكومبوننت: `AdminPolicyEngine`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `policy-engine`
-- سطور الملف: 346
+- سطور الملف: 200
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L158: "(بلا تسمية)"
+- L71: "(بلا تسمية)" → `() => refetchAudit()`
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/admin/governance/policy-audit`
+- GET `/admin/governance/role-strategies`
 
 
 
@@ -35,11 +36,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `policy-engine` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L172 _(inline-data-array)_: `const summaryCards = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/admin/policy-engine`
-- لقطة: `audit/screenshots/admin_policy_engine.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/admin/policy-engine`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

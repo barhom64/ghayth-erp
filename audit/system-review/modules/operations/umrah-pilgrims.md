@@ -1,21 +1,21 @@
-# /umrah/pilgrims — `any`
+# /umrah/pilgrims — `artifacts/ghayth-erp/src/pages/umrah/pilgrims.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/umrah/pilgrims`
-- ملف الصفحة: `—`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/pilgrims.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:39`
 - المجموعة: `operations`
-- الكومبوننت: `any`
+- الكومبوننت: `UmrahPilgrims`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `pilgrims`
-- سطور الملف: 0
-- مصدر موجود: —
+- سطور الملف: 145
+- مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L81: "إضافة معتمر"
 
 ### القراءات (GET)
 _لا قراءات._
@@ -35,11 +35,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `pilgrims` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L26 _(inline-data-array)_: `const kpiCards = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/umrah/pilgrims`
-- لقطة: `audit/screenshots/umrah_pilgrims.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/umrah/pilgrims`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

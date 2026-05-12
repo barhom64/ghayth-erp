@@ -1,14 +1,14 @@
-# /governance/compliance/:id — `artifacts/ghayth-erp/src/pages/governance.tsx`
+# /governance/compliance/:id — `artifacts/ghayth-erp/src/pages/details/compliance-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/governance/compliance/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/governance.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/compliance-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/governanceRoutes.tsx:26`
 - المجموعة: `governance`
-- الكومبوننت: `Governance`
+- الكومبوننت: `ComplianceDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 51
+- سطور الملف: 310
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
@@ -18,7 +18,7 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/governance/stats`
+_لا قراءات._
 
 
 
@@ -38,7 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/governance/compliance → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/governance/compliance/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

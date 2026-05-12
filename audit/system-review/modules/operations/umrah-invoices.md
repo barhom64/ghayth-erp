@@ -1,25 +1,26 @@
-# /umrah/invoices — `artifacts/ghayth-erp/src/pages/umrah/penalties.tsx`
+# /umrah/invoices — `artifacts/ghayth-erp/src/pages/umrah/invoices.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/umrah/invoices`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/penalties.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/invoices.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:48`
 - المجموعة: `operations`
-- الكومبوننت: `UmrahPenalties`
+- الكومبوننت: `UmrahInvoices`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `invoices`
-- سطور الملف: 142
+- سطور الملف: 146
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L78: "(بلا تسمية)" → `(e) => handleWaive(e, p.id)`
-- L89: "تشغيل محرك الغرامات" → `runPenaltyEngine`
+- L100: "إنشاء فاتورة" → `generate` 🔒
 
 ### القراءات (GET)
-- GET `/umrah/penalties`
+- GET `/umrah/agent-invoices`
+- GET `/umrah/agents`
+- GET `/umrah/seasons`
 
 
 
@@ -33,16 +34,14 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 - يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
 
 ## 4. النمذجة
-- الجدول: `invoices` (export: `invoices`, 7 عمود)
-- tenant col: ✅ | createdBy: — | createdAt: — | updatedAt: — | softDelete: — | lifecycle col: —
+- الجدول: `invoices` (export: `invoices`, 12 عمود)
+- tenant col: ✅ | createdBy: — | createdAt: ✅ | updatedAt: — | softDelete: ✅ | lifecycle col: ✅
 - FKs: companies.id, clients.id
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L54 _(inline-data-array)_: `const kpiCards = [`
+- ⚠ L52 _(inline-data-array)_: `const kpiCards = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/umrah/invoices`
-- لقطة: `audit/screenshots/umrah_invoices.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/umrah/invoices`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

@@ -43,20 +43,31 @@ function parseImports(lines) {
 }
 
 function parseRouteEntries(lines, imports, module, routeFile) {
-  // { path: "/x", component: Foo, subKey: "k", minRoleLevel: 40 }
+  // { path: "/x", component: Foo, subKey: "k", minRoleLevel: 40, module: "y" }
+  // Parse one entry per `path:` line. Restrict the search window to the
+  // braces of the current entry only — joining several lines was leaking
+  // `module:` from an adjacent entry into the wrong row.
   const rows = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const pm = line.match(/path:\s*["']([^"']+)["']/);
     if (!pm) continue;
-    // Collect a small window around this line for component/subKey/minRoleLevel
-    const window = lines.slice(Math.max(0, i - 2), i + 4).join(" ");
-    const cm = window.match(/component:\s*(\w+)/);
-    const sm = window.match(/subKey:\s*["']([^"']+)["']/);
-    const rm = window.match(/minRoleLevel:\s*(\d+)/);
-    // Honor inline `module: "x"` so misc-grouped routes (crm/projects/support/...)
-    // get categorized into their real module instead of "misc".
-    const mm = window.match(/module:\s*["']([^"']+)["']/);
+    // Find the entry's own braces. Most entries are on a single line:
+    //   { path: "...", component: X, module: "y" },
+    // For multi-line entries, expand until the matching `}` is found.
+    let scope = line;
+    if (!line.includes("}")) {
+      const collected = [line];
+      for (let j = i + 1; j < Math.min(lines.length, i + 6); j++) {
+        collected.push(lines[j]);
+        if (lines[j].includes("}")) break;
+      }
+      scope = collected.join(" ");
+    }
+    const cm = scope.match(/component:\s*(\w+)/);
+    const sm = scope.match(/subKey:\s*["']([^"']+)["']/);
+    const rm = scope.match(/minRoleLevel:\s*(\d+)/);
+    const mm = scope.match(/module:\s*["']([^"']+)["']/);
     const componentName = cm ? cm[1] : null;
     const sourceImport = componentName ? imports[componentName] : null;
     rows.push({

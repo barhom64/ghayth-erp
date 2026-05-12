@@ -1,24 +1,28 @@
-# /fleet/traffic-violations — `artifacts/ghayth-erp/src/pages/fleet/reports.tsx`
+# /fleet/traffic-violations — `artifacts/ghayth-erp/src/pages/fleet/traffic-violations.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/fleet/traffic-violations`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/fleet/reports.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/fleet/traffic-violations.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/fleetRoutes.tsx:52`
 - المجموعة: `fleet`
-- الكومبوننت: `FleetReports`
+- الكومبوننت: `TrafficViolations`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `traffic-violations`
-- سطور الملف: 81
+- سطور الملف: 287
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L158: "(بلا تسمية)" → `() => handlePay(v.id)`
+- L173: "(بلا تسمية)" → `() => setShowForm(!showForm)`
+- L212: "(بلا تسمية)" → `() => setShowForm(false)`
 
 ### القراءات (GET)
-- GET `/fleet/stats`
+- GET `/fleet/traffic-violations`
+- GET `/fleet/vehicles?limit=200`
+- GET `/fleet/drivers?limit=200`
 
 
 
@@ -35,11 +39,9 @@ _لم تُلتقط أزرار._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `traffic-violations` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L15 _(inline-data-array)_: `const statCards = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/fleet/traffic-violations`
-- لقطة: `audit/screenshots/fleet_traffic_violations.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/fleet/traffic-violations`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

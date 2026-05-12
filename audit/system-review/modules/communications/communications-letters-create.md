@@ -1,29 +1,26 @@
-# /communications/letters/create — `artifacts/ghayth-erp/src/pages/communications.tsx`
+# /communications/letters/create — `artifacts/ghayth-erp/src/pages/create/communications/letters-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/communications/letters/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/communications.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/communications/letters-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/commsRoutes.tsx:13`
 - المجموعة: `communications`
-- الكومبوننت: `Communications`
+- الكومبوننت: `LettersCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 648
+- سطور الملف: 133
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L139: "(بلا تسمية)" → `handleSubscribe` 🔒
-- L145: "إرسال تجريبي" → `handleTest` 🔒
-- L149: "إلغاء الاشتراك" → `handleUnsubscribe` 🔒
-- L236: "(بلا تسمية)" → `() => refetch()`
-- L407: "(بلا تسمية)" → `() => setShow(!show)`
-- L415: "(بلا تسمية)"
+- L65: "مسح المسودة" → `clearDraft`
+- L126: "(بلا تسمية)" → `() => setLocation("/communications")` 🔒
+- L127: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
-- GET `/communications/stats`
+_لا قراءات._
 
 
 
@@ -40,11 +37,9 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `create` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L379 _(inline-data-array)_: `const options = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/communications/letters/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/communications_letters_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/communications/letters/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

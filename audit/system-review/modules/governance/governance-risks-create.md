@@ -1,21 +1,25 @@
-# /governance/risks/create — `artifacts/ghayth-erp/src/pages/details/policy-detail.tsx`
+# /governance/risks/create — `artifacts/ghayth-erp/src/pages/create/governance/risks-create.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/governance/risks/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/policy-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/governance/risks-create.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/governanceRoutes.tsx:19`
 - المجموعة: `governance`
-- الكومبوننت: `PolicyDetail`
+- الكومبوننت: `RisksCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 260
+- سطور الملف: 149
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/governance/risks` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L61: "مسح المسودة" → `clearDraft`
+- L142: "(بلا تسمية)" → `() => setLocation("/governance/risks")` 🔒
+- L143: "(بلا تسمية)" → `handleSubmit` 🔒
 
 ### القراءات (GET)
 _لا قراءات._
@@ -38,8 +42,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/governance/risks/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/governance_risks_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/governance/risks/create`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

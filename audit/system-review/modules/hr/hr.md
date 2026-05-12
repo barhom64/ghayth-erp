@@ -6,7 +6,7 @@
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:87`
 - المجموعة: `hr`
 - الكومبوننت: `HR`
-- subKey: `employees` | minRoleLevel: —
+- subKey: — | minRoleLevel: —
 - الكيان المستنبط: `hr`
 - سطور الملف: 317
 - مصدر موجود: ✅
@@ -38,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr`
-- لقطة: `audit/screenshots/hr.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

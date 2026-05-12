@@ -1,28 +1,24 @@
-# /fleet/trips — `artifacts/ghayth-erp/src/pages/create/fleet/drivers-create.tsx`
+# /fleet/trips — `artifacts/ghayth-erp/src/pages/fleet/trips.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/fleet/trips`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/fleet/drivers-create.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/fleet/trips.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/fleetRoutes.tsx:36`
 - المجموعة: `fleet`
-- الكومبوننت: `DriversCreate`
+- الكومبوننت: `Trips`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `trips`
-- سطور الملف: 160
+- سطور الملف: 119
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/fleet/drivers` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L70: "مسح المسودة" → `clearDraft`
-- L152: "(بلا تسمية)" → `() => setLocation("/fleet/drivers")` 🔒
-- L153: "(بلا تسمية)" → `handleSubmit` 🔒
+- L56: "رحلة جديدة"
 
 ### القراءات (GET)
-_لا قراءات._
+- GET `/fleet/trips`
 
 
 
@@ -42,8 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/fleet/trips`
-- لقطة: `audit/screenshots/fleet_trips.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/fleet/trips`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

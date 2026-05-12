@@ -1,28 +1,24 @@
-# /hr/turnover-report — `artifacts/ghayth-erp/src/pages/hr/idp.tsx`
+# /hr/turnover-report — `artifacts/ghayth-erp/src/pages/hr/turnover-report.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/hr/turnover-report`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/idp.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/hr/turnover-report.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/hrRoutes.tsx:159`
 - المجموعة: `hr`
-- الكومبوننت: `IDP`
+- الكومبوننت: `TurnoverReport`
 - subKey: `performance` | minRoleLevel: —
 - الكيان المستنبط: `turnover-report`
-- سطور الملف: 279
+- سطور الملف: 221
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
-|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(call)_ | `/hr/idp` | POST | 🔴 لم يُعثر على endpoint مطابق |||||||
+_لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L197: "(بلا تسمية)" → `() => setShowForm(true)`
-- L238: "(بلا تسمية)" → `() => setShowForm(false)`
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
-- GET `/hr/idp`
-- GET `/employees?status=active&limit=200`
+_لا قراءات._
 
 
 
@@ -39,11 +35,9 @@
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `turnover-report` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L92 _(inline-data-array)_: `const kpis = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/hr/turnover-report`
-- لقطة: `audit/screenshots/hr_turnover_report.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/hr/turnover-report`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

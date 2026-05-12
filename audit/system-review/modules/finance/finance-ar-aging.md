@@ -1,21 +1,21 @@
-# /finance/ar-aging — `artifacts/ghayth-erp/src/pages/details/salary-advance-detail.tsx`
+# /finance/ar-aging — `artifacts/ghayth-erp/src/pages/finance/ar-aging.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/finance/ar-aging`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/salary-advance-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/finance/ar-aging.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/financeRoutes.tsx:121`
 - المجموعة: `finance`
-- الكومبوننت: `SalaryAdvanceDetail`
+- الكومبوننت: `ArAging`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `ar-aging`
-- سطور الملف: 276
+- سطور الملف: 174
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-_لم تُلتقط أزرار._
+- L86: "(بلا تسمية)" → `() => exportCSV(clients, `ar-aging-${asOfDate`
 
 ### القراءات (GET)
 _لا قراءات._
@@ -35,11 +35,9 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `ar-aging` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L34 _(inline-data-array)_: `const BUCKETS = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/finance/ar-aging`
-- لقطة: `audit/screenshots/finance_ar_aging.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/finance/ar-aging`)
+- توصية: **TBD**
+- المشاكل: 1 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.

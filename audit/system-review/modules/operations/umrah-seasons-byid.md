@@ -1,14 +1,14 @@
-# /umrah/seasons/:id — `artifacts/ghayth-erp/src/pages/details/umrah-agent-detail.tsx`
+# /umrah/seasons/:id — `artifacts/ghayth-erp/src/pages/details/umrah-season-detail.tsx`
 
 ## 1. الميتاداتا
 - المسار: `/umrah/seasons/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/umrah-agent-detail.tsx`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/umrah-season-detail.tsx`
 - مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:45`
 - المجموعة: `operations`
-- الكومبوننت: `UmrahAgentDetail`
+- الكومبوننت: `UmrahSeasonDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 251
+- سطور الملف: 231
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
@@ -38,7 +38,6 @@ _لم يتم العثور على جدول Drizzle بالاسم المستنبط 
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/umrah/seasons → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **TBD** — راجع `audit/runtime-audit-results.json` (`/umrah/seasons/:id`)
+- توصية: **TBD**
+- المشاكل: 0 مدخل آلي. أضِفها إلى `audit/system-review/findings/FINDINGS.csv`.
