@@ -4,6 +4,7 @@ import { useFormContext } from "react-hook-form";
 import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -100,10 +101,10 @@ export default function ScheduledReportsPage() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">جدولة إرسال التقارير تلقائياً بالبريد الإلكتروني</p>
         </div>
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>
+        <GuardedButton perm="reports:create" size="sm" onClick={() => setShowForm(!showForm)}>
           <Plus className="h-4 w-4 me-1" />
           {showForm ? "إلغاء" : "جدولة جديدة"}
-        </Button>
+        </GuardedButton>
       </div>
 
       {showForm && (
@@ -260,9 +261,9 @@ function ScheduledReportCard({ item }: { item: any }) {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Switch checked={item.isActive} onCheckedChange={handleToggle} />
-            <Button variant="ghost" size="sm" onClick={handleDelete} disabled={deleteMut.isPending}>
+            <GuardedButton perm="reports:create" variant="ghost" size="sm" onClick={handleDelete} disabled={deleteMut.isPending}>
               <Trash2 className="h-4 w-4 text-red-500" />
-            </Button>
+            </GuardedButton>
           </div>
         </div>
       </CardContent>

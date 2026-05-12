@@ -62,13 +62,13 @@ describe("settings/workflow-definitions-tab — SLA form on FormShell + zod", ()
     expect(SRC).toContain('apiFetch("/workflows/sla-definitions"');
   });
 
-  it("workflow-definition form (with nested `steps` array) INTENTIONALLY preserved", () => {
-    // useFieldArray pattern out of scope — that form still uses
-    // useState({...form, steps: [...]}). The page's Input/Label
-    // imports survive because of it.
+  it("workflow-definition form seeded with at least one step", () => {
+    // Batch 40 (#TBD) followed this batch and migrated the workflow
+    // form to useFieldArray; the seed shape lives here so handleEdit
+    // still maps server detail rows back into FormShell defaults.
     expect(SRC).toContain("steps: [");
+    // Input stays because useFieldArray rows still render raw <Input>.
     expect(SRC).toContain('from "@/components/ui/input"');
-    expect(SRC).toContain('from "@/components/ui/label"');
   });
 
   it("stays inline Cards — §3.4 (no modal)", () => {

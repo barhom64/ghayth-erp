@@ -5,6 +5,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -165,13 +166,13 @@ function RuleCard({ rule, onToggle, onDelete }: { rule: BusinessRule; onToggle: 
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setExpanded(!expanded)}>
               {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
             </Button>
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onToggle}>
+            <GuardedButton perm="settings:create" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onToggle}>
               {rule.isActive ? <PowerOff className="h-3.5 w-3.5 text-orange-500" /> : <Power className="h-3.5 w-3.5 text-green-500" />}
-            </Button>
+            </GuardedButton>
             {rule.companyId && (
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onDelete}>
+              <GuardedButton perm="settings:create" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onDelete}>
                 <Trash2 className="h-3.5 w-3.5 text-red-500" />
-              </Button>
+              </GuardedButton>
             )}
           </div>
         </div>

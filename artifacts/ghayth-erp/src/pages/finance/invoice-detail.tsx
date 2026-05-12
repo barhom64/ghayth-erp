@@ -3,6 +3,7 @@ import { useRoute, Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@/components/print-layout";
@@ -195,10 +196,10 @@ export default function InvoiceDetailPage() {
         </Button>
       </Link>
       {invoice && remaining > 0 && (
-        <Button variant="outline" size="sm" onClick={() => setShowPayment(!showPayment)}>
+        <GuardedButton perm="finance:create" variant="outline" size="sm" onClick={() => setShowPayment(!showPayment)}>
           <Banknote className="h-4 w-4 me-1" />
           تسجيل دفعة
-        </Button>
+        </GuardedButton>
       )}
       {invoice && (
         <>
@@ -308,7 +309,8 @@ export default function InvoiceDetailPage() {
                     />
                   )}
                   {canRetry && (
-                    <Button
+                    <GuardedButton
+                      perm="finance:approve"
                       size="sm"
                       onClick={handleZatcaSubmit}
                       disabled={zatcaMut.isPending}
@@ -321,7 +323,7 @@ export default function InvoiceDetailPage() {
                         : isFailed
                           ? "إعادة الإرسال"
                           : "إرسال للهيئة"}
-                    </Button>
+                    </GuardedButton>
                   )}
                 </div>
               </div>
@@ -352,9 +354,9 @@ export default function InvoiceDetailPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button type="submit" disabled={paymentMut.isPending} rateLimitAware>
+              <GuardedButton perm="finance:create" type="submit" disabled={paymentMut.isPending} rateLimitAware>
                 {paymentMut.isPending ? "جاري التسجيل..." : "تسجيل"}
-              </Button>
+              </GuardedButton>
               <Button type="button" variant="outline" onClick={() => setShowPayment(false)}>
                 إلغاء
               </Button>

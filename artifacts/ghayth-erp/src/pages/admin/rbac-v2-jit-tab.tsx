@@ -4,6 +4,7 @@ import { useFormContext, useWatch } from "react-hook-form";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -124,9 +125,9 @@ export function JitRequestsTab() {
             للحالات الاستثنائية: أطلب صلاحية مؤقتة بمبرّر، يعتمدها مديرك، ويسحبها النظام تلقائياً عند انتهاء المدة.
           </p>
         </div>
-        <Button onClick={() => setShowRequest(!showRequest)}>
+        <GuardedButton perm="admin:create" onClick={() => setShowRequest(!showRequest)}>
           {showRequest ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />طلب جديد</>}
-        </Button>
+        </GuardedButton>
       </div>
 
       {showRequest && (
@@ -179,14 +180,14 @@ export function JitRequestsTab() {
                         </p>
                       </div>
                       <div className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => setDecisionDialog({ id: r.id, mode: "reject" })}>
+                        <GuardedButton perm="admin:create" size="sm" variant="outline" onClick={() => setDecisionDialog({ id: r.id, mode: "reject" })}>
                           <X className="h-4 w-4 me-1" />
                           رفض
-                        </Button>
-                        <Button size="sm" onClick={() => setDecisionDialog({ id: r.id, mode: "approve" })}>
+                        </GuardedButton>
+                        <GuardedButton perm="admin:create" size="sm" onClick={() => setDecisionDialog({ id: r.id, mode: "approve" })}>
                           <Check className="h-4 w-4 me-1" />
                           اعتماد
-                        </Button>
+                        </GuardedButton>
                       </div>
                     </div>
                   </CardContent>
