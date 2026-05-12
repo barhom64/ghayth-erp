@@ -9,7 +9,7 @@ export interface AlertResult {
 }
 
 async function checkEmployeeOverload(companyId: number): Promise<number> {
-  const rows = await rawQuery<any>(
+  const rows = await rawQuery<{ assignmentId: number; employeeId: number; name: string; activeTasks: number }>(
     `SELECT ea.id AS "assignmentId", ea."employeeId", e.name,
             (SELECT COUNT(*) FROM tasks t
              WHERE t."assignedTo" = ea.id AND t."companyId" = $1
@@ -35,7 +35,7 @@ async function checkEmployeeOverload(companyId: number): Promise<number> {
     );
 
     try {
-      const leastLoaded = await rawQuery<any>(
+      const leastLoaded = await rawQuery<{ assignmentId: number; employeeId: number; name: string; workload: number }>(
         `SELECT ea.id AS "assignmentId", ea."employeeId", e.name,
                 (SELECT COUNT(*) FROM tasks t
                  WHERE t."assignedTo" = ea.id AND t."companyId" = $1
@@ -49,7 +49,7 @@ async function checkEmployeeOverload(companyId: number): Promise<number> {
 
       if (leastLoaded.length > 0 && leastLoaded[0].workload < 4) {
         const target = leastLoaded[0];
-        const [oldestTask] = await rawQuery<any>(
+        const [oldestTask] = await rawQuery<{ id: number; title: string }>(
           `SELECT id, title FROM tasks
            WHERE "assignedTo" = $1 AND "companyId" = $2 AND status = 'pending'
            ORDER BY "scheduledDate" ASC LIMIT 1`,
@@ -75,7 +75,7 @@ async function checkEmployeeOverload(companyId: number): Promise<number> {
 }
 
 async function checkTaskTakingTooLong(companyId: number): Promise<number> {
-  const rows = await rawQuery<any>(
+  const rows = await rawQuery<{ id: number; title: string; assignedTo: number | null; assigneeName: string | null; elapsedMinutes: number; estimatedDuration: number }>(
     `SELECT t.id, t.title, t."assignedTo", t."scheduledStart", t."estimatedDuration",
             e.name AS "assigneeName",
             EXTRACT(EPOCH FROM (NOW() - t."scheduledStart")) / 60 AS "elapsedMinutes"
@@ -106,7 +106,7 @@ async function checkTaskTakingTooLong(companyId: number): Promise<number> {
 
     if (row.assignedTo) {
       try {
-        const [supervisorAsgn] = await rawQuery<any>(
+        const [supervisorAsgn] = await rawQuery<{ id: number }>(
           `SELECT ea.id FROM employee_assignments ea
            WHERE ea."companyId" = $1 AND ea.role IN ('branch_manager','hr_manager','general_manager','supervisor')
            AND ea.status = 'active' LIMIT 1`,
@@ -128,7 +128,7 @@ async function checkTaskTakingTooLong(companyId: number): Promise<number> {
 }
 
 async function checkRepeatedMaintenanceAtProperty(companyId: number): Promise<number> {
-  const rows = await rawQuery<any>(
+  const rows = await rawQuery<{ unitId: number; unitName: string | null; cnt: number }>(
     `SELECT mr."unitId", pu.name AS "unitName", COUNT(*)::int AS cnt
      FROM maintenance_requests mr
      LEFT JOIN property_units pu ON pu.id = mr."unitId"
@@ -165,7 +165,7 @@ async function checkRepeatedMaintenanceAtProperty(companyId: number): Promise<nu
 }
 
 async function checkLowEmployeeRating(companyId: number): Promise<number> {
-  const rows = await rawQuery<any>(
+  const rows = await rawQuery<{ employeeId: number; name: string; assignmentId: number; avgRating: number }>(
     `SELECT ea."employeeId", e.name, ea.id AS "assignmentId",
             AVG(st.rating)::float AS "avgRating"
      FROM support_tickets st
@@ -189,7 +189,7 @@ async function checkLowEmployeeRating(companyId: number): Promise<number> {
     );
 
     try {
-      const [hrAsgn] = await rawQuery<any>(
+      const [hrAsgn] = await rawQuery<{ id: number }>(
         `SELECT id FROM employee_assignments WHERE "companyId" = $1 AND role IN ('hr_manager','branch_manager','general_manager','owner') AND status = 'active' LIMIT 1`,
         [companyId]
       );
@@ -208,7 +208,7 @@ async function checkLowEmployeeRating(companyId: number): Promise<number> {
 }
 
 async function checkBranchSlaBreachRate(companyId: number): Promise<number> {
-  const rows = await rawQuery<any>(
+  const rows = await rawQuery<{ branchId: number; branchName: string | null; total: number; breached: number; breachPct: number }>(
     `SELECT b.id AS "branchId", b.name AS "branchName",
             COUNT(*)::int AS total,
             COUNT(*) FILTER (WHERE st."slaBreached" = true)::int AS breached,
@@ -234,7 +234,7 @@ async function checkBranchSlaBreachRate(companyId: number): Promise<number> {
 }
 
 async function checkTechnicianNoUpdate(companyId: number): Promise<number> {
-  const rows = await rawQuery<any>(
+  const rows = await rawQuery<{ id: number; title: string; assignedTo: number | null; assigneeName: string | null; hoursSinceUpdate: number }>(
     `SELECT t.id, t.title, t."assignedTo", e.name AS "assigneeName",
             EXTRACT(EPOCH FROM (NOW() - COALESCE(
               (SELECT MAX(el."createdAt") FROM event_logs el
@@ -270,7 +270,7 @@ async function checkTechnicianNoUpdate(companyId: number): Promise<number> {
 
     if (row.assignedTo) {
       try {
-        const [asgn] = await rawQuery<any>(
+        const [asgn] = await rawQuery<{ id: number }>(
           `SELECT id FROM employee_assignments WHERE id = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
           [row.assignedTo, companyId]
         );
@@ -302,7 +302,7 @@ async function checkSpeedViolation(_companyId: number): Promise<number> {
 }
 
 async function checkVehicleRepeatedBreakdowns(companyId: number): Promise<number> {
-  const rows = await rawQuery<any>(
+  const rows = await rawQuery<{ vehicleId: number; plateNumber: string; breakdowns: number }>(
     `SELECT fv.id AS "vehicleId", fv."plateNumber", COUNT(*)::int AS breakdowns
      FROM fleet_maintenance fm
      JOIN fleet_vehicles fv ON fv.id = fm."vehicleId"
@@ -333,7 +333,7 @@ async function checkVehicleRepeatedBreakdowns(companyId: number): Promise<number
 }
 
 async function checkInventoryBelowThreshold(companyId: number): Promise<number> {
-  const rows = await rawQuery<any>(
+  const rows = await rawQuery<{ productId: number; name: string; current: number; threshold: number }>(
     `SELECT wp.id AS "productId", wp.name,
             COALESCE(wp."currentStock", 0)::float AS current,
             COALESCE(wp."minStock", 0)::float AS threshold
@@ -370,7 +370,7 @@ async function checkInventoryBelowThreshold(companyId: number): Promise<number> 
 }
 
 async function checkProductivityDeviation(companyId: number): Promise<number> {
-  const rows = await rawQuery<any>(
+  const rows = await rawQuery<{ employeeId: number; assignmentId: number; name: string; recentRate: number; historicalRate: number }>(
     `WITH recent AS (
        SELECT t."assignedTo",
               COUNT(*) FILTER (WHERE t.status='completed')::float / NULLIF(COUNT(*),0) AS rate
@@ -410,7 +410,7 @@ async function checkProductivityDeviation(companyId: number): Promise<number> {
       "warning", "employee", row.employeeId
     );
     try {
-      const [mgr] = await rawQuery<any>(
+      const [mgr] = await rawQuery<{ id: number }>(
         `SELECT id FROM employee_assignments WHERE "companyId"=$1 AND role IN ('branch_manager','hr_manager','general_manager','owner') AND status='active' LIMIT 1`,
         [companyId]
       );
@@ -429,7 +429,7 @@ async function checkProductivityDeviation(companyId: number): Promise<number> {
 }
 
 async function checkAttendancePatternChange(companyId: number): Promise<number> {
-  const rows = await rawQuery<any>(
+  const rows = await rawQuery<{ assignmentId: number; employeeId: number; name: string; recentLate: number; historicalLate: number }>(
     `WITH recent_late AS (
        SELECT a."assignmentId", COUNT(*) FILTER (WHERE a.status='late')::int AS late_count,
               COUNT(*)::int AS total
@@ -475,7 +475,7 @@ async function checkAttendancePatternChange(companyId: number): Promise<number> 
 }
 
 async function checkBudgetOverrun(companyId: number): Promise<number> {
-  const rows = await rawQuery<any>(
+  const rows = await rawQuery<{ accountCode: string; amount: number; used: number; pct: number }>(
     `SELECT b."accountCode", b.amount, b.used,
             ROUND((b.used / NULLIF(b.amount,0)) * 100)::int AS pct
      FROM budgets b
@@ -503,7 +503,7 @@ async function checkBudgetOverrun(companyId: number): Promise<number> {
 async function checkConsecutiveUnpaidInvoices(companyId: number): Promise<number> {
     let count = 0;
     try {
-      const clients = await rawQuery<any>(
+      const clients = await rawQuery<{ clientId: number; clientName: string; streak: number }>(
         `WITH all_invoices AS (
            SELECT i."clientId", c.name AS "clientName", i.status,
                   ROW_NUMBER() OVER (PARTITION BY i."clientId" ORDER BY i."dueDate" DESC) AS rn
