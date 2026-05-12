@@ -1,0 +1,48 @@
+# /umrah/penalties — `artifacts/ghayth-erp/src/pages/umrah/seasons.tsx`
+
+## 1. الميتاداتا
+- المسار: `/umrah/penalties`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/seasons.tsx`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:46`
+- المجموعة: `operations`
+- الكومبوننت: `UmrahSeasons`
+- subKey: — | minRoleLevel: —
+- الكيان المستنبط: `penalties`
+- سطور الملف: 93
+- مصدر موجود: ✅
+
+## 2. الأزرار والإجراءات
+_لا توجد طلبات كتابة من هذه الصفحة._
+
+### تفاصيل الأزرار المرئية
+- L54: "(بلا تسمية)" → `(e) => { e.stopPropagation(); closeSeason(r.id);`
+- L65: "(بلا تسمية)" → `() => setShowForm(!showForm)`
+- L82: "حفظ" → `() => setShowForm(false)` 🔒
+- L83: "حفظ" → `save` 🔒
+
+### القراءات (GET)
+- GET `/umrah/seasons`
+
+
+
+## 3. الحركات ذات الصلة (Cross-Module Transactions)
+- [ ] **TBD** — راجع `docs/blueprints/operations.md` (إن وُجد) وعدّد:
+  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
+  - تأثير الأرصدة (balances, balances_history)
+  - الإشعارات (notifications)
+  - سير الموافقات (approval_chains)
+  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
+- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+## 4. النمذجة
+_لم يتم العثور على جدول Drizzle بالاسم المستنبط `penalties` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
+
+## 5. البيانات الوهمية الثابتة
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+
+## 6. النتيجة (Verdict)
+- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
+- ملاحظة: `landed=/dashboard expected=/umrah/penalties`
+- لقطة: `audit/screenshots/umrah_penalties.png`
+- landedUrl: `http://localhost/dashboard`
+- توصية: **يحتاج إصلاح**

@@ -54,10 +54,13 @@ function parseRouteEntries(lines, imports, module, routeFile) {
     const cm = window.match(/component:\s*(\w+)/);
     const sm = window.match(/subKey:\s*["']([^"']+)["']/);
     const rm = window.match(/minRoleLevel:\s*(\d+)/);
+    // Honor inline `module: "x"` so misc-grouped routes (crm/projects/support/...)
+    // get categorized into their real module instead of "misc".
+    const mm = window.match(/module:\s*["']([^"']+)["']/);
     const componentName = cm ? cm[1] : null;
     const sourceImport = componentName ? imports[componentName] : null;
     rows.push({
-      module,
+      module: mm ? mm[1] : module,
       path: pm[1],
       componentName,
       sourceFile: sourceImport

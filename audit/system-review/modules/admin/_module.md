@@ -1,6 +1,6 @@
 # وحدة `admin` — نظرة عامة
 
-> الموجة: **5** | عدد الصفحات: **16** | أوراق منشأة: **0**
+> الموجة: **5** | عدد الصفحات: **17** | أوراق منشأة: **17**
 
 ## KPIs
 - مشاكل إجمالية: **1** (🔴 1 / ⚠ 0 / ℹ 0)
@@ -25,3 +25,4 @@
 | [/admin/rbac-matrix](./admin-rbac-matrix.md) | `/admin/rbac-matrix` | `rbac-matrix` | 119 | 0 | 3 | 0 |
 | [/admin/gl-reconciliation](./admin-gl-reconciliation.md) | `/admin/gl-reconciliation` | `gl-reconciliation` | 152 | 1 | 1 | 0 |
 | [/admin/system-registry](./admin-system-registry.md) | `/admin/system-registry` | `system-registry` | 187 | 1 | 1 | 0 |
+| [/module-dashboards](./module-dashboards.md) | `/module-dashboards` | `module-dashboards` | 293 | 3 | 1 | 0 |

@@ -440,7 +440,7 @@
   },
   "/crm/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/crm/activities.tsx",
-    "module": "misc",
+    "module": "crm",
     "hits": [
       {
         "line": 40,
@@ -451,7 +451,7 @@
   },
   "/projects/risks": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/tasks.tsx",
-    "module": "misc",
+    "module": "operations",
     "hits": [
       {
         "line": 24,
@@ -462,7 +462,7 @@
   },
   "/warehouse": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/projects/risks.tsx",
-    "module": "misc",
+    "module": "operations",
     "hits": [
       {
         "line": 41,
@@ -478,7 +478,7 @@
   },
   "/warehouse/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/project-detail.tsx",
-    "module": "misc",
+    "module": "operations",
     "hits": [
       {
         "line": 74,
@@ -489,7 +489,7 @@
   },
   "/intelligence": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/tasks.tsx",
-    "module": "misc",
+    "module": "operations",
     "hits": [
       {
         "line": 24,
@@ -500,7 +500,7 @@
   },
   "/reports/scheduled": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/activity-log.tsx",
-    "module": "misc",
+    "module": "bi",
     "hits": [
       {
         "line": 273,
@@ -705,7 +705,7 @@
   },
   "/umrah/pilgrims/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/pilgrims.tsx",
-    "module": "umrah",
+    "module": "operations",
     "hits": [
       {
         "line": 26,
@@ -716,7 +716,7 @@
   },
   "/umrah/seasons": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/agents.tsx",
-    "module": "umrah",
+    "module": "operations",
     "hits": [
       {
         "line": 104,
@@ -727,7 +727,7 @@
   },
   "/umrah/invoices": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/penalties.tsx",
-    "module": "umrah",
+    "module": "operations",
     "hits": [
       {
         "line": 54,
@@ -738,7 +738,7 @@
   },
   "/umrah/packages": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/invoices.tsx",
-    "module": "umrah",
+    "module": "operations",
     "hits": [
       {
         "line": 52,

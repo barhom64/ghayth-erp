@@ -7,7 +7,7 @@
 ## الإحصاءات
 
 - **إجمالي المسارات المسجّلة:** 379
-- **مسارات بأوراق منشأة:** 162
+- **مسارات بأوراق منشأة:** 379
 - **إجمالي المشاكل الآلية:** 268
   - 🔴 high: 123
   - ⚠ medium: 27
@@ -31,19 +31,23 @@
 | 1 | [`finance`](./modules/finance/_module.md) | 67 | 67 | 33 | 21 | 0 |
 | 1 | [`governance`](./modules/governance/_module.md) | 14 | 14 | 1 | 1 | 0 |
 | 1 | [`hr`](./modules/hr/_module.md) | 81 | 81 | 69 | 48 | 0 |
-| 2 | `fleet` | 26 | 0 | 15 | 8 | 0 |
-| 2 | `legal` | 13 | 0 | 2 | 2 | 0 |
-| 2 | `properties` | 30 | 0 | 50 | 5 | 13 |
-| 2 | `store` | 6 | 0 | 4 | 4 | 0 |
-| 2 | `umrah` | 27 | 0 | 6 | 4 | 0 |
-| 3 | `communications` | 6 | 0 | 3 | 3 | 0 |
-| 4 | `bi` | 9 | 0 | 0 | 0 | 0 |
-| 4 | `documents` | 7 | 0 | 0 | 0 | 0 |
-| 4 | `misc` | 62 | 0 | 62 | 18 | 0 |
-| 4 | `requests` | 6 | 0 | 4 | 4 | 0 |
-| 5 | `admin` | 16 | 0 | 1 | 1 | 0 |
-| 5 | `settings` | 6 | 0 | 0 | 0 | 0 |
-| — | `root` | 3 | 0 | 0 | 0 | 0 |
+| 2 | [`fleet`](./modules/fleet/_module.md) | 26 | 26 | 15 | 8 | 0 |
+| 2 | [`legal`](./modules/legal/_module.md) | 13 | 13 | 2 | 2 | 0 |
+| 2 | [`properties`](./modules/properties/_module.md) | 30 | 30 | 50 | 5 | 13 |
+| 2 | [`store`](./modules/store/_module.md) | 6 | 6 | 4 | 4 | 0 |
+| 2 | [`warehouse`](./modules/warehouse/_module.md) | 13 | 13 | 28 | 4 | 0 |
+| 3 | [`communications`](./modules/communications/_module.md) | 6 | 6 | 3 | 3 | 0 |
+| 3 | [`crm`](./modules/crm/_module.md) | 9 | 9 | 3 | 2 | 0 |
+| 3 | [`support`](./modules/support/_module.md) | 5 | 5 | 1 | 1 | 0 |
+| 4 | [`bi`](./modules/bi/_module.md) | 13 | 13 | 1 | 1 | 0 |
+| 4 | [`documents`](./modules/documents/_module.md) | 7 | 7 | 0 | 0 | 0 |
+| 4 | [`misc`](./modules/misc/_module.md) | 8 | 8 | 2 | 2 | 0 |
+| 4 | [`requests`](./modules/requests/_module.md) | 6 | 6 | 4 | 4 | 0 |
+| 5 | [`admin`](./modules/admin/_module.md) | 17 | 17 | 1 | 1 | 0 |
+| 5 | [`settings`](./modules/settings/_module.md) | 6 | 6 | 0 | 0 | 0 |
+| — | [`marketing`](./modules/marketing/_module.md) | 2 | 2 | 1 | 1 | 0 |
+| — | [`operations`](./modules/operations/_module.md) | 47 | 47 | 32 | 11 | 0 |
+| — | [`root`](./modules/root/_module.md) | 3 | 3 | 0 | 0 | 0 |
 
 ## النتائج الموحّدة
 

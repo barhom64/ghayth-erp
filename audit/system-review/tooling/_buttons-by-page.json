@@ -7534,7 +7534,7 @@
   },
   "/my-loans": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/my-performance.tsx",
-    "module": "misc",
+    "module": "operations",
     "apiCalls": [
       {
         "kind": "query",
@@ -7553,7 +7553,7 @@
   },
   "/my-overtime": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/my-documents.tsx",
-    "module": "misc",
+    "module": "operations",
     "apiCalls": [
       {
         "kind": "query",
@@ -7585,7 +7585,7 @@
   },
   "/action-center": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/my-loans.tsx",
-    "module": "misc",
+    "module": "operations",
     "apiCalls": [
       {
         "kind": "query",
@@ -7611,7 +7611,7 @@
   },
   "/obligations": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/my-overtime.tsx",
-    "module": "misc",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 0,
     "buttons": [],
@@ -7624,7 +7624,7 @@
   },
   "/calendar": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/action-center.tsx",
-    "module": "misc",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 10,
     "buttons": [
@@ -7700,7 +7700,7 @@
   },
   "/exec-dashboard": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/obligations.tsx",
-    "module": "misc",
+    "module": "operations",
     "apiCalls": [
       {
         "kind": "query",
@@ -7737,7 +7737,7 @@
   },
   "/manager-board": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/calendar.tsx",
-    "module": "misc",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 5,
     "buttons": [
@@ -7780,7 +7780,7 @@
   },
   "/operations-center": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/exec-dashboard.tsx",
-    "module": "misc",
+    "module": "operations",
     "apiCalls": [
       {
         "kind": "query",
@@ -7799,7 +7799,7 @@
   },
   "/daily-close": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/manager-board.tsx",
-    "module": "misc",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 7,
     "buttons": [
@@ -7856,7 +7856,7 @@
   },
   "/clients": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/operations-center.tsx",
-    "module": "misc",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 4,
     "buttons": [
@@ -7893,7 +7893,7 @@
   },
   "/clients/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/daily-close.tsx",
-    "module": "misc",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 3,
     "buttons": [
@@ -7925,7 +7925,7 @@
   },
   "/clients/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/clients.tsx",
-    "module": "misc",
+    "module": "crm",
     "apiCalls": [],
     "buttonCount": 2,
     "buttons": [
@@ -7951,7 +7951,7 @@
   },
   "/crm": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/clients-create.tsx",
-    "module": "misc",
+    "module": "crm",
     "apiCalls": [],
     "buttonCount": 3,
     "buttons": [
@@ -7981,7 +7981,7 @@
   },
   "/crm/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/client-detail.tsx",
-    "module": "misc",
+    "module": "crm",
     "apiCalls": [],
     "buttonCount": 4,
     "buttons": [
@@ -8020,7 +8020,7 @@
   },
   "/crm/pipeline": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/crm.tsx",
-    "module": "misc",
+    "module": "crm",
     "apiCalls": [
       {
         "kind": "query",
@@ -8051,7 +8051,7 @@
   },
   "/crm/activities": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/crm-create.tsx",
-    "module": "misc",
+    "module": "crm",
     "apiCalls": [
       {
         "kind": "mutation",
@@ -8089,7 +8089,7 @@
   },
   "/crm/leads/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/crm.tsx",
-    "module": "misc",
+    "module": "crm",
     "apiCalls": [
       {
         "kind": "query",
@@ -8120,7 +8120,7 @@
   },
   "/crm/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/crm/activities.tsx",
-    "module": "misc",
+    "module": "crm",
     "apiCalls": [
       {
         "kind": "query",
@@ -8140,7 +8140,7 @@
   },
   "/projects": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/crm/lead-detail.tsx",
-    "module": "misc",
+    "module": "crm",
     "apiCalls": [],
     "buttonCount": 2,
     "buttons": [
@@ -8165,7 +8165,7 @@
   },
   "/projects/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/opportunity-detail.tsx",
-    "module": "misc",
+    "module": "crm",
     "apiCalls": [],
     "buttonCount": 6,
     "buttons": [
@@ -8216,7 +8216,7 @@
   },
   "/projects/tasks": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/projects.tsx",
-    "module": "misc",
+    "module": "operations",
     "apiCalls": [
       {
         "kind": "query",
@@ -8277,7 +8277,7 @@
   },
   "/projects/gantt": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/projects-create.tsx",
-    "module": "misc",
+    "module": "operations",
     "apiCalls": [
       {
         "kind": "mutation",
@@ -8314,7 +8314,7 @@
   },
   "/projects/risks": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/tasks.tsx",
-    "module": "misc",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 10,
     "buttons": [
@@ -8388,7 +8388,7 @@
   },
   "/projects/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/projects/gantt.tsx",
-    "module": "misc",
+    "module": "operations",
     "apiCalls": [
       {
         "kind": "query",
@@ -8405,7 +8405,7 @@
   },
   "/warehouse": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/projects/risks.tsx",
-    "module": "misc",
+    "module": "operations",
     "apiCalls": [
       {
         "kind": "query",
@@ -8436,7 +8436,7 @@
   },
   "/warehouse/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/project-detail.tsx",
-    "module": "misc",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 21,
     "buttons": [
@@ -8576,7 +8576,7 @@
   },
   "/warehouse/movements/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/warehouse.tsx",
-    "module": "misc",
+    "module": "warehouse",
     "apiCalls": [],
     "buttonCount": 6,
     "buttons": [
@@ -8625,7 +8625,7 @@
   },
   "/warehouse/categories/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/warehouse-create.tsx",
-    "module": "misc",
+    "module": "warehouse",
     "apiCalls": [
       {
         "kind": "mutation",
@@ -8661,7 +8661,7 @@
   },
   "/warehouse/suppliers/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/warehouse/movements-create.tsx",
-    "module": "misc",
+    "module": "warehouse",
     "apiCalls": [
       {
         "kind": "mutation",
@@ -8697,7 +8697,7 @@
   },
   "/warehouse/products/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/warehouse/categories-create.tsx",
-    "module": "misc",
+    "module": "warehouse",
     "apiCalls": [
       {
         "kind": "mutation",
@@ -8733,7 +8733,7 @@
   },
   "/warehouse/movements/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/warehouse/suppliers-create.tsx",
-    "module": "misc",
+    "module": "warehouse",
     "apiCalls": [
       {
         "kind": "mutation",
@@ -8769,7 +8769,7 @@
   },
   "/warehouse/categories/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/warehouse-product-detail.tsx",
-    "module": "misc",
+    "module": "warehouse",
     "apiCalls": [],
     "buttonCount": 0,
     "buttons": [],
@@ -8781,7 +8781,7 @@
   },
   "/warehouse/suppliers/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/warehouse-movement-detail.tsx",
-    "module": "misc",
+    "module": "warehouse",
     "apiCalls": [],
     "buttonCount": 0,
     "buttons": [],
@@ -8793,7 +8793,7 @@
   },
   "/warehouse/movements": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/warehouse-category-detail.tsx",
-    "module": "misc",
+    "module": "warehouse",
     "apiCalls": [],
     "buttonCount": 0,
     "buttons": [],
@@ -8805,7 +8805,7 @@
   },
   "/warehouse/categories": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/warehouse-supplier-detail.tsx",
-    "module": "misc",
+    "module": "warehouse",
     "apiCalls": [],
     "buttonCount": 0,
     "buttons": [],
@@ -8817,7 +8817,7 @@
   },
   "/warehouse/suppliers": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/warehouse.tsx",
-    "module": "misc",
+    "module": "warehouse",
     "apiCalls": [],
     "buttonCount": 6,
     "buttons": [
@@ -8866,7 +8866,7 @@
   },
   "/warehouse/inventory-count": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/warehouse.tsx",
-    "module": "misc",
+    "module": "warehouse",
     "apiCalls": [],
     "buttonCount": 6,
     "buttons": [
@@ -8915,7 +8915,7 @@
   },
   "/support/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/warehouse.tsx",
-    "module": "misc",
+    "module": "warehouse",
     "apiCalls": [],
     "buttonCount": 6,
     "buttons": [
@@ -8964,7 +8964,7 @@
   },
   "/support/replies": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/warehouse/inventory-count.tsx",
-    "module": "misc",
+    "module": "warehouse",
     "apiCalls": [
       {
         "kind": "query",
@@ -9018,7 +9018,7 @@
   },
   "/support/kb": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/support-create.tsx",
-    "module": "misc",
+    "module": "support",
     "apiCalls": [
       {
         "kind": "mutation",
@@ -9055,7 +9055,7 @@
   },
   "/support/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/support/replies.tsx",
-    "module": "misc",
+    "module": "support",
     "apiCalls": [
       {
         "kind": "query",
@@ -9074,7 +9074,7 @@
   },
   "/support": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/support/kb.tsx",
-    "module": "misc",
+    "module": "support",
     "apiCalls": [
       {
         "kind": "query",
@@ -9092,7 +9092,7 @@
   },
   "/marketing": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/ticket-detail.tsx",
-    "module": "misc",
+    "module": "support",
     "apiCalls": [],
     "buttonCount": 4,
     "buttons": [
@@ -9129,7 +9129,7 @@
   },
   "/marketing/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/support.tsx",
-    "module": "misc",
+    "module": "support",
     "apiCalls": [
       {
         "kind": "query",
@@ -9182,7 +9182,7 @@
   },
   "/tasks/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/marketing.tsx",
-    "module": "misc",
+    "module": "marketing",
     "apiCalls": [
       {
         "kind": "query",
@@ -9224,7 +9224,7 @@
   },
   "/tasks/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/marketing-create.tsx",
-    "module": "misc",
+    "module": "marketing",
     "apiCalls": [
       {
         "kind": "mutation",
@@ -9261,7 +9261,7 @@
   },
   "/tasks": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/tasks-create.tsx",
-    "module": "misc",
+    "module": "operations",
     "apiCalls": [
       {
         "kind": "mutation",
@@ -9298,7 +9298,7 @@
   },
   "/notifications": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/task-detail.tsx",
-    "module": "misc",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 0,
     "buttons": [],
@@ -9310,7 +9310,7 @@
   },
   "/intelligence": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/tasks.tsx",
-    "module": "misc",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 10,
     "buttons": [
@@ -9384,7 +9384,7 @@
   },
   "/insights": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/notifications.tsx",
-    "module": "misc",
+    "module": "bi",
     "apiCalls": [
       {
         "kind": "query",
@@ -9409,7 +9409,7 @@
   },
   "/automation": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/intelligence.tsx",
-    "module": "misc",
+    "module": "bi",
     "apiCalls": [
       {
         "kind": "query",
@@ -9437,7 +9437,7 @@
   },
   "/activity-log": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/insights.tsx",
-    "module": "misc",
+    "module": "bi",
     "apiCalls": [
       {
         "kind": "query",
@@ -9474,7 +9474,7 @@
   },
   "/module-dashboards": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/automation.tsx",
-    "module": "misc",
+    "module": "admin",
     "apiCalls": [
       {
         "kind": "query",
@@ -9510,7 +9510,7 @@
   },
   "/reports/scheduled": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/activity-log.tsx",
-    "module": "misc",
+    "module": "bi",
     "apiCalls": [
       {
         "kind": "query",
@@ -11545,7 +11545,7 @@
   },
   "/umrah/pilgrims/create": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/dashboard.tsx",
-    "module": "umrah",
+    "module": "operations",
     "apiCalls": [
       {
         "kind": "query",
@@ -11576,7 +11576,7 @@
   },
   "/umrah/pilgrims/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/pilgrims.tsx",
-    "module": "umrah",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 1,
     "buttons": [
@@ -11596,7 +11596,7 @@
   },
   "/umrah/agents": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/pilgrim-create.tsx",
-    "module": "umrah",
+    "module": "operations",
     "apiCalls": [
       {
         "kind": "query",
@@ -11642,7 +11642,7 @@
   },
   "/umrah/agents/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/pilgrim-detail.tsx",
-    "module": "umrah",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 1,
     "buttons": [
@@ -11661,7 +11661,7 @@
   },
   "/umrah/seasons": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/agents.tsx",
-    "module": "umrah",
+    "module": "operations",
     "apiCalls": [
       {
         "kind": "query",
@@ -11722,7 +11722,7 @@
   },
   "/umrah/seasons/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-agent-detail.tsx",
-    "module": "umrah",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 0,
     "buttons": [],
@@ -11734,7 +11734,7 @@
   },
   "/umrah/penalties": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/seasons.tsx",
-    "module": "umrah",
+    "module": "operations",
     "apiCalls": [
       {
         "kind": "query",
@@ -11777,7 +11777,7 @@
   },
   "/umrah/penalties/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-season-detail.tsx",
-    "module": "umrah",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 0,
     "buttons": [],
@@ -11789,7 +11789,7 @@
   },
   "/umrah/invoices": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/penalties.tsx",
-    "module": "umrah",
+    "module": "operations",
     "apiCalls": [
       {
         "kind": "query",
@@ -11821,7 +11821,7 @@
   },
   "/umrah/invoices/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-penalty-detail.tsx",
-    "module": "umrah",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 0,
     "buttons": [],
@@ -11833,7 +11833,7 @@
   },
   "/umrah/packages": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/invoices.tsx",
-    "module": "umrah",
+    "module": "operations",
     "apiCalls": [
       {
         "kind": "query",
@@ -11869,7 +11869,7 @@
   },
   "/umrah/packages/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-invoice-detail.tsx",
-    "module": "umrah",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 0,
     "buttons": [],
@@ -11881,7 +11881,7 @@
   },
   "/umrah/transport": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/packages.tsx",
-    "module": "umrah",
+    "module": "operations",
     "apiCalls": [
       {
         "kind": "query",
@@ -11947,7 +11947,7 @@
   },
   "/umrah/transport/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-package-detail.tsx",
-    "module": "umrah",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 0,
     "buttons": [],
@@ -11959,7 +11959,7 @@
   },
   "/umrah/import/legacy": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-transport-detail.tsx",
-    "module": "umrah",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 0,
     "buttons": [],
@@ -11971,7 +11971,7 @@
   },
   "/umrah/sub-agents": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/import.tsx",
-    "module": "umrah",
+    "module": "operations",
     "apiCalls": [
       {
         "kind": "query",
@@ -12007,7 +12007,7 @@
   },
   "/umrah/pricing": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/sub-agents.tsx",
-    "module": "umrah",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 2,
     "buttons": [
@@ -12032,7 +12032,7 @@
   },
   "/umrah/commission-plans": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/sub-agents.tsx",
-    "module": "umrah",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 2,
     "buttons": [
@@ -12057,7 +12057,7 @@
   },
   "/umrah/commission-plans/new": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/pricing.tsx",
-    "module": "umrah",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 2,
     "buttons": [
@@ -12082,7 +12082,7 @@
   },
   "/umrah/commission-plans/:id/edit": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/commission-plans.tsx",
-    "module": "umrah",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 2,
     "buttons": [
@@ -12107,7 +12107,7 @@
   },
   "/umrah/violations": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/commission-plan-editor.tsx",
-    "module": "umrah",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 1,
     "buttons": [
@@ -12126,7 +12126,7 @@
   },
   "/umrah/violations/:id": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/commission-plan-editor.tsx",
-    "module": "umrah",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 1,
     "buttons": [
@@ -12145,7 +12145,7 @@
   },
   "/umrah/import": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/violations.tsx",
-    "module": "umrah",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 8,
     "buttons": [
@@ -12206,7 +12206,7 @@
   },
   "/umrah/daily-runsheet": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-violation-detail.tsx",
-    "module": "umrah",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 0,
     "buttons": [],
@@ -12218,7 +12218,7 @@
   },
   "/umrah/reconciliation": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/import-wizard.tsx",
-    "module": "umrah",
+    "module": "operations",
     "apiCalls": [],
     "buttonCount": 5,
     "buttons": [

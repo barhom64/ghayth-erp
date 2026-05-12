@@ -2717,7 +2717,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "operations",
     "path": "/my-loans",
     "componentName": "MyPerformance",
     "sourceFile": "artifacts/ghayth-erp/src/pages/my-performance.tsx",
@@ -2728,7 +2728,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "operations",
     "path": "/my-overtime",
     "componentName": "MyDocuments",
     "sourceFile": "artifacts/ghayth-erp/src/pages/my-documents.tsx",
@@ -2739,7 +2739,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "operations",
     "path": "/action-center",
     "componentName": "MyLoans",
     "sourceFile": "artifacts/ghayth-erp/src/pages/my-loans.tsx",
@@ -2750,7 +2750,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "operations",
     "path": "/obligations",
     "componentName": "MyOvertime",
     "sourceFile": "artifacts/ghayth-erp/src/pages/my-overtime.tsx",
@@ -2761,7 +2761,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "operations",
     "path": "/calendar",
     "componentName": "ActionCenter",
     "sourceFile": "artifacts/ghayth-erp/src/pages/action-center.tsx",
@@ -2772,7 +2772,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "operations",
     "path": "/exec-dashboard",
     "componentName": "Obligations",
     "sourceFile": "artifacts/ghayth-erp/src/pages/obligations.tsx",
@@ -2783,7 +2783,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "operations",
     "path": "/manager-board",
     "componentName": "CalendarPage",
     "sourceFile": "artifacts/ghayth-erp/src/pages/calendar.tsx",
@@ -2794,7 +2794,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "operations",
     "path": "/operations-center",
     "componentName": "ExecDashboard",
     "sourceFile": "artifacts/ghayth-erp/src/pages/exec-dashboard.tsx",
@@ -2805,7 +2805,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "operations",
     "path": "/daily-close",
     "componentName": "ManagerBoard",
     "sourceFile": "artifacts/ghayth-erp/src/pages/manager-board.tsx",
@@ -2816,7 +2816,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "operations",
     "path": "/clients",
     "componentName": "OperationsCenter",
     "sourceFile": "artifacts/ghayth-erp/src/pages/operations-center.tsx",
@@ -2827,7 +2827,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "operations",
     "path": "/clients/create",
     "componentName": "DailyClose",
     "sourceFile": "artifacts/ghayth-erp/src/pages/daily-close.tsx",
@@ -2838,7 +2838,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "crm",
     "path": "/clients/:id",
     "componentName": "Clients",
     "sourceFile": "artifacts/ghayth-erp/src/pages/clients.tsx",
@@ -2849,7 +2849,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "crm",
     "path": "/crm",
     "componentName": "ClientsCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/clients-create.tsx",
@@ -2860,7 +2860,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "crm",
     "path": "/crm/create",
     "componentName": "ClientDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/client-detail.tsx",
@@ -2871,7 +2871,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "crm",
     "path": "/crm/pipeline",
     "componentName": "CRM",
     "sourceFile": "artifacts/ghayth-erp/src/pages/crm.tsx",
@@ -2882,7 +2882,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "crm",
     "path": "/crm/activities",
     "componentName": "CrmCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/crm-create.tsx",
@@ -2893,7 +2893,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "crm",
     "path": "/crm/leads/:id",
     "componentName": "CRM",
     "sourceFile": "artifacts/ghayth-erp/src/pages/crm.tsx",
@@ -2904,7 +2904,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "crm",
     "path": "/crm/:id",
     "componentName": "CrmActivities",
     "sourceFile": "artifacts/ghayth-erp/src/pages/crm/activities.tsx",
@@ -2915,7 +2915,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "crm",
     "path": "/projects",
     "componentName": "LeadDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/crm/lead-detail.tsx",
@@ -2926,7 +2926,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "crm",
     "path": "/projects/create",
     "componentName": "OpportunityDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/opportunity-detail.tsx",
@@ -2937,7 +2937,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "operations",
     "path": "/projects/tasks",
     "componentName": "Projects",
     "sourceFile": "artifacts/ghayth-erp/src/pages/projects.tsx",
@@ -2948,7 +2948,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "operations",
     "path": "/projects/gantt",
     "componentName": "ProjectsCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/projects-create.tsx",
@@ -2959,7 +2959,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "operations",
     "path": "/projects/risks",
     "componentName": "Tasks",
     "sourceFile": "artifacts/ghayth-erp/src/pages/tasks.tsx",
@@ -2970,7 +2970,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "operations",
     "path": "/projects/:id",
     "componentName": "ProjectGantt",
     "sourceFile": "artifacts/ghayth-erp/src/pages/projects/gantt.tsx",
@@ -2981,7 +2981,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "operations",
     "path": "/warehouse",
     "componentName": "ProjectRisks",
     "sourceFile": "artifacts/ghayth-erp/src/pages/projects/risks.tsx",
@@ -2992,7 +2992,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "operations",
     "path": "/warehouse/create",
     "componentName": "ProjectDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/project-detail.tsx",
@@ -3003,7 +3003,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "warehouse",
     "path": "/warehouse/movements/create",
     "componentName": "Warehouse",
     "sourceFile": "artifacts/ghayth-erp/src/pages/warehouse.tsx",
@@ -3014,7 +3014,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "warehouse",
     "path": "/warehouse/categories/create",
     "componentName": "WarehouseCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/warehouse-create.tsx",
@@ -3025,7 +3025,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "warehouse",
     "path": "/warehouse/suppliers/create",
     "componentName": "WarehouseMovementsCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/warehouse/movements-create.tsx",
@@ -3036,7 +3036,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "warehouse",
     "path": "/warehouse/products/:id",
     "componentName": "WarehouseCategoriesCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/warehouse/categories-create.tsx",
@@ -3047,7 +3047,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "warehouse",
     "path": "/warehouse/movements/:id",
     "componentName": "WarehouseSuppliersCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/warehouse/suppliers-create.tsx",
@@ -3058,7 +3058,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "warehouse",
     "path": "/warehouse/categories/:id",
     "componentName": "WarehouseProductDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/warehouse-product-detail.tsx",
@@ -3069,7 +3069,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "warehouse",
     "path": "/warehouse/suppliers/:id",
     "componentName": "WarehouseMovementDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/warehouse-movement-detail.tsx",
@@ -3080,7 +3080,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "warehouse",
     "path": "/warehouse/movements",
     "componentName": "WarehouseCategoryDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/warehouse-category-detail.tsx",
@@ -3091,7 +3091,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "warehouse",
     "path": "/warehouse/categories",
     "componentName": "WarehouseSupplierDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/warehouse-supplier-detail.tsx",
@@ -3102,7 +3102,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "warehouse",
     "path": "/warehouse/suppliers",
     "componentName": "Warehouse",
     "sourceFile": "artifacts/ghayth-erp/src/pages/warehouse.tsx",
@@ -3113,7 +3113,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "warehouse",
     "path": "/warehouse/inventory-count",
     "componentName": "Warehouse",
     "sourceFile": "artifacts/ghayth-erp/src/pages/warehouse.tsx",
@@ -3124,7 +3124,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "warehouse",
     "path": "/support/create",
     "componentName": "Warehouse",
     "sourceFile": "artifacts/ghayth-erp/src/pages/warehouse.tsx",
@@ -3135,7 +3135,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "warehouse",
     "path": "/support/replies",
     "componentName": "InventoryCount",
     "sourceFile": "artifacts/ghayth-erp/src/pages/warehouse/inventory-count.tsx",
@@ -3146,7 +3146,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "support",
     "path": "/support/kb",
     "componentName": "SupportCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/support-create.tsx",
@@ -3157,7 +3157,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "support",
     "path": "/support/:id",
     "componentName": "SupportReplies",
     "sourceFile": "artifacts/ghayth-erp/src/pages/support/replies.tsx",
@@ -3168,7 +3168,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "support",
     "path": "/support",
     "componentName": "KnowledgeBase",
     "sourceFile": "artifacts/ghayth-erp/src/pages/support/kb.tsx",
@@ -3179,7 +3179,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "support",
     "path": "/marketing",
     "componentName": "TicketDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/ticket-detail.tsx",
@@ -3190,7 +3190,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "support",
     "path": "/marketing/create",
     "componentName": "Support",
     "sourceFile": "artifacts/ghayth-erp/src/pages/support.tsx",
@@ -3201,7 +3201,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "marketing",
     "path": "/tasks/create",
     "componentName": "Marketing",
     "sourceFile": "artifacts/ghayth-erp/src/pages/marketing.tsx",
@@ -3212,7 +3212,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "marketing",
     "path": "/tasks/:id",
     "componentName": "MarketingCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/marketing-create.tsx",
@@ -3223,7 +3223,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "operations",
     "path": "/tasks",
     "componentName": "TasksCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/tasks-create.tsx",
@@ -3234,7 +3234,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "operations",
     "path": "/notifications",
     "componentName": "TaskDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/task-detail.tsx",
@@ -3245,7 +3245,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "operations",
     "path": "/intelligence",
     "componentName": "Tasks",
     "sourceFile": "artifacts/ghayth-erp/src/pages/tasks.tsx",
@@ -3256,7 +3256,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "bi",
     "path": "/insights",
     "componentName": "Notifications",
     "sourceFile": "artifacts/ghayth-erp/src/pages/notifications.tsx",
@@ -3267,7 +3267,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "bi",
     "path": "/automation",
     "componentName": "Intelligence",
     "sourceFile": "artifacts/ghayth-erp/src/pages/intelligence.tsx",
@@ -3278,7 +3278,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "bi",
     "path": "/activity-log",
     "componentName": "Insights",
     "sourceFile": "artifacts/ghayth-erp/src/pages/insights.tsx",
@@ -3289,7 +3289,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "admin",
     "path": "/module-dashboards",
     "componentName": "Automation",
     "sourceFile": "artifacts/ghayth-erp/src/pages/automation.tsx",
@@ -3300,7 +3300,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "misc",
+    "module": "bi",
     "path": "/reports/scheduled",
     "componentName": "ActivityLog",
     "sourceFile": "artifacts/ghayth-erp/src/pages/activity-log.tsx",
@@ -3839,7 +3839,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah",
     "componentName": "any",
     "sourceFile": null,
@@ -3850,7 +3850,7 @@
     "sourceFileExists": false
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah/pilgrims",
     "componentName": "any",
     "sourceFile": null,
@@ -3861,7 +3861,7 @@
     "sourceFileExists": false
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah/pilgrims/create",
     "componentName": "UmrahDashboard",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/dashboard.tsx",
@@ -3872,7 +3872,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah/pilgrims/:id",
     "componentName": "UmrahPilgrims",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/pilgrims.tsx",
@@ -3883,7 +3883,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah/agents",
     "componentName": "PilgrimCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/pilgrim-create.tsx",
@@ -3894,7 +3894,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah/agents/:id",
     "componentName": "PilgrimDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/pilgrim-detail.tsx",
@@ -3905,7 +3905,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah/seasons",
     "componentName": "UmrahAgents",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/agents.tsx",
@@ -3916,7 +3916,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah/seasons/:id",
     "componentName": "UmrahAgentDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-agent-detail.tsx",
@@ -3927,7 +3927,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah/penalties",
     "componentName": "UmrahSeasons",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/seasons.tsx",
@@ -3938,7 +3938,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah/penalties/:id",
     "componentName": "UmrahSeasonDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-season-detail.tsx",
@@ -3949,7 +3949,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah/invoices",
     "componentName": "UmrahPenalties",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/penalties.tsx",
@@ -3960,7 +3960,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah/invoices/:id",
     "componentName": "UmrahPenaltyDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-penalty-detail.tsx",
@@ -3971,7 +3971,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah/packages",
     "componentName": "UmrahInvoices",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/invoices.tsx",
@@ -3982,7 +3982,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah/packages/:id",
     "componentName": "UmrahInvoiceDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-invoice-detail.tsx",
@@ -3993,7 +3993,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah/transport",
     "componentName": "UmrahPackages",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/packages.tsx",
@@ -4004,7 +4004,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah/transport/:id",
     "componentName": "UmrahPackageDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-package-detail.tsx",
@@ -4015,7 +4015,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah/import/legacy",
     "componentName": "UmrahTransportDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-transport-detail.tsx",
@@ -4026,7 +4026,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah/sub-agents",
     "componentName": "UmrahImport",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/import.tsx",
@@ -4037,7 +4037,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah/pricing",
     "componentName": "UmrahSubAgents",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/sub-agents.tsx",
@@ -4048,7 +4048,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah/commission-plans",
     "componentName": "UmrahSubAgents",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/sub-agents.tsx",
@@ -4059,7 +4059,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah/commission-plans/new",
     "componentName": "UmrahPricing",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/pricing.tsx",
@@ -4070,7 +4070,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah/commission-plans/:id/edit",
     "componentName": "UmrahCommissionPlans",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/commission-plans.tsx",
@@ -4081,7 +4081,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah/violations",
     "componentName": "UmrahCommissionPlanEditor",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/commission-plan-editor.tsx",
@@ -4092,7 +4092,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah/violations/:id",
     "componentName": "UmrahCommissionPlanEditor",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/commission-plan-editor.tsx",
@@ -4103,7 +4103,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah/import",
     "componentName": "UmrahViolations",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/violations.tsx",
@@ -4114,7 +4114,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah/daily-runsheet",
     "componentName": "UmrahViolationDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-violation-detail.tsx",
@@ -4125,7 +4125,7 @@
     "sourceFileExists": true
   },
   {
-    "module": "umrah",
+    "module": "operations",
     "path": "/umrah/reconciliation",
     "componentName": "UmrahImportWizard",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/import-wizard.tsx",

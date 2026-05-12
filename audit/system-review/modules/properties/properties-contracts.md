@@ -1,0 +1,47 @@
+# /properties/contracts — `artifacts/ghayth-erp/src/pages/create/properties/payment-record.tsx`
+
+## 1. الميتاداتا
+- المسار: `/properties/contracts`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/create/properties/payment-record.tsx`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/propertyRoutes.tsx:48`
+- المجموعة: `properties`
+- الكومبوننت: `PaymentRecord`
+- subKey: — | minRoleLevel: —
+- الكيان المستنبط: `contracts`
+- سطور الملف: 120
+- مصدر موجود: ✅
+
+## 2. الأزرار والإجراءات
+_لا توجد طلبات كتابة من هذه الصفحة._
+
+### تفاصيل الأزرار المرئية
+- L81: "مسح المسودة" → `clearDraft`
+- L112: "(بلا تسمية)" → `() => setLocation("/properties/contracts")` 🔒
+- L113: "(بلا تسمية)" → `handleSave` 🔒
+
+### القراءات (GET)
+_لا قراءات._
+
+
+
+## 3. الحركات ذات الصلة (Cross-Module Transactions)
+- [ ] **TBD** — راجع `docs/blueprints/properties.md` (إن وُجد) وعدّد:
+  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
+  - تأثير الأرصدة (balances, balances_history)
+  - الإشعارات (notifications)
+  - سير الموافقات (approval_chains)
+  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
+- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+## 4. النمذجة
+_لم يتم العثور على جدول Drizzle بالاسم المستنبط `contracts` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
+
+## 5. البيانات الوهمية الثابتة
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+
+## 6. النتيجة (Verdict)
+- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
+- ملاحظة: `landed=/dashboard expected=/properties/contracts`
+- لقطة: `audit/screenshots/properties_contracts.png`
+- landedUrl: `http://localhost/dashboard`
+- توصية: **يحتاج إصلاح**
