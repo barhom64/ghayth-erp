@@ -1617,13 +1617,67 @@ router.get("/alerts", authorize({ feature: "fleet.vehicles", action: "list" }), 
     const in30Days = new Date(today); in30Days.setDate(today.getDate() + 30);
     const in90Days = new Date(today); in90Days.setDate(today.getDate() + 90);
 
-    const allInsurance = await rawQuery<any>(
-      `SELECT v."plateNumber", i."endDate", i.type AS "insuranceType",
-              (i."endDate"::date - CURRENT_DATE) AS "daysLeft"
-       FROM fleet_insurance i JOIN fleet_vehicles v ON v.id=i."vehicleId" AND v."deletedAt" IS NULL
-       WHERE i."companyId"=$1 AND i."deletedAt" IS NULL AND i."endDate" BETWEEN $2 AND $3`,
-      [cid, todayStr, toDateISO(in90Days)]
-    );
+    const in90Str = toDateISO(in90Days);
+    const [allInsurance, expiringLicenses, speedAlerts, abnormalFuel, frequentBreakdowns, lowRatingDrivers, oilDue] = await Promise.all([
+      rawQuery<any>(
+        `SELECT v."plateNumber", i."endDate", i.type AS "insuranceType",
+                (i."endDate"::date - CURRENT_DATE) AS "daysLeft"
+         FROM fleet_insurance i JOIN fleet_vehicles v ON v.id=i."vehicleId" AND v."deletedAt" IS NULL
+         WHERE i."companyId"=$1 AND i."deletedAt" IS NULL AND i."endDate" BETWEEN $2 AND $3`,
+        [cid, todayStr, in90Str]
+      ),
+      rawQuery<any>(
+        `SELECT d.name, d."licenseExpiry", d."licenseNumber",
+                (d."licenseExpiry"::date - CURRENT_DATE) AS "daysLeft"
+         FROM fleet_drivers d
+         WHERE d."companyId"=$1 AND d."licenseExpiry" IS NOT NULL
+           AND d."deletedAt" IS NULL
+           AND d."licenseExpiry" BETWEEN $2 AND $3`,
+        [cid, todayStr, in90Str]
+      ),
+      rawQuery<any>(
+        `SELECT g.speed, g.latitude, g.longitude, g."recordedAt",
+                v."plateNumber", d.name AS "driverName"
+         FROM fleet_gps_tracking g
+         LEFT JOIN fleet_vehicles v ON v.id=g."vehicleId" AND v."companyId"=$1 AND v."deletedAt" IS NULL
+         LEFT JOIN fleet_drivers d ON d.id=g."driverId" AND d."companyId"=$1 AND d."deletedAt" IS NULL
+         WHERE g.speed > 120 AND g."recordedAt" > NOW() - INTERVAL '24 hours'
+           AND v."companyId" = $1
+         ORDER BY g."recordedAt" DESC LIMIT 50`,
+        [cid]
+      ),
+      rawQuery<any>(
+        `SELECT v."plateNumber", v.id AS "vehicleId",
+                AVG(f.liters) AS "avgLiters",
+                MAX(f.liters) AS "maxLiters"
+         FROM fleet_fuel_logs f
+         JOIN fleet_vehicles v ON v.id=f."vehicleId" AND v."deletedAt" IS NULL
+         WHERE f."companyId"=$1 AND f."fuelDate" > CURRENT_DATE - INTERVAL '30 days'
+         GROUP BY v.id, v."plateNumber"
+         HAVING MAX(f.liters) > AVG(f.liters) * 1.2`,
+        [cid]
+      ),
+      rawQuery<any>(
+        `SELECT v."plateNumber", v.id AS "vehicleId", COUNT(m.id) AS "breakdownCount"
+         FROM fleet_maintenance m
+         JOIN fleet_vehicles v ON v.id=m."vehicleId" AND v."deletedAt" IS NULL
+         WHERE m."companyId"=$1 AND m."serviceDate" > CURRENT_DATE - INTERVAL '30 days'
+           AND m.type IN ('breakdown','emergency','repair')
+         GROUP BY v.id, v."plateNumber"
+         HAVING COUNT(m.id) >= 3`,
+        [cid]
+      ),
+      rawQuery<any>(
+        `SELECT d.name, d.rating, d.id FROM fleet_drivers d
+         WHERE d."companyId"=$1 AND d.rating IS NOT NULL AND d.rating < 3 AND d."deletedAt" IS NULL
+         LIMIT 500`,
+        [cid]
+      ),
+      rawQuery<any>(
+        `SELECT v."plateNumber", v."currentMileage", m."mileageAtService" FROM fleet_vehicles v LEFT JOIN fleet_maintenance m ON m.id=(SELECT id FROM fleet_maintenance WHERE "vehicleId"=v.id AND type='oil_change' ORDER BY "mileageAtService" DESC LIMIT 1) WHERE v."companyId"=$1 AND v."deletedAt" IS NULL AND (v."currentMileage" - COALESCE(m."mileageAtService",0)) >= 5000`,
+        [cid]
+      ),
+    ]);
     for (const r of allInsurance) {
       const daysLeft = Number(r.daysLeft);
       let severity: string;
@@ -1640,16 +1694,6 @@ router.get("/alerts", authorize({ feature: "fleet.vehicles", action: "list" }), 
           : `تأمين المركبة ${r.plateNumber} ينتهي خلال ${daysLeft} يوم`,
       });
     }
-
-    const expiringLicenses = await rawQuery<any>(
-      `SELECT d.name, d."licenseExpiry", d."licenseNumber",
-              (d."licenseExpiry"::date - CURRENT_DATE) AS "daysLeft"
-       FROM fleet_drivers d
-       WHERE d."companyId"=$1 AND d."licenseExpiry" IS NOT NULL
-         AND d."deletedAt" IS NULL
-         AND d."licenseExpiry" BETWEEN $2 AND $3`,
-      [cid, todayStr, toDateISO(in90Days)]
-    );
     for (const d of expiringLicenses) {
       const daysLeft = Number(d.daysLeft);
       let severity = daysLeft <= 7 ? 'critical' : daysLeft <= 14 ? 'high' : daysLeft <= 30 ? 'medium' : 'low';
@@ -1659,18 +1703,6 @@ router.get("/alerts", authorize({ feature: "fleet.vehicles", action: "list" }), 
         message: `رخصة السائق ${d.name} تنتهي خلال ${daysLeft} يوم`,
       });
     }
-
-    const speedAlerts = await rawQuery<any>(
-      `SELECT g.speed, g.latitude, g.longitude, g."recordedAt",
-              v."plateNumber", d.name AS "driverName"
-       FROM fleet_gps_tracking g
-       LEFT JOIN fleet_vehicles v ON v.id=g."vehicleId" AND v."companyId"=$1 AND v."deletedAt" IS NULL
-       LEFT JOIN fleet_drivers d ON d.id=g."driverId" AND d."companyId"=$1 AND d."deletedAt" IS NULL
-       WHERE g.speed > 120 AND g."recordedAt" > NOW() - INTERVAL '24 hours'
-         AND v."companyId" = $1
-       ORDER BY g."recordedAt" DESC LIMIT 50`,
-      [scope.companyId]
-    );
     for (const s of speedAlerts) {
       alerts.push({
         type: 'speed_violation', severity: 'high',
@@ -1679,18 +1711,6 @@ router.get("/alerts", authorize({ feature: "fleet.vehicles", action: "list" }), 
         message: `تجاوز سرعة: ${s.driverName || 'غير معروف'} — ${s.speed} كم/س (المركبة ${s.plateNumber || 'غير محدد'})`,
       });
     }
-
-    const abnormalFuel = await rawQuery<any>(
-      `SELECT v."plateNumber", v.id AS "vehicleId",
-              AVG(f.liters) AS "avgLiters",
-              MAX(f.liters) AS "maxLiters"
-       FROM fleet_fuel_logs f
-       JOIN fleet_vehicles v ON v.id=f."vehicleId" AND v."deletedAt" IS NULL
-       WHERE f."companyId"=$1 AND f."fuelDate" > CURRENT_DATE - INTERVAL '30 days'
-       GROUP BY v.id, v."plateNumber"
-       HAVING MAX(f.liters) > AVG(f.liters) * 1.2`,
-      [cid]
-    );
     for (const r of abnormalFuel) {
       alerts.push({
         type: 'abnormal_fuel', severity: 'medium', vehicle: r.plateNumber,
@@ -1698,17 +1718,6 @@ router.get("/alerts", authorize({ feature: "fleet.vehicles", action: "list" }), 
         message: `وقود غير طبيعي: المركبة ${r.plateNumber} — أقصى ${Number(r.maxLiters).toFixed(1)} لتر (المتوسط ${Number(r.avgLiters).toFixed(1)}) تجاوز 120%`,
       });
     }
-
-    const frequentBreakdowns = await rawQuery<any>(
-      `SELECT v."plateNumber", v.id AS "vehicleId", COUNT(m.id) AS "breakdownCount"
-       FROM fleet_maintenance m
-       JOIN fleet_vehicles v ON v.id=m."vehicleId" AND v."deletedAt" IS NULL
-       WHERE m."companyId"=$1 AND m."serviceDate" > CURRENT_DATE - INTERVAL '30 days'
-         AND m.type IN ('breakdown','emergency','repair')
-       GROUP BY v.id, v."plateNumber"
-       HAVING COUNT(m.id) >= 3`,
-      [cid]
-    );
     for (const r of frequentBreakdowns) {
       alerts.push({
         type: 'frequent_breakdowns', severity: 'high', vehicle: r.plateNumber,
@@ -1716,13 +1725,6 @@ router.get("/alerts", authorize({ feature: "fleet.vehicles", action: "list" }), 
         message: `المركبة ${r.plateNumber} تعطلت ${r.breakdownCount} مرات خلال الشهر — يُنصح بالاستبعاد`,
       });
     }
-
-    const lowRatingDrivers = await rawQuery<any>(
-      `SELECT d.name, d.rating, d.id FROM fleet_drivers d
-       WHERE d."companyId"=$1 AND d.rating IS NOT NULL AND d.rating < 3 AND d."deletedAt" IS NULL
-       LIMIT 500`,
-      [cid]
-    );
     for (const d of lowRatingDrivers) {
       alerts.push({
         type: 'low_driver_rating', severity: 'medium', driver: d.name,
@@ -1730,11 +1732,6 @@ router.get("/alerts", authorize({ feature: "fleet.vehicles", action: "list" }), 
         message: `تقييم السائق ${d.name} منخفض: ${Number(d.rating).toFixed(1)}/5 — يحتاج مراجعة`,
       });
     }
-
-    const oilDue = await rawQuery<any>(
-      `SELECT v."plateNumber", v."currentMileage", m."mileageAtService" FROM fleet_vehicles v LEFT JOIN fleet_maintenance m ON m.id=(SELECT id FROM fleet_maintenance WHERE "vehicleId"=v.id AND type='oil_change' ORDER BY "mileageAtService" DESC LIMIT 1) WHERE v."companyId"=$1 AND v."deletedAt" IS NULL AND (v."currentMileage" - COALESCE(m."mileageAtService",0)) >= 5000`,
-      [cid]
-    );
     oilDue.forEach((r: any) => alerts.push({ type: 'oil_change_due', severity: 'medium', vehicle: r.plateNumber, message: `تغيير زيت المركبة ${r.plateNumber} مستحق (الكيلومتراج: ${r.currentMileage})` }));
 
     res.json({ data: alerts, total: alerts.length, page: 1, pageSize: alerts.length });
