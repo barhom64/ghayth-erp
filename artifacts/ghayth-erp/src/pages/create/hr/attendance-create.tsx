@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { CreatePageLayout, AutoField, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { MapPin, Clock, LogIn, LogOut, CheckCircle, Loader2 } from "lucide-react";
 import { TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
@@ -31,6 +32,7 @@ export default function AttendanceCreate() {
   const { user } = useAuth();
   const { toast } = useToast();
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
+  const { fieldErrors, validate } = useFieldErrors();
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationStatus, setLocationStatus] = useState<"idle" | "success" | "error">("idle");
 

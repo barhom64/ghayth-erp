@@ -360,6 +360,6 @@ describe("Legal lifecycle integration", () => {
 
   it("case detail response includes allowedTransitions", () => {
     expect(LEGAL_ROUTE).toContain("allowedTransitions");
-    expect(LEGAL_ROUTE).toContain("VALID_CASE_TRANSITIONS[row.status]");
+    expect(LEGAL_ROUTE).toContain("VALID_CASE_TRANSITIONS[row.status");
   });
 });

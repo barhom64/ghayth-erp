@@ -6,6 +6,7 @@ import {
   InlineEditCard,
 } from "@/components/shared/detail-edit-delete-actions";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Truck, Users, DollarSign } from "lucide-react";
@@ -49,6 +50,7 @@ const pilgrimColumns: DataTableColumn<any>[] = [
 export default function UmrahTransportDetail() {
   const [, params] = useRoute("/umrah/transport/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("transport", id ?? 0);
 
   const { data, isLoading, isError, refetch } = useApiQuery<any>(
     ["umrah-transport-detail", String(id)],
@@ -130,6 +132,8 @@ export default function UmrahTransportDetail() {
       status={item ? { label: st.label, tone: st.tone } : undefined}
       entityType="transport"
       entityId={id || 0}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       isLoading={isLoading}
       error={isError ? true : undefined}
      

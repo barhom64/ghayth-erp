@@ -10,7 +10,7 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
-import { VehicleSelect, EmployeeSelect } from "@/components/shared/entity-selects";
+import { VehicleSelect, DriverSelect } from "@/components/shared/entity-selects";
 
 const DRAFT_KEY = "fleet_fuel_create";
 const INITIAL = {
@@ -76,7 +76,7 @@ export default function FuelCreate() {
             </div>
           )}
         </div>
-        <EmployeeSelect value={form.driverId} onChange={(v) => setForm((f) => ({ ...f, driverId: v }))} label="السائق" />
+        <DriverSelect value={form.driverId} onChange={(v) => setForm((f) => ({ ...f, driverId: v }))} label="السائق" />
         <NumberField label="اللترات" required value={form.liters} onChange={(v) => setForm((f) => ({ ...f, liters: v }))} step={0.01} min={0} error={fieldErrors.liters} />
         <NumberField label="سعر اللتر" value={form.costPerLiter} onChange={(v) => setForm((f) => ({ ...f, costPerLiter: v }))} step={0.01} min={0} />
         {totalCost > 0 && (

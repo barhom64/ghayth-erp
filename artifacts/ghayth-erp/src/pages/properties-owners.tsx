@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { useApiQuery, asList } from "@/lib/api";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +9,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { PageShell } from "@/components/page-shell";
 import { Crown, Plus, Pencil, Phone, Building2, Home, Trash2 } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { useAppContext } from "@/contexts/app-context";
 
 export default function PropertiesOwners() {
@@ -25,17 +28,13 @@ export default function PropertiesOwners() {
     searchFields: ["name", "phone", "nationalId", "crNumber"] as any,
   });
 
-  const deleteMut = useApiMutation<any, { id: number }>(
-    (body) => `/properties/owners/${body.id}`,
-    "DELETE",
-    [["property-owners"]],
-    { successMessage: "تم حذف المالك" }
-  );
-
-  const handleDelete = (id: number) => {
-    if (!confirm("هل أنت متأكد من حذف هذا المالك؟")) return;
-    deleteMut.mutate({ id });
-  };
+  // Delete dialog state. The previous `confirm()` window dialog
+  // blocked the event loop, ignored RTL, and gave no preview of the
+  // impact (units, contracts, etc. that reference this owner). The
+  // shared ConfirmDeleteDialog fetches /impact-preview before the
+  // user even confirms, and surfaces server-side 409 blockers
+  // inline rather than as a generic toast.
+  const [deletingOwner, setDeletingOwner] = useState<{ id: number; name: string } | null>(null);
 
   const columns: DataTableColumn<any>[] = [
     {
@@ -104,7 +103,7 @@ export default function PropertiesOwners() {
                   <Pencil className="h-3 w-3" /> تعديل
                 </Button>
               </Link>
-              <Button variant="ghost" size="sm" className="gap-1 text-xs h-7 text-red-500 hover:text-red-700" onClick={() => handleDelete(o.id)}>
+              <Button variant="ghost" size="sm" className="gap-1 text-xs h-7 text-red-500 hover:text-red-700" onClick={() => setDeletingOwner({ id: o.id, name: o.name || "—" })}>
                 <Trash2 className="h-3 w-3" />
               </Button>
             </>
@@ -121,9 +120,9 @@ export default function PropertiesOwners() {
       breadcrumbs={[{ href: "/properties", label: "إدارة الأملاك" }]}
       actions={canManage && (
         <Link href="/properties/owners/create">
-          <Button className="gap-2">
+          <GuardedButton perm="property:create" className="gap-2">
             <Plus className="h-4 w-4" /> إضافة مالك
-          </Button>
+          </GuardedButton>
         </Link>
       )}
     >
@@ -163,6 +162,20 @@ export default function PropertiesOwners() {
           />
         </CardContent>
       </Card>
+
+      <ConfirmDeleteDialog
+        open={deletingOwner !== null}
+        onOpenChange={(v) => { if (!v) setDeletingOwner(null); }}
+        entity={{
+          type: "property_owner",
+          id: deletingOwner?.id ?? 0,
+          name: deletingOwner?.name ?? "",
+        }}
+        deletePath={`/properties/owners/${deletingOwner?.id}`}
+        invalidateKeys={[["property-owners"]]}
+        successMessage="تم حذف المالك"
+        onDeleted={() => setDeletingOwner(null)}
+      />
     </PageShell>
   );
 }

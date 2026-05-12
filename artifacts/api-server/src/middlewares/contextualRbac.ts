@@ -119,7 +119,8 @@ export function requireOwnership(options: OwnershipOptions) {
             }
             break;
           case "branch":
-            if (record.bid && scope.branchId && record.bid !== scope.branchId) {
+            if (record.bid && scope.branchId && record.bid !== scope.branchId
+                && !scope.allowedBranches?.includes(record.bid)) {
               res.status(403).json({
                 error: "لا يمكنك الوصول لسجلات فرع آخر",
                 code: "OWNERSHIP_DENIED",

@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 function ScoreCircle({ score, label, color = "blue" }: { score: number | null; label: string; color?: string }) {
   const colorMap: Record<string, string> = {
@@ -126,6 +127,7 @@ function RadarChart({ data }: { data: { label: string; value: number; color: str
 export default function Evaluation360DetailPage() {
   const [, params] = useRoute("/hr/evaluation-360/:id");
   const cycleId = params?.id ?? "";
+  const { extraTabs, hideTabs } = useRegistryTabs("hr-evaluation-360", cycleId ?? "");
   const [tab, setTab] = useState<"system" | "peers" | "upward" | "summary">("summary");
 
   const { data, isLoading, isError } = useApiQuery<any>(
@@ -464,6 +466,8 @@ export default function Evaluation360DetailPage() {
       backLabel="العودة"
       entityType="hr-evaluation-360"
       entityId={cycleId}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       isLoading={isLoading}
       error={isError || (!isLoading && !data?.cycle) ? true : undefined}
      

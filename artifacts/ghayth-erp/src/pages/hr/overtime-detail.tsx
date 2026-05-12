@@ -3,6 +3,7 @@ import { useApiQuery } from "@/lib/api";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 import type { DetailStatus } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,7 @@ export default function OvertimeDetail() {
 
   const { data, isLoading, isError } = useApiQuery<any>(["hr-overtime-detail", id], id ? `/hr/overtime/${id}` : null);
   const item = data?.data ?? data;
+  const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("overtime_request", id || "");
 
   if (!item && !isLoading && !isError) {
     return (
@@ -92,7 +94,8 @@ export default function OvertimeDetail() {
       updatedAt={item?.updatedAt}
       isLoading={isLoading}
       error={isError ? true : undefined}
-     
+      extraTabs={registryExtraTabs}
+      hideTabs={registryHideTabs}
       actions={
         <Badge className={cn("text-sm px-3 py-1", st.color)}>{st.label}</Badge>
       }

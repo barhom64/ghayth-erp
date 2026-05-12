@@ -20,6 +20,7 @@ import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick
 import { useAppContext } from "@/contexts/app-context";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { CrmTabsNav } from "@/components/shared/crm-tabs-nav";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 const STAGE_LABELS: Record<string, string> = {
   lead: "عميل محتمل",
@@ -177,7 +178,7 @@ function OpportunitiesTab() {
           />
         </div>
         <Link href="/crm/create">
-          <Button className="gap-2"><Plus className="h-4 w-4" /> فرصة جديدة</Button>
+          <GuardedButton perm="crm:create" className="gap-2"><Plus className="h-4 w-4" /> فرصة جديدة</GuardedButton>
         </Link>
       </div>
 

@@ -15,6 +15,7 @@ import { Edit, Wrench, Car, User } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
   scheduled: "مجدول",
@@ -45,6 +46,7 @@ export default function MaintenanceDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/fleet/maintenance/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("maintenance_request", id ?? 0);
 
   const { data: maintenance, isLoading, error, refetch } = useApiQuery<any>(
     ["maintenance-detail", String(id)],
@@ -277,6 +279,8 @@ export default function MaintenanceDetail() {
       relatedEntities={relatedEntities}
       entityType="maintenance"
       entityId={id ?? 0}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       overview={overview}
       isLoading={isLoading}
       error={error}

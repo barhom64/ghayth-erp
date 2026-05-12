@@ -25,7 +25,7 @@ export function NotificationDropdown() {
   const containerRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
-  const { data: notifResp } = useApiQuery<any>(["notifications-bell"], "/notifications?limit=8");
+  const { data: notifResp } = useApiQuery<any>(["notifications-bell"], "/notifications?pageSize=8");
   const { data: countResp } = useApiQuery<{ count: number }>(
     ["notifications-unread-count"],
     "/notifications/unread-count"

@@ -1,7 +1,6 @@
 import { handleRouteError, NotFoundError, parseId } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { triggerJobByName } from "../lib/cronScheduler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
@@ -148,35 +147,37 @@ router.get("/automation-stats", authorize({ feature: "admin", action: "list" }),
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [totalRow] = await rawQuery<any>(
-      `SELECT COUNT(*) as total FROM automation_logs WHERE "companyId" = $1`,
-      [cid]
-    );
-    const [todayRow] = await rawQuery<any>(
-      `SELECT COUNT(*) as total FROM automation_logs WHERE "companyId" = $1 AND "createdAt"::date = CURRENT_DATE`,
-      [cid]
-    );
-    const [weekRow] = await rawQuery<any>(
-      `SELECT COUNT(*) as total FROM automation_logs WHERE "companyId" = $1 AND "createdAt" >= CURRENT_DATE - INTERVAL '7 days'`,
-      [cid]
-    );
-    const byType = await rawQuery<any>(
-      `SELECT "automationType", COUNT(*) as count FROM automation_logs WHERE "companyId" = $1 GROUP BY "automationType" ORDER BY count DESC`,
-      [cid]
-    );
-    const byModule = await rawQuery<any>(
-      `SELECT pr.module, COUNT(al.id) as count
-       FROM automation_logs al
-       LEFT JOIN proactive_rules pr ON pr.name = al."automationType"
-       WHERE al."companyId" = $1
-       GROUP BY pr.module ORDER BY count DESC`,
-      [cid]
-    );
-    const recent = await rawQuery<any>(
-      `SELECT "automationType", "triggerReason", "actionTaken", "createdAt"
-       FROM automation_logs WHERE "companyId" = $1 ORDER BY "createdAt" DESC LIMIT 5`,
-      [cid]
-    );
+    const [[totalRow], [todayRow], [weekRow], byType, byModule, recent] = await Promise.all([
+      rawQuery<any>(
+        `SELECT COUNT(*) as total FROM automation_logs WHERE "companyId" = $1`,
+        [cid]
+      ),
+      rawQuery<any>(
+        `SELECT COUNT(*) as total FROM automation_logs WHERE "companyId" = $1 AND "createdAt"::date = CURRENT_DATE`,
+        [cid]
+      ),
+      rawQuery<any>(
+        `SELECT COUNT(*) as total FROM automation_logs WHERE "companyId" = $1 AND "createdAt" >= CURRENT_DATE - INTERVAL '7 days'`,
+        [cid]
+      ),
+      rawQuery<any>(
+        `SELECT "automationType", COUNT(*) as count FROM automation_logs WHERE "companyId" = $1 GROUP BY "automationType" ORDER BY count DESC`,
+        [cid]
+      ),
+      rawQuery<any>(
+        `SELECT pr.module, COUNT(al.id) as count
+         FROM automation_logs al
+         LEFT JOIN proactive_rules pr ON pr.name = al."automationType"
+         WHERE al."companyId" = $1
+         GROUP BY pr.module ORDER BY count DESC`,
+        [cid]
+      ),
+      rawQuery<any>(
+        `SELECT "automationType", "triggerReason", "actionTaken", "createdAt"
+         FROM automation_logs WHERE "companyId" = $1 ORDER BY "createdAt" DESC LIMIT 5`,
+        [cid]
+      ),
+    ]);
     res.json({
       total: Number(totalRow?.total || 0),
       today: Number(todayRow?.total || 0),

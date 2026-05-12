@@ -14,6 +14,7 @@ import { PAYMENT_METHODS } from "@/lib/finance-type-maps";
 import { useToast } from "@/hooks/use-toast";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 /**
  * PayrollDetail — unified detail page for a single payroll record.
@@ -55,6 +56,8 @@ export default function PayrollDetail() {
   const [, params] = useRoute("/hr/payroll/:id");
   const id = params?.id ? Number(params.id) : null;
   const { toast } = useToast();
+
+  const { extraTabs, hideTabs } = useRegistryTabs("payroll_run", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["payroll", String(id)],
@@ -271,7 +274,7 @@ export default function PayrollDetail() {
                 approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
                 rejectBody={(notes) => ({ approved: false, notes })}
                 returnBody={(notes) => ({ approved: "returned", notes })}
-                pendingStatuses={["pending", "draft", "returned"]}
+                pendingStatuses={["pending", "draft", "returned", "pending_approval"]}
                 invalidateKeys={[["payroll"]]}
                 onDone={() => {
                   refetch();
@@ -329,6 +332,8 @@ export default function PayrollDetail() {
       entityType="payroll"
       entityId={id ?? 0}
       overview={overview}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       isLoading={isLoading}
       error={error}
       onRetry={refetch}

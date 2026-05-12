@@ -104,6 +104,14 @@ d("Tenant isolation — dynamic (real Postgres)", () => {
     "/api/gov-integrations",
     "/api/notifications",
     "/api/audit-logs",
+    // ── Umrah endpoints added by PRs #303 / #305 / #306 / #312 ──
+    // Locks in CONTRIBUTING.md §3.1: a token-A list query must never
+    // return a companyId belonging to company B, even on the new
+    // operational endpoints. Empty arrays pass — the contract is the
+    // absence of foreign rows, not a specific row count.
+    "/api/umrah/attachments",
+    "/api/umrah/reports/daily-runsheet",
+    "/api/umrah/reports/reconciliation",
   ];
 
   for (const path of SCOPED_LIST_ENDPOINTS) {
@@ -123,6 +131,156 @@ d("Tenant isolation — dynamic (real Postgres)", () => {
         (r: any) => r?.companyId && r.companyId !== fx.companyA.id
       );
       expect(foreign).toEqual([]);
+    });
+  }
+
+  // ── Cross-tenant write contracts ──
+  // For each write path, token A must not be able to mutate a row that
+  // belongs to company B. The fixture seeds one row per company in
+  // `clients`, `projects`, and `tasks`; the cross-tenant case asks for
+  // the OTHER company's id and we expect 403 / 404 (never 200).
+  // Same-tenant control checks confirm the route works for legitimate
+  // owners — guards against the trivial false-positive of "every write
+  // returns 404, so cross-tenant writes are also 404".
+  const CROSS_TENANT_WRITE_CASES: Array<{
+    method: "delete" | "patch" | "put";
+    path: (fx: any) => string;
+    body?: object;
+    label: string;
+  }> = [
+    {
+      method: "delete",
+      path: (fx) => `/api/clients/${fx.companyB.clientId}`,
+      label: "DELETE /api/clients/:id (foreign client)",
+    },
+    {
+      method: "patch",
+      path: (fx) => `/api/clients/${fx.companyB.clientId}`,
+      body: { name: "hijacked" },
+      label: "PATCH /api/clients/:id (foreign client)",
+    },
+    {
+      method: "delete",
+      path: (fx) => `/api/projects/${fx.companyB.projectId}`,
+      label: "DELETE /api/projects/:id (foreign project)",
+    },
+    {
+      method: "patch",
+      path: (fx) => `/api/projects/${fx.companyB.projectId}`,
+      body: { name: "hijacked" },
+      label: "PATCH /api/projects/:id (foreign project)",
+    },
+    {
+      method: "delete",
+      path: (fx) => `/api/tasks/${fx.companyB.taskId}`,
+      label: "DELETE /api/tasks/:id (foreign task)",
+    },
+    {
+      method: "patch",
+      path: (fx) => `/api/employees/${fx.companyB.employeeId}`,
+      body: { name: "hijacked" },
+      label: "PATCH /api/employees/:id (foreign employee)",
+    },
+    {
+      method: "delete",
+      path: (fx) => `/api/employees/${fx.companyB.employeeId}`,
+      label: "DELETE /api/employees/:id (foreign employee)",
+    },
+    {
+      method: "patch",
+      path: (fx) => `/api/documents/${fx.companyB.documentId}`,
+      body: { title: "hijacked" },
+      label: "PATCH /api/documents/:id (foreign document)",
+    },
+    {
+      method: "delete",
+      path: (fx) => `/api/documents/${fx.companyB.documentId}`,
+      label: "DELETE /api/documents/:id (foreign document)",
+    },
+    {
+      method: "patch",
+      path: (fx) => `/api/requests/${fx.companyB.requestId}`,
+      body: { title: "hijacked" },
+      label: "PATCH /api/requests/:id (foreign request)",
+    },
+    {
+      method: "delete",
+      path: (fx) => `/api/requests/${fx.companyB.requestId}`,
+      label: "DELETE /api/requests/:id (foreign request)",
+    },
+    // ── Umrah cross-tenant write contracts (PRs #305 / #312) ──
+    // The minimal fixture doesn't seed umrah_groups / umrah_penalties /
+    // umrah_attachments for either company, so we probe with a foreign
+    // id of 99999 — the route must refuse via its own companyId guard
+    // (NotFound / ValidationError) regardless of whether such a row
+    // exists. Same contract as the maintenance-request foreign-id case
+    // at the top of this file.
+    {
+      method: "delete",
+      path: () => `/api/umrah/attachments/99999`,
+      label: "DELETE /api/umrah/attachments/:id (foreign id)",
+    },
+  ];
+
+  // ── Umrah cross-tenant POST contracts ──
+  // Per CONTRIBUTING.md §3.1, every newly added write route must refuse
+  // token A's attempt to mutate company-B data. The four POST endpoints
+  // below take entity ids in their body (not path), so they're handled
+  // separately from CROSS_TENANT_WRITE_CASES.
+  const UMRAH_POST_CASES: Array<{
+    path: string;
+    body: object;
+    label: string;
+  }> = [
+    {
+      path: "/api/umrah/groups/99999/split",
+      body: { pilgrimIds: [99999], newGroupName: "hijack" },
+      label: "POST /api/umrah/groups/:id/split (foreign source group)",
+    },
+    {
+      path: "/api/umrah/groups/merge",
+      body: { sourceGroupIds: [99999], targetGroupId: 99998 },
+      label: "POST /api/umrah/groups/merge (foreign groups)",
+    },
+    {
+      path: "/api/umrah/penalties/waive-bulk",
+      body: { penaltyIds: [99999], reason: "cross-tenant probe" },
+      label: "POST /api/umrah/penalties/waive-bulk (foreign penalty)",
+    },
+    {
+      path: "/api/umrah/attachments",
+      body: { entityType: "mutamer", entityId: 99999, type: "passport", title: "x" },
+      label: "POST /api/umrah/attachments (foreign owner)",
+    },
+  ];
+
+  for (const c of UMRAH_POST_CASES) {
+    it(`${c.label} — token A must not touch company B's row`, async () => {
+      const res = await request(app)
+        .post(c.path)
+        .set("Authorization", `Bearer ${fx.tokenA}`)
+        .send(c.body);
+      // Bulk-waive returns 200 with all rows in skipped[] when the
+      // ids don't belong to caller's company — that's still a no-leak
+      // outcome (zero rows touched). We accept it alongside the usual
+      // refusals.
+      expect([200, 400, 401, 403, 404, 422]).toContain(res.status);
+      if (res.status === 200 && c.path.endsWith("/waive-bulk")) {
+        expect(res.body?.successCount ?? 0).toBe(0);
+      }
+    });
+  }
+
+  for (const c of CROSS_TENANT_WRITE_CASES) {
+    it(`${c.label} — token A must not mutate company B's row`, async () => {
+      const req = (request(app) as any)[c.method](c.path(fx)).set(
+        "Authorization",
+        `Bearer ${fx.tokenA}`
+      );
+      const res = await (c.body ? req.send(c.body) : req);
+      // 200/204 = the mutation went through, which is the leak we're
+      // asserting against. 401/403/404/422 = correctly refused.
+      expect([401, 403, 404, 422]).toContain(res.status);
     });
   }
 });

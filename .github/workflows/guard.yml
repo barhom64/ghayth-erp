@@ -59,8 +59,22 @@ jobs:
       JWT_SECRET: ci-only-jwt-secret-thirty-two-chars-aaaaaaaaaaaaaaaa
 
     steps:
+      - name: Diagnostic — confirm job reached runner
+        run: |
+          echo "=== reached runner ==="
+          echo "Job started at: $(date -u +%FT%TZ)"
+          echo "Runner OS: $RUNNER_OS"
+          echo "Workspace: $GITHUB_WORKSPACE"
+          uname -a
+
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Diagnostic — after checkout
+        run: |
+          echo "=== checkout done ==="
+          git log -1 --oneline
+          ls -la | head -10
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -91,32 +105,39 @@ jobs:
           # db/bootstrap.sh's sudo-driven role/DB management and just load
           # the schema dump directly via psql.
           #
-          # db/schema.sql is a pg_dump 17 output that interleaves
-          # `ALTER TABLE ... ADD CONSTRAINT FOREIGN KEY` blocks with
-          # `CREATE TABLE` blocks rather than placing every FK in a
-          # post-data section. On PG16 that ordering causes ~40 FKs to
-          # reference tables / unique constraints that don't exist yet at
-          # the moment the FK is created. We work around it with a 2-pass
-          # load: pass 1 ignores those errors and creates everything else;
-          # pass 2 replays only the `ALTER TABLE ... ADD CONSTRAINT` blocks,
-          # at which point every referenced table and PK is in place. The
-          # second pass logs "constraint already exists" / "multiple
-          # primary keys" for blocks that pass 1 already applied — those
-          # are expected and ignored.
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=0 -q -f db/schema.sql > /tmp/pass1.log 2>&1 || true
-          python3 -c "import re; content=open('db/schema.sql').read(); blocks=re.findall(r'^ALTER TABLE[^;]*?;', content, re.MULTILINE | re.DOTALL); print('\n\n'.join(b for b in blocks if 'ADD CONSTRAINT' in b))" > /tmp/constraints.sql
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=0 -q -f /tmp/constraints.sql > /tmp/pass2.log 2>&1 || true
+          # The dump was regenerated 2026-05-10 with `bash db/dump-schema.sh`
+          # on Replit. To stay under the Replit GitHub proxy's 800 KB
+          # per-file limit it is split into:
+          #
+          #   db/schema_pre.sql   — DROP CONSTRAINT/INDEX, DROP TABLE, CREATE TABLE
+          #   db/schema_post.sql  — ALTER TABLE … ADD CONSTRAINT (PK/FK), CREATE INDEX
+          #   db/schema.sql       — psql wrapper that `\ir`s the two halves
+          #
+          # The wrapper is convenient locally but cannot be used in this
+          # workflow: pg_dump 17 emits `\restrict <token>` at the top of
+          # `schema_pre.sql` (a security feature), which puts psql into a
+          # mode that blocks all subsequent backslash commands — including
+          # the wrapper's `\ir schema_post.sql`. So a single
+          # `psql -f db/schema.sql` loads the tables (312) but no FKs/indexes.
+          #
+          # Instead we load the two halves with separate psql invocations,
+          # which both start in unrestricted mode. Pass on schema_post uses
+          # ON_ERROR_STOP=0 because the dump's trailing `\unrestrict` line
+          # errors when the session isn't in restricted mode (harmless —
+          # all DDL above it has already executed). The FK count assertion
+          # below confirms the load actually succeeded.
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f db/schema_pre.sql > /tmp/pre.log 2>&1
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=0 -q -f db/schema_post.sql > /tmp/post.log 2>&1 || true
           # Verify the schema is loaded fully — every FK named in the
-          # dump must exist in the live DB. If anything is missing the
-          # workflow fails loudly with both pass logs attached.
-          expected_fks=$(grep -c 'FOREIGN KEY' db/schema.sql)
+          # dump must exist in the live DB.
+          expected_fks=$(grep -c 'FOREIGN KEY' db/schema_post.sql)
           actual_fks=$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM pg_constraint c JOIN pg_class r ON c.conrelid=r.oid JOIN pg_namespace n ON r.relnamespace=n.oid WHERE c.contype='f' AND n.nspname='public';")
           echo "Schema loaded: $actual_fks FKs (dump declares $expected_fks)"
           if [ "$actual_fks" -lt "$expected_fks" ]; then
-            echo "FK shortfall — pass1.log:" >&2
-            cat /tmp/pass1.log >&2
-            echo "---- pass2.log:" >&2
-            cat /tmp/pass2.log >&2
+            echo "FK shortfall — pre.log:" >&2
+            cat /tmp/pre.log >&2
+            echo "---- post.log:" >&2
+            cat /tmp/post.log >&2
             exit 1
           fi
           # Mark every existing migration as already applied so the API

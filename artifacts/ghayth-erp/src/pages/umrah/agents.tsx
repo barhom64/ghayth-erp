@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Building2, Users, Pencil, Trash2 } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PageShell } from "@/components/page-shell";
@@ -130,7 +131,7 @@ export default function UmrahAgents() {
       <UmrahTabsNav />
       <div className="flex items-center justify-between">
         <p className="text-muted-foreground">إدارة وكلاء العمرة</p>
-        <Button onClick={openCreate} className="gap-2"><Plus className="h-4 w-4" />إضافة وكيل</Button>
+        <GuardedButton perm="umrah:create" onClick={openCreate} className="gap-2"><Plus className="h-4 w-4" />إضافة وكيل</GuardedButton>
       </div>
 
       <div className="grid gap-4 grid-cols-3">
@@ -225,9 +226,9 @@ export default function UmrahAgents() {
           <p>هل أنت متأكد من حذف هذا الوكيل؟ لا يمكن حذف وكيل مرتبط بمعتمرين.</p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteId(null)}>إلغاء</Button>
-            <Button variant="destructive" onClick={() => deleteMut.mutate({})} disabled={deleteMut.isPending}>
+            <GuardedButton perm="umrah:delete" variant="destructive" onClick={() => deleteMut.mutate({})} disabled={deleteMut.isPending}>
               {deleteMut.isPending ? "جاري الحذف..." : "حذف"}
-            </Button>
+            </GuardedButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -6,7 +6,6 @@ import { handleRouteError, NotFoundError,
   zodParse,
 } from "../lib/errorHandler.js";
 import { rawQuery } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { emitEvent } from "../lib/businessHelpers.js";
 import {
@@ -24,6 +23,30 @@ import { logger } from "../lib/logger.js";
 
 export const obligationsRouter = Router();
 obligationsRouter.use(authMiddleware);
+
+interface ObligationRow {
+  id: number;
+  companyId: number;
+  branchId: number | null;
+  entityType: string;
+  entityId: number;
+  obligationType: string;
+  title: string;
+  status: string;
+  dueAt: string;
+  metAt: string | null;
+  assignedTo: number | null;
+  escalationSteps: unknown;
+  metadata: unknown;
+  dedupeKey: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+interface ObligationStatusRow {
+  id: number;
+  status: string;
+}
 
 const createObligationSchema = z.object({
   entityType: z.string().min(1, "نوع الكيان مطلوب"),
@@ -96,7 +119,7 @@ obligationsRouter.post("/", authorize({ feature: "projects", action: "create" })
       dedupeKey,
     });
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "obligation.created", entity: "obligations", entityId: id, details: JSON.stringify({ entityType, entityId, obligationType, title, dueAt }) }).catch((e) => logger.error(e, "obligations background task failed"));
-    const [row] = await rawQuery<any>(`SELECT * FROM obligations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery<ObligationRow>(`SELECT * FROM obligations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.status(201).json(row || { id });
   } catch (err) {
     handleRouteError(err, res, "Create obligation error:");
@@ -109,7 +132,7 @@ obligationsRouter.post("/:id/met", authorize({ feature: "projects", action: "cre
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     await ensureObligationsTable();
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<ObligationStatusRow>(
       `UPDATE obligations SET status='met', "metAt"=NOW(), "updatedAt"=NOW()
        WHERE id=$1 AND "companyId"=$2 AND status = 'pending' RETURNING id, status`,
       [id, scope.companyId]
@@ -145,7 +168,7 @@ obligationsRouter.post("/:id/cancel", authorize({ feature: "projects", action: "
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     await ensureObligationsTable();
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<ObligationStatusRow>(
       `UPDATE obligations SET status='cancelled', "updatedAt"=NOW()
        WHERE id=$1 AND "companyId"=$2 AND status = 'pending' RETURNING id, status`,
       [id, scope.companyId]

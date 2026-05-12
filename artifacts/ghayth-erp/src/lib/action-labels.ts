@@ -53,34 +53,3 @@ export function actionLabel(action: string | null | undefined): string {
   return ACTION_VERB[action] ?? action;
 }
 
-/**
- * Past-tense phrase ("تم اعتماد") for success toasts.
- */
-export function actionLabelPast(action: string | null | undefined): string {
-  const verb = actionLabel(action);
-  return verb ? `تم ${verb}` : "";
-}
-
-/**
- * Tailwind-friendly tone for each verb — used by audit-log lists and
- * approval timelines that colour each entry. Fall back to gray when
- * the verb isn't catalogued.
- */
-const ACTION_TONE: Record<string, string> = {
-  approve: "text-green-600",
-  reject: "text-red-600",
-  return: "text-orange-600",
-  refer: "text-indigo-600",
-  escalate: "text-purple-600",
-  cancel: "text-gray-500",
-  terminate: "text-rose-600",
-  create: "text-blue-600",
-  update: "text-amber-600",
-  delete: "text-red-600",
-  archive: "text-slate-500",
-};
-
-export function actionTone(action: string | null | undefined): string {
-  if (!action) return "text-gray-600";
-  return ACTION_TONE[action] ?? "text-gray-600";
-}

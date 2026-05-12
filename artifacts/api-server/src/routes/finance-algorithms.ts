@@ -12,7 +12,6 @@ import { z } from "zod";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { checkFinancialPeriodOpen, updateAccountBalances, todayISO, currentPeriod, toDateISO, roundTo2, roundTo4, generateTimeRef } from "../lib/businessHelpers.js";
 import { FINANCE_ROLES } from "../lib/rbacCatalog.js";
@@ -1275,15 +1274,16 @@ financeAlgorithmsRouter.get("/fx/revaluation/preview", authorize({ feature: "fin
       new Set<string>([...openInvoices.map((i: any) => i.currency), ...openPOs.map((p: any) => p.currency)])
     );
     const rateMap: Record<string, number> = {};
-    for (const cur of currencies) {
-      const [r] = await rawQuery<any>(
-        `SELECT rate FROM fx_rates
-         WHERE "companyId"=$1 AND "fromCurrency"=$2 AND "toCurrency"='SAR'
+    if (currencies.length > 0) {
+      const rateRows = await rawQuery<any>(
+        `SELECT DISTINCT ON ("fromCurrency") "fromCurrency", rate FROM fx_rates
+         WHERE "companyId"=$1 AND "fromCurrency" = ANY($2::text[]) AND "toCurrency"='SAR'
            AND "effectiveDate"::date <= $3::date
-         ORDER BY (source='period_end') DESC, "effectiveDate" DESC LIMIT 1`,
-        [scope.companyId, cur, periodEnd]
+         ORDER BY "fromCurrency", (source='period_end') DESC, "effectiveDate" DESC`,
+        [scope.companyId, currencies, periodEnd]
       );
-      rateMap[cur] = r ? Number(r.rate) : 0;
+      for (const r of rateRows) rateMap[r.fromCurrency] = Number(r.rate);
+      for (const cur of currencies) if (!(cur in rateMap)) rateMap[cur] = 0;
     }
 
     let totalGain = 0;
@@ -1404,15 +1404,16 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
       ...openPOs.map((p: any) => p.currency),
     ]));
     const rateMap: Record<string, number> = {};
-    for (const cur of currencies) {
-      const [r] = await rawQuery<any>(
-        `SELECT rate FROM fx_rates
-         WHERE "companyId"=$1 AND "fromCurrency"=$2 AND "toCurrency"='SAR'
+    if (currencies.length > 0) {
+      const rateRows = await rawQuery<any>(
+        `SELECT DISTINCT ON ("fromCurrency") "fromCurrency", rate FROM fx_rates
+         WHERE "companyId"=$1 AND "fromCurrency" = ANY($2::text[]) AND "toCurrency"='SAR'
            AND "effectiveDate"::date <= $3::date
-         ORDER BY (source='period_end') DESC, "effectiveDate" DESC LIMIT 1`,
-        [scope.companyId, cur, periodEnd]
+         ORDER BY "fromCurrency", (source='period_end') DESC, "effectiveDate" DESC`,
+        [scope.companyId, currencies, periodEnd]
       );
-      rateMap[cur] = r ? Number(r.rate) : 0;
+      for (const r of rateRows) rateMap[r.fromCurrency] = Number(r.rate);
+      for (const cur of currencies) if (!(cur in rateMap)) rateMap[cur] = 0;
     }
 
     let arDiff = 0; // net AR adjustment (DR if positive → asset up)
@@ -1658,6 +1659,8 @@ financeAlgorithmsRouter.get("/entity-financial-profile", authorize({ feature: "f
       project: 'jl."projectId"',
       contract: 'jl."contractId"',
       department: 'jl."departmentId"',
+      client: 'jl."clientId"',
+      supplier: 'jl."supplierId"',
     };
     const safeCol = safeColumns[entityType];
 

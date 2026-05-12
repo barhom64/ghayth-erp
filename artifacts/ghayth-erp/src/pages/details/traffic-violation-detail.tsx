@@ -10,6 +10,7 @@ import { Edit, AlertTriangle } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
   open: "مفتوح",
@@ -37,6 +38,7 @@ export default function TrafficViolationDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/fleet/traffic-violations/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("traffic-violation", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["traffic-violation", String(id)],
@@ -184,6 +186,8 @@ export default function TrafficViolationDetail() {
       relatedEntities={relatedEntities}
       entityType="traffic-violation"
       entityId={id ?? 0}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       overview={overview}
       isLoading={isLoading}
       error={error}

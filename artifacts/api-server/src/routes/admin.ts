@@ -10,7 +10,7 @@ import { logger } from "../lib/logger.js";
 import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
 import { getRedisRateLimitStatus } from "../lib/rateLimitStore.js";
 import { integrationService } from "../lib/integrationService.js";
-import { requirePermission, invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
+import { invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import crypto from "node:crypto";
@@ -26,7 +26,12 @@ const createUserSchema = z.object({
 });
 
 const resetPasswordSchema = z.object({
-  newPassword: z.string().min(8, "كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل"),
+  newPassword: z.string()
+    .min(8, "كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل")
+    .regex(/[A-Z]/, "يجب أن تحتوي على حرف كبير واحد على الأقل")
+    .regex(/[a-z]/, "يجب أن تحتوي على حرف صغير واحد على الأقل")
+    .regex(/[0-9]/, "يجب أن تحتوي على رقم واحد على الأقل")
+    .regex(/[^a-zA-Z0-9]/, "يجب أن تحتوي على رمز خاص واحد على الأقل"),
 });
 
 const createRoleSchema = z.object({
@@ -366,9 +371,21 @@ router.post("/users/:id/reset-password", resetPasswordLimiter, authorize({ featu
     const parsed = zodParse(resetPasswordSchema.safeParse(req.body));
     const { newPassword } = parsed;
     const hashed = await hashPassword(newPassword);
-    const result = await rawExecute(`UPDATE users SET "passwordHash"=$1 WHERE id=$2`, [hashed, id]);
-    if (result.affectedRows === 0) { throw new NotFoundError("المستخدم غير موجود"); }
-    await rawExecute(`UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE "userId" = $1 AND "revokedAt" IS NULL`, [id]);
+    // Atomic: rotate password AND revoke existing refresh tokens together.
+    // Same reasoning as /auth/change-password — half-applied state would
+    // leave old tokens valid after a forced password reset, defeating the
+    // point of the reset.
+    await withTransaction(async (client) => {
+      const { rowCount: passwordUpdated } = await client.query(
+        `UPDATE users SET "passwordHash"=$1 WHERE id=$2`,
+        [hashed, id],
+      );
+      if (!passwordUpdated) throw new NotFoundError("المستخدم غير موجود");
+      await client.query(
+        `UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE "userId" = $1 AND "revokedAt" IS NULL`,
+        [id],
+      );
+    });
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "password_reset", entity: "users", entityId: id,
@@ -771,71 +788,90 @@ router.get("/system-health", authorize({ feature: "admin", action: "list" }), as
     const scope = req.scope!;
     const cid = scope.companyId;
 
-    const [cronJobs] = await rawQuery<any>(
-      `SELECT
-        COUNT(*) as total,
-        COUNT(*) FILTER (WHERE "isActive" = true) as active,
-        COUNT(*) FILTER (WHERE "lastStatus" = 'failed') as failed
-       FROM cron_jobs`
-    ).catch((e) => { logger.error(e, "admin query failed"); return [{ total: 0, active: 0, failed: 0 }]; });
+    const [
+      cronJobsRow,
+      recentCrons,
+      recentCronLogs,
+      recentErrors,
+      failedLoginsRow,
+      userCountRow,
+      companyCountRow,
+      employeeCountRow,
+      sizeRow,
+      tableCountRow,
+      integrationStatsRow,
+      pendingMessagesRow,
+    ] = await Promise.all([
+      rawQuery<any>(
+        `SELECT
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE "isActive" = true) as active,
+          COUNT(*) FILTER (WHERE "lastStatus" = 'failed') as failed
+         FROM cron_jobs`
+      ).catch((e) => { logger.error(e, "admin query failed"); return [{ total: 0, active: 0, failed: 0 }]; }),
 
-    const recentCrons = await rawQuery<any>(
-      `SELECT name, "lastRunAt", "lastStatus", "lastError", schedule, "isActive"
-       FROM cron_jobs ORDER BY "lastRunAt" DESC NULLS LAST LIMIT 20`
-    ).catch((e) => { logger.error(e, "admin query failed"); return []; });
+      rawQuery<any>(
+        `SELECT name, "lastRunAt", "lastStatus", "lastError", schedule, "isActive"
+         FROM cron_jobs ORDER BY "lastRunAt" DESC NULLS LAST LIMIT 20`
+      ).catch((e) => { logger.error(e, "admin query failed"); return []; }),
 
-    const recentCronLogs = await rawQuery<any>(
-      `SELECT "jobName", status, duration, result, error, "createdAt"
-       FROM cron_logs ORDER BY "createdAt" DESC LIMIT 20`
-    ).catch((e) => { logger.error(e, "admin query failed"); return []; });
+      rawQuery<any>(
+        `SELECT "jobName", status, duration, result, error, "createdAt"
+         FROM cron_logs ORDER BY "createdAt" DESC LIMIT 20`
+      ).catch((e) => { logger.error(e, "admin query failed"); return []; }),
 
-    const recentErrors = await rawQuery<any>(
-      `SELECT action, entity, details, "createdAt"
-       FROM event_logs WHERE (action LIKE '%error%' OR action LIKE '%failed%')
-         AND ("companyId"=$1 OR "companyId" IS NULL)
-       ORDER BY "createdAt" DESC LIMIT 20`,
-      [cid]
-    ).catch((e) => { logger.error(e, "admin query failed"); return []; });
+      rawQuery<any>(
+        `SELECT action, entity, details, "createdAt"
+         FROM event_logs WHERE (action LIKE '%error%' OR action LIKE '%failed%')
+           AND ("companyId"=$1 OR "companyId" IS NULL)
+         ORDER BY "createdAt" DESC LIMIT 20`,
+        [cid]
+      ).catch((e) => { logger.error(e, "admin query failed"); return []; }),
 
-    const [failedLogins] = await rawQuery<any>(
-      `SELECT COUNT(*) as count FROM event_logs
-       WHERE action IN ('login.failed','auth.failed') AND "createdAt" > NOW() - INTERVAL '24 hours'
-         AND ("companyId"=$1 OR "companyId" IS NULL)`,
-      [cid]
-    ).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; });
+      rawQuery<any>(
+        `SELECT COUNT(*) as count FROM event_logs
+         WHERE action IN ('login.failed','auth.failed') AND "createdAt" > NOW() - INTERVAL '24 hours'
+           AND ("companyId"=$1 OR "companyId" IS NULL)`,
+        [cid]
+      ).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; }),
 
-    const [userCount] = await rawQuery<any>(`SELECT COUNT(*) as count FROM users`).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; });
-    const [companyCount] = await rawQuery<any>(`SELECT COUNT(*) as count FROM companies`).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; });
-    const [employeeCount] = await rawQuery<any>(
-      `SELECT COUNT(DISTINCT e.id) as count FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id WHERE ea."companyId"=$1 AND e."deletedAt" IS NULL`,
-      [cid]
-    ).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; });
+      rawQuery<any>(`SELECT COUNT(*) as count FROM users`).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; }),
 
-    let dbSize = "N/A";
-    try {
-      const [sizeRow] = await rawQuery<any>(`SELECT pg_size_pretty(pg_database_size(current_database())) as size`);
-      dbSize = sizeRow?.size || "N/A";
-    } catch (e) { logger.error(e, "admin stats: db size query failed"); }
+      rawQuery<any>(`SELECT COUNT(*) as count FROM companies`).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; }),
 
-    let tableCount = 0;
-    try {
-      const [tc] = await rawQuery<any>(`SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema='public'`);
-      tableCount = Number(tc?.count || 0);
-    } catch (e) { logger.error(e, "admin stats: table count query failed"); }
+      rawQuery<any>(
+        `SELECT COUNT(DISTINCT e.id) as count FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id WHERE ea."companyId"=$1 AND e."deletedAt" IS NULL`,
+        [cid]
+      ).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; }),
 
-    const [integrationStats] = await rawQuery<any>(
-      `SELECT
-        COUNT(*) as total,
-        COUNT(*) FILTER (WHERE status = 'active') as active,
-        COUNT(*) FILTER (WHERE status = 'error') as errored
-       FROM integrations WHERE "companyId"=$1`,
-      [cid]
-    ).catch((e) => { logger.error(e, "admin query failed"); return [{ total: 0, active: 0, errored: 0 }]; });
+      rawQuery<any>(`SELECT pg_size_pretty(pg_database_size(current_database())) as size`).catch((e) => { logger.error(e, "admin stats: db size query failed"); return [{ size: "N/A" }]; }),
 
-    const [pendingMessages] = await rawQuery<any>(
-      `SELECT COUNT(*) as count FROM integration_logs WHERE status IN ('pending','retrying') AND "companyId"=$1`,
-      [cid]
-    ).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; });
+      rawQuery<any>(`SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema='public'`).catch((e) => { logger.error(e, "admin stats: table count query failed"); return [{ count: 0 }]; }),
+
+      rawQuery<any>(
+        `SELECT
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE status = 'active') as active,
+          COUNT(*) FILTER (WHERE status = 'error') as errored
+         FROM integrations WHERE "companyId"=$1`,
+        [cid]
+      ).catch((e) => { logger.error(e, "admin query failed"); return [{ total: 0, active: 0, errored: 0 }]; }),
+
+      rawQuery<any>(
+        `SELECT COUNT(*) as count FROM integration_logs WHERE status IN ('pending','retrying') AND "companyId"=$1`,
+        [cid]
+      ).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; }),
+    ]);
+
+    const [cronJobs] = cronJobsRow;
+    const [failedLogins] = failedLoginsRow;
+    const [userCount] = userCountRow;
+    const [companyCount] = companyCountRow;
+    const [employeeCount] = employeeCountRow;
+    const dbSize = sizeRow[0]?.size || "N/A";
+    const tableCount = Number(tableCountRow[0]?.count || 0);
+    const [integrationStats] = integrationStatsRow;
+    const [pendingMessages] = pendingMessagesRow;
 
     res.json({
       timestamp: new Date().toISOString(),
@@ -896,50 +932,62 @@ router.get("/violations-report", authorize({ feature: "admin", action: "list" })
     const whereClause = conditions.join(" AND ");
 
     const paginated = [...params, pageLimit, pageOffset];
-    const violations = await rawQuery(
-      `SELECT * FROM audit_violations WHERE ${whereClause} ORDER BY "createdAt" DESC LIMIT $${paginated.length - 1} OFFSET $${paginated.length}`,
-      paginated
-    );
+    const [
+      violations,
+      totalCountRow,
+      summaryRow,
+      byType,
+      byDepartment,
+      trend,
+    ] = await Promise.all([
+      rawQuery(
+        `SELECT * FROM audit_violations WHERE ${whereClause} ORDER BY "createdAt" DESC LIMIT $${paginated.length - 1} OFFSET $${paginated.length}`,
+        paginated
+      ),
 
-    const [totalCount] = await rawQuery<any>(
-      `SELECT COUNT(*)::int AS count FROM audit_violations WHERE ${whereClause}`,
-      params
-    );
+      rawQuery<any>(
+        `SELECT COUNT(*)::int AS count FROM audit_violations WHERE ${whereClause}`,
+        params
+      ),
 
-    const [summary] = await rawQuery<any>(
-      `SELECT
-         COUNT(*) AS total,
-         COUNT(*) FILTER (WHERE status='open') AS open,
-         COUNT(*) FILTER (WHERE status='resolved') AS resolved,
-         COUNT(*) FILTER (WHERE priority='critical') AS critical,
-         COUNT(*) FILTER (WHERE priority='high') AS high,
-         COUNT(*) FILTER (WHERE priority='medium') AS medium,
-         COUNT(*) FILTER (WHERE priority='low') AS low
-       FROM audit_violations WHERE "companyId"=$1 AND "auditDate"=CURRENT_DATE`,
-      [scope.companyId]
-    );
+      rawQuery<any>(
+        `SELECT
+           COUNT(*) AS total,
+           COUNT(*) FILTER (WHERE status='open') AS open,
+           COUNT(*) FILTER (WHERE status='resolved') AS resolved,
+           COUNT(*) FILTER (WHERE priority='critical') AS critical,
+           COUNT(*) FILTER (WHERE priority='high') AS high,
+           COUNT(*) FILTER (WHERE priority='medium') AS medium,
+           COUNT(*) FILTER (WHERE priority='low') AS low
+         FROM audit_violations WHERE "companyId"=$1 AND "auditDate"=CURRENT_DATE`,
+        [scope.companyId]
+      ),
 
-    const byType = await rawQuery<any>(
-      `SELECT type, COUNT(*)::int AS count
-       FROM audit_violations WHERE "companyId"=$1 AND status='open'
-       GROUP BY type ORDER BY count DESC`,
-      [scope.companyId]
-    );
+      rawQuery<any>(
+        `SELECT type, COUNT(*)::int AS count
+         FROM audit_violations WHERE "companyId"=$1 AND status='open'
+         GROUP BY type ORDER BY count DESC`,
+        [scope.companyId]
+      ),
 
-    const byDepartment = await rawQuery<any>(
-      `SELECT department, COUNT(*)::int AS count
-       FROM audit_violations WHERE "companyId"=$1 AND status='open' AND department IS NOT NULL
-       GROUP BY department ORDER BY count DESC`,
-      [scope.companyId]
-    );
+      rawQuery<any>(
+        `SELECT department, COUNT(*)::int AS count
+         FROM audit_violations WHERE "companyId"=$1 AND status='open' AND department IS NOT NULL
+         GROUP BY department ORDER BY count DESC`,
+        [scope.companyId]
+      ),
 
-    const trend = await rawQuery<any>(
-      `SELECT "auditDate"::text AS date, COUNT(*)::int AS count
-       FROM audit_violations WHERE "companyId"=$1
-         AND "auditDate" >= CURRENT_DATE - INTERVAL '30 days'
-       GROUP BY "auditDate" ORDER BY "auditDate"`,
-      [scope.companyId]
-    );
+      rawQuery<any>(
+        `SELECT "auditDate"::text AS date, COUNT(*)::int AS count
+         FROM audit_violations WHERE "companyId"=$1
+           AND "auditDate" >= CURRENT_DATE - INTERVAL '30 days'
+         GROUP BY "auditDate" ORDER BY "auditDate"`,
+        [scope.companyId]
+      ),
+    ]);
+
+    const [totalCount] = totalCountRow;
+    const [summary] = summaryRow;
 
     res.json({ data: violations, summary, byType, byDepartment, trend, total: totalCount?.count || violations.length });
   } catch (err) { handleRouteError(err, res, "admin"); }
@@ -1165,6 +1213,7 @@ import { DOMAIN_REGISTRY, getSystemStats, getDomain } from "../lib/domainRegistr
 import { STATE_MACHINES } from "../lib/lifecycleEngine.js";
 import { EVENT_CATALOG, countEventsByDomain } from "../lib/eventCatalog.js";
 import { PERMISSIONS, ROLE_PERMISSIONS } from "../lib/rbacCatalog.js";
+import { ENTITY_REGISTRY, getEntitiesByDomain, getMissingCoverage, getCoverageSummary } from "../lib/entityRegistry.js";
 
 router.get("/governance/policy-audit", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
@@ -1188,8 +1237,7 @@ router.get("/governance/system-guards", authorize({ feature: "admin", action: "l
     const result = await checkSystemGuards(companyId, "all", { date: todayISO() });
     res.json(result);
   } catch (err: any) {
-    logger.error(err, "System guards error");
-    res.status(500).json({ allowed: false, violations: [], error: "خطأ في فحص حراسة النظام" });
+    handleRouteError(err, res, "System guards error");
   }
 });
 
@@ -1340,6 +1388,7 @@ router.get("/system-registry", authorize({ feature: "admin", action: "list" }), 
       [scope.companyId]
     );
 
+    const coverageSummary = getCoverageSummary();
     res.json({
       overview: {
         domains: stats.domains,
@@ -1351,6 +1400,8 @@ router.get("/system-registry", authorize({ feature: "admin", action: "list" }), 
         roles: Object.keys(ROLE_PERMISSIONS).length,
         cronJobs: stats.cronJobs,
         glDomains: stats.glDomains,
+        registeredEntities: ENTITY_REGISTRY.length,
+        coverage: coverageSummary,
       },
       domains: DOMAIN_REGISTRY.map(d => ({
         id: d.id,
@@ -1366,19 +1417,77 @@ router.get("/system-registry", authorize({ feature: "admin", action: "list" }), 
   } catch (err) { handleRouteError(err, res, "System registry error:"); }
 });
 
-router.get("/system-registry/entities", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
+router.get("/system-registry/entities", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
-    const entities = DOMAIN_REGISTRY.flatMap(d =>
-      d.tables.map(t => ({
-        table: t,
-        domain: d.id,
-        domainLabel: d.label,
-        hasLifecycle: STATE_MACHINES.some((m: any) => m.entity === t),
-        lifecycle: STATE_MACHINES.find((m: any) => m.entity === t) || null,
-      }))
-    );
+    const domain = req.query.domain as string | undefined;
+    const entities = domain ? getEntitiesByDomain(domain) : ENTITY_REGISTRY;
     res.json({ entities, total: entities.length });
   } catch (err) { handleRouteError(err, res, "Entity registry error:"); }
+});
+
+router.get("/system-registry/coverage", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
+  try {
+    const gaps = getMissingCoverage();
+    const summary = getCoverageSummary();
+    const bySeverity = { critical: 0, high: 0, medium: 0, low: 0 };
+    const byCategory: Record<string, number> = {};
+    for (const g of gaps) {
+      bySeverity[g.severity]++;
+      byCategory[g.category] = (byCategory[g.category] || 0) + 1;
+    }
+    res.json({ gaps, total: gaps.length, bySeverity, byCategory, summary });
+  } catch (err) { handleRouteError(err, res, "Coverage analysis error:"); }
+});
+
+router.get("/system-registry/notifications", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
+  try {
+    const byDomain: Record<string, Array<{ entityId: string; entityLabel: string; notifications: string[] }>> = {};
+    for (const entity of ENTITY_REGISTRY) {
+      if (entity.notifications.length === 0) continue;
+      if (!byDomain[entity.domain]) byDomain[entity.domain] = [];
+      byDomain[entity.domain].push({
+        entityId: entity.id,
+        entityLabel: entity.label,
+        notifications: entity.notifications,
+      });
+    }
+    const totalTypes = ENTITY_REGISTRY.reduce((s, e) => s + e.notifications.length, 0);
+    const entitiesWithNotifications = ENTITY_REGISTRY.filter(e => e.notifications.length > 0).length;
+    res.json({ byDomain, totalTypes, entitiesWithNotifications, totalEntities: ENTITY_REGISTRY.length });
+  } catch (err) { handleRouteError(err, res, "Notification registry error:"); }
+});
+
+router.get("/system-registry/reports", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
+  try {
+    const byDomain: Record<string, Array<{ entityId: string; entityLabel: string; reports: string[] }>> = {};
+    for (const entity of ENTITY_REGISTRY) {
+      if (entity.reports.length === 0) continue;
+      if (!byDomain[entity.domain]) byDomain[entity.domain] = [];
+      byDomain[entity.domain].push({
+        entityId: entity.id,
+        entityLabel: entity.label,
+        reports: entity.reports,
+      });
+    }
+    const totalReports = ENTITY_REGISTRY.reduce((s, e) => s + e.reports.length, 0);
+    const entitiesWithReports = ENTITY_REGISTRY.filter(e => e.reports.length > 0).length;
+    res.json({ byDomain, totalReports, entitiesWithReports, totalEntities: ENTITY_REGISTRY.length });
+  } catch (err) { handleRouteError(err, res, "Report registry error:"); }
+});
+
+router.get("/system-registry/print-templates", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
+  try {
+    const templates = ENTITY_REGISTRY
+      .filter(e => e.print?.hasTemplate)
+      .map(e => ({
+        entityId: e.id,
+        entityLabel: e.label,
+        domain: e.domain,
+        templateKey: e.print!.templateKey,
+        detailRoute: e.routes.detail,
+      }));
+    res.json({ templates, total: templates.length });
+  } catch (err) { handleRouteError(err, res, "Print templates error:"); }
 });
 
 router.get("/system-registry/actions", authorize({ feature: "admin", action: "list" }), async (req, res) => {
@@ -1705,8 +1814,8 @@ router.post("/system-stops", authorize({ feature: "admin", action: "update" }), 
        VALUES ($1, $2, $3, $4) RETURNING id`,
       [scope.companyId, s, reason, scope.userId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.activated", entity: "system_stops", entityId: row.id, after: { scope: s, reason } }).catch(() => {});
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.activated", entity: "system_stops", entityId: row.id, details: `إيقاف نظام (${s}): ${reason}` }).catch(() => {});
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.activated", entity: "system_stops", entityId: row.id, after: { scope: s, reason } }).catch((e) => logger.error(e, "audit log failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.activated", entity: "system_stops", entityId: row.id, details: `إيقاف نظام (${s}): ${reason}` }).catch((e) => logger.error(e, "emit event failed"));
     res.status(201).json({ id: row.id, message: `تم تفعيل إيقاف النظام — النطاق: ${s}` });
   } catch (err) { handleRouteError(err, res, "Create system stop"); }
 });
@@ -1720,8 +1829,8 @@ router.patch("/system-stops/:id/deactivate", authorize({ feature: "admin", actio
        WHERE id=$2 AND "companyId"=$3 AND active=true`,
       [scope.userId, id, scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.deactivated", entity: "system_stops", entityId: id, after: {} }).catch(() => {});
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.deactivated", entity: "system_stops", entityId: id, details: "إلغاء إيقاف النظام" }).catch(() => {});
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.deactivated", entity: "system_stops", entityId: id, after: {} }).catch((e) => logger.error(e, "audit log failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.deactivated", entity: "system_stops", entityId: id, details: "إلغاء إيقاف النظام" }).catch((e) => logger.error(e, "emit event failed"));
     res.json({ message: "تم إلغاء تفعيل الإيقاف" });
   } catch (err) { handleRouteError(err, res, "Deactivate system stop"); }
 });

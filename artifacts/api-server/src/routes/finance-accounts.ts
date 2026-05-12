@@ -10,7 +10,6 @@ import {
   zodParse,
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { checkFinancialPeriodOpen, emitEvent, createAuditLog, todayISO, toDateISO } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -56,12 +55,83 @@ const createJournalSchema = z.object({
 export const accountsRouter = Router();
 accountsRouter.use(authMiddleware);
 
+interface ChartOfAccountsBriefRow {
+  id: number;
+  code: string;
+  name: string;
+  type: string;
+  parentCode: string | null;
+  status: string;
+}
+
+interface ChartOfAccountsRow extends ChartOfAccountsBriefRow {
+  companyId: number;
+  nameEn: string | null;
+  nature: string;
+  allowPosting: boolean;
+  isAnalytical: boolean;
+  parentId: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+  deletedAt: string | null;
+}
+
+interface JournalCountRow { cnt: string | number }
+interface IdRow { id: number }
+
+interface JournalEntryWithLinesRow {
+  id: number;
+  companyId: number;
+  branchId: number | null;
+  ref: string;
+  description: string;
+  status: string;
+  createdAt: string;
+  createdBy: number | null;
+  deletedAt: string | null;
+  lines: unknown;
+}
+
+interface AccountLedgerHeadRow {
+  name: string;
+  type: string;
+  code: string;
+}
+
+interface LedgerEntryRow {
+  id: number;
+  ref: string;
+  description: string;
+  date: string;
+  debit: number | string | null;
+  credit: number | string | null;
+}
+
+interface FinanceStatsRow {
+  totalRevenue: number | string;
+  paidThisMonth: number | string;
+  pendingAmount: number | string;
+  overdueAmount: number | string;
+}
+
+interface InvoiceSummaryRow {
+  count: number | string;
+  total: number | string;
+  paid: number | string;
+  outstanding: number | string;
+}
+
+interface ExpenseSummaryRow {
+  count: number | string;
+  total: number | string;
+}
+
 accountsRouter.get("/chart-of-accounts", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
     const { where, params } = buildScopedWhere(scope, filters);
-    const accounts = await rawQuery<any>(
+    const accounts = await rawQuery<ChartOfAccountsBriefRow>(
       `SELECT id, code, name, type, "parentCode", status
        FROM chart_of_accounts
        WHERE ${where} AND "deletedAt" IS NULL
@@ -109,7 +179,7 @@ accountsRouter.post("/accounts", authorize({ feature: "finance.accounts", action
     const scope = req.scope!;
 
     const b = zodParse(createAccountSchema.safeParse(req.body ?? {}));
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<ChartOfAccountsRow>(
       `INSERT INTO chart_of_accounts ("companyId", code, name, type, "parentCode", "nameEn", nature, "allowPosting", "isAnalytical")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        ON CONFLICT ("companyId", code) DO NOTHING
@@ -171,7 +241,7 @@ accountsRouter.patch("/accounts/:id", authorize({ feature: "finance.accounts", a
       });
     }
     params.push(id); params.push(scope.companyId);
-    const rows = await rawQuery<any>(`UPDATE chart_of_accounts SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`, params);
+    const rows = await rawQuery<ChartOfAccountsRow>(`UPDATE chart_of_accounts SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`, params);
     if (rows.length === 0) throw new NotFoundError("الحساب غير موجود");
 
     emitEvent({
@@ -202,14 +272,14 @@ accountsRouter.delete("/accounts/:id", authorize({ feature: "finance.accounts", 
 
     const accountId = parseId(req.params.id, "id");
 
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<{ id: number; code: string; name: string }>(
       `SELECT id, code, name FROM chart_of_accounts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [accountId, scope.companyId]
     );
     if (!existing) throw new NotFoundError("الحساب غير موجود");
 
     // Referential integrity: refuse delete when journal lines reference this account code.
-    const [journalUsage] = await rawQuery<any>(
+    const [journalUsage] = await rawQuery<JournalCountRow>(
       `SELECT COUNT(*) AS cnt FROM journal_lines jl
        JOIN journal_entries je ON je.id = jl."journalId"
        WHERE jl."accountCode" = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL`,
@@ -226,7 +296,7 @@ accountsRouter.delete("/accounts/:id", authorize({ feature: "finance.accounts", 
       );
     }
 
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<IdRow>(
       `UPDATE chart_of_accounts SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
       [accountId, scope.companyId]
     );
@@ -259,7 +329,7 @@ accountsRouter.get("/journal", authorize({ feature: "finance.accounts", action: 
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
     const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"' });
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<JournalEntryWithLinesRow>(
       `SELECT je.*, json_agg(jl.*) AS lines
        FROM journal_entries je
        LEFT JOIN journal_lines jl ON jl."journalId" = je.id
@@ -324,7 +394,7 @@ accountsRouter.post("/journal", authorize({ feature: "finance.accounts", action:
       after: { ref, lineCount: lines.length, date: journalDate },
     }).catch((err) => logger.error(err, "[audit] journal.created:"));
 
-    const [createdJournal] = await rawQuery<any>(
+    const [createdJournal] = await rawQuery<JournalEntryWithLinesRow>(
       `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit, 'description', jl.description)) AS lines
        FROM journal_entries je
        LEFT JOIN journal_lines jl ON jl."journalId" = je.id
@@ -349,12 +419,12 @@ accountsRouter.get("/ledger/:accountCode", authorize({ feature: "finance.account
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
     if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
 
-    const [accountRow] = await rawQuery<any>(
+    const [accountRow] = await rawQuery<AccountLedgerHeadRow>(
       `SELECT name, type, code FROM chart_of_accounts WHERE code = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [accountCode, scope.companyId]
     );
 
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<LedgerEntryRow>(
       `SELECT je.id, je.ref, je.description, je."createdAt" AS date,
               jl.debit, jl.credit
        FROM journal_entries je
@@ -386,7 +456,7 @@ accountsRouter.get("/ledger/:accountCode", authorize({ feature: "finance.account
 accountsRouter.get("/stats", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [inv] = await rawQuery<any>(
+    const [inv] = await rawQuery<FinanceStatsRow>(
       `SELECT COALESCE(SUM(total),0) AS "totalRevenue",
               COALESCE(SUM("paidAmount") FILTER(WHERE "paidAt" >= date_trunc('month', CURRENT_DATE)),0) AS "paidThisMonth",
               COALESCE(SUM(total - "paidAmount") FILTER(WHERE status IN ('sent','partial')),0) AS "pendingAmount",
@@ -401,14 +471,14 @@ accountsRouter.get("/stats", authorize({ feature: "finance.accounts", action: "l
 accountsRouter.get("/summary", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [inv] = await rawQuery<any>(
+    const [inv] = await rawQuery<InvoiceSummaryRow>(
       `SELECT COUNT(*) AS count, COALESCE(SUM(total),0) AS total,
               COALESCE(SUM("paidAmount"),0) AS paid,
               COALESCE(SUM(total - "paidAmount") FILTER(WHERE status IN ('sent','partial','overdue')),0) AS outstanding
        FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [scope.companyId]
     );
-    const [exp] = await rawQuery<any>(
+    const [exp] = await rawQuery<ExpenseSummaryRow>(
       `SELECT COUNT(*) AS count, COALESCE(SUM(jl.debit),0) AS total
        FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id
        WHERE je."companyId" = $1 AND jl."accountCode" LIKE '5%' AND je."deletedAt" IS NULL AND je.status = 'posted'`,

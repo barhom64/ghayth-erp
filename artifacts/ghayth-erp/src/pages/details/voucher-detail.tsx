@@ -2,14 +2,14 @@ import { useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
-import { EntityDocuments } from "@/components/shared/entity-documents";
-import { ApprovalTimeline } from "@/components/shared/approval-timeline";
+
 import { Edit, Paperclip, Eye, Receipt } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { PAYMENT_METHODS } from "@/lib/finance-type-maps";
@@ -53,6 +53,7 @@ export default function VoucherDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/finance/vouchers/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("voucher", id ?? 0);
   const { toast } = useToast();
   const [previewAttachment, setPreviewAttachment] = useState<PreviewableAttachment | null>(null);
 
@@ -305,18 +306,6 @@ export default function VoucherDetail() {
         )}
       </div>
 
-      {/* Documents */}
-      {id && (
-        <EntityDocuments entityType="voucher" entityId={id} />
-      )}
-
-      {/* Approval Timeline */}
-      {id && (
-        <ApprovalTimeline entityType="voucher" entityId={id} />
-      )}
-
-      {id && <EntityComments entityType="voucher" entityId={id} />}
-      {id && <EntityTags entityType="voucher" entityId={id} />}
     </div>
   );
 
@@ -340,6 +329,8 @@ export default function VoucherDetail() {
         relatedEntities={relatedEntities}
         entityType="voucher"
         entityId={id ?? 0}
+        extraTabs={extraTabs}
+        hideTabs={hideTabs}
         overview={overview}
         isLoading={isLoading}
         error={error}

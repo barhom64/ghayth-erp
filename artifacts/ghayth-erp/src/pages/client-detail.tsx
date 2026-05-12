@@ -21,6 +21,11 @@ import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { useToast } from "@/hooks/use-toast";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
+import { z } from "zod";
+import {
+  FormShell, FormEmailField, FormTextField, FormGrid,
+} from "@/components/form-shell";
 
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Activity },
@@ -57,6 +62,7 @@ const TIMELINE_ICONS: Record<string, { icon: typeof FileText; color: string; bg:
 export default function ClientDetail() {
   const [, params] = useRoute("/clients/:id");
   const id = params?.id || "";
+  const { hideTabs: registryHideTabs } = useRegistryTabs("client", id ?? "");
   const { data: client, isLoading, isError } = useApiQuery<any>(["client", id], `/clients/${id}`, !!id);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
 
@@ -435,7 +441,7 @@ export default function ClientDetail() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <EntityFinancialProfile entityType="vendor" entityId={id} />
+              <EntityFinancialProfile entityType="client" entityId={id} />
             </CardContent>
           </Card>
           <Card>
@@ -602,7 +608,7 @@ export default function ClientDetail() {
       isLoading={isLoading}
       error={isError ? new Error("خطأ في تحميل بيانات العميل") : undefined}
       onRetry={() => {}}
-      hideTabs={["tasks"]}
+      hideTabs={[...new Set(["tasks" as const, ...registryHideTabs])]}
       actions={
         <>
           {client && (
@@ -628,19 +634,23 @@ function ClientPortalTab({ clientId, clientEmail }: { clientId: string; clientEm
   const createMut = useApiMutation<any, any>(`/clients/${clientId}/portal-account`, "POST", [["portal-account", clientId]]);
   const updateMut = useApiMutation<any, any>(`/clients/${clientId}/portal-account`, "PATCH", [["portal-account", clientId]]);
 
-  const [form, setForm] = useState({ email: clientEmail || "", password: "" });
+  // Schema enforces email validity client-side AND password min length.
+  // Old guard was `if (!form.email || !form.password)` which accepted
+  // "x" + "1" as valid. Server still re-validates.
+  const portalSchema = z.object({
+    email: z.string().email("بريد إلكتروني غير صالح"),
+    password: z.string().min(6, "كلمة المرور 6 أحرف على الأقل"),
+  });
+  type PortalForm = z.infer<typeof portalSchema>;
+
   const [resetPassword, setResetPassword] = useState("");
   const [showCreate, setShowCreate] = useState(false);
 
   const account = data?.account;
 
-  const handleCreate = async () => {
-    if (!form.email || !form.password) {
-      toast({ variant: "destructive", title: "يرجى إدخال البريد وكلمة المرور" });
-      return;
-    }
+  const handleCreate = async (values: PortalForm) => {
     try {
-      await createMut.mutateAsync({ email: form.email, password: form.password });
+      await createMut.mutateAsync({ email: values.email, password: values.password });
       toast({ title: "تم إنشاء حساب البوابة بنجاح" });
       setShowCreate(false);
       refetch();
@@ -699,36 +709,26 @@ function ClientPortalTab({ clientId, clientEmail }: { clientId: string; clientEm
             ) : (
               <div className="space-y-3 border rounded-lg p-4">
                 <p className="text-sm font-semibold">إنشاء حساب بوابة للعميل</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <Label>البريد الإلكتروني</Label>
-                    <Input
-                      className="mt-1"
-                      type="email"
-                      dir="ltr"
-                      value={form.email}
-                      onChange={(e) => setForm({ ...form, email: e.target.value })}
-                      placeholder="client@example.com"
-                    />
-                  </div>
-                  <div>
-                    <Label>كلمة المرور المؤقتة</Label>
-                    <Input
-                      className="mt-1"
-                      type="text"
-                      value={form.password}
-                      onChange={(e) => setForm({ ...form, password: e.target.value })}
-                      placeholder="6 أحرف على الأقل"
-                    />
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground">سيُطلب من العميل تغيير كلمة المرور عند أول دخول</p>
-                <div className="flex gap-2">
-                  <Button onClick={handleCreate} disabled={createMut.isPending} size="sm" rateLimitAware>
-                    {createMut.isPending ? "جارٍ الإنشاء..." : "إنشاء الحساب"}
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setShowCreate(false)}>إلغاء</Button>
-                </div>
+                <FormShell
+                  schema={portalSchema}
+                  defaultValues={{ email: clientEmail || "", password: "" }}
+                  submitLabel="إنشاء الحساب"
+                  secondaryActions={
+                    <Button type="button" variant="outline" size="sm" onClick={() => setShowCreate(false)}>
+                      إلغاء
+                    </Button>
+                  }
+                  onSubmit={async (values, ctx) => {
+                    await handleCreate(values);
+                    ctx.reset();
+                  }}
+                >
+                  <FormGrid cols={2}>
+                    <FormEmailField name="email" label="البريد الإلكتروني" required placeholder="client@example.com" />
+                    <FormTextField name="password" label="كلمة المرور المؤقتة" required placeholder="6 أحرف على الأقل" />
+                  </FormGrid>
+                  <p className="text-xs text-muted-foreground mt-2">سيُطلب من العميل تغيير كلمة المرور عند أول دخول</p>
+                </FormShell>
               </div>
             )}
           </div>
