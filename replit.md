@@ -100,6 +100,15 @@ Ghayth ERP centralizes operations across 28+ modules (HR, Finance, Fleet, Wareho
     -   `/api/support` ❌ → `/api/support/tickets` ✅
     -   `/api/marketing` ❌ → `/api/marketing/campaigns` ✅
     Rule of thumb: when in doubt, `grep -E "router\.(get\|post)\(['\"]/" artifacts/api-server/src/routes/<module>.ts` to see the actual mounted paths.
+-   **Umrah canonical paths (added by PRs #303 / #305 / #306 / #312 / #318, May 2026)** — new operational endpoints. See `lib/api-spec/openapi.yaml` for full schemas and `SERVICES_INDEX.md` for the per-module listing.
+    -   `POST   /api/umrah/groups/:id/split` — split a group (rejects 409 if the source is invoiced)
+    -   `POST   /api/umrah/groups/merge` — merge N source groups into one target
+    -   `POST   /api/umrah/penalties/waive-bulk` — bulk waive with consolidated GL reversal
+    -   `GET|POST|DELETE /api/umrah/attachments` — polymorphic attachments (mutamer / sub_agent / group / ...)
+    -   `GET    /api/umrah/reports/reconciliation` — NUSK file ↔ system diff (amount / count / overstay)
+    -   `GET    /api/umrah/reports/daily-runsheet[/pdf]` — arrivals + departures + overstays for `?date=`
+    -   `GET    /api/umrah/statements/:subAgentId/pdf` — Arabic statement-of-account PDF
+    Three engine-level changes ride alongside these endpoints: NUSK voucher import posts AP on receipt instead of only when `nuskStatus='paid'` and a separate reversal entry on refund (#303); the commission engine snapshots `planVersion + planSnapshot + tiersSnapshot` onto every `employee_commission_calculations` row (#306); the migration runner detects `CREATE INDEX CONCURRENTLY` in a migration body and runs that file un-wrapped (#318).
 -   **Auth uses HttpOnly cookies, not Bearer tokens.** `POST /api/auth/login` returns `Set-Cookie: erp_access=<jwt>; Path=/api; HttpOnly` (and `erp_refresh` on `/api/auth`). For curl/scripts use `-c jar.txt` on login then `-b jar.txt` on subsequent requests. The login JSON response body contains `assignments` + `userRoles` only — no `accessToken` field.
 -   **API Recurring Bugs**: Be aware of common API query discrepancies (e.g., `hireDate` vs `startDate`, `entityType` vs `relatedEntity`, missing `fullName` on `users` table).
 -   **Migration Overwrites**: Upstream pulls often overwrite local fixes; re-apply known fixes related to column names, `SAVEPOINT` usage, `rawExecute` vs `pool.query`, and conditional DDL statements.
