@@ -34,7 +34,7 @@ import { encryptField, decryptPilgrimRow, blindIndex, SENSITIVE_PILGRIM_FIELDS, 
 // ─────────────────────────────────────────────────────────────────────────────
 async function requireOpenSeason(seasonId: number, companyId: number): Promise<void> {
   const [season] = await rawQuery<{ id: number; status: string }>(
-    `SELECT id, status FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+    `SELECT id, status FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
     [seasonId, companyId]
   );
   if (!season) throw new ValidationError("الموسم غير موجود", { field: "seasonId" });
@@ -251,6 +251,11 @@ const waivePenaltySchema = z.object({
   reason: z.string().min(1, "سبب الإعفاء مطلوب"),
 });
 
+const bulkWaivePenaltiesSchema = z.object({
+  penaltyIds: z.array(z.number().int().positive()).min(1, "اختر عقوبة واحدة على الأقل"),
+  reason: z.string().min(1, "سبب الإعفاء مطلوب"),
+});
+
 const recordPaymentSchema = z.object({
   amount: z.coerce.number().positive("مبلغ الدفع مطلوب"),
   paymentMethod: z.string().optional(),
@@ -323,7 +328,7 @@ const createPenaltySchema = z.object({
 router.get("/seasons", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM umrah_seasons WHERE "companyId"=$1 ORDER BY "startDate" DESC LIMIT 100`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM umrah_seasons WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "startDate" DESC LIMIT 100`, [scope.companyId]);
     res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "List seasons error"); }
 });
@@ -333,7 +338,7 @@ router.get("/seasons/:id", authorize({ feature: "umrah", action: "view" }), asyn
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<any>(
-      `SELECT * FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 `,
+      `SELECT * FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("الموسم غير موجود");
@@ -363,7 +368,7 @@ router.patch("/seasons/:id", authorize({ feature: "umrah", action: "update" }), 
     const b = zodParse(patchSeasonSchema.safeParse(req.body));
     let originalStatus: string | undefined;
     if (b.status !== undefined) {
-      const [existing] = await rawQuery<any>(`SELECT status FROM umrah_seasons WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+      const [existing] = await rawQuery<any>(`SELECT status FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
       if (!existing) throw new NotFoundError("الموسم غير موجود");
       originalStatus = existing.status;
       if (b.status !== existing.status) {
@@ -385,7 +390,7 @@ router.patch("/seasons/:id", authorize({ feature: "umrah", action: "update" }), 
         throw new ValidationError(`لا يمكن إغلاق الموسم — يوجد ${open[0].c} معتمر نشط`, { meta: { blockers: [{ type: "active_pilgrims", count: Number(open[0].c) }] } });
       }
       const unpaid = await rawQuery(
-        `SELECT COUNT(*) as c FROM umrah_agent_invoices WHERE "seasonId"=$1 AND "companyId"=$2 AND status NOT IN ('paid','cancelled')`,
+        `SELECT COUNT(*) as c FROM umrah_agent_invoices WHERE "seasonId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL AND status NOT IN ('paid','cancelled')`,
         [id, scope.companyId]
       );
       if (Number(unpaid[0]?.c) > 0) {
@@ -405,7 +410,7 @@ router.patch("/seasons/:id", authorize({ feature: "umrah", action: "update" }), 
     if (originalStatus !== undefined) { params.push(originalStatus); seasonUpdateWhere += ` AND status=$${params.length}`; }
     const { affectedRows } = await rawExecute(`UPDATE umrah_seasons SET ${sets.join(",")} WHERE ${seasonUpdateWhere}`, params);
     if (!affectedRows) throw new NotFoundError("الموسم غير موجود");
-    const [row] = await rawQuery(`SELECT * FROM umrah_seasons WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery(`SELECT * FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_seasons", entityId: Number(id), after: { status: b.status } }).catch((e) => logger.error(e, "umrah background task failed"));
     if (b.status) {
       emitEvent({ companyId: scope.companyId, userId: scope.userId, action: `umrah.season.${b.status}`, entity: "umrah_seasons", entityId: Number(id), after: { status: b.status } }).catch((e) => logger.error(e, "umrah background task failed"));
@@ -511,7 +516,7 @@ router.delete("/agents/:id", authorize({ feature: "umrah", action: "delete" }), 
 router.get("/packages", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT p.*, s.title as "seasonTitle" FROM umrah_packages p LEFT JOIN umrah_seasons s ON p."seasonId"=s.id WHERE p."companyId"=$1 AND p."deletedAt" IS NULL ORDER BY p.name LIMIT 500`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT p.*, s.title as "seasonTitle" FROM umrah_packages p LEFT JOIN umrah_seasons s ON p."seasonId"=s.id AND s."deletedAt" IS NULL WHERE p."companyId"=$1 AND p."deletedAt" IS NULL ORDER BY p.name LIMIT 500`, [scope.companyId]);
     res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "List packages error"); }
 });
@@ -538,7 +543,7 @@ router.get("/packages/:id", authorize({ feature: "umrah", action: "view" }), asy
     const id = parseId(req.params.id, "id");
     const [row] = await rawQuery(
       `SELECT p.*, s.title AS "seasonTitle" FROM umrah_packages p
-       LEFT JOIN umrah_seasons s ON p."seasonId" = s.id
+       LEFT JOIN umrah_seasons s ON p."seasonId" = s.id AND s."deletedAt" IS NULL
        WHERE p.id = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -798,12 +803,12 @@ router.get("/pilgrims/:id", authorize({ feature: "umrah", action: "view" }), asy
        FROM umrah_pilgrims p
        LEFT JOIN umrah_agents a ON p."agentId"=a.id
        LEFT JOIN umrah_packages pkg ON p."packageId"=pkg.id
-       LEFT JOIN umrah_seasons s ON p."seasonId"=s.id
+       LEFT JOIN umrah_seasons s ON p."seasonId"=s.id AND s."deletedAt" IS NULL
        WHERE p.id=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL`, [id, scope.companyId]
     );
     if (!row) { throw new NotFoundError("المعتمر غير موجود"); }
     logSensitiveAccess({ companyId: scope.companyId, userId: scope.userId, action: "read", entity: "umrah_pilgrims", entityId: id, ipAddress: req.ip, userAgent: req.headers["user-agent"] });
-    const penalties = await rawQuery(`SELECT * FROM umrah_penalties WHERE "pilgrimId"=$1 AND "companyId"=$2 ORDER BY "createdAt" DESC LIMIT 500`, [id, scope.companyId]);
+    const penalties = await rawQuery(`SELECT * FROM umrah_penalties WHERE "pilgrimId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [id, scope.companyId]);
     res.json({ ...decryptPilgrimRow(row), penalties });
   } catch (err) { handleRouteError(err, res, "Get pilgrim error"); }
 });
@@ -973,39 +978,41 @@ router.get("/dashboard", authorize({ feature: "umrah", action: "list" }), async 
     let seasonFilterP = "";
     const params: any[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); seasonFilter = ` AND "seasonId"=$${params.length}`; seasonFilterP = ` AND p."seasonId"=$${params.length}`; }
-    const stats = await rawQuery(`
-      SELECT
-        COUNT(*) as total,
-        COUNT(*) FILTER (WHERE status='pending') as pending,
-        COUNT(*) FILTER (WHERE status='arrived') as arrived,
-        COUNT(*) FILTER (WHERE status='active') as active,
-        COUNT(*) FILTER (WHERE status='overstayed') as overstayed,
-        COUNT(*) FILTER (WHERE status='departed') as departed,
-        COUNT(*) FILTER (WHERE status='violated') as violated,
-        COUNT(*) FILTER (WHERE status='cancelled') as cancelled,
-        COUNT(*) FILTER (WHERE "agentId" IS NULL) as unassigned
-      FROM umrah_pilgrims WHERE "companyId"=$1 AND "deletedAt" IS NULL${seasonFilter}
-    `, params);
-    const penaltyStats = await rawQuery(`
-      SELECT
-        COUNT(*) as total,
-        COALESCE(SUM(amount),0) as "totalAmount",
-        COUNT(*) FILTER (WHERE status='pending') as pending
-      FROM umrah_penalties WHERE "companyId"=$1${seasonFilter}
-    `, params);
-    const agentStats = await rawQuery(`
-      SELECT a.id, a.name, COUNT(p.id) as "pilgrimCount",
-        COUNT(p.id) FILTER (WHERE p.status='overstayed') as "overstayedCount"
-      FROM umrah_agents a
-      LEFT JOIN umrah_pilgrims p ON p."agentId"=a.id AND p."companyId"=$1 AND p."deletedAt" IS NULL${seasonFilterP}
-      WHERE a."companyId"=$1 AND a.status='active' AND a."deletedAt" IS NULL
-      GROUP BY a.id, a.name ORDER BY "pilgrimCount" DESC LIMIT 10
-    `, params);
-    const recentArrivals = await rawQuery(`
-      SELECT id,"fullName","passportNumber",nationality,"actualArrival",status
-      FROM umrah_pilgrims WHERE "companyId"=$1 AND "deletedAt" IS NULL${seasonFilter} AND "actualArrival" IS NOT NULL
-      ORDER BY "actualArrival" DESC LIMIT 10
-    `, params);
+    const [stats, penaltyStats, agentStats, recentArrivals] = await Promise.all([
+      rawQuery(`
+        SELECT
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE status='pending') as pending,
+          COUNT(*) FILTER (WHERE status='arrived') as arrived,
+          COUNT(*) FILTER (WHERE status='active') as active,
+          COUNT(*) FILTER (WHERE status='overstayed') as overstayed,
+          COUNT(*) FILTER (WHERE status='departed') as departed,
+          COUNT(*) FILTER (WHERE status='violated') as violated,
+          COUNT(*) FILTER (WHERE status='cancelled') as cancelled,
+          COUNT(*) FILTER (WHERE "agentId" IS NULL) as unassigned
+        FROM umrah_pilgrims WHERE "companyId"=$1 AND "deletedAt" IS NULL${seasonFilter}
+      `, params),
+      rawQuery(`
+        SELECT
+          COUNT(*) as total,
+          COALESCE(SUM(amount),0) as "totalAmount",
+          COUNT(*) FILTER (WHERE status='pending') as pending
+        FROM umrah_penalties WHERE "companyId"=$1${seasonFilter}
+      `, params),
+      rawQuery(`
+        SELECT a.id, a.name, COUNT(p.id) as "pilgrimCount",
+          COUNT(p.id) FILTER (WHERE p.status='overstayed') as "overstayedCount"
+        FROM umrah_agents a
+        LEFT JOIN umrah_pilgrims p ON p."agentId"=a.id AND p."companyId"=$1 AND p."deletedAt" IS NULL${seasonFilterP}
+        WHERE a."companyId"=$1 AND a.status='active' AND a."deletedAt" IS NULL
+        GROUP BY a.id, a.name ORDER BY "pilgrimCount" DESC LIMIT 10
+      `, params),
+      rawQuery(`
+        SELECT id,"fullName","passportNumber",nationality,"actualArrival",status
+        FROM umrah_pilgrims WHERE "companyId"=$1 AND "deletedAt" IS NULL${seasonFilter} AND "actualArrival" IS NOT NULL
+        ORDER BY "actualArrival" DESC LIMIT 10
+      `, params),
+    ]);
     res.json({
       pilgrims: stats[0],
       penalties: penaltyStats[0],
@@ -1020,18 +1027,20 @@ router.post("/run-daily-status", authorize({ feature: "umrah", action: "create" 
     const scope = req.scope!;
     const today = todayISO();
 
-    const pendingToArrived = await rawQuery<any>(
-      `SELECT id FROM umrah_pilgrims WHERE "companyId"=$1 AND status='pending' AND "arrivalDate" <= $2 AND ("departureDate" IS NULL OR "departureDate" >= $2) AND "deletedAt" IS NULL`,
-      [scope.companyId, today]
-    );
-    const toOverstayed = await rawQuery<any>(
-      `SELECT id, status FROM umrah_pilgrims WHERE "companyId"=$1 AND status IN ('arrived','active') AND "departureDate" < $2 AND "actualDeparture" IS NULL AND "deletedAt" IS NULL`,
-      [scope.companyId, today]
-    );
-    const toDeparted = await rawQuery<any>(
-      `SELECT id, status FROM umrah_pilgrims WHERE "companyId"=$1 AND status IN ('arrived','active') AND "actualDeparture" IS NOT NULL AND "actualDeparture" <= $2 AND "deletedAt" IS NULL`,
-      [scope.companyId, today]
-    );
+    const [pendingToArrived, toOverstayed, toDeparted] = await Promise.all([
+      rawQuery<any>(
+        `SELECT id FROM umrah_pilgrims WHERE "companyId"=$1 AND status='pending' AND "arrivalDate" <= $2 AND ("departureDate" IS NULL OR "departureDate" >= $2) AND "deletedAt" IS NULL`,
+        [scope.companyId, today]
+      ),
+      rawQuery<any>(
+        `SELECT id, status FROM umrah_pilgrims WHERE "companyId"=$1 AND status IN ('arrived','active') AND "departureDate" < $2 AND "actualDeparture" IS NULL AND "deletedAt" IS NULL`,
+        [scope.companyId, today]
+      ),
+      rawQuery<any>(
+        `SELECT id, status FROM umrah_pilgrims WHERE "companyId"=$1 AND status IN ('arrived','active') AND "actualDeparture" IS NOT NULL AND "actualDeparture" <= $2 AND "deletedAt" IS NULL`,
+        [scope.companyId, today]
+      ),
+    ]);
 
     let arrivedUpdated = 0, overstayedUpdated = 0, departedUpdated = 0;
 
@@ -1085,7 +1094,7 @@ router.post("/run-penalty-engine", authorize({ feature: "umrah", action: "create
         ($1::date - p."departureDate"::date) as "daysOver"
        FROM umrah_pilgrims p
        WHERE p."companyId"=$2 AND p."deletedAt" IS NULL AND p.status='overstayed' AND p."departureDate" < $1
-         AND NOT EXISTS (SELECT 1 FROM umrah_penalties pen WHERE pen."pilgrimId"=p.id AND pen.type='overstay' AND pen.status IN ('pending','invoiced'))`,
+         AND NOT EXISTS (SELECT 1 FROM umrah_penalties pen WHERE pen."pilgrimId"=p.id AND pen."deletedAt" IS NULL AND pen.type='overstay' AND pen.status IN ('pending','invoiced'))`,
       [today, scope.companyId]
     );
     let created = 0;
@@ -1190,7 +1199,7 @@ router.patch("/penalties/:id/waive", authorize({ feature: "umrah", action: "upda
         );
       } catch (e) { logger.error(e, "umrah penalty waiver GL posting failed (non-blocking)"); }
     }
-    const [row] = await rawQuery(`SELECT * FROM umrah_penalties WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery(`SELECT * FROM umrah_penalties WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json(row);
   } catch (err) {
     const lcErr = lifecycleErrorResponse(err);
@@ -1199,12 +1208,87 @@ router.patch("/penalties/:id/waive", authorize({ feature: "umrah", action: "upda
   }
 });
 
+// Bulk waive — same lifecycle transition + GL posting as the single
+// endpoint, but applied to N penalties under one reason. Failures on
+// individual rows don't roll back the whole batch: each is wrapped so
+// successCount / skipped[] / errors[] are reported back to the caller.
+// (Closes #6 from the umrah internal review.)
+router.post("/penalties/waive-bulk", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const body = zodParse(bulkWaivePenaltiesSchema.safeParse(req.body));
+
+    const successIds: number[] = [];
+    const skipped: { id: number; reason: string }[] = [];
+    const errors: { id: number; error: string }[] = [];
+    let totalAmount = 0;
+
+    for (const id of body.penaltyIds) {
+      try {
+        const [penalty] = await rawQuery<any>(
+          `SELECT pen.*, p."fullName" as "pilgrimName"
+             FROM umrah_penalties pen
+        LEFT JOIN umrah_pilgrims p ON pen."pilgrimId" = p.id
+            WHERE pen.id = $1 AND pen."companyId" = $2`,
+          [id, scope.companyId]
+        );
+        if (!penalty) { skipped.push({ id, reason: "not_found" }); continue; }
+        if (penalty.status === "waived") { skipped.push({ id, reason: "already_waived" }); continue; }
+        if (penalty.status === "paid")   { skipped.push({ id, reason: "already_paid" });   continue; }
+
+        await applyTransition({
+          entity: "umrah_penalties",
+          id,
+          scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
+          action: "umrah.penalty.waived",
+          fromStates: ["pending", "invoiced"],
+          toState: "waived",
+          reason: `${body.reason} (bulk)`,
+          setExtras: { waivedBy: scope.userId, waivedAt: { raw: "NOW()" } },
+          skipUpdatedAt: true,
+        });
+
+        if (Number(penalty.amount) > 0) {
+          try {
+            const { umrahEngine } = await import("../lib/engines/index.js");
+            await umrahEngine.postPenaltyWaiverGL(
+              { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
+              { id, amount: Number(penalty.amount), pilgrimName: penalty.pilgrimName || "" }
+            );
+            totalAmount += Number(penalty.amount);
+          } catch (e) {
+            logger.error(e, `bulk waive GL post failed for penalty ${id} (non-blocking)`);
+          }
+        }
+        successIds.push(id);
+      } catch (rowErr: any) {
+        const lcErr = lifecycleErrorResponse(rowErr);
+        errors.push({ id, error: lcErr ? lcErr.body.message : String(rowErr?.message ?? rowErr) });
+      }
+    }
+
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.penalty.waived_bulk", entity: "umrah_penalties", entityId: 0,
+      details: JSON.stringify({ successCount: successIds.length, totalAmount, reason: body.reason, skipped: skipped.length, errors: errors.length }),
+    }).catch((e) => logger.error(e, "bulk waive bg"));
+
+    res.json({
+      successCount: successIds.length,
+      successIds,
+      totalWaivedAmount: totalAmount,
+      skipped,
+      errors,
+    });
+  } catch (err) { handleRouteError(err, res, "Bulk waive penalties"); }
+});
+
 router.post("/agent-invoices/:id/record-payment", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { amount, paymentMethod, reference } = zodParse(recordPaymentSchema.safeParse(req.body));
-    const [invoice] = await rawQuery<any>(`SELECT * FROM umrah_agent_invoices WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [invoice] = await rawQuery<any>(`SELECT * FROM umrah_agent_invoices WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
     const paidSoFar = Number(invoice.paidAmount || 0) + Number(amount);
     if (paidSoFar > Number(invoice.total) * 1.001) {
@@ -1221,7 +1305,7 @@ router.post("/agent-invoices/:id/record-payment", authorize({ feature: "umrah", 
       setExtras: { paidAmount: paidSoFar },
       after: { paymentAmount: Number(amount), paymentMethod, reference, paidSoFar },
     });
-    const [row] = await rawQuery(`SELECT * FROM umrah_agent_invoices WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery(`SELECT * FROM umrah_agent_invoices WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json(row);
   } catch (err) {
     const lcErr = lifecycleErrorResponse(err);
@@ -1254,7 +1338,7 @@ router.post("/agent-invoices/generate", authorize({ feature: "umrah", action: "c
     const [agent] = await rawQuery(`SELECT * FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [agentId, scope.companyId]);
     if (!agent) { throw new NotFoundError("الوكيل غير موجود"); }
     const penalties = await rawQuery(
-      `SELECT COALESCE(SUM(amount),0) as total FROM umrah_penalties WHERE "agentId"=$1 AND "seasonId"=$2 AND "companyId"=$3 AND status='pending'`,
+      `SELECT COALESCE(SUM(amount),0) as total FROM umrah_penalties WHERE "agentId"=$1 AND "seasonId"=$2 AND "companyId"=$3 AND "deletedAt" IS NULL AND status='pending'`,
       [agentId, seasonId, scope.companyId]
     );
     const penaltiesTotal = Number(penalties[0]?.total || 0);
@@ -1328,8 +1412,8 @@ router.get("/agent-invoices", authorize({ feature: "umrah", action: "list" }), a
       `SELECT i.*, a.name as "agentName", s.title as "seasonTitle"
        FROM umrah_agent_invoices i
        LEFT JOIN umrah_agents a ON i."agentId"=a.id
-       LEFT JOIN umrah_seasons s ON i."seasonId"=s.id
-       WHERE ${where} ORDER BY i."createdAt" DESC LIMIT 500`, params
+       LEFT JOIN umrah_seasons s ON i."seasonId"=s.id AND s."deletedAt" IS NULL
+       WHERE ${where} AND i."deletedAt" IS NULL ORDER BY i."createdAt" DESC LIMIT 500`, params
     );
     res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "List agent invoices error"); }
@@ -1343,13 +1427,13 @@ router.get("/agent-invoices/:id", authorize({ feature: "umrah", action: "view" }
       `SELECT i.*, a.name as "agentName", s.title as "seasonTitle"
        FROM umrah_agent_invoices i
        LEFT JOIN umrah_agents a ON i."agentId"=a.id
-       LEFT JOIN umrah_seasons s ON i."seasonId"=s.id
-       WHERE i.id=$1 AND i."companyId"=$2`,
+       LEFT JOIN umrah_seasons s ON i."seasonId"=s.id AND s."deletedAt" IS NULL
+       WHERE i.id=$1 AND i."companyId"=$2 AND i."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("الفاتورة غير موجودة");
     const penalties = await rawQuery(
-      `SELECT * FROM umrah_penalties WHERE "invoiceId"=$1 AND "companyId"=$2 ORDER BY "createdAt" DESC LIMIT 500`,
+      `SELECT * FROM umrah_penalties WHERE "invoiceId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`,
       [id, scope.companyId]
     );
     res.json({ ...row, penalties });
@@ -1562,7 +1646,7 @@ router.post("/transport/:id/assign-pilgrims", authorize({ feature: "umrah", acti
 router.get("/import-logs", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM umrah_import_logs WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 50`, [scope.companyId]);
+    const rows = await rawQuery(`SELECT * FROM umrah_import_logs WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 50`, [scope.companyId]);
     res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "List import logs error"); }
 });

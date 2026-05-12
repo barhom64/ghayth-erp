@@ -8,6 +8,7 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import {
   Undo2,
 } from "lucide-react";
@@ -23,6 +24,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const LIFECYCLE_STEPS: ReadonlyArray<{ key: string; label: string }> = [
   { key: "draft",           label: "مسودة" },
@@ -69,6 +71,7 @@ export default function JournalManualDetailPage() {
   const [, params] = useRoute("/finance/journal-manual/:id");
   const id = params?.id || "";
   const { toast } = useToast();
+  const { extraTabs, hideTabs } = useRegistryTabs("journal_entry", id);
   const [reversalOpen, setReversalOpen] = useState(false);
   const [reversalReason, setReversalReason] = useState("");
 
@@ -187,10 +190,10 @@ export default function JournalManualDetailPage() {
       {journal?.reversedById && <PageStatusBadge status="reversed" domain="shared" />}
       {journal?.reversalOfId && <PageStatusBadge status="active">قيد عاكس</PageStatusBadge>}
       {journal && !journal.reversedById && !journal.reversalOfId && (
-        <Button variant="outline" size="sm" className="gap-1" onClick={() => setReversalOpen(true)}>
+        <GuardedButton perm="finance:delete" variant="outline" size="sm" className="gap-1" onClick={() => setReversalOpen(true)}>
           <Undo2 className="h-4 w-4" />
           عكس القيد
-        </Button>
+        </GuardedButton>
       )}
     </div>
   );
@@ -213,6 +216,8 @@ export default function JournalManualDetailPage() {
         error={isError ? true : undefined}
         onRetry={() => refetch()}
         overview={overview}
+        extraTabs={extraTabs}
+        hideTabs={hideTabs}
         actions={actions}
       />
 

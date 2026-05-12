@@ -10,6 +10,7 @@ import { Edit, Scale } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
   issued: "صادر",
@@ -48,6 +49,7 @@ export default function LegalJudgmentDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/legal/judgments/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("legal-judgment", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["legal-judgment", String(id)],
@@ -275,6 +277,8 @@ export default function LegalJudgmentDetail() {
       isLoading={isLoading}
       error={error}
       onRetry={refetch}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       actions={
         <>
           {judgment && (

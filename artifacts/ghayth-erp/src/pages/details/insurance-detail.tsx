@@ -15,6 +15,7 @@ import { AlertTriangle, CheckCircle2, Edit, Shield, Car } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
   active: "ساري",
@@ -54,6 +55,7 @@ export default function InsuranceDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/fleet/insurance/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("insurance_policy", id ?? 0);
 
   const { data: insurance, isLoading, error, refetch } = useApiQuery<any>(
     ["insurance-detail", String(id)],
@@ -278,6 +280,8 @@ export default function InsuranceDetail() {
       relatedEntities={relatedEntities}
       entityType="insurance"
       entityId={id ?? 0}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       overview={overview}
       isLoading={isLoading}
       error={error}

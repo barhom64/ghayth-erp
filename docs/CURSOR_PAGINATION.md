@@ -5,8 +5,12 @@ default `?page=N&limit=M` style triggers a Postgres `OFFSET` scan that
 becomes O(N) as the table grows. This document describes the opt-in
 cursor mode that some endpoints now support.
 
-> Status: rolled out on `/api/admin/audit-logs` only (PR #273). Other
-> heavy endpoints follow when their callers are ready to migrate.
+> Status (as of 2026-05-11): rolled out on three endpoints:
+> - `GET /api/admin/audit-logs` (PR #274 — first reference)
+> - `GET /api/events/log` (cursor batch 2)
+> - `GET /api/notifications` (cursor batch 2)
+>
+> Other heavy endpoints follow as their callers are ready to migrate.
 
 ---
 

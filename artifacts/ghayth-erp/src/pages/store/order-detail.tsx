@@ -9,10 +9,13 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { ShoppingCart, User, Phone, Calendar, Package } from "lucide-react";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 export default function StoreOrderDetailPage() {
   const [, params] = useRoute("/store/orders/:id");
   const id = params?.id;
+  const { extraTabs, hideTabs } = useRegistryTabs("store_order", id ?? "");
+
   const { data: order, isLoading, isError } = useApiQuery<any>(["store-order-detail", id || ""], `/store/orders/${id}`, !!id);
   const [showPreview, setShowPreview] = useState(false);
   const printContainerRef = useRef<HTMLDivElement>(null);
@@ -198,6 +201,8 @@ export default function StoreOrderDetailPage() {
       createdAt={order?.createdAt}
       updatedAt={order?.updatedAt}
       overview={overview}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       actions={actions}
     />
   );

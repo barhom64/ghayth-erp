@@ -2,6 +2,7 @@ import { useParams } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -40,6 +41,7 @@ function buildViolationSteps(status: string | undefined): StageStep[] {
 
 export default function ViolationDetail() {
   const { id } = useParams<{ id: string }>();
+  const { extraTabs, hideTabs } = useRegistryTabs("violation", id ?? "");
 
   const { data, isLoading, isError } = useApiQuery<any>(["hr-violation-detail", id], id ? `/hr/violations/${id}` : null);
   const item = data?.data ?? data;
@@ -204,6 +206,8 @@ export default function ViolationDetail() {
       } : undefined}
       entityType="violation"
       entityId={Number(id)}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       isLoading={isLoading}
       error={isError ? true : undefined}
      

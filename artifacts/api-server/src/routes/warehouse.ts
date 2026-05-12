@@ -1002,7 +1002,7 @@ router.post("/categories", authorize({ feature: "warehouse.inventory", action: "
   } catch (err) { handleRouteError(err, res, "Create category error:"); }
 });
 
-router.get("/suppliers", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
+router.get("/suppliers", authorize({ feature: "warehouse.inventory", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { page = "1", limit: lim = "50", search, status } = req.query as any;
@@ -1028,7 +1028,7 @@ router.get("/suppliers", authorize({ feature: "warehouse", action: "list" }), as
   } catch (err) { handleRouteError(err, res, "Suppliers error:"); }
 });
 
-router.get("/suppliers/:id", authorize({ feature: "warehouse", action: "view" }), async (req, res) => {
+router.get("/suppliers/:id", authorize({ feature: "warehouse.inventory", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1041,7 +1041,7 @@ router.get("/suppliers/:id", authorize({ feature: "warehouse", action: "view" })
   } catch (err) { handleRouteError(err, res, "Supplier detail error:"); }
 });
 
-router.post("/suppliers", authorize({ feature: "warehouse", action: "create" }), async (req, res) => {
+router.post("/suppliers", authorize({ feature: "warehouse.inventory", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createSupplierSchema.safeParse(req.body));
@@ -1161,7 +1161,7 @@ router.delete("/categories/:id", authorize({ feature: "warehouse.inventory", act
   } catch (err) { handleRouteError(err, res, "Delete category error:"); }
 });
 
-router.patch("/suppliers/:id", authorize({ feature: "warehouse", action: "update" }), async (req, res) => {
+router.patch("/suppliers/:id", authorize({ feature: "warehouse.inventory", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1198,7 +1198,7 @@ router.patch("/suppliers/:id", authorize({ feature: "warehouse", action: "update
   } catch (err) { handleRouteError(err, res, "Update supplier error:"); }
 });
 
-router.delete("/suppliers/:id", authorize({ feature: "warehouse", action: "delete" }), async (req, res) => {
+router.delete("/suppliers/:id", authorize({ feature: "warehouse.inventory", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1223,13 +1223,15 @@ router.delete("/suppliers/:id", authorize({ feature: "warehouse", action: "delet
   } catch (err) { handleRouteError(err, res, "Delete supplier error:"); }
 });
 
-router.get("/stats", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
+router.get("/stats", authorize({ feature: "warehouse.inventory", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [products] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE "currentStock" <= "minStock") as "lowStock" FROM warehouse_products WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]);
-    const [value] = await rawQuery<any>(`SELECT COALESCE(SUM("currentStock" * "costPrice"),0) as "totalValue" FROM warehouse_products WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]);
-    const [movements] = await rawQuery<any>(`SELECT COUNT(*) as "todayMovements" FROM warehouse_movements WHERE "companyId"=$1 AND "createdAt"::date = CURRENT_DATE`, [cid]);
+    const [[products], [value], [movements]] = await Promise.all([
+      rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE "currentStock" <= "minStock") as "lowStock" FROM warehouse_products WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COALESCE(SUM("currentStock" * "costPrice"),0) as "totalValue" FROM warehouse_products WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as "todayMovements" FROM warehouse_movements WHERE "companyId"=$1 AND "createdAt"::date = CURRENT_DATE`, [cid]),
+    ]);
     res.json({ totalProducts: Number(products.total), lowStock: Number(products.lowStock), totalValue: Number(value.totalValue), todayMovements: Number(movements.todayMovements) });
   } catch (err) { handleRouteError(err, res, "Warehouse stats error:"); }
 });

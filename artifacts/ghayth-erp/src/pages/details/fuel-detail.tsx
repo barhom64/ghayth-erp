@@ -15,6 +15,7 @@ import { Edit, Fuel, Gauge } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const FUEL_TYPES: Record<string, string> = {
   gasoline_91: "بنزين 91",
@@ -27,6 +28,7 @@ export default function FuelDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/fleet/fuel/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("fuel_log", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["fuel-detail", String(id)],
@@ -213,6 +215,8 @@ export default function FuelDetail() {
       relatedEntities={relatedEntities}
       entityType="fuel"
       entityId={id ?? 0}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       overview={overview}
       isLoading={isLoading}
       error={error}

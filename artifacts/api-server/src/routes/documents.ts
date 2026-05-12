@@ -481,11 +481,11 @@ router.patch("/:id/status", authorize({ feature: "documents", action: "update" }
       throw new ForbiddenError("ليس لديك صلاحية اعتماد المستندات");
     }
 
-    const [beforeDoc] = await rawQuery<DocumentRow>(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [docId, scope.companyId]);
+    const [beforeDoc] = await rawQuery<DocumentRow>(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [docId, scope.companyId]);
     if (!beforeDoc) throw new NotFoundError("المستند غير موجود");
 
     const result = await rawExecute(
-      `UPDATE documents SET status=$1, "updatedAt"=NOW() WHERE id=$2 AND ("companyId"=$3 OR "companyId" IS NULL) AND status != $1 AND "deletedAt" IS NULL`,
+      `UPDATE documents SET status=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND status != $1 AND "deletedAt" IS NULL`,
       [status, docId, scope.companyId]
     );
     if (result.affectedRows === 0 && beforeDoc.status === status) throw new ConflictError("المستند في هذه الحالة مسبقاً");
@@ -980,11 +980,13 @@ router.get("/stats", authorize({ feature: "documents", action: "list" }), async 
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [docs] = await rawQuery(`SELECT COUNT(*) as count FROM documents WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]);
-    const [folders] = await rawQuery(`SELECT COUNT(*) as count FROM document_folders WHERE "companyId"=$1 OR "companyId" IS NULL`, [cid]);
-    const [templates] = await rawQuery(`SELECT COUNT(*) as count FROM document_templates WHERE "companyId"=$1 OR "companyId" IS NULL`, [cid]);
-    const [drafts] = await rawQuery(`SELECT COUNT(*) as count FROM documents WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL AND status='draft'`, [cid]);
-    const [approved] = await rawQuery(`SELECT COUNT(*) as count FROM documents WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL AND status='approved'`, [cid]);
+    const [[docs], [folders], [templates], [drafts], [approved]] = await Promise.all([
+      rawQuery(`SELECT COUNT(*) as count FROM documents WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]),
+      rawQuery(`SELECT COUNT(*) as count FROM document_folders WHERE "companyId"=$1 OR "companyId" IS NULL`, [cid]),
+      rawQuery(`SELECT COUNT(*) as count FROM document_templates WHERE "companyId"=$1 OR "companyId" IS NULL`, [cid]),
+      rawQuery(`SELECT COUNT(*) as count FROM documents WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL AND status='draft'`, [cid]),
+      rawQuery(`SELECT COUNT(*) as count FROM documents WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL AND status='approved'`, [cid]),
+    ]);
     res.json({
       totalDocuments: Number(docs.count),
       totalFolders: Number(folders.count),

@@ -212,13 +212,13 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
   { key: "finance.cost_centers", parentKey: "finance", moduleKey: "finance", labelAr: "مراكز التكلفة",
     availableActions: ALL_ACTIONS, availableScopes: ["company"], displayOrder: 284 },
   { key: "finance.algorithms", parentKey: "finance", moduleKey: "finance", labelAr: "المحركات المالية (الإهلاك / الأعمار / المطابقة)",
-    availableActions: [...READ_ACTIONS, "create"], availableScopes: ["company"],
+    availableActions: [...READ_ACTIONS, "create", "update"], availableScopes: ["company"],
     systemCritical: true, displayOrder: 286 },
   { key: "finance.hardening", parentKey: "finance", moduleKey: "finance", labelAr: "تشديد الإغلاق المالي",
-    availableActions: [...READ_ACTIONS, "create", "approve"], availableScopes: ["company"],
+    availableActions: [...READ_ACTIONS, "create", "update", "delete", "approve"], availableScopes: ["company"],
     approvableActions: ["approve"], systemCritical: true, displayOrder: 288 },
   { key: "finance.accounting_engine", parentKey: "finance", moduleKey: "finance", labelAr: "محرك المحاسبة (الترحيل التلقائي)",
-    availableActions: READ_ACTIONS, availableScopes: ["company"],
+    availableActions: [...READ_ACTIONS, "create", "delete"], availableScopes: ["company"],
     systemCritical: true, displayOrder: 289 },
 
   // ═══════════════════════════════════════════════════════════════
@@ -345,11 +345,11 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
     availableActions: ALL_ACTIONS, availableScopes: ["company"], displayOrder: 1600 },
 
   { key: "bi", moduleKey: "bi", labelAr: "تحليلات الأعمال (BI)", icon: "BarChart3",
-    availableActions: [...READ_ACTIONS, "create", "update"], availableScopes: ["branch", "company"],
+    availableActions: [...READ_ACTIONS, "create", "update", "delete"], availableScopes: ["branch", "company"],
     displayOrder: 1700 },
 
   { key: "reports", moduleKey: "reports", labelAr: "التقارير", icon: "FileBarChart",
-    availableActions: READ_ACTIONS, availableScopes: ALL_SCOPES, displayOrder: 1800 },
+    availableActions: [...READ_ACTIONS, "create", "update", "delete"], availableScopes: ALL_SCOPES, displayOrder: 1800 },
 
   { key: "admin", moduleKey: "admin", labelAr: "إدارة النظام", icon: "Settings2",
     availableActions: ALL_ACTIONS, availableScopes: ["company", "all"],
@@ -390,6 +390,29 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
   { key: "calendar.my", moduleKey: "calendar", labelAr: "تقويمي", icon: "Calendar",
     availableActions: ["view", "list", "create", "update", "delete"], availableScopes: ["self"],
     selfService: true, displayOrder: 70 },
+
+  // ═══════════════════════════════════════════════════════════════
+  // Dashboards & cross-module views
+  // ═══════════════════════════════════════════════════════════════
+  { key: "dashboard", moduleKey: "dashboard", labelAr: "لوحة القيادة", icon: "LayoutDashboard",
+    availableActions: ["view", "list"], availableScopes: ALL_SCOPES, displayOrder: 10 },
+  { key: "dashboard.action_center", parentKey: "dashboard", moduleKey: "dashboard", labelAr: "مركز المهام", icon: "ListChecks",
+    availableActions: ["view", "list"], availableScopes: ALL_SCOPES, displayOrder: 11 },
+  { key: "dashboard.executive", parentKey: "dashboard", moduleKey: "dashboard", labelAr: "لوحة القيادة التنفيذية", icon: "LineChart",
+    availableActions: ["view"], availableScopes: ["company", "multi_company", "all"], displayOrder: 12 },
+
+  // ═══════════════════════════════════════════════════════════════
+  // My Space sub-features
+  // ═══════════════════════════════════════════════════════════════
+  { key: "my_space.payslip", parentKey: "my_space", moduleKey: "my-space", labelAr: "كشف الراتب", icon: "Receipt",
+    availableActions: ["view"], availableScopes: ["self"],
+    selfService: true, displayOrder: 51 },
+
+  // ═══════════════════════════════════════════════════════════════
+  // Admin sub-features
+  // ═══════════════════════════════════════════════════════════════
+  { key: "admin.approvals", parentKey: "admin", moduleKey: "admin", labelAr: "سجل الاعتمادات", icon: "CheckCircle",
+    availableActions: ["view", "list"], availableScopes: ALL_SCOPES, displayOrder: 1810 },
 ];
 
 /**
