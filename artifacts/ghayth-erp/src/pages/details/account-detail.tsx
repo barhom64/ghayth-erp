@@ -6,12 +6,14 @@ import {
   InlineEditCard,
 } from "@/components/shared/detail-edit-delete-actions";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BookOpen } from "lucide-react";
 
 export default function AccountDetail() {
   const [, params] = useRoute("/finance/accounts/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("account", id ?? 0);
 
   // Accounts have no GET /:id endpoint — fetch the list and find by id.
   const { data, isLoading, error, refetch } = useApiQuery<any>(
@@ -72,6 +74,8 @@ export default function AccountDetail() {
       isLoading={isLoading}
       error={error}
       onRetry={refetch}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       actions={<DetailActionButtons hook={editDelete} />}
     />
   );

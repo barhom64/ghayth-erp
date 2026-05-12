@@ -10,6 +10,7 @@ import { Edit, Gavel } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
   scheduled: "مجدولة",
@@ -39,6 +40,7 @@ export default function LegalSessionDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/legal/sessions/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("legal-session", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["legal-session", String(id)],
@@ -290,6 +292,8 @@ export default function LegalSessionDetail() {
       isLoading={isLoading}
       error={error}
       onRetry={refetch}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       actions={
         <>
           {session && (

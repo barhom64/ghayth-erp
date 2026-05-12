@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useParams } from "wouter";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 import type { ExtraTab } from "@/components/shared/detail-page-layout";
@@ -9,10 +10,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DatePicker } from "@/components/ui/date-picker";
 import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
+import {
+  FormShell, FormTextField, FormDateField, FormGrid,
+} from "@/components/form-shell";
 import {
   Gavel, Calendar, FileText, AlertTriangle, Clock,
   CheckCircle2, User, MapPin, TrendingUp, Activity,
@@ -20,6 +23,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EntityObligations } from "@/components/shared/entity-obligations";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 
 const STEP_IMPACTS: Record<string, { icon: string; title: string; description: string; severity: "info" | "warning" | "danger" | "success" }> = {
@@ -116,50 +120,59 @@ function CaseTimeline({ sessions }: { sessions: any[] }) {
   );
 }
 
-function AddSessionForm({ caseId, onSuccess }: { caseId: number; onSuccess: () => void }) {
-  const { toast } = useToast();
-  const [form, setForm] = useState({ sessionDate: "", location: "", judge: "", result: "", notes: "", nextSessionDate: "" });
+// sessionDate required (was a bare toast guard on submit).
+const sessionSchema = z.object({
+  sessionDate: z.string().min(1, "تاريخ الجلسة مطلوب"),
+  location: z.string().trim(),
+  judge: z.string().trim(),
+  result: z.string().trim(),
+  notes: z.string().trim(),
+  nextSessionDate: z.string(),
+});
+type SessionForm = z.infer<typeof sessionSchema>;
+const defaultSessionForm: SessionForm = {
+  sessionDate: "", location: "", judge: "", result: "", notes: "", nextSessionDate: "",
+};
 
-  const saveMut = useApiMutation<any, typeof form>(
+function AddSessionForm({ caseId, onSuccess }: { caseId: number; onSuccess: () => void }) {
+  const saveMut = useApiMutation<any, SessionForm>(
     `/legal/cases/${caseId}/sessions`,
     "POST",
     [["legal-case", String(caseId)], ["legal-cases"]],
     {
       successMessage: "تمت إضافة الجلسة بنجاح",
-      onSuccess: () => {
-        setForm({ sessionDate: "", location: "", judge: "", result: "", notes: "", nextSessionDate: "" });
-        onSuccess();
-      },
-    }
+      onSuccess,
+    },
   );
-  const saving = saveMut.isPending;
-
-  const handleSave = () => {
-    if (!form.sessionDate) { toast({ variant: "destructive", title: "تاريخ الجلسة مطلوب" }); return; }
-    saveMut.mutate(form);
-  };
 
   return (
     <Card className="border-dashed">
       <CardContent className="p-4">
         <h4 className="font-semibold mb-3 text-sm">إضافة جلسة جديدة</h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div><Label className="text-xs">تاريخ الجلسة *</Label><DatePicker value={form.sessionDate} onChange={v => setForm({ ...form, sessionDate: v })} /></div>
-          <div><Label className="text-xs">المكان</Label><Input value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} placeholder="اسم المحكمة" /></div>
-          <div><Label className="text-xs">القاضي</Label><Input value={form.judge} onChange={e => setForm({ ...form, judge: e.target.value })} /></div>
-          <div><Label className="text-xs">نتيجة الجلسة</Label><Input value={form.result} onChange={e => setForm({ ...form, result: e.target.value })} placeholder="مثال: تأجيل، حكم، مذكرة..." /></div>
-          <div><Label className="text-xs">الجلسة التالية</Label><DatePicker value={form.nextSessionDate} onChange={v => setForm({ ...form, nextSessionDate: v })} /></div>
-          <div className="md:col-span-2"><Label className="text-xs">ملاحظات</Label><Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
-        </div>
-        <div className="mt-3 p-3 bg-blue-50 rounded-lg text-xs text-blue-700 flex items-start gap-2">
-          <Info className="h-4 w-4 flex-shrink-0 mt-0.5" />
-          <div>
-            <strong>الأثر المتوقع:</strong> إضافة جلسة ستحدث حالة القضية تلقائياً (مفتوح → جاري) وستُرسل إشعار للمحامي.
+        <FormShell
+          schema={sessionSchema}
+          defaultValues={defaultSessionForm}
+          submitLabel="حفظ الجلسة"
+          onSubmit={async (values, ctx) => {
+            await saveMut.mutateAsync(values);
+            ctx.reset();
+          }}
+        >
+          <FormGrid cols={2}>
+            <FormDateField name="sessionDate" label="تاريخ الجلسة" required />
+            <FormTextField name="location" label="المكان" placeholder="اسم المحكمة" />
+            <FormTextField name="judge" label="القاضي" />
+            <FormTextField name="result" label="نتيجة الجلسة" placeholder="مثال: تأجيل، حكم، مذكرة..." />
+            <FormDateField name="nextSessionDate" label="الجلسة التالية" />
+            <FormTextField name="notes" label="ملاحظات" className="md:col-span-2" />
+          </FormGrid>
+          <div className="mt-3 p-3 bg-blue-50 rounded-lg text-xs text-blue-700 flex items-start gap-2">
+            <Info className="h-4 w-4 flex-shrink-0 mt-0.5" />
+            <div>
+              <strong>الأثر المتوقع:</strong> إضافة جلسة ستحدث حالة القضية تلقائياً (مفتوح → جاري) وستُرسل إشعار للمحامي.
+            </div>
           </div>
-        </div>
-        <Button size="sm" className="mt-3" onClick={handleSave} disabled={saving} rateLimitAware>
-          {saving ? "جاري الحفظ..." : "حفظ الجلسة"}
-        </Button>
+        </FormShell>
       </CardContent>
     </Card>
   );
@@ -218,6 +231,8 @@ export default function LegalCaseDetail() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [showAddSession, setShowAddSession] = useState(false);
+
+  const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("legal_case", Number(id));
 
   const { data: caseData, refetch, isLoading, error } = useApiQuery<any>(["legal-case", id], id ? `/legal/cases/${id}` : null);
 
@@ -440,7 +455,8 @@ export default function LegalCaseDetail() {
       onRetry={refetch}
       actions={actions}
       overview={overview}
-      extraTabs={extraTabs}
+      extraTabs={[...extraTabs, ...registryExtraTabs]}
+      hideTabs={registryHideTabs}
     />
   );
 }

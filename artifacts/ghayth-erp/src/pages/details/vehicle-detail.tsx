@@ -20,6 +20,7 @@ import { EntityFinancialProfile } from "@/components/shared/entity-financial-pro
 import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { CheckSquare } from "lucide-react";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -76,6 +77,7 @@ export default function VehicleDetail() {
 
   const { data: vehicle, isLoading, isError, error, refetch } = useApiQuery<any>(["vehicle-detail", id || ""], `/fleet/vehicles/${id}`, !!id);
   const { data: tco } = useApiQuery<any>(["vehicle-tco", id || ""], `/fleet/vehicles/${id}/tco`, !!id);
+  const { hideTabs: registryHideTabs } = useRegistryTabs("vehicle", id || "");
 
   const [editForm, setEditForm] = useState<Record<string, string>>({});
 
@@ -795,7 +797,7 @@ export default function VehicleDetail() {
       updatedAt={vehicle?.updatedAt}
       overview={overview}
       actions={actions}
-      hideTabs={["tasks"]}
+      hideTabs={[...registryHideTabs, "tasks"]}
     />
   );
 }

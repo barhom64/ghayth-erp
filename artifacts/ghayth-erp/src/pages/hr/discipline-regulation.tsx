@@ -6,6 +6,16 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { BookOpen, Pencil, RefreshCw, AlertTriangle } from "lucide-react";
@@ -51,6 +61,11 @@ export default function DisciplineRegulationPage() {
     total: number;
   }>(["discipline-regulation"], "/hr/discipline/regulation");
   const [editing, setEditing] = useState<Article | null>(null);
+  // BUG FIX: this was declared after the early returns below, which violates
+  // Rules of Hooks (the hook count differs between render passes once data
+  // arrives → "Invalid hook call" + "change in order of Hooks" errors). Must
+  // stay above any conditional return.
+  const [reseedAsk, setReseedAsk] = useState(false);
 
   const grouped = data?.grouped ?? { work_time: [], work_organization: [], conduct: [] };
   const total = data?.total ?? 0;
@@ -93,9 +108,12 @@ export default function DisciplineRegulationPage() {
     } as any);
   };
 
+  // Native confirm() was unreadable in RTL + dark mode. The
+  // AlertDialog below preserves the same yes/no flow with proper
+  // localised buttons. (reseedAsk state declared above the early
+  // returns to satisfy Rules of Hooks.)
   const reseedDefaults = () => {
-    if (!confirm("سيتم استنساخ اللائحة الافتراضية (49 مادة) للشركة. المتابعة؟")) return;
-    reseedMut.mutate({});
+    setReseedAsk(true);
   };
 
   const renderArticle = (a: Article) => (
@@ -262,6 +280,28 @@ export default function DisciplineRegulationPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={reseedAsk} onOpenChange={(v) => { if (!v) setReseedAsk(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>استنساخ اللائحة الافتراضية</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيتم استنساخ اللائحة الافتراضية (49 مادة) للشركة. هل تريد المتابعة؟
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setReseedAsk(false)}>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setReseedAsk(false);
+                reseedMut.mutate({});
+              }}
+            >
+              استنساخ
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageShell>
   );
 }

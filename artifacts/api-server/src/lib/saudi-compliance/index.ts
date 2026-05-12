@@ -103,3 +103,16 @@ export {
   parseMudadResponse,
   MudadTransportError,
 } from "./mudad/client.js";
+
+// Mudad salary settlement → journal entry wiring
+export type {
+  SalaryComponents,
+  SalaryJournalAccounts,
+  PostMudadSalaryOpts,
+  PostMudadSalaryOutcome,
+} from "./mudad/post-salary-journal.js";
+export {
+  computeGross,
+  buildSalaryEntryInput,
+  postMudadSalaryJournal,
+} from "./mudad/post-salary-journal.js";

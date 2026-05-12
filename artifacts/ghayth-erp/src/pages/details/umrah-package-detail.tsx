@@ -15,6 +15,7 @@ import { Edit, Package, Star, Bus, Utensils, Calendar } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
   active: "متاح",
@@ -34,6 +35,7 @@ export default function UmrahPackageDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/umrah/packages/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("umrah-package", id ?? 0);
 
   const { data: pkg, isLoading, error, refetch } = useApiQuery<any>(
     ["umrah-package", String(id)],
@@ -248,6 +250,8 @@ export default function UmrahPackageDetail() {
       relatedEntities={relatedEntities}
       entityType="umrah-package"
       entityId={id ?? 0}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       overview={overview}
       isLoading={isLoading}
       error={error}

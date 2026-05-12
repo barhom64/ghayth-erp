@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { handleRouteError, ValidationError, NotFoundError,
   parseId,
@@ -249,11 +248,16 @@ router.get("/funnel", authorize({ feature: "marketing", action: "list" }), async
     const scope = req.scope!;
     const cid = scope.companyId;
     const STAGES = ['lead', 'qualified', 'proposal', 'negotiation', 'closed_won', 'closed_lost'];
-    const stageData: FunnelStageRow[] = [];
-    for (const stage of STAGES) {
-      const [row] = await rawQuery<CountValueRow>(`SELECT COUNT(*) AS count, COALESCE(SUM(value),0) AS value FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage=$2`, [cid, stage]);
-      stageData.push({ stage, count: Number(row?.count ?? 0), value: Number(row?.value ?? 0) });
-    }
+    const stageRows = await rawQuery<CountValueRow & { stage: string }>(
+      `SELECT stage, COUNT(*) AS count, COALESCE(SUM(value),0) AS value FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage = ANY($2::text[]) GROUP BY stage`,
+      [cid, STAGES]
+    );
+    const stageMap = new Map(stageRows.map(r => [r.stage, { count: Number(r.count ?? 0), value: Number(r.value ?? 0) }]));
+    const stageData: FunnelStageRow[] = STAGES.map(stage => ({
+      stage,
+      count: stageMap.get(stage)?.count ?? 0,
+      value: stageMap.get(stage)?.value ?? 0,
+    }));
     const sourceFunnel = await rawQuery<SourceFunnelRow>(
       `SELECT source, COUNT(*) AS total, COUNT(*) FILTER (WHERE stage='closed_won') AS won, COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) AS "wonValue"
        FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND source IS NOT NULL GROUP BY source ORDER BY total DESC`,

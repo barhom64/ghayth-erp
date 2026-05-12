@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { useApiQuery, asList } from "@/lib/api";
+import { z } from "zod";
+import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable } from "@/components/ui/data-table";
 import { CheckCircle2, Plus, Eye } from "lucide-react";
@@ -16,7 +15,35 @@ import { useQueryClient } from "@tanstack/react-query";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { UnifiedDateInput } from "@/components/ui/unified-date-input";
+import {
+  FormShell,
+  FormTextField,
+  FormTextareaField,
+  FormDateField,
+  FormGrid,
+} from "@/components/form-shell";
+
+// New: validation now lives in zod (was: bare `if (!newForm.finding) return`).
+// status enum is closed — typo in the option list fails typecheck.
+const capaSchema = z.object({
+  finding: z.string().trim().min(1, "الملاحظة مطلوبة"),
+  rootCause: z.string().trim(),
+  correctiveAction: z.string().trim(),
+  preventiveAction: z.string().trim(),
+  responsiblePerson: z.string().trim(),
+  dueDate: z.string(),
+  status: z.enum(["open", "in_progress", "closed", "overdue"]),
+});
+type CapaForm = z.infer<typeof capaSchema>;
+const defaultCapaForm: CapaForm = {
+  finding: "",
+  rootCause: "",
+  correctiveAction: "",
+  preventiveAction: "",
+  responsiblePerson: "",
+  dueDate: "",
+  status: "open",
+};
 
 export function CAPATab() {
   const { data: capaResp, isLoading, isError, error, refetch } = useApiQuery<any>(["gov-capa"], "/governance/capa");
@@ -43,18 +70,15 @@ export function CAPATab() {
     { key: "status", label: "الحالة", type: "select" as const, options: [{ value: "open", label: "مفتوح" }, { value: "in_progress", label: "جاري" }, { value: "closed", label: "مغلق" }, { value: "overdue", label: "متأخر" }] },
   ];
 
-  const [newForm, setNewForm] = useState({ finding: "", rootCause: "", correctiveAction: "", preventiveAction: "", responsiblePerson: "", dueDate: "", status: "open" });
   const [showNew, setShowNew] = useState(false);
-  const handleCreate = async () => {
-    if (!newForm.finding) return;
+  const handleCreate = async (values: CapaForm) => {
     try {
-      await import("@/lib/api").then(({ apiFetch }) => apiFetch("/governance/capa", {
+      await apiFetch("/governance/capa", {
         method: "POST",
-        body: JSON.stringify(newForm),
-      }));
+        body: JSON.stringify(values),
+      });
       toast({ title: "تم إنشاء الإجراء التصحيحي" });
       setShowNew(false);
-      setNewForm({ finding: "", rootCause: "", correctiveAction: "", preventiveAction: "", responsiblePerson: "", dueDate: "", status: "open" });
       qc.invalidateQueries({ queryKey: ["gov-capa"] });
     } catch { toast({ variant: "destructive", title: "خطأ في الحفظ" }); }
   };
@@ -82,31 +106,29 @@ export function CAPATab() {
       </div>
       {showNew && (
         <Card className="border-dashed">
-          <CardContent className="p-4 grid grid-cols-2 gap-3">
-            <div className="col-span-2">
-              <label className="text-xs text-gray-500 mb-1 block">الملاحظة *</label>
-              <Input className="text-sm" value={newForm.finding} onChange={e => setNewForm(p => ({ ...p, finding: e.target.value }))} />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">المسؤول</label>
-              <Input className="text-sm" value={newForm.responsiblePerson} onChange={e => setNewForm(p => ({ ...p, responsiblePerson: e.target.value }))} />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">تاريخ الاستحقاق</label>
-              <UnifiedDateInput inputClassName="text-sm" value={newForm.dueDate} onChange={(iso) => setNewForm(p => ({ ...p, dueDate: iso }))} />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">السبب الجذري</label>
-              <Textarea className="text-sm" rows={2} value={newForm.rootCause} onChange={e => setNewForm(p => ({ ...p, rootCause: e.target.value }))} />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">الإجراء التصحيحي</label>
-              <Textarea className="text-sm" rows={2} value={newForm.correctiveAction} onChange={e => setNewForm(p => ({ ...p, correctiveAction: e.target.value }))} />
-            </div>
-            <div className="col-span-2 flex gap-2">
-              <Button size="sm" onClick={handleCreate} rateLimitAware>حفظ</Button>
-              <Button size="sm" variant="ghost" onClick={() => setShowNew(false)}>إلغاء</Button>
-            </div>
+          <CardContent className="p-4">
+            <FormShell
+              schema={capaSchema}
+              defaultValues={defaultCapaForm}
+              submitLabel="حفظ"
+              secondaryActions={
+                <Button type="button" size="sm" variant="ghost" onClick={() => setShowNew(false)}>
+                  إلغاء
+                </Button>
+              }
+              onSubmit={async (values, ctx) => {
+                await handleCreate(values);
+                ctx.reset();
+              }}
+            >
+              <FormGrid cols={2}>
+                <FormTextField name="finding" label="الملاحظة" required className="col-span-2" />
+                <FormTextField name="responsiblePerson" label="المسؤول" />
+                <FormDateField name="dueDate" label="تاريخ الاستحقاق" />
+                <FormTextareaField name="rootCause" label="السبب الجذري" rows={2} />
+                <FormTextareaField name="correctiveAction" label="الإجراء التصحيحي" rows={2} />
+              </FormGrid>
+            </FormShell>
           </CardContent>
         </Card>
       )}

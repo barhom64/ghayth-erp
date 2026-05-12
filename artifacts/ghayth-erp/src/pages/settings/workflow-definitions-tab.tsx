@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { z } from "zod";
+import { useFormContext, useWatch } from "react-hook-form";
 import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +10,26 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Workflow, Clock, AlertTriangle, Plus, X, Save, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import {
+  FormShell,
+  FormNumberField,
+  FormSelectField,
+  FormGrid,
+} from "@/components/form-shell";
+
+// SLA schema. The workflow-definition form (with its nested
+// `steps` array) is intentionally left on useState — useFieldArray
+// is a separate pattern that warrants its own batch.
+const slaDefSchema = z.object({
+  requestType: z.string().min(1),
+  warningHours: z.coerce.number().int().nonnegative(),
+  deadlineHours: z.coerce.number().int().positive(),
+  escalationHours: z.coerce.number().int().nonnegative(),
+  autoApproveOnTimeout: z.boolean(),
+  escalateTo: z.string().min(1),
+});
+type SlaDefForm = z.infer<typeof slaDefSchema>;
 
 export function WorkflowDefinitionsTab() {
   const { data, refetch, isLoading, isError } = useApiQuery<any>(["workflow-definitions"], "/workflows/definitions");
@@ -48,14 +70,14 @@ export function WorkflowDefinitionsTab() {
     steps: [{ stepName: "موافقة المدير", requiredRole: "manager", slaHours: 48, autoApproveOnTimeout: false }] as { stepName: string; requiredRole: string; slaHours: number; autoApproveOnTimeout: boolean }[],
   });
 
-  const [slaForm, setSlaForm] = useState({
+  const slaDefaults: SlaDefForm = {
     requestType: "leave",
     warningHours: 24,
     deadlineHours: 48,
     escalationHours: 72,
     autoApproveOnTimeout: false,
     escalateTo: "hr",
-  });
+  };
 
   const defs = asList(data?.data ?? data);
   const slas = asList(slaData?.data ?? slaData);
@@ -125,21 +147,14 @@ export function WorkflowDefinitionsTab() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("هل أنت متأكد من حذف هذا التعريف؟")) return;
-    try {
-      await apiFetch(`/workflows/definitions/${id}`, { method: "DELETE" });
-      toast({ title: "تم الحذف" });
-      refetch();
-    } catch (e: any) {
-      toast({ variant: "destructive", title: e.message || "خطأ" });
-    }
-  };
+  // Replaces window.confirm(). The dialog owns the DELETE and
+  // surfaces 409 blockers inline (e.g. workflow has active instances).
+  const [deletingDef, setDeletingDef] = useState<{ id: number; label: string } | null>(null);
 
-  const handleSaveSla = async () => {
+  const handleSaveSla = async (values: SlaDefForm) => {
     try {
       await apiFetch("/workflows/sla-definitions", {
-        method: "POST", body: JSON.stringify(slaForm),
+        method: "POST", body: JSON.stringify(values),
       });
       toast({ title: "تم حفظ إعدادات المهلة" });
       setShowSlaForm(false);
@@ -183,31 +198,32 @@ export function WorkflowDefinitionsTab() {
       {showSlaForm && (
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><AlertTriangle className="h-4 w-4" />إعدادات المهل الزمنية</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <Label>نوع الطلب</Label>
-                <select className="w-full border rounded-md p-2" value={slaForm.requestType} onChange={(e) => setSlaForm({ ...slaForm, requestType: e.target.value })}>
-                  {REQUEST_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
-              </div>
-              <div><Label>تنبيه بعد (ساعة)</Label><Input type="number" value={slaForm.warningHours} onChange={(e) => setSlaForm({ ...slaForm, warningHours: Number(e.target.value) })} /></div>
-              <div><Label>المهلة القصوى (ساعة)</Label><Input type="number" value={slaForm.deadlineHours} onChange={(e) => setSlaForm({ ...slaForm, deadlineHours: Number(e.target.value) })} /></div>
-              <div><Label>تصعيد بعد (ساعة)</Label><Input type="number" value={slaForm.escalationHours} onChange={(e) => setSlaForm({ ...slaForm, escalationHours: Number(e.target.value) })} /></div>
-              <div>
-                <Label>تصعيد إلى</Label>
-                <select className="w-full border rounded-md p-2" value={slaForm.escalateTo} onChange={(e) => setSlaForm({ ...slaForm, escalateTo: e.target.value })}>
-                  {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                </select>
-              </div>
-              <div className="flex items-end gap-2 pb-1">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={slaForm.autoApproveOnTimeout} onChange={(e) => setSlaForm({ ...slaForm, autoApproveOnTimeout: e.target.checked })} className="rounded" />
-                  <span className="text-sm">موافقة تلقائية عند التجاوز</span>
-                </label>
-              </div>
-            </div>
-            <Button size="sm" onClick={handleSaveSla} rateLimitAware><Save className="h-4 w-4 me-1" />حفظ إعدادات مستوى الخدمة</Button>
+          <CardContent>
+            <FormShell
+              schema={slaDefSchema}
+              defaultValues={slaDefaults}
+              submitLabel="حفظ إعدادات مستوى الخدمة"
+              onSubmit={async (values) => {
+                await handleSaveSla(values);
+              }}
+            >
+              <FormGrid cols={3}>
+                <FormSelectField
+                  name="requestType"
+                  label="نوع الطلب"
+                  options={REQUEST_TYPES}
+                />
+                <FormNumberField name="warningHours" label="تنبيه بعد (ساعة)" />
+                <FormNumberField name="deadlineHours" label="المهلة القصوى (ساعة)" />
+                <FormNumberField name="escalationHours" label="تصعيد بعد (ساعة)" />
+                <FormSelectField
+                  name="escalateTo"
+                  label="تصعيد إلى"
+                  options={ROLES}
+                />
+                <AutoApproveToggle />
+              </FormGrid>
+            </FormShell>
 
             {slas.length > 0 && (
               <div className="mt-4">
@@ -306,7 +322,7 @@ export function WorkflowDefinitionsTab() {
                 </div>
                 <div className="flex gap-1">
                   <Button variant="ghost" size="sm" onClick={() => handleEdit(def)}><Pencil className="h-4 w-4" /></Button>
-                  <Button variant="ghost" size="sm" className="text-red-500" onClick={() => handleDelete(def.id)}><Trash2 className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="sm" className="text-red-500" onClick={() => setDeletingDef({ id: def.id, label: def.requestTypeLabel || def.requestType || "—" })}><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </div>
               {def.description && <p className="text-sm text-gray-500 mb-2">{def.description}</p>}
@@ -326,6 +342,41 @@ export function WorkflowDefinitionsTab() {
           </CardContent></Card>
         )}
       </div>
+
+      <ConfirmDeleteDialog
+        open={deletingDef !== null}
+        onOpenChange={(v) => { if (!v) setDeletingDef(null); }}
+        entity={{
+          type: "workflow_definition",
+          id: deletingDef?.id ?? 0,
+          name: deletingDef?.label ?? "",
+        }}
+        deletePath={`/workflows/definitions/${deletingDef?.id}`}
+        invalidateKeys={[["workflow-definitions"]]}
+        successMessage="تم الحذف"
+        onDeleted={() => { setDeletingDef(null); refetch(); }}
+      />
+    </div>
+  );
+}
+
+// "Auto-approve on timeout" checkbox bound to the boolean field. The
+// label-wrapped <input type="checkbox"> mirrors the original DOM —
+// no Switch component swap, just RHF wiring.
+function AutoApproveToggle() {
+  const { setValue } = useFormContext<SlaDefForm>();
+  const checked = useWatch<SlaDefForm, "autoApproveOnTimeout">({ name: "autoApproveOnTimeout" });
+  return (
+    <div className="flex items-end gap-2 pb-1">
+      <label className="flex items-center gap-2 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={Boolean(checked)}
+          onChange={(e) => setValue("autoApproveOnTimeout", e.target.checked, { shouldDirty: true })}
+          className="rounded"
+        />
+        <span className="text-sm">موافقة تلقائية عند التجاوز</span>
+      </label>
     </div>
   );
 }

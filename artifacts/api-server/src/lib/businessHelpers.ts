@@ -139,8 +139,15 @@ export async function emitEvent(params: {
     logger.warn(`[emitEvent] payload warnings for ${params.action}: ${validation.warnings.join("; ")}`);
   }
 
-  // Critical events: persist to event_logs BEFORE emitting to listeners
-  if (isCritical) {
+  // Critical events: persist to event_logs BEFORE emitting to listeners.
+  // Non-critical events: persist iff the operator has opted in via
+  // PERSIST_ALL_EVENTS — defaults off because every emitEvent() call
+  // would otherwise write a row, and that bloats event_logs fast on
+  // a busy tenant. The original audit flagged "event_logs is empty";
+  // turning the env flag on is the supported way to fix that without
+  // surprising existing deployments with a behaviour change.
+  const persistAll = process.env.PERSIST_ALL_EVENTS === "true";
+  if (isCritical || persistAll) {
     await rawExecute(
       `INSERT INTO event_logs ("companyId","userId",action,entity,"entityId",details)
        VALUES ($1,$2,$3,$4,$5,$6)`,

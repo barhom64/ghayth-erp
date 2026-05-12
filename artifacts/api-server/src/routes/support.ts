@@ -10,7 +10,6 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { slaDeadlineForPriority, haversineKm, loadBalanceAssign } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
@@ -710,7 +709,7 @@ router.delete("/tickets/:id", authorize({ feature: "support.tickets", action: "d
   } catch (err) { handleRouteError(err, res, "Delete ticket error:"); }
 });
 
-router.get("/replies", authorize({ feature: "support", action: "list" }), async (req, res) => {
+router.get("/replies", authorize({ feature: "support.tickets", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -741,14 +740,16 @@ router.get("/replies", authorize({ feature: "support", action: "list" }), async 
   } catch (err) { handleRouteError(err, res, "Support replies error:"); }
 });
 
-router.get("/stats", authorize({ feature: "support", action: "list" }), async (req, res) => {
+router.get("/stats", authorize({ feature: "support.tickets", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [tickets] = await rawQuery<AggCountsRow>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COUNT(*) FILTER (WHERE status='resolved') as resolved, COUNT(*) FILTER (WHERE status IN ('open','in_progress','field_visit') AND "slaDeadline" < NOW()) as "slaBreach" FROM support_tickets WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [avgRes] = await rawQuery<AvgHoursRow>(`SELECT AVG(EXTRACT(EPOCH FROM ("resolvedAt"::timestamp - "createdAt"::timestamp))/3600) AS "avgHours" FROM support_tickets WHERE "companyId"=$1 AND status='resolved' AND "resolvedAt" IS NOT NULL AND "deletedAt" IS NULL`, [cid]);
-    const [firstResponse] = await rawQuery<AvgHoursRow>(`SELECT AVG(EXTRACT(EPOCH FROM ("firstResponseAt"::timestamp - "createdAt"::timestamp))/3600) AS "avgHours" FROM support_tickets WHERE "companyId"=$1 AND "firstResponseAt" IS NOT NULL AND "deletedAt" IS NULL`, [cid]);
-    const [csat] = await rawQuery<AvgTotalRow>(`SELECT AVG(score) AS avg, COUNT(*) AS total FROM ticket_csat_ratings WHERE "companyId"=$1`, [cid]).catch((e) => { logger.error(e, "support query failed"); return [{ avg: null, total: 0 }] as AvgTotalRow[]; });
+    const [[tickets], [avgRes], [firstResponse], [csat]] = await Promise.all([
+      rawQuery<AggCountsRow>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COUNT(*) FILTER (WHERE status='resolved') as resolved, COUNT(*) FILTER (WHERE status IN ('open','in_progress','field_visit') AND "slaDeadline" < NOW()) as "slaBreach" FROM support_tickets WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<AvgHoursRow>(`SELECT AVG(EXTRACT(EPOCH FROM ("resolvedAt"::timestamp - "createdAt"::timestamp))/3600) AS "avgHours" FROM support_tickets WHERE "companyId"=$1 AND status='resolved' AND "resolvedAt" IS NOT NULL AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<AvgHoursRow>(`SELECT AVG(EXTRACT(EPOCH FROM ("firstResponseAt"::timestamp - "createdAt"::timestamp))/3600) AS "avgHours" FROM support_tickets WHERE "companyId"=$1 AND "firstResponseAt" IS NOT NULL AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<AvgTotalRow>(`SELECT AVG(score) AS avg, COUNT(*) AS total FROM ticket_csat_ratings WHERE "companyId"=$1`, [cid]).catch((e) => { logger.error(e, "support query failed"); return [{ avg: null, total: 0 }] as AvgTotalRow[]; }),
+    ]);
     res.json({
       totalTickets: Number(tickets.total), openTickets: Number(tickets.open),
       resolvedTickets: Number(tickets.resolved), slaBreach: Number(tickets.slaBreach),
@@ -790,7 +791,7 @@ router.post("/tickets/:id/csat", authorize({ feature: "support.tickets", action:
   } catch (err) { handleRouteError(err, res, "CSAT error:"); }
 });
 
-router.get("/csat", authorize({ feature: "support", action: "list" }), async (req, res) => {
+router.get("/csat", authorize({ feature: "support.tickets", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<CsatRow & { ticketRef?: string | null; ticketTitle?: string | null; assigneeName?: string | null }>(
@@ -813,7 +814,7 @@ router.get("/csat", authorize({ feature: "support", action: "list" }), async (re
   } catch (err) { handleRouteError(err, res, "CSAT list error:"); }
 });
 
-router.get("/kb", authorize({ feature: "support", action: "list" }), async (req, res) => {
+router.get("/kb", authorize({ feature: "support.tickets", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { q, category } = req.query as any;
@@ -826,7 +827,7 @@ router.get("/kb", authorize({ feature: "support", action: "list" }), async (req,
   } catch (err) { handleRouteError(err, res, "KB list error:"); }
 });
 
-router.get("/kb/:id", authorize({ feature: "support", action: "view" }), async (req, res) => {
+router.get("/kb/:id", authorize({ feature: "support.tickets", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -837,7 +838,7 @@ router.get("/kb/:id", authorize({ feature: "support", action: "view" }), async (
   } catch (err) { handleRouteError(err, res, "KB article error:"); }
 });
 
-router.post("/kb", authorize({ feature: "support", action: "create" }), async (req, res) => {
+router.post("/kb", authorize({ feature: "support.tickets", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createKbSchema.safeParse(req.body)) as any;
@@ -857,7 +858,7 @@ router.post("/kb", authorize({ feature: "support", action: "create" }), async (r
   } catch (err) { handleRouteError(err, res, "KB create error:"); }
 });
 
-router.patch("/kb/:id", authorize({ feature: "support", action: "update" }), async (req, res) => {
+router.patch("/kb/:id", authorize({ feature: "support.tickets", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -883,7 +884,7 @@ router.patch("/kb/:id", authorize({ feature: "support", action: "update" }), asy
   } catch (err) { handleRouteError(err, res, "KB update error:"); }
 });
 
-router.delete("/kb/:id", authorize({ feature: "support", action: "delete" }), async (req, res) => {
+router.delete("/kb/:id", authorize({ feature: "support.tickets", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -907,7 +908,7 @@ router.delete("/kb/:id", authorize({ feature: "support", action: "delete" }), as
 // scope pattern at line 612: validate the article is visible to the
 // caller (own company OR global) before incrementing, and scope the
 // UPDATE the same way.
-router.post("/kb/:id/feedback", authorize({ feature: "support", action: "list" }), async (req, res) => {
+router.post("/kb/:id/feedback", authorize({ feature: "support.tickets", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

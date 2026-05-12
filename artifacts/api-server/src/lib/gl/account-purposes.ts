@@ -39,11 +39,16 @@ export type AccountPurpose =
   | "realized_fx_gain"
   | "realized_fx_loss"
   // Inventory adjustments
+  | "inventory_asset"
   | "inventory_writeoff_loss"
   | "inventory_writeup_gain"
   | "cycle_count_variance_gain"
   | "cycle_count_variance_loss"
-  | "cogs_default";
+  | "cogs_default"
+  // Payroll (Mudad salary booking)
+  | "salary_expense"
+  | "salary_payable"
+  | "salary_deductions_payable";
 
 export type AccountSide = "debit" | "credit";
 
@@ -82,11 +87,15 @@ const FALLBACK_CODE: Record<AccountPurpose, string> = {
   fx_revaluation_loss:      "5900",
   realized_fx_gain:         "4910",
   realized_fx_loss:         "5910",
+  inventory_asset:          "1400",
   inventory_writeoff_loss:  "5610",
   inventory_writeup_gain:   "4610",
   cycle_count_variance_gain:"4620",
   cycle_count_variance_loss:"5620",
   cogs_default:             "5100",
+  salary_expense:           "5200",
+  salary_payable:           "2200",
+  salary_deductions_payable:"2210",
 };
 
 /**

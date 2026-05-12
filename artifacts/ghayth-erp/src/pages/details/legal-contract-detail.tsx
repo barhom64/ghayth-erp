@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 
 import { ApprovalActions } from "@/components/approval-actions";
 import { Edit, FileText } from "lucide-react";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { EntityComments } from "@/components/shared/entity-comments";
@@ -123,6 +124,8 @@ export default function LegalContractDetail() {
     });
     return sections;
   }, [contract, id]);
+
+  const { extraTabs, hideTabs } = useRegistryTabs("legal_contract", id ?? 0);
 
   const handleEdit = () => {
     setLocation(`/legal/contracts/${id}/edit`);
@@ -287,6 +290,8 @@ export default function LegalContractDetail() {
       entityType="legal-contract"
       entityId={id ?? 0}
       overview={overview}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       isLoading={isLoading}
       error={error}
       onRetry={refetch}

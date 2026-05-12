@@ -85,12 +85,13 @@
 - Saudization quota reporting (per Nitaqat)
 - GOSI integration (موجود ready لكن يحتاج testing نهائي)
 
-### 8. RBAC v2 migration للراوتات — جارٍ بواسطة الفريق
-PRs #175, #176, #178, #181, #182 على main تنفّذ هذا. الباقي:
-- migrate `actionCenter.ts` إلى `authorize()` middleware
-- migrate `approvalActions.ts` إلى الـ permission system
-- migrate `moduleDashboards.ts` للـ field-level policies
-- استبدال `*_ROLES.includes(scope.role)` patterns المتبقية
+### 8. ~~RBAC v2 migration للراوتات~~ — ✅ مكتمل 100% (PR #260, 2026-05-11)
+- ~~migrate `actionCenter.ts` إلى `authorize()` middleware~~
+- ~~migrate `approvalActions.ts` إلى الـ permission system~~
+- ~~migrate `moduleDashboards.ts` للـ field-level policies~~
+- ~~استبدال `*_ROLES.includes(scope.role)` patterns المتبقية~~
+
+**الحالة النهائية**: 1131/1131 endpoint على `authorize()` (100%). 65 dead `requirePermission` import تم تنظيفها في نفس الـsweep. تفاصيل في `docs/RBAC_V2.md` §11 + Appendix A.
 
 ### 9. as any cleanup — ~2-3 أسابيع
 - ~421 occurrence من `as any` / `as unknown as` عبر الكود
@@ -118,7 +119,7 @@ PRs #175, #176, #178, #181, #182 على main تنفّذ هذا. الباقي:
 **P1 — وظائف أعمال متوقعة**:
 2. Multi-currency
 3. Forms migration (تحسين UX + validation)
-4. RBAC v2 migration completion (يكمله الفريق)
+4. ~~RBAC v2 migration completion~~ ✅ منجز (PR #260)
 
 **P2 — تحسينات تشغيلية**:
 5. Observability (Sentry SDK)

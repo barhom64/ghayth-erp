@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { PageShell } from "@/components/page-shell";
 import {
@@ -184,7 +185,8 @@ export default function ExitRequestsPage() {
       render: (v) => {
         if (v.status !== "pending") return null;
         return (
-          <Button
+          <GuardedButton
+            perm="hr:approve"
             size="sm"
             variant="ghost"
             className="h-7 px-2 text-green-700 hover:bg-green-50"
@@ -193,7 +195,7 @@ export default function ExitRequestsPage() {
           >
             <CheckCircle className="h-3.5 w-3.5 ml-1" />
             اعتماد
-          </Button>
+          </GuardedButton>
         );
       },
     },
@@ -206,10 +208,10 @@ export default function ExitRequestsPage() {
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
         <Link href="/hr/exit/create">
-          <Button size="sm" className="gap-1.5">
+          <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
             <Plus className="h-4 w-4" />
             طلب نهاية خدمة
-          </Button>
+          </GuardedButton>
         </Link>
       }
     >

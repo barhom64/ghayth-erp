@@ -26,10 +26,12 @@ import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 export default function TenantDetail() {
   const [, params] = useRoute("/properties/tenants/:id");
   const id = params?.id;
+  const { hideTabs: registryHideTabs } = useRegistryTabs("tenant", id ?? "");
 
   const { data: tenant, isLoading, isError, refetch } = useApiQuery<any>(
     ["tenant-detail", id || ""],
@@ -276,6 +278,7 @@ export default function TenantDetail() {
       overview={overview}
       actions={<DetailActionButtons hook={editDelete} extra={tenantActionsExtra} />}
       extraTabs={extraTabs}
+      hideTabs={registryHideTabs}
     />
   );
 }

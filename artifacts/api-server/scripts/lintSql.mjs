@@ -80,6 +80,24 @@ const SAFE_NAMES = new Set([
   // (hardcoded) and adapter.compareFields (hardcoded). No user-provided
   // identifiers are interpolated.
   "setClauses",
+  // `cols` (in lib/rbac/authorize.ts) joins `opts.resource.columns` which
+  // is set at route-registration time by trusted developer code (never
+  // user input), or falls back to a hardcoded list of standard scope
+  // columns.
+  "cols",
+  // `sideColCode` (in lib/gl/account-purposes.ts) is a ternary that picks
+  // between two hardcoded column names ('"debitAccountCode"' /
+  // '"creditAccountCode"') based on a `side` enum — no user input reaches
+  // the interpolation.
+  "sideColCode",
+  // `idPlaceholders` (in routes/hr.ts) generates `$2,$3,$4…` placeholder
+  // strings from array indices — no user values are interpolated, just
+  // positional binding markers.
+  "idPlaceholders",
+  // `seasonFilterP` (in routes/umrah.ts) is built the same way as `where`
+  // / `conditions` above: a hardcoded SQL fragment with `$n` parameter
+  // binding for the actual value.
+  "seasonFilterP",
 ]);
 
 // Member expressions like `params.length` or `sets.join(...)` are allowed

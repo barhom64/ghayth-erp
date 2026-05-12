@@ -10,6 +10,7 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { useApiQuery, asList } from "@/lib/api";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Package, ArrowLeftRight, Layers, Truck, Plus, AlertTriangle, DollarSign, Activity } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
@@ -27,16 +28,16 @@ export default function Warehouse() {
       actions={
         <div className="flex items-center gap-2">
           <Link href="/warehouse/movements/create">
-            <Button variant="outline" size="sm" className="gap-1.5">
+            <GuardedButton perm="warehouse:create" variant="outline" size="sm" className="gap-1.5">
               <ArrowLeftRight className="h-4 w-4" />
               حركة جديدة
-            </Button>
+            </GuardedButton>
           </Link>
           <Link href="/warehouse/create">
-            <Button size="sm" className="gap-1.5">
+            <GuardedButton perm="warehouse:create" size="sm" className="gap-1.5">
               <Plus className="h-4 w-4" />
               منتج جديد
-            </Button>
+            </GuardedButton>
           </Link>
         </div>
       }
@@ -150,7 +151,7 @@ function ProductsTab() {
             resultCount={filtered.length}
           />
         </div>
-        {canManage && <Link href="/warehouse/create"><Button className="gap-2"><Plus className="h-4 w-4" /> إضافة منتج</Button></Link>}
+        {canManage && <Link href="/warehouse/create"><GuardedButton perm="warehouse:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة منتج</GuardedButton></Link>}
       </div>
 
       <Card>
@@ -235,7 +236,7 @@ function MovementsTab() {
             resultCount={filtered.length}
           />
         </div>
-        <Link href="/warehouse/movements/create"><Button className="gap-2"><Plus className="h-4 w-4" /> إضافة حركة</Button></Link>
+        <Link href="/warehouse/movements/create"><GuardedButton perm="warehouse:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة حركة</GuardedButton></Link>
       </div>
       <Card>
         <CardHeader><CardTitle>حركات المخزون</CardTitle></CardHeader>
@@ -295,7 +296,7 @@ function CategoriesTab() {
             resultCount={filtered.length}
           />
         </div>
-        <Link href="/warehouse/categories/create"><Button className="gap-2"><Plus className="h-4 w-4" /> تصنيف جديد</Button></Link>
+        <Link href="/warehouse/categories/create"><GuardedButton perm="warehouse:create" className="gap-2"><Plus className="h-4 w-4" /> تصنيف جديد</GuardedButton></Link>
       </div>
       <Card>
         <CardContent className="pt-6">
@@ -362,7 +363,7 @@ function SuppliersTab() {
             resultCount={filtered.length}
           />
         </div>
-        <Link href="/warehouse/suppliers/create"><Button className="gap-2"><Plus className="h-4 w-4" /> إضافة مورد</Button></Link>
+        <Link href="/warehouse/suppliers/create"><GuardedButton perm="warehouse:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة مورد</GuardedButton></Link>
       </div>
       <Card>
         <CardContent className="pt-6">

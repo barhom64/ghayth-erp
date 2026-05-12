@@ -24,11 +24,13 @@ import {
   CheckCircle2,
   XCircle,
 } from "lucide-react";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 export default function TripDetailPage() {
   const [, params] = useRoute("/fleet/trips/:id");
   const [, navigate] = useLocation();
   const id = params?.id || "";
+  const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("fleet_trip", id);
   const queryClient = useQueryClient();
 
   const { data: trip, isLoading, isError, refetch } = useApiQuery<any>(
@@ -279,7 +281,8 @@ export default function TripDetailPage() {
       updatedAt={trip?.updatedAt}
       overview={overview}
       actions={actions}
-      extraTabs={extraTabs}
+      extraTabs={[...extraTabs, ...registryExtraTabs]}
+      hideTabs={registryHideTabs}
     />
   );
 }

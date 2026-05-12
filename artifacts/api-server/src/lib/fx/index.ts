@@ -57,3 +57,14 @@ export {
   postFxRevaluationJournal,
   isAssetEntity,
 } from "./post-revaluation-journal.js";
+
+// Realised FX → journal entry wiring (sister helper to post-revaluation)
+export type {
+  RealizedAccounts,
+  PostRealizedFxOpts,
+  PostRealizedFxOutcome,
+} from "./post-realized-journal.js";
+export {
+  buildRealizedFxEntryInput,
+  postRealizedFxJournal,
+} from "./post-realized-journal.js";

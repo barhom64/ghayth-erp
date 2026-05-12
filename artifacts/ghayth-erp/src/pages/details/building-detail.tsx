@@ -18,12 +18,14 @@ import { useAppContext } from "@/contexts/app-context";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 export default function BuildingDetail() {
   const [, params] = useRoute("/properties/buildings/:id");
   const id = params?.id;
   const { permissions, roleLevel } = useAppContext();
   const canManage = permissions.canManageProperty || roleLevel >= 50;
+  const { extraTabs, hideTabs } = useRegistryTabs("building", id ?? 0);
 
   const { data: building, isLoading, isError, refetch } = useApiQuery<any>(
     ["building-detail", id || ""],
@@ -193,6 +195,8 @@ export default function BuildingDetail() {
       isLoading={isLoading}
       error={isError ? true : undefined}
       onRetry={refetch}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       overview={overview}
       actions={actions}
     />

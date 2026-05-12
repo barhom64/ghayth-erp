@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { buildScopedWhere } from "../lib/scopedQuery.js";
 import { handleRouteError, NotFoundError,
@@ -542,10 +541,12 @@ router.post("/sla-definitions", authorize({ feature: "admin", action: "update" }
 router.get("/stats", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [total] = await rawQuery<{ count: string | number }>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [scope.companyId]);
-    const [pending] = await rawQuery<{ count: string | number }>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status IN ('pending','in_review')`, [scope.companyId]);
-    const [slaWarning] = await rawQuery<{ count: string | number }>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "slaStatus" IN ('warning','exceeded') AND status IN ('pending','in_review')`, [scope.companyId]);
-    const [escalated] = await rawQuery<{ count: string | number }>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "slaStatus" = 'escalated' AND status IN ('pending','in_review')`, [scope.companyId]);
+    const [[total], [pending], [slaWarning], [escalated]] = await Promise.all([
+      rawQuery<{ count: string | number }>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [scope.companyId]),
+      rawQuery<{ count: string | number }>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status IN ('pending','in_review')`, [scope.companyId]),
+      rawQuery<{ count: string | number }>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "slaStatus" IN ('warning','exceeded') AND status IN ('pending','in_review')`, [scope.companyId]),
+      rawQuery<{ count: string | number }>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "slaStatus" = 'escalated' AND status IN ('pending','in_review')`, [scope.companyId]),
+    ]);
     res.json({
       total: Number(total.count),
       pending: Number(pending.count),

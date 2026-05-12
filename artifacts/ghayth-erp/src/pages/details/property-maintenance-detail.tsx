@@ -10,6 +10,7 @@ import { Edit, Wrench } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
   open: "مفتوح",
@@ -47,6 +48,7 @@ export default function PropertyMaintenanceDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/properties/maintenance/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("property-maintenance", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["property-maintenance", String(id)],
@@ -220,6 +222,8 @@ export default function PropertyMaintenanceDetail() {
       relatedEntities={relatedEntities}
       entityType="property-maintenance"
       entityId={id ?? 0}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       overview={overview}
       isLoading={isLoading}
       error={error}

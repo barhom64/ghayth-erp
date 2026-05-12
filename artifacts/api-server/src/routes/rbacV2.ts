@@ -32,6 +32,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { bumpCacheVersion, checkAccess } from "../lib/rbac/authzEngine.js";
 import { invalidateSodCache } from "../lib/rbac/sodEnforcement.js";
+import { createNotification } from "../lib/businessHelpers.js";
 import { FEATURE_CATALOG, FEATURE_INDEX } from "../lib/rbac/featureCatalog.js";
 import { handleRouteError, ValidationError, NotFoundError, parseId, zodParse } from "../lib/errorHandler.js";
 
@@ -66,7 +67,7 @@ const assignUserRoleSchema = z.object({
 // ─── Catalog (read-only, anyone authenticated) ──────────────────────────────
 router.get("/features", async (req, res) => {
   try {
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT feature_key, parent_key, module_key, label_ar, label_en, description_ar, icon,
               available_actions, available_scopes, sensitive_fields, approvable_actions,
               display_order, is_self_service, is_system_critical
@@ -83,7 +84,7 @@ router.get("/features", async (req, res) => {
 router.get("/roles", authorize({ feature: "admin.roles", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT r.id, r.role_key, r.label_ar, r.label_en, r.description, r.level,
               r.parent_role_id, r.color, r.is_system, r.is_template, r.is_active,
               r."createdAt", r."updatedAt",
@@ -137,7 +138,7 @@ router.patch("/roles/:id", authorize({ feature: "admin.roles", action: "update" 
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(updateRoleSchema.safeParse(req.body));
-    const [before] = await rawQuery<any>(`SELECT * FROM rbac_roles WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    const [before] = await rawQuery<Record<string, unknown>>(`SELECT * FROM rbac_roles WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     if (!before) return void res.status(404).json({ error: "الدور غير موجود" });
     if (before.is_system && b.roleKey && b.roleKey !== before.role_key) {
       return void res.status(403).json({ error: "لا يمكن تغيير مفتاح دور نظامي" });
@@ -173,7 +174,7 @@ router.delete("/roles/:id", authorize({ feature: "admin.roles", action: "delete"
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [role] = await rawQuery<any>(`SELECT * FROM rbac_roles WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    const [role] = await rawQuery<Record<string, unknown>>(`SELECT * FROM rbac_roles WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     if (!role) return void res.status(404).json({ error: "الدور غير موجود" });
     if (role.is_system) return void res.status(403).json({ error: "لا يمكن حذف الأدوار النظامية" });
 
@@ -197,7 +198,7 @@ router.get("/roles/:id/grants", authorize({ feature: "admin.roles", action: "vie
     const [{ count }] = await rawQuery<{ count: string }>(`SELECT COUNT(*)::text AS count FROM rbac_roles WHERE id = $1 AND ("companyId" = $2 OR is_template)`, [id, scope.companyId]);
     if (Number(count) === 0) return void res.status(404).json({ error: "الدور غير موجود" });
 
-    const grants = await rawQuery<any>(
+    const grants = await rawQuery<Record<string, unknown>>(
       `SELECT feature_key, actions, scope, conditions FROM rbac_role_grants WHERE role_id = $1 ORDER BY feature_key`,
       [id]
     );
@@ -271,7 +272,7 @@ router.get("/roles/:id/field-policies", authorize({ feature: "admin.roles", acti
       [id, scope.companyId]
     );
     if (Number(count) === 0) return void res.status(404).json({ error: "الدور غير موجود" });
-    const policies = await rawQuery<any>(
+    const policies = await rawQuery<Record<string, unknown>>(
       `SELECT feature_key, field_name, mode FROM rbac_field_policies WHERE role_id = $1 ORDER BY feature_key, field_name`,
       [id]
     );
@@ -330,7 +331,7 @@ router.get("/roles/:id/approval-limits", authorize({ feature: "admin.roles", act
       [id, scope.companyId]
     );
     if (Number(count) === 0) return void res.status(404).json({ error: "الدور غير موجود" });
-    const limits = await rawQuery<any>(
+    const limits = await rawQuery<Record<string, unknown>>(
       `SELECT feature_key, action, currency, max_amount, requires_dual_control
          FROM rbac_approval_limits WHERE role_id = $1 ORDER BY feature_key, action`,
       [id]
@@ -459,7 +460,7 @@ router.delete("/sod/:id", authorize({ feature: "admin.roles", action: "delete" }
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [rule] = await rawQuery<any>(`SELECT * FROM rbac_sod_rules WHERE id = $1`, [id]);
+    const [rule] = await rawQuery<Record<string, unknown>>(`SELECT * FROM rbac_sod_rules WHERE id = $1`, [id]);
     if (!rule) return void res.status(404).json({ error: "القاعدة غير موجودة" });
     if (rule.companyId == null) return void res.status(403).json({ error: "لا يمكن حذف القواعد النظامية، عطّلها بدلاً من ذلك" });
     const { affectedRows } = await rawExecute(`DELETE FROM rbac_sod_rules WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
@@ -482,7 +483,7 @@ router.get("/users", authorize({ feature: "admin.users", action: "list" }), asyn
       where += ` AND (e.name ILIKE $2 OR u.email ILIKE $2 OR ea."jobTitle" ILIKE $2)`;
       params.push(`%${search}%`);
     }
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT u.id AS "userId", u.email, e.name AS "userName", e."empNumber",
               ea.role AS legacy_role, ea."jobTitle", ea."branchId", b.name AS "branchName",
               ea."departmentId", d.name AS "departmentName",
@@ -558,7 +559,7 @@ router.post("/roles/:id/clone", authorize({ feature: "admin.roles", action: "cre
 
 router.get("/templates", async (req, res) => {
   try {
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT id, role_key, label_ar, label_en, description, level, color,
               (SELECT COUNT(*) FROM rbac_role_grants WHERE role_id = r.id) AS grant_count,
               (SELECT COUNT(*) FROM rbac_field_policies WHERE role_id = r.id) AS field_count,
@@ -629,7 +630,7 @@ router.get("/roles/:id/history", authorize({ feature: "admin.roles", action: "vi
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT h.id, h."changedBy", h.change_type, h.before_state, h.after_state, h.reason, h."createdAt",
               COALESCE(e.name, u.email) AS "changedByName"
          FROM rbac_role_history h
@@ -649,7 +650,7 @@ router.get("/roles/:id/history", authorize({ feature: "admin.roles", action: "vi
 router.get("/sod", authorize({ feature: "admin.roles", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rules = await rawQuery<any>(
+    const rules = await rawQuery<Record<string, unknown>>(
       `SELECT id, rule_key, label_ar, feature_a, action_a, feature_b, action_b, severity, is_active
          FROM rbac_sod_rules WHERE "companyId" IS NULL OR "companyId" = $1`,
       [scope.companyId]
@@ -658,7 +659,7 @@ router.get("/sod", authorize({ feature: "admin.roles", action: "view" }), async 
     // Detect violations: any role/user holding both sides of any rule
     const violations: any[] = [];
     for (const r of rules.filter((x: any) => x.is_active)) {
-      const offenders = await rawQuery<any>(
+      const offenders = await rawQuery<Record<string, unknown>>(
         `SELECT DISTINCT ur."userId", rr.id AS role_id, rr.role_key, rr.label_ar
            FROM rbac_user_roles ur
            JOIN rbac_roles rr ON rr.id = ur.role_id
@@ -691,7 +692,7 @@ router.post("/simulate", authorize({ feature: "admin.roles", action: "view" }), 
     if (!parsed.success) throw new ValidationError("بيانات المحاكاة غير صالحة");
 
     // Build a synthetic scope for the target user
-    const [target] = await rawQuery<any>(
+    const [target] = await rawQuery<Record<string, unknown>>(
       `SELECT u.id AS "userId", u."employeeId", ea."companyId", ea."branchId", ea.role,
               ea."jobTitleId", jt.name AS "jobTitle", e.name AS "userName"
          FROM users u
@@ -704,22 +705,22 @@ router.post("/simulate", authorize({ feature: "admin.roles", action: "view" }), 
     if (!target) return void res.status(404).json({ error: "المستخدم غير موجود في هذه الشركة" });
 
     const synthScope = {
-      userId: target.userId,
-      employeeId: target.employeeId,
-      companyId: target.companyId,
-      branchId: target.branchId,
+      userId: target.userId as number,
+      employeeId: target.employeeId as number,
+      companyId: target.companyId as number,
+      branchId: target.branchId as number | null,
       activeAssignmentId: 0,
-      allowedCompanies: [target.companyId],
-      allowedBranches: [target.branchId],
-      allowedAssignments: [],
-      role: target.role,
+      allowedCompanies: [target.companyId as number],
+      allowedBranches: [target.branchId as number | null],
+      allowedAssignments: [] as number[],
+      role: target.role as string,
       isOwner: target.role === "owner",
-      jobTitle: target.jobTitle,
-      jobTitleId: target.jobTitleId,
-      userName: target.userName ?? "مستخدم",
+      jobTitle: target.jobTitle as string | null,
+      jobTitleId: target.jobTitleId as number | null,
+      userName: (target.userName as string | null) ?? "مستخدم",
     };
 
-    const result = await checkAccess(synthScope, { feature: parsed.data.feature, action: parsed.data.action as any });
+    const result = await checkAccess(synthScope as Parameters<typeof checkAccess>[0], { feature: parsed.data.feature, action: parsed.data.action as any });
     res.json({ target, result });
   } catch (err) {
     handleRouteError(err, res, "simulate");
@@ -731,7 +732,7 @@ router.get("/users/:userId/effective", authorize({ feature: "admin.roles", actio
   try {
     const scope = req.scope!;
     const userId = parseId(req.params.userId, "userId");
-    const [target] = await rawQuery<any>(
+    const [target] = await rawQuery<Record<string, unknown>>(
       `SELECT u.id, u."employeeId", e.name AS "userName", ea."companyId", ea."branchId",
               ea."departmentId", ea.role, jt.name AS "jobTitle"
          FROM users u
@@ -743,7 +744,7 @@ router.get("/users/:userId/effective", authorize({ feature: "admin.roles", actio
     );
     if (!target) return void res.status(404).json({ error: "المستخدم غير موجود" });
 
-    const roles = await rawQuery<any>(
+    const roles = await rawQuery<Record<string, unknown>>(
       `SELECT ur.role_id, ur.is_primary, ur.expires_at, r.role_key, r.label_ar, r.color, r.level
          FROM rbac_user_roles ur
          JOIN rbac_roles r ON r.id = ur.role_id
@@ -752,7 +753,7 @@ router.get("/users/:userId/effective", authorize({ feature: "admin.roles", actio
       [userId, scope.companyId]
     );
 
-    const grants = await rawQuery<any>(
+    const grants = await rawQuery<Record<string, unknown>>(
       `SELECT g.role_id, g.feature_key, g.actions, g.scope, r.label_ar AS role_label
          FROM rbac_role_grants g
          JOIN rbac_user_roles ur ON ur.role_id = g.role_id
@@ -763,7 +764,7 @@ router.get("/users/:userId/effective", authorize({ feature: "admin.roles", actio
       [userId, scope.companyId]
     );
 
-    const fields = await rawQuery<any>(
+    const fields = await rawQuery<Record<string, unknown>>(
       `SELECT fp.feature_key, fp.field_name, fp.mode, r.label_ar AS role_label
          FROM rbac_field_policies fp
          JOIN rbac_user_roles ur ON ur.role_id = fp.role_id
@@ -773,7 +774,7 @@ router.get("/users/:userId/effective", authorize({ feature: "admin.roles", actio
       [userId, scope.companyId]
     );
 
-    const limits = await rawQuery<any>(
+    const limits = await rawQuery<Record<string, unknown>>(
       `SELECT al.feature_key, al.action, al.currency, al.max_amount, al.requires_dual_control, r.label_ar AS role_label
          FROM rbac_approval_limits al
          JOIN rbac_user_roles ur ON ur.role_id = al.role_id
@@ -783,7 +784,7 @@ router.get("/users/:userId/effective", authorize({ feature: "admin.roles", actio
       [userId, scope.companyId]
     );
 
-    const overrides = await rawQuery<any>(
+    const overrides = await rawQuery<Record<string, unknown>>(
       `SELECT feature_key, action, scope, type, expires_at, reason
          FROM rbac_user_grants
         WHERE "userId" = $1 AND "companyId" = $2
@@ -802,7 +803,7 @@ router.get("/users/:userId/roles", authorize({ feature: "admin.roles", action: "
   try {
     const scope = req.scope!;
     const userId = parseId(req.params.userId, "userId");
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT ur.id, ur.role_id, ur."branchId", ur."departmentId", ur.is_primary, ur.expires_at,
               r.role_key, r.label_ar, r.color, r.level
          FROM rbac_user_roles ur
@@ -977,7 +978,7 @@ router.post("/jit/request", async (req, res) => {
 router.get("/jit/my", async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT id, feature_key, action, scope, justification, requested_minutes, status,
               "approvedBy", "approvedAt", "rejectedReason", granted_at, expires_at, "createdAt"
          FROM rbac_jit_requests
@@ -994,7 +995,7 @@ router.get("/jit/my", async (req, res) => {
 router.get("/jit/pending", authorize({ feature: "admin.roles", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT j.id, j."userId", e.name AS "userName", j.feature_key, j.action, j.scope,
               j.justification, j.requested_minutes, j."createdAt"
          FROM rbac_jit_requests j
@@ -1051,6 +1052,38 @@ router.post("/jit/:id/approve", authorize({ feature: "admin.roles", action: "upd
       );
     });
     await bumpCacheVersion(scope.companyId);
+
+    // Notify the requester so they don't have to refresh the JIT page
+    // to find out. We look up their active assignment ID to feed
+    // createNotification (which keys on assignmentId, not userId).
+    void (async () => {
+      const [{ rows: [j] }, asgRes] = await Promise.all([
+        rawQuery<Record<string, unknown>>(`SELECT "userId", feature_key, action, requested_minutes FROM rbac_jit_requests WHERE id = $1`, [id])
+          .then((rows) => ({ rows })),
+        rawQuery<{ id: number }>(
+          `SELECT ea.id FROM employee_assignments ea
+             JOIN users u ON u."employeeId" = ea."employeeId"
+            WHERE u.id = (SELECT "userId" FROM rbac_jit_requests WHERE id = $1)
+              AND ea."companyId" = $2 AND ea.status = 'active'
+            ORDER BY ea."isPrimary" DESC, ea.id ASC LIMIT 1`,
+          [id, scope.companyId]
+        ),
+      ]).catch(() => [{ rows: [] }, []] as any);
+      const assignmentId = asgRes[0]?.id;
+      if (!assignmentId || !j) return;
+      await createNotification({
+        companyId: scope.companyId,
+        assignmentId,
+        type: "rbac.jit.approved",
+        title: "تم اعتماد طلب الصلاحية المؤقتة",
+        body: `يمكنك الآن استخدام "${j.feature_key}:${j.action}" لمدة ${j.requested_minutes} دقيقة`,
+        priority: "high",
+        refType: "rbac_jit_request",
+        refId: id,
+        actionUrl: "/admin?tab=rbac-jit",
+      });
+    })().catch(() => undefined);
+
     res.json({ ok: true });
   } catch (err) {
     handleRouteError(err, res, "approve JIT");
@@ -1077,6 +1110,32 @@ router.post("/jit/:id/reject", authorize({ feature: "admin.roles", action: "upda
        VALUES (NULL, $1, $2, 'jit.reject', $3, $4)`,
       [scope.companyId, scope.userId, JSON.stringify({ jitId: id }), body.reason || null]
     ).catch(() => undefined);
+
+    // Notify the requester of the rejection.
+    void (async () => {
+      const asgRes = await rawQuery<{ id: number }>(
+        `SELECT ea.id FROM employee_assignments ea
+           JOIN users u ON u."employeeId" = ea."employeeId"
+          WHERE u.id = (SELECT "userId" FROM rbac_jit_requests WHERE id = $1)
+            AND ea."companyId" = $2 AND ea.status = 'active'
+          ORDER BY ea."isPrimary" DESC, ea.id ASC LIMIT 1`,
+        [id, scope.companyId]
+      ).catch(() => [] as { id: number }[]);
+      const assignmentId = asgRes[0]?.id;
+      if (!assignmentId) return;
+      await createNotification({
+        companyId: scope.companyId,
+        assignmentId,
+        type: "rbac.jit.rejected",
+        title: "تم رفض طلب الصلاحية المؤقتة",
+        body: body.reason || "لم يُذكر سبب",
+        priority: "normal",
+        refType: "rbac_jit_request",
+        refId: id,
+        actionUrl: "/admin?tab=rbac-jit",
+      });
+    })().catch(() => undefined);
+
     res.json({ ok: true });
   } catch (err) {
     handleRouteError(err, res, "reject JIT");

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { DetailPageLayout, type ExtraTab } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -27,6 +28,7 @@ export default function VendorDetailPage() {
   const [, params] = useRoute("/finance/vendors/:id");
   const [, navigate] = useLocation();
   const id = params?.id || "";
+  const { hideTabs: registryHideTabs } = useRegistryTabs("vendor", id ?? "");
 
   const { data: vendor, isLoading, isError, refetch } = useApiQuery<any>(
     ["vendor", id],
@@ -216,6 +218,7 @@ export default function VendorDetailPage() {
       backLabel="العودة للموردين"
       entityType="vendor"
       entityId={id}
+      hideTabs={registryHideTabs}
       isLoading={isLoading}
       error={isError ? true : undefined}
       onRetry={() => refetch()}

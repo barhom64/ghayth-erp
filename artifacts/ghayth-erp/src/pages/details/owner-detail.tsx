@@ -12,6 +12,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import {
   useDetailEditDelete,
   DetailActionButtons,
@@ -43,6 +44,7 @@ export default function OwnerDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/properties/owners/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("owner", id ?? 0);
   const { toast } = useToast();
   const [previewAttachment, setPreviewAttachment] = useState<PreviewableAttachment | null>(null);
 
@@ -294,6 +296,8 @@ export default function OwnerDetail() {
         isLoading={isLoading}
         error={error}
         onRetry={refetch}
+        extraTabs={extraTabs}
+        hideTabs={hideTabs}
         actions={
           <DetailActionButtons
             hook={editDelete}

@@ -65,6 +65,7 @@ const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const SCHEMA_PRE = join(REPO_ROOT, "db/schema_pre.sql");
 const SCHEMA_POST = join(REPO_ROOT, "db/schema_post.sql");
 const API_SRC = join(REPO_ROOT, "artifacts/api-server/src");
+const MIGRATIONS_DIR = join(REPO_ROOT, "artifacts/api-server/src/migrations");
 
 // Postgres built-ins, aliases, and identifiers that appear in raw SQL
 // but aren't schema columns. Additions require a one-line reason.
@@ -137,6 +138,57 @@ async function loadSchemaIdentifiers() {
     }
   }
 
+  // Views are read-only consumers of one or more underlying tables, but
+  // they expose their own (possibly aliased) column names that routes
+  // legitimately SELECT against. Treat the view name as a table and
+  // every `AS "alias"` in the body as a defined column.
+  const viewRe = /CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+public\.([\w]+)\s+AS([\s\S]*?);/g;
+  while ((match = viewRe.exec(text)) !== null) {
+    tables.add(match[1]);
+    const body = match[2];
+    const aliasRe = /\bAS\s+"([a-zA-Z_][a-zA-Z0-9_]*)"/g;
+    let am;
+    while ((am = aliasRe.exec(body)) !== null) {
+      columns.add(am[1]);
+    }
+  }
+
+  // Migrations that landed after the last Replit dump-schema run define
+  // new tables and columns the dump doesn't know about (e.g.
+  // warehouse_stock_lots."writeoffJournalEntryId" from migration 146).
+  // Walk every migration file and harvest `CREATE TABLE` definitions
+  // and `ALTER TABLE … ADD COLUMN` additions so audit:schema accepts
+  // those identifiers even before the next dump regen.
+  try {
+    for (const f of await readdir(MIGRATIONS_DIR)) {
+      if (!f.endsWith(".sql")) continue;
+      const mig = await readFile(join(MIGRATIONS_DIR, f), "utf8");
+      // CREATE TABLE IF NOT EXISTS X ( … ) — same per-line parse as above
+      const createRe = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:public\.)?"?([\w]+)"?\s*\(([\s\S]+?)\)\s*(?:;|$)/gi;
+      let cm;
+      while ((cm = createRe.exec(mig)) !== null) {
+        tables.add(cm[1]);
+        for (const line of cm[2].split("\n")) {
+          const trimmed = line.trim().replace(/,\s*$/, "");
+          if (!trimmed) continue;
+          if (/^(CONSTRAINT|PRIMARY KEY|FOREIGN KEY|UNIQUE|CHECK)\b/i.test(trimmed)) continue;
+          const quoted = trimmed.match(/^"([^"]+)"/);
+          if (quoted) { columns.add(quoted[1]); continue; }
+          const bare = trimmed.match(/^([a-z_][a-z0-9_]*)\s/i);
+          if (bare) columns.add(bare[1]);
+        }
+      }
+      // ALTER TABLE X ADD COLUMN [IF NOT EXISTS] "col" type …
+      const addColRe = /ALTER\s+TABLE\s+\S+\s+ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?"([^"]+)"/gi;
+      let ac;
+      while ((ac = addColRe.exec(mig)) !== null) {
+        columns.add(ac[1]);
+      }
+    }
+  } catch {
+    // No migrations dir — skip.
+  }
+
   return { columns, tables };
 }
 
@@ -156,9 +208,17 @@ function sanitiseTemplate(body) {
 
 // Pull every `rawQuery(`…`)` template literal body out of a source
 // file, including multi-line ones and ones with embedded ${} expressions.
+//
+// The `<[^>]*>?` segment makes the regex tolerant of TypeScript generic
+// type parameters between `rawQuery` and `(` — without it, every
+// `rawQuery<RowType>(\`…\`)` call (which is the dominant shape: ~90%
+// of usages) was silently skipped by this audit. Note the inner `[^>]*`
+// is greedy enough for single-level generics like `<{ id: number }>` and
+// `<RowType & { extra?: string }>`; we don't try to balance nested
+// `<...>` because none of the codebase's generics nest.
 function extractRawQueryBodies(source) {
   const bodies = [];
-  const re = /rawQuery\s*\(\s*`/g;
+  const re = /rawQuery\s*(?:<[^>]*>)?\s*\(\s*`/g;
   let match;
   while ((match = re.exec(source)) !== null) {
     // Walk forward from match end, handling nested ${...} blocks.
@@ -200,41 +260,91 @@ function extractRawQueryBodies(source) {
 // with `AS "foo"` — those are defined locally and have no relation to
 // the schema. Also skips positional CTE / subquery names defined with
 // `WITH "x" AS (...)` or `SELECT ... FROM (...) AS "x"`.
+//
+// We do TWO passes: first collect every alias defined in the SQL
+// (`AS "alias"`), then any later quoted reference to one of those names
+// is also treated as the alias rather than a schema column. That's how
+// `ORDER BY "avgHours"` and `WHERE "totalDue" > 0` legitimately work
+// against an alias defined upstream in the same SELECT.
 function findQuotedIdentifiers(sql) {
+  const aliases = new Set();
+  const aliasRe = /\bAS\s+"([a-zA-Z_][a-zA-Z0-9_]*)"/gi;
+  let am;
+  while ((am = aliasRe.exec(sql)) !== null) {
+    aliases.add(am[1]);
+  }
+
   const ids = [];
   const re = /"([a-zA-Z_][a-zA-Z0-9_]*)"/g;
   let match;
   while ((match = re.exec(sql)) !== null) {
-    // Look 4 chars back for `AS ` (case-insensitive). That's the alias
-    // form; skip it.
+    // Skip alias definition sites (`AS "x"`) and any later reference to
+    // an already-defined alias (`ORDER BY "x"`, `WHERE "x" > 0`, etc).
     const tail = sql.slice(Math.max(0, match.index - 4), match.index);
     if (/\bas\s*$/i.test(tail)) continue;
+    if (aliases.has(match[1])) continue;
     ids.push(match[1]);
   }
   return ids;
+}
+
+// Some routes / lib helpers create their own helper tables on first
+// use via `rawQuery|rawExecute|pool.query(\`CREATE TABLE IF NOT EXISTS
+// … (…)\`)` instead of a migration. Their columns/tables won't appear
+// in db/schema.sql but they ARE legitimate references everywhere else
+// in the same module. We harvest those definitions directly from the
+// source text — not from the previously-extracted rawQuery bodies —
+// because the wrapper call doesn't always look like rawQuery (e.g.
+// journeyEngine.ts uses pool.query, cronScheduler.ts uses rawExecute).
+function harvestInlineDefinitions(source, columnsOut, tablesOut) {
+  const re = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:public\.)?"?([\w]+)"?\s*\(([\s\S]+?)\)\s*(?:;|\n\s*\`|\)\s*;)/gi;
+  let m;
+  while ((m = re.exec(source)) !== null) {
+    tablesOut.add(m[1]);
+    const lines = m[2].split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim().replace(/,\s*$/, "");
+      if (!trimmed) continue;
+      if (/^(CONSTRAINT|PRIMARY KEY|FOREIGN KEY|UNIQUE|CHECK)\b/i.test(trimmed)) continue;
+      const quoted = trimmed.match(/^"([^"]+)"/);
+      if (quoted) {
+        columnsOut.add(quoted[1]);
+        continue;
+      }
+      const bare = trimmed.match(/^([a-z_][a-z0-9_]*)\s/i);
+      if (bare) columnsOut.add(bare[1]);
+    }
+  }
 }
 
 async function main() {
   const { columns, tables } = await loadSchemaIdentifiers();
   if (columns.size === 0) {
     console.error(
-      `[audit-schema-drift] ERROR — no columns parsed from ${SCHEMA_FILE}. ` +
+      `[audit-schema-drift] ERROR — no columns parsed from db/schema_pre.sql. ` +
         `Is the schema dump missing or in an unexpected format?`,
     );
     process.exit(2);
   }
 
-  const allowed = new Set([...columns, ...tables, ...BUILTIN_IDENTIFIERS]);
-
   const srcFiles = await walk(API_SRC);
-  const findings = [];
 
+  // Pass 1: collect inline CREATE TABLE definitions from route source.
+  const sources = new Map();
   for (const file of srcFiles) {
     const source = await readFile(file, "utf8");
     if (!source.includes("rawQuery")) continue;
     const bodies = extractRawQueryBodies(source);
     if (bodies.length === 0) continue;
+    sources.set(file, bodies);
+    harvestInlineDefinitions(source, columns, tables);
+  }
 
+  const allowed = new Set([...columns, ...tables, ...BUILTIN_IDENTIFIERS]);
+  const findings = [];
+
+  // Pass 2: check identifier references against the combined set.
+  for (const [file, bodies] of sources) {
     const rel = relative(REPO_ROOT, file);
     for (const raw of bodies) {
       const cleaned = sanitiseTemplate(raw);

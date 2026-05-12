@@ -1,18 +1,57 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { ShieldAlert, Plus, AlertTriangle } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import {
+  FormShell,
+  FormTextField,
+  FormTextareaField,
+  FormSelectField,
+  FormGrid,
+} from "@/components/form-shell";
+
+// New: probability + impact were strings ("1".."5") and Number()-coerced
+// at submit. Now zod coerces and bounds them — invalid combos can't
+// even submit. The schema rejects probability=0 or impact=6.
+const riskSchema = z.object({
+  title: z.string().trim().min(1, "عنوان المخاطرة مطلوب"),
+  description: z.string().trim(),
+  probability: z.coerce.number().int().min(1, "1 على الأقل").max(5, "5 على الأكثر"),
+  impact: z.coerce.number().int().min(1, "1 على الأقل").max(5, "5 على الأكثر"),
+  mitigationPlan: z.string().trim(),
+});
+type RiskForm = z.infer<typeof riskSchema>;
+const defaultRiskForm: RiskForm = {
+  title: "",
+  description: "",
+  probability: 3,
+  impact: 3,
+  mitigationPlan: "",
+};
+const PROBABILITY_OPTIONS = [
+  { value: "1", label: "1 — ضئيلة" },
+  { value: "2", label: "2 — منخفضة" },
+  { value: "3", label: "3 — متوسطة" },
+  { value: "4", label: "4 — عالية" },
+  { value: "5", label: "5 — مرتفعة جداً" },
+];
+const IMPACT_OPTIONS = [
+  { value: "1", label: "1 — طفيف" },
+  { value: "2", label: "2 — منخفض" },
+  { value: "3", label: "3 — متوسط" },
+  { value: "4", label: "4 — عالٍ" },
+  { value: "5", label: "5 — حرج" },
+];
 
 const RISK_LEVEL_COLORS: Record<string, string> = {
   low: "bg-green-100 text-green-700",
@@ -39,7 +78,6 @@ export default function RisksPage() {
   const [projectId, setProjectId] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [filters, setFilters] = useFilters();
-  const [form, setForm] = useState({ title: "", description: "", probability: "3", impact: "3", mitigationPlan: "" });
 
   const { data: projects } = useApiQuery<any>(["projects-list"], "/projects?limit=100");
   const projectList = asList(projects?.data || projects);
@@ -51,17 +89,17 @@ export default function RisksPage() {
   );
   const risks = asList(data?.data || data);
 
-  const handleSave = async () => {
-    if (!projectId || !form.title) { toast({ title: "اختر المشروع وأدخل عنوان المخاطرة", variant: "destructive" }); return; }
+  const handleSave = async (values: RiskForm) => {
+    if (!projectId) { toast({ title: "اختر المشروع أولاً", variant: "destructive" }); return; }
     try {
-      await apiFetch(`/projects/${projectId}/risks`, { method: "POST", body: JSON.stringify({
-        ...form,
-        probability: Number(form.probability),
-        impact: Number(form.impact),
-      }) });
+      // Schema already coerced probability/impact to numbers — body is
+      // typed RiskForm so no extra Number() casts needed.
+      await apiFetch(`/projects/${projectId}/risks`, {
+        method: "POST",
+        body: JSON.stringify(values),
+      });
       toast({ title: "تم تسجيل المخاطرة" });
       setShowForm(false);
-      setForm({ title: "", description: "", probability: "3", impact: "3", mitigationPlan: "" });
       refetch();
     } catch (e: any) { toast({ title: e.message || "خطأ", variant: "destructive" }); }
   };
@@ -181,41 +219,29 @@ export default function RisksPage() {
       {showForm && (
         <Card className="border-2 border-primary/20">
           <CardHeader className="pb-2"><CardTitle className="text-base">مخاطرة جديدة</CardTitle></CardHeader>
-          <CardContent className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
-              <Label>عنوان المخاطرة *</Label>
-              <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="وصف المخاطرة المحتملة" />
-            </div>
-            <div className="col-span-2">
-              <Label>التفاصيل</Label>
-              <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} />
-            </div>
-            <div>
-              <Label>الاحتمالية (1-5)</Label>
-              <Select value={form.probability} onValueChange={(v) => setForm({ ...form, probability: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {[1,2,3,4,5].map((n) => <SelectItem key={n} value={String(n)}>{n} — {["ضئيلة","منخفضة","متوسطة","عالية","مرتفعة جداً"][n-1]}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>الأثر (1-5)</Label>
-              <Select value={form.impact} onValueChange={(v) => setForm({ ...form, impact: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {[1,2,3,4,5].map((n) => <SelectItem key={n} value={String(n)}>{n} — {["طفيف","منخفض","متوسط","عالٍ","حرج"][n-1]}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="col-span-2">
-              <Label>خطة التخفيف</Label>
-              <Textarea value={form.mitigationPlan} onChange={(e) => setForm({ ...form, mitigationPlan: e.target.value })} rows={2} placeholder="الإجراءات للحد من هذه المخاطرة" />
-            </div>
-            <div className="col-span-2 flex gap-2">
-              <Button onClick={handleSave} rateLimitAware>حفظ</Button>
-              <Button variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>
-            </div>
+          <CardContent>
+            <FormShell
+              schema={riskSchema}
+              defaultValues={defaultRiskForm}
+              submitLabel="حفظ"
+              secondaryActions={
+                <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
+                  إلغاء
+                </Button>
+              }
+              onSubmit={async (values, ctx) => {
+                await handleSave(values);
+                ctx.reset();
+              }}
+            >
+              <FormGrid cols={2}>
+                <FormTextField name="title" label="عنوان المخاطرة" required className="col-span-2" placeholder="وصف المخاطرة المحتملة" />
+                <FormTextareaField name="description" label="التفاصيل" rows={2} className="col-span-2" />
+                <FormSelectField name="probability" label="الاحتمالية (1-5)" options={PROBABILITY_OPTIONS} />
+                <FormSelectField name="impact" label="الأثر (1-5)" options={IMPACT_OPTIONS} />
+                <FormTextareaField name="mitigationPlan" label="خطة التخفيف" rows={2} className="col-span-2" placeholder="الإجراءات للحد من هذه المخاطرة" />
+              </FormGrid>
+            </FormShell>
           </CardContent>
         </Card>
       )}

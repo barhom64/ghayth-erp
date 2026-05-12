@@ -13,6 +13,7 @@ import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "معلق",
@@ -32,6 +33,7 @@ export default function ExcuseDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/hr/excuse-requests/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("excuse_request", id ?? 0);
   const { toast } = useToast();
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
@@ -228,6 +230,8 @@ export default function ExcuseDetail() {
       entityType="excuse"
       entityId={id ?? 0}
       overview={overview}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       isLoading={isLoading}
       error={error}
       onRetry={refetch}
