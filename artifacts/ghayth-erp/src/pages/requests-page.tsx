@@ -604,11 +604,16 @@ function TypesTab() {
   );
 }
 
+const workflowSchema = z.object({
+  name: z.string().trim().min(1, "الاسم مطلوب"),
+  description: z.string().trim(),
+});
+type WorkflowForm = z.infer<typeof workflowSchema>;
+
 function WorkflowsTab() {
   const { data, refetch } = useApiQuery<any>(["workflows"], "/requests/workflows");
-  const createMut = useApiMutation<unknown, Record<string, string>>("/requests/workflows", "POST", [["workflows"]]);
+  const createMut = useApiMutation<unknown, WorkflowForm>("/requests/workflows", "POST", [["workflows"]]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: "", description: "" });
   const items = data?.data || [];
 
   return (
@@ -618,10 +623,28 @@ function WorkflowsTab() {
         <Button size="sm" onClick={() => setShowForm(!showForm)}>{showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة</>}</Button>
       </div>
       {showForm && (
-        <Card><CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>الاسم</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-          <div><Label>الوصف</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
-          <div className="md:col-span-2"><Button onClick={async () => { await createMut.mutateAsync(form); setForm({ name: "", description: "" }); setShowForm(false); refetch(); }} disabled={!form.name}>حفظ</Button></div>
+        <Card><CardContent className="p-4">
+          <FormShell
+            schema={workflowSchema}
+            defaultValues={{ name: "", description: "" }}
+            submitLabel="حفظ"
+            secondaryActions={
+              <Button type="button" size="sm" variant="ghost" onClick={() => setShowForm(false)}>
+                إلغاء
+              </Button>
+            }
+            onSubmit={async (values, ctx) => {
+              await createMut.mutateAsync(values);
+              ctx.reset();
+              setShowForm(false);
+              refetch();
+            }}
+          >
+            <FormGrid cols={2}>
+              <FormTextField name="name" label="الاسم" required />
+              <FormTextField name="description" label="الوصف" />
+            </FormGrid>
+          </FormShell>
         </CardContent></Card>
       )}
       <DataTable
