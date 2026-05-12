@@ -1,25 +1,34 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
-import { formatCurrency, formatDateAr as formatDate , todayLocal } from "@/lib/formatters";
+import { formatCurrency, formatDateAr as formatDate, todayLocal } from "@/lib/formatters";
 import { ArrowLeftRight, Layers } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Link } from "wouter";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { UnifiedDateInput } from "@/components/ui/unified-date-input";
+import {
+  FormShell, FormNumberField, FormTextareaField, FormDateField, FormSelectField, FormGrid,
+} from "@/components/form-shell";
+
+// toCompanyId is a string in the form; the submit handler converts
+// to number for the API. amount coerced via z.coerce.
+const intercompanySchema = z.object({
+  toCompanyId: z.string().min(1, "اختر الشركة"),
+  amount: z.coerce.number().positive("المبلغ يجب أن يكون أكبر من 0"),
+  description: z.string().trim(),
+  transactionDate: z.string(),
+});
+type IntercompanyForm = z.infer<typeof intercompanySchema>;
 
 export default function IntercompanyPage() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ toCompanyId: "", amount: "", description: "", transactionDate: todayLocal() });
 
   const { data, isLoading, isError } = useApiQuery<any>(
     ["intercompany"],
@@ -37,10 +46,6 @@ export default function IntercompanyPage() {
     [["intercompany"]],
     {
       successMessage: "تم تسجيل المعاملة البينية وإنشاء القيدين المحاسبيين",
-      onSuccess: () => {
-        setShowCreate(false);
-        setForm({ toCompanyId: "", amount: "", description: "", transactionDate: todayLocal() });
-      },
     },
   );
 
@@ -49,10 +54,13 @@ export default function IntercompanyPage() {
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    createMutation.mutate({ ...form, toCompanyId: Number(form.toCompanyId), amount: Number(form.amount) });
-  }
+  const handleSubmit = async (values: IntercompanyForm) => {
+    await createMutation.mutateAsync({
+      ...values,
+      toCompanyId: Number(values.toCompanyId),
+    });
+    setShowCreate(false);
+  };
 
   const list = data?.data ?? data ?? [];
 
@@ -143,36 +151,45 @@ export default function IntercompanyPage() {
             <div className="p-6 border-b">
               <h3 className="text-lg font-bold">تسجيل معاملة بينية جديدة</h3>
             </div>
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">الشركة المُستقبِلة *</label>
-                <Select value={form.toCompanyId || "_none"} onValueChange={(v) => setForm(f => ({ ...f, toCompanyId: v === "_none" ? "" : v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_none">-- اختر الشركة --</SelectItem>
-                    {(Array.isArray(companies) ? companies : []).map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">المبلغ *</label>
-                <Input type="number" min="1" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} placeholder="0.00" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">تاريخ المعاملة</label>
-                <UnifiedDateInput value={form.transactionDate} onChange={(iso) => setForm(f => ({ ...f, transactionDate: iso }))} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">البيان</label>
-                <Textarea rows={2} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="وصف المعاملة البينية" />
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>إلغاء</Button>
-                <Button type="submit" disabled={createMutation.isPending} rateLimitAware>
-                  {createMutation.isPending ? "جاري التسجيل..." : "تسجيل المعاملة"}
-                </Button>
-              </div>
-            </form>
+            <div className="p-6">
+              <FormShell
+                schema={intercompanySchema}
+                defaultValues={{
+                  toCompanyId: "",
+                  amount: 0,
+                  description: "",
+                  transactionDate: todayLocal(),
+                }}
+                submitLabel="تسجيل المعاملة"
+                secondaryActions={
+                  <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>
+                    إلغاء
+                  </Button>
+                }
+                onSubmit={async (values, ctx) => {
+                  await handleSubmit(values);
+                  ctx.reset();
+                }}
+              >
+                <FormGrid cols={1}>
+                  <FormSelectField
+                    name="toCompanyId"
+                    label="الشركة المُستقبِلة"
+                    required
+                    options={[
+                      { value: "", label: "-- اختر الشركة --" },
+                      ...(Array.isArray(companies) ? companies : []).map((c: any) => ({
+                        value: String(c.id),
+                        label: c.name,
+                      })),
+                    ]}
+                  />
+                  <FormNumberField name="amount" label="المبلغ" required placeholder="0.00" />
+                  <FormDateField name="transactionDate" label="تاريخ المعاملة" />
+                  <FormTextareaField name="description" label="البيان" rows={2} />
+                </FormGrid>
+              </FormShell>
+            </div>
           </div>
         </div>
       )}
