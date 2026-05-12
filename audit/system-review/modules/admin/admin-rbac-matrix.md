@@ -23,13 +23,27 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/admin.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+مصفوفة RBAC v2 — التحكم بصلاحيات النظام. المرجع: `docs/RBAC_V2.md`, `docs/RBAC_USAGE_GUIDE.md`.
+
+| الحركة | الوحدة الهدف | مدخل API | مدخل DB | الحالة |
+|--------|--------------|----------|---------|--------|
+| عرض المصفوفة (features × roles) | rbac-v2 | GET `/rbac/v2/matrix` | aggregate من `role_permissions` | ✅ |
+| تعديل صلاحية (toggle feature × role) | rbac-v2 | PATCH `/rbac/v2/permissions` | `role_permissions` | ✅ |
+| إنشاء دور جديد (custom role) | rbac-v2 | POST `/rbac/v2/roles` | `predefined_roles` (مع `isCustom=true`) | ✅ |
+| إسناد دور لمستخدم | rbac-v2 | POST `/rbac/v2/user-roles` | `user_roles` | ✅ |
+| **تأثير فوري** على الـ session | auth | invalidate cache `userRoleCache` | `sessions` تبقى لكن authorize() يُعاد حسابه | ✅ |
+| Audit log + emit event | core | `createAuditLog` + `emitEvent('rbac.permission.changed')` | `audit_logs`, `event_logs` | ✅ critical |
+| تأثير على governance | governance | audit findings قد تقترح تشديد RBAC | `rbac_change_proposals` | ⚠ يدوي |
+| Approval workflow (للتغييرات الحساسة) | governance/workflows | تغيير admin: 90 يحتاج موافقة | `approval_chains` | ⚠ تحقق |
+| Snapshot history | rbac-v2 | كل تغيير ينشئ snapshot | `rbac_snapshots` (للـ rollback) | ✅ |
+| إشعار للمستخدم بتغيير صلاحياته | comms | event=`role_assigned\|permission_changed` | `notifications` | ⚠ |
+| PDPL: log access changes | core | إجباري | `audit_logs` يحفظ before/after | ✅ |
+
+تحقق يدوي:
+- [ ] هل دور admin:100 (superadmin) محصّن — لا يمكن تخفيضه بدون موافقة 2-of-N؟
+- [ ] هل صلاحية "view financial" تشمل تلقائياً "view own"؟ (hierarchy)
+- [ ] هل تغيير دور موظف منقول لقسم آخر يُحدّث تلقائياً عبر `employee_assignments` change?
+- [ ] هل feature toggles معطّلة (system-wide) تظهر للمستخدم بحاله "غير متاح" أم تختفي؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `rbac-matrix` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

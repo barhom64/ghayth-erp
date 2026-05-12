@@ -55,4 +55,3 @@ attached_assets/
 .env.*
 !.env.example
 artifacts/api-server/.env
-.agent-state/

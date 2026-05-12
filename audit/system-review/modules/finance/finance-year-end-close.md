@@ -8,15 +8,14 @@
 - الكومبوننت: `YearEndClose`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `year-end-close`
-- سطور الملف: 287
+- سطور الملف: 289
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L136: "(بلا تسمية)" → `() => previewMut.mutate({ retainedEarningsAccountCode, force` 🔒
-- L140: "(بلا تسمية)" → `() => {                 if (!preview) {                   toast({ variant: "dest`
+- L137: "(بلا تسمية)" → `() => previewMut.mutate({ retainedEarningsAccountCode, force` 🔒
 
 ### القراءات (GET)
 _لا قراءات._

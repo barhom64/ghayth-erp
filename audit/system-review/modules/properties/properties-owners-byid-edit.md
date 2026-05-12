@@ -8,15 +8,14 @@
 - الكومبوننت: `OwnersEdit`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `edit`
-- سطور الملف: 158
+- سطور الملف: 193
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L150: "(بلا تسمية)" → `() => setLocation("/properties/owners")` 🔒
-- L151: "(بلا تسمية)" → `handleSave` 🔒
+- L116: "(بلا تسمية)" → `() => setLocation("/properties/owners")`
 
 ### القراءات (GET)
 _لا قراءات._
@@ -36,7 +35,7 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `edit` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L121 _(dummy-iban)_: `<TextField label="رقم الآيبان" dir="ltr" value={form.iban} onChange={v => setForm({ ...form, iban: v })} placeholder="SA`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
 - Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP

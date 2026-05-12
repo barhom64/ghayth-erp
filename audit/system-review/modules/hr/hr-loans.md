@@ -8,16 +8,14 @@
 - الكومبوننت: `Loans`
 - subKey: `payroll` | minRoleLevel: —
 - الكيان المستنبط: `loans`
-- سطور الملف: 330
+- سطور الملف: 333
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L221: "(بلا تسمية)"
-- L231: "(بلا تسمية)"
-- L257: "طلب سلفة"
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
 _لا قراءات._
@@ -25,13 +23,25 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/hr.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+سلف موظفين. المرجع: `docs/blueprints/hr-payroll.md` §"Loans".
+
+| الحركة | الوحدة الهدف | مدخل API | مدخل DB | الحالة |
+|--------|--------------|----------|---------|--------|
+| طلب سلفة | hr/loans | `hr-loans.ts` POST `/hr/loans` | `hr_loans` | ✅ |
+| سير موافقة | governance/workflows | `business_rules.loan_approval_chain` | `approval_chains` | ✅ |
+| توليد جدول الأقساط | hr/loans | تلقائي عند الاعتماد | `hr_loan_installments` (N صف بمبلغ ثابت) | ✅ |
+| صرف السلفة → قيد محاسبي | finance/GL | DR Employee Loans Receivable / CR Cash | `gl_entries`, `gl_lines` | ✅ متوقع |
+| خصم القسط الشهري في مسير الراتب | hr/payroll | `payroll_lines.loanDeduction` = الأقساط المستحقة | تحديث `hr_loan_installments.paidAt` | ✅ موجود |
+| إقفال السلفة (paid in full) | hr/loans | تلقائي عند آخر قسط | `hr_loans.status='closed'` | ✅ |
+| إعادة جدولة (reschedule) | hr/loans | PATCH `/hr/loans/:id/reschedule` | `hr_loan_installments` تُعاد بناءً | ⚠ تحقق |
+| سداد مبكر | hr/loans | POST `/hr/loans/:id/early-payment` | يطفئ كل الأقساط المتبقية + قيد | ⚠ |
+| إشعارات للموظف + HR | comms | event=`loan_approved\|installment_due\|loan_closed` | `notifications` | ✅ |
+| Audit log | core | `auditMiddleware` لـ `/hr/loans` (إن مضافة) | `audit_logs` | ⚠ تحقق من ENTITY_MAP |
+
+تحقق يدوي:
+- [ ] هل المبلغ المتبقي على الموظف يُخصم من مستحقات نهاية الخدمة عند الاستقالة؟
+- [ ] هل سلفة جديدة تُمنع إذا كانت سلفة سابقة لم تُسدّد؟
+- [ ] هل توجد قيود على نسبة الخصم الشهري (مثلاً ≤ 33% من الراتب)؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `loans` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

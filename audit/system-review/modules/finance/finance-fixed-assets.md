@@ -8,21 +8,18 @@
 - الكومبوننت: `FixedAssets`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `fixed-assets`
-- سطور الملف: 251
+- سطور الملف: 253
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 | الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
 |------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(write)_ | `/finance/fixed-assets/depreciate-all` | POST | — | — | — | — | ✅ | ✅ | ✅ |
+| _(write)_ | `/finance/fixed-assets/depreciate-all` | POST | ✅ | ✅ | — | — | ✅ | ✅ | ✅ |
 
 ### تفاصيل الأزرار المرئية
-- L107: "إهلاك دفعي"
-- L111: "(بلا تسمية)" → `() => setShowCreate(true)`
-- L141: "(بلا تسمية)" → `() => { setSelectedAsset(a); setDepResult(null); setShowDepreciate(true);`
-- L182: "(بلا تسمية)" → `() => setShowCreate(false)`
-- L239: "(بلا تسمية)" → `() => { setShowDepreciate(false); setDepResult(null);` 🔒
-- L240: "(بلا تسمية)" → `handleDepreciate` 🔒
+- L184: "(بلا تسمية)" → `() => setShowCreate(false)`
+- L241: "(بلا تسمية)" → `() => { setShowDepreciate(false); setDepResult(null);` 🔒
+- L242: "(بلا تسمية)" → `handleDepreciate` 🔒
 
 ### القراءات (GET)
 - GET `/finance/fixed-assets`
