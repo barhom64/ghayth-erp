@@ -100,6 +100,168 @@ ALTER TABLE zatca_settings ADD COLUMN IF NOT EXISTS "certificateExpiresAt" TIMES
 
 ## 4) Module Layout
 
+### 4.1 Provider abstraction (vendor-neutral)
+
+**Architectural rule**: the finance module **must not** import any ZATCA-specific symbol. Every call site goes through an `EInvoiceProvider` interface so the day Saudi Arabia switches APIs (or another jurisdiction lands — UAE FTA, EU PEPPOL, etc.) the swap is a single registration line.
+
+```
+artifacts/api-server/src/lib/einvoice/
+├── types.ts          — vendor-neutral types (Invoice, ClearanceResult,
+│                       Provider, InvoiceLifecycleState, …)
+├── provider.ts       — `EInvoiceProvider` interface (abstract contract)
+├── registry.ts       — per-company provider lookup
+│                       (config-driven: ZATCA / mock / future provider)
+├── lifecycle.ts      — state machine: draft → signed → submitted →
+│                       cleared|reported|rejected|cancelled
+└── providers/
+    ├── zatca/        — concrete ZATCA Phase 2 implementation
+    │   ├── index.ts          — implements EInvoiceProvider
+    │   ├── api-client.ts     — Fatoora HTTP client
+    │   ├── ubl.ts            — UBL 2.1 XML builder
+    │   ├── qr.ts             — TLV encoder (Phase 1 + Phase 2)
+    │   ├── signing.ts        — ECDSA P-256 + canonicalization
+    │   ├── csr.ts            — CSR generation
+    │   ├── pih.ts / icv.ts   — chain + counter helpers
+    │   └── retry.ts          — re-submission queue worker
+    └── mock/         — in-memory provider for dev + tests
+        └── index.ts          — no-op clearInvoice/reportInvoice
+```
+
+### 4.2 The `EInvoiceProvider` contract
+
+```ts
+// lib/einvoice/types.ts — vendor-neutral
+export interface Invoice {
+  id: number;
+  companyId: number;
+  type: "standard" | "simplified" | "credit-note" | "debit-note";
+  // raw rows from your finance schema — keep loose to avoid leaking
+  // a specific UBL / TLV / etc. shape into the caller.
+  data: unknown;
+}
+
+export type ClearanceStatus =
+  | "cleared"        // tax authority accepted
+  | "reported"       // tax authority recorded (simplified flow)
+  | "rejected"       // permanently denied
+  | "pending"        // retry queue
+  | "skipped";       // provider says no submission needed
+
+export interface ClearanceResult {
+  status: ClearanceStatus;
+  externalRef?: string;     // ZATCA UUID / future provider id
+  qrPayload?: string;       // base64-encoded TLV / equivalent
+  authorityHash?: string;   // ZATCA "hash" / future provider attestation
+  rawResponse: unknown;     // provider-specific blob for audit
+  errors?: { code: string; message: string }[];
+}
+
+// lib/einvoice/provider.ts
+export interface EInvoiceProvider {
+  /** Stable id for this provider, e.g. `"zatca-fatoora-v2"`. */
+  readonly id: string;
+
+  /** Provider-specific onboarding (e.g. ZATCA CSR + OTP exchange). */
+  onboard(companyId: number, params: Record<string, unknown>): Promise<void>;
+
+  /** Submit an invoice for clearance/reporting. Always async; never throws on a tax-authority rejection — return `status: "rejected"` instead. */
+  submit(invoice: Invoice): Promise<ClearanceResult>;
+
+  /** Re-submit a previously-failed invoice from the retry queue. */
+  resubmit(invoice: Invoice, previousAttemptId: number): Promise<ClearanceResult>;
+
+  /** Pre-flight check (e.g. cert expiry, network reachability). */
+  health(companyId: number): Promise<{ ok: boolean; details: string[] }>;
+}
+```
+
+### 4.3 Registry — config-driven dispatch
+
+```ts
+// lib/einvoice/registry.ts
+import type { EInvoiceProvider } from "./provider.js";
+import { ZatcaProvider } from "./providers/zatca/index.js";
+import { MockProvider } from "./providers/mock/index.js";
+
+const PROVIDERS: Record<string, () => EInvoiceProvider> = {
+  zatca: () => new ZatcaProvider(),
+  mock: () => new MockProvider(),
+  // future: "fta-uae": () => new FtaUaeProvider(),
+};
+
+export async function getProvider(companyId: number): Promise<EInvoiceProvider> {
+  // Read the active provider id from the company's `einvoice_settings` row
+  // (or fall back to the env-configured default for dev).
+  const id = await readProviderId(companyId) ?? process.env.EINVOICE_PROVIDER_DEFAULT ?? "mock";
+  const factory = PROVIDERS[id];
+  if (!factory) throw new Error(`Unknown e-invoice provider: ${id}`);
+  return factory();
+}
+```
+
+### 4.4 What finance code may import
+
+Finance routes import **only** from `lib/einvoice/` — never from `lib/einvoice/providers/zatca/`:
+
+```ts
+// ✅ allowed
+import { getProvider } from "../lib/einvoice/registry.js";
+import type { ClearanceResult } from "../lib/einvoice/types.js";
+
+// ❌ forbidden — would couple finance to ZATCA specifically
+import { clearInvoice } from "../lib/einvoice/providers/zatca/index.js";
+```
+
+A guardrail in `scripts/lint-patterns.mjs` enforces this — any `import` of `providers/zatca` from outside `lib/einvoice/` is a CI failure.
+
+### 4.5 Invoice lifecycle (vendor-neutral state machine)
+
+```
+              ┌──────────────┐
+              │    draft     │  ← create / edit invoice rows
+              └──────┬───────┘
+                     │ approve()
+                     ▼
+              ┌──────────────┐
+              │    signed    │  ← provider-specific sign step (ZATCA: ECDSA)
+              └──────┬───────┘
+                     │ submit()
+                     ▼
+              ┌──────────────┐    fail
+              │  submitted   │ ───────┐
+              └──────┬───────┘        │
+            success  │                ▼
+                     ▼          ┌──────────────┐    >5 attempts
+              ┌──────────────┐  │   pending    │ ───────┐
+              │  cleared/    │  │  (retry)     │        │
+              │  reported    │  └──────┬───────┘        ▼
+              └──────────────┘         │          ┌──────────────┐
+                     │                 └─→ retry  │   rejected   │
+                     │ creditNote()                └──────────────┘
+                     ▼
+              ┌──────────────┐
+              │  cancelled   │  ← never delete a cleared invoice;
+              └──────────────┘    issue a credit note instead
+```
+
+The state lives in `invoices.einvoice_state` (new column, see schema below). Transitions are gated by `lib/einvoice/lifecycle.ts` — illegal transitions throw `LifecycleError` rather than silently no-op.
+
+### 4.6 Legacy `routes/finance-zatca.ts`
+
+The existing route is renamed to `routes/finance-einvoice.ts` and refactored to:
+
+1. Look up the active provider via `getProvider(companyId)`.
+2. Call `provider.submit(invoice)` / `provider.health()` / `provider.onboard()`.
+3. Persist the returned `ClearanceResult` in `einvoice_submission_log` (renamed from `zatca_submission_log`).
+
+The old `routes/finance-zatca.ts` is kept as a thin re-export to preserve URL backwards compatibility (`/api/finance/zatca/*` → `/api/finance/einvoice/*`).
+
+---
+
+## 4-bis) Legacy module layout (pre-abstraction)
+
+Kept for historical reference — the current `lib/zatca/` tree predates §4.1.
+
 ```
 artifacts/api-server/src/lib/zatca/
 ├── index.ts          — public API: clearInvoice(), reportInvoice()
@@ -116,6 +278,8 @@ artifacts/api-server/src/lib/zatca/
 artifacts/api-server/src/routes/finance-zatca.ts
                       — refactored to delegate to lib/zatca/
 ```
+
+§4.1-§4.6 is what gets built in Phase 2; this section is what exists today.
 
 ## 5) خطة التنفيذ (3-4 أسابيع)
 
