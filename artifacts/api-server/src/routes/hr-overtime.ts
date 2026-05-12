@@ -411,13 +411,13 @@ router.patch("/overtime/:id/approve", authorize({ feature: "hr.overtime", action
         type: "overtime_rejected", title: "تم رفض طلب الوقت الإضافي",
         body: `تم رفض الطلب ${item.requestNumber}${rejectionReason ? " — السبب: " + rejectionReason : ""}`,
         priority: "normal", refType: "hr_overtime_request", refId: item.id,
-      }).catch(console.error);
+      }).catch((e) => logger.error(e, "hr-overtime notification failed"));
       try {
         await rawExecute(
           `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('hr_overtime_request',$1,'rejected',$2,$3,$4)`,
           [item.id, rejectionReason || null, scope.userId, scope.companyId]
         );
-      } catch (e) { console.error("Failed to log approval action:", e); }
+      } catch (e) { logger.error(e, "Failed to log approval action"); }
       emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "hr.overtime.rejected", entity: "hr_overtime_requests", entityId: item.id, details: JSON.stringify({ requestNumber: item.requestNumber, reason: rejectionReason }) }).catch((e) => logger.error(e, "hr-overtime background task failed"));
       res.json({ success: true, message: "تم رفض الطلب" });
       return;
@@ -462,7 +462,7 @@ router.patch("/overtime/:id/approve", authorize({ feature: "hr.overtime", action
         `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('hr_overtime_request',$1,'approved',$2,$3,$4)`,
         [item.id, notes || null, scope.userId, scope.companyId]
       );
-    } catch (e) { console.error("Failed to log approval action:", e); }
+    } catch (e) { logger.error(e, "Failed to log approval action"); }
 
     await createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
