@@ -3,7 +3,7 @@
 ## 1. الميتاداتا
 - المسار: `/umrah/groups`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/groups.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:77`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:79`
 - المجموعة: `operations`
 - الكومبوننت: `UmrahGroups`
 - subKey: — | minRoleLevel: —

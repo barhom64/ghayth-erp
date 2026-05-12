@@ -139,7 +139,7 @@ async function fetchBeforeState(entity: string, entityId: string, companyId?: nu
 
   try {
     const conditions = [`id = $1`];
-    const params: any[] = [entityId];
+    const params: unknown[] = [entityId];
     if (companyId) {
       conditions.push(`"companyId" = $2`);
       params.push(companyId);

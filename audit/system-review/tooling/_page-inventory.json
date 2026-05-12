@@ -3844,7 +3844,7 @@
     "componentName": "UmrahDashboard",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/dashboard.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 47,
+    "routeLine": 48,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3855,7 +3855,7 @@
     "componentName": "UmrahPilgrims",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/pilgrims.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 48,
+    "routeLine": 49,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3866,7 +3866,7 @@
     "componentName": "PilgrimCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/pilgrim-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 49,
+    "routeLine": 50,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3877,7 +3877,7 @@
     "componentName": "PilgrimDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/pilgrim-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 50,
+    "routeLine": 51,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3888,7 +3888,7 @@
     "componentName": "UmrahAgents",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/agents.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 51,
+    "routeLine": 52,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3899,7 +3899,7 @@
     "componentName": "UmrahAgentDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-agent-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 52,
+    "routeLine": 53,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3910,7 +3910,7 @@
     "componentName": "UmrahSeasons",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/seasons.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 53,
+    "routeLine": 54,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3921,7 +3921,7 @@
     "componentName": "UmrahSeasonDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-season-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 54,
+    "routeLine": 55,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3932,7 +3932,7 @@
     "componentName": "UmrahPenalties",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/penalties.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 55,
+    "routeLine": 56,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3943,7 +3943,7 @@
     "componentName": "UmrahPenaltyDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-penalty-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 56,
+    "routeLine": 57,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3954,7 +3954,7 @@
     "componentName": "UmrahInvoices",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/invoices.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 57,
+    "routeLine": 58,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3965,7 +3965,7 @@
     "componentName": "UmrahInvoiceDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-invoice-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 58,
+    "routeLine": 59,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3976,7 +3976,7 @@
     "componentName": "UmrahPackages",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/packages.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 59,
+    "routeLine": 60,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3987,7 +3987,7 @@
     "componentName": "UmrahPackageDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-package-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 60,
+    "routeLine": 61,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3998,7 +3998,7 @@
     "componentName": "UmrahTransport",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/transport.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 61,
+    "routeLine": 62,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4009,7 +4009,7 @@
     "componentName": "UmrahTransportDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-transport-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 62,
+    "routeLine": 63,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4020,7 +4020,7 @@
     "componentName": "UmrahImport",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/import.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 64,
+    "routeLine": 65,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4031,7 +4031,18 @@
     "componentName": "UmrahSubAgents",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/sub-agents.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 66,
+    "routeLine": 67,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "operations",
+    "path": "/umrah/sub-agents/:id",
+    "componentName": "UmrahSubAgentDetail",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-sub-agent-detail.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
+    "routeLine": 68,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4042,7 +4053,7 @@
     "componentName": "UmrahPricing",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/pricing.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 67,
+    "routeLine": 69,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4053,7 +4064,7 @@
     "componentName": "UmrahCommissionPlans",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/commission-plans.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 68,
+    "routeLine": 70,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4064,7 +4075,7 @@
     "componentName": "UmrahCommissionPlanEditor",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/commission-plan-editor.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 69,
+    "routeLine": 71,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4075,7 +4086,7 @@
     "componentName": "UmrahCommissionPlanEditor",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/commission-plan-editor.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 70,
+    "routeLine": 72,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4086,7 +4097,7 @@
     "componentName": "UmrahViolations",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/violations.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 71,
+    "routeLine": 73,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4097,7 +4108,7 @@
     "componentName": "UmrahViolationCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/violation-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 72,
+    "routeLine": 74,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4108,7 +4119,7 @@
     "componentName": "UmrahViolationDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-violation-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 73,
+    "routeLine": 75,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4119,7 +4130,7 @@
     "componentName": "UmrahImportWizard",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/import-wizard.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 74,
+    "routeLine": 76,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4130,7 +4141,7 @@
     "componentName": "UmrahDailyRunsheet",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/daily-runsheet.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 75,
+    "routeLine": 77,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4141,7 +4152,7 @@
     "componentName": "UmrahReconciliation",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/reconciliation.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 76,
+    "routeLine": 78,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4152,7 +4163,7 @@
     "componentName": "UmrahGroups",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/groups.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 77,
+    "routeLine": 79,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4163,7 +4174,7 @@
     "componentName": "UmrahAttachments",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/attachments.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 78,
+    "routeLine": 80,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true

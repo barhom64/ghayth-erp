@@ -26,13 +26,27 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/legal.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+عقود قانونية (B2B/شراكات/خدمات/توريد) — مستقلة عن عقود الإيجار.
+
+| الحركة | الوحدة الهدف | مدخل API | مدخل DB | الحالة |
+|--------|--------------|----------|---------|--------|
+| إنشاء عقد | legal | `legal.ts` POST `/contracts` | `legal_contracts` | ✅ |
+| ربط بطرف (عميل/مورد/شركة) | crm + finance | `contract.partyType + partyId` polymorphic | ✅ |
+| توليد من قالب | documents | راجع `documents-templates.md` | ✅ |
+| سير موافقة (CEO/CFO/Legal) | governance/workflows | `business_rules.legal_contract_approval` | `approval_chains` | ✅ |
+| توقيع رقمي | digital-signature | `digital_signatures.contractId` | ✅ |
+| ربط بفواتير المشروع | finance/invoices | `invoices.contractId` | ⚠ تحقق |
+| تذكير بـ تجديد (renewal) | comms | cron يفحص `contracts.endDate` (90/30/7 يوم قبل) | `notifications` | ✅ |
+| فسخ مبكر (early termination) | legal | POST `/contracts/:id/terminate` مع reason + penalty | `contract_amendments` | ⚠ |
+| تأثير مالي للفسخ | finance/GL | penalty → AR; refund → AP | `gl_entries` | ⚠ يدوي |
+| ربط بالقضايا (إن نزاع) | legal/cases | `legal_cases.contractId` | ✅ |
+| تخزين في الأرشيف (post-expiry) | documents | بعد X سنة → cold storage | ⚠ |
+| Audit log | core | `auditMiddleware` (`/legal` لو مضاف) | `audit_logs` | ⚠ تحقق |
+
+تحقق يدوي:
+- [ ] هل تجديد العقد يحفظ كل الـ history (طبقات الإصدار)؟
+- [ ] هل تعديل عقد موقّع رقمياً يتطلب توقيع جديد من كل الأطراف؟
+- [ ] هل العقود المتجاوزة تاريخها بدون تجديد تُحوّل إلى "expired" + تنشئ tickets؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `contracts` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

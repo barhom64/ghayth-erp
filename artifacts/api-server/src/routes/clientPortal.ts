@@ -199,7 +199,7 @@ function buildPortalWhere(
   const cc = opts.clientColumn ?? '"clientId"';
   const mc = opts.companyColumn ?? '"companyId"';
   let where = `${cc} = $1 AND ${mc} = $2`;
-  const params: any[] = [scope.clientId, scope.companyId, ...(opts.extraParams ?? [])];
+  const params: unknown[] = [scope.clientId, scope.companyId, ...(opts.extraParams ?? [])];
   if (opts.extraWhere) where += ` AND ${opts.extraWhere}`;
   return { where, params };
 }
@@ -291,7 +291,7 @@ protectedRouter.get("/me", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
     const { where, params } = buildPortalWhere(scope, { clientColumn: "c.id", companyColumn: 'c."companyId"' });
-    const [client] = await portalScopedQuery<any>(scope,
+    const [client] = await portalScopedQuery<Record<string, unknown>>(scope,
       `SELECT c.id, c.name, c.email, c.phone, c.classification, c.source, c.notes, c."createdAt",
               cpa.email AS "portalEmail", cpa."mustChangePassword", cpa."lastLoginAt"
        FROM clients c
@@ -310,7 +310,7 @@ protectedRouter.get("/dashboard", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
     const { where, params } = buildPortalWhere(scope);
-    const [financials] = await portalScopedQuery<any>(scope,
+    const [financials] = await portalScopedQuery<Record<string, unknown>>(scope,
       `SELECT
          COALESCE(SUM(total), 0) AS "totalInvoiced",
          COALESCE(SUM("paidAmount"), 0) AS "totalPaid",
@@ -323,7 +323,7 @@ protectedRouter.get("/dashboard", withPortalScope(async (req, res) => {
        WHERE ${where} AND "deletedAt" IS NULL`,
       params
     );
-    const [ticketStats] = await portalScopedQuery<any>(scope,
+    const [ticketStats] = await portalScopedQuery<Record<string, unknown>>(scope,
       `SELECT
          COUNT(*) AS total,
          COUNT(*) FILTER (WHERE status = 'open') AS "openCount",
@@ -333,14 +333,14 @@ protectedRouter.get("/dashboard", withPortalScope(async (req, res) => {
        WHERE ${where} AND "deletedAt" IS NULL`,
       params
     );
-    const recentInvoices = await portalScopedQuery<any>(scope,
+    const recentInvoices = await portalScopedQuery<Record<string, unknown>>(scope,
       `SELECT id, ref, status, total, "paidAmount", "dueDate", "createdAt"
        FROM invoices
        WHERE ${where} AND "deletedAt" IS NULL
        ORDER BY "createdAt" DESC LIMIT 5`,
       params
     );
-    const recentTickets = await portalScopedQuery<any>(scope,
+    const recentTickets = await portalScopedQuery<Record<string, unknown>>(scope,
       `SELECT id, ref, title, status, priority, category, "createdAt"
        FROM support_tickets
        WHERE ${where} AND "deletedAt" IS NULL
@@ -361,7 +361,7 @@ protectedRouter.get("/dashboard", withPortalScope(async (req, res) => {
 protectedRouter.get("/invoices", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
-    const { status, page = "1", limit: lim = "20" } = req.query as any;
+    const { status, page = "1", limit: lim = "20" } = req.query as Record<string, string | undefined>;
     const pageNum = Math.max(Number(page) || 1, 1);
     const perPage = Math.min(Number(lim) || 20, 500);
     const offset = (pageNum - 1) * perPage;
@@ -379,7 +379,7 @@ protectedRouter.get("/invoices", withPortalScope(async (req, res) => {
     const limitParam = params.length - 1;
     const offsetParam = params.length;
 
-    const invoices = await portalScopedQuery<any>(scope,
+    const invoices = await portalScopedQuery<Record<string, unknown>>(scope,
       `SELECT id, ref, status, total, "paidAmount", "dueDate", "createdAt" AS "issueDate", notes, "createdAt"
        FROM invoices
        WHERE ${where}
@@ -388,7 +388,7 @@ protectedRouter.get("/invoices", withPortalScope(async (req, res) => {
       params
     );
     const countParams = params.slice(0, params.length - 2);
-    const [countRow] = await portalScopedQuery<any>(scope,
+    const [countRow] = await portalScopedQuery<Record<string, unknown>>(scope,
       `SELECT COUNT(*) AS total FROM invoices WHERE ${where}`,
       countParams
     );
@@ -402,7 +402,7 @@ protectedRouter.get("/invoices/:id", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
     const id = parseId(req.params.id, "id");
-    const [invoice] = await portalScopedQuery<any>(scope,
+    const [invoice] = await portalScopedQuery<Record<string, unknown>>(scope,
       `SELECT i.*,
               json_agg(json_build_object('description', il.description, 'qty', il.quantity, 'unitPrice', il."unitPrice", 'total', il."lineTotal") ORDER BY il.id) AS items
        FROM invoices i
@@ -421,7 +421,7 @@ protectedRouter.get("/invoices/:id", withPortalScope(async (req, res) => {
 protectedRouter.get("/tickets", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
-    const { status, page = "1", limit: lim = "20" } = req.query as any;
+    const { status, page = "1", limit: lim = "20" } = req.query as Record<string, string | undefined>;
     const pageNum = Math.max(Number(page) || 1, 1);
     const perPage = Math.min(Number(lim) || 20, 500);
     const offset = (pageNum - 1) * perPage;
@@ -439,7 +439,7 @@ protectedRouter.get("/tickets", withPortalScope(async (req, res) => {
     const limitParam = params.length - 1;
     const offsetParam = params.length;
 
-    const tickets = await portalScopedQuery<any>(scope,
+    const tickets = await portalScopedQuery<Record<string, unknown>>(scope,
       `SELECT id, ref, title, status, priority, category, "createdAt", "updatedAt"
        FROM support_tickets
        WHERE ${where} AND "deletedAt" IS NULL
@@ -448,7 +448,7 @@ protectedRouter.get("/tickets", withPortalScope(async (req, res) => {
       params
     );
     const countParams = params.slice(0, params.length - 2);
-    const [countRow] = await portalScopedQuery<any>(scope,
+    const [countRow] = await portalScopedQuery<Record<string, unknown>>(scope,
       `SELECT COUNT(*) AS total FROM support_tickets WHERE ${where} AND "deletedAt" IS NULL`,
       countParams
     );
@@ -462,7 +462,7 @@ protectedRouter.get("/tickets/:id", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
     const id = parseId(req.params.id, "id");
-    const [ticket] = await portalScopedQuery<any>(scope,
+    const [ticket] = await portalScopedQuery<Record<string, unknown>>(scope,
       `SELECT id, ref, title, description, status, priority, category, "createdAt", "updatedAt"
        FROM support_tickets
        WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -479,7 +479,7 @@ protectedRouter.get("/tickets/:id/replies", withPortalScope(async (req, res) => 
   try {
     const scope = req.portalScope;
     const id = parseId(req.params.id, "id");
-    const [ticket] = await portalScopedQuery<any>(scope,
+    const [ticket] = await portalScopedQuery<Record<string, unknown>>(scope,
       `SELECT id FROM support_tickets WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [scope.clientId, scope.companyId, id]
     );
@@ -506,7 +506,7 @@ protectedRouter.post("/tickets/:id/replies", withPortalScope(async (req, res) =>
     if (!message) {
       throw new ValidationError("نص الرد مطلوب");
     }
-    const [ticket] = await portalScopedQuery<any>(scope,
+    const [ticket] = await portalScopedQuery<Record<string, unknown>>(scope,
       `SELECT id, status FROM support_tickets WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [scope.clientId, scope.companyId, id]
     );
@@ -557,7 +557,7 @@ protectedRouter.post("/tickets", withPortalScope(async (req, res) => {
       invoiceId: invoiceId || null,
       contractId: contractId || null,
     });
-    const [ticket] = await portalScopedQuery<any>(scope,
+    const [ticket] = await portalScopedQuery<Record<string, unknown>>(scope,
       `SELECT id, ref, title, status, priority, category, "invoiceId", "contractId", "createdAt" FROM support_tickets WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [clientId, companyId, insertId]
     );
@@ -581,12 +581,12 @@ protectedRouter.patch("/profile/password", withPortalScope(async (req, res) => {
     const { accountId, clientId, companyId } = req.portalScope;
     const body = zodParse(portalChangePasswordSchema.safeParse(req.body));
     const { currentPassword, newPassword } = body;
-    const [account] = await portalScopedQuery<any>(req.portalScope,
+    const [account] = await portalScopedQuery<Record<string, unknown>>(req.portalScope,
       `SELECT "passwordHash" FROM client_portal_accounts WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2`,
       [clientId, companyId, accountId]
     );
     if (!account) throw new NotFoundError("الحساب غير موجود");
-    const valid = await verifyPassword(currentPassword, account.passwordHash);
+    const valid = await verifyPassword(currentPassword, account.passwordHash as string);
     if (!valid) {
       res.status(401).json({ error: "كلمة المرور الحالية غير صحيحة" });
       return;
@@ -618,7 +618,7 @@ protectedRouter.post("/invoices/:id/pay", withPortalScope(async (req, res) => {
     const body = zodParse(portalInvoicePaySchema.safeParse(req.body));
     const { amount, transactionRef } = body;
     const method = body.method ?? "online";
-    const [invoice] = await portalScopedQuery<any>(scope,
+    const [invoice] = await portalScopedQuery<Record<string, unknown>>(scope,
       `SELECT id, ref, total, "paidAmount", status FROM invoices WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [scope.clientId, scope.companyId, id]
     );
@@ -630,7 +630,7 @@ protectedRouter.post("/invoices/:id/pay", withPortalScope(async (req, res) => {
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const { newPaid, newStatus } = await financialEngine.recordInvoicePayment({
-      invoiceId: invoice.id,
+      invoiceId: invoice.id as number,
       companyId: scope.companyId,
       clientId: scope.clientId,
       amount: payAmt,
@@ -641,11 +641,11 @@ protectedRouter.post("/invoices/:id/pay", withPortalScope(async (req, res) => {
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.accountId,
-      action: "update", entity: "invoices", entityId: invoice.id,
+      action: "update", entity: "invoices", entityId: invoice.id as number,
     }).catch((e) => logger.error(e, "clientPortal background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.accountId,
-      action: "portal.invoice.paid", entity: "invoices", entityId: invoice.id,
+      action: "portal.invoice.paid", entity: "invoices", entityId: invoice.id as number,
       details: JSON.stringify({ paidAmount: payAmt, totalPaid: newPaid, status: newStatus, paymentRef, clientId: scope.clientId }),
     }).catch((e) => logger.error(e, "clientPortal background task failed"));
     res.json({
@@ -667,12 +667,12 @@ protectedRouter.post("/tickets/:id/csat", withPortalScope(async (req, res) => {
     const id = parseId(req.params.id, "id");
     const body = zodParse(portalCsatSchema.safeParse(req.body));
     const { score, comment } = body;
-    const [ticket] = await portalScopedQuery<any>(scope,
+    const [ticket] = await portalScopedQuery<Record<string, unknown>>(scope,
       `SELECT id, "assigneeId", status FROM support_tickets WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [scope.clientId, scope.companyId, id]
     );
     if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
-    if (!['resolved', 'closed'].includes(ticket.status)) throw new ValidationError("لا يمكن تقييم تذكرة مفتوحة");
+    if (!['resolved', 'closed'].includes(ticket.status as string)) throw new ValidationError("لا يمكن تقييم تذكرة مفتوحة");
     await rawExecute(
       `INSERT INTO ticket_csat_ratings ("ticketId","companyId","assigneeId",score,comment) VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("ticketId") DO UPDATE SET score=$4, comment=$5, "updatedAt"=NOW()`,
       [id, scope.companyId, ticket.assigneeId, score, comment || null]
@@ -696,9 +696,9 @@ protectedRouter.post("/tickets/:id/csat", withPortalScope(async (req, res) => {
 protectedRouter.get("/kb", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
-    const { q, category } = req.query as any;
+    const { q, category } = req.query as Record<string, string | undefined>;
     const conditions = [`("companyId"=$1 OR "companyId" IS NULL)`, `status='published'`, `"deletedAt" IS NULL`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (category) { params.push(category); conditions.push(`category=$${params.length}`); }
     if (q) { params.push(`%${q}%`); conditions.push(`(title ILIKE $${params.length} OR content ILIKE $${params.length})`); }
     const rows = await rawQuery<KbArticleListRow>(

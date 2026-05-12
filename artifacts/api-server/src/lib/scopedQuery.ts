@@ -69,7 +69,7 @@ export function buildScopedWhere(
   const branchCol = options.branchColumn || '"branchId"';
 
   const conditions: string[] = [];
-  const params: any[] = [];
+  const params: unknown[] = [];
   let paramIdx = startParamIndex;
 
   const companyIds = filters.companyIds?.length

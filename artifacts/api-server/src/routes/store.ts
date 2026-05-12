@@ -147,7 +147,7 @@ interface StoreCountRow { total: string | number }
 router.get("/products", authorize({ feature: "store", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { page = "1", limit: lim = "50" } = req.query as any;
+    const { page = "1", limit: lim = "50" } = req.query as Record<string, string | undefined>;
     const pageNum = Math.max(Number(page) || 1, 1);
     const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
@@ -199,9 +199,9 @@ router.patch("/products/:id", authorize({ feature: "store", action: "update" }),
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<{ id: number }>(`SELECT id FROM store_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المنتج غير موجود");
-    const b = zodParse(updateStoreProductSchema.safeParse(req.body)) as any;
+    const b = zodParse(updateStoreProductSchema.safeParse(req.body));
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
     if (b.description !== undefined) { params.push(b.description); sets.push(`description=$${params.length}`); }
     if (b.sku !== undefined) { params.push(b.sku); sets.push(`sku=$${params.length}`); }
@@ -239,9 +239,9 @@ router.delete("/products/:id", authorize({ feature: "store", action: "delete" })
 router.get("/orders", authorize({ feature: "store", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { productId, status } = req.query as any;
+    const { productId, status } = req.query as Record<string, string | undefined>;
     let where = `o."companyId"=$1 AND o."deletedAt" IS NULL`;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (productId) {
       params.push(Number(productId));
       where += ` AND o.id IN (SELECT "orderId" FROM store_order_items WHERE "productId"=$${params.length})`;
@@ -336,9 +336,9 @@ router.patch("/orders/:id", authorize({ feature: "store", action: "update" }), a
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = zodParse(updateStoreOrderSchema.safeParse(req.body)) as any;
+    const b = zodParse(updateStoreOrderSchema.safeParse(req.body));
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
     if (b.customerName !== undefined) { params.push(b.customerName); sets.push(`"customerName"=$${params.length}`); }
     if (b.customerPhone !== undefined) { params.push(b.customerPhone); sets.push(`"customerPhone"=$${params.length}`); }

@@ -175,7 +175,7 @@ const approveCustodySchema = z.object({
 custodiesRouter.get("/custodies", authorize({ feature: "finance.custodies", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { status: filterStatus, employeeId, page = "1", limit: lim = "50", dateFrom, dateTo } = req.query as any;
+    const { status: filterStatus, employeeId, page = "1", limit: lim = "50", dateFrom, dateTo } = req.query as Record<string, string | undefined>;
 
     const queryParams: any[] = [scope.companyId];
     let dateFilter = "";
@@ -955,7 +955,7 @@ custodiesRouter.patch("/custodies/:id/approve", authorize({ feature: "finance.cu
     // ensures the same record can't be decided twice. The onApply hook
     // writes the approval_actions audit row inside the same transaction
     // so the approval trail and the state flip are atomic.
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "journal_entries",
       id: custodyId,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },

@@ -135,7 +135,7 @@ router.get("/overtime", authorize({ feature: "hr.overtime", action: "list" }), a
   try {
     await ensureOvertimeTable();
     const scope = req.scope!;
-    const { status, assignmentId, month } = req.query as any;
+    const { status, assignmentId, month } = req.query as Record<string, string | undefined>;
 
     let where = `o."companyId" = $1 AND o."deletedAt" IS NULL`;
     const params: unknown[] = [scope.companyId];

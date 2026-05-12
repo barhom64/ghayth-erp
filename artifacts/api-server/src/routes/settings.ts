@@ -425,7 +425,7 @@ router.put("/branches/:id", authorize({ feature: "settings", action: "update" })
     if (!existing) { throw new NotFoundError("الفرع غير موجود"); }
     const { name, nameEn, city, phone, logoUrl, address, taxNumber, crNumber, email, website, footerText } = body;
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (name !== undefined) { params.push(name); sets.push(`name=$${params.length}`); }
     if (nameEn !== undefined) { params.push(nameEn); sets.push(`"nameEn"=$${params.length}`); }
     if (city !== undefined) { params.push(city); sets.push(`city=$${params.length}`); }

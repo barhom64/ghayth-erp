@@ -70,7 +70,7 @@ const entityActionSchema = z.object({
 obligationsRouter.get("/", authorize({ feature: "projects", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { entityType, entityId, status, assignedTo, dueBefore, dueAfter, limit } = req.query as any;
+    const { entityType, entityId, status, assignedTo, dueBefore, dueAfter, limit } = req.query as Record<string, string | undefined>;
     const statuses: ObligationStatus[] | undefined = status
       ? String(status).split(",").filter(Boolean) as ObligationStatus[]
       : undefined;

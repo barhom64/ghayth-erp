@@ -398,7 +398,7 @@ router.post("/pbx/status", async (req, res): Promise<void> => {
   try {
     const { callId, status, answeredBy } = zodParse(pbxStatusSchema.safeParse(req.body ?? {}));
 
-    const [call] = await rawQuery<any>(
+    const [call] = await rawQuery<Record<string, unknown>>(
       `SELECT id, "companyId" FROM pbx_calls WHERE "callId"=$1 AND status != 'completed' LIMIT 1`,
       [callId]
     );
@@ -411,8 +411,8 @@ router.post("/pbx/status", async (req, res): Promise<void> => {
       [status ?? "in_progress", answeredBy ?? null, call.id]
     );
 
-    emitEvent({ companyId: call.companyId ?? 0, userId: 0, action: "communication.pbx.status", entity: "communication_logs", entityId: call.id, details: JSON.stringify({ callId, status: status ?? "in_progress", answeredBy }) }).catch((e) => logger.error(e, "communications background task failed"));
-    createAuditLog({ companyId: call.companyId ?? 0, userId: 0, action: "create", entity: "communication_logs", entityId: call.id, after: { channel: "pbx", callId, status: status ?? "in_progress", answeredBy } }).catch((e) => logger.error(e, "communications background task failed"));
+    emitEvent({ companyId: (call.companyId as number | null) ?? 0, userId: 0, action: "communication.pbx.status", entity: "communication_logs", entityId: call.id as number, details: JSON.stringify({ callId, status: status ?? "in_progress", answeredBy }) }).catch((e) => logger.error(e, "communications background task failed"));
+    createAuditLog({ companyId: (call.companyId as number | null) ?? 0, userId: 0, action: "create", entity: "communication_logs", entityId: call.id as number, after: { channel: "pbx", callId, status: status ?? "in_progress", answeredBy } }).catch((e) => logger.error(e, "communications background task failed"));
 
     res.status(200).json({ status: "ok" });
   } catch (err) {
@@ -423,17 +423,17 @@ router.post("/pbx/status", async (req, res): Promise<void> => {
 router.get("/log", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { channel, direction, limit: lim, offset: off } = req.query as any;
+    const { channel, direction, limit: lim, offset: off } = req.query as Record<string, string | undefined>;
     const pageLimit = Math.min(Number(lim) || 50, 200);
     const pageOffset = Number(off) || 0;
     const conditions = [`"companyId" = $1`, `"deletedAt" IS NULL`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (channel) { params.push(channel); conditions.push(`channel = $${params.length}`); }
     if (direction) { params.push(direction); conditions.push(`direction = $${params.length}`); }
     const where = conditions.join(" AND ");
-    const [countRow] = await rawQuery<any>(`SELECT COUNT(*) AS total FROM communications_log WHERE ${where}`, params);
+    const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM communications_log WHERE ${where}`, params);
     params.push(pageLimit, pageOffset);
-    const rows = await rawQuery<any>(`SELECT * FROM communications_log WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
+    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM communications_log WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
     res.json({ data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset });
   } catch (err) { handleRouteError(err, res, "Communications log error:"); }
 });
@@ -461,7 +461,7 @@ router.post("/send", authorize({ feature: "communications", action: "create" }),
       `INSERT INTO communications_log ("companyId",channel,direction,"fromNumber","toNumber",subject,body,status,"relatedType","relatedId") VALUES ($1,$2,'outbound',$3,$4,$5,$6,'queued',$7,$8)`,
       [scope.companyId, b.channel.toLowerCase(), b.fromNumber ?? null, b.toNumber ?? b.toEmail, b.subject ?? null, b.body.trim(), b.relatedType ?? null, b.relatedId ?? null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM communications_log WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM communications_log WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     if (!row) throw new NotFoundError("فشل في استرجاع السجل");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "communications_log", entityId: insertId, after: { channel: b.channel.toLowerCase(), toNumber: b.toNumber ?? b.toEmail } }).catch((e) => logger.error(e, "communications background task failed"));
     emitEvent({
@@ -479,16 +479,16 @@ router.post("/send", authorize({ feature: "communications", action: "create" }),
 router.get("/whatsapp", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { status, limit: lim, offset: off } = req.query as any;
+    const { status, limit: lim, offset: off } = req.query as Record<string, string | undefined>;
     const pageLimit = Math.min(Number(lim) || 50, 200);
     const pageOffset = Number(off) || 0;
     const conditions = [`"companyId" = $1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`status = $${params.length}`); }
     const where = conditions.join(" AND ");
-    const [countRow] = await rawQuery<any>(`SELECT COUNT(*) AS total FROM whatsapp_queue WHERE ${where}`, params);
+    const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM whatsapp_queue WHERE ${where}`, params);
     params.push(pageLimit, pageOffset);
-    const rows = await rawQuery<any>(`SELECT * FROM whatsapp_queue WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
+    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM whatsapp_queue WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
     res.json({ data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset });
   } catch (err) { handleRouteError(err, res, "WhatsApp queue error:"); }
 });
@@ -496,16 +496,16 @@ router.get("/whatsapp", authorize({ feature: "communications", action: "list" })
 router.get("/sms", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { status, limit: lim, offset: off } = req.query as any;
+    const { status, limit: lim, offset: off } = req.query as Record<string, string | undefined>;
     const pageLimit = Math.min(Number(lim) || 50, 200);
     const pageOffset = Number(off) || 0;
     const conditions = [`"companyId" = $1`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`status = $${params.length}`); }
     const where = conditions.join(" AND ");
-    const [countRow] = await rawQuery<any>(`SELECT COUNT(*) AS total FROM sms_queue WHERE ${where}`, params);
+    const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM sms_queue WHERE ${where}`, params);
     params.push(pageLimit, pageOffset);
-    const rows = await rawQuery<any>(`SELECT * FROM sms_queue WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
+    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM sms_queue WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
     res.json({ data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset });
   } catch (err) { handleRouteError(err, res, "SMS queue error:"); }
 });
@@ -513,11 +513,11 @@ router.get("/sms", authorize({ feature: "communications", action: "list" }), asy
 router.get("/pbx", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { limit: lim, offset: off } = req.query as any;
+    const { limit: lim, offset: off } = req.query as Record<string, string | undefined>;
     const pageLimit = Math.min(Number(lim) || 50, 200);
     const pageOffset = Number(off) || 0;
-    const [countRow] = await rawQuery<any>(`SELECT COUNT(*) AS total FROM pbx_calls WHERE "companyId"=$1`, [scope.companyId]);
-    const rows = await rawQuery<any>(`SELECT * FROM pbx_calls WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT $2 OFFSET $3`, [scope.companyId, pageLimit, pageOffset]);
+    const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM pbx_calls WHERE "companyId"=$1`, [scope.companyId]);
+    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM pbx_calls WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT $2 OFFSET $3`, [scope.companyId, pageLimit, pageOffset]);
     res.json({ data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset });
   } catch (err) { handleRouteError(err, res, "PBX calls error:"); }
 });
@@ -529,7 +529,7 @@ router.patch("/log/:id", authorize({ feature: "communications", action: "update"
     const id = parseId(req.params.id, "id");
     const { body, content, subject, direction, status } = parsed;
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     let idx = 1;
     const finalBody = body ?? content;
     if (finalBody !== undefined) { sets.push(`body = $${idx++}`); params.push(finalBody); }
@@ -538,7 +538,7 @@ router.patch("/log/:id", authorize({ feature: "communications", action: "update"
     if (status !== undefined) { sets.push(`status = $${idx++}`); params.push(status); }
     if (sets.length === 0) { throw new ValidationError("لا توجد بيانات"); }
     params.push(id, scope.companyId);
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `UPDATE communications_log SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
@@ -562,7 +562,7 @@ router.post("/log/:id/convert", authorize({ feature: "communications", action: "
     const logId = parseId(req.params.id, "id");
     const { targetType } = parsed;
 
-    const [logEntry] = await rawQuery<any>(
+    const [logEntry] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM communications_log WHERE id=$1 AND "companyId"=$2`,
       [logId, scope.companyId]
     );
@@ -634,8 +634,8 @@ router.delete("/log/:id", authorize({ feature: "communications", action: "delete
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [before] = await rawQuery<any>(`SELECT * FROM communications_log WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    const [row] = await rawQuery<any>(
+    const [before] = await rawQuery<Record<string, unknown>>(`SELECT * FROM communications_log WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(
       `UPDATE communications_log SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
       [id, scope.companyId]
     );
@@ -657,9 +657,9 @@ router.get("/stats", authorize({ feature: "communications", action: "list" }), a
     const scope = req.scope!;
     const cid = scope.companyId;
     const [[comm], [wa], [sms]] = await Promise.all([
-      rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE channel='whatsapp') as whatsapp, COUNT(*) FILTER (WHERE channel='sms') as sms, COUNT(*) FILTER (WHERE channel='email') as email, COUNT(*) FILTER (WHERE channel='pbx') as pbx FROM communications_log WHERE "companyId"=$1`, [cid]),
-      rawQuery<any>(`SELECT COUNT(*) as pending FROM whatsapp_queue WHERE "companyId"=$1 AND status='pending'`, [cid]),
-      rawQuery<any>(`SELECT COUNT(*) as pending FROM sms_queue WHERE "companyId"=$1 AND status='pending'`, [cid]),
+      rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE channel='whatsapp') as whatsapp, COUNT(*) FILTER (WHERE channel='sms') as sms, COUNT(*) FILTER (WHERE channel='email') as email, COUNT(*) FILTER (WHERE channel='pbx') as pbx FROM communications_log WHERE "companyId"=$1`, [cid]),
+      rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as pending FROM whatsapp_queue WHERE "companyId"=$1 AND status='pending'`, [cid]),
+      rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as pending FROM sms_queue WHERE "companyId"=$1 AND status='pending'`, [cid]),
     ]);
     res.json({
       total: Number(comm.total),

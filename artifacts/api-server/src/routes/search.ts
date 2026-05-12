@@ -22,7 +22,7 @@ interface TenantHit extends SearchHit { name: string; phone: string | null; emai
 router.get("/", authorize({ feature: "projects", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { q = "", type = "all" } = req.query as any;
+    const { q = "", type = "all" } = req.query as Record<string, string | undefined>;
     const query = String(q).trim();
 
     if (!query || query.length < 2) {

@@ -524,7 +524,7 @@ budgetRouter.post("/budget/approval-requests/:id/decide", authorize({ feature: "
     // Phase 9 added the `updatedAt` and `deletedAt` columns to this table,
     // so the engine can now manage the updatedAt clock and we can filter
     // out soft-deleted rows from state transitions.
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "budget_approval_requests",
       id: requestId,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },

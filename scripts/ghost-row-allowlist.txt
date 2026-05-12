@@ -57,3 +57,8 @@ routes/umrah.ts:umrah_packages
 routes/umrah.ts:umrah_pilgrims
 routes/umrah.ts:umrah_sub_agents
 routes/umrah.ts:umrah_transport
+# Newly surfaced after stricter alias parsing — same baseline category:
+routes/umrah.ts:umrah_penalties
+routes/umrah.ts:umrah_agent_invoices
+routes/umrah.ts:umrah_import_logs
+routes/umrah.ts:umrah_seasons

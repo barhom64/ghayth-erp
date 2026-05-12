@@ -169,7 +169,7 @@ export async function advanceJourney(
   entityId?: number
 ): Promise<{ journeyId: number; completed: boolean; progress: number } | null> {
   await ensureTable();
-  const params: any[] = [companyId, journeyType];
+  const params: unknown[] = [companyId, journeyType];
   let where = `"companyId"=$1 AND "journeyType"=$2 AND status='in_progress'`;
   if (entityType && entityId) {
     params.push(entityType, entityId);
@@ -217,19 +217,19 @@ export async function getJourneyProgress(
   entityId?: number
 ): Promise<{ id: number; completedSteps: string[]; totalSteps: number; status: string; progress: number } | null> {
   await ensureTable();
-  const params: any[] = [companyId, journeyType];
+  const params: unknown[] = [companyId, journeyType];
   let where = `"companyId"=$1 AND "journeyType"=$2`;
   if (entityType && entityId) {
     params.push(entityType, entityId);
     where += ` AND "entityType"=$${params.length - 1} AND "entityId"=$${params.length}`;
   }
-  const [row] = await rawQuery<any>(
+  const [row] = await rawQuery<Record<string, unknown>>(
     `SELECT * FROM journey_instances WHERE ${where} ORDER BY id DESC LIMIT 1`,
     params
   );
   if (!row) return null;
   const steps: string[] = Array.isArray(row.completedSteps) ? row.completedSteps : [];
-  return { id: row.id, completedSteps: steps, totalSteps: row.totalSteps, status: row.status, progress: steps.length / row.totalSteps };
+  return { id: row.id as number, completedSteps: steps, totalSteps: row.totalSteps as number, status: row.status as string, progress: steps.length / Number(row.totalSteps) };
 }
 
 export async function listJourneys(
@@ -237,10 +237,10 @@ export async function listJourneys(
   status?: string
 ): Promise<any[]> {
   await ensureTable();
-  const params: any[] = [companyId];
+  const params: unknown[] = [companyId];
   let where = `"companyId"=$1`;
   if (status) { params.push(status); where += ` AND status=$${params.length}`; }
-  return rawQuery<any>(
+  return rawQuery<Record<string, unknown>>(
     `SELECT *, (jsonb_array_length("completedSteps")::float / NULLIF("totalSteps",0)) AS progress
      FROM journey_instances WHERE ${where} ORDER BY "updatedAt" DESC LIMIT 100`,
     params
