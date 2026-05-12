@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 // P4.5 — Property sweep: shared header + status chips.
 import { PageShell } from "@/components/page-shell";
@@ -98,7 +99,7 @@ export default function Properties() {
       actions={
         canManage ? (
           <Link href="/properties/create">
-            <Button className="gap-2"><Plus className="h-4 w-4" /> إضافة وحدة</Button>
+            <GuardedButton perm="properties:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة وحدة</GuardedButton>
           </Link>
         ) : null
       }

@@ -18,6 +18,7 @@
 
 import { rawExecute, rawQuery, pool } from "./rawdb.js";
 import { emitEvent } from "./businessHelpers.js";
+import { logger } from "./logger.js";
 
 export interface JourneyStepDef {
   key: string;
@@ -203,7 +204,7 @@ export async function advanceJourney(
       action: "system.journey.completed",
       entity: "journey_instances", entityId: inst.id,
       details: `رحلة مكتملة: ${journeyType}`,
-    }).catch((err) => { console.error("[JourneyEngine] journey completion event failed:", err); });
+    }).catch((err) => { logger.error(err, "JourneyEngine: journey completion event failed"); });
   }
 
   return { journeyId: inst.id, completed, progress: steps.length / inst.totalSteps };

@@ -16,6 +16,12 @@ tags:
   - name: finance
   - name: notifications
   - name: tasks
+  - name: umrah
+    description: |
+      Umrah workflow — pilgrimage operations.
+      Only the endpoints introduced in PRs #303/#305/#306/#312/#318 are
+      enumerated below; the legacy `/api/umrah/*` surface is large and
+      will be back-filled in per-module follow-up PRs.
 
 paths:
   /healthz:
@@ -569,6 +575,333 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Task"
+
+  # ─────────────────────────────────────────────────────────────────────
+  # Umrah — endpoints added by PRs #303, #305, #306, #312, #318
+  # Legacy /api/umrah/* (seasons, agents, packages, pilgrims, ...) is not
+  # yet enumerated here; follow-up PRs will back-fill the rest module
+  # by module per CONTRIBUTING.md §3.5.
+  # ─────────────────────────────────────────────────────────────────────
+
+  /umrah/groups/{id}/split:
+    post:
+      operationId: splitUmrahGroup
+      tags: [umrah]
+      summary: Split a group into a new group (move N pilgrims)
+      description: |
+        Moves the listed pilgrims out of the source group into a fresh
+        child group. Rejects 409 if the source group is already linked to
+        a sales invoice (issue credit note first). agentId / subAgentId /
+        seasonId / programDuration are inherited from the source.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pilgrimIds]
+              properties:
+                pilgrimIds:
+                  type: array
+                  items: { type: integer }
+                newGroupName: { type: string }
+                newNuskGroupNumber: { type: string }
+      responses:
+        "200":
+          description: Split succeeded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  newGroup:
+                    type: object
+                  movedCount: { type: integer }
+        "404": { description: Source group not found }
+        "409": { description: Source group is already invoiced }
+
+  /umrah/groups/merge:
+    post:
+      operationId: mergeUmrahGroups
+      tags: [umrah]
+      summary: Merge multiple source groups into a target group
+      description: |
+        Moves every pilgrim from each source group into the target, then
+        soft-deletes the now-empty source groups. Rejects 409 if any
+        source is already invoiced. Idempotent on re-runs because
+        deleted groups are skipped on subsequent calls.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sourceGroupIds, targetGroupId]
+              properties:
+                sourceGroupIds:
+                  type: array
+                  items: { type: integer }
+                targetGroupId: { type: integer }
+      responses:
+        "200":
+          description: Merge succeeded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  movedCount: { type: integer }
+                  mergedSourceIds:
+                    type: array
+                    items: { type: integer }
+        "404": { description: Target group not found }
+        "409": { description: One or more source groups invoiced }
+
+  /umrah/penalties/waive-bulk:
+    post:
+      operationId: bulkWaiveUmrahPenalties
+      tags: [umrah]
+      summary: Waive multiple penalties under one reason
+      description: |
+        Loops each penaltyId through `applyTransition` +
+        `postPenaltyWaiverGL`. A single bad row does not break the batch
+        — failures + skips are reported back so the UI can render a
+        non-atomic summary. Posts one consolidated reversal journal
+        entry per successful row.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [penaltyIds, reason]
+              properties:
+                penaltyIds:
+                  type: array
+                  items: { type: integer }
+                reason: { type: string }
+      responses:
+        "200":
+          description: Bulk waive result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  successCount: { type: integer }
+                  successIds:
+                    type: array
+                    items: { type: integer }
+                  totalWaivedAmount: { type: number }
+                  skipped:
+                    type: array
+                  errors:
+                    type: array
+
+  /umrah/attachments:
+    get:
+      operationId: listUmrahAttachments
+      tags: [umrah]
+      summary: List polymorphic attachments
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: entityType
+          in: query
+          schema:
+            type: string
+            enum: [mutamer, sub_agent, group, agent, nusk_invoice, season, sales_invoice, violation]
+        - name: entityId
+          in: query
+          schema: { type: integer }
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [passport, visa, contract, nusk_file, identity, transfer_receipt, other]
+      responses:
+        "200":
+          description: Filtered attachment list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+    post:
+      operationId: createUmrahAttachment
+      tags: [umrah]
+      summary: Attach a file to an umrah entity
+      description: |
+        Verifies ownership of the target row via an entityType→table
+        whitelist before insert (no raw table-name injection). The
+        attached file is described by metadata only; uploads go through
+        the central storage service and `storageKey` + `fileUrl` are
+        recorded here.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [entityType, entityId, type, title]
+              properties:
+                entityType: { type: string }
+                entityId: { type: integer }
+                type: { type: string }
+                title: { type: string }
+                notes: { type: string }
+                fileUrl: { type: string, format: uri }
+                storageKey: { type: string }
+                fileSize: { type: integer }
+                mimeType: { type: string }
+      responses:
+        "201":
+          description: Attachment created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer }
+        "404": { description: Owning entity not found }
+
+  /umrah/attachments/{id}:
+    delete:
+      operationId: deleteUmrahAttachment
+      tags: [umrah]
+      summary: Soft-delete an attachment
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404": { description: Attachment not found }
+
+  /umrah/reports/reconciliation:
+    get:
+      operationId: umrahReconciliationReport
+      tags: [umrah]
+      summary: NUSK file ↔ system reconciliation
+      description: |
+        Read-only diff across three dimensions:
+          1. amountDiffs — nuskInvoice.totalAmount vs posted JE total
+          2. countDiffs — nuskInvoice.mutamerCount vs actual pilgrims
+          3. overstayGaps — pilgrims with overstayDays>0 and no open
+             violation row
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: seasonId
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Reconciliation findings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    type: object
+                  amountDiffs: { type: array }
+                  countDiffs:  { type: array }
+                  overstayGaps: { type: array }
+
+  /umrah/reports/daily-runsheet:
+    get:
+      operationId: umrahDailyRunsheet
+      tags: [umrah]
+      summary: Daily operations run-sheet (JSON)
+      description: |
+        Returns arrivals + departures for a given date plus everyone
+        currently overstaying. Defaults to today (ISO yyyy-mm-dd).
+        Companion PDF at `/umrah/reports/daily-runsheet/pdf`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: date
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Run-sheet payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  date: { type: string, format: date }
+                  arrivals: { type: array }
+                  departures: { type: array }
+                  overstays: { type: array }
+
+  /umrah/reports/daily-runsheet/pdf:
+    get:
+      operationId: umrahDailyRunsheetPdf
+      tags: [umrah]
+      summary: Daily operations run-sheet (Arabic PDF)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: date
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+
+  /umrah/statements/{subAgentId}/pdf:
+    get:
+      operationId: umrahSubAgentStatementPdf
+      tags: [umrah]
+      summary: Sub-agent statement of account (Arabic PDF)
+      description: |
+        Detailed running-balance ledger (invoices + violations + payments
+        with opening + closing balance), rendered as a printable PDF for
+        WhatsApp / email / hand delivery.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: subAgentId
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
 
 components:
   securitySchemes:

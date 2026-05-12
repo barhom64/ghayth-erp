@@ -1,25 +1,47 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, Edit2, Save, X } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import { Plus, Trash2, Edit2, X } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { HOLIDAY_TYPES, HOLIDAY_COLORS, MONTHS_AR } from "@/lib/hr-type-maps";
-import { DatePicker } from "@/components/ui/date-picker";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import {
+  FormShell, FormTextField, FormSelectField, FormDateField, FormGrid,
+} from "@/components/form-shell";
+
+// HOLIDAY_TYPES has a fixed set of keys — `national`, `religious`,
+// `company`, etc. Use them as the closed enum source. type stays a
+// string in the schema (rather than z.enum) because the labels come
+// from a Record<string,string> and we don't want to duplicate the keys.
+const holidaySchema = z.object({
+  name: z.string().trim().min(1, "اسم العطلة مطلوب"),
+  startDate: z.string().min(1, "تاريخ البداية مطلوب"),
+  endDate: z.string(),
+  type: z.string().min(1, "النوع مطلوب"),
+  description: z.string().trim(),
+  isRecurring: z.boolean(),
+});
+type HolidayForm = z.infer<typeof holidaySchema>;
+const defaultHolidayForm: HolidayForm = {
+  name: "", startDate: "", endDate: "", type: "national", description: "", isRecurring: false,
+};
 
 export default function PublicHolidaysPage() {
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState({ name: "", startDate: "", endDate: "", type: "national", description: "", isRecurring: false });
+  // Seed values passed to FormShell.defaultValues. When the operator
+  // clicks "تعديل" on an existing holiday, handleEdit updates this AND
+  // the FormShell remounts via `key={editingId ?? "new"}` so the new
+  // defaults take effect.
+  const [formInitial, setFormInitial] = useState<HolidayForm>(defaultHolidayForm);
   // Deletion dialog state (replaces window.confirm). Tracks the
   // holiday being deleted so ConfirmDeleteDialog can render its name +
   // fetch /impact-preview for it.
@@ -31,27 +53,26 @@ export default function PublicHolidaysPage() {
   const resetForm = () => {
     setShowForm(false);
     setEditingId(null);
-    setForm({ name: "", startDate: "", endDate: "", type: "national", description: "", isRecurring: false });
+    setFormInitial(defaultHolidayForm);
   };
 
-  const updateMut = useApiMutation<any, typeof form & { id: number }>(
+  const updateMut = useApiMutation<any, HolidayForm & { id: number }>(
     (body) => `/hr/public-holidays/${body.id}`,
     "PATCH",
     [["public-holidays"]],
     { successMessage: "تم تحديث العطلة", onSuccess: resetForm }
   );
-  const createMut = useApiMutation<any, typeof form>(
+  const createMut = useApiMutation<any, HolidayForm>(
     "/hr/public-holidays",
     "POST",
     [["public-holidays"]],
     { successMessage: "تم إضافة العطلة", onSuccess: resetForm }
   );
-  const handleSave = () => {
-    if (!form.name || !form.startDate) { toast({ title: "الاسم والتاريخ مطلوبان", variant: "destructive" }); return; }
+  const handleSave = async (values: HolidayForm) => {
     if (editingId) {
-      updateMut.mutate({ ...form, id: editingId });
+      await updateMut.mutateAsync({ ...values, id: editingId });
     } else {
-      createMut.mutate(form);
+      await createMut.mutateAsync(values);
     }
   };
 
@@ -63,7 +84,14 @@ export default function PublicHolidaysPage() {
 
   const handleEdit = (h: any) => {
     setEditingId(h.id);
-    setForm({ name: h.name, startDate: h.startDate?.split("T")[0] || "", endDate: h.endDate?.split("T")[0] || "", type: h.type || "national", description: h.description || "", isRecurring: h.isRecurring || false });
+    setFormInitial({
+      name: h.name,
+      startDate: h.startDate?.split("T")[0] || "",
+      endDate: h.endDate?.split("T")[0] || "",
+      type: h.type || "national",
+      description: h.description || "",
+      isRecurring: h.isRecurring || false,
+    });
     setShowForm(true);
   };
 
@@ -93,9 +121,9 @@ export default function PublicHolidaysPage() {
               ))}
             </SelectContent>
           </Select>
-          <Button onClick={() => { setShowForm(!showForm); setEditingId(null); setForm({ name: "", startDate: "", endDate: "", type: "national", description: "", isRecurring: false }); }} size="sm">
+          <GuardedButton perm="hr:create" onClick={() => { setShowForm(!showForm); setEditingId(null); setFormInitial(defaultHolidayForm); }} size="sm">
             <Plus className="w-4 h-4 me-1" /> إضافة عطلة
-          </Button>
+          </GuardedButton>
         </>
       }
     >
@@ -105,37 +133,33 @@ export default function PublicHolidaysPage() {
             <CardTitle className="text-base">{editingId ? "تعديل عطلة" : "إضافة عطلة جديدة"}</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>اسم العطلة *</Label>
-                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="مثال: اليوم الوطني" />
-              </div>
-              <div>
-                <Label>النوع</Label>
-                <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(HOLIDAY_TYPES).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>تاريخ البداية *</Label>
-                <DatePicker value={form.startDate} onChange={(v) => setForm({ ...form, startDate: v })} />
-              </div>
-              <div>
-                <Label>تاريخ النهاية</Label>
-                <DatePicker value={form.endDate} onChange={(v) => setForm({ ...form, endDate: v })} />
-              </div>
-              <div className="col-span-2">
-                <Label>الوصف</Label>
-                <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="وصف اختياري" />
-              </div>
-            </div>
-            <div className="flex gap-2 mt-4">
-              <Button onClick={handleSave} rateLimitAware><Save className="w-4 h-4 me-1" /> حفظ</Button>
-              <Button variant="outline" onClick={() => { setShowForm(false); setEditingId(null); }}><X className="w-4 h-4 me-1" /> إلغاء</Button>
-            </div>
+            <FormShell
+              key={editingId ?? "new"}
+              schema={holidaySchema}
+              defaultValues={formInitial}
+              submitLabel={editingId ? "تحديث العطلة" : "إضافة العطلة"}
+              secondaryActions={
+                <Button type="button" variant="outline" onClick={() => { setShowForm(false); setEditingId(null); }}>
+                  <X className="w-4 h-4 me-1" /> إلغاء
+                </Button>
+              }
+              onSubmit={async (values) => {
+                await handleSave(values);
+              }}
+            >
+              <FormGrid cols={2}>
+                <FormTextField name="name" label="اسم العطلة" required placeholder="مثال: اليوم الوطني" />
+                <FormSelectField
+                  name="type"
+                  label="النوع"
+                  required
+                  options={Object.entries(HOLIDAY_TYPES).map(([value, label]) => ({ value, label }))}
+                />
+                <FormDateField name="startDate" label="تاريخ البداية" required />
+                <FormDateField name="endDate" label="تاريخ النهاية" />
+                <FormTextField name="description" label="الوصف" placeholder="وصف اختياري" className="col-span-2" />
+              </FormGrid>
+            </FormShell>
           </CardContent>
         </Card>
       )}
