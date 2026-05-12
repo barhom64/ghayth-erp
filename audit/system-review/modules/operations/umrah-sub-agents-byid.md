@@ -1,25 +1,25 @@
-# /umrah/transport — `artifacts/ghayth-erp/src/pages/umrah/transport.tsx`
+# /umrah/sub-agents/:id — `artifacts/ghayth-erp/src/pages/details/umrah-sub-agent-detail.tsx`
 
 ## 1. الميتاداتا
-- المسار: `/umrah/transport`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/transport.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:62`
+- المسار: `/umrah/sub-agents/:id`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/umrah-sub-agent-detail.tsx`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:68`
 - المجموعة: `operations`
-- الكومبوننت: `UmrahTransport`
+- الكومبوننت: `UmrahSubAgentDetail`
 - subKey: — | minRoleLevel: —
-- الكيان المستنبط: `transport`
-- سطور الملف: 113
+- الكيان المستنبط: `:id`
+- سطور الملف: 202
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L97: "حفظ" → `() => { setShowForm(false); setForm({` 🔒
-- L98: "حفظ" → `save` 🔒
+- L153: "(بلا تسمية)"
+- L167: "عرض تسعير الوكيل"
 
 ### القراءات (GET)
-- GET `/umrah/transport`
+_لا قراءات._
 
 
 
@@ -33,14 +33,11 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 - يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
 
 ## 4. النمذجة
-_لم يتم العثور على جدول Drizzle بالاسم المستنبط `transport` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
+_لم يتم العثور على جدول Drizzle بالاسم المستنبط `:id` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/umrah/transport`
-- لقطة: `audit/screenshots/umrah_transport.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **N/A** — لم يُشغّل بعد لهذا المسار.
+- توصية: **TBD**

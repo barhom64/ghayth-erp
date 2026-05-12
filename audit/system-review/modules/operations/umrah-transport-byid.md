@@ -3,7 +3,7 @@
 ## 1. الميتاداتا
 - المسار: `/umrah/transport/:id`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/umrah-transport-detail.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:62`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:63`
 - المجموعة: `operations`
 - الكومبوننت: `UmrahTransportDetail`
 - subKey: — | minRoleLevel: —
