@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Plus, Eye, Users, UserCheck, UserX, Car } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
@@ -89,7 +90,7 @@ export default function DriversPage() {
       loading={isLoading}
       actions={
         <Link href="/fleet/drivers/create">
-          <Button size="sm"><Plus className="h-4 w-4 me-1" />إضافة سائق</Button>
+          <GuardedButton perm="fleet:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة سائق</GuardedButton>
         </Link>
       }
     >

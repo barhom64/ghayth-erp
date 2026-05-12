@@ -1930,18 +1930,23 @@ invoicesRouter.post("/dunning/send", authorize({ feature: "finance.collection", 
     const today = todayISO();
     const results: any[] = [];
 
+    // Batch-fetch all invoices in one query
+    const invoiceIdNums = invoiceIds.map(Number);
+    const allInvoices = await rawQuery<any>(
+      `SELECT i.id, i.ref AS "invoiceNumber", i."createdAt"::date AS "invoiceDate", i."dueDate",
+              i.total, COALESCE(i."paidAmount",0) AS "paidAmount", i."clientId",
+              c.name AS "clientName"
+       FROM invoices i
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+       WHERE i.id = ANY($1::int[]) AND i."companyId"=$2
+         AND i.status NOT IN ('paid','cancelled')
+         AND i."deletedAt" IS NULL`,
+      [invoiceIdNums, scope.companyId]
+    );
+    const invoiceMap = new Map(allInvoices.map((inv: any) => [inv.id, inv]));
+
     for (const invId of invoiceIds) {
-      const [inv] = await rawQuery<any>(
-        `SELECT i.id, i.ref AS "invoiceNumber", i."createdAt"::date AS "invoiceDate", i."dueDate",
-                i.total, COALESCE(i."paidAmount",0) AS "paidAmount", i."clientId",
-                c.name AS "clientName"
-         FROM invoices i
-         LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
-         WHERE i.id=$1 AND i."companyId"=$2
-           AND i.status NOT IN ('paid','cancelled')
-           AND i."deletedAt" IS NULL`,
-        [Number(invId), scope.companyId]
-      );
+      const inv = invoiceMap.get(Number(invId));
       if (!inv) { results.push({ invoiceId: invId, status: "skipped", reason: "not_found_or_paid" }); continue; }
 
       if (!inv.dueDate) { results.push({ invoiceId: invId, status: "skipped", reason: "no_due_date" }); continue; }
@@ -2017,14 +2022,23 @@ invoicesRouter.get("/tax/declarations", authorize({ feature: "finance.zatca", ac
   try {
     const scope = req.scope!;
     const thisYear = currentYear();
-    const declarations = [];
-    for (let m = 1; m <= 12; m++) {
-      const period = `${thisYear}-${String(m).padStart(2, "0")}`;
-      const [stats] = await rawQuery<any>(`SELECT COALESCE(SUM("vatAmount"), 0) AS "outputVat", COUNT(*) AS "invoiceCount" FROM invoices WHERE "companyId" = $1 AND to_char("createdAt", 'YYYY-MM') = $2 AND "deletedAt" IS NULL`, [scope.companyId, period]);
-      if (Number(stats?.invoiceCount ?? 0) > 0) {
-        declarations.push({ period, outputVat: Number(stats.outputVat), inputVat: 0, netVat: Number(stats.outputVat), invoiceCount: Number(stats.invoiceCount), status: m < new Date().getMonth() + 1 ? "submitted" : "pending" });
-      }
-    }
+    const vatRows = await rawQuery<any>(
+      `SELECT to_char("createdAt", 'YYYY-MM') AS period,
+              COALESCE(SUM("vatAmount"), 0) AS "outputVat",
+              COUNT(*) AS "invoiceCount"
+       FROM invoices
+       WHERE "companyId" = $1 AND "deletedAt" IS NULL
+         AND "createdAt" >= make_date($2, 1, 1) AND "createdAt" < make_date($2 + 1, 1, 1)
+       GROUP BY to_char("createdAt", 'YYYY-MM')`,
+      [scope.companyId, thisYear]
+    );
+    const currentMonth = new Date().getMonth() + 1;
+    const declarations = vatRows
+      .filter((r: any) => Number(r.invoiceCount ?? 0) > 0)
+      .map((r: any) => {
+        const m = Number(r.period.split("-")[1]);
+        return { period: r.period, outputVat: Number(r.outputVat), inputVat: 0, netVat: Number(r.outputVat), invoiceCount: Number(r.invoiceCount), status: m < currentMonth ? "submitted" : "pending" };
+      });
     res.json({ data: declarations });
   } catch (err) {
     handleRouteError(err, res, "Finance route error:");

@@ -17,6 +17,50 @@ import { logger } from "../lib/logger.js";
 const correspondenceRouter = Router();
 correspondenceRouter.use(authMiddleware);
 
+interface CorrespondenceRow {
+  id: number;
+  companyId: number;
+  branchId: number | null;
+  direction: "outgoing" | "incoming";
+  ref: string;
+  subject: string;
+  content: string | null;
+  entityType: string | null;
+  entityId: number | null;
+  senderName: string | null;
+  senderOrg: string | null;
+  recipientName: string | null;
+  recipientOrg: string | null;
+  channel: string;
+  status: string;
+  attachments: unknown;
+  notes: string | null;
+  responseRef: string | null;
+  respondedAt: string | null;
+  sentAt: string | null;
+  receivedAt: string | null;
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+interface CorrespondenceListRow extends CorrespondenceRow {
+  createdByName: string | null;
+}
+
+interface SeqRow {
+  seq: string | number;
+}
+
+interface CorrespondenceStatsRow {
+  totalOutgoing: string | number;
+  totalIncoming: string | number;
+  totalDraft: string | number;
+  totalSent: string | number;
+  totalResponded: string | number;
+  totalPending: string | number;
+}
+
 const respondSchema = z.object({
   subject: z.string().optional(),
   content: z.string().optional(),
@@ -55,7 +99,7 @@ const createSchema = z.object({
 async function generateCorrespondenceRef(direction: "outgoing" | "incoming", companyId: number): Promise<string> {
   const prefix = direction === "outgoing" ? "OUT" : "IN";
   const seqName = direction === "outgoing" ? "correspondence_outgoing_seq" : "correspondence_incoming_seq";
-  const [row] = await rawQuery<any>(`SELECT nextval($1::regclass) AS seq`, [seqName]);
+  const [row] = await rawQuery<SeqRow>(`SELECT nextval($1::regclass) AS seq`, [seqName]);
   if (!row) throw new Error(`فشل في توليد التسلسل: ${seqName}`);
   return makeRef(prefix, row.seq);
 }
@@ -89,7 +133,7 @@ correspondenceRouter.get("/", authorize({ feature: "communications", action: "li
       where += ` AND (c.subject ILIKE $${params.length} OR c.ref ILIKE $${params.length} OR c."senderName" ILIKE $${params.length} OR c."recipientName" ILIKE $${params.length})`;
     }
 
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<CorrespondenceListRow>(
       `SELECT c.*, COALESCE(e.name, u.email) AS "createdByName"
        FROM correspondence c
        LEFT JOIN users u ON u.id = c."createdBy"
@@ -110,7 +154,7 @@ correspondenceRouter.get("/:id", authorize({ feature: "communications", action: 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<CorrespondenceListRow>(
       `SELECT c.*, COALESCE(e.name, u.email) AS "createdByName"
        FROM correspondence c
        LEFT JOIN users u ON u.id = c."createdBy"
@@ -132,7 +176,7 @@ correspondenceRouter.post("/", authorize({ feature: "communications", action: "c
     const data = createSchema.parse(req.body);
     const ref = await generateCorrespondenceRef(data.direction, scope.companyId);
 
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<CorrespondenceRow>(
       `INSERT INTO correspondence (
         "companyId", "branchId", direction, ref, subject, content,
         "entityType", "entityId",
@@ -166,7 +210,7 @@ correspondenceRouter.patch("/:id", authorize({ feature: "communications", action
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<CorrespondenceRow>(
       `SELECT * FROM correspondence WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
@@ -192,7 +236,7 @@ correspondenceRouter.patch("/:id", authorize({ feature: "communications", action
     sets.push(`"updatedAt" = NOW()`);
     params.push(id, scope.companyId);
 
-    const [updated] = await rawQuery<any>(
+    const [updated] = await rawQuery<CorrespondenceRow>(
       `UPDATE correspondence SET ${sets.join(", ")}
        WHERE id = $${params.length - 1} AND "companyId" = $${params.length}
        RETURNING *`,
@@ -211,7 +255,7 @@ correspondenceRouter.post("/:id/send", authorize({ feature: "communications", ac
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<CorrespondenceRow>(
       `SELECT * FROM correspondence WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
@@ -221,7 +265,7 @@ correspondenceRouter.post("/:id/send", authorize({ feature: "communications", ac
     }
 
     const sentField = existing.direction === "outgoing" ? '"sentAt"' : '"receivedAt"';
-    const [updated] = await rawQuery<any>(
+    const [updated] = await rawQuery<CorrespondenceRow>(
       `UPDATE correspondence SET status = 'sent', ${sentField} = NOW(), "updatedAt" = NOW()
        WHERE id = $1 AND "companyId" = $2 AND status = 'draft' RETURNING *`,
       [id, scope.companyId]
@@ -245,7 +289,7 @@ correspondenceRouter.post("/:id/respond", authorize({ feature: "communications",
     const b = zodParse(respondSchema.safeParse(req.body ?? {}));
     const { subject, content, notes } = b;
 
-    const [original] = await rawQuery<any>(
+    const [original] = await rawQuery<CorrespondenceRow>(
       `SELECT * FROM correspondence WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
@@ -297,7 +341,7 @@ correspondenceRouter.post("/:id/respond", authorize({ feature: "communications",
 correspondenceRouter.get("/stats/summary", authorize({ feature: "communications", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [stats] = await rawQuery<any>(
+    const [stats] = await rawQuery<CorrespondenceStatsRow>(
       `SELECT
         COUNT(*) FILTER (WHERE direction = 'outgoing') AS "totalOutgoing",
         COUNT(*) FILTER (WHERE direction = 'incoming') AS "totalIncoming",

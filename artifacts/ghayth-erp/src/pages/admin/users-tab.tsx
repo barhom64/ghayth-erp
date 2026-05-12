@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -12,43 +14,61 @@ import { useToast } from "@/hooks/use-toast";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { ROLE_OPTIONS } from "./shared";
+import {
+  FormShell,
+  FormEmailField,
+  FormTextField,
+  FormSelectField,
+  FormGrid,
+} from "@/components/form-shell";
+
+// Schema enforces email validity client-side (the old `!form.email`
+// guard accepted "x" as valid). employeeId stays a string until the
+// submit handler — same shape as official-letters.
+const newUserSchema = z.object({
+  email: z.string().email("بريد إلكتروني غير صالح"),
+  role: z.string().min(1, "اختر دورًا"),
+  password: z.string(),
+  employeeId: z.string(),
+});
+type NewUserForm = z.infer<typeof newUserSchema>;
+const defaultNewUser: NewUserForm = {
+  email: "",
+  role: "employee",
+  password: "",
+  employeeId: "",
+};
 
 export function UsersTab() {
   const { toast } = useToast();
   const { data, refetch, isLoading: isLoading1, isError: isError1 } = useApiQuery<any>(["admin-users"], "/admin/users");
   const { data: employeesData, isLoading: isLoading2, isError: isError2 } = useApiQuery<any>(["employees-list-admin"], "/employees?limit=200");
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ email: "", role: "employee", password: "", employeeId: "" });
   const [createdUser, setCreatedUser] = useState<any>(null);
   const [resetUserId, setResetUserId] = useState<number | null>(null);
   const [resetPassword, setResetPassword] = useState("");
   const [showResetPw, setShowResetPw] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const items = data?.data || [];
   const employees = employeesData?.data || [];
 
   const roleLabel = (r: string) => ROLE_OPTIONS.find(o => o.value === r)?.label || r;
 
-  const createUser = async () => {
-    if (!form.email) { toast({ variant: "destructive", title: "البريد الإلكتروني مطلوب" }); return; }
-    setSubmitting(true);
+  const createUser = async (values: NewUserForm) => {
     try {
       const result = await apiFetch("/admin/users", {
         method: "POST",
         body: JSON.stringify({
-          email: form.email,
-          role: form.role,
-          password: form.password || undefined,
-          employeeId: form.employeeId ? Number(form.employeeId) : undefined,
+          email: values.email,
+          role: values.role,
+          password: values.password || undefined,
+          employeeId: values.employeeId ? Number(values.employeeId) : undefined,
         }),
       });
       setCreatedUser(result);
-      setForm({ email: "", role: "employee", password: "", employeeId: "" });
       refetch();
     } catch (e: any) {
       toast({ variant: "destructive", title: e.message || "فشل في إنشاء المستخدم" });
     }
-    setSubmitting(false);
   };
 
   const toggleActive = async (u: any) => {
@@ -131,7 +151,8 @@ export function UsersTab() {
       header: "إجراءات",
       render: (u) => (
         <div className="flex gap-1">
-          <Button
+          <GuardedButton
+            perm="admin:create"
             variant="ghost" size="sm"
             className="h-7 text-xs gap-1"
             title={u.isActive ? "تعليق الحساب" : "تفعيل الحساب"}
@@ -140,14 +161,15 @@ export function UsersTab() {
             {u.isActive
               ? <ToggleRight className="h-4 w-4 text-green-500" />
               : <ToggleLeft className="h-4 w-4 text-gray-400" />}
-          </Button>
-          <Button
+          </GuardedButton>
+          <GuardedButton
+            perm="admin:create"
             variant="ghost" size="sm"
             className="h-7 text-xs gap-1 text-orange-600"
             onClick={(e) => { e.stopPropagation(); setResetUserId(u.id); setResetPassword(""); setCreatedUser(null); setShowForm(false); }}
           >
             <KeySquare className="h-3.5 w-3.5" />
-          </Button>
+          </GuardedButton>
         </div>
       ),
     },
@@ -157,45 +179,41 @@ export function UsersTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">المستخدمين</h1>
-        <Button size="sm" onClick={() => { setShowForm(!showForm); setCreatedUser(null); }}>
+        <GuardedButton perm="admin:create" size="sm" onClick={() => { setShowForm(!showForm); setCreatedUser(null); }}>
           {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة مستخدم</>}
-        </Button>
+        </GuardedButton>
       </div>
 
       {showForm && !createdUser && (
-        <Card><CardContent className="p-4 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="md:col-span-2">
-              <Label>البريد الإلكتروني <span className="text-red-500">*</span></Label>
-              <Input className="mt-1" type="email" dir="ltr" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="user@company.com" />
-            </div>
-            <div>
-              <Label>الدور الوظيفي</Label>
-              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {ROLE_OPTIONS.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>ربط بموظف (اختياري)</Label>
-              <Select value={form.employeeId || "_none"} onValueChange={(v) => setForm({ ...form, employeeId: v === "_none" ? "" : v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_none">— بدون ربط —</SelectItem>
-                  {employees.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.name} ({e.empNumber})</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>كلمة المرور (اختياري - ستُنشأ تلقائياً)</Label>
-              <Input className="mt-1" type="password" dir="ltr" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="اتركها فارغة للإنشاء التلقائي" />
-            </div>
-          </div>
-          <Button onClick={createUser} disabled={!form.email || submitting}>
-            {submitting ? "جاري الإنشاء..." : "إنشاء حساب"}
-          </Button>
+        <Card><CardContent className="p-4">
+          <FormShell
+            schema={newUserSchema}
+            defaultValues={defaultNewUser}
+            submitLabel="إنشاء حساب"
+            secondaryActions={
+              <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>
+                إلغاء
+              </Button>
+            }
+            onSubmit={async (values, ctx) => {
+              await createUser(values);
+              ctx.reset();
+            }}
+          >
+            <FormGrid cols={2}>
+              <FormEmailField name="email" label="البريد الإلكتروني" required className="md:col-span-2" placeholder="user@company.com" />
+              <FormSelectField name="role" label="الدور الوظيفي" options={ROLE_OPTIONS} />
+              <FormSelectField
+                name="employeeId"
+                label="ربط بموظف (اختياري)"
+                options={[
+                  { value: "", label: "— بدون ربط —" },
+                  ...employees.map((e: any) => ({ value: String(e.id), label: `${e.name} (${e.empNumber})` })),
+                ]}
+              />
+              <FormTextField name="password" label="كلمة المرور (اختياري - ستُنشأ تلقائياً)" type="password" placeholder="اتركها فارغة للإنشاء التلقائي" />
+            </FormGrid>
+          </FormShell>
         </CardContent></Card>
       )}
 
@@ -242,7 +260,7 @@ export function UsersTab() {
                   {showResetPw ? <EyeOff className="h-4 w-4 text-gray-400" /> : <Eye className="h-4 w-4 text-gray-400" />}
                 </button>
               </div>
-              <Button onClick={resetUserPassword} disabled={resetPassword.length < 6}>تأكيد</Button>
+              <GuardedButton perm="admin:create" onClick={resetUserPassword} disabled={resetPassword.length < 6}>تأكيد</GuardedButton>
               <Button variant="outline" onClick={() => { setResetUserId(null); setResetPassword(""); }}>إلغاء</Button>
             </div>
           </CardContent>

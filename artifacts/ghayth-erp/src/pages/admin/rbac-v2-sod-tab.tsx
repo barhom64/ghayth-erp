@@ -1,14 +1,37 @@
 import { useState } from "react";
+import { z } from "zod";
+import { useFormContext, useWatch } from "react-hook-form";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { ShieldAlert, Plus, Trash2, AlertTriangle } from "lucide-react";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import { ShieldAlert, Plus, Trash2, AlertTriangle, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  FormShell,
+  FormTextField,
+  FormSelectField,
+  FormGrid,
+} from "@/components/form-shell";
+
+// Schema for the create-rule form. ruleKey is regex-locked (lowercase
+// + underscore), feature/action pairs are required. severity is a
+// real zod enum.
+const sodRuleSchema = z.object({
+  ruleKey: z.string()
+    .min(1, "المفتاح مطلوب")
+    .regex(/^[a-z_]+$/, "أحرف إنجليزية صغيرة وشرطة سفلية فقط"),
+  labelAr: z.string().trim().min(1, "الاسم بالعربية مطلوب"),
+  featureA: z.string().min(1, "الميزة A مطلوبة"),
+  actionA: z.string().min(1, "الإجراء A مطلوب"),
+  featureB: z.string().min(1, "الميزة B مطلوبة"),
+  actionB: z.string().min(1, "الإجراء B مطلوب"),
+  severity: z.enum(["critical", "high", "medium", "low"]),
+});
+type SodRuleForm = z.infer<typeof sodRuleSchema>;
 
 interface SodRule {
   id: number;
@@ -50,6 +73,10 @@ const SEVERITY_COLORS: Record<string, string> = {
 export function SodRulesTab() {
   const { toast } = useToast();
   const [showAdd, setShowAdd] = useState(false);
+  // Replaces window.confirm() — the dialog owns the DELETE call and
+  // surfaces 409 blockers inline if the server refuses (e.g. rules
+  // referenced by active assignments).
+  const [deletingRule, setDeletingRule] = useState<SodRule | null>(null);
 
   const { data: sodData, refetch, isLoading } = useApiQuery<{ rules: SodRule[]; violations: SodViolation[] }>(
     ["rbac-sod"],
@@ -74,15 +101,10 @@ export function SodRulesTab() {
     }
   };
 
-  const remove = async (rule: SodRule) => {
-    if (!confirm(`حذف القاعدة "${rule.label_ar}"؟`)) return;
-    try {
-      await apiFetch(`/rbac/v2/sod/${rule.id}`, { method: "DELETE" });
-      toast({ title: "تم الحذف" });
-      refetch();
-    } catch (err: any) {
-      toast({ title: "فشل الحذف", description: err?.message || "خطأ", variant: "destructive" });
-    }
+  // Open the confirm dialog — the actual DELETE fires from inside
+  // ConfirmDeleteDialog via the deletePath it's handed below.
+  const remove = (rule: SodRule) => {
+    setDeletingRule(rule);
   };
 
   if (isLoading) return <LoadingSpinner />;
@@ -99,11 +121,19 @@ export function SodRulesTab() {
             تمنع اجتماع صلاحيتين متعارضتين في دور واحد (مَن يُنشئ القيد لا يَعتمده).
           </p>
         </div>
-        <Button size="sm" onClick={() => setShowAdd(true)}>
-          <Plus className="h-4 w-4 me-1" />
-          قاعدة جديدة
-        </Button>
+        <GuardedButton perm="admin:create" size="sm" onClick={() => setShowAdd(!showAdd)}>
+          {showAdd ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />قاعدة جديدة</>}
+        </GuardedButton>
       </div>
+
+      {showAdd && (
+        <Card className="border-2 border-primary/20">
+          <CardHeader className="pb-2"><CardTitle className="text-base">قاعدة فصل مهام جديدة</CardTitle></CardHeader>
+          <CardContent>
+            <AddSodRuleForm features={features} onCreated={() => { setShowAdd(false); refetch(); }} />
+          </CardContent>
+        </Card>
+      )}
 
       {violations.length > 0 && (
         <Card className="border-red-200 bg-red-50">
@@ -153,9 +183,9 @@ export function SodRulesTab() {
                 )}
               </div>
               <div className="col-span-1">
-                <Button size="sm" variant="ghost" onClick={() => remove(r)}>
+                <GuardedButton perm="admin:create" size="sm" variant="ghost" onClick={() => remove(r)}>
                   <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+                </GuardedButton>
               </div>
             </div>
           );
@@ -165,97 +195,116 @@ export function SodRulesTab() {
         )}
       </div>
 
-      <AddSodRuleDialog open={showAdd} onClose={() => setShowAdd(false)} features={features} onCreated={() => refetch()} />
+      <ConfirmDeleteDialog
+        open={deletingRule !== null}
+        onOpenChange={(v) => { if (!v) setDeletingRule(null); }}
+        entity={{
+          type: "rbac_sod_rule",
+          id: deletingRule?.id ?? 0,
+          name: deletingRule?.label_ar ?? "",
+        }}
+        deletePath={`/rbac/v2/sod/${deletingRule?.id}`}
+        invalidateKeys={[["rbac-sod"]]}
+        successMessage="تم الحذف"
+        onDeleted={() => { setDeletingRule(null); refetch(); }}
+      />
     </div>
   );
 }
 
-function AddSodRuleDialog({ open, onClose, features, onCreated }: {
-  open: boolean; onClose: () => void; features: Feature[]; onCreated: () => void;
-}) {
+function AddSodRuleForm({ features, onCreated }: { features: Feature[]; onCreated: () => void }) {
   const { toast } = useToast();
-  const [form, setForm] = useState({
-    ruleKey: "",
-    labelAr: "",
-    featureA: "",
-    actionA: "",
-    featureB: "",
-    actionB: "",
-    severity: "high" as SodRule["severity"],
-  });
 
-  const submit = async () => {
+  const submit = async (values: SodRuleForm) => {
     try {
-      await apiFetch("/rbac/v2/sod", { method: "POST", body: JSON.stringify(form) });
+      await apiFetch("/rbac/v2/sod", { method: "POST", body: JSON.stringify(values) });
       toast({ title: "تم إنشاء القاعدة" });
       onCreated();
-      onClose();
-      setForm({ ruleKey: "", labelAr: "", featureA: "", actionA: "", featureB: "", actionB: "", severity: "high" });
     } catch (err: any) {
       toast({ title: "فشل الإنشاء", description: err?.message || "خطأ", variant: "destructive" });
     }
   };
 
-  const featA = features.find((f) => f.feature_key === form.featureA);
-  const featB = features.find((f) => f.feature_key === form.featureB);
-
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>قاعدة فصل مهام جديدة</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-2">
-          <div className="grid grid-cols-2 gap-2">
-            <Input placeholder="المفتاح (مثال: my_rule)" value={form.ruleKey} onChange={(e) => setForm((f) => ({ ...f, ruleKey: e.target.value }))} />
-            <Input placeholder="الاسم بالعربية" value={form.labelAr} onChange={(e) => setForm((f) => ({ ...f, labelAr: e.target.value }))} />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <Select value={form.featureA} onValueChange={(v) => setForm((f) => ({ ...f, featureA: v, actionA: "" }))}>
-              <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="الميزة A" /></SelectTrigger>
-              <SelectContent>
-                {features.map((f) => <SelectItem key={f.feature_key} value={f.feature_key} className="text-sm">{f.label_ar}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={form.actionA} onValueChange={(v) => setForm((f) => ({ ...f, actionA: v }))}>
-              <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="الإجراء A" /></SelectTrigger>
-              <SelectContent>
-                {(featA?.available_actions || []).map((a) => <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="text-center text-red-500">↔</div>
-          <div className="grid grid-cols-2 gap-2">
-            <Select value={form.featureB} onValueChange={(v) => setForm((f) => ({ ...f, featureB: v, actionB: "" }))}>
-              <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="الميزة B" /></SelectTrigger>
-              <SelectContent>
-                {features.map((f) => <SelectItem key={f.feature_key} value={f.feature_key} className="text-sm">{f.label_ar}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={form.actionB} onValueChange={(v) => setForm((f) => ({ ...f, actionB: v }))}>
-              <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="الإجراء B" /></SelectTrigger>
-              <SelectContent>
-                {(featB?.available_actions || []).map((a) => <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <Select value={form.severity} onValueChange={(v: any) => setForm((f) => ({ ...f, severity: v }))}>
-            <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="critical" className="text-sm">حرج</SelectItem>
-              <SelectItem value="high" className="text-sm">مرتفع</SelectItem>
-              <SelectItem value="medium" className="text-sm">متوسط</SelectItem>
-              <SelectItem value="low" className="text-sm">منخفض</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={onClose}>إلغاء</Button>
-          <Button onClick={submit} disabled={!form.ruleKey || !form.labelAr || !form.featureA || !form.actionA || !form.featureB || !form.actionB}>
-            إنشاء
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <FormShell
+      schema={sodRuleSchema}
+      defaultValues={{
+        ruleKey: "",
+        labelAr: "",
+        featureA: "",
+        actionA: "",
+        featureB: "",
+        actionB: "",
+        severity: "high" as const,
+      }}
+      submitLabel="إنشاء"
+      onSubmit={async (values) => {
+        await submit(values);
+      }}
+    >
+      <FormGrid cols={2}>
+        <FormTextField name="ruleKey" label="المفتاح" required placeholder="my_rule" />
+        <FormTextField name="labelAr" label="الاسم بالعربية" required placeholder="اسم القاعدة" />
+        <FormSelectField
+          name="featureA"
+          label="الميزة A"
+          required
+          options={[
+            { value: "", label: "اختر الميزة" },
+            ...features.map((f) => ({ value: f.feature_key, label: f.label_ar })),
+          ]}
+        />
+        <ActionPicker pairKey="A" features={features} />
+      </FormGrid>
+      <div className="text-center text-red-500 my-2">↔</div>
+      <FormGrid cols={2}>
+        <FormSelectField
+          name="featureB"
+          label="الميزة B"
+          required
+          options={[
+            { value: "", label: "اختر الميزة" },
+            ...features.map((f) => ({ value: f.feature_key, label: f.label_ar })),
+          ]}
+        />
+        <ActionPicker pairKey="B" features={features} />
+      </FormGrid>
+      <div className="mt-3">
+        <FormSelectField
+          name="severity"
+          label="الشدة"
+          options={[
+            { value: "critical", label: "حرج" },
+            { value: "high", label: "مرتفع" },
+            { value: "medium", label: "متوسط" },
+            { value: "low", label: "منخفض" },
+          ]}
+        />
+      </div>
+    </FormShell>
+  );
+}
+
+// Dependent dropdown: action options depend on the selected feature.
+// useWatch tracks the parent select; key={selectedFeature} remounts
+// the action field whenever the feature changes so its stale value
+// is cleared (the old action probably isn't in the new feature's
+// available_actions list).
+function ActionPicker({ pairKey, features }: { pairKey: "A" | "B"; features: Feature[] }) {
+  const featureName = `feature${pairKey}` as const;
+  const actionName = `action${pairKey}` as const;
+  const selectedFeature = useWatch<SodRuleForm>({ name: featureName }) as unknown as string;
+  const feat = features.find((f) => f.feature_key === selectedFeature);
+  return (
+    <FormSelectField
+      key={selectedFeature}
+      name={actionName}
+      label={`الإجراء ${pairKey}`}
+      required
+      options={[
+        { value: "", label: selectedFeature ? "اختر الإجراء" : "اختر الميزة أولاً" },
+        ...(feat?.available_actions ?? []).map((a) => ({ value: a, label: a })),
+      ]}
+    />
   );
 }
