@@ -5249,7 +5249,10 @@ CREATE TABLE public.employee_commission_calculations (
     "updatedBy" integer,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    "planVersion" integer,
+    "planSnapshot" jsonb,
+    "tiersSnapshot" jsonb
 );
 
 
@@ -5305,7 +5308,8 @@ CREATE TABLE public.employee_commission_plans (
     "updatedBy" integer,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    version integer DEFAULT 1 NOT NULL
 );
 
 
@@ -14116,6 +14120,8 @@ CREATE TABLE public.umrah_pilgrims (
     "mofaNumber_hash" character varying(16),
     "borderNumber_hash" character varying(16),
     "visaExpiry" date,
+    "entryDate" date,
+    "exitDate" date,
     CONSTRAINT umrah_pilgrims_status_check CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'arrived'::character varying, 'active'::character varying, 'overstayed'::character varying, 'overstay_penalized'::character varying, 'departed'::character varying, 'violated'::character varying, 'absconded'::character varying, 'deceased'::character varying, 'visa_rejected'::character varying, 'visa_printed'::character varying, 'cancelled'::character varying])::text[])))
 );
 
@@ -14333,6 +14339,32 @@ CREATE SEQUENCE public.umrah_seasons_id_seq
 --
 
 ALTER SEQUENCE public.umrah_seasons_id_seq OWNED BY public.umrah_seasons.id;
+
+
+--
+-- Name: umrah_attachments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.umrah_attachments (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "entityType" character varying(30) NOT NULL,
+    "entityId" integer NOT NULL,
+    type character varying(40) NOT NULL,
+    title character varying(255) NOT NULL,
+    notes text,
+    "fileUrl" text,
+    "storageKey" text,
+    "fileSize" integer,
+    "mimeType" character varying(120),
+    "uploadedBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT umrah_attachments_entity_check CHECK ((("entityType")::text = ANY ((ARRAY['mutamer'::character varying, 'sub_agent'::character varying, 'group'::character varying, 'agent'::character varying, 'nusk_invoice'::character varying, 'season'::character varying, 'sales_invoice'::character varying, 'violation'::character varying])::text[]))),
+    CONSTRAINT umrah_attachments_type_check CHECK ((type::text = ANY ((ARRAY['passport'::character varying, 'visa'::character varying, 'contract'::character varying, 'nusk_file'::character varying, 'identity'::character varying, 'transfer_receipt'::character varying, 'other'::character varying])::text[])))
+);
 
 
 --

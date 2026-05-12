@@ -251,6 +251,11 @@ const waivePenaltySchema = z.object({
   reason: z.string().min(1, "سبب الإعفاء مطلوب"),
 });
 
+const bulkWaivePenaltiesSchema = z.object({
+  penaltyIds: z.array(z.number().int().positive()).min(1, "اختر عقوبة واحدة على الأقل"),
+  reason: z.string().min(1, "سبب الإعفاء مطلوب"),
+});
+
 const recordPaymentSchema = z.object({
   amount: z.coerce.number().positive("مبلغ الدفع مطلوب"),
   paymentMethod: z.string().optional(),
@@ -1197,6 +1202,81 @@ router.patch("/penalties/:id/waive", authorize({ feature: "umrah", action: "upda
     if (lcErr) { res.status(lcErr.status).json(lcErr.body); return; }
     handleRouteError(err, res, "Waive penalty error");
   }
+});
+
+// Bulk waive — same lifecycle transition + GL posting as the single
+// endpoint, but applied to N penalties under one reason. Failures on
+// individual rows don't roll back the whole batch: each is wrapped so
+// successCount / skipped[] / errors[] are reported back to the caller.
+// (Closes #6 from the umrah internal review.)
+router.post("/penalties/waive-bulk", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const body = zodParse(bulkWaivePenaltiesSchema.safeParse(req.body));
+
+    const successIds: number[] = [];
+    const skipped: { id: number; reason: string }[] = [];
+    const errors: { id: number; error: string }[] = [];
+    let totalAmount = 0;
+
+    for (const id of body.penaltyIds) {
+      try {
+        const [penalty] = await rawQuery<any>(
+          `SELECT pen.*, p."fullName" as "pilgrimName"
+             FROM umrah_penalties pen
+        LEFT JOIN umrah_pilgrims p ON pen."pilgrimId" = p.id
+            WHERE pen.id = $1 AND pen."companyId" = $2`,
+          [id, scope.companyId]
+        );
+        if (!penalty) { skipped.push({ id, reason: "not_found" }); continue; }
+        if (penalty.status === "waived") { skipped.push({ id, reason: "already_waived" }); continue; }
+        if (penalty.status === "paid")   { skipped.push({ id, reason: "already_paid" });   continue; }
+
+        await applyTransition({
+          entity: "umrah_penalties",
+          id,
+          scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
+          action: "umrah.penalty.waived",
+          fromStates: ["pending", "invoiced"],
+          toState: "waived",
+          reason: `${body.reason} (bulk)`,
+          setExtras: { waivedBy: scope.userId, waivedAt: { raw: "NOW()" } },
+          skipUpdatedAt: true,
+        });
+
+        if (Number(penalty.amount) > 0) {
+          try {
+            const { umrahEngine } = await import("../lib/engines/index.js");
+            await umrahEngine.postPenaltyWaiverGL(
+              { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
+              { id, amount: Number(penalty.amount), pilgrimName: penalty.pilgrimName || "" }
+            );
+            totalAmount += Number(penalty.amount);
+          } catch (e) {
+            logger.error(e, `bulk waive GL post failed for penalty ${id} (non-blocking)`);
+          }
+        }
+        successIds.push(id);
+      } catch (rowErr: any) {
+        const lcErr = lifecycleErrorResponse(rowErr);
+        errors.push({ id, error: lcErr ? lcErr.body.message : String(rowErr?.message ?? rowErr) });
+      }
+    }
+
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.penalty.waived_bulk", entity: "umrah_penalties", entityId: 0,
+      details: JSON.stringify({ successCount: successIds.length, totalAmount, reason: body.reason, skipped: skipped.length, errors: errors.length }),
+    }).catch((e) => logger.error(e, "bulk waive bg"));
+
+    res.json({
+      successCount: successIds.length,
+      successIds,
+      totalWaivedAmount: totalAmount,
+      skipped,
+      errors,
+    });
+  } catch (err) { handleRouteError(err, res, "Bulk waive penalties"); }
 });
 
 router.post("/agent-invoices/:id/record-payment", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {

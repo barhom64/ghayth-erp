@@ -1,10 +1,28 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useApiQuery, apiFetch, isRateLimitedError } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import {
+  FormShell, FormEmailField, FormTextField, FormSelectField, FormGrid,
+} from "@/components/form-shell";
+
+// Same schema as users-tab.tsx (#301) — both pages create users with
+// the same payload shape. Email is validated client-side now;
+// the old `if (!form.email)` accepted "x" as a valid email.
+const newUserSchema = z.object({
+  email: z.string().email("بريد إلكتروني غير صالح"),
+  role: z.string().min(1, "اختر دورًا"),
+  password: z.string(),
+  employeeId: z.string(),
+});
+type NewUserForm = z.infer<typeof newUserSchema>;
+const defaultNewUser: NewUserForm = {
+  email: "", role: "employee", password: "", employeeId: "",
+};
 import {
   Shield, Plus, X, CheckCircle, KeySquare, Eye, EyeOff, ToggleLeft, ToggleRight,
   Search, Users, Trash2, Edit2, ShieldAlert, AlertCircle,
@@ -39,12 +57,10 @@ export default function AdminUsersPage() {
   const { data, isLoading, isError, refetch } = useApiQuery<any>(["admin-users"], "/admin/users");
   const { data: employeesData } = useApiQuery<any>(["employees-list-admin"], "/employees?limit=200");
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ email: "", role: "employee", password: "", employeeId: "" });
   const [createdUser, setCreatedUser] = useState<any>(null);
   const [resetUserId, setResetUserId] = useState<number | null>(null);
   const [resetPassword, setResetPassword] = useState("");
   const [showResetPw, setShowResetPw] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
@@ -149,26 +165,22 @@ export default function AdminUsersPage() {
     },
   ];
 
-  const createUser = async () => {
-    if (!form.email) { toast({ variant: "destructive", title: "البريد الإلكتروني مطلوب" }); return; }
-    setSubmitting(true);
+  const createUser = async (values: NewUserForm) => {
     try {
       const result = await apiFetch("/admin/users", {
         method: "POST",
         body: JSON.stringify({
-          email: form.email,
-          role: form.role,
-          password: form.password || undefined,
-          employeeId: form.employeeId ? Number(form.employeeId) : undefined,
+          email: values.email,
+          role: values.role,
+          password: values.password || undefined,
+          employeeId: values.employeeId ? Number(values.employeeId) : undefined,
         }),
       });
       setCreatedUser(result);
-      setForm({ email: "", role: "employee", password: "", employeeId: "" });
       refetch();
     } catch (e: any) {
       toast({ variant: "destructive", title: e.message || "فشل في إنشاء المستخدم" });
     }
-    setSubmitting(false);
   };
 
   const toggleActive = async (u: any) => {
@@ -276,38 +288,34 @@ export default function AdminUsersPage() {
       {showForm && !createdUser && (
         <Card><CardContent className="p-4 space-y-4">
           <h3 className="font-semibold text-base">إنشاء حساب مستخدم جديد</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="md:col-span-2">
-              <Label>البريد الإلكتروني <span className="text-red-500">*</span></Label>
-              <Input className="mt-1" type="email" dir="ltr" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="user@company.com" />
-            </div>
-            <div>
-              <Label>الدور الوظيفي</Label>
-              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {ROLE_OPTIONS.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>ربط بموظف (اختياري)</Label>
-              <Select value={form.employeeId || "_none"} onValueChange={(v) => setForm({ ...form, employeeId: v === "_none" ? "" : v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_none">— بدون ربط —</SelectItem>
-                  {employees.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.name} ({e.empNumber})</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>كلمة المرور (اختياري - ستُنشأ تلقائياً)</Label>
-              <Input className="mt-1" type="password" dir="ltr" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="اتركها فارغة للإنشاء التلقائي" />
-            </div>
-          </div>
-          <Button onClick={createUser} disabled={!form.email || submitting}>
-            {submitting ? "جاري الإنشاء..." : "إنشاء حساب"}
-          </Button>
+          <FormShell
+            schema={newUserSchema}
+            defaultValues={defaultNewUser}
+            submitLabel="إنشاء حساب"
+            secondaryActions={
+              <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>
+                إلغاء
+              </Button>
+            }
+            onSubmit={async (values, ctx) => {
+              await createUser(values);
+              ctx.reset();
+            }}
+          >
+            <FormGrid cols={2}>
+              <FormEmailField name="email" label="البريد الإلكتروني" required className="md:col-span-2" placeholder="user@company.com" />
+              <FormSelectField name="role" label="الدور الوظيفي" options={ROLE_OPTIONS} />
+              <FormSelectField
+                name="employeeId"
+                label="ربط بموظف (اختياري)"
+                options={[
+                  { value: "", label: "— بدون ربط —" },
+                  ...employees.map((e: any) => ({ value: String(e.id), label: `${e.name} (${e.empNumber})` })),
+                ]}
+              />
+              <FormTextField name="password" label="كلمة المرور (اختياري - ستُنشأ تلقائياً)" type="password" placeholder="اتركها فارغة للإنشاء التلقائي" />
+            </FormGrid>
+          </FormShell>
         </CardContent></Card>
       )}
 
