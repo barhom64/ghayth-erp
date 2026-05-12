@@ -11,38 +11,6 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 export const scheduledReportsRouter = Router();
 scheduledReportsRouter.use(authMiddleware);
 
-interface ScheduledReportRow {
-  id: number;
-  companyId: number;
-  reportType: string;
-  title: string;
-  frequency: string;
-  recipients: unknown;
-  params: unknown;
-  isActive: boolean;
-  createdBy: number | null;
-  createdAt: string;
-  updatedAt?: string | null;
-  lastRunAt?: string | null;
-  nextRunAt?: string | null;
-}
-
-interface ScheduledReportListRow extends ScheduledReportRow {
-  createdByName: string;
-}
-
-interface ScheduledReportHistoryRow {
-  id: number;
-  scheduledReportId: number;
-  sentAt: string;
-  status: string | null;
-  recipients: unknown;
-  payload: unknown;
-  errorMessage: string | null;
-  reportTitle: string;
-  reportType: string;
-}
-
 const createScheduledReportSchema = z.object({
   reportType: z.string().min(1, "نوع التقرير مطلوب"),
   title: z.string().min(1, "العنوان مطلوب"),
@@ -63,7 +31,7 @@ const patchScheduledReportSchema = z.object({
 scheduledReportsRouter.get("/", authorize({ feature: "reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<ScheduledReportListRow>(
+    const rows = await rawQuery<any>(
       `SELECT sr.*,
          COALESCE(e."name", e."nameEn", 'Unknown') AS "createdByName"
        FROM scheduled_reports sr
@@ -83,7 +51,7 @@ scheduledReportsRouter.post("/", authorize({ feature: "reports", action: "create
   try {
     const scope = req.scope!;
     const { reportType, title, frequency, recipients, params, isActive } = zodParse(createScheduledReportSchema.safeParse(req.body));
-    const [row] = await rawQuery<ScheduledReportRow>(
+    const [row] = await rawQuery<any>(
       `INSERT INTO scheduled_reports ("companyId", "reportType", title, frequency, recipients, params, "isActive", "createdBy", "createdAt")
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
        RETURNING *`,
@@ -108,7 +76,7 @@ scheduledReportsRouter.patch("/:id", authorize({ feature: "reports", action: "cr
     if (params !== undefined) { vals.push(JSON.stringify(params)); updates.push(`params = $${vals.length}`); }
     if (isActive !== undefined) { vals.push(isActive); updates.push(`"isActive" = $${vals.length}`); }
     if (updates.length === 0) throw new ValidationError("No fields to update");
-    const [row] = await rawQuery<ScheduledReportRow>(
+    const [row] = await rawQuery<any>(
       `UPDATE scheduled_reports SET ${updates.join(", ")} WHERE id = $1 AND "companyId" = $2 RETURNING *`,
       vals
     );
@@ -136,7 +104,7 @@ scheduledReportsRouter.delete("/:id", authorize({ feature: "reports", action: "c
 scheduledReportsRouter.get("/history", authorize({ feature: "reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<ScheduledReportHistoryRow>(
+    const rows = await rawQuery<any>(
       `SELECT srh.*, sr.title AS "reportTitle", sr."reportType"
        FROM scheduled_report_history srh
        JOIN scheduled_reports sr ON sr.id = srh."scheduledReportId"
