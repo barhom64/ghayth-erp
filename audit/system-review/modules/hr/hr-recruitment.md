@@ -8,15 +8,14 @@
 - الكومبوننت: `Recruitment`
 - subKey: `recruitment` | minRoleLevel: —
 - الكيان المستنبط: `recruitment`
-- سطور الملف: 295
+- سطور الملف: 296
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L171: "وظيفة جديدة"
-- L174: "إضافة متقدم"
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
 - GET `/hr/recruitment/postings`
@@ -38,7 +37,7 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `recruitment` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L40 _(inline-data-array)_: `const kpis = [`
+- ⚠ L41 _(inline-data-array)_: `const kpis = [`
 
 ## 6. النتيجة (Verdict)
 - Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS

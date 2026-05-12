@@ -3,12 +3,12 @@
 ## 1. الميتاداتا
 - المسار: `/umrah/violations`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/violations.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:62`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:67`
 - المجموعة: `operations`
 - الكومبوننت: `UmrahViolations`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `violations`
-- سطور الملف: 519
+- سطور الملف: 521
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
@@ -18,11 +18,11 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 - L254: "(بلا تسمية)"
 - L259: "(بلا تسمية)" → `() => openEdit(v)`
 - L263: "(بلا تسمية)" → `() => setDeleteId(v.id)`
-- L280: "مخالفة جديدة" → `openCreate`
-- L493: "(بلا تسمية)" → `() => setEditing(null)` 🔒
-- L494: "(بلا تسمية)" → `handleSave` 🔒
-- L509: "(بلا تسمية)" → `() => setDeleteId(null)` 🔒
-- L510: "(بلا تسمية)" → `() => deleteMut.mutate({` 🔒
+- L280: "(بلا تسمية)"
+- L495: "(بلا تسمية)" → `() => setEditing(null)` 🔒
+- L496: "(بلا تسمية)" → `handleSave` 🔒
+- L511: "(بلا تسمية)" → `() => setDeleteId(null)` 🔒
+- L512: "(بلا تسمية)" → `() => deleteMut.mutate({` 🔒
 
 ### القراءات (GET)
 _لا قراءات._

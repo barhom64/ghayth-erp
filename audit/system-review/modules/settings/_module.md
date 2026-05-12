@@ -9,9 +9,9 @@
 
 | الصفحة | المسار | الكيان | سطور | API calls | أزرار | مشاكل |
 |--------|--------|--------|------|-----------|--------|--------|
-| [/settings](./settings.md) | `/settings` | `settings` | 352 | 2 | 5 | 0 |
-| [/settings/branches](./settings-branches.md) | `/settings/branches` | `branches` | 352 | 2 | 5 | 0 |
-| [/settings/departments](./settings-departments.md) | `/settings/departments` | `departments` | 352 | 2 | 5 | 0 |
-| [/settings/companies](./settings-companies.md) | `/settings/companies` | `companies` | 352 | 2 | 5 | 0 |
-| [/settings/audit-log](./settings-audit-log.md) | `/settings/audit-log` | `audit-log` | 352 | 2 | 5 | 0 |
+| [/settings](./settings.md) | `/settings` | `settings` | 402 | 2 | 3 | 0 |
+| [/settings/branches](./settings-branches.md) | `/settings/branches` | `branches` | 402 | 2 | 3 | 0 |
+| [/settings/departments](./settings-departments.md) | `/settings/departments` | `departments` | 402 | 2 | 3 | 0 |
+| [/settings/companies](./settings-companies.md) | `/settings/companies` | `companies` | 402 | 2 | 3 | 0 |
+| [/settings/audit-log](./settings-audit-log.md) | `/settings/audit-log` | `audit-log` | 402 | 2 | 3 | 0 |
 | [/settings/rules](./settings-rules.md) | `/settings/rules` | `rules` | 475 | 0 | 3 | 0 |

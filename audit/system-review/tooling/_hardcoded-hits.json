@@ -135,7 +135,7 @@
     "module": "hr",
     "hits": [
       {
-        "line": 133,
+        "line": 134,
         "kind": "inline-data-array",
         "text": "const kpis = ["
       }
@@ -168,7 +168,7 @@
     "module": "hr",
     "hits": [
       {
-        "line": 203,
+        "line": 204,
         "kind": "inline-data-array",
         "text": "const kpis = ["
       }
@@ -201,7 +201,7 @@
     "module": "hr",
     "hits": [
       {
-        "line": 57,
+        "line": 58,
         "kind": "inline-data-array",
         "text": "const kpis = ["
       }
@@ -212,7 +212,7 @@
     "module": "hr",
     "hits": [
       {
-        "line": 29,
+        "line": 30,
         "kind": "inline-data-array",
         "text": "const kpis = ["
       }
@@ -234,7 +234,7 @@
     "module": "hr",
     "hits": [
       {
-        "line": 45,
+        "line": 46,
         "kind": "inline-data-array",
         "text": "const kpis = ["
       }
@@ -278,7 +278,7 @@
     "module": "hr",
     "hits": [
       {
-        "line": 40,
+        "line": 41,
         "kind": "inline-data-array",
         "text": "const kpis = ["
       }
@@ -322,7 +322,7 @@
     "module": "hr",
     "hits": [
       {
-        "line": 182,
+        "line": 183,
         "kind": "inline-data-array",
         "text": "const byStage = ["
       }
@@ -344,7 +344,7 @@
     "module": "hr",
     "hits": [
       {
-        "line": 47,
+        "line": 48,
         "kind": "inline-data-array",
         "text": "const kpis = ["
       }
@@ -388,7 +388,7 @@
     "module": "hr",
     "hits": [
       {
-        "line": 62,
+        "line": 63,
         "kind": "inline-data-array",
         "text": "const kpis = ["
       }
@@ -432,7 +432,7 @@
     "module": "hr",
     "hits": [
       {
-        "line": 44,
+        "line": 45,
         "kind": "inline-data-array",
         "text": "const kpis = ["
       }
@@ -454,7 +454,7 @@
     "module": "operations",
     "hits": [
       {
-        "line": 24,
+        "line": 25,
         "kind": "inline-data-array",
         "text": "const statusOptions = ["
       }
@@ -492,7 +492,7 @@
     "module": "operations",
     "hits": [
       {
-        "line": 24,
+        "line": 25,
         "kind": "inline-data-array",
         "text": "const statusOptions = ["
       }
@@ -547,9 +547,9 @@
     "module": "properties",
     "hits": [
       {
-        "line": 121,
+        "line": 168,
         "kind": "dummy-iban",
-        "text": "<TextField label=\"رقم الآيبان\" dir=\"ltr\" value={form.iban} onChange={v => setForm({ ...form, iban: v })} placeholder=\"SA"
+        "text": "<FormTextField name=\"iban\" label=\"رقم الآيبان\" placeholder=\"SA0000000000000000000000\" />"
       }
     ]
   },
@@ -569,7 +569,7 @@
     "module": "requests",
     "hits": [
       {
-        "line": 95,
+        "line": 96,
         "kind": "inline-data-array",
         "text": "const CONVERT_OPTIONS = ["
       }
@@ -580,7 +580,7 @@
     "module": "requests",
     "hits": [
       {
-        "line": 95,
+        "line": 96,
         "kind": "inline-data-array",
         "text": "const CONVERT_OPTIONS = ["
       }
@@ -591,7 +591,7 @@
     "module": "requests",
     "hits": [
       {
-        "line": 95,
+        "line": 96,
         "kind": "inline-data-array",
         "text": "const CONVERT_OPTIONS = ["
       }
@@ -602,7 +602,7 @@
     "module": "store",
     "hits": [
       {
-        "line": 314,
+        "line": 315,
         "kind": "inline-data-array",
         "text": "const statCards = ["
       }
@@ -613,7 +613,7 @@
     "module": "store",
     "hits": [
       {
-        "line": 314,
+        "line": 315,
         "kind": "inline-data-array",
         "text": "const statCards = ["
       }
@@ -624,7 +624,7 @@
     "module": "operations",
     "hits": [
       {
-        "line": 26,
+        "line": 27,
         "kind": "inline-data-array",
         "text": "const kpiCards = ["
       }
@@ -635,7 +635,7 @@
     "module": "operations",
     "hits": [
       {
-        "line": 104,
+        "line": 105,
         "kind": "inline-data-array",
         "text": "const kpiCards = ["
       }
@@ -646,7 +646,7 @@
     "module": "operations",
     "hits": [
       {
-        "line": 54,
+        "line": 85,
         "kind": "inline-data-array",
         "text": "const kpiCards = ["
       }
@@ -660,6 +660,17 @@
         "line": 52,
         "kind": "inline-data-array",
         "text": "const kpiCards = ["
+      }
+    ]
+  },
+  "/umrah/violations/create": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/violation-create.tsx",
+    "module": "operations",
+    "hits": [
+      {
+        "line": 23,
+        "kind": "inline-data-array",
+        "text": "const violationTypes = ["
       }
     ]
   },

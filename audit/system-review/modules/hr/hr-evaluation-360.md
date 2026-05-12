@@ -8,14 +8,14 @@
 - الكومبوننت: `Evaluation360`
 - subKey: `performance` | minRoleLevel: —
 - الكيان المستنبط: `evaluation-360`
-- سطور الملف: 179
+- سطور الملف: 180
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L145: "بدء دورة تقييم"
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
 - GET `/hr/evaluation-cycles`
@@ -35,7 +35,7 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `evaluation-360` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L62 _(inline-data-array)_: `const kpis = [`
+- ⚠ L63 _(inline-data-array)_: `const kpis = [`
 
 ## 6. النتيجة (Verdict)
 - Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS

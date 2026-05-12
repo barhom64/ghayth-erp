@@ -3,7 +3,7 @@
 > الموجة: **4** | عدد الصفحات: **13** | أوراق منشأة: **13**
 
 ## KPIs
-- مشاكل إجمالية: **2** (🔴 1 / ⚠ 1 / ℹ 0)
+- مشاكل إجمالية: **1** (🔴 1 / ⚠ 0 / ℹ 0)
 
 ## الصفحات
 
@@ -21,4 +21,4 @@
 | [/intelligence](./intelligence.md) | `/intelligence` | `intelligence` | 127 | 3 | 0 | 0 |
 | [/insights](./insights.md) | `/insights` | `insights` | 509 | 2 | 2 | 0 |
 | [/module-dashboards](./module-dashboards.md) | `/module-dashboards` | `module-dashboards` | 698 | 11 | 0 | 1 |
-| [/reports/scheduled](./reports-scheduled.md) | `/reports/scheduled` | `scheduled` | 262 | 3 | 4 | 1 |
+| [/reports/scheduled](./reports-scheduled.md) | `/reports/scheduled` | `scheduled` | 289 | 2 | 3 | 0 |

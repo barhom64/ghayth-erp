@@ -1,6 +1,6 @@
 # بيانات وهمية ثابتة — Hardcoded Data Findings
 
-إجمالي: **63**
+إجمالي: **64**
 
 ## `/finance/invoices/create` — 2
 
@@ -55,7 +55,7 @@
 
 ## `/hr/attendance` — 1
 
-- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/hr/attendance.tsx:133 const kpis = [
+- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/hr/attendance.tsx:134 const kpis = [
 
 ## `/hr/attendance/reports` — 1
 
@@ -67,7 +67,7 @@
 
 ## `/hr/leaves` — 1
 
-- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/hr/leaves.tsx:203 const kpis = [
+- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/hr/leaves.tsx:204 const kpis = [
 
 ## `/hr/leaves/management` — 1
 
@@ -79,11 +79,11 @@
 
 ## `/hr/payroll` — 1
 
-- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/hr/payroll.tsx:57 const kpis = [
+- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/hr/payroll.tsx:58 const kpis = [
 
 ## `/hr/performance` — 1
 
-- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/hr/performance.tsx:29 const kpis = [
+- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/hr/performance.tsx:30 const kpis = [
 
 ## `/hr/performance/advanced` — 1
 
@@ -91,7 +91,7 @@
 
 ## `/hr/training` — 1
 
-- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/hr/training.tsx:45 const kpis = [
+- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/hr/training.tsx:46 const kpis = [
 
 ## `/hr/training/advanced` — 1
 
@@ -107,7 +107,7 @@
 
 ## `/hr/recruitment` — 1
 
-- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/hr/recruitment.tsx:40 const kpis = [
+- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/hr/recruitment.tsx:41 const kpis = [
 
 ## `/hr/recruitment/applications` — 1
 
@@ -123,7 +123,7 @@
 
 ## `/hr/violations` — 1
 
-- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/hr/violations.tsx:182 const byStage = [
+- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/hr/violations.tsx:183 const byStage = [
 
 ## `/hr/violations/penalty-escalation` — 1
 
@@ -131,7 +131,7 @@
 
 ## `/hr/shifts` — 1
 
-- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/hr/shifts.tsx:47 const kpis = [
+- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/hr/shifts.tsx:48 const kpis = [
 
 ## `/hr/shifts/create` — 1
 
@@ -147,7 +147,7 @@
 
 ## `/hr/evaluation-360` — 1
 
-- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/hr/evaluation-360.tsx:62 const kpis = [
+- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/hr/evaluation-360.tsx:63 const kpis = [
 
 ## `/hr/evaluation-360/:id` — 1
 
@@ -163,7 +163,7 @@
 
 ## `/hr/excuse-requests` — 1
 
-- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/hr/excuse-requests.tsx:44 const kpis = [
+- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/hr/excuse-requests.tsx:45 const kpis = [
 
 ## `/crm/activities` — 1
 
@@ -171,7 +171,7 @@
 
 ## `/projects/tasks` — 1
 
-- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/tasks.tsx:24 const statusOptions = [
+- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/tasks.tsx:25 const statusOptions = [
 
 ## `/projects/:id` — 1
 
@@ -179,7 +179,7 @@
 
 ## `/tasks` — 1
 
-- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/tasks.tsx:24 const statusOptions = [
+- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/tasks.tsx:25 const statusOptions = [
 
 ## `/activity-log` — 1
 
@@ -199,7 +199,7 @@
 
 ## `/properties/owners/:id/edit` — 1
 
-- _medium_ **hardcoded-dummy-iban** — artifacts/ghayth-erp/src/pages/create/properties/owners-edit.tsx:121 <TextField label="رقم الآيبان" dir="ltr" value={form.iban} onChange={v => setFor
+- _medium_ **hardcoded-dummy-iban** — artifacts/ghayth-erp/src/pages/create/properties/owners-edit.tsx:168 <FormTextField name="iban" label="رقم الآيبان" placeholder="SA000000000000000000
 
 ## `/properties/occupancy-report` — 1
 
@@ -207,39 +207,43 @@
 
 ## `/requests` — 1
 
-- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/requests-page.tsx:95 const CONVERT_OPTIONS = [
+- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/requests-page.tsx:96 const CONVERT_OPTIONS = [
 
 ## `/requests/types` — 1
 
-- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/requests-page.tsx:95 const CONVERT_OPTIONS = [
+- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/requests-page.tsx:96 const CONVERT_OPTIONS = [
 
 ## `/requests/workflows` — 1
 
-- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/requests-page.tsx:95 const CONVERT_OPTIONS = [
+- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/requests-page.tsx:96 const CONVERT_OPTIONS = [
 
 ## `/store` — 1
 
-- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/store.tsx:314 const statCards = [
+- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/store.tsx:315 const statCards = [
 
 ## `/store/orders` — 1
 
-- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/store.tsx:314 const statCards = [
+- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/store.tsx:315 const statCards = [
 
 ## `/umrah/pilgrims` — 1
 
-- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/umrah/pilgrims.tsx:26 const kpiCards = [
+- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/umrah/pilgrims.tsx:27 const kpiCards = [
 
 ## `/umrah/agents` — 1
 
-- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/umrah/agents.tsx:104 const kpiCards = [
+- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/umrah/agents.tsx:105 const kpiCards = [
 
 ## `/umrah/penalties` — 1
 
-- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/umrah/penalties.tsx:54 const kpiCards = [
+- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/umrah/penalties.tsx:85 const kpiCards = [
 
 ## `/umrah/invoices` — 1
 
 - _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/umrah/invoices.tsx:52 const kpiCards = [
+
+## `/umrah/violations/create` — 1
+
+- _high_ **hardcoded-inline-data-array** — artifacts/ghayth-erp/src/pages/umrah/violation-create.tsx:23 const violationTypes = [
 
 ## `/umrah/daily-runsheet` — 1
 

@@ -3,21 +3,20 @@
 ## 1. الميتاداتا
 - المسار: `/umrah/transport`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/transport.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:52`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:57`
 - المجموعة: `operations`
 - الكومبوننت: `UmrahTransport`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `transport`
-- سطور الملف: 112
+- سطور الملف: 113
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L83: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L96: "حفظ" → `() => { setShowForm(false); setForm({` 🔒
-- L97: "حفظ" → `save` 🔒
+- L97: "حفظ" → `() => { setShowForm(false); setForm({` 🔒
+- L98: "حفظ" → `save` 🔒
 
 ### القراءات (GET)
 - GET `/umrah/transport`

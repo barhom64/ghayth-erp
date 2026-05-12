@@ -3,7 +3,7 @@
 ## 1. الميتاداتا
 - المسار: `/umrah/invoices`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/invoices.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:48`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:53`
 - المجموعة: `operations`
 - الكومبوننت: `UmrahInvoices`
 - subKey: — | minRoleLevel: —

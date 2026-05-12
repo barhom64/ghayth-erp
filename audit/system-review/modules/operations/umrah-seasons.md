@@ -3,22 +3,21 @@
 ## 1. الميتاداتا
 - المسار: `/umrah/seasons`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/seasons.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:44`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:49`
 - المجموعة: `operations`
 - الكومبوننت: `UmrahSeasons`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `seasons`
-- سطور الملف: 93
+- سطور الملف: 94
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L54: "(بلا تسمية)" → `(e) => { e.stopPropagation(); closeSeason(r.id);`
-- L65: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L82: "حفظ" → `() => setShowForm(false)` 🔒
-- L83: "حفظ" → `save` 🔒
+- L55: "(بلا تسمية)" → `(e) => { e.stopPropagation(); closeSeason(r.id);`
+- L83: "حفظ" → `() => setShowForm(false)` 🔒
+- L84: "حفظ" → `save` 🔒
 
 ### القراءات (GET)
 - GET `/umrah/seasons`

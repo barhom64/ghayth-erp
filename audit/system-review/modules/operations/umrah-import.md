@@ -3,7 +3,7 @@
 ## 1. الميتاداتا
 - المسار: `/umrah/import`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/import-wizard.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:64`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:70`
 - المجموعة: `operations`
 - الكومبوننت: `UmrahImportWizard`
 - subKey: — | minRoleLevel: —

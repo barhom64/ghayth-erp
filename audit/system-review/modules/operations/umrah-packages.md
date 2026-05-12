@@ -3,25 +3,23 @@
 ## 1. الميتاداتا
 - المسار: `/umrah/packages`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/packages.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:50`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:55`
 - المجموعة: `operations`
 - الكومبوننت: `UmrahPackages`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `packages`
-- سطور الملف: 243
+- سطور الملف: 244
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L144: "(بلا تسمية)" → `() => openEdit(r)`
-- L145: "(بلا تسمية)" → `() => setDeleteId(r.id)`
-- L159: "إضافة باقة" → `openCreate`
-- L220: "إلغاء" → `closeDialog` 🔒
-- L221: "(بلا تسمية)" → `handleSubmit` 🔒
-- L233: "(بلا تسمية)" → `() => setDeleteId(null)` 🔒
-- L234: "(بلا تسمية)" → `() => deleteMut.mutate({` 🔒
+- L145: "(بلا تسمية)" → `() => openEdit(r)`
+- L146: "(بلا تسمية)" → `() => setDeleteId(r.id)`
+- L221: "إلغاء" → `closeDialog` 🔒
+- L222: "(بلا تسمية)" → `handleSubmit` 🔒
+- L234: "(بلا تسمية)" → `() => setDeleteId(null)` 🔒
 
 ### القراءات (GET)
 - GET `/umrah/packages`

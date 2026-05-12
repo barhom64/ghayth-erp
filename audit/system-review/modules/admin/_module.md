@@ -10,8 +10,8 @@
 | الصفحة | المسار | الكيان | سطور | API calls | أزرار | مشاكل |
 |--------|--------|--------|------|-----------|--------|--------|
 | [/admin](./admin.md) | `/admin` | `admin` | 104 | 0 | 0 | 0 |
-| [/admin/users](./admin-users.md) | `/admin/users` | `users` | 548 | 3 | 12 | 0 |
-| [/admin/roles](./admin-roles.md) | `/admin/roles` | `roles` | 393 | 2 | 6 | 0 |
+| [/admin/users](./admin-users.md) | `/admin/users` | `users` | 549 | 3 | 9 | 0 |
+| [/admin/roles](./admin-roles.md) | `/admin/roles` | `roles` | 412 | 2 | 3 | 0 |
 | [/admin/logs](./admin-logs.md) | `/admin/logs` | `logs` | 272 | 1 | 2 | 0 |
 | [/admin/integrations](./admin-integrations.md) | `/admin/integrations` | `integrations` | 310 | 2 | 7 | 0 |
 | [/admin/monitoring](./admin-monitoring.md) | `/admin/monitoring` | `monitoring` | 321 | 1 | 1 | 0 |

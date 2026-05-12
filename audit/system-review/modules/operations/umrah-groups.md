@@ -1,22 +1,21 @@
-# /umrah/commission-plans — `artifacts/ghayth-erp/src/pages/umrah/commission-plans.tsx`
+# /umrah/groups — `artifacts/ghayth-erp/src/pages/umrah/groups.tsx`
 
 ## 1. الميتاداتا
-- المسار: `/umrah/commission-plans`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/commission-plans.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:64`
+- المسار: `/umrah/groups`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/groups.tsx`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:73`
 - المجموعة: `operations`
-- الكومبوننت: `UmrahCommissionPlans`
+- الكومبوننت: `UmrahGroups`
 - subKey: — | minRoleLevel: —
-- الكيان المستنبط: `commission-plans`
-- سطور الملف: 327
+- الكيان المستنبط: `groups`
+- سطور الملف: 313
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L145: "(بلا تسمية)"
-- L305: "(بلا تسمية)" → `() => setConfirmAction(null)`
+- L160: "(بلا تسمية)"
 
 ### القراءات (GET)
 _لا قراءات._
@@ -33,14 +32,11 @@ _لا قراءات._
 - يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
 
 ## 4. النمذجة
-_لم يتم العثور على جدول Drizzle بالاسم المستنبط `commission-plans` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
+_لم يتم العثور على جدول Drizzle بالاسم المستنبط `groups` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/umrah/commission-plans`
-- لقطة: `audit/screenshots/umrah_commission_plans.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **N/A** — لم يُشغّل بعد لهذا المسار.
+- توصية: **TBD**

@@ -8,16 +8,14 @@
 - الكومبوننت: `Attendance`
 - subKey: `attendance` | minRoleLevel: —
 - الكيان المستنبط: `attendance`
-- سطور الملف: 365
+- سطور الملف: 366
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L239: "الاستئذانات"
-- L245: "تسجيل حضور"
-- L266: "تسجيل حضور"
+- L240: "الاستئذانات"
 
 ### القراءات (GET)
 _لا قراءات._
@@ -47,7 +45,7 @@ _لا قراءات._
 - FKs: employeeAssignments.id, companies.id, branches.id
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L133 _(inline-data-array)_: `const kpis = [`
+- ⚠ L134 _(inline-data-array)_: `const kpis = [`
 
 ## 6. النتيجة (Verdict)
 - Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS

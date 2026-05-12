@@ -1,28 +1,27 @@
-# /umrah/pilgrims/create — `artifacts/ghayth-erp/src/pages/umrah/pilgrim-create.tsx`
+# /umrah/violations/create — `artifacts/ghayth-erp/src/pages/umrah/violation-create.tsx`
 
 ## 1. الميتاداتا
-- المسار: `/umrah/pilgrims/create`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/pilgrim-create.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:45`
+- المسار: `/umrah/violations/create`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/violation-create.tsx`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:68`
 - المجموعة: `operations`
-- الكومبوننت: `PilgrimCreate`
+- الكومبوننت: `UmrahViolationCreate`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `create`
-- سطور الملف: 103
+- سطور الملف: 316
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/umrah/violations` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-- L47: "(بلا تسمية)"
-- L95: "إلغاء" → `save` 🔒
-- L96: "(بلا تسمية)" → `save` 🔒
+- L98: "(بلا تسمية)"
+- L219: "(بلا تسمية)" → `() => setLocation("/umrah/violations")`
 
 ### القراءات (GET)
-- GET `/umrah/seasons`
-- GET `/umrah/agents`
-- GET `/umrah/packages`
+_لا قراءات._
 
 
 
@@ -39,11 +38,8 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `create` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+- ⚠ L23 _(inline-data-array)_: `const violationTypes = [`
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=SKIP | CTA=PASS | nav=FAIL | smoke=PASS
-- ملاحظة: `landed=/dashboard expected=/umrah/pilgrims/create; write POST /api/intelligence/activity → 200`
-- لقطة: `audit/screenshots/umrah_pilgrims_create.png`
-- landedUrl: `http://localhost/dashboard`
-- توصية: **يحتاج إصلاح**
+- Runtime audit: **N/A** — لم يُشغّل بعد لهذا المسار.
+- توصية: **TBD**

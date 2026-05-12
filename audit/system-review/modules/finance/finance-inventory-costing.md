@@ -14,7 +14,7 @@
 ## 2. الأزرار والإجراءات
 | الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
 |------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(write)_ | `/finance/rounding-account/setup` | POST | — | — | — | — | ✅ | ✅ | — |
+| _(write)_ | `/finance/rounding-account/setup` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
 - L217: "(بلا تسمية)" → `handleSetupRounding` 🔒

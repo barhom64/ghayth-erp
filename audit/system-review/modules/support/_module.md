@@ -13,4 +13,4 @@
 | [/support/replies](./support-replies.md) | `/support/replies` | `replies` | 94 | 1 | 0 | 0 |
 | [/support/kb](./support-kb.md) | `/support/kb` | `kb` | 49 | 1 | 0 | 0 |
 | [/support/:id](./support-byid.md) | `/support/:id` | `:id` | 229 | 0 | 4 | 0 |
-| [/support](./support.md) | `/support` | `support` | 462 | 3 | 4 | 0 |
+| [/support](./support.md) | `/support` | `support` | 463 | 3 | 2 | 0 |

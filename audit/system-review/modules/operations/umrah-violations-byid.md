@@ -3,7 +3,7 @@
 ## 1. الميتاداتا
 - المسار: `/umrah/violations/:id`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/umrah-violation-detail.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:63`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:69`
 - المجموعة: `operations`
 - الكومبوننت: `UmrahViolationDetail`
 - subKey: — | minRoleLevel: —

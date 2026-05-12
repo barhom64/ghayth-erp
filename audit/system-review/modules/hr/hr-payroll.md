@@ -8,15 +8,14 @@
 - الكومبوننت: `Payroll`
 - subKey: `payroll` | minRoleLevel: —
 - الكيان المستنبط: `payroll`
-- سطور الملف: 172
+- سطور الملف: 173
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L100: "(بلا تسمية)" → `(e) => { e.stopPropagation(); setSelectedRun(p.id);`
-- L119: "تشغيل مسير رواتب"
+- L101: "(بلا تسمية)" → `(e) => { e.stopPropagation(); setSelectedRun(p.id);`
 
 ### القراءات (GET)
 _لا قراءات._
@@ -51,7 +50,7 @@ _لا قراءات._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `payroll` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L57 _(inline-data-array)_: `const kpis = [`
+- ⚠ L58 _(inline-data-array)_: `const kpis = [`
 
 ## 6. النتيجة (Verdict)
 - Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS

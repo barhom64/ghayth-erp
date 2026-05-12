@@ -19,7 +19,7 @@
 | [/my-documents](./my-documents.md) | `/my-documents` | `my-documents` | 90 | 1 | 2 | 0 |
 | [/my-loans](./my-loans.md) | `/my-loans` | `my-loans` | 122 | 1 | 1 | 0 |
 | [/my-overtime](./my-overtime.md) | `/my-overtime` | `my-overtime` | 128 | 0 | 0 | 0 |
-| [/action-center](./action-center.md) | `/action-center` | `action-center` | 693 | 0 | 10 | 0 |
+| [/action-center](./action-center.md) | `/action-center` | `action-center` | 699 | 0 | 5 | 0 |
 | [/calendar](./calendar.md) | `/calendar` | `calendar` | 310 | 0 | 5 | 0 |
 | [/exec-dashboard](./exec-dashboard.md) | `/exec-dashboard` | `exec-dashboard` | 263 | 1 | 0 | 0 |
 | [/manager-board](./manager-board.md) | `/manager-board` | `manager-board` | 491 | 0 | 7 | 0 |
