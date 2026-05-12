@@ -4,7 +4,7 @@ import { handleRouteError, ValidationError, NotFoundError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
@@ -41,12 +41,53 @@ const patchRuleSchema = z.object({
 
 const toggleRuleSchema = z.object({}).optional();
 
+interface BusinessRuleRow {
+  id: number;
+  companyId: number | null;
+  name: string;
+  description: string | null;
+  triggerEvent: string;
+  conditionField: string | null;
+  conditionOperator: string | null;
+  conditionValue: string | null;
+  actionType: string;
+  actionTarget: string | null;
+  actionConfig: unknown;
+  module: string | null;
+  priority: number | null;
+  isActive: boolean;
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+  deletedAt: string | null;
+}
+
+interface BusinessRuleLogRow {
+  id: number;
+  companyId: number | null;
+  ruleId: number;
+  triggerEvent: string;
+  matched: boolean;
+  actionResult: unknown;
+  errorMessage: string | null;
+  executedAt: string;
+}
+
+interface RuleToggleRow {
+  id: number;
+  isActive: boolean;
+}
+
+interface CountRow {
+  total: string | number;
+}
+
 const router = Router();
 
-router.get("/", requirePermission("admin:write"), async (req, res) => {
+router.get("/", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rules = await rawQuery<any>(
+    const rules = await rawQuery<BusinessRuleRow>(
       `SELECT * FROM business_rules
        WHERE ("companyId" IS NULL OR "companyId" = $1) AND "deletedAt" IS NULL
        ORDER BY priority DESC, "createdAt" DESC`,
@@ -58,12 +99,12 @@ router.get("/", requirePermission("admin:write"), async (req, res) => {
   }
 });
 
-router.get("/logs", requirePermission("admin:write"), async (req, res) => {
+router.get("/logs", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { ruleId, limit: lim = "50", page = "1" } = req.query as any;
     const pageNum = Math.max(Number(page) || 1, 1);
-    const perPage = Number(lim) || 50;
+    const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
     const conditions = [`("companyId" IS NULL OR "companyId" = $1)`];
     const params: any[] = [scope.companyId];
@@ -78,8 +119,8 @@ router.get("/logs", requirePermission("admin:write"), async (req, res) => {
     params.push(offset);
     const offsetIdx = params.length;
 
-    const logs = await rawQuery<any>(
-      `SELECT * FROM business_rule_logs 
+    const logs = await rawQuery<BusinessRuleLogRow>(
+      `SELECT * FROM business_rule_logs
        WHERE ${conditions.join(" AND ")}
        ORDER BY "executedAt" DESC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
@@ -87,7 +128,7 @@ router.get("/logs", requirePermission("admin:write"), async (req, res) => {
     );
 
     const countParams = params.slice(0, params.length - 2);
-    const [countRow] = await rawQuery<any>(
+    const [countRow] = await rawQuery<CountRow>(
       `SELECT COUNT(*) AS total FROM business_rule_logs WHERE ${conditions.join(" AND ")}`,
       countParams
     );
@@ -98,7 +139,7 @@ router.get("/logs", requirePermission("admin:write"), async (req, res) => {
   }
 });
 
-router.post("/", requirePermission("admin:write"), async (req, res) => {
+router.post("/", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const b = zodParse(createRuleSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -118,7 +159,7 @@ router.post("/", requirePermission("admin:write"), async (req, res) => {
       ]
     );
 
-    const [rule] = await rawQuery<any>(`SELECT * FROM business_rules WHERE id = $1`, [insertId]);
+    const [rule] = await rawQuery<BusinessRuleRow>(`SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "create_business_rule",
@@ -133,14 +174,14 @@ router.post("/", requirePermission("admin:write"), async (req, res) => {
   }
 });
 
-router.patch("/:id", requirePermission("admin:write"), async (req, res) => {
+router.patch("/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const b = zodParse(patchRuleSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
 
-    const [existing] = await rawQuery<any>(
-      `SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2`,
+    const [existing] = await rawQuery<BusinessRuleRow>(
+      `SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!existing) {
@@ -164,9 +205,11 @@ router.patch("/:id", requirePermission("admin:write"), async (req, res) => {
     if (b.isActive !== undefined) { params.push(b.isActive); sets.push(`"isActive" = $${params.length}`); }
 
     params.push(id);
-    await rawExecute(`UPDATE business_rules SET ${sets.join(",")} WHERE id = $${params.length}`, params);
+    params.push(scope.companyId);
+    const { affectedRows } = await rawExecute(`UPDATE business_rules SET ${sets.join(",")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("القاعدة غير موجودة");
 
-    const [rule] = await rawQuery<any>(`SELECT * FROM business_rules WHERE id = $1`, [id]);
+    const [rule] = await rawQuery<BusinessRuleRow>(`SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_business_rule",
@@ -181,18 +224,19 @@ router.patch("/:id", requirePermission("admin:write"), async (req, res) => {
   }
 });
 
-router.delete("/:id", requirePermission("admin:write"), async (req, res) => {
+router.delete("/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(
-      `SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2`,
+    const [existing] = await rawQuery<BusinessRuleRow>(
+      `SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!existing) {
       throw new NotFoundError("القاعدة غير موجودة أو لا يمكن حذف القواعد الافتراضية");
     }
-    await rawExecute(`UPDATE business_rules SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE business_rules SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("القاعدة غير موجودة");
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "delete_business_rule",
@@ -207,20 +251,21 @@ router.delete("/:id", requirePermission("admin:write"), async (req, res) => {
   }
 });
 
-router.patch("/:id/toggle", requirePermission("admin:write"), async (req, res) => {
+router.patch("/:id/toggle", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     zodParse(toggleRuleSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(
-      `SELECT id, "isActive" FROM business_rules WHERE id = $1 AND ("companyId" IS NULL OR "companyId" = $2)`,
+    const [existing] = await rawQuery<RuleToggleRow>(
+      `SELECT id, "isActive" FROM business_rules WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!existing) {
       throw new NotFoundError("القاعدة غير موجودة");
     }
     const newActive = !existing.isActive;
-    await rawExecute(`UPDATE business_rules SET "isActive" = $1, "updatedAt" = NOW() WHERE id = $2 AND ("companyId" IS NULL OR "companyId" = $3)`, [newActive, id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE business_rules SET "isActive" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [newActive, id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("القاعدة غير موجودة");
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "toggle_business_rule",

@@ -10,6 +10,7 @@ import { Edit, Gavel } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
   scheduled: "مجدولة",
@@ -39,6 +40,7 @@ export default function LegalSessionDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/legal/sessions/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("legal-session", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["legal-session", String(id)],
@@ -151,24 +153,16 @@ export default function LegalSessionDetail() {
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           <div className="grid grid-cols-2 gap-3">
-            {session?.caseReference && (
+            {session?.caseNumber && (
               <div>
                 <p className="text-xs text-gray-500 mb-0.5">مرجع القضية</p>
-                <span className="text-gray-800 font-mono text-xs">{session.caseReference}</span>
+                <span className="text-gray-800 font-mono text-xs">{session.caseNumber}</span>
               </div>
             )}
-            {session?.sessionType && (
+            {session?.caseTitle && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">نوع الجلسة</p>
-                <Badge variant="outline">
-                  {SESSION_TYPE_LABELS[session.sessionType] || session.sessionType}
-                </Badge>
-              </div>
-            )}
-            {session?.courtName && (
-              <div>
-                <p className="text-xs text-gray-500 mb-0.5">المحكمة</p>
-                <span className="text-gray-800">{session.courtName}</span>
+                <p className="text-xs text-gray-500 mb-0.5">عنوان القضية</p>
+                <span className="text-gray-800">{session.caseTitle}</span>
               </div>
             )}
             {session?.judge && (
@@ -298,6 +292,8 @@ export default function LegalSessionDetail() {
       isLoading={isLoading}
       error={error}
       onRetry={refetch}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       actions={
         <>
           {session && (

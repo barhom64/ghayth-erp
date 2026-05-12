@@ -5,6 +5,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -119,7 +120,7 @@ export default function AutoDetectionPage() {
   );
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const settings = settingsQuery.data;
   const summary = summaryQuery.data;
@@ -267,7 +268,8 @@ export default function AutoDetectionPage() {
             <Settings2 className="h-4 w-4" />
             الإعدادات
           </Button>
-          <Button
+          <GuardedButton
+            perm="hr:create"
             size="sm"
             className="gap-1.5"
             onClick={handleRun}
@@ -280,7 +282,7 @@ export default function AutoDetectionPage() {
               <Play className="h-4 w-4" />
             )}
             تشغيل الرصد الآن
-          </Button>
+          </GuardedButton>
         </div>
       }
     >

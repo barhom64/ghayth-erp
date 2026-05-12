@@ -11,6 +11,7 @@ import { CreatePageLayout, CreationDateField } from "@/components/create-page-la
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { Sun, Moon, Coffee, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
@@ -52,10 +53,11 @@ export default function ShiftsCreate() {
     isDefault: false,
     branchId: "",
   });
+  const { fieldErrors, validate } = useFieldErrors();
   const [selectedDays, setSelectedDays] = useState<string[]>(["0", "1", "2", "3", "4"]);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const toggleDay = (day: string) => {
     setSelectedDays((prev) =>
@@ -76,12 +78,13 @@ export default function ShiftsCreate() {
   })();
 
   const handleSubmit = () => {
-    if (!form.name) {
-      toast({ variant: "destructive", title: "اسم الوردية مطلوب" });
-      return;
-    }
-    if (!form.startTime || !form.endTime) {
-      toast({ variant: "destructive", title: "وقت البدء والانتهاء مطلوبان" });
+    const firstError = validate({
+      name: form.name ? null : "اسم الوردية مطلوب",
+      startTime: form.startTime ? null : "وقت البدء مطلوب",
+      endTime: form.endTime ? null : "وقت الانتهاء مطلوب",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     createMut.mutate(
@@ -123,7 +126,7 @@ export default function ShiftsCreate() {
             معلومات الوردية
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <TextField label="اسم الوردية" required value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="وردية صباحية" />
+            <TextField label="اسم الوردية" required value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="وردية صباحية" error={fieldErrors.name} />
             <FormFieldWrapper label="وقت البدء" required>
               <Input type="time" value={form.startTime} onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))} />
             </FormFieldWrapper>
@@ -202,7 +205,7 @@ export default function ShiftsCreate() {
 
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/hr/shifts")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={!form.name || createMut.isPending} size="lg">
+        <Button onClick={handleSubmit} disabled={!form.name || createMut.isPending} size="lg" rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "حفظ الوردية"}
         </Button>
       </div>

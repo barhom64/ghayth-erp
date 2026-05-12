@@ -225,8 +225,8 @@ export default function InvoicesCreate() {
         {lines.map((line, idx) => (
           <div key={idx} className="grid grid-cols-4 gap-2 mt-2 items-end">
             <div><Label className="text-xs">الوصف</Label><Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} /></div>
-            <div><Label className="text-xs">الكمية</Label><Input type="number" min="1" value={line.quantity} onChange={(e) => updateLine(idx, "quantity", e.target.value)} /></div>
-            <div><Label className="text-xs">سعر الوحدة</Label><Input type="number" step="0.01" min="0" value={line.unitPrice} onChange={(e) => updateLine(idx, "unitPrice", e.target.value)} /></div>
+            <NumberField label="الكمية" value={line.quantity} onChange={(v) => updateLine(idx, "quantity", v)} placeholder="1" />
+            <NumberField label="سعر الوحدة" value={line.unitPrice} onChange={(v) => updateLine(idx, "unitPrice", v)} placeholder="0.00" />
             <Button type="button" variant="destructive" size="sm" onClick={() => removeLine(idx)} disabled={lines.length <= 1}>حذف</Button>
           </div>
         ))}
@@ -309,7 +309,7 @@ export default function InvoicesCreate() {
 
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/finance/invoices")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
         </Button>
       </div>

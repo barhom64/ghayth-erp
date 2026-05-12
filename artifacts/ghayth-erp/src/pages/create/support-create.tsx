@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -8,7 +7,6 @@ import { CreatePageLayout, AutoField, CreationDateField } from "@/components/cre
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
-import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { ClientContextCard } from "@/components/shared/client-context-card";
 import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { ClientSelect, EmployeeSelect } from "@/components/shared/entity-selects";
@@ -20,7 +18,6 @@ export default function SupportCreate() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const addTicket = useApiMutation("/support/tickets", "POST", [["support-tickets"], ["support-stats"]]);
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
 
@@ -128,10 +125,9 @@ export default function SupportCreate() {
           rows={4}
           error={fieldErrors.description}
         />
-        <FileDropZone files={attachments} onFilesChange={setAttachments} />
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/support")}>إلغاء</Button>
-          <Button onClick={handleSubmit} disabled={addTicket.isPending}>{addTicket.isPending ? "جاري الإنشاء..." : "إنشاء"}</Button>
+          <Button onClick={handleSubmit} disabled={addTicket.isPending} rateLimitAware>{addTicket.isPending ? "جاري الإنشاء..." : "إنشاء"}</Button>
         </div>
       </div>
     </CreatePageLayout>

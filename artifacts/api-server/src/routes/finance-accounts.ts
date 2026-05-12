@@ -10,7 +10,7 @@ import {
   zodParse,
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { checkFinancialPeriodOpen, emitEvent, createAuditLog, todayISO, toDateISO } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
@@ -55,15 +55,86 @@ const createJournalSchema = z.object({
 export const accountsRouter = Router();
 accountsRouter.use(authMiddleware);
 
-accountsRouter.get("/chart-of-accounts", requirePermission("finance:read"), async (req, res) => {
+interface ChartOfAccountsBriefRow {
+  id: number;
+  code: string;
+  name: string;
+  type: string;
+  parentCode: string | null;
+  status: string;
+}
+
+interface ChartOfAccountsRow extends ChartOfAccountsBriefRow {
+  companyId: number;
+  nameEn: string | null;
+  nature: string;
+  allowPosting: boolean;
+  isAnalytical: boolean;
+  parentId: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+  deletedAt: string | null;
+}
+
+interface JournalCountRow { cnt: string | number }
+interface IdRow { id: number }
+
+interface JournalEntryWithLinesRow {
+  id: number;
+  companyId: number;
+  branchId: number | null;
+  ref: string;
+  description: string;
+  status: string;
+  createdAt: string;
+  createdBy: number | null;
+  deletedAt: string | null;
+  lines: unknown;
+}
+
+interface AccountLedgerHeadRow {
+  name: string;
+  type: string;
+  code: string;
+}
+
+interface LedgerEntryRow {
+  id: number;
+  ref: string;
+  description: string;
+  date: string;
+  debit: number | string | null;
+  credit: number | string | null;
+}
+
+interface FinanceStatsRow {
+  totalRevenue: number | string;
+  paidThisMonth: number | string;
+  pendingAmount: number | string;
+  overdueAmount: number | string;
+}
+
+interface InvoiceSummaryRow {
+  count: number | string;
+  total: number | string;
+  paid: number | string;
+  outstanding: number | string;
+}
+
+interface ExpenseSummaryRow {
+  count: number | string;
+  total: number | string;
+}
+
+accountsRouter.get("/chart-of-accounts", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
     const { where, params } = buildScopedWhere(scope, filters);
-    const accounts = await rawQuery<any>(
+    const accounts = await rawQuery<ChartOfAccountsBriefRow>(
       `SELECT id, code, name, type, "parentCode", status
        FROM chart_of_accounts
-       WHERE ${where}
+       WHERE ${where} AND "deletedAt" IS NULL
        ORDER BY code ASC`,
       params
     );
@@ -73,7 +144,7 @@ accountsRouter.get("/chart-of-accounts", requirePermission("finance:read"), asyn
   }
 });
 
-accountsRouter.get("/accounts", requirePermission("finance:read"), async (req, res) => {
+accountsRouter.get("/accounts", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -94,21 +165,21 @@ accountsRouter.get("/accounts", requirePermission("finance:read"), async (req, r
     }
 
     const rows = await rawQuery(
-      `SELECT * FROM chart_of_accounts WHERE ${where}${extraWhere} ORDER BY code`,
+      `SELECT c.*, (SELECT p.id FROM chart_of_accounts p WHERE p.code = c."parentCode" AND p."companyId" = c."companyId" AND p."deletedAt" IS NULL LIMIT 1) AS "parentId" FROM chart_of_accounts c WHERE ${where} AND c."deletedAt" IS NULL${extraWhere} ORDER BY c.code LIMIT 5000`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (_e) {
+  } catch (_e) { logger.error(_e, "accounts list query failed");
     res.json({ data: [], total: 0, page: 1, pageSize: 0 });
   }
 });
 
-accountsRouter.post("/accounts", requirePermission("finance:create"), async (req, res) => {
+accountsRouter.post("/accounts", authorize({ feature: "finance.accounts", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
     const b = zodParse(createAccountSchema.safeParse(req.body ?? {}));
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<ChartOfAccountsRow>(
       `INSERT INTO chart_of_accounts ("companyId", code, name, type, "parentCode", "nameEn", nature, "allowPosting", "isAnalytical")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        ON CONFLICT ("companyId", code) DO NOTHING
@@ -116,6 +187,16 @@ accountsRouter.post("/accounts", requirePermission("finance:create"), async (req
       [scope.companyId, b.code, b.name, b.type, b.parentCode ?? null, b.nameEn ?? null, b.nature, b.allowPosting, b.isAnalytical]
     );
     if (!row) throw new ConflictError("رمز الحساب مستخدم مسبقاً", { field: "code", fix: "استخدم رمزاً مختلفاً للحساب" });
+
+    // Compute parentId from parentCode
+    if (b.parentCode) {
+      await rawExecute(
+        `UPDATE chart_of_accounts SET "parentId" = (
+          SELECT p.id FROM chart_of_accounts p WHERE p.code = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL
+        ) WHERE id = $3`,
+        [b.parentCode, scope.companyId, row.id]
+      );
+    }
 
     emitEvent({
       companyId: scope.companyId,
@@ -135,13 +216,13 @@ accountsRouter.post("/accounts", requirePermission("finance:create"), async (req
       after: { code: b.code, name: b.name, type: b.type },
     }).catch((err) => logger.error(err, "[audit] account.created:"));
 
-    res.status(201).json({ id: row.id, ...b });
+    res.status(201).json(row);
   } catch (err) {
     handleRouteError(err, res, "Create account error:");
   }
 });
 
-accountsRouter.patch("/accounts/:id", requirePermission("finance:update"), async (req, res) => {
+accountsRouter.patch("/accounts/:id", authorize({ feature: "finance.accounts", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -160,7 +241,7 @@ accountsRouter.patch("/accounts/:id", requirePermission("finance:update"), async
       });
     }
     params.push(id); params.push(scope.companyId);
-    const rows = await rawQuery<any>(`UPDATE chart_of_accounts SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
+    const rows = await rawQuery<ChartOfAccountsRow>(`UPDATE chart_of_accounts SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`, params);
     if (rows.length === 0) throw new NotFoundError("الحساب غير موجود");
 
     emitEvent({
@@ -185,20 +266,20 @@ accountsRouter.patch("/accounts/:id", requirePermission("finance:update"), async
   } catch (err) { handleRouteError(err, res, "Update account error:"); }
 });
 
-accountsRouter.delete("/accounts/:id", requirePermission("finance:delete"), async (req, res) => {
+accountsRouter.delete("/accounts/:id", authorize({ feature: "finance.accounts", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
     const accountId = parseId(req.params.id, "id");
 
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<{ id: number; code: string; name: string }>(
       `SELECT id, code, name FROM chart_of_accounts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [accountId, scope.companyId]
     );
     if (!existing) throw new NotFoundError("الحساب غير موجود");
 
     // Referential integrity: refuse delete when journal lines reference this account code.
-    const [journalUsage] = await rawQuery<any>(
+    const [journalUsage] = await rawQuery<JournalCountRow>(
       `SELECT COUNT(*) AS cnt FROM journal_lines jl
        JOIN journal_entries je ON je.id = jl."journalId"
        WHERE jl."accountCode" = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL`,
@@ -215,7 +296,7 @@ accountsRouter.delete("/accounts/:id", requirePermission("finance:delete"), asyn
       );
     }
 
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<IdRow>(
       `UPDATE chart_of_accounts SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
       [accountId, scope.companyId]
     );
@@ -243,12 +324,12 @@ accountsRouter.delete("/accounts/:id", requirePermission("finance:delete"), asyn
   } catch (err) { handleRouteError(err, res, "Delete account error:"); }
 });
 
-accountsRouter.get("/journal", requirePermission("finance:read"), async (req, res) => {
+accountsRouter.get("/journal", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
     const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"' });
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<JournalEntryWithLinesRow>(
       `SELECT je.*, json_agg(jl.*) AS lines
        FROM journal_entries je
        LEFT JOIN journal_lines jl ON jl."journalId" = je.id
@@ -258,12 +339,12 @@ accountsRouter.get("/journal", requirePermission("finance:read"), async (req, re
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (_e) {
+  } catch (_e) { logger.error(_e, "journal list query failed");
     res.json({ data: [], total: 0, page: 1, pageSize: 0 });
   }
 });
 
-accountsRouter.post("/journal", requirePermission("finance:create"), async (req, res) => {
+accountsRouter.post("/journal", authorize({ feature: "finance.accounts", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -313,13 +394,21 @@ accountsRouter.post("/journal", requirePermission("finance:create"), async (req,
       after: { ref, lineCount: lines.length, date: journalDate },
     }).catch((err) => logger.error(err, "[audit] journal.created:"));
 
-    res.status(201).json({ id: journalId, ref, description, lines });
+    const [createdJournal] = await rawQuery<JournalEntryWithLinesRow>(
+      `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit, 'description', jl.description)) AS lines
+       FROM journal_entries je
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
+       GROUP BY je.id`,
+      [journalId, scope.companyId]
+    );
+    res.status(201).json(createdJournal || { id: journalId });
   } catch (err) {
     handleRouteError(err, res, "Create journal error:");
   }
 });
 
-accountsRouter.get("/ledger/:accountCode", requirePermission("finance:read"), async (req, res) => {
+accountsRouter.get("/ledger/:accountCode", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { accountCode } = req.params;
@@ -330,13 +419,18 @@ accountsRouter.get("/ledger/:accountCode", requirePermission("finance:read"), as
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
     if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
 
-    const rows = await rawQuery<any>(
-      `SELECT je.id, je.ref, je.description, je."createdAt",
+    const [accountRow] = await rawQuery<AccountLedgerHeadRow>(
+      `SELECT name, type, code FROM chart_of_accounts WHERE code = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [accountCode, scope.companyId]
+    );
+
+    const rows = await rawQuery<LedgerEntryRow>(
+      `SELECT je.id, je.ref, je.description, je."createdAt" AS date,
               jl.debit, jl.credit
        FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = $2
+       JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = $2 AND jl."deletedAt" IS NULL
        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}
-       ORDER BY je."createdAt" ASC`,
+       ORDER BY je."createdAt" ASC LIMIT 5000`,
       params
     );
 
@@ -349,23 +443,42 @@ accountsRouter.get("/ledger/:accountCode", requirePermission("finance:read"), as
     const totalDebit = rows.reduce((s: number, r: any) => s + Number(r.debit), 0);
     const totalCredit = rows.reduce((s: number, r: any) => s + Number(r.credit), 0);
 
-    res.json({ movements, summary: { totalDebit, totalCredit, netBalance: totalDebit - totalCredit, count: movements.length } });
+    res.json({
+      account: { code: accountCode, name: accountRow?.name, type: accountRow?.type },
+      entries: movements,
+      summary: { totalDebit, totalCredit, balance: totalDebit - totalCredit, count: movements.length }
+    });
   } catch (err) {
     handleRouteError(err, res, "Ledger error:");
   }
 });
 
-accountsRouter.get("/summary", requirePermission("finance:read"), async (req, res) => {
+accountsRouter.get("/stats", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [inv] = await rawQuery<any>(
+    const [inv] = await rawQuery<FinanceStatsRow>(
+      `SELECT COALESCE(SUM(total),0) AS "totalRevenue",
+              COALESCE(SUM("paidAmount") FILTER(WHERE "paidAt" >= date_trunc('month', CURRENT_DATE)),0) AS "paidThisMonth",
+              COALESCE(SUM(total - "paidAmount") FILTER(WHERE status IN ('sent','partial')),0) AS "pendingAmount",
+              COALESCE(SUM(total - "paidAmount") FILTER(WHERE status = 'overdue'),0) AS "overdueAmount"
+       FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
+      [scope.companyId]
+    );
+    res.json(inv || { totalRevenue: 0, paidThisMonth: 0, pendingAmount: 0, overdueAmount: 0 });
+  } catch (err) { handleRouteError(err, res, "finance stats error"); }
+});
+
+accountsRouter.get("/summary", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const [inv] = await rawQuery<InvoiceSummaryRow>(
       `SELECT COUNT(*) AS count, COALESCE(SUM(total),0) AS total,
               COALESCE(SUM("paidAmount"),0) AS paid,
               COALESCE(SUM(total - "paidAmount") FILTER(WHERE status IN ('sent','partial','overdue')),0) AS outstanding
        FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [scope.companyId]
     );
-    const [exp] = await rawQuery<any>(
+    const [exp] = await rawQuery<ExpenseSummaryRow>(
       `SELECT COUNT(*) AS count, COALESCE(SUM(jl.debit),0) AS total
        FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id
        WHERE je."companyId" = $1 AND jl."accountCode" LIKE '5%' AND je."deletedAt" IS NULL AND je.status = 'posted'`,

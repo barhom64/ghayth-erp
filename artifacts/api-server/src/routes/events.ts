@@ -14,6 +14,42 @@ import {
 export const eventsRouter = Router();
 eventsRouter.use(authMiddleware);
 
+// Local row shape for event_logs. Schema lives in db/schema.sql; not
+// modelled in @workspace/db yet.
+interface EventLogRow {
+  id: number;
+  companyId: number;
+  action: string;
+  entity?: string | null;
+  entityId?: number | null;
+  details?: unknown;
+  userId?: number | null;
+  createdAt: string;
+}
+
+// Cursor payload — see docs/CURSOR_PAGINATION.md for the rationale and
+// the same (createdAt, id) keyset pattern used by /admin/audit-logs.
+interface EventCursor {
+  t: string;
+  i: number;
+}
+
+function encodeCursor(c: EventCursor): string {
+  return Buffer.from(JSON.stringify(c), "utf8").toString("base64url");
+}
+
+function decodeCursor(s: string): EventCursor | null {
+  try {
+    const raw = Buffer.from(s, "base64url").toString("utf8");
+    const obj = JSON.parse(raw) as Partial<EventCursor>;
+    if (typeof obj.t !== "string" || typeof obj.i !== "number") return null;
+    if (Number.isNaN(Date.parse(obj.t))) return null;
+    return { t: obj.t, i: obj.i };
+  } catch {
+    return null;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CATALOG — الفهرس الرسمي للأحداث (static, read-only)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -43,14 +79,19 @@ eventsRouter.get("/catalog/:name", (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LOG — سجل الأحداث الفعلي من event_logs table
+//
+// Supports both legacy (limit-only) and cursor pagination modes. Cursor
+// mode kicks in when ?cursor=… is present; otherwise the old "newest N"
+// behavior is preserved exactly for existing callers.
 // ─────────────────────────────────────────────────────────────────────────────
 
 eventsRouter.get("/log", async (req, res) => {
   try {
     const scope = req.scope!;
-    const { action, entity, entityId, from, to, limit = "100" } = req.query as any;
+    const { action, entity, entityId, from, to, limit = "100", cursor } =
+      req.query as Record<string, string | undefined>;
 
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     let where = `"companyId" = $1`;
     if (action) { params.push(action); where += ` AND action = $${params.length}`; }
     if (entity) { params.push(entity); where += ` AND entity = $${params.length}`; }
@@ -59,17 +100,65 @@ eventsRouter.get("/log", async (req, res) => {
     if (to) { params.push(to); where += ` AND "createdAt" <= $${params.length}::timestamp`; }
 
     const lim = Math.min(500, Math.max(1, Number(limit) || 100));
-    const rows = await rawQuery<any>(
+
+    // ── Cursor mode (opt-in, non-breaking) ────────────────────────────
+    if (cursor) {
+      const decoded = decodeCursor(cursor);
+      if (!decoded) {
+        res.status(400).json({ error: "cursor غير صالح" });
+        return;
+      }
+      params.push(decoded.t);
+      const tIdx = params.length;
+      params.push(decoded.i);
+      const iIdx = params.length;
+      where += ` AND ("createdAt", id) < ($${tIdx}::timestamptz, $${iIdx})`;
+      params.push(lim + 1); // +1 to peek for hasMore
+      const limitIdx = params.length;
+
+      const rows = await rawQuery<EventLogRow>(
+        `SELECT id, action, entity, "entityId", details, "userId", "createdAt"
+         FROM event_logs
+         WHERE ${where}
+         ORDER BY "createdAt" DESC, id DESC
+         LIMIT $${limitIdx}`,
+        params,
+      );
+
+      const hasMore = rows.length > lim;
+      const data = hasMore ? rows.slice(0, lim) : rows;
+      const last = data[data.length - 1];
+      const nextCursor = hasMore && last
+        ? encodeCursor({ t: String(last.createdAt), i: last.id })
+        : null;
+
+      const enriched = data.map((r) => {
+        const def = getEventDefinition(r.action);
+        return {
+          ...r,
+          label: def?.label ?? r.action,
+          domain: def?.domain ?? "unknown",
+          critical: def?.critical ?? false,
+        };
+      });
+
+      res.json({ data: enriched, count: enriched.length, cursor: nextCursor, hasMore });
+      return;
+    }
+
+    // ── Legacy "newest N" mode ────────────────────────────────────────
+    params.push(lim);
+    const rows = await rawQuery<EventLogRow>(
       `SELECT id, action, entity, "entityId", details, "userId", "createdAt"
        FROM event_logs
        WHERE ${where}
-       ORDER BY "createdAt" DESC
-       LIMIT ${lim}`,
-      params
+       ORDER BY "createdAt" DESC, id DESC
+       LIMIT $${params.length}`,
+      params,
     );
 
     // Enrich with catalog metadata
-    const enriched = rows.map((r: any) => {
+    const enriched = rows.map((r) => {
       const def = getEventDefinition(r.action);
       return {
         ...r,
@@ -89,16 +178,16 @@ eventsRouter.get("/log/stats", async (req, res) => {
   try {
     const scope = req.scope!;
     const days = Number(req.query.days) || 7;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<{ action: string; count: number }>(
       `SELECT action, COUNT(*)::int AS count
        FROM event_logs
        WHERE "companyId" = $1 AND "createdAt" >= NOW() - ($2 || ' days')::interval
        GROUP BY action
        ORDER BY count DESC
        LIMIT 100`,
-      [scope.companyId, String(days)]
+      [scope.companyId, String(days)],
     );
-    const enriched = rows.map((r: any) => {
+    const enriched = rows.map((r) => {
       const def = getEventDefinition(r.action);
       return {
         action: r.action,

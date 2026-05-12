@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { apiFetch } from "@/lib/api";
 import { FileCheck, X, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { moduleLabel, moduleFromPath } from "@/lib/module-labels";
 
 interface Policy {
   id: number;
@@ -11,46 +12,13 @@ interface Policy {
   status: string;
 }
 
-const MODULE_LABELS: Record<string, string> = {
-  hr: "الموارد البشرية",
-  finance: "المالية",
-  fleet: "الأسطول",
-  property: "الأملاك",
-  operations: "العمليات",
-  warehouse: "المستودعات",
-  governance: "الحوكمة",
-  legal: "القانونية",
-  crm: "المبيعات",
-  support: "الدعم",
-  comms: "التواصل",
-  store: "المتجر",
-  marketing: "التسويق",
-};
-
-function getModuleFromPath(path: string): string | null {
-  if (path.startsWith("/hr") || path.startsWith("/employees")) return "hr";
-  if (path.startsWith("/finance")) return "finance";
-  if (path.startsWith("/fleet")) return "fleet";
-  if (path.startsWith("/properties")) return "property";
-  if (path.startsWith("/projects") || path.startsWith("/tasks")) return "operations";
-  if (path.startsWith("/warehouse")) return "warehouse";
-  if (path.startsWith("/governance")) return "governance";
-  if (path.startsWith("/legal")) return "legal";
-  if (path.startsWith("/crm") || path.startsWith("/clients")) return "crm";
-  if (path.startsWith("/support")) return "support";
-  if (path.startsWith("/communications")) return "comms";
-  if (path.startsWith("/store")) return "store";
-  if (path.startsWith("/marketing")) return "marketing";
-  return null;
-}
-
 const dismissedKey = (module: string) => `erp_policy_dismissed_${module}`;
 
 export function PolicyBanner({ currentPath }: { currentPath: string }) {
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [dismissed, setDismissed] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const module = getModuleFromPath(currentPath);
+  const module = moduleFromPath(currentPath);
 
   useEffect(() => {
     if (!module) {
@@ -95,7 +63,7 @@ export function PolicyBanner({ currentPath }: { currentPath: string }) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-xs font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
-                سياسة {MODULE_LABELS[module] || module}
+                سياسة {moduleLabel(module)}
               </span>
             </div>
             <p className="text-sm font-medium text-blue-900">{first.title}</p>

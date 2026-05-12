@@ -4,6 +4,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useAppContext } from "@/contexts/app-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 // P4.2 — HR hub sweep: shared header from P1.
 import { PageShell } from "@/components/page-shell";
 import {
@@ -98,7 +99,7 @@ export default function HR() {
   const isError = empQ.isError || leavesQ.isError || payrollQ.isError || attendanceQ.isError;
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const totalEmployees = empQ.data?.total ?? "—";
   const pendingLeaves = leavesQ.data?.total ?? "—";
@@ -115,10 +116,10 @@ export default function HR() {
       subtitle="نظرة شاملة على أداء وإدارة الموارد البشرية"
       breadcrumbs={[{ label: "الموارد البشرية" }]}
       actions={
-        <Button onClick={() => navigate("/employees/create")} className="gap-2">
+        <GuardedButton perm="hr:create" onClick={() => navigate("/employees/create")} className="gap-2">
           <UserPlus className="h-4 w-4" />
           إضافة موظف
-        </Button>
+        </GuardedButton>
       }
     >
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">

@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Plus, Clock, CheckCircle, XCircle, LogOut } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { ApprovalActions } from "@/components/approval-actions";
@@ -127,7 +128,7 @@ export default function ExcuseRequestsPage() {
   ];
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   return (
     <PageShell
@@ -137,10 +138,10 @@ export default function ExcuseRequestsPage() {
       actions={
         <div className="flex items-center gap-2">
           <Link href="/hr/excuse-requests/create">
-            <Button size="sm" className="gap-1.5">
+            <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
               <Plus className="h-4 w-4" />
               طلب استئذان
-            </Button>
+            </GuardedButton>
           </Link>
         </div>
       }

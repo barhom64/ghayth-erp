@@ -36,10 +36,17 @@ class WarehouseEngineImpl implements DomainEngine {
     let creditFallback: string;
     let description: string;
 
+    // Task #190 fix: fallbacks must reference codes that exist in the
+    // standard Saudi chart_of_accounts seeded into every company. The
+    // previous "1300" was a placeholder that never existed in the seed
+    // (only 1100/1110/1120/1130/1140/1150/1160/1170 are seeded under
+    // "1100 الأصول المتداولة"). 1150 = "المخزون" — the canonical
+    // inventory asset account — is the correct fallback for any
+    // inventory-on-hand leg.
     switch (movement.trigger) {
       case "receipt":
         debitMapping = "inventory_receipt";
-        debitFallback = "1300";
+        debitFallback = "1151";
         creditMapping = "inventory_receipt";
         creditFallback = "2115";
         description = `استلام مخزون${productLabel} — ${movement.totalValue.toFixed(2)} ريال`;
@@ -48,12 +55,12 @@ class WarehouseEngineImpl implements DomainEngine {
         debitMapping = "inventory_issue_cogs";
         debitFallback = "5110";
         creditMapping = "inventory_issue_cogs";
-        creditFallback = "1300";
+        creditFallback = "1151";
         description = `صرف مخزون${productLabel} — تكلفة ${movement.totalValue.toFixed(2)} ريال`;
         break;
       case "variance_in":
         debitMapping = "inventory_variance";
-        debitFallback = "1300";
+        debitFallback = "1151";
         creditMapping = "inventory_variance";
         creditFallback = "5150";
         description = `فائض جرد${productLabel} — ${movement.totalValue.toFixed(2)} ريال`;
@@ -62,7 +69,7 @@ class WarehouseEngineImpl implements DomainEngine {
         debitMapping = "inventory_variance";
         debitFallback = "5150";
         creditMapping = "inventory_variance";
-        creditFallback = "1300";
+        creditFallback = "1151";
         description = `عجز جرد${productLabel} — ${movement.totalValue.toFixed(2)} ريال`;
         break;
     }

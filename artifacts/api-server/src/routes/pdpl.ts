@@ -2,15 +2,38 @@ import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
-import { HR_ROLES } from "../lib/rbacCatalog.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { userHasPermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent, toDateISO } from "../lib/businessHelpers.js";
 import { z } from "zod";
+import rateLimit from "express-rate-limit";
+import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
+import { makeRateLimitStore } from "../lib/rateLimitStore.js";
 import { logger } from "../lib/logger.js";
+
+// /pdpl mixes one anonymous endpoint (/privacy-notice) with several
+// authenticated ones. Per-IP cap goes only on the anonymous endpoint;
+// authenticated routes get a per-user cap (owner/admin exempt) so admins
+// on a shared proxy IP aren't lumped together.
+const privacyNoticeIpLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: process.env.NODE_ENV === "production" ? 100 : 2000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "تم تجاوز الحد الأقصى للطلبات. يرجى المحاولة لاحقاً" },
+  validate: { ip: false, trustProxy: false },
+  store: makeRateLimitStore("pdpl:privacy-notice"),
+});
+const pdplUserLimiter = createPerUserLimiter({
+  prefix: "pdpl",
+  windowMs: 60 * 1000,
+  max: 120,
+  message: "تم تجاوز الحد الأقصى لطلبات حماية البيانات. يرجى المحاولة لاحقاً",
+});
 
 const dataRequestSchema = z.object({
   requestType: z.enum(["access", "rectification", "erasure", "portability", "objection"]),
@@ -21,7 +44,91 @@ const dataRequestSchema = z.object({
 
 const router = Router();
 
-router.get("/privacy-notice", async (req, res) => {
+interface RetentionPolicyRow {
+  id: number;
+  companyId: number | null;
+  dataType: string;
+  retentionPeriodDays: number;
+  legalBasis: string | null;
+  isDefault: boolean;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+interface EmployeePersonalDataRow {
+  id: number;
+  name: string;
+  nameEn: string | null;
+  nationalId: string | null;
+  phone: string | null;
+  email: string | null;
+  dateOfBirth: string | null;
+  nationality: string | null;
+  gender: string | null;
+  profileImageUrl: string | null;
+}
+
+interface EmploymentAssignmentRow {
+  id: number;
+  role: string | null;
+  jobTitle: string | null;
+  salary: number | string | null;
+  status: string;
+  startDate: string | null;
+  endDate: string | null;
+  companyName: string;
+  branchName: string;
+}
+
+interface AttendanceSummaryRow {
+  period: string;
+  presentDays: number | null;
+  lateDays: number | null;
+  totalLateMinutes: number | null;
+  totalDeduction: number | string | null;
+  overtimeMinutes: number | null;
+}
+
+interface LeaveRequestRow {
+  id: number;
+  leaveType: string;
+  startDate: string;
+  endDate: string;
+  days: number;
+  status: string;
+  createdAt: string;
+}
+
+interface DataAccessRequestRow {
+  id: number;
+  companyId: number;
+  requestType: string;
+  requesterId: number | null;
+  requesterName: string | null;
+  requesterEmail: string | null;
+  status: string;
+  notes: string | null;
+  dueDate: string;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+interface ProcessingActivityLogRow {
+  id: number;
+  companyId: number;
+  activityType: string;
+  dataCategories: unknown;
+  dataSubjects: string | null;
+  purpose: string | null;
+  legalBasis: string | null;
+  performedBy: number | null;
+  createdAt: string;
+  performedByRole: string | null;
+  performedByName: string | null;
+}
+
+router.get("/privacy-notice", privacyNoticeIpLimiter, async (req, res) => {
   try {
     res.json({
       version: "1.0",
@@ -56,10 +163,10 @@ router.get("/privacy-notice", async (req, res) => {
   }
 });
 
-router.get("/retention-policies", authMiddleware, async (req, res) => {
+router.get("/retention-policies", authMiddleware, pdplUserLimiter, authorize({ feature: "admin.pdpl", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<RetentionPolicyRow>(
       `SELECT * FROM data_retention_policies
        WHERE ("companyId" IS NULL OR "companyId" = $1)
        ORDER BY "isDefault" DESC, "dataType" ASC`,
@@ -71,19 +178,27 @@ router.get("/retention-policies", authMiddleware, async (req, res) => {
   }
 });
 
-router.get("/employee-data-export/:employeeId", authMiddleware, async (req, res) => {
+router.get("/employee-data-export/:employeeId", authMiddleware, pdplUserLimiter, async (req, res) => {
   try {
     const scope = req.scope!;
     const employeeId = parseId(req.params.employeeId, "employeeId");
 
+    // Self-service exception: an employee can always export their
+    // own PDPL data without holding admin.pdpl. For any OTHER
+    // employee, fall through to the standard pdpl-export permission
+    // OR the legacy hr:read fallback (subject-access requests filed
+    // by HR on behalf of an employee).
     const isOwnData = scope.employeeId === employeeId;
-    const isHROrAbove = HR_ROLES.includes(scope.role);
+    const canExportEmployeeData =
+      isOwnData
+      || (await userHasPermission(scope, "hr:read"))
+      || (await userHasPermission(scope, "admin.pdpl:export"));
 
-    if (!isOwnData && !isHROrAbove) {
-      throw new ForbiddenError("يمكنك فقط تصدير بياناتك الشخصية أو يجب أن تكون مسؤول موارد بشرية");
+    if (!canExportEmployeeData) {
+      throw new ForbiddenError("يمكنك فقط تصدير بياناتك الشخصية أو يجب أن تملك صلاحية تصدير بيانات حماية البيانات الشخصية");
     }
 
-    const [employee] = await rawQuery<any>(
+    const [employee] = await rawQuery<EmployeePersonalDataRow>(
       `SELECT e.id, e.name, e."nameEn", e."nationalId", e.phone, e.email, e."dateOfBirth",
               e.nationality, e.gender, e."photoUrl" AS "profileImageUrl"
        FROM employees e
@@ -97,7 +212,7 @@ router.get("/employee-data-export/:employeeId", authMiddleware, async (req, res)
     }
 
     const [assignments, attendanceSummary, leaveRequests] = await Promise.all([
-      rawQuery<any>(
+      rawQuery<EmploymentAssignmentRow>(
         `SELECT ea.id, ea.role, ea."jobTitle", ea.salary, ea.status, ea."hireDate" AS "startDate", ea."endDate",
                 c.name AS "companyName", b.name AS "branchName"
          FROM employee_assignments ea
@@ -106,7 +221,7 @@ router.get("/employee-data-export/:employeeId", authMiddleware, async (req, res)
          WHERE ea."employeeId" = $1 AND ea."companyId" = $2`,
         [employeeId, scope.companyId]
       ),
-      rawQuery<any>(
+      rawQuery<AttendanceSummaryRow>(
         `SELECT period, "presentDays", "lateDays", "totalLateMinutes", "totalDeduction", "overtimeMinutes"
          FROM employee_monthly_attendance
          WHERE "assignmentId" IN (
@@ -115,7 +230,7 @@ router.get("/employee-data-export/:employeeId", authMiddleware, async (req, res)
          ORDER BY period DESC LIMIT 12`,
         [employeeId, scope.companyId]
       ),
-      rawQuery<any>(
+      rawQuery<LeaveRequestRow>(
         `SELECT lr.id, lt.name AS "leaveType", lr."startDate", lr."endDate", lr.days, lr.status, lr."createdAt"
          FROM hr_leave_requests lr
          JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
@@ -153,7 +268,7 @@ router.get("/employee-data-export/:employeeId", authMiddleware, async (req, res)
   }
 });
 
-router.post("/data-request", authMiddleware, requirePermission("admin:write"), async (req, res) => {
+router.post("/data-request", authMiddleware, pdplUserLimiter, authorize({ feature: "admin.pdpl", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(dataRequestSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -188,21 +303,17 @@ router.post("/data-request", authMiddleware, requirePermission("admin:write"), a
     }).catch((e) => logger.error(e, "pdpl background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "pdpl.data_request.created", entity: "data_access_requests", entityId: insertId, details: JSON.stringify({ requestType, requesterName: requesterName ?? scope.userName }) }).catch((e) => logger.error(e, "pdpl background task failed"));
 
-    res.status(201).json({
-      id: insertId,
-      message: "تم استلام طلبك وسيتم الرد خلال 30 يوماً وفق متطلبات PDPL",
-      requestType,
-      dueDate: toDateISO(dueDate)
-    });
+    const [row] = await rawQuery<DataAccessRequestRow>(`SELECT * FROM data_access_requests WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json({ ...row, message: "تم استلام طلبك وسيتم الرد خلال 30 يوماً وفق متطلبات PDPL" });
   } catch (err) {
     handleRouteError(err, res, "Data request error:");
   }
 });
 
-router.get("/processing-log", authMiddleware, requireMinLevel(90), async (req, res) => {
+router.get("/processing-log", authMiddleware, pdplUserLimiter, authorize({ feature: "admin.pdpl", action: "view" }), requireMinLevel(90), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<ProcessingActivityLogRow>(
       `SELECT pal.*, ea.role AS "performedByRole", e.name AS "performedByName"
        FROM processing_activities_log pal
        LEFT JOIN employee_assignments ea ON ea.id = pal."performedBy"

@@ -4,6 +4,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { PageShell } from "@/components/page-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -85,7 +86,7 @@ export default function ViolationsReportPage() {
   const resolving = resolveMut.isPending ? resolveMut.variables?.id ?? null : null;
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const handleResolve = (id: number) => {
     resolveMut.mutate({ id });
@@ -155,7 +156,8 @@ export default function ViolationsReportPage() {
       header: "إجراء",
       render: (v) =>
         v.status === "open" ? (
-          <Button
+          <GuardedButton
+            perm="admin:create"
             size="sm"
             variant="outline"
             className="text-xs"
@@ -164,7 +166,7 @@ export default function ViolationsReportPage() {
           >
             <CheckCircle2 className="h-3 w-3 me-1" />
             تم المعالجة
-          </Button>
+          </GuardedButton>
         ) : null,
     },
   ];

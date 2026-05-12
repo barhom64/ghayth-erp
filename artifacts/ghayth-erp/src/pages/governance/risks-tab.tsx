@@ -12,6 +12,7 @@ import { Link, useLocation } from "wouter";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 export function RisksTab() {
   const [, navigate] = useLocation();
@@ -64,7 +65,7 @@ export function RisksTab() {
   ];
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   return (
     <div className="space-y-4">
@@ -95,7 +96,7 @@ export function RisksTab() {
         </div>
         {canWrite && (
           <Link href="/governance/risks/create">
-            <Button size="sm"><Plus className="h-4 w-4 me-1" />إضافة خطر</Button>
+            <GuardedButton perm="governance:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة خطر</GuardedButton>
           </Link>
         )}
       </div>

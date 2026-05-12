@@ -1,0 +1,171 @@
+/**
+ * DB driver: hand a `JournalEntryPayload` (from
+ * `lib/gl/journal-poster.ts`) and an `EntryContext` here, and a
+ * balanced row is inserted into `journal_entries` + `journal_lines`
+ * inside a transaction. Returns the new `journalEntryId`.
+ *
+ * This is the integration helper the four down-stream posters (FX
+ * revaluation, realised FX, cycle-count variance, inventory write-
+ * off) call. It deliberately does NOT decide WHICH accounts to use
+ * (that's `account-purposes.ts`) or HOW to compute the amount
+ * (that's the domain layer). The poster's only job is to translate
+ * the validated payload into SQL — and double-check the balance
+ * invariant one last time before the INSERT so a future caller
+ * that builds the payload by hand (instead of through the builder)
+ * still can't post an unbalanced row.
+ *
+ * Status of the inserted entry is `posted` by default. Callers
+ * that want a draft (the operator reviews before posting) pass
+ * `status: "draft"`.
+ */
+import { rawQuery, rawExecute, withTransaction } from "../rawdb.js";
+import { logger } from "../logger.js";
+import type { JournalEntryPayload } from "./journal-poster.js";
+
+export type JournalEntryStatus = "draft" | "posted";
+
+export interface EntryContext {
+  companyId: number;
+  branchId?: number;
+  /** Operator who triggered the posting (audit log). */
+  createdBy?: number;
+  /** Stable identifier the operator types or the engine generates
+   *  ("FX-REV-2026-05", "REAL-FX-INV-1234"). */
+  ref?: string;
+  /** YYYY-MM-DD — journal entry effective date. */
+  date?: string;
+  /** Classifier used by reporting: 'manual', 'fx_revaluation',
+   *  'fx_realised', 'cycle_count_variance', etc. */
+  type?: string;
+  /** Cross-reference back to the originating audit row, e.g.
+   *  ('fx_revaluation_log', 42). The journal-lines table stores
+   *  these too on each line if the payload set them. */
+  sourceType?: string;
+  sourceId?: number;
+  /** Whether to mark the entry posted immediately (default) or
+   *  leave it as a draft for operator review. */
+  status?: JournalEntryStatus;
+}
+
+export interface PostedEntry {
+  journalEntryId: number;
+  status: JournalEntryStatus;
+}
+
+/**
+ * Insert a balanced journal entry + lines inside one transaction.
+ *
+ * Throws if:
+ *   - The payload is unbalanced (defence in depth — `buildEntry`
+ *     should have caught this already)
+ *   - Any line references a non-postable / soft-deleted account
+ *
+ * Returns the new `journalEntryId` so the caller can stamp it on
+ * the originating audit row (e.g.
+ * `fx_revaluation_log.journalEntryId`).
+ */
+export async function postJournalEntry(
+  payload: JournalEntryPayload,
+  ctx: EntryContext,
+): Promise<PostedEntry> {
+  // Defence in depth: re-validate the balance even though
+  // `buildEntry` already did. A future caller might pass a hand-
+  // crafted payload that skipped the builder.
+  if (Math.abs(payload.totalDebit - payload.totalCredit) > 0.01) {
+    throw new Error(
+      `postJournalEntry: payload unbalanced ` +
+        `(debit=${payload.totalDebit}, credit=${payload.totalCredit})`,
+    );
+  }
+  if (payload.lines.length === 0) {
+    throw new Error("postJournalEntry: payload has no lines");
+  }
+
+  const status: JournalEntryStatus = ctx.status ?? "posted";
+
+  return withTransaction(async () => {
+    // Validate every account exists + allows posting BEFORE we
+    // insert the header — a single bad accountId would otherwise
+    // leave us with a half-written entry that withTransaction
+    // would have to roll back.
+    const accountIds = Array.from(new Set(payload.lines.map((l) => l.accountId)));
+    const accounts = await rawQuery<{ id: number; code: string }>(
+      `SELECT id, code FROM chart_of_accounts
+       WHERE id = ANY($1::int[])
+         AND "companyId" = $2
+         AND "deletedAt" IS NULL
+         AND "allowPosting" = true`,
+      [accountIds, ctx.companyId],
+    );
+    const valid = new Set(accounts.map((a) => a.id));
+    const missing = accountIds.filter((id) => !valid.has(id));
+    if (missing.length > 0) {
+      throw new Error(
+        `postJournalEntry: account IDs not postable (deleted, blocked, or wrong company): ${missing.join(", ")}`,
+      );
+    }
+
+    // Build a {id → code} map for the journal_lines insert
+    // (journal_lines.accountCode is NOT NULL even though
+    // journal_lines.accountId is the canonical FK).
+    const codeById = new Map(accounts.map((a) => [a.id, a.code]));
+
+    const [header] = await rawQuery<{ id: number }>(
+      `INSERT INTO journal_entries (
+         "companyId", "branchId", ref, description, "createdBy",
+         date, type, status, "sourceType", "sourceId", "postedBy", "postedAt"
+       ) VALUES ($1, $2, $3, $4, $5, COALESCE($6::date, CURRENT_DATE),
+                 COALESCE($7, 'manual'), $8, $9, $10,
+                 CASE WHEN $8 = 'posted' THEN $5 ELSE NULL END,
+                 CASE WHEN $8 = 'posted' THEN NOW() ELSE NULL END)
+       RETURNING id`,
+      [
+        ctx.companyId,
+        ctx.branchId ?? null,
+        ctx.ref ?? null,
+        payload.description,
+        ctx.createdBy ?? null,
+        ctx.date ?? null,
+        ctx.type ?? null,
+        status,
+        ctx.sourceType ?? null,
+        ctx.sourceId ?? null,
+      ],
+    );
+    const journalEntryId = header.id;
+
+    for (const line of payload.lines) {
+      const accountCode = codeById.get(line.accountId);
+      if (!accountCode) {
+        // Shouldn't happen — we validated above. Belt + braces.
+        throw new Error(`postJournalEntry: account ${line.accountId} disappeared mid-transaction`);
+      }
+      await rawExecute(
+        `INSERT INTO journal_lines (
+           "journalId", "accountId", "accountCode",
+           debit, credit, description
+         ) VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          journalEntryId, line.accountId, accountCode,
+          line.debit, line.credit, line.description,
+        ],
+      );
+    }
+
+    logger.info(
+      {
+        journalEntryId,
+        companyId: ctx.companyId,
+        type: ctx.type,
+        sourceType: ctx.sourceType,
+        sourceId: ctx.sourceId,
+        totalDebit: payload.totalDebit,
+        totalCredit: payload.totalCredit,
+        status,
+      },
+      "[gl] journal entry posted",
+    );
+
+    return { journalEntryId, status };
+  });
+}

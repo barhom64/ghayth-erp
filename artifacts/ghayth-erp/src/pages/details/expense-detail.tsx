@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
@@ -69,6 +70,7 @@ export default function ExpenseDetail() {
   const id = params?.id ? Number(params.id) : null;
   const { toast } = useToast();
   const [previewAttachment, setPreviewAttachment] = useState<PreviewableAttachment | null>(null);
+  const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("expense_claim", id ?? 0);
 
   // Fetch via the generic journal endpoint — there is no dedicated
   // /finance/expenses/:id handler on the server, but the row itself is
@@ -430,6 +432,8 @@ export default function ExpenseDetail() {
         entityType="expense"
         entityId={id ?? 0}
         overview={overview}
+        extraTabs={registryExtraTabs}
+        hideTabs={registryHideTabs}
         isLoading={isLoading}
         error={error}
         onRetry={refetch}

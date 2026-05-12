@@ -13,6 +13,8 @@ const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }
   rented: { label: "مؤجرة", color: "text-green-600", bg: "bg-green-100" },
   available: { label: "متاحة", color: "text-blue-600", bg: "bg-blue-100" },
   maintenance: { label: "صيانة", color: "text-orange-600", bg: "bg-orange-100" },
+  under_maintenance: { label: "تحت الصيانة", color: "text-orange-600", bg: "bg-orange-100" },
+  out_of_service: { label: "خارج الخدمة", color: "text-red-600", bg: "bg-red-100" },
   reserved: { label: "محجوزة", color: "text-yellow-600", bg: "bg-yellow-100" },
 };
 
@@ -22,7 +24,7 @@ export default function OccupancyReportPage() {
   const { data, isLoading, isError } = useApiQuery<any>(["occupancy-report"], "/properties/occupancy-report");
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const units = asList(data?.units || []);
   const pieData = [

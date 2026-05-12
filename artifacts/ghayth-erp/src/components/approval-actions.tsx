@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { CheckCircle, XCircle, RotateCcw, MessageSquare, ChevronDown, ChevronUp, History, ArrowLeftRight, ArrowUpCircle } from "lucide-react";
 import { ImpactCard } from "@/components/impact-card";
+import { actionLabel } from "@/lib/action-labels";
 
 export type ApprovalActionType = "approve" | "reject" | "return" | "refer" | "escalate";
 
@@ -165,13 +166,8 @@ export function ApprovalActions({
     );
   }
 
-  const actionLabels: Record<ApprovalActionType, string> = {
-    approve: "قبول",
-    reject: "رفض",
-    return: "إرجاع",
-    refer: "إحالة",
-    escalate: "تصعيد",
-  };
+  // Verbs come from the canonical lib/action-labels so this dialog reads
+  // the same as the success toasts and audit-log timeline.
   const actionColors: Record<ApprovalActionType, string> = {
     approve: "bg-green-600 hover:bg-green-700",
     reject: "bg-red-600 hover:bg-red-700",
@@ -193,7 +189,7 @@ export function ApprovalActions({
       <ImpactCard entityType={entityType} entityId={entityId} action={action} />
       <div className="flex items-center gap-2 text-sm font-medium">
         <MessageSquare className="h-4 w-4" />
-        {actionLabels[action]}
+        {actionLabel(action)}
       </div>
       {action === "refer" && (
         <div>

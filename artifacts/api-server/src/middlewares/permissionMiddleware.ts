@@ -240,6 +240,28 @@ export function requireAnyPermission(...candidatePerms: string[]) {
   };
 }
 
+/**
+ * Inline permission check for routes that need to combine permission state
+ * with runtime conditions (e.g. "allow if user has hr:read OR is the data
+ * subject"). Use this instead of hardcoded role-name checks.
+ */
+export async function userHasPermission(
+  scope: { userId: number; companyId: number; role: string; isOwner?: boolean },
+  permission: string
+): Promise<boolean> {
+  if (scope.isOwner || scope.role === "owner") return true;
+  const rolePerms = await loadAllUserRolePermissions(scope.userId, scope.role, scope.companyId);
+  const userOverrides = await loadUserPermissions(scope.userId, scope.companyId);
+  const effective = new Set(rolePerms);
+  for (const p of userOverrides.granted) effective.add(p);
+  for (const p of userOverrides.revoked) effective.delete(p);
+  if (effective.has("*")) return true;
+  if (effective.has(permission)) return true;
+  const [module] = permission.split(":");
+  if (effective.has(`${module}:*`)) return true;
+  return false;
+}
+
 export function invalidatePermissionCache(role?: string, companyId?: number): void {
   if (role && companyId) {
     permissionCache.delete(`${role}:${companyId}`);

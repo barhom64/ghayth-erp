@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError,
   parseId,
@@ -10,6 +10,67 @@ import { handleRouteError, ValidationError, NotFoundError, ConflictError, Forbid
 import { createAuditLog, createNotification, emitEvent, getLegalResponsible, currentPeriod, currentYear, generateRef } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 import { MANAGER_ROLES , HR_APPROVAL_ROLES} from "../lib/rbacCatalog.js";
+import type { Request as ExpressRequest } from "express";
+
+// Local row shapes for the requests + request_types + workflows tables.
+// These tables aren't modelled in @workspace/db yet; the shapes evolve
+// next to the queries that consume them.
+type RequestScope = NonNullable<ExpressRequest["scope"]>;
+
+interface RequestRow extends Record<string, unknown> {
+  id: number;
+  companyId?: number | null;
+  branchId?: number | null;
+  typeId?: number | null;
+  number?: string | null;
+  title: string;
+  description: string;
+  requesterName?: string | null;
+  requester?: string | null;
+  priority?: string | null;
+  status: string;
+  currentApprover?: number | string | null;
+  data?: unknown;
+  attachments?: unknown;
+  createdAt: string;
+  updatedAt?: string | null;
+  deletedAt?: string | null;
+  typeName?: string | null;
+  // Annotated at runtime by validateRequestTransition when a manager
+  // overrides the assignee. Sentinel only — never persisted.
+  _isOverride?: boolean;
+}
+
+interface RequestTypeRow {
+  id: number;
+  companyId?: number | null;
+  name: string;
+  description?: string | null;
+  category?: string | null;
+  icon?: string | null;
+  fields?: unknown;
+  defaultPriority?: string | null;
+  approvalChainId?: number | null;
+  createdAt: string;
+}
+
+interface WorkflowRow {
+  id: number;
+  companyId: number;
+  name: string;
+  description?: string | null;
+  triggerType?: string | null;
+  steps?: unknown;
+  isActive?: boolean | null;
+  createdAt: string;
+}
+
+interface AttachmentInput {
+  name: string;
+  size: number;
+  type: string;
+  dataUrl: string;
+}
 
 /* ── Zod Schemas ───────────────────────────────────────────────── */
 
@@ -80,9 +141,9 @@ async function validateRequestTransition(
   id: number,
   companyId: number,
   targetStatus: string,
-  scope: any,
-): Promise<any> {
-  const [request] = await rawQuery<any>(
+  scope: RequestScope,
+): Promise<RequestRow> {
+  const [request] = await rawQuery<RequestRow>(
     `SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL`,
     [id, companyId]
   );
@@ -126,7 +187,7 @@ async function validateRequestTransition(
 
     if (data._budgetAccountCode && data._budgetAmount) {
       const period = currentPeriod();
-      const [budget] = await rawQuery<any>(
+      const [budget] = await rawQuery<{ amount: number | string; used: number | string }>(
         `SELECT amount, used FROM budgets WHERE "companyId" = $1 AND "accountCode" = $2 AND period = $3`,
         [companyId, data._budgetAccountCode, period]
       );
@@ -170,7 +231,7 @@ async function logCommunication(companyId: number, direction: string, subject: s
   }
 }
 
-router.get("/", requirePermission("requests:read"), async (req, res) => {
+router.get("/", authorize({ feature: "requests", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const isManager = HR_APPROVAL_ROLES.includes(scope.role);
@@ -184,11 +245,13 @@ router.get("/", requirePermission("requests:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.post("/", requirePermission("requests:write"), async (req, res) => {
+// RBAC v2: requests are also self-service via requests.my (selfService:true)
+// so any employee can create their own request unconditionally.
+router.post("/", authorize({ feature: "requests.my", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(createRequestSchema.safeParse(req.body));
     const scope = req.scope!;
-    const { typeId, requesterName, requester, title, description, priority, data, attachments } = req.body;
+    const { typeId, requesterName, requester, title, description, priority, data, attachments } = parsed as any;
     const resolvedRequesterName = requesterName || requester;
 
     if (!title || !String(title).trim()) {
@@ -225,14 +288,15 @@ router.post("/", requirePermission("requests:write"), async (req, res) => {
     }
 
     const enforcedRequesterId = scope.activeAssignmentId;
-    let validatedAttachments: any[] = [];
+    let validatedAttachments: AttachmentInput[] = [];
     if (attachments && Array.isArray(attachments)) {
-      validatedAttachments = attachments.slice(0, 10).filter((a: any) =>
-        a && typeof a.name === "string" && typeof a.size === "number" && a.size <= 5 * 1024 * 1024
-      ).map((a: any) => ({ name: a.name, size: a.size, type: a.type || "", dataUrl: a.dataUrl || "" }));
+      validatedAttachments = attachments.slice(0, 10).filter((a: unknown): a is Partial<AttachmentInput> => {
+        const obj = a as Partial<AttachmentInput> | null;
+        return !!obj && typeof obj.name === "string" && typeof obj.size === "number" && obj.size <= 5 * 1024 * 1024;
+      }).map((a) => ({ name: a.name!, size: a.size!, type: a.type || "", dataUrl: a.dataUrl || "" }));
     }
-    const [seqRow] = await rawQuery<any>(`SELECT nextval('request_number_seq') AS seq`).catch((e) => { logger.error(e, "requests query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
-    const ref = generateRef("REQ", seqRow.seq);
+    const [seqRow] = await rawQuery<{ seq: number | string }>(`SELECT nextval('request_number_seq') AS seq`).catch((e) => { logger.error(e, "requests query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }] as { seq: number }[]; });
+    const ref = generateRef("REQ", Number(seqRow.seq));
 
     const r = await rawExecute(
       `INSERT INTO requests ("typeId", "requesterId", "requesterName", title, description, status, priority, data, "companyId", attachments, ref, "requestDate", "branchId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,CURRENT_DATE,$12)`,
@@ -250,17 +314,26 @@ router.post("/", requirePermission("requests:write"), async (req, res) => {
       after: { typeId: typeId ? Number(typeId) : null, title, description, priority: priority || "medium", ref },
     }).catch((e) => logger.error(e, "requests background task failed"));
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request.created", entity: "approval_requests", entityId: r.insertId }).catch((e) => logger.error(e, "requests background task failed"));
-    res.status(201).json({ id: r.insertId, ref, title, description, priority: priority || "medium", status: "pending" });
+    const [row] = await rawQuery<RequestRow>(`SELECT * FROM requests WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId, ref, title, priority: priority || "medium", status: "pending" });
   } catch (err) { handleRouteError(err, res, "Create request error:"); }
 });
 
-router.get("/catalog", requirePermission("requests:read"), async (req, res) => {
+router.get("/catalog", authorize({ feature: "requests", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const role = scope.role;
     const jobTitle = scope.jobTitle;
 
-    const allTypes = await rawQuery<any>(
+    interface RequestTypeListRow {
+      id: number;
+      name: string;
+      description?: string | null;
+      category?: string | null;
+      requiredFields?: unknown;
+      approvalFlow?: unknown;
+    }
+    const allTypes = await rawQuery<RequestTypeListRow>(
       `SELECT id, name, description, category, "requiredFields", "approvalFlow"
        FROM request_types
        WHERE "isActive" = true AND ("companyId" = $1 OR "companyId" IS NULL)
@@ -323,7 +396,7 @@ router.get("/catalog", requirePermission("requests:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.get("/types", requirePermission("requests:read"), async (req, res) => {
+router.get("/types", authorize({ feature: "requests", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM request_types WHERE "isActive"=true AND ("companyId"=$1 OR "companyId" IS NULL) ORDER BY name LIMIT 500`, [scope.companyId]);
@@ -331,22 +404,23 @@ router.get("/types", requirePermission("requests:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.post("/types", requirePermission("requests:write"), async (req, res) => {
+router.post("/types", authorize({ feature: "requests", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(createRequestTypeSchema.safeParse(req.body));
     const scope = req.scope!;
-    const { name, description, category, requiredFields, approvalFlow, isActive } = req.body;
+    const { name, description, category, requiredFields, approvalFlow, isActive } = parsed as any;
     const r = await rawExecute(
       `INSERT INTO request_types (name, description, category, "requiredFields", "approvalFlow", "isActive", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [name, description, category, requiredFields ? JSON.stringify(requiredFields) : '[]', approvalFlow ? JSON.stringify(approvalFlow) : '[]', isActive !== false, scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "request_types", entityId: r.insertId, after: { name, category, isActive: isActive !== false } }).catch((e) => logger.error(e, "requests background task failed"));
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request_type.created", entity: "request_types", entityId: r.insertId }).catch((e) => logger.error(e, "requests background task failed"));
-    res.status(201).json({ id: r.insertId });
+    const [row] = await rawQuery<RequestTypeRow>(`SELECT * FROM request_types WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId });
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.get("/workflows", requirePermission("requests:read"), async (req, res) => {
+router.get("/workflows", authorize({ feature: "requests", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM workflows WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
@@ -354,29 +428,32 @@ router.get("/workflows", requirePermission("requests:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.post("/workflows", requirePermission("requests:write"), async (req, res) => {
+router.post("/workflows", authorize({ feature: "requests", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(createWorkflowSchema.safeParse(req.body));
     const scope = req.scope!;
-    const { name, description, steps } = req.body;
+    const { name, description, steps } = parsed as any;
     const r = await rawExecute(
       `INSERT INTO workflows (name, description, steps, "companyId") VALUES ($1,$2,$3,$4)`,
       [name, description, steps ? JSON.stringify(steps) : '[]', scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "workflows", entityId: r.insertId, after: { name, description } }).catch((e) => logger.error(e, "requests background task failed"));
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "workflow.created", entity: "workflow_definitions", entityId: r.insertId }).catch((e) => logger.error(e, "requests background task failed"));
-    res.status(201).json({ id: r.insertId });
+    const [row] = await rawQuery<WorkflowRow>(`SELECT * FROM workflows WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId });
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.get("/stats", requirePermission("requests:read"), async (req, res) => {
+router.get("/stats", authorize({ feature: "requests", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [total] = await rawQuery(`SELECT COUNT(*) as count FROM requests WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]);
-    const [pending] = await rawQuery(`SELECT COUNT(*) as count FROM requests WHERE status='pending' AND ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]);
-    const [approved] = await rawQuery(`SELECT COUNT(*) as count FROM requests WHERE status='approved' AND ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]);
-    const [types] = await rawQuery(`SELECT COUNT(*) as count FROM request_types WHERE "isActive"=true AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]);
+    const [[total], [pending], [approved], [types]] = await Promise.all([
+      rawQuery(`SELECT COUNT(*) as count FROM requests WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]),
+      rawQuery(`SELECT COUNT(*) as count FROM requests WHERE status='pending' AND ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]),
+      rawQuery(`SELECT COUNT(*) as count FROM requests WHERE status='approved' AND ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [cid]),
+      rawQuery(`SELECT COUNT(*) as count FROM request_types WHERE "isActive"=true AND ("companyId"=$1 OR "companyId" IS NULL)`, [cid]),
+    ]);
     res.json({
       totalRequests: Number(total.count),
       pendingRequests: Number(pending.count),
@@ -386,24 +463,24 @@ router.get("/stats", requirePermission("requests:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.get("/:id", requirePermission("requests:read"), async (req, res) => {
+router.get("/:id", authorize({ feature: "requests", action: "view", resource: { table: "requests", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<RequestRow>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("الطلب غير موجود");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.patch("/:id", requirePermission("requests:write"), async (req, res) => {
+router.patch("/:id", authorize({ feature: "requests", action: "update", resource: { table: "requests", idParam: "id" } }), async (req, res) => {
   try {
     const parsed = zodParse(updateRequestSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = parsed;
 
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<{ id: number; status: string }>(
       `SELECT id, status FROM requests WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -438,15 +515,19 @@ router.patch("/:id", requirePermission("requests:write"), async (req, res) => {
     if (b.returnReason !== undefined) extras.returnReason = b.returnReason;
 
     if (b.status !== undefined) {
+      // Narrow once for the nested closures below — Object.entries / onApply
+      // capture this in their own scopes and TS can't prove b.status stays
+      // defined there.
+      const targetStatus: string = b.status;
       // Status change — route through applyTransition
-      if (b.status && ['approved', 'rejected', 'returned'].includes(b.status)) {
+      if (['approved', 'rejected', 'returned'].includes(targetStatus)) {
         extras.reviewedBy = scope.userId;
         extras.reviewedAt = { raw: "NOW()" };
       }
 
-      const statusAction = `request.status.${b.status}`;
+      const statusAction = `request.status.${targetStatus}`;
       const allowedFromStates = Object.entries(VALID_REQUEST_TRANSITIONS)
-        .filter(([, targets]) => targets.includes(b.status))
+        .filter(([, targets]) => targets.includes(targetStatus))
         .map(([from]) => from);
 
       const updated = await applyTransition({
@@ -455,52 +536,52 @@ router.patch("/:id", requirePermission("requests:write"), async (req, res) => {
         scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
         action: statusAction,
         fromStates: allowedFromStates.length > 0 ? allowedFromStates : undefined,
-        toState: b.status,
+        toState: targetStatus,
         reason: b.notes || b.returnReason || undefined,
         setExtras: Object.keys(extras).length > 0 ? extras : undefined,
         extraWhere: `"deletedAt" IS NULL`,
         after: { overrideLogged: patchIsOverride },
         onApply: async (row, client) => {
-          if (['approved', 'rejected', 'in_review', 'returned'].includes(b.status)) {
+          if (['approved', 'rejected', 'in_review', 'returned'].includes(targetStatus)) {
             const statusLabels: Record<string, string> = { approved: 'معتمد', rejected: 'مرفوض', in_review: 'قيد المراجعة', returned: 'مُرجع' };
             await logCommunication(
               scope.companyId, 'outbound',
-              `تحديث طلب: ${row?.title || '#' + id} — ${statusLabels[b.status] || b.status}`,
-              `تم تحديث حالة الطلب رقم ${id} إلى "${statusLabels[b.status] || b.status}" - ${b.notes || row?.title || ''}`,
+              `تحديث طلب: ${row?.title || '#' + id} — ${statusLabels[targetStatus] || targetStatus}`,
+              `تم تحديث حالة الطلب رقم ${id} إلى "${statusLabels[targetStatus] || targetStatus}" - ${b.notes || row?.title || ''}`,
               'request', id
             );
             await client.query(
               `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "actionByName", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-              ['request', id, b.status, b.notes || b.returnReason || null, scope.userId, null, scope.companyId]
+              ['request', id, targetStatus, b.notes || b.returnReason || null, scope.userId, null, scope.companyId]
             );
             if (patchIsOverride) {
               await createAuditLog({
                 companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
                 action: "workflow_override", entity: "requests", entityId: id,
                 before: { status: previousStatus },
-                after: { status: b.status, overriddenBy: scope.userId },
+                after: { status: targetStatus, overriddenBy: scope.userId },
                 reason: b.notes || b.returnReason || "تدخل دور أعلى",
               });
             }
           }
         },
       });
-      const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL`, [id, scope.companyId]);
+      const [row] = await rawQuery<RequestRow>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL`, [id, scope.companyId]);
       res.json(row ?? updated);
     } else {
       // No status change — simple field update
       if (Object.keys(extras).length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
       const sets: string[] = [];
-      const params: any[] = [];
+      const params: unknown[] = [];
       for (const [col, val] of Object.entries(extras)) {
         params.push(val);
         const colName = /[A-Z]/.test(col) ? `"${col}"` : col;
         sets.push(`${colName}=$${params.length}`);
       }
       params.push(id); params.push(scope.companyId);
-      const result = await rawExecute(`UPDATE requests SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+      const result = await rawExecute(`UPDATE requests SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
       if (result.affectedRows === 0) throw new NotFoundError("الطلب غير موجود");
-      const [row] = await rawQuery<any>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL`, [id, scope.companyId]);
+      const [row] = await rawQuery<RequestRow>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL`, [id, scope.companyId]);
       emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request.updated", entity: "approval_requests", entityId: id }).catch((e) => logger.error(e, "requests background task failed"));
       res.json(row);
     }
@@ -511,7 +592,9 @@ router.patch("/:id", requirePermission("requests:write"), async (req, res) => {
   }
 });
 
-router.post("/:id/approve", requirePermission("requests:write"), async (req, res) => {
+// RBAC v2: approval action — approval limit applies if configured on
+// the role for requests:approve.
+router.post("/:id/approve", authorize({ feature: "requests", action: "approve", resource: { table: "requests", idParam: "id" } }), async (req, res) => {
   try {
     const parsed = zodParse(approveRequestSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
@@ -574,7 +657,7 @@ router.post("/:id/approve", requirePermission("requests:write"), async (req, res
   }
 });
 
-router.post("/:id/reject", requirePermission("requests:write"), async (req, res) => {
+router.post("/:id/reject", authorize({ feature: "requests", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(rejectRequestSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
@@ -635,7 +718,7 @@ router.post("/:id/reject", requirePermission("requests:write"), async (req, res)
   }
 });
 
-router.post("/:id/return", requirePermission("requests:write"), async (req, res) => {
+router.post("/:id/return", authorize({ feature: "requests", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(returnRequestSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
@@ -697,7 +780,7 @@ router.post("/:id/return", requirePermission("requests:write"), async (req, res)
   }
 });
 
-router.get("/:id/actions", requirePermission("requests:read"), async (req, res) => {
+router.get("/:id/actions", authorize({ feature: "requests", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -709,7 +792,7 @@ router.get("/:id/actions", requirePermission("requests:read"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.delete("/:id", requirePermission("requests:write"), async (req, res) => {
+router.delete("/:id", authorize({ feature: "requests", action: "delete", resource: { table: "requests", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -717,7 +800,7 @@ router.delete("/:id", requirePermission("requests:write"), async (req, res) => {
     // Approved/rejected/closed/converted requests are terminal — deleting them
     // would erase the audit trail of an already-processed decision and orphan
     // any downstream entities created via convert.
-    const [request] = await rawQuery<any>(
+    const [request] = await rawQuery<{ id: number; status: string; requesterId: number | string; convertedTo?: string | null }>(
       `SELECT id, status, "requesterId", "convertedTo" FROM requests WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -757,7 +840,7 @@ router.delete("/:id", requirePermission("requests:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "requests"); }
 });
 
-router.post("/:id/convert", requirePermission("requests:write"), async (req, res) => {
+router.post("/:id/convert", authorize({ feature: "requests", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(convertRequestSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
@@ -768,7 +851,7 @@ router.post("/:id/convert", requirePermission("requests:write"), async (req, res
       throw new ValidationError("نوع التحويل غير صالح. المتاح: maintenance, purchase, case", { field: "targetType" });
     }
 
-    const [request] = await rawQuery<any>(
+    const [request] = await rawQuery<RequestRow & { convertedTo?: string | null }>(
       `SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -779,62 +862,6 @@ router.post("/:id/convert", requirePermission("requests:write"), async (req, res
     let createdId: number | null = null;
     let targetEndpoint = "";
 
-    if (targetType === "maintenance") {
-      const { supportEngine } = await import("../lib/engines/index.js");
-      const { insertId } = await supportEngine.createTicket({
-        companyId: scope.companyId,
-        title: `صيانة: ${request.title}`,
-        description: request.description || request.title,
-        priority: request.priority || "medium",
-      });
-      createdId = insertId;
-      targetEndpoint = `/support/${insertId}`;
-    } else if (targetType === "purchase") {
-      const { financialEngine } = await import("../lib/engines/index.js");
-      const { insertId } = await financialEngine.createPurchaseOrder({
-        companyId: scope.companyId,
-        ref: `PO-REQ-${id}`,
-        description: request.title + (request.description ? `: ${request.description}` : ""),
-        requestedBy: scope.userId,
-      });
-      createdId = insertId;
-      targetEndpoint = `/finance/purchase-orders/${insertId}`;
-    } else if (targetType === "case") {
-      const legalResp = await getLegalResponsible(scope.companyId);
-      const { legalEngine } = await import("../lib/engines/index.js");
-      const { insertId } = await legalEngine.createCase({
-        companyId: scope.companyId,
-        title: `قضية: ${request.title}`,
-        description: request.description || request.title,
-        priority: request.priority || "medium",
-        caseType: "civil",
-        lawyerName: legalResp?.employeeName ?? null,
-      });
-      createdId = insertId;
-      targetEndpoint = `/legal/cases/${insertId}`;
-      if (legalResp?.assignmentId) {
-        await createNotification({
-          companyId: scope.companyId,
-          assignmentId: legalResp.assignmentId,
-          type: "legal_case_created",
-          title: "قضية قانونية جديدة",
-          body: `تم إنشاء قضية جديدة من طلب رقم ${id}: ${request.title}`,
-          priority: "high",
-          refType: "legal_case",
-          refId: insertId,
-        }).catch((e) => logger.error(e, "requests background task failed"));
-      }
-      emitEvent({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        userId: scope.userId,
-        action: "legal.case.created",
-        entity: "legal_case",
-        entityId: insertId,
-        after: { title: `قضية: ${request.title}`, lawyerName: legalResp?.employeeName ?? null, sourceRequestId: id },
-      }).catch((e) => logger.error(e, "requests background task failed"));
-    }
-
     const updated = await applyTransition({
       entity: "requests",
       id,
@@ -843,13 +870,72 @@ router.post("/:id/convert", requirePermission("requests:write"), async (req, res
       fromStates: ["approved"],
       toState: "closed",
       setExtras: {
-        convertedTo: createdId,
         convertedType: targetType,
         closedAt: { raw: "NOW()" },
         closedBy: scope.userId,
       },
-      after: { convertedTo: createdId, convertedType: targetType },
+      after: { convertedType: targetType },
       onApply: async (_row, client) => {
+        if (targetType === "maintenance") {
+          const { supportEngine } = await import("../lib/engines/index.js");
+          const { insertId } = await supportEngine.createTicket({
+            companyId: scope.companyId,
+            title: `صيانة: ${request.title}`,
+            description: request.description || request.title,
+            priority: request.priority || "medium",
+          });
+          createdId = insertId;
+          targetEndpoint = `/support/${insertId}`;
+        } else if (targetType === "purchase") {
+          const { financialEngine } = await import("../lib/engines/index.js");
+          const { insertId } = await financialEngine.createPurchaseOrder({
+            companyId: scope.companyId,
+            ref: `PO-REQ-${id}`,
+            description: request.title + (request.description ? `: ${request.description}` : ""),
+            requestedBy: scope.userId,
+          });
+          createdId = insertId;
+          targetEndpoint = `/finance/purchase-orders/${insertId}`;
+        } else if (targetType === "case") {
+          const legalResp = await getLegalResponsible(scope.companyId);
+          const { legalEngine } = await import("../lib/engines/index.js");
+          const { insertId } = await legalEngine.createCase({
+            companyId: scope.companyId,
+            title: `قضية: ${request.title}`,
+            description: request.description || request.title,
+            priority: request.priority || "medium",
+            caseType: "civil",
+            lawyerName: legalResp?.employeeName ?? null,
+          });
+          createdId = insertId;
+          targetEndpoint = `/legal/cases/${insertId}`;
+          if (legalResp?.assignmentId) {
+            await createNotification({
+              companyId: scope.companyId,
+              assignmentId: legalResp.assignmentId,
+              type: "legal_case_created",
+              title: "قضية قانونية جديدة",
+              body: `تم إنشاء قضية جديدة من طلب رقم ${id}: ${request.title}`,
+              priority: "high",
+              refType: "legal_case",
+              refId: insertId,
+            }).catch((e) => logger.error(e, "requests background task failed"));
+          }
+          emitEvent({
+            companyId: scope.companyId,
+            branchId: scope.branchId,
+            userId: scope.userId,
+            action: "legal.case.created",
+            entity: "legal_case",
+            entityId: insertId,
+            after: { title: `قضية: ${request.title}`, lawyerName: legalResp?.employeeName ?? null, sourceRequestId: id },
+          }).catch((e) => logger.error(e, "requests background task failed"));
+        }
+
+        await client.query(
+          `UPDATE requests SET "convertedTo" = $1 WHERE id = $2 AND "companyId" = $3`,
+          [createdId, id, scope.companyId]
+        );
         await client.query(
           `INSERT INTO approval_actions ("entityType","entityId",action,notes,"actionBy","companyId") VALUES ('request',$1,'converted',$2,$3,$4)`,
           [id, `تحويل إلى: ${targetType} (معرف: ${createdId})`, scope.userId, scope.companyId]

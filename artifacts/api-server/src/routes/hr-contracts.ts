@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import {
   handleRouteError,
   ValidationError,
@@ -47,8 +47,10 @@ const renewContractSchema = z.object({
   newSalary: z.coerce.number().optional(),
 });
 
+const updateContractSchema = createContractSchema.partial();
+
 // ── List all contracts ──
-contractsRouter.get("/", requirePermission("hr:read"), async (req, res) => {
+contractsRouter.get("/", authorize({ feature: "hr.contracts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, employeeId, search } = req.query as Record<string, string>;
@@ -68,7 +70,7 @@ contractsRouter.get("/", requirePermission("hr:read"), async (req, res) => {
       where += ` AND (e.name ILIKE $${params.length} OR ec.ref ILIKE $${params.length})`;
     }
 
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT ec.*, e.name AS "employeeName", e."empNumber",
               b.name AS "branchName"
        FROM employee_contracts ec
@@ -86,11 +88,11 @@ contractsRouter.get("/", requirePermission("hr:read"), async (req, res) => {
 });
 
 // ── Get single contract ──
-contractsRouter.get("/:id", requirePermission("hr:read"), async (req, res) => {
+contractsRouter.get("/:id", authorize({ feature: "hr.contracts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [contract] = await rawQuery<any>(
+    const [contract] = await rawQuery<Record<string, unknown>>(
       `SELECT ec.*, e.name AS "employeeName", e."empNumber",
               e."nationalId", e."passportNumber",
               ea."jobTitle", ea.salary AS "assignmentSalary",
@@ -112,12 +114,12 @@ contractsRouter.get("/:id", requirePermission("hr:read"), async (req, res) => {
 });
 
 // ── Create contract ──
-contractsRouter.post("/", requirePermission("hr:create"), async (req, res) => {
+contractsRouter.post("/", authorize({ feature: "hr.contracts", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const data = createContractSchema.parse(req.body);
 
-    const [emp] = await rawQuery<any>(
+    const [emp] = await rawQuery<Record<string, unknown>>(
       `SELECT e.id, e.name FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id WHERE e.id = $1 AND ea."companyId" = $2 LIMIT 1`,
       [data.employeeId, scope.companyId]
     );
@@ -125,22 +127,22 @@ contractsRouter.post("/", requirePermission("hr:create"), async (req, res) => {
 
     let assignmentId = data.assignmentId ?? null;
     if (!assignmentId) {
-      const [assn] = await rawQuery<any>(
+      const [assn] = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM employee_assignments
          WHERE "employeeId"=$1 AND "companyId"=$2 AND ("endDate" IS NULL OR "endDate" >= CURRENT_DATE)
          ORDER BY "isPrimary" DESC NULLS LAST, "hireDate" DESC NULLS LAST, id DESC LIMIT 1`,
         [data.employeeId, scope.companyId]
       );
-      assignmentId = assn?.id ?? null;
+      assignmentId = (assn?.id as number | undefined) ?? null;
     }
     if (!assignmentId) {
       throw new NotFoundError("لا يوجد تعيين فعّال لهذا الموظف. يرجى إنشاء تعيين أولاً.");
     }
 
-    const [seqRow] = await rawQuery<any>(`SELECT nextval('contract_number_seq') AS seq`);
+    const [seqRow] = await rawQuery<{ seq: string | number }>(`SELECT nextval('contract_number_seq') AS seq`);
     const ref = generateRef("CTR", seqRow.seq);
 
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `INSERT INTO employee_contracts (
         "companyId", "employeeId", "assignmentId", "contractType",
         "startDate", "endDate", "probationEndDate",
@@ -157,7 +159,7 @@ contractsRouter.post("/", requirePermission("hr:create"), async (req, res) => {
       ]
     );
 
-    await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_created", entity: "employee_contract", entityId: row.id, after: { ref, employeeName: emp.name } });
+    await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_created", entity: "employee_contract", entityId: row.id as number, after: { ref, employeeName: emp.name } });
 
     res.status(201).json(row);
   } catch (err) {
@@ -166,11 +168,11 @@ contractsRouter.post("/", requirePermission("hr:create"), async (req, res) => {
 });
 
 // ── Update contract (draft only) ──
-contractsRouter.patch("/:id", requirePermission("hr:update"), async (req, res) => {
+contractsRouter.patch("/:id", authorize({ feature: "hr.contracts", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -186,9 +188,10 @@ contractsRouter.patch("/:id", requirePermission("hr:update"), async (req, res) =
     ];
     const sets: string[] = [];
     const params: any[] = [];
+    const body = zodParse(updateContractSchema.safeParse(req.body));
     for (const key of allowed) {
-      if (req.body[key] !== undefined) {
-        params.push(key === "otherAllowances" ? JSON.stringify(req.body[key]) : req.body[key]);
+      if ((body as any)[key] !== undefined) {
+        params.push(key === "otherAllowances" ? JSON.stringify((body as any)[key]) : (body as any)[key]);
         sets.push(`"${key}" = $${params.length}`);
       }
     }
@@ -197,7 +200,7 @@ contractsRouter.patch("/:id", requirePermission("hr:update"), async (req, res) =
     params.push(id, scope.companyId);
     sets.push(`"updatedAt" = NOW()`);
 
-    const [updated] = await rawQuery<any>(
+    const [updated] = await rawQuery<Record<string, unknown>>(
       `UPDATE employee_contracts SET ${sets.join(", ")}
        WHERE id = $${params.length - 1} AND "companyId" = $${params.length}
        RETURNING *`,
@@ -210,11 +213,11 @@ contractsRouter.patch("/:id", requirePermission("hr:update"), async (req, res) =
 });
 
 // ── Submit for approval ──
-contractsRouter.post("/:id/submit", requirePermission("hr:create"), async (req, res) => {
+contractsRouter.post("/:id/submit", authorize({ feature: "hr.contracts", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [contract] = await rawQuery<any>(
+    const [contract] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -223,7 +226,7 @@ contractsRouter.post("/:id/submit", requirePermission("hr:create"), async (req, 
       throw new ValidationError("العقد ليس في حالة مسودة");
     }
 
-    const [updated] = await rawQuery<any>(
+    const [updated] = await rawQuery<Record<string, unknown>>(
       `UPDATE employee_contracts SET "approvalStatus" = 'pending_approval', "updatedAt" = NOW()
        WHERE id = $1 AND "companyId" = $2 RETURNING *`,
       [id, scope.companyId]
@@ -238,11 +241,11 @@ contractsRouter.post("/:id/submit", requirePermission("hr:create"), async (req, 
 });
 
 // ── Approve contract ──
-contractsRouter.post("/:id/approve", requirePermission("hr:approve"), async (req, res) => {
+contractsRouter.post("/:id/approve", authorize({ feature: "hr.contracts", action: "approve" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [contract] = await rawQuery<any>(
+    const [contract] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -251,7 +254,7 @@ contractsRouter.post("/:id/approve", requirePermission("hr:approve"), async (req
       throw new ValidationError("العقد ليس في حالة انتظار الاعتماد");
     }
 
-    const [updated] = await rawQuery<any>(
+    const [updated] = await rawQuery<Record<string, unknown>>(
       `UPDATE employee_contracts
        SET "approvalStatus" = 'approved', "approvedBy" = $2, "approvedAt" = NOW(), "updatedAt" = NOW()
        WHERE id = $1 AND "companyId" = $3 AND "approvalStatus" = 'pending_approval' RETURNING *`,
@@ -260,7 +263,7 @@ contractsRouter.post("/:id/approve", requirePermission("hr:approve"), async (req
     if (!updated) throw new ConflictError("تم تحديث العقد مسبقاً — أعد التحميل");
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_approved", entity: "employee_contract", entityId: id, after: { ref: contract.ref } });
-    await createNotification({ companyId: scope.companyId, assignmentId: contract.assignmentId, type: "contract_approved", title: "تم اعتماد العقد", body: `تم اعتماد العقد رقم ${contract.ref}`, refType: "contract", refId: id }).catch((e) => logger.error(e, "hr-contracts background task failed"));
+    await createNotification({ companyId: scope.companyId, assignmentId: contract.assignmentId as number, type: "contract_approved", title: "تم اعتماد العقد", body: `تم اعتماد العقد رقم ${contract.ref}`, refType: "contract", refId: id }).catch((e) => logger.error(e, "hr-contracts background task failed"));
 
     res.json(updated);
   } catch (err) {
@@ -269,13 +272,13 @@ contractsRouter.post("/:id/approve", requirePermission("hr:approve"), async (req
 });
 
 // ── Reject contract ──
-contractsRouter.post("/:id/reject", requirePermission("hr:approve"), async (req, res) => {
+contractsRouter.post("/:id/reject", authorize({ feature: "hr.contracts", action: "approve" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(rejectContractSchema.safeParse(req.body ?? {}));
     const { reason } = b;
-    const [contract] = await rawQuery<any>(
+    const [contract] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -284,7 +287,7 @@ contractsRouter.post("/:id/reject", requirePermission("hr:approve"), async (req,
       throw new ValidationError("العقد ليس في حالة انتظار الاعتماد");
     }
 
-    const [updated] = await rawQuery<any>(
+    const [updated] = await rawQuery<Record<string, unknown>>(
       `UPDATE employee_contracts
        SET "approvalStatus" = 'rejected', notes = COALESCE(notes, '') || E'\nسبب الرفض: ' || $2, "updatedAt" = NOW()
        WHERE id = $1 AND "companyId" = $3 AND "approvalStatus" = 'pending_approval' RETURNING *`,
@@ -301,11 +304,11 @@ contractsRouter.post("/:id/reject", requirePermission("hr:approve"), async (req,
 });
 
 // ─�� Sign by company ──
-contractsRouter.post("/:id/sign-company", requirePermission("hr:approve"), async (req, res) => {
+contractsRouter.post("/:id/sign-company", authorize({ feature: "hr.contracts", action: "approve" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [contract] = await rawQuery<any>(
+    const [contract] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -314,7 +317,7 @@ contractsRouter.post("/:id/sign-company", requirePermission("hr:approve"), async
       throw new ValidationError("يجب اعتماد العقد أولاً قبل التوقيع");
     }
 
-    const [updated] = await rawQuery<any>(
+    const [updated] = await rawQuery<Record<string, unknown>>(
       `UPDATE employee_contracts
        SET "signedByCompany" = TRUE, "companySignedAt" = NOW(), "companySignedBy" = $2, "updatedAt" = NOW(),
            "approvalStatus" = CASE WHEN "signedByEmployee" = TRUE THEN 'signed' ELSE "approvalStatus" END
@@ -336,11 +339,11 @@ contractsRouter.post("/:id/sign-employee", async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [contract] = await rawQuery<any>(
+    const [contract] = await rawQuery<Record<string, unknown>>(
       `SELECT ec.* FROM employee_contracts ec
        JOIN employee_assignments ea ON ea.id = ec."assignmentId"
-       WHERE ec.id = $1 AND ec."companyId" = $2
-         AND ea."employeeId" = (SELECT id FROM employees WHERE id = $3 AND "companyId" = $2)`,
+       WHERE ec.id = $1 AND ec."companyId" = $2 AND ec."deletedAt" IS NULL
+         AND ea."employeeId" = $3`,
       [id, scope.companyId, scope.employeeId]
     );
     if (!contract) throw new NotFoundError("العقد غير موجود أو ليس لك");
@@ -348,7 +351,7 @@ contractsRouter.post("/:id/sign-employee", async (req, res) => {
       throw new ValidationError("يجب اعتماد العقد أولاً قبل التوقيع");
     }
 
-    const [updated] = await rawQuery<any>(
+    const [updated] = await rawQuery<Record<string, unknown>>(
       `UPDATE employee_contracts
        SET "signedByEmployee" = TRUE, "employeeSignedAt" = NOW(), "updatedAt" = NOW(),
            "approvalStatus" = CASE WHEN "signedByCompany" = TRUE THEN 'signed' ELSE "approvalStatus" END
@@ -365,11 +368,11 @@ contractsRouter.post("/:id/sign-employee", async (req, res) => {
 });
 
 // ── Activate contract (after both signatures) ──
-contractsRouter.post("/:id/activate", requirePermission("hr:update"), async (req, res) => {
+contractsRouter.post("/:id/activate", authorize({ feature: "hr.contracts", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [contract] = await rawQuery<any>(
+    const [contract] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -378,10 +381,10 @@ contractsRouter.post("/:id/activate", requirePermission("hr:update"), async (req
       throw new ValidationError("يجب توقيع العقد من الطرفين أولاً");
     }
 
-    const [updated] = await rawQuery<any>(
+    const [updated] = await rawQuery<Record<string, unknown>>(
       `UPDATE employee_contracts
        SET "approvalStatus" = 'active', status = 'active', "updatedAt" = NOW()
-       WHERE id = $1 AND "companyId" = $2 RETURNING *`,
+       WHERE id = $1 AND "companyId" = $2 AND "approvalStatus" = 'signed' RETURNING *`,
       [id, scope.companyId]
     );
 
@@ -394,13 +397,13 @@ contractsRouter.post("/:id/activate", requirePermission("hr:update"), async (req
 });
 
 // ── Terminate contract ──
-contractsRouter.post("/:id/terminate", requirePermission("hr:update"), async (req, res) => {
+contractsRouter.post("/:id/terminate", authorize({ feature: "hr.contracts", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(terminateContractSchema.safeParse(req.body ?? {}));
     const { reason } = b;
-    const [contract] = await rawQuery<any>(
+    const [contract] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -409,11 +412,11 @@ contractsRouter.post("/:id/terminate", requirePermission("hr:update"), async (re
       throw new ValidationError("لا يمكن إنهاء عقد غير نشط");
     }
 
-    const [updated] = await rawQuery<any>(
+    const [updated] = await rawQuery<Record<string, unknown>>(
       `UPDATE employee_contracts
        SET status = 'terminated', "approvalStatus" = 'terminated',
-           "terminatedAt" = NOW(), "terminatedBy" = $2, "terminationReason" = $3, "updatedAt" = NOW()
-       WHERE id = $1 AND "companyId" = $4 RETURNING *`,
+           notes = COALESCE($3, notes), "updatedBy" = $2, "updatedAt" = NOW()
+       WHERE id = $1 AND "companyId" = $4 AND status = 'active' RETURNING *`,
       [id, scope.userId, reason || null, scope.companyId]
     );
 
@@ -426,19 +429,19 @@ contractsRouter.post("/:id/terminate", requirePermission("hr:update"), async (re
 });
 
 // ── Renew contract ──
-contractsRouter.post("/:id/renew", requirePermission("hr:create"), async (req, res) => {
+contractsRouter.post("/:id/renew", authorize({ feature: "hr.contracts", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(renewContractSchema.safeParse(req.body ?? {}));
     const { newEndDate, newSalary } = b;
-    const [contract] = await rawQuery<any>(
+    const [contract] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!contract) throw new NotFoundError("الع��د غير موجود");
 
-    const [seqRow] = await rawQuery<any>(`SELECT nextval('contract_number_seq') AS seq`);
+    const [seqRow] = await rawQuery<{ seq: string | number }>(`SELECT nextval('contract_number_seq') AS seq`);
     const ref = generateRef("CTR", seqRow.seq);
 
     const newStart = contract.endDate || todayISO();
@@ -462,8 +465,8 @@ contractsRouter.post("/:id/renew", requirePermission("hr:create"), async (req, r
       );
 
       await client.query(
-        `UPDATE employee_contracts SET "renewalDate" = $2, "updatedAt" = NOW() WHERE id = $1`,
-        [id, newStart]
+        `UPDATE employee_contracts SET "renewalDate" = $2, "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+        [id, newStart, scope.companyId]
       );
 
       return insertRes.rows[0];

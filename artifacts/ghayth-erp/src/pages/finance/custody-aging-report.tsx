@@ -17,7 +17,7 @@ export default function CustodyAgingReportPage() {
   const [expandedEmployee, setExpandedEmployee] = useState<string | null>(null);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   return (
     <PageShell

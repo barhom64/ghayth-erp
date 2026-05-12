@@ -5,8 +5,8 @@ import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, Integ
 import { Router } from "express";
 import { logger } from "../lib/logger.js";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { sendNotification } from "../lib/notificationService.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { aiEngine } from "../lib/aiEngine.js";
@@ -81,7 +81,7 @@ const pushUnsubscribeSchema = z.object({
 
 const router = Router();
 
-const WA_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? "";
+const WA_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? "ghayth_erp_verify";
 const WA_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN ?? "";
 const WA_PHONE_ID = process.env.WHATSAPP_PHONE_ID ?? "";
 
@@ -99,7 +99,8 @@ async function matchSenderToEntity(phone: string, companyId: number): Promise<{ 
   const employees = await rawQuery<{ id: number; name: string }>(
     `SELECT e.id, e.name FROM employees e
      JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active'
-     WHERE REPLACE(REPLACE(e.phone,'+',''),'-','') LIKE $2`,
+     WHERE REPLACE(REPLACE(e.phone,'+',''),'-','') LIKE $2
+     LIMIT 5`,
     [companyId, `%${normalizedPhone}`]
   );
   if (employees.length > 0) {
@@ -145,7 +146,7 @@ router.get("/whatsapp/webhook", (req, res) => {
     const token = req.query["hub.verify_token"];
     const challenge = req.query["hub.challenge"];
 
-    if (mode === "subscribe" && WA_VERIFY_TOKEN && token === WA_VERIFY_TOKEN) {
+    if (mode === "subscribe" && token === WA_VERIFY_TOKEN) {
       res.status(200).send(challenge);
     } else {
       throw new ForbiddenError("Verification failed");
@@ -294,17 +295,20 @@ router.post("/pbx/incoming", async (req, res): Promise<void> => {
 
     const sender = await matchSenderToEntity(callerNumber, companyId);
 
-    const { insertId: pbxId } = await rawExecute(
-      `INSERT INTO pbx_calls ("companyId","callId","callerNumber","calledNumber",direction,status,"createdAt")
-       VALUES ($1,$2,$3,$4,$5,'ringing',NOW())`,
-      [companyId, callId, callerNumber, calledNumber, direction]
-    );
-
-    await rawExecute(
-      `INSERT INTO communications_log ("companyId",channel,direction,"fromNumber","toNumber",subject,body,status,"relatedType","relatedId","createdAt")
-       VALUES ($1,'pbx',$2,$3,$4,$5,$6,'received','pbx_call',$7,NOW())`,
-      [companyId, direction, callerNumber, calledNumber, `PBX Call from ${sender.name}`, `Incoming call from ${callerNumber} identified as ${sender.name} (${sender.type})`, pbxId]
-    );
+    let pbxId!: number;
+    await withTransaction(async (client) => {
+      const result = await client.query(
+        `INSERT INTO pbx_calls ("companyId","callId","callerNumber","calledNumber",direction,status,"createdAt")
+         VALUES ($1,$2,$3,$4,$5,'ringing',NOW()) RETURNING id`,
+        [companyId, callId, callerNumber, calledNumber, direction]
+      );
+      pbxId = result.rows[0].id;
+      await client.query(
+        `INSERT INTO communications_log ("companyId",channel,direction,"fromNumber","toNumber",subject,body,status,"relatedType","relatedId","createdAt")
+         VALUES ($1,'pbx',$2,$3,$4,$5,$6,'received','pbx_call',$7,NOW())`,
+        [companyId, direction, callerNumber, calledNumber, `PBX Call from ${sender.name}`, `Incoming call from ${callerNumber} identified as ${sender.name} (${sender.type})`, pbxId]
+      );
+    });
 
     await sendNotification({
       companyId,
@@ -359,7 +363,6 @@ router.post("/pbx/completed", async (req, res): Promise<void> => {
 
     if (status === "no_answer" || duration === 0) {
       const sender = await matchSenderToEntity(call.callerNumber, companyId);
-
       await rawExecute(
         `INSERT INTO tasks ("companyId",title,description,type,status,priority,"createdAt")
          VALUES ($1,$2,$3,'follow_up','pending','high',NOW())`,
@@ -395,13 +398,21 @@ router.post("/pbx/status", async (req, res): Promise<void> => {
   try {
     const { callId, status, answeredBy } = zodParse(pbxStatusSchema.safeParse(req.body ?? {}));
 
+    const [call] = await rawQuery<any>(
+      `SELECT id, "companyId" FROM pbx_calls WHERE "callId"=$1 AND status != 'completed' LIMIT 1`,
+      [callId]
+    );
+    if (!call) {
+      res.status(404).json({ error: "Call not found or already completed" });
+      return;
+    }
     await rawExecute(
-      `UPDATE pbx_calls SET status=$1, "answeredBy"=$2 WHERE "callId"=$3 AND status != 'completed'`,
-      [status ?? "in_progress", answeredBy ?? null, callId]
+      `UPDATE pbx_calls SET status=$1, "answeredBy"=$2 WHERE id=$3`,
+      [status ?? "in_progress", answeredBy ?? null, call.id]
     );
 
-    emitEvent({ companyId: 0, userId: 0, action: "communication.pbx.status", entity: "communication_logs", entityId: 0, details: JSON.stringify({ callId, status: status ?? "in_progress", answeredBy }) }).catch((e) => logger.error(e, "communications background task failed"));
-    createAuditLog({ companyId: 0, userId: 0, action: "create", entity: "communication_logs", entityId: 0, after: { channel: "pbx", callId, status: status ?? "in_progress", answeredBy } }).catch((e) => logger.error(e, "communications background task failed"));
+    emitEvent({ companyId: call.companyId ?? 0, userId: 0, action: "communication.pbx.status", entity: "communication_logs", entityId: call.id, details: JSON.stringify({ callId, status: status ?? "in_progress", answeredBy }) }).catch((e) => logger.error(e, "communications background task failed"));
+    createAuditLog({ companyId: call.companyId ?? 0, userId: 0, action: "create", entity: "communication_logs", entityId: call.id, after: { channel: "pbx", callId, status: status ?? "in_progress", answeredBy } }).catch((e) => logger.error(e, "communications background task failed"));
 
     res.status(200).json({ status: "ok" });
   } catch (err) {
@@ -409,13 +420,13 @@ router.post("/pbx/status", async (req, res): Promise<void> => {
   }
 });
 
-router.get("/log", requirePermission("communications:read"), async (req, res): Promise<void> => {
+router.get("/log", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { channel, direction, limit: lim, offset: off } = req.query as any;
     const pageLimit = Math.min(Number(lim) || 50, 200);
     const pageOffset = Number(off) || 0;
-    const conditions = [`"companyId" = $1`];
+    const conditions = [`"companyId" = $1`, `"deletedAt" IS NULL`];
     const params: any[] = [scope.companyId];
     if (channel) { params.push(channel); conditions.push(`channel = $${params.length}`); }
     if (direction) { params.push(direction); conditions.push(`direction = $${params.length}`); }
@@ -427,7 +438,7 @@ router.get("/log", requirePermission("communications:read"), async (req, res): P
   } catch (err) { handleRouteError(err, res, "Communications log error:"); }
 });
 
-router.post("/send", requirePermission("communications:write"), async (req, res): Promise<void> => {
+router.post("/send", authorize({ feature: "communications", action: "create" }), async (req, res): Promise<void> => {
   try {
     const b = zodParse(sendCommunicationSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
@@ -465,7 +476,7 @@ router.post("/send", requirePermission("communications:write"), async (req, res)
   } catch (err) { handleRouteError(err, res, "Send communication error:"); }
 });
 
-router.get("/whatsapp", requirePermission("communications:read"), async (req, res): Promise<void> => {
+router.get("/whatsapp", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { status, limit: lim, offset: off } = req.query as any;
@@ -482,7 +493,7 @@ router.get("/whatsapp", requirePermission("communications:read"), async (req, re
   } catch (err) { handleRouteError(err, res, "WhatsApp queue error:"); }
 });
 
-router.get("/sms", requirePermission("communications:read"), async (req, res): Promise<void> => {
+router.get("/sms", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { status, limit: lim, offset: off } = req.query as any;
@@ -499,7 +510,7 @@ router.get("/sms", requirePermission("communications:read"), async (req, res): P
   } catch (err) { handleRouteError(err, res, "SMS queue error:"); }
 });
 
-router.get("/pbx", requirePermission("communications:read"), async (req, res): Promise<void> => {
+router.get("/pbx", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { limit: lim, offset: off } = req.query as any;
@@ -511,7 +522,7 @@ router.get("/pbx", requirePermission("communications:read"), async (req, res): P
   } catch (err) { handleRouteError(err, res, "PBX calls error:"); }
 });
 
-router.patch("/log/:id", requirePermission("communications:write"), async (req, res): Promise<void> => {
+router.patch("/log/:id", authorize({ feature: "communications", action: "update" }), async (req, res): Promise<void> => {
   try {
     const parsed = zodParse(updateLogSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
@@ -528,7 +539,7 @@ router.patch("/log/:id", requirePermission("communications:write"), async (req, 
     if (sets.length === 0) { throw new ValidationError("لا توجد بيانات"); }
     params.push(id, scope.companyId);
     const [row] = await rawQuery<any>(
-      `UPDATE communications_log SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} RETURNING *`,
+      `UPDATE communications_log SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
     if (!row) { throw new NotFoundError("السجل غير موجود"); }
@@ -544,7 +555,7 @@ router.patch("/log/:id", requirePermission("communications:write"), async (req, 
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.post("/log/:id/convert", requirePermission("communications:write"), async (req, res): Promise<void> => {
+router.post("/log/:id/convert", authorize({ feature: "communications", action: "create" }), async (req, res): Promise<void> => {
   try {
     const parsed = zodParse(convertLogSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
@@ -567,40 +578,37 @@ router.post("/log/:id/convert", requirePermission("communications:write"), async
     const fullTitle = `${prefixMap[targetType]}: ${commTitle}`;
     const fullDesc = `مصدر: ${logEntry.channel} — من: ${logEntry.fromNumber || "-"}\n${commDesc}`;
 
-    if (targetType === "task") {
-      const { insertId } = await rawExecute(
-        `INSERT INTO tasks ("companyId", title, description, type, status, priority)
-         VALUES ($1, $2, $3, 'follow_up', 'pending', 'medium')`,
-        [scope.companyId, fullTitle, fullDesc]
-      );
-      createdId = insertId;
-      targetPath = "/tasks";
-    } else if (targetType === "ticket") {
-      const { insertId } = await rawExecute(
-        `INSERT INTO support_tickets ("companyId", title, description, status, priority, ref)
-         VALUES ($1, $2, $3, 'open', 'medium', $4)`,
-        [scope.companyId, fullTitle, fullDesc, `TKT-COMM-${logId}`]
-      );
-      createdId = insertId;
-      targetPath = "/support/tickets";
-    } else {
-      const { insertId } = await rawExecute(
-        `INSERT INTO requests ("companyId", title, description, status, priority, "requesterName")
-         VALUES ($1, $2, $3, 'pending', 'medium', $4)`,
-        [scope.companyId, fullTitle, fullDesc, logEntry.fromNumber || "من اتصال"]
-      );
-      createdId = insertId;
-      targetPath = "/requests";
-    }
-
-    try {
-      await rawExecute(
-        `UPDATE communications_log SET "relatedType"=$1, "relatedId"=$2 WHERE id=$3 AND "companyId"=$4`,
+    await withTransaction(async (client) => {
+      if (targetType === "task") {
+        const result = await client.query(
+          `INSERT INTO tasks ("companyId", title, description, type, status, priority)
+           VALUES ($1, $2, $3, 'follow_up', 'pending', 'medium') RETURNING id`,
+          [scope.companyId, fullTitle, fullDesc]
+        );
+        createdId = result.rows[0].id;
+        targetPath = "/tasks";
+      } else if (targetType === "ticket") {
+        const result = await client.query(
+          `INSERT INTO support_tickets ("companyId", title, description, status, priority, ref)
+           VALUES ($1, $2, $3, 'open', 'medium', $4) RETURNING id`,
+          [scope.companyId, fullTitle, fullDesc, `TKT-COMM-${logId}`]
+        );
+        createdId = result.rows[0].id;
+        targetPath = "/support/tickets";
+      } else {
+        const result = await client.query(
+          `INSERT INTO requests ("companyId", title, description, status, priority, "requesterName")
+           VALUES ($1, $2, $3, 'pending', 'medium', $4) RETURNING id`,
+          [scope.companyId, fullTitle, fullDesc, logEntry.fromNumber || "من اتصال"]
+        );
+        createdId = result.rows[0].id;
+        targetPath = "/requests";
+      }
+      await client.query(
+        `UPDATE communications_log SET "relatedType"=$1, "relatedId"=$2 WHERE id=$3 AND "companyId"=$4 AND "deletedAt" IS NULL`,
         [targetType, createdId, logId, scope.companyId]
       );
-    } catch (e) {
-      logger.warn(e, "communications: relatedType/relatedId columns may not exist yet");
-    }
+    });
 
     const typeLabels: Record<string, string> = { task: "مهمة متابعة", ticket: "تذكرة دعم", request: "طلب داخلي" };
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: targetType, entityId: createdId!, after: { sourceLogId: logId, targetType } }).catch((e) => logger.error(e, "communications background task failed"));
@@ -622,7 +630,7 @@ router.post("/log/:id/convert", requirePermission("communications:write"), async
   } catch (err) { handleRouteError(err, res, "Communication convert error:"); }
 });
 
-router.delete("/log/:id", requirePermission("communications:write"), async (req, res): Promise<void> => {
+router.delete("/log/:id", authorize({ feature: "communications", action: "delete" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -644,13 +652,15 @@ router.delete("/log/:id", requirePermission("communications:write"), async (req,
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.get("/stats", requirePermission("communications:read"), async (req, res): Promise<void> => {
+router.get("/stats", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [comm] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE channel='whatsapp') as whatsapp, COUNT(*) FILTER (WHERE channel='sms') as sms, COUNT(*) FILTER (WHERE channel='email') as email, COUNT(*) FILTER (WHERE channel='pbx') as pbx FROM communications_log WHERE "companyId"=$1`, [cid]);
-    const [wa] = await rawQuery<any>(`SELECT COUNT(*) as pending FROM whatsapp_queue WHERE "companyId"=$1 AND status='pending'`, [cid]);
-    const [sms] = await rawQuery<any>(`SELECT COUNT(*) as pending FROM sms_queue WHERE "companyId"=$1 AND status='pending'`, [cid]);
+    const [[comm], [wa], [sms]] = await Promise.all([
+      rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE channel='whatsapp') as whatsapp, COUNT(*) FILTER (WHERE channel='sms') as sms, COUNT(*) FILTER (WHERE channel='email') as email, COUNT(*) FILTER (WHERE channel='pbx') as pbx FROM communications_log WHERE "companyId"=$1`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as pending FROM whatsapp_queue WHERE "companyId"=$1 AND status='pending'`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as pending FROM sms_queue WHERE "companyId"=$1 AND status='pending'`, [cid]),
+    ]);
     res.json({
       total: Number(comm.total),
       whatsapp: Number(comm.whatsapp),
@@ -663,7 +673,7 @@ router.get("/stats", requirePermission("communications:read"), async (req, res):
   } catch (err) { handleRouteError(err, res, "Communications stats error:"); }
 });
 
-router.get("/queue-stats", requirePermission("communications:read"), async (req, res): Promise<void> => {
+router.get("/queue-stats", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -680,35 +690,40 @@ router.get("/queue-stats", requirePermission("communications:read"), async (req,
     type QueueRow = { id: number; recipient: string; message: string; status: string; attemptCount: number | null; errorMessage: string | null; createdAt: string; sentAt: string | null };
 
     const smsParams: unknown[] = [cid];
-    const smsStats = await rawQuery<StatusCount>(
-      `SELECT status, COUNT(*) as count FROM sms_queue WHERE "companyId"=$1${buildDateFilter("sms_queue", smsParams)} GROUP BY status`,
-      smsParams
-    );
+    const smsDateFilter = buildDateFilter("sms_queue", smsParams);
     const waParams: unknown[] = [cid];
-    const waStats = await rawQuery<StatusCount>(
-      `SELECT status, COUNT(*) as count FROM whatsapp_queue WHERE "companyId"=$1${buildDateFilter("whatsapp_queue", waParams)} GROUP BY status`,
-      waParams
-    );
+    const waDateFilter = buildDateFilter("whatsapp_queue", waParams);
     const emailParams: unknown[] = [cid];
-    const emailStats = await rawQuery<StatusCount>(
-      `SELECT status, COUNT(*) as count FROM email_queue WHERE "companyId"=$1${buildDateFilter("email_queue", emailParams)} GROUP BY status`,
-      emailParams
-    );
-    const pushCount = await rawQuery<{ count: string }>(
-      `SELECT COUNT(*) as count FROM push_subscriptions WHERE "companyId"=$1`,
-      [cid]
-    );
+    const emailDateFilter = buildDateFilter("email_queue", emailParams);
 
-    const recentSms = await rawQuery<QueueRow>(
-      `SELECT id, "recipientPhone" AS recipient, message, status, "attemptCount", "errorMessage", "createdAt", "sentAt"
-       FROM sms_queue WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 20`,
-      [cid]
-    );
-    const recentWa = await rawQuery<QueueRow>(
-      `SELECT id, phone AS recipient, message, status, "attemptCount", "errorMessage", "createdAt", "sentAt"
-       FROM whatsapp_queue WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 20`,
-      [cid]
-    );
+    const [smsStats, waStats, emailStats, pushCount, recentSms, recentWa] = await Promise.all([
+      rawQuery<StatusCount>(
+        `SELECT status, COUNT(*) as count FROM sms_queue WHERE "companyId"=$1${smsDateFilter} GROUP BY status`,
+        smsParams
+      ),
+      rawQuery<StatusCount>(
+        `SELECT status, COUNT(*) as count FROM whatsapp_queue WHERE "companyId"=$1${waDateFilter} GROUP BY status`,
+        waParams
+      ),
+      rawQuery<StatusCount>(
+        `SELECT status, COUNT(*) as count FROM email_queue WHERE "companyId"=$1${emailDateFilter} GROUP BY status`,
+        emailParams
+      ),
+      rawQuery<{ count: string }>(
+        `SELECT COUNT(*) as count FROM push_subscriptions WHERE "companyId"=$1`,
+        [cid]
+      ),
+      rawQuery<QueueRow>(
+        `SELECT id, "recipientPhone" AS recipient, message, status, "attemptCount", "errorMessage", "createdAt", "sentAt"
+         FROM sms_queue WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 20`,
+        [cid]
+      ),
+      rawQuery<QueueRow>(
+        `SELECT id, phone AS recipient, message, status, "attemptCount", "errorMessage", "createdAt", "sentAt"
+         FROM whatsapp_queue WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 20`,
+        [cid]
+      ),
+    ]);
 
     const toMap = (rows: StatusCount[]): Record<string, number> => {
       const m: Record<string, number> = {};
@@ -737,7 +752,7 @@ router.get("/push/vapid-key", async (_req, res): Promise<void> => {
   } catch (err) { handleRouteError(err, res, "VAPID key error:"); }
 });
 
-router.post("/push/subscribe", requirePermission("communications:write"), async (req, res): Promise<void> => {
+router.post("/push/subscribe", authorize({ feature: "communications", action: "create" }), async (req, res): Promise<void> => {
   try {
     const parsed = zodParse(pushSubscribeSchema.safeParse(req.body ?? {}));
     const scope = req.scope!;
@@ -772,7 +787,7 @@ router.post("/push/subscribe", requirePermission("communications:write"), async 
   } catch (err) { handleRouteError(err, res, "Push subscribe error:"); }
 });
 
-router.delete("/push/unsubscribe", requirePermission("communications:write"), async (req, res): Promise<void> => {
+router.delete("/push/unsubscribe", authorize({ feature: "communications", action: "delete" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { endpoint } = zodParse(pushUnsubscribeSchema.safeParse(req.body ?? {}));
@@ -796,7 +811,7 @@ router.delete("/push/unsubscribe", requirePermission("communications:write"), as
   } catch (err) { handleRouteError(err, res, "Push unsubscribe error:"); }
 });
 
-router.post("/push/test", requirePermission("communications:write"), async (req, res): Promise<void> => {
+router.post("/push/test", authorize({ feature: "communications", action: "create" }), async (req, res): Promise<void> => {
   try {
     const parsed = zodParse(z.object({}).safeParse(req.body));
     const scope = req.scope!;

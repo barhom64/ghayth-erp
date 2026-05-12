@@ -10,7 +10,7 @@ import {
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { movingAverage } from "../lib/algorithms.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import {
@@ -147,14 +147,15 @@ const COUNT_TRANSITIONS: Record<string, readonly string[]> = {
 // ─────────────────────────────────────────────────────────────────────────────
 async function updateWeightedAverageCost(
   productId: number,
+  companyId: number,
   qty: number,
   unitCost: number,
   direction: "in" | "out"
 ): Promise<void> {
   try {
     const [product] = await rawQuery<any>(
-      `SELECT "currentStock", "costPrice" FROM warehouse_products WHERE id=$1`,
-      [productId]
+      `SELECT "currentStock", "costPrice" FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [productId, companyId]
     );
     if (!product) return;
     const prevQty = Math.max(0, Number(product.currentStock ?? 0));
@@ -169,14 +170,13 @@ async function updateWeightedAverageCost(
           ? roundTo4(newTotalValue / newTotalQty)
           : movCost;
       await rawExecute(
-        `UPDATE warehouse_products SET "costPrice"=$1, "lastWaCost"=$1, "updatedAt"=NOW() WHERE id=$2`,
-        [newWa, productId]
+        `UPDATE warehouse_products SET "costPrice"=$1, "lastWaCost"=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+        [newWa, productId, companyId]
       );
     } else {
-      // "out": weighted-average stays the same; just refresh lastWaCost snapshot
       await rawExecute(
-        `UPDATE warehouse_products SET "lastWaCost"="costPrice", "updatedAt"=NOW() WHERE id=$1`,
-        [productId]
+        `UPDATE warehouse_products SET "lastWaCost"="costPrice", "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [productId, companyId]
       );
     }
   } catch (err) {
@@ -264,12 +264,12 @@ async function postInventoryMovementGl(params: {
   }
 }
 
-router.get("/products", requirePermission("warehouse:read"), async (req, res) => {
+router.get("/products", authorize({ feature: "warehouse.inventory", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { search, status, page = "1", limit: lim = "50" } = req.query as any;
     const pageNum = Math.max(Number(page) || 1, 1);
-    const perPage = Number(lim) || 50;
+    const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
     const filters = parseScopeFilters(req);
     if (search) { filters.search = String(search); filters.searchColumns = ['p.name', 'p.sku']; }
@@ -297,7 +297,7 @@ router.get("/products", requirePermission("warehouse:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Warehouse products error:"); }
 });
 
-router.post("/products", requirePermission("warehouse:create"), async (req, res) => {
+router.post("/products", authorize({ feature: "warehouse.inventory", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createProductSchema.safeParse(req.body));
@@ -357,7 +357,8 @@ router.post("/products", requirePermission("warehouse:create"), async (req, res)
   } catch (err) { handleRouteError(err, res, "Create product error:"); }
 });
 
-router.get("/products/:id", requirePermission("warehouse:read"), async (req, res) => {
+// RBAC v2: warehouse.inventory view with branch-scope check.
+router.get("/products/:id", authorize({ feature: "warehouse.inventory", action: "view", resource: { table: "warehouse_products", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -367,7 +368,7 @@ router.get("/products/:id", requirePermission("warehouse:read"), async (req, res
   } catch (err) { handleRouteError(err, res, "Get product error:"); }
 });
 
-router.patch("/products/:id", requirePermission("warehouse:update"), async (req, res) => {
+router.patch("/products/:id", authorize({ feature: "warehouse.inventory", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -468,7 +469,7 @@ router.patch("/products/:id", requirePermission("warehouse:update"), async (req,
         sets.push(`${colMap[f]}=$${params.length}`);
       }
       params.push(id);
-      await rawExecute(`UPDATE warehouse_products SET ${sets.join(",")} WHERE id=$${params.length} AND "companyId"=$${params.length + 1}`, [...params, scope.companyId]);
+      await rawExecute(`UPDATE warehouse_products SET ${sets.join(",")} WHERE id=$${params.length} AND "companyId"=$${params.length + 1} AND "deletedAt" IS NULL`, [...params, scope.companyId]);
       const [fetched] = await rawQuery<any>(`SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
       row = fetched;
 
@@ -503,7 +504,7 @@ router.patch("/products/:id", requirePermission("warehouse:update"), async (req,
   }
 });
 
-router.delete("/products/:id", requirePermission("warehouse:delete"), async (req, res) => {
+router.delete("/products/:id", authorize({ feature: "warehouse.inventory", action: "delete", resource: { table: "warehouse_products", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -543,15 +544,17 @@ router.delete("/products/:id", requirePermission("warehouse:delete"), async (req
   }
 });
 
-router.get("/movements", requirePermission("warehouse:read"), async (req, res) => {
+router.get("/movements", authorize({ feature: "warehouse.transfers", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { productId } = req.query as any;
+    const { productId, search, status } = req.query as any;
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'm."companyId"', branchColumn: 'm."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (productId) { where += ` AND m."productId" = $${paramIdx}`; params.push(Number(productId)); paramIdx++; }
+    if (search) { params.push(`%${search}%`); where += ` AND (p.name ILIKE $${paramIdx} OR m.reference ILIKE $${paramIdx})`; paramIdx++; }
+    if (status) { where += ` AND m.type = $${paramIdx}`; params.push(status); paramIdx++; }
     const rows = await rawQuery<any>(
       `SELECT m.*, p.name AS "productName", p.sku FROM warehouse_movements m LEFT JOIN warehouse_products p ON p.id=m."productId" WHERE ${where} ORDER BY m.id DESC LIMIT 500`,
       params
@@ -560,7 +563,8 @@ router.get("/movements", requirePermission("warehouse:read"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "Warehouse movements error:"); }
 });
 
-router.get("/movements/:id", requirePermission("warehouse:read"), async (req, res) => {
+// RBAC v2: warehouse.transfers view (movements between branches).
+router.get("/movements/:id", authorize({ feature: "warehouse.transfers", action: "view", resource: { table: "warehouse_movements", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -576,7 +580,7 @@ router.get("/movements/:id", requirePermission("warehouse:read"), async (req, re
   } catch (err) { handleRouteError(err, res, "Warehouse movement detail error:"); }
 });
 
-router.post("/movements", requirePermission("warehouse:create"), async (req, res): Promise<void> => {
+router.post("/movements", authorize({ feature: "warehouse.transfers", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const b = zodParse(createMovementSchema.safeParse(req.body));
@@ -661,7 +665,7 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
       insertId = movRes.rows[0]?.id ?? 0;
 
       const newStock = Number(product.currentStock) + sign * Math.abs(Number(b.quantity));
-      await client.query(`UPDATE warehouse_products SET "currentStock" = "currentStock" + $1, "updatedAt" = NOW() WHERE id = $2`, [sign * Math.abs(b.quantity), b.productId]);
+      await client.query(`UPDATE warehouse_products SET "currentStock" = "currentStock" + $1, "updatedAt" = NOW() WHERE id = $2 AND "deletedAt" IS NULL`, [sign * Math.abs(b.quantity), b.productId]);
 
       if (b.type === 'in' || b.type === 'return' || b.type === 'transfer_in') {
         const incomingQty = Math.abs(Number(b.quantity));
@@ -672,12 +676,12 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
         const newTotalQty = prevStock + incomingQty;
         const newWaCost = newTotalQty > 0 ? roundTo4(newTotalValue / newTotalQty) : incomingCost;
         await client.query(
-          `UPDATE warehouse_products SET "costPrice"=$1, "lastWaCost"=$1, "updatedAt"=NOW() WHERE id=$2`,
+          `UPDATE warehouse_products SET "costPrice"=$1, "lastWaCost"=$1, "updatedAt"=NOW() WHERE id=$2 AND "deletedAt" IS NULL`,
           [newWaCost, b.productId]
         );
       } else if ((b.type === 'out' || b.type === 'transfer_out') && newStock <= 0) {
         await client.query(
-          `UPDATE warehouse_products SET "lastWaCost"="costPrice", "updatedAt"=NOW() WHERE id=$1`,
+          `UPDATE warehouse_products SET "lastWaCost"="costPrice", "updatedAt"=NOW() WHERE id=$1 AND "deletedAt" IS NULL`,
           [b.productId]
         );
       }
@@ -752,7 +756,7 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
       logger.error(glOuterErr, `[warehouse-gl] unexpected error posting GL for movement ${insertId}:`);
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_movements WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_movements WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     if (row) (row as any).journalEntryId = journalEntryId;
 
     // Bus emission — closes the dead listener in eventListeners.ts:261 so the
@@ -764,6 +768,10 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
       action: "warehouse.movement.created",
       entity: "warehouse_movements",
       entityId: insertId,
+      movementId: insertId,
+      type: String(row?.type ?? b.type ?? ""),
+      productId: Number(row?.productId ?? b.productId),
+      qty: Number(row?.quantity ?? b.quantity),
       details: JSON.stringify({
         productId: row?.productId,
         type: row?.type,
@@ -782,7 +790,7 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
     if (updatedProduct && Number(updatedProduct.currentStock) <= Number(updatedProduct.minStock)) {
       let autoRequestId: number | null = null;
       try {
-        autoRequestId = await triggerMinStockPipeline(scope.companyId, updatedProduct, scope.userId);
+        autoRequestId = await triggerMinStockPipeline(scope.companyId, updatedProduct, scope.userId, scope.activeAssignmentId);
       } catch (e) {
         logger.error(e, "[MinStock] Pipeline error (non-critical, movement already committed):");
       }
@@ -796,7 +804,7 @@ router.post("/movements", requirePermission("warehouse:create"), async (req, res
   }
 });
 
-async function triggerMinStockPipeline(companyId: number, product: any, userId: number): Promise<number | null> {
+async function triggerMinStockPipeline(companyId: number, product: any, userId: number, assignmentId?: number): Promise<number | null> {
   const lastOrders = await rawQuery<any>(
     `SELECT pri."unitPrice" AS "unitCost" FROM purchase_request_items pri JOIN purchase_requests pr ON pr.id=pri."requestId" WHERE pri."productId"=$1 AND pr."companyId"=$2 ORDER BY pr."createdAt" DESC LIMIT 3`,
     [product.id, companyId]
@@ -806,27 +814,34 @@ async function triggerMinStockPipeline(companyId: number, product: any, userId: 
   const reorderQty = Math.max(Number(product.maxStock) - Number(product.currentStock), Number(product.minStock) * 2, 1);
 
   const preferredSupplier = await rawQuery<any>(
-    `SELECT s.* FROM suppliers s JOIN purchase_requests pr ON pr."supplierId"=s.id WHERE pr."companyId"=$1 ORDER BY pr."createdAt" DESC LIMIT 1`,
+    `SELECT s.* FROM suppliers s JOIN purchase_requests pr ON pr."supplierId"=s.id WHERE pr."companyId"=$1 AND s."deletedAt" IS NULL ORDER BY pr."createdAt" DESC LIMIT 1`,
     [companyId]
   );
   const supplierId = preferredSupplier[0]?.id || null;
   const estimatedTotal = reorderQty * estimatedUnitCost;
   const ref = generateTimeRef("PR-AUTO");
 
-  const { insertId: prId } = await rawExecute(
-    `INSERT INTO purchase_requests ("companyId","supplierId",ref,status,"totalAmount","requestedBy",notes) VALUES ($1,$2,$3,'pending_approval',$4,$5,$6)`,
-    [companyId, supplierId, ref, estimatedTotal, userId, `طلب شراء تلقائي - مخزون منخفض: ${product.name}`]
-  );
-  if (prId) {
-    await rawExecute(
+  let effectiveAssignmentId = assignmentId;
+  if (!effectiveAssignmentId) {
+    const [asgn] = await rawQuery<any>(`SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`, [userId, companyId]);
+    effectiveAssignmentId = asgn?.id || userId;
+  }
+  let prId = 0;
+  await withTransaction(async (client) => {
+    const result = await client.query(
+      `INSERT INTO purchase_requests ("companyId","supplierId",ref,status,"totalAmount","requestedBy",notes) VALUES ($1,$2,$3,'pending',$4,$5,$6) RETURNING id`,
+      [companyId, supplierId, ref, estimatedTotal, effectiveAssignmentId, `طلب شراء تلقائي - مخزون منخفض: ${product.name}`]
+    );
+    prId = result.rows[0].id;
+    await client.query(
       `INSERT INTO purchase_request_items ("requestId","productId",quantity,"unitPrice","totalPrice") VALUES ($1,$2,$3,$4,$5)`,
       [prId, product.id, reorderQty, estimatedUnitCost, estimatedTotal]
     );
-  }
+  });
   return prId || null;
 }
 
-router.post("/transfers", requirePermission("warehouse:create"), async (req, res): Promise<void> => {
+router.post("/transfers", authorize({ feature: "warehouse.transfers", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const b = zodParse(createTransferSchema.safeParse(req.body));
@@ -870,6 +885,12 @@ router.post("/transfers", requirePermission("warehouse:create"), async (req, res
         [scope.companyId, b.productId, b.quantity, unitCost, transferRef, fromLocation, toLocation, `استلام تحويل من ${fromLocation} في ${toLocation}`, scope.userId]
       );
       inId = inRes.rows[0].id;
+
+      // Decrement source product stock (transfer_out)
+      await client.query(
+        `UPDATE warehouse_products SET "currentStock" = "currentStock" - $1, "updatedAt" = NOW() WHERE id = $2 AND "deletedAt" IS NULL`,
+        [qtyNum, b.productId]
+      );
     });
 
     emitEvent({
@@ -888,10 +909,12 @@ router.post("/transfers", requirePermission("warehouse:create"), async (req, res
       after: { transferRef, fromLocation, toLocation, quantity: b.quantity, productId: b.productId, unitCost },
     }).catch((e) => logger.error(e, "warehouse background task failed"));
 
+    const [outRow] = await rawQuery<any>(`SELECT * FROM warehouse_movements WHERE id=$1 AND "companyId"=$2`, [outId, scope.companyId]);
+    const [inRow] = await rawQuery<any>(`SELECT * FROM warehouse_movements WHERE id=$1 AND "companyId"=$2`, [inId, scope.companyId]);
     res.status(201).json({
       transferRef,
-      outMovementId: outId,
-      inMovementId: inId,
+      outMovement: outRow || { id: outId },
+      inMovement: inRow || { id: inId },
       fromLocation,
       toLocation,
       quantity: b.quantity,
@@ -904,27 +927,33 @@ router.post("/transfers", requirePermission("warehouse:create"), async (req, res
   }
 });
 
-router.get("/categories", requirePermission("warehouse:read"), async (req, res) => {
+router.get("/categories", authorize({ feature: "warehouse.inventory", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { page = "1", limit: lim = "50" } = req.query as any;
+    const { page = "1", limit: lim = "50", search, status } = req.query as any;
     const pageNum = Math.max(Number(page) || 1, 1);
-    const perPage = Number(lim) || 50;
+    const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
 
+    const params: any[] = [scope.companyId];
+    let where = `"companyId"=$1 AND "deletedAt" IS NULL`;
+    let paramIdx = 2;
+    if (search) { params.push(`%${search}%`); where += ` AND name ILIKE $${paramIdx}`; paramIdx++; }
+    if (status) { params.push(status); where += ` AND status = $${paramIdx}`; paramIdx++; }
+
     const [countRow] = await rawQuery<any>(
-      `SELECT COUNT(*) AS total FROM warehouse_categories WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
-      [scope.companyId]
+      `SELECT COUNT(*) AS total FROM warehouse_categories WHERE ${where}`,
+      params
     );
     const rows = await rawQuery<any>(
-      `SELECT * FROM warehouse_categories WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY name LIMIT $2 OFFSET $3`,
-      [scope.companyId, perPage, offset]
+      `SELECT * FROM warehouse_categories WHERE ${where} ORDER BY name LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
+      [...params, perPage, offset]
     );
     res.json({ data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage });
   } catch (err) { handleRouteError(err, res, "Warehouse categories error:"); }
 });
 
-router.get("/categories/:id", requirePermission("warehouse:read"), async (req, res) => {
+router.get("/categories/:id", authorize({ feature: "warehouse.inventory", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -937,7 +966,7 @@ router.get("/categories/:id", requirePermission("warehouse:read"), async (req, r
   } catch (err) { handleRouteError(err, res, "Warehouse category detail error:"); }
 });
 
-router.post("/categories", requirePermission("warehouse:create"), async (req, res) => {
+router.post("/categories", authorize({ feature: "warehouse.inventory", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createCategorySchema.safeParse(req.body));
@@ -954,7 +983,7 @@ router.post("/categories", requirePermission("warehouse:create"), async (req, re
       `INSERT INTO warehouse_categories ("companyId",name,"parentId") VALUES ($1,$2,$3)`,
       [scope.companyId, b.name.trim(), b.parentId || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_categories WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM warehouse_categories WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -973,27 +1002,33 @@ router.post("/categories", requirePermission("warehouse:create"), async (req, re
   } catch (err) { handleRouteError(err, res, "Create category error:"); }
 });
 
-router.get("/suppliers", requirePermission("warehouse:read"), async (req, res) => {
+router.get("/suppliers", authorize({ feature: "warehouse.inventory", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { page = "1", limit: lim = "50" } = req.query as any;
+    const { page = "1", limit: lim = "50", search, status } = req.query as any;
     const pageNum = Math.max(Number(page) || 1, 1);
-    const perPage = Number(lim) || 50;
+    const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
 
+    const params: any[] = [scope.companyId];
+    let where = `"companyId"=$1 AND "deletedAt" IS NULL`;
+    let paramIdx = 2;
+    if (search) { params.push(`%${search}%`); where += ` AND (name ILIKE $${paramIdx} OR "contactPerson" ILIKE $${paramIdx} OR phone ILIKE $${paramIdx})`; paramIdx++; }
+    if (status) { params.push(status); where += ` AND status = $${paramIdx}`; paramIdx++; }
+
     const [countRow] = await rawQuery<any>(
-      `SELECT COUNT(*) AS total FROM suppliers WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
-      [scope.companyId]
+      `SELECT COUNT(*) AS total FROM suppliers WHERE ${where}`,
+      params
     );
     const rows = await rawQuery<any>(
-      `SELECT * FROM suppliers WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY name LIMIT $2 OFFSET $3`,
-      [scope.companyId, perPage, offset]
+      `SELECT * FROM suppliers WHERE ${where} ORDER BY name LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
+      [...params, perPage, offset]
     );
     res.json({ data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage });
   } catch (err) { handleRouteError(err, res, "Suppliers error:"); }
 });
 
-router.get("/suppliers/:id", requirePermission("warehouse:read"), async (req, res) => {
+router.get("/suppliers/:id", authorize({ feature: "warehouse.inventory", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1006,7 +1041,7 @@ router.get("/suppliers/:id", requirePermission("warehouse:read"), async (req, re
   } catch (err) { handleRouteError(err, res, "Supplier detail error:"); }
 });
 
-router.post("/suppliers", requirePermission("warehouse:create"), async (req, res) => {
+router.post("/suppliers", authorize({ feature: "warehouse.inventory", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createSupplierSchema.safeParse(req.body));
@@ -1026,7 +1061,7 @@ router.post("/suppliers", requirePermission("warehouse:create"), async (req, res
       `INSERT INTO suppliers ("companyId",name,"contactPerson",phone,email,address,"taxNumber","paymentTerms") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [scope.companyId, b.name.trim(), b.contactPerson, b.phone, b.email, b.address, b.taxNumber, b.paymentTerms || 30]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM suppliers WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM suppliers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -1045,7 +1080,7 @@ router.post("/suppliers", requirePermission("warehouse:create"), async (req, res
   } catch (err) { handleRouteError(err, res, "Create supplier error:"); }
 });
 
-router.patch("/categories/:id", requirePermission("warehouse:update"), async (req, res) => {
+router.patch("/categories/:id", authorize({ feature: "warehouse.inventory", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1056,7 +1091,7 @@ router.patch("/categories/:id", requirePermission("warehouse:update"), async (re
     if (b.parentId !== undefined) { params.push(b.parentId); fields.push(`"parentId" = $${params.length}`); }
     if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
-    const rows = await rawQuery<any>(`UPDATE warehouse_categories SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
+    const rows = await rawQuery<any>(`UPDATE warehouse_categories SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`, params);
     if (rows.length === 0) throw new NotFoundError("الفئة غير موجودة");
     emitEvent({
       companyId: scope.companyId,
@@ -1076,7 +1111,7 @@ router.patch("/categories/:id", requirePermission("warehouse:update"), async (re
   } catch (err) { handleRouteError(err, res, "Update category error:"); }
 });
 
-router.delete("/categories/:id", requirePermission("warehouse:delete"), async (req, res) => {
+router.delete("/categories/:id", authorize({ feature: "warehouse.inventory", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1126,7 +1161,7 @@ router.delete("/categories/:id", requirePermission("warehouse:delete"), async (r
   } catch (err) { handleRouteError(err, res, "Delete category error:"); }
 });
 
-router.patch("/suppliers/:id", requirePermission("warehouse:update"), async (req, res) => {
+router.patch("/suppliers/:id", authorize({ feature: "warehouse.inventory", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1143,7 +1178,7 @@ router.patch("/suppliers/:id", requirePermission("warehouse:update"), async (req
     addField("paymentTerms", b.paymentTerms);
     if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
-    const rows = await rawQuery<any>(`UPDATE suppliers SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
+    const rows = await rawQuery<any>(`UPDATE suppliers SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`, params);
     if (rows.length === 0) throw new NotFoundError("المورد غير موجود");
     emitEvent({
       companyId: scope.companyId,
@@ -1163,11 +1198,11 @@ router.patch("/suppliers/:id", requirePermission("warehouse:update"), async (req
   } catch (err) { handleRouteError(err, res, "Update supplier error:"); }
 });
 
-router.delete("/suppliers/:id", requirePermission("warehouse:delete"), async (req, res) => {
+router.delete("/suppliers/:id", authorize({ feature: "warehouse.inventory", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(`SELECT id FROM suppliers WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT id FROM suppliers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المورد غير موجود");
     await rawExecute(`UPDATE suppliers SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     emitEvent({
@@ -1188,13 +1223,15 @@ router.delete("/suppliers/:id", requirePermission("warehouse:delete"), async (re
   } catch (err) { handleRouteError(err, res, "Delete supplier error:"); }
 });
 
-router.get("/stats", requirePermission("warehouse:read"), async (req, res) => {
+router.get("/stats", authorize({ feature: "warehouse.inventory", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [products] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE "currentStock" <= "minStock") as "lowStock" FROM warehouse_products WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]);
-    const [value] = await rawQuery<any>(`SELECT COALESCE(SUM("currentStock" * "costPrice"),0) as "totalValue" FROM warehouse_products WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]);
-    const [movements] = await rawQuery<any>(`SELECT COUNT(*) as "todayMovements" FROM warehouse_movements WHERE "companyId"=$1 AND "createdAt"::date = CURRENT_DATE`, [cid]);
+    const [[products], [value], [movements]] = await Promise.all([
+      rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE "currentStock" <= "minStock") as "lowStock" FROM warehouse_products WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COALESCE(SUM("currentStock" * "costPrice"),0) as "totalValue" FROM warehouse_products WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as "todayMovements" FROM warehouse_movements WHERE "companyId"=$1 AND "createdAt"::date = CURRENT_DATE`, [cid]),
+    ]);
     res.json({ totalProducts: Number(products.total), lowStock: Number(products.lowStock), totalValue: Number(value.totalValue), todayMovements: Number(movements.todayMovements) });
   } catch (err) { handleRouteError(err, res, "Warehouse stats error:"); }
 });
@@ -1203,7 +1240,7 @@ router.get("/stats", requirePermission("warehouse:read"), async (req, res) => {
 // INVENTORY COUNT — جرد المخزن
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/inventory-counts", requirePermission("warehouse:read"), async (req, res) => {
+router.get("/inventory-counts", authorize({ feature: "warehouse.inventory", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
@@ -1213,7 +1250,7 @@ router.get("/inventory-counts", requirePermission("warehouse:read"), async (req,
     const rows = await rawQuery<any>(
       `SELECT ic.*, e.name AS "conductedByName"
        FROM inventory_counts ic
-       LEFT JOIN employees e ON e.id=ic."conductedBy"
+       LEFT JOIN employees e ON e.id=ic."conductedBy" AND e."deletedAt" IS NULL
        WHERE ${conditions.join(" AND ")}
        ORDER BY ic."countDate" DESC LIMIT 500`,
       params
@@ -1222,7 +1259,7 @@ router.get("/inventory-counts", requirePermission("warehouse:read"), async (req,
   } catch (err) { handleRouteError(err, res, "Inventory counts error:"); }
 });
 
-router.post("/inventory-counts", requirePermission("warehouse:create"), async (req, res) => {
+router.post("/inventory-counts", authorize({ feature: "warehouse.inventory", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createInventoryCountSchema.safeParse(req.body));
@@ -1234,7 +1271,7 @@ router.post("/inventory-counts", requirePermission("warehouse:create"), async (r
        scope.employeeId || null,
        b.notes || null, b.warehouseLocation || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM inventory_counts WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM inventory_counts WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -1253,7 +1290,7 @@ router.post("/inventory-counts", requirePermission("warehouse:create"), async (r
   } catch (err) { handleRouteError(err, res, "Create count error:"); }
 });
 
-router.get("/inventory-counts/:id/items", requirePermission("warehouse:read"), async (req, res) => {
+router.get("/inventory-counts/:id/items", authorize({ feature: "warehouse.inventory", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const countId = parseId(req.params.id, "id");
@@ -1298,7 +1335,7 @@ router.get("/inventory-counts/:id/items", requirePermission("warehouse:read"), a
   } catch (err) { handleRouteError(err, res, "Count items error:"); }
 });
 
-router.post("/inventory-counts/:id/items", requirePermission("warehouse:create"), async (req, res) => {
+router.post("/inventory-counts/:id/items", authorize({ feature: "warehouse.inventory", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const countId = parseId(req.params.id, "id");
@@ -1358,7 +1395,7 @@ router.post("/inventory-counts/:id/items", requirePermission("warehouse:create")
   } catch (err) { handleRouteError(err, res, "Count item error:"); }
 });
 
-router.post("/inventory-counts/:id/approve", requirePermission("warehouse:create"), async (req, res) => {
+router.post("/inventory-counts/:id/approve", authorize({ feature: "warehouse.inventory", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const countId = parseId(req.params.id, "id");
@@ -1366,7 +1403,7 @@ router.post("/inventory-counts/:id/approve", requirePermission("warehouse:create
     // Pre-fetch count items so we can use them inside onApply and for
     // GL posting after the transition commits.
     const items = await rawQuery<any>(
-      `SELECT ici.*, wp."currentStock" FROM inventory_count_items ici JOIN warehouse_products wp ON wp.id=ici."productId" WHERE ici."countId"=$1`,
+      `SELECT ici.*, wp."currentStock" FROM inventory_count_items ici JOIN warehouse_products wp ON wp.id=ici."productId" WHERE ici."countId"=$1 LIMIT 10000`,
       [countId]
     );
 
@@ -1410,8 +1447,8 @@ router.post("/inventory-counts/:id/approve", requirePermission("warehouse:create
           // Snapshot avg cost BEFORE applying the adjustment so the GL
           // entry uses the pre-adjustment weighted-average.
           const prodBeforeRes = await client.query(
-            `SELECT id, name, "costPrice", "lastWaCost" FROM warehouse_products WHERE id=$1 FOR UPDATE`,
-            [item.productId]
+            `SELECT id, name, "costPrice", "lastWaCost" FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL FOR UPDATE`,
+            [item.productId, scope.companyId]
           );
           const prodBefore = prodBeforeRes.rows[0];
           const preCost = prodBefore
@@ -1419,8 +1456,8 @@ router.post("/inventory-counts/:id/approve", requirePermission("warehouse:create
             : 0;
 
           await client.query(
-            `UPDATE warehouse_products SET "currentStock"="currentStock"+$1, "updatedAt"=NOW() WHERE id=$2`,
-            [variance, item.productId]
+            `UPDATE warehouse_products SET "currentStock"="currentStock"+$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+            [variance, item.productId, scope.companyId]
           );
 
           const movRes = await client.query(

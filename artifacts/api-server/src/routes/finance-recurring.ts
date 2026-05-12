@@ -9,7 +9,7 @@ import {
 import { z } from "zod";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { emitEvent, createAuditLog, todayISO } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
@@ -27,6 +27,45 @@ export { computeNextRunDate, runRecurringJournal, processDueRecurringJournals };
 
 export const recurringRouter = Router();
 
+interface RecurringJournalRow {
+  id: number;
+  companyId: number;
+  branchId: number | null;
+  name: string;
+  description: string | null;
+  frequency: string;
+  startDate: string;
+  nextRunDate: string | null;
+  lastRunDate: string | null;
+  active: boolean;
+  templateLines: unknown;
+  templateRef: string | null;
+  templateDescription: string | null;
+  createdBy: number | null;
+  runsCount: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+  deletedAt: string | null;
+}
+
+interface RecurringRunHistoryRow {
+  id: number;
+  recurringJournalId: number;
+  companyId: number;
+  journalEntryId: number | null;
+  status: string;
+  triggeredBy: string;
+  errorMessage: string | null;
+  createdAt: string;
+  journalRef: string | null;
+  journalDescription: string | null;
+}
+
+interface RecurringNameRow {
+  id: number;
+  name: string;
+}
+
 const VALID_FREQUENCIES = ["daily", "weekly", "monthly", "quarterly", "yearly"] as const;
 
 const recurringJournalLineSchema = z.object({
@@ -42,7 +81,7 @@ const recurringJournalLineSchema = z.object({
 const createRecurringJournalSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
-  frequency: z.string(),
+  frequency: z.enum(["daily", "weekly", "monthly", "quarterly", "yearly"]),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   active: z.boolean().default(true),
   templateLines: z.array(recurringJournalLineSchema),
@@ -53,7 +92,7 @@ const createRecurringJournalSchema = z.object({
 const updateRecurringJournalSchema = z.object({
   name: z.string().optional(),
   description: z.string().optional(),
-  frequency: z.string().optional(),
+  frequency: z.enum(["daily", "weekly", "monthly", "quarterly", "yearly"]).optional(),
   startDate: z.string().optional(),
   nextRunDate: z.string().optional(),
   active: z.boolean().optional(),
@@ -62,7 +101,7 @@ const updateRecurringJournalSchema = z.object({
   templateLines: z.array(recurringJournalLineSchema).optional(),
 });
 
-recurringRouter.get("/recurring-journals", requirePermission("finance:read"), async (req, res) => {
+recurringRouter.get("/recurring-journals", authorize({ feature: "finance.recurring", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -76,7 +115,7 @@ recurringRouter.get("/recurring-journals", requirePermission("finance:read"), as
     if (active === "false") extra += ` AND active = FALSE`;
     if (frequency) { params.push(frequency); extra += ` AND frequency = $${params.length}`; }
 
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<RecurringJournalRow>(
       `SELECT id, "companyId", "branchId", name, description, frequency,
               "startDate", "nextRunDate", "lastRunDate", active,
               "templateLines", "templateRef", "templateDescription",
@@ -93,22 +132,22 @@ recurringRouter.get("/recurring-journals", requirePermission("finance:read"), as
   }
 });
 
-recurringRouter.get("/recurring-journals/:id", requirePermission("finance:read"), async (req, res) => {
+recurringRouter.get("/recurring-journals/:id", authorize({ feature: "finance.recurring", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<RecurringJournalRow>(
       `SELECT * FROM recurring_journals WHERE id = $1 AND "companyId" = ANY($2) AND "deletedAt" IS NULL`,
       [id, scope.allowedCompanies]
     );
     if (!row) throw new NotFoundError("القيد الدوري غير موجود");
-    const history = await rawQuery<any>(
+    const history = await rawQuery<RecurringRunHistoryRow>(
       `SELECT rr.*, je.ref AS "journalRef", je.description AS "journalDescription"
        FROM recurring_journal_runs rr
        LEFT JOIN journal_entries je ON je.id = rr."journalEntryId"
-       WHERE rr."recurringJournalId" = $1
+       WHERE rr."recurringJournalId" = $1 AND rr."companyId" = $2
        ORDER BY rr."createdAt" DESC LIMIT 50`,
-      [id]
+      [id, scope.companyId]
     );
     res.json({ ...row, history });
   } catch (err) {
@@ -142,7 +181,7 @@ function validateTemplateLines(lines: any): { ok: true; lines: any[] } | { ok: f
   };
 }
 
-recurringRouter.post("/recurring-journals", requirePermission("finance:create"), async (req, res) => {
+recurringRouter.post("/recurring-journals", authorize({ feature: "finance.recurring", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -204,14 +243,14 @@ recurringRouter.post("/recurring-journals", requirePermission("finance:create"),
   }
 });
 
-recurringRouter.patch("/recurring-journals/:id", requirePermission("finance:update"), async (req, res) => {
+recurringRouter.patch("/recurring-journals/:id", authorize({ feature: "finance.recurring", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
     const id = parseId(req.params.id, "id");
     const b = zodParse(updateRecurringJournalSchema.safeParse(req.body ?? {}));
 
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<RecurringJournalRow>(
       `SELECT * FROM recurring_journals WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -263,7 +302,7 @@ recurringRouter.patch("/recurring-journals/:id", requirePermission("finance:upda
     params.push(id);
     params.push(scope.companyId);
     await rawExecute(
-      `UPDATE recurring_journals SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length}`,
+      `UPDATE recurring_journals SET ${fields.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL`,
       params
     );
 
@@ -291,12 +330,12 @@ recurringRouter.patch("/recurring-journals/:id", requirePermission("finance:upda
   }
 });
 
-recurringRouter.post("/recurring-journals/:id/run-now", requirePermission("finance:create"), async (req, res) => {
+recurringRouter.post("/recurring-journals/:id/run-now", authorize({ feature: "finance.recurring", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
     const id = parseId(req.params.id, "id");
-    const [recurring] = await rawQuery<any>(
+    const [recurring] = await rawQuery<RecurringJournalRow>(
       `SELECT * FROM recurring_journals WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -343,13 +382,13 @@ recurringRouter.post("/recurring-journals/:id/run-now", requirePermission("finan
   }
 });
 
-recurringRouter.delete("/recurring-journals/:id", requirePermission("finance:delete"), async (req, res) => {
+recurringRouter.delete("/recurring-journals/:id", authorize({ feature: "finance.recurring", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
     const id = parseId(req.params.id, "id");
 
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<RecurringNameRow>(
       `SELECT id, name FROM recurring_journals WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );

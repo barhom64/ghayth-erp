@@ -36,7 +36,7 @@ export default function CrmCreate() {
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const handleSubmit = async () => {
     const firstError = validate({
@@ -154,7 +154,7 @@ export default function CrmCreate() {
         <FileDropZone files={attachments} onFilesChange={setAttachments} />
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/crm")}>إلغاء</Button>
-          <Button onClick={handleSubmit} disabled={addOpp.isPending}>{addOpp.isPending ? "جاري الإضافة..." : "إضافة"}</Button>
+          <Button onClick={handleSubmit} disabled={addOpp.isPending} rateLimitAware>{addOpp.isPending ? "جاري الإضافة..." : "إضافة"}</Button>
         </div>
       </div>
     </CreatePageLayout>

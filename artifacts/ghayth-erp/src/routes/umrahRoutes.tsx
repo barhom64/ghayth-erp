@@ -26,6 +26,22 @@ const UmrahPricing = lazy(() => import("@/pages/umrah/pricing"));
 const UmrahCommissionPlans = lazy(() => import("@/pages/umrah/commission-plans"));
 const UmrahCommissionPlanEditor = lazy(() => import("@/pages/umrah/commission-plan-editor"));
 const UmrahViolations = lazy(() => import("@/pages/umrah/violations"));
+const UmrahViolationCreate = lazy(() => import("@/pages/umrah/violation-create"));
+const UmrahViolationDetail = lazy(() => import("@/pages/details/umrah-violation-detail"));
+
+// Daily run-sheet — surfaces GET /umrah/reports/daily-runsheet from PR #305.
+const UmrahDailyRunsheet = lazy(() => import("@/pages/umrah/daily-runsheet"));
+
+// Reconciliation report — surfaces GET /umrah/reports/reconciliation from PR #312.
+const UmrahReconciliation = lazy(() => import("@/pages/umrah/reconciliation"));
+
+// Groups list + split / merge actions — surfaces /umrah/groups + the two POST
+// endpoints from PR #312.
+const UmrahGroups = lazy(() => import("@/pages/umrah/groups"));
+
+// Standalone cross-entity attachments index. Editing is still per-entity
+// via the embedded UmrahAttachmentsPanel; this page is read-only.
+const UmrahAttachments = lazy(() => import("@/pages/umrah/attachments"));
 
 export const umrahRoutes: { path: string; component: any; module?: ModuleType }[] = [
   { path: "/umrah", component: UmrahDashboard, module: "operations" },
@@ -53,5 +69,11 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/commission-plans/new", component: UmrahCommissionPlanEditor, module: "operations" },
   { path: "/umrah/commission-plans/:id/edit", component: UmrahCommissionPlanEditor, module: "operations" },
   { path: "/umrah/violations", component: UmrahViolations, module: "operations" },
+  { path: "/umrah/violations/create", component: UmrahViolationCreate, module: "operations" },
+  { path: "/umrah/violations/:id", component: UmrahViolationDetail, module: "operations" },
   { path: "/umrah/import", component: UmrahImportWizard, module: "operations" },
+  { path: "/umrah/daily-runsheet", component: UmrahDailyRunsheet, module: "operations" },
+  { path: "/umrah/reconciliation", component: UmrahReconciliation, module: "operations" },
+  { path: "/umrah/groups", component: UmrahGroups, module: "operations" },
+  { path: "/umrah/attachments", component: UmrahAttachments, module: "operations" },
 ];

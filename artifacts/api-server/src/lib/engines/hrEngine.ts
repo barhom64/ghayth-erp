@@ -383,7 +383,7 @@ class HREngineImpl implements DomainEngine {
     sourceId?: number;
   }) {
     await rawExecute(
-      `INSERT INTO payroll_deductions ("companyId","employeeId",type,amount,reason,date,"createdAt")
+      `INSERT INTO payroll_deductions ("companyId","employeeId",type,amount,description,"effectiveDate","createdAt")
        VALUES ($1,$2,$3,$4,$5,CURRENT_DATE,NOW())`,
       [params.companyId, params.employeeId, params.type, params.amount, params.reason]
     );

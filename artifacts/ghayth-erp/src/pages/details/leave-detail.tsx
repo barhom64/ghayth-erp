@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,10 +11,7 @@ import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { Edit, CalendarDays } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import { EntityDocuments } from "@/components/shared/entity-documents";
-import { ApprovalTimeline } from "@/components/shared/approval-timeline";
-import { EntityComments } from "@/components/shared/entity-comments";
-import { EntityTags } from "@/components/shared/entity-tags";
+
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "معلق",
@@ -65,6 +63,7 @@ export default function LeaveDetail() {
   );
 
   const leave = data;
+  const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("leave_request", id ?? 0);
 
   const duration = useMemo(() => {
     if (leave?.duration) return leave.duration;
@@ -227,11 +226,6 @@ export default function LeaveDetail() {
         )}
       </div>
 
-      {id && <ApprovalTimeline entityType="leave" entityId={id} />}
-      {id && <EntityDocuments entityType="leave" entityId={id} />}
-
-      {id && <EntityComments entityType="leave" entityId={id} />}
-      {id && <EntityTags entityType="leave" entityId={id} />}
     </div>
   );
 
@@ -263,6 +257,8 @@ export default function LeaveDetail() {
       entityType="leave"
       entityId={id ?? 0}
       overview={overview}
+      extraTabs={registryExtraTabs}
+      hideTabs={registryHideTabs}
       isLoading={isLoading}
       error={error}
       onRetry={refetch}

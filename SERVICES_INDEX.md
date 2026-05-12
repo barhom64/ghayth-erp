@@ -44,9 +44,7 @@ _تم التوليد: 2026-05-06T19:52:45.652Z_
 | A5 State (?page=2) | 214 | 0 | 155 |
 | **الإجمالي** | **1496** | **14** | **335** |
 
-**معدل النجاح**: 1496/1510 من الفحوصات القابلة للتطبيق (99.07%). جميع أعطال الـ5xx التي رصدتها المصفوفة تم إصلاحها في هذه المهمة (4 endpoints + جدول `financial_posting_failures` جديد).
-
-> **مصدر الحقيقة لكل مسار على حدة (PASS/FAIL/SKIP عبر A1–A5)**: `FRONTEND_TEST_MATRIX.md` (369 صفًا، مرتبة بالـmodule). تصنيف الأخطاء بحسب الخطورة في `FRONTEND_BUGS.md`. هذا القسم هنا ملخّص فقط.
+**معدل النجاح**: 1496/1510 من الفحوصات القابلة للتطبيق (99.07%). جميع أعطال الـ5xx التي رصدتها المصفوفة تم إصلاحها في هذه المهمة (4 endpoints + جدول `financial_posting_failures` جديد). تفاصيل كاملة في `FRONTEND_TEST_MATRIX.md` و`FRONTEND_BUGS.md`.
 
 ---
 
@@ -645,8 +643,27 @@ _تم التوليد: 2026-05-06T19:52:45.652Z_
 
 **API endpoints المرتبطة:**
 
-- إجمالي endpoints: **86** | GET smoke نجح: **0**
+- إجمالي endpoints: **96** | GET smoke نجح: **0**
 - المسارات: `/api/umrah`
+
+**Endpoints جديدة (PRs #303 / #305 / #306 / #312 / #318):**
+
+- `POST   /api/umrah/groups/:id/split` — تقسيم مجموعة (#312)
+- `POST   /api/umrah/groups/merge` — دمج مجموعات (#312)
+- `POST   /api/umrah/penalties/waive-bulk` — إعفاء جماعي (#312)
+- `GET    /api/umrah/attachments` — قائمة المرفقات (#312)
+- `POST   /api/umrah/attachments` — إضافة مرفق (#312)
+- `DELETE /api/umrah/attachments/:id` — حذف مرفق (#312)
+- `GET    /api/umrah/reports/reconciliation` — مطابقة NUSK (#312)
+- `GET    /api/umrah/reports/daily-runsheet` — كشف اليوم JSON (#305)
+- `GET    /api/umrah/reports/daily-runsheet/pdf` — كشف اليوم PDF (#305)
+- `GET    /api/umrah/statements/:subAgentId/pdf` — كشف الوكيل الفرعي PDF (#305)
+
+**تأثيرات جانبية:**
+
+- محرك الاستيراد يرحّل قيد AP لفواتير nusk على الاستلام (لا تشترط `paid`) + قيد عكسي للإرجاعات — #303.
+- محرك العمولات يحفظ `planVersion` + `planSnapshot` + `tiersSnapshot` لكل حساب — #306.
+- محرك المهاجرات يكتشف `CREATE INDEX CONCURRENTLY` ويشغّله خارج transaction — #318.
 
 ### warehouse (13 صفحة)
 
@@ -678,7 +695,7 @@ _تم التوليد: 2026-05-06T19:52:45.652Z_
 | Mount | عدد Endpoints | GET smoke OK |
 |---|---|---|
 | `/api/hr` | 129 | 0 / 63 |
-| `/api/umrah` | 86 | 0 / 35 |
+| `/api/umrah` | 96 | 0 / 35 |
 | `/api/properties` | 55 | 0 / 25 |
 | `/api/admin` | 47 | 0 / 27 |
 | `/api/fleet` | 46 | 0 / 19 |

@@ -51,7 +51,7 @@ export default function CategoriesCreate() {
         <TextField label="اسم التصنيف" required value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="اسم التصنيف" error={fieldErrors.name} />
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/warehouse")}>إلغاء</Button>
-          <Button onClick={handleSubmit} disabled={addCategory.isPending}>{addCategory.isPending ? "جاري الإضافة..." : "إضافة"}</Button>
+          <Button onClick={handleSubmit} disabled={addCategory.isPending} rateLimitAware>{addCategory.isPending ? "جاري الإضافة..." : "إضافة"}</Button>
         </div>
       </div>
     </CreatePageLayout>

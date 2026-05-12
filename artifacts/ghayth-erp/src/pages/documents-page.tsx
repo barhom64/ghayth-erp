@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { z } from "zod";
 import { Link } from "wouter";
 import { PageShell } from "@/components/page-shell";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
@@ -8,6 +9,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { FormShell, FormTextField, FormGrid } from "@/components/form-shell";
+
+const folderSchema = z.object({
+  name: z.string().trim().min(1, "الاسم مطلوب"),
+  color: z.string().trim(),
+});
+type FolderForm = z.infer<typeof folderSchema>;
+
+const templateSchema = z.object({
+  name: z.string().trim().min(1, "الاسم مطلوب"),
+  description: z.string().trim(),
+  category: z.string().trim(),
+});
+type TemplateForm = z.infer<typeof templateSchema>;
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -20,6 +35,8 @@ import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { useToast } from "@/hooks/use-toast";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 const CATEGORIES = [
   { value: "contracts", label: "عقود" },
@@ -60,6 +77,7 @@ function CategoryBadge({ category }: { category: string }) {
 
 function DocumentsList() {
   const qc = useQueryClient();
+  const { toast } = useToast();
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -105,7 +123,7 @@ function DocumentsList() {
       a.remove();
       URL.revokeObjectURL(url);
     } catch (err: any) {
-      alert(err.message);
+      toast({ variant: "destructive", title: "فشل التنزيل", description: err.message });
     }
   };
 
@@ -117,8 +135,8 @@ function DocumentsList() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <Link href="/documents/upload"><Button className="gap-2"><Upload className="h-4 w-4" /> رفع مستند</Button></Link>
-        <Link href="/documents/create"><Button variant="outline" className="gap-2"><FilePlus className="h-4 w-4" /> إنشاء مستند</Button></Link>
+        <Link href="/documents/upload"><GuardedButton perm="documents:create" className="gap-2"><Upload className="h-4 w-4" /> رفع مستند</GuardedButton></Link>
+        <Link href="/documents/create"><GuardedButton perm="documents:create" variant="outline" className="gap-2"><FilePlus className="h-4 w-4" /> إنشاء مستند</GuardedButton></Link>
         <div className="flex-1" />
         <div className="relative w-64">
           <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -190,14 +208,14 @@ function DocumentsList() {
                         </Button>
                       </Link>
                       {d.status !== "approved" && (
-                        <Button variant="ghost" size="sm" className="gap-1 text-xs text-green-600" onClick={() => handleStatusChange(d.id, "approved")}>
+                        <GuardedButton perm="documents:approve" variant="ghost" size="sm" className="gap-1 text-xs text-green-600" onClick={() => handleStatusChange(d.id, "approved")}>
                           <CheckCircle2 className="h-3.5 w-3.5" /> اعتماد
-                        </Button>
+                        </GuardedButton>
                       )}
                       {d.status !== "cancelled" && d.status !== "draft" && (
-                        <Button variant="ghost" size="sm" className="gap-1 text-xs text-red-600" onClick={() => handleStatusChange(d.id, "cancelled")}>
+                        <GuardedButton perm="documents:delete" variant="ghost" size="sm" className="gap-1 text-xs text-red-600" onClick={() => handleStatusChange(d.id, "cancelled")}>
                           <XCircle className="h-3.5 w-3.5" /> إلغاء
-                        </Button>
+                        </GuardedButton>
                       )}
                       {d.status === "cancelled" && (
                         <Button variant="ghost" size="sm" className="gap-1 text-xs text-gray-600" onClick={() => handleStatusChange(d.id, "draft")}>
@@ -235,36 +253,45 @@ function DocumentsList() {
 function FoldersTab() {
   const { data: foldersResp, isLoading, isError } = useApiQuery<any>(["doc-folders"], "/documents/folders");
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: "", color: "" });
   const items = asList(foldersResp);
 
-  const createMut = useApiMutation<any, { name: string; color: string }>(
+  const createMut = useApiMutation<any, FolderForm>(
     "/documents/folders",
     "POST",
     [["doc-folders"]],
-    {
-      successMessage: "تم إنشاء المجلد",
-      onSuccess: () => {
-        setForm({ name: "", color: "" });
-        setShowForm(false);
-      },
-    }
+    { successMessage: "تم إنشاء المجلد" },
   );
-  const handleCreate = () => createMut.mutate(form);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">المجلدات</h3>
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>
+        <GuardedButton perm="documents:create" size="sm" onClick={() => setShowForm(!showForm)}>
           {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة مجلد</>}
-        </Button>
+        </GuardedButton>
       </div>
       {showForm && (
-        <Card><CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>الاسم</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-          <div><Label>اللون</Label><Input value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} placeholder="#3B82F6" /></div>
-          <div className="md:col-span-2"><Button onClick={handleCreate} disabled={!form.name}>حفظ</Button></div>
+        <Card><CardContent className="p-4">
+          <FormShell
+            schema={folderSchema}
+            defaultValues={{ name: "", color: "" }}
+            submitLabel="حفظ"
+            secondaryActions={
+              <Button type="button" size="sm" variant="ghost" onClick={() => setShowForm(false)}>
+                إلغاء
+              </Button>
+            }
+            onSubmit={async (values, ctx) => {
+              await createMut.mutateAsync(values);
+              ctx.reset();
+              setShowForm(false);
+            }}
+          >
+            <FormGrid cols={2}>
+              <FormTextField name="name" label="الاسم" required />
+              <FormTextField name="color" label="اللون" placeholder="#3B82F6" />
+            </FormGrid>
+          </FormShell>
         </CardContent></Card>
       )}
       {isLoading ? (
@@ -305,36 +332,45 @@ const templateColumns: DataTableColumn<any>[] = [
 function TemplatesTab() {
   const { data: templatesResp, isLoading } = useApiQuery<any>(["doc-templates"], "/documents/templates");
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: "", description: "", category: "" });
   const items = asList(templatesResp);
 
-  const createMut = useApiMutation<any, { name: string; description: string; category: string }>(
+  const createMut = useApiMutation<any, TemplateForm>(
     "/documents/templates",
     "POST",
     [["doc-templates"]],
-    {
-      successMessage: "تم إنشاء القالب",
-      onSuccess: () => {
-        setForm({ name: "", description: "", category: "" });
-        setShowForm(false);
-      },
-    }
+    { successMessage: "تم إنشاء القالب" },
   );
-  const handleCreate = () => createMut.mutate(form);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4 justify-end">
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>
+        <GuardedButton perm="documents:create" size="sm" onClick={() => setShowForm(!showForm)}>
           {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة قالب</>}
-        </Button>
+        </GuardedButton>
       </div>
       {showForm && (
-        <Card><CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>الاسم</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-          <div><Label>التصنيف</Label><Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} /></div>
-          <div className="md:col-span-2"><Label>الوصف</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
-          <div className="md:col-span-2"><Button onClick={handleCreate} disabled={!form.name}>حفظ</Button></div>
+        <Card><CardContent className="p-4">
+          <FormShell
+            schema={templateSchema}
+            defaultValues={{ name: "", description: "", category: "" }}
+            submitLabel="حفظ"
+            secondaryActions={
+              <Button type="button" size="sm" variant="ghost" onClick={() => setShowForm(false)}>
+                إلغاء
+              </Button>
+            }
+            onSubmit={async (values, ctx) => {
+              await createMut.mutateAsync(values);
+              ctx.reset();
+              setShowForm(false);
+            }}
+          >
+            <FormGrid cols={2}>
+              <FormTextField name="name" label="الاسم" required />
+              <FormTextField name="category" label="التصنيف" />
+              <FormTextField name="description" label="الوصف" className="md:col-span-2" />
+            </FormGrid>
+          </FormShell>
         </CardContent></Card>
       )}
       <DataTable
@@ -353,7 +389,7 @@ export default function DocumentsPage() {
   const { data: stats, isLoading, isError } = useApiQuery<any>(["doc-stats"], "/documents/stats");
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const s = stats || {};
 

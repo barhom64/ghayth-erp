@@ -4,6 +4,7 @@ import { Link, useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Plus, Calendar, Clock, CheckCircle, XCircle, ChevronDown, ChevronUp, Timer, Copy, Download } from "lucide-react";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -208,7 +209,7 @@ export default function LeavesPage() {
   ];
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   return (
     <PageShell
@@ -218,7 +219,7 @@ export default function LeavesPage() {
       actions={
         <div className="flex items-center gap-2">
           <Link href="/hr/leaves/create">
-            <Button size="sm"><Plus className="h-4 w-4 me-1" />طلب إجازة</Button>
+            <GuardedButton perm="hr:create" size="sm"><Plus className="h-4 w-4 me-1" />طلب إجازة</GuardedButton>
           </Link>
         </div>
       }

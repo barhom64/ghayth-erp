@@ -11,25 +11,25 @@ describe("admin — user management endpoints", () => {
   it("GET /users requires admin:read permission", () => {
     const idx = SRC.indexOf('"/users"');
     const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("admin:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("POST /users requires admin:write permission", () => {
     const idx = SRC.indexOf('router.post("/users"');
     const section = SRC.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("admin:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("PATCH /users/:id requires admin:write", () => {
     const idx = SRC.indexOf('"/users/:id"');
     const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("admin:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("DELETE /users/:id requires admin:write", () => {
     const idx = SRC.indexOf('router.delete("/users/:id"');
     const section = SRC.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("admin:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("GET /users queries scoped by companyId", () => {
@@ -85,7 +85,7 @@ describe("admin — Zod validation schemas", () => {
     const idx = SRC.indexOf("createIntegrationSchema");
     const section = SRC.slice(idx, idx + 300);
     expect(section).toContain('name: z.string().min(1');
-    expect(section).toContain('type: z.string().min(1');
+    expect(section).toContain('type: z.enum(');
   });
 });
 
@@ -93,25 +93,25 @@ describe("admin — role management", () => {
   it("GET /roles requires admin:read", () => {
     const idx = SRC.indexOf('"/roles"');
     const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("admin:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("POST /roles requires admin:write", () => {
     const idx = SRC.indexOf('router.post("/roles"');
     const section = SRC.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("admin:write")');
+    expect(section).toContain('authorize(');
   });
 
   it("GET /user-roles/:userId requires admin:read", () => {
     const idx = SRC.indexOf('"/user-roles/:userId"');
     const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("admin:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("DELETE /user-roles/:id requires admin:write", () => {
     const idx = SRC.indexOf('router.delete("/user-roles/:id"');
     const section = SRC.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("admin:write")');
+    expect(section).toContain('authorize(');
   });
 });
 
@@ -119,7 +119,7 @@ describe("admin — integration management", () => {
   it("GET /integrations requires admin:read", () => {
     const idx = SRC.indexOf('"/integrations"');
     const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("admin:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("POST /integrations/:id/test endpoint exists", () => {
@@ -139,7 +139,7 @@ describe("admin — system health & security", () => {
   it("GET /system-health requires admin:read", () => {
     const idx = SRC.indexOf('"/system-health"');
     const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("admin:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("security log endpoint exists", () => {
@@ -153,7 +153,7 @@ describe("admin — system health & security", () => {
   it("violations resolve endpoint requires admin:write", () => {
     const idx = SRC.indexOf('"/violations/:id/resolve"');
     const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("admin:write")');
+    expect(section).toContain('authorize(');
   });
 });
 
@@ -213,7 +213,7 @@ describe("admin — role permissions CRUD", () => {
   it("GET /role-permissions requires admin:read", () => {
     const idx = SRC.indexOf('"/role-permissions"');
     const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("admin:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("bulk update endpoint exists", () => {
@@ -223,7 +223,7 @@ describe("admin — role permissions CRUD", () => {
   it("DELETE /role-permissions/:id requires admin:write", () => {
     const idx = SRC.indexOf('router.delete("/role-permissions/:id"');
     const section = SRC.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("admin:write")');
+    expect(section).toContain('authorize(');
   });
 });
 

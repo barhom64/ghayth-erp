@@ -8,7 +8,41 @@ import { Router } from "express";
 import { HR_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
+
+// Local row shapes — hr_overtime_requests not in @workspace/db schema.
+
+interface OvertimeRow extends Record<string, unknown> {
+  id: number;
+  companyId: number;
+  branchId?: number | null;
+  assignmentId: number;
+  employeeId?: number | null;
+  requestNumber?: string | null;
+  overtimeDate: string;
+  hours: number | string;
+  rate?: number | string | null;
+  totalAmount?: number | string | null;
+  reason?: string | null;
+  status: string;
+  approvedBy?: number | null;
+  approvedAt?: string | null;
+  rejectedReason?: string | null;
+  createdBy?: number | null;
+  createdAt: string;
+  updatedAt?: string | null;
+  deletedAt?: string | null;
+  employeeName?: string | null;
+}
+
+interface OvertimeStatsRow {
+  total: number | string;
+  pending: number | string;
+  approved: number | string;
+  rejected: number | string;
+  totalHours: number | string;
+  totalAmount: number | string;
+}
 import {
   handleRouteError,
   NotFoundError,
@@ -97,21 +131,21 @@ const approvalDecisionSchema = z.object({
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/overtime — قائمة الطلبات
 // ═══════════════════════════════════════════════════════════════════════════════
-router.get("/overtime", requirePermission("hr:read"), async (req, res) => {
+router.get("/overtime", authorize({ feature: "hr.overtime", action: "list" }), async (req, res) => {
   try {
     await ensureOvertimeTable();
     const scope = req.scope!;
     const { status, assignmentId, month } = req.query as any;
 
     let where = `o."companyId" = $1 AND o."deletedAt" IS NULL`;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     let idx = 2;
 
     if (status) { where += ` AND o.status = $${idx}`; params.push(status); idx++; }
     if (assignmentId) { where += ` AND o."assignmentId" = $${idx}`; params.push(Number(assignmentId)); idx++; }
     if (month) { where += ` AND o."payrollPeriod" = $${idx}`; params.push(month); idx++; }
 
-    const data = await rawQuery<any>(
+    const data = await rawQuery<OvertimeRow>(
       `SELECT o.*, e.name AS "employeeName", e."empNumber",
               ea."jobTitle", b.name AS "branchName"
        FROM hr_overtime_requests o
@@ -124,7 +158,7 @@ router.get("/overtime", requirePermission("hr:read"), async (req, res) => {
       params
     );
 
-    const [stats] = await rawQuery<any>(
+    const [stats] = await rawQuery<OvertimeStatsRow>(
       `SELECT
          COUNT(*) AS total,
          COUNT(*) FILTER (WHERE status = 'pending') AS pending,
@@ -136,7 +170,7 @@ router.get("/overtime", requirePermission("hr:read"), async (req, res) => {
       [scope.companyId]
     );
 
-    res.json({ data, stats: stats ?? {}, total: data.length });
+    res.json(maskFields(req, { data, stats: stats ?? {}, total: data.length }));
   } catch (err) {
     handleRouteError(err, res, "خطأ في قراءة طلبات الوقت الإضافي");
   }
@@ -145,11 +179,11 @@ router.get("/overtime", requirePermission("hr:read"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/overtime/my — طلباتي (Self-Service)
 // ═══════════════════════════════════════════════════════════════════════════════
-router.get("/overtime/my", requirePermission("hr:read"), async (req, res) => {
+router.get("/overtime/my", authorize({ feature: "hr.overtime.my", action: "list" }), async (req, res) => {
   try {
     await ensureOvertimeTable();
     const scope = req.scope!;
-    const data = await rawQuery<any>(
+    const data = await rawQuery<OvertimeRow>(
       `SELECT o.*, e.name AS "employeeName"
        FROM hr_overtime_requests o
        JOIN employees e ON e.id = o."employeeId"
@@ -166,12 +200,12 @@ router.get("/overtime/my", requirePermission("hr:read"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/overtime/summary — ملخص شهري للربط بالرواتب
 // ═══════════════════════════════════════════════════════════════════════════════
-router.get("/overtime/summary", requirePermission("hr:read"), async (req, res) => {
+router.get("/overtime/summary", authorize({ feature: "hr.overtime", action: "list" }), async (req, res) => {
   try {
     await ensureOvertimeTable();
     const scope = req.scope!;
     const period = String(req.query.period || req.query.month || "");
-    const data = await rawQuery<any>(
+    const data = await rawQuery<OvertimeRow>(
       `SELECT o."assignmentId", e.name AS "employeeName", e."empNumber",
               SUM(o.hours) AS "totalHours", SUM(o."totalAmount") AS "totalAmount",
               COUNT(*) AS "requestCount"
@@ -185,7 +219,7 @@ router.get("/overtime/summary", requirePermission("hr:read"), async (req, res) =
       [scope.companyId, period]
     );
 
-    const [totals] = await rawQuery<any>(
+    const [totals] = await rawQuery<{ totalHours: number | string; totalAmount: number | string }>(
       `SELECT COALESCE(SUM(hours), 0) AS hours, COALESCE(SUM("totalAmount"), 0) AS amount
        FROM hr_overtime_requests
        WHERE "companyId" = $1 AND "payrollPeriod" = $2 AND status = 'approved' AND "deletedAt" IS NULL`,
@@ -201,12 +235,12 @@ router.get("/overtime/summary", requirePermission("hr:read"), async (req, res) =
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /hr/overtime/:id — تفاصيل الطلب
 // ═══════════════════════════════════════════════════════════════════════════════
-router.get("/overtime/:id", requirePermission("hr:read"), async (req, res) => {
+router.get("/overtime/:id", authorize({ feature: "hr.overtime", action: "view" }), async (req, res) => {
   try {
     await ensureOvertimeTable();
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [item] = await rawQuery<any>(
+    const [item] = await rawQuery<OvertimeRow>(
       `SELECT o.*, e.name AS "employeeName", e."empNumber",
               ea."jobTitle", ea.salary, b.name AS "branchName"
        FROM hr_overtime_requests o
@@ -217,7 +251,7 @@ router.get("/overtime/:id", requirePermission("hr:read"), async (req, res) => {
       [id, scope.companyId]
     );
     if (!item) throw new NotFoundError("طلب الوقت الإضافي غير موجود");
-    res.json(item);
+    res.json(maskFields(req, item));
   } catch (err) {
     handleRouteError(err, res, "خطأ في قراءة تفاصيل الطلب");
   }
@@ -226,7 +260,7 @@ router.get("/overtime/:id", requirePermission("hr:read"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // POST /hr/overtime — طلب وقت إضافي
 // ═══════════════════════════════════════════════════════════════════════════════
-router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
+router.post("/overtime", authorize({ feature: "hr.overtime", action: "create" }), async (req, res) => {
   try {
     await ensureOvertimeTable();
     const scope = req.scope!;
@@ -235,7 +269,7 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
     const hours = b.hours;
 
     // جلب بيانات الموظف
-    const [emp] = await rawQuery<any>(
+    const [emp] = await rawQuery<{ salary: number | string | null; employeeId: number; branchId: number | null }>(
       `SELECT ea.salary, ea."employeeId", ea."branchId"
        FROM employee_assignments ea WHERE ea.id = $1 AND ea."companyId" = $2`,
       [b.assignmentId, scope.companyId]
@@ -247,7 +281,7 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
     const totalAmount = roundTo2(hourlyRate * multiplier * hours);
 
     // التحقق من عدم التكرار
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<{ id: number }>(
       `SELECT id FROM hr_overtime_requests
        WHERE "assignmentId" = $1 AND "overtimeDate" = $2
          AND "companyId" = $3 AND "deletedAt" IS NULL AND status != 'rejected'`,
@@ -326,10 +360,8 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
       details: JSON.stringify({ requestNumber, hours, totalAmount, overtimeDate: b.overtimeDate, assignmentId: b.assignmentId }),
     }).catch((e) => logger.error(e, "hr-overtime background task failed"));
 
-    res.status(201).json({
-      id: insertId, requestNumber, totalAmount,
-      approval: approvalResult ?? { requiresApproval: false },
-    });
+    const [row] = await rawQuery<OvertimeRow>(`SELECT * FROM hr_overtime_requests WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json({ ...row, approval: approvalResult ?? { requiresApproval: false } });
   } catch (err) {
     handleRouteError(err, res, "خطأ في إنشاء طلب الوقت الإضافي");
   }
@@ -338,7 +370,7 @@ router.post("/overtime", requirePermission("hr:create"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // PATCH /hr/overtime/:id/approve — اعتماد الطلب
 // ═══════════════════════════════════════════════════════════════════════════════
-router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req, res) => {
+router.patch("/overtime/:id/approve", authorize({ feature: "hr.overtime", action: "update" }), async (req, res) => {
   try {
     const b = zodParse(approvalDecisionSchema.safeParse(req.body ?? {}));
     const { approved = true, reason, notes } = b;
@@ -351,14 +383,13 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
       );
     }
 
-    const [item] = await rawQuery<any>(
+    const [item] = await rawQuery<OvertimeRow>(
       `SELECT * FROM hr_overtime_requests WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!item) throw new NotFoundError("الطلب غير موجود");
     if (item.status !== "pending") throw new ConflictError("لا يمكن اعتماد طلب بحالة: " + item.status);
 
-    // منع الموظف من اعتماد طلبه الخاص
     if (item.assignmentId === scope.activeAssignmentId) {
       throw new ForbiddenError("لا يمكنك اعتماد طلبك الخاص");
     }
@@ -366,8 +397,8 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
     const rejectionReason = reason || notes;
     if (!approved) {
       const { affectedRows } = await rawExecute(
-        `UPDATE hr_overtime_requests SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND status = 'pending'`,
-        [rejectionReason || null, item.id]
+        `UPDATE hr_overtime_requests SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status = 'pending' AND "deletedAt" IS NULL`,
+        [rejectionReason || null, item.id, scope.companyId]
       );
       if (!affectedRows) throw new ConflictError("تم تحديث الطلب مسبقاً — أعد التحميل");
       processApprovalStep({
@@ -380,21 +411,19 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
         type: "overtime_rejected", title: "تم رفض طلب الوقت الإضافي",
         body: `تم رفض الطلب ${item.requestNumber}${rejectionReason ? " — السبب: " + rejectionReason : ""}`,
         priority: "normal", refType: "hr_overtime_request", refId: item.id,
-      }).catch((e) => logger.error(e, "hr-overtime background task failed"));
-      emitEvent({
-        companyId: scope.companyId,
-        branchId: scope.branchId,
-        userId: scope.userId,
-        action: "hr.overtime.rejected",
-        entity: "hr_overtime_requests",
-        entityId: item.id,
-        details: JSON.stringify({ requestNumber: item.requestNumber, reason: rejectionReason }),
-      }).catch((e) => logger.error(e, "hr-overtime background task failed"));
+      }).catch((e) => logger.error(e, "hr-overtime notification failed"));
+      try {
+        await rawExecute(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('hr_overtime_request',$1,'rejected',$2,$3,$4)`,
+          [item.id, rejectionReason || null, scope.userId, scope.companyId]
+        );
+      } catch (e) { logger.error(e, "Failed to log approval action"); }
+      emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "hr.overtime.rejected", entity: "hr_overtime_requests", entityId: item.id, details: JSON.stringify({ requestNumber: item.requestNumber, reason: rejectionReason }) }).catch((e) => logger.error(e, "hr-overtime background task failed"));
       res.json({ success: true, message: "تم رفض الطلب" });
       return;
     }
 
-    // ── معالجة خطوة الموافقة في السلسلة ──
+    // ── معالجة خطوة الموافقة ──
     const chainResult = await processApprovalStep({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -416,8 +445,8 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
     const { affectedRows } = await rawExecute(
       `UPDATE hr_overtime_requests
        SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW(), "updatedAt" = NOW()
-       WHERE id = $2 AND status = 'pending'`,
-      [scope.userId, item.id]
+       WHERE id = $2 AND "companyId" = $3 AND status = 'pending' AND "deletedAt" IS NULL`,
+      [scope.userId, item.id, scope.companyId]
     );
     if (!affectedRows) throw new ConflictError("تم تحديث الطلب مسبقاً — أعد التحميل");
 
@@ -427,6 +456,13 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
       body: `تمت الموافقة على ${item.hours} ساعات إضافية — ${item.requestNumber}`,
       priority: "normal", refType: "hr_overtime_request", refId: item.id,
     }).catch((e) => logger.error(e, "hr-overtime background task failed"));
+
+    try {
+      await rawExecute(
+        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('hr_overtime_request',$1,'approved',$2,$3,$4)`,
+        [item.id, notes || null, scope.userId, scope.companyId]
+      );
+    } catch (e) { logger.error(e, "Failed to log approval action"); }
 
     await createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
@@ -452,7 +488,7 @@ router.patch("/overtime/:id/approve", requirePermission("hr:update"), async (req
 // ═══════════════════════════════════════════════════════════════════════════════
 // PATCH /hr/overtime/:id/reject — رفض الطلب
 // ═══════════════════════════════════════════════════════════════════════════════
-router.patch("/overtime/:id/reject", requirePermission("hr:update"), async (req, res) => {
+router.patch("/overtime/:id/reject", authorize({ feature: "hr.overtime", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -461,7 +497,7 @@ router.patch("/overtime/:id/reject", requirePermission("hr:update"), async (req,
     }
 
     const b = zodParse(rejectOvertimeSchema.safeParse(req.body));
-    const [item] = await rawQuery<any>(
+    const [item] = await rawQuery<OvertimeRow>(
       `SELECT * FROM hr_overtime_requests WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -475,8 +511,8 @@ router.patch("/overtime/:id/reject", requirePermission("hr:update"), async (req,
     }).catch((e) => logger.error(e, "hr-overtime background task failed"));
 
     const { affectedRows } = await rawExecute(
-      `UPDATE hr_overtime_requests SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND status = 'pending'`,
-      [b.reason || null, item.id]
+      `UPDATE hr_overtime_requests SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status = 'pending' AND "deletedAt" IS NULL`,
+      [b.reason || null, item.id, scope.companyId]
     );
     if (!affectedRows) throw new ConflictError("تم تحديث الطلب مسبقاً — أعد التحميل");
 

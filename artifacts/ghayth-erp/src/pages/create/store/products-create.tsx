@@ -74,7 +74,7 @@ export default function ProductsCreate() {
               <SelectContent>
                 <SelectItem value="active">نشط</SelectItem>
                 <SelectItem value="inactive">غير نشط</SelectItem>
-                <SelectItem value="out_of_stock">نفد المخزون</SelectItem>
+                <SelectItem value="draft">مسودة</SelectItem>
               </SelectContent>
             </Select>
           </FormFieldWrapper>
@@ -86,7 +86,7 @@ export default function ProductsCreate() {
         <FileDropZone files={attachments} onFilesChange={setAttachments} />
         <div className="flex justify-end gap-3 pt-4">
           <Button type="button" variant="outline" onClick={() => setLocation("/store")}>إلغاء</Button>
-          <Button type="submit" disabled={createMut.isPending}>{createMut.isPending ? "جاري الإضافة..." : "إضافة"}</Button>
+          <Button type="submit" disabled={createMut.isPending} rateLimitAware>{createMut.isPending ? "جاري الإضافة..." : "إضافة"}</Button>
         </div>
       </div>
       </form>

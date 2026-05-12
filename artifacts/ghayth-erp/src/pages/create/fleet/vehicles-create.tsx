@@ -14,7 +14,7 @@ import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/compo
 const DRAFT_KEY = "fleet_vehicles_create";
 const INITIAL = {
   plateNumber: "", make: "", model: "", year: "", color: "", vinNumber: "",
-  fuelType: "gasoline", currentMileage: "", fuelCapacity: "", status: "active",
+  fuelType: "gasoline", currentMileage: "", fuelCapacity: "", status: "available",
   insuranceExpiry: "", registrationExpiry: "", notes: "",
   registrationNumber: "", plateType: "", sequenceNumber: "", inspectionDate: "", nextInspectionDate: "",
 };
@@ -103,9 +103,10 @@ export default function VehiclesCreate() {
             <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="active">نشطة</SelectItem>
+                <SelectItem value="available">متاحة</SelectItem>
+                <SelectItem value="in_use">قيد الاستخدام</SelectItem>
                 <SelectItem value="maintenance">في الصيانة</SelectItem>
-                <SelectItem value="inactive">غير نشطة</SelectItem>
+                <SelectItem value="out_of_service">خارج الخدمة</SelectItem>
               </SelectContent>
             </Select>
           </FormFieldWrapper>
@@ -149,7 +150,7 @@ export default function VehiclesCreate() {
         <FileDropZone files={attachments} onFilesChange={setAttachments} />
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/fleet")}>إلغاء</Button>
-          <Button onClick={handleSubmit} disabled={addVehicle.isPending}>{addVehicle.isPending ? "جاري الإضافة..." : "إضافة"}</Button>
+          <Button onClick={handleSubmit} disabled={addVehicle.isPending} rateLimitAware>{addVehicle.isPending ? "جاري الإضافة..." : "إضافة"}</Button>
         </div>
       </div>
     </CreatePageLayout>

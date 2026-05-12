@@ -4,6 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -56,7 +57,7 @@ export function RoleAssignmentTab() {
   const assignedKeys = (userRoles || []).map(r => r.roleKey);
 
   if (isLoading1 || isLoading2) return <LoadingSpinner />;
-  if (isError1 || isError2) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError1 || isError2) return <ErrorState />;
 
   return (
     <div className="space-y-4">
@@ -115,9 +116,9 @@ export function RoleAssignmentTab() {
                           </div>
                         </div>
                       </div>
-                      <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => removeRole(role.id)}>
+                      <GuardedButton perm="admin:create" variant="ghost" size="sm" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => removeRole(role.id)}>
                         <Trash2 className="h-4 w-4" />
-                      </Button>
+                      </GuardedButton>
                     </div>
                   ))}
                 </div>

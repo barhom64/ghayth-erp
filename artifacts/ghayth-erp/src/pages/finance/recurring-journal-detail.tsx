@@ -9,6 +9,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
   ListChecks, History,
 } from "lucide-react";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const FREQUENCY_LABEL: Record<string, string> = {
   daily: "يومي",
@@ -21,6 +22,7 @@ const FREQUENCY_LABEL: Record<string, string> = {
 export default function RecurringJournalDetailPage() {
   const [, params] = useRoute("/finance/recurring-journals/:id");
   const id = params?.id || "";
+  const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("recurring_journal", id);
 
   const { data: rj, isLoading, isError, refetch } = useApiQuery<any>(
     ["recurring-journal-detail", id],
@@ -141,7 +143,8 @@ export default function RecurringJournalDetailPage() {
       error={isError ? true : undefined}
       onRetry={() => refetch()}
       overview={overview}
-      extraTabs={extraTabs}
+      extraTabs={[...extraTabs, ...registryExtraTabs]}
+      hideTabs={registryHideTabs}
     />
   );
 }

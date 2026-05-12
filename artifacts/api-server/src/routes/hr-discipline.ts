@@ -8,7 +8,7 @@ import { Router } from "express";
 import { HR_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import {
   handleRouteError,
   NotFoundError,
@@ -54,6 +54,153 @@ const router = Router();
 
 
 
+interface MemoRow {
+  id: number;
+  companyId: number;
+  branchId: number | null;
+  memoNumber: string;
+  assignmentId: number;
+  employeeId: number;
+  violationId: number | null;
+  regulationId: number | null;
+  incidentType: string;
+  incidentDate: string;
+  incidentDurationMinutes: number | null;
+  status: string;
+  source: string | null;
+  occurrenceCount: number | null;
+  appliedPenaltyLabel: string | null;
+  appliedDeductionAmount: number | string;
+  appliedExtraDeduction: number | string;
+  terminationDecided: boolean;
+  managerId: number | null;
+  gmId: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+  deletedAt: string | null;
+  employeeName: string;
+  empNumber: string | null;
+  regSection: string | null;
+  regArticle: string | null;
+  regTitle: string | null;
+  [k: string]: unknown;
+}
+
+interface RegulationRow {
+  id: number;
+  companyId: number;
+  section: string;
+  articleNumber: string;
+  title: string;
+  description: string | null;
+  penalty1: string | null;
+  penalty2: string | null;
+  penalty3: string | null;
+  penalty4: string | null;
+  extraDeduction: number | string | null;
+  severity: string | null;
+  isTermination: boolean;
+  legalReference: string | null;
+  effectiveFrom: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string | null;
+  deletedAt: string | null;
+}
+
+interface MemoListRow {
+  id: number;
+  memoNumber: string;
+  incidentType: string;
+  incidentDate: string;
+  incidentDurationMinutes: number | null;
+  status: string;
+  source: string | null;
+  occurrenceCount: number | null;
+  appliedPenaltyLabel: string | null;
+  appliedDeductionAmount: number | string;
+  appliedExtraDeduction: number | string;
+  terminationDecided: boolean;
+  createdAt: string;
+  employeeId: number;
+  employeeName: string;
+  empNumber: string | null;
+  regulationId: number | null;
+  regSection: string | null;
+  regArticle: string | null;
+  regTitle: string | null;
+}
+
+interface MemoEventRow {
+  id: number;
+  memoId: number;
+  companyId: number;
+  actorId: number | null;
+  actorRole: string;
+  action: string;
+  payload: unknown;
+  note: string | null;
+  createdAt: string;
+}
+
+interface AssignmentBriefRow {
+  id: number;
+  companyId: number;
+  branchId: number | null;
+  employeeId: number;
+  salary?: number | string | null;
+}
+
+interface DisciplineStatsRow {
+  pendingEmployee: string | number;
+  pendingManager?: string | number;
+  pendingGm?: string | number;
+  approved?: string | number;
+  rejected?: string | number;
+  draft?: string | number;
+  totalActive?: string | number;
+  pending?: string | number;
+  ytdCount?: string | number;
+  ytdDeductions?: string | number;
+  currentEscalation?: string | number;
+  terminations?: string | number;
+}
+
+interface DisciplineTotalsRow {
+  pendingEmployee: string | number;
+  pendingManager: string | number;
+  pendingGm: string | number;
+  approved: string | number;
+  rejected: string | number;
+}
+
+interface MemoRecentRow {
+  id: number;
+  memoNumber: string;
+  incidentType: string;
+  incidentDate: string;
+  status: string;
+  appliedPenaltyLabel: string | null;
+  appliedDeductionAmount: number | string;
+  appliedExtraDeduction: number | string;
+  occurrenceCount: number | null;
+  createdAt: string;
+}
+
+interface DetectionStatsRow {
+  totalRuns: string | number;
+  totalDetected: string | number;
+  totalViolations: string | number;
+  totalMemos: string | number;
+  totalErrors: string | number;
+  lastRunAt: string | null;
+}
+
+interface DetectionByTypeRow {
+  type: string | null;
+  count: string | number;
+}
+
 async function logMemoEvent(params: {
   memoId: number;
   companyId: number;
@@ -79,7 +226,7 @@ async function logMemoEvent(params: {
 }
 
 async function getMemo(companyId: number, memoId: number) {
-  const [row] = await rawQuery<any>(
+  const [row] = await rawQuery<MemoRow>(
     `SELECT m.*, e.name AS "employeeName", e."empNumber",
             r.section AS "regSection", r."articleNumber" AS "regArticle", r.title AS "regTitle"
        FROM hr_inquiry_memos m
@@ -96,7 +243,7 @@ async function getMemo(companyId: number, memoId: number) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 // List — مع فلترة اختيارية على القسم
-router.get("/regulation", requirePermission("hr:read"), async (req, res) => {
+router.get("/regulation", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const section = (req.query.section as string) || null;
@@ -106,7 +253,7 @@ router.get("/regulation", requirePermission("hr:read"), async (req, res) => {
       params.push(section);
       where += ` AND section = $${params.length}`;
     }
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<RegulationRow>(
       `SELECT id, section, "articleNumber", title, description,
               penalty1, penalty2, penalty3, penalty4, "extraDeduction",
               severity, "isTermination", "legalReference", "effectiveFrom",
@@ -117,7 +264,7 @@ router.get("/regulation", requirePermission("hr:read"), async (req, res) => {
       params
     );
     // Group by section for UI
-    const grouped: Record<string, any[]> = { work_time: [], work_organization: [], conduct: [] };
+    const grouped: Record<string, RegulationRow[]> = { work_time: [], work_organization: [], conduct: [] };
     for (const row of rows) {
       if (!grouped[row.section]) grouped[row.section] = [];
       grouped[row.section].push(row);
@@ -138,11 +285,11 @@ router.get("/regulation", requirePermission("hr:read"), async (req, res) => {
   }
 });
 
-router.get("/regulation/:id", requirePermission("hr:read"), async (req, res) => {
+router.get("/regulation/:id", authorize({ feature: "hr.discipline", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<RegulationRow>(
       `SELECT * FROM hr_discipline_regulation
         WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -150,7 +297,7 @@ router.get("/regulation/:id", requirePermission("hr:read"), async (req, res) => 
     if (!row) {
       throw new NotFoundError("المادة غير موجودة");
     }
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) {
     handleRouteError(err, res, "Get regulation article error:");
   }
@@ -158,7 +305,7 @@ router.get("/regulation/:id", requirePermission("hr:read"), async (req, res) => 
 
 const createRegulationSchema = z.object({
   section: z.enum(["work_time", "work_organization", "conduct"], { message: "القسم غير صحيح" }),
-  articleNumber: z.string().min(1, "رقم المادة مطلوب"),
+  articleNumber: z.coerce.number({ message: "رقم المادة مطلوب" }),
   title: z.string().min(1, "العنوان مطلوب"),
   description: z.string().optional(),
   penalty1: z.string().optional(),
@@ -259,10 +406,10 @@ const appealDecisionSchema = z.object({
 });
 
 const closeMemoSchema = z.object({
-  closureNote: z.string().optional().nullable(),
+  note: z.string().optional().nullable(),
 });
 
-router.post("/regulation", requirePermission("hr:create"), async (req, res) => {
+router.post("/regulation", authorize({ feature: "hr.discipline", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const body = zodParse(createRegulationSchema.safeParse(req.body));
@@ -300,13 +447,14 @@ router.post("/regulation", requirePermission("hr:create"), async (req, res) => {
       entityId: insertId,
       details: JSON.stringify({ section, articleNumber, title, severity: severity ?? "medium" }),
     }).catch((e) => logger.error(e, "hr-discipline background task failed"));
-    res.status(201).json({ id: insertId });
+    const [row] = await rawQuery<RegulationRow>(`SELECT * FROM hr_discipline_regulation WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json(row || { id: insertId });
   } catch (err) {
     handleRouteError(err, res, "Create regulation article error:");
   }
 });
 
-router.patch("/regulation/:id", requirePermission("hr:update"), async (req, res) => {
+router.patch("/regulation/:id", authorize({ feature: "hr.discipline", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -328,7 +476,7 @@ router.patch("/regulation/:id", requirePermission("hr:update"), async (req, res)
     params.push(id, scope.companyId);
     await rawExecute(
       `UPDATE hr_discipline_regulation SET ${sets.join(", ")}
-        WHERE id = $${params.length - 1} AND "companyId" = $${params.length}`,
+        WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL`,
       params
     );
     await createAuditLog({
@@ -353,7 +501,7 @@ router.patch("/regulation/:id", requirePermission("hr:update"), async (req, res)
 });
 
 // إعادة استنساخ اللائحة الافتراضية (للشركات التي لم تُبذر)
-router.post("/regulation/reseed", requirePermission("hr:create"), async (req, res) => {
+router.post("/regulation/reseed", authorize({ feature: "hr.discipline", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<{ count: string }>(
@@ -379,7 +527,7 @@ router.post("/regulation/reseed", requirePermission("hr:create"), async (req, re
   }
 });
 
-router.delete("/regulation/:id", requirePermission("hr:delete"), async (req, res) => {
+router.delete("/regulation/:id", authorize({ feature: "hr.discipline", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -414,7 +562,7 @@ router.delete("/regulation/:id", requirePermission("hr:delete"), async (req, res
 // ═════════════════════════════════════════════════════════════════════════════
 
 // List
-router.get("/memos", requirePermission("hr:read"), async (req, res) => {
+router.get("/memos", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const status = (req.query.status as string) || null;
@@ -427,7 +575,7 @@ router.get("/memos", requirePermission("hr:read"), async (req, res) => {
     if (Number.isFinite(employeeId)) { params.push(employeeId); where += ` AND m."employeeId" = $${params.length}`; }
     const regulationIdFilter = req.query.regulationId ? Number(req.query.regulationId) : null;
     if (Number.isFinite(regulationIdFilter)) { params.push(regulationIdFilter); where += ` AND m."regulationId" = $${params.length}`; }
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<MemoListRow>(
       `SELECT m.id, m."memoNumber", m."incidentType", m."incidentDate",
               m."incidentDurationMinutes", m.status, m.source,
               m."occurrenceCount", m."appliedPenaltyLabel",
@@ -444,32 +592,32 @@ router.get("/memos", requirePermission("hr:read"), async (req, res) => {
         LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "List memos error:");
   }
 });
 
 // Detail (with timeline)
-router.get("/memos/:id", requirePermission("hr:read"), async (req, res) => {
+router.get("/memos/:id", authorize({ feature: "hr.discipline", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
-    const events = await rawQuery<any>(
+    const events = await rawQuery<MemoEventRow>(
       `SELECT * FROM hr_inquiry_memo_events
-        WHERE "memoId" = $1 ORDER BY "createdAt" ASC`,
-      [id]
+        WHERE "memoId" = $1 AND "companyId" = $2 ORDER BY "createdAt" ASC`,
+      [id, scope.companyId]
     );
-    res.json({ memo, events });
+    res.json(maskFields(req, { memo, events }));
   } catch (err) {
     handleRouteError(err, res, "Get memo error:");
   }
 });
 
 // Create a new memo (manually by manager/HR)
-router.post("/memos", requirePermission("hr:create"), async (req, res) => {
+router.post("/memos", authorize({ feature: "hr.discipline", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const body = zodParse(createMemoSchema.safeParse(req.body));
@@ -490,7 +638,7 @@ router.post("/memos", requirePermission("hr:create"), async (req, res) => {
     } = body;
 
     // جلب بيانات التعيين للتحقق من ملكية الشركة
-    const [assignment] = await rawQuery<any>(
+    const [assignment] = await rawQuery<AssignmentBriefRow>(
       `SELECT id, "companyId", "branchId", "employeeId"
          FROM employee_assignments WHERE id = $1`,
       [assignmentId]
@@ -576,14 +724,15 @@ router.post("/memos", requirePermission("hr:create"), async (req, res) => {
       after: { memoNumber, incidentType, incidentDate, assignmentId, regulationId: resolvedRegulationId, source: "manual" },
     }).catch((e) => logger.error(e, "hr-discipline background task failed"));
 
-    res.status(201).json({ id: memoId, memoNumber, regulationId: resolvedRegulationId, penaltyPreview });
+    const [row] = await rawQuery<MemoRow>(`SELECT * FROM hr_inquiry_memos WHERE id=$1 AND "companyId"=$2`, [memoId, scope.companyId]);
+    res.status(201).json({ ...row, penaltyPreview });
   } catch (err) {
     handleRouteError(err, res, "Create memo error:");
   }
 });
 
 // Step 1: Employee justification
-router.post("/memos/:id/justify", requirePermission("hr:read"), async (req, res) => {
+router.post("/memos/:id/justify", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -602,7 +751,7 @@ router.post("/memos/:id/justify", requirePermission("hr:read"), async (req, res)
       throw new ValidationError("التبرير مطلوب أو يجب الإقرار برفض التبرير", { field: "justification" });
     }
 
-    const managerAssignmentId = await getManagerAssignmentId(scope.companyId, memo.branchId);
+    const managerAssignmentId = await getManagerAssignmentId(scope.companyId, memo.branchId ?? 0);
 
     await applyTransition({
       entity: "hr_inquiry_memos",
@@ -649,7 +798,7 @@ router.post("/memos/:id/justify", requirePermission("hr:read"), async (req, res)
 });
 
 // Step 2: Direct manager recommendation
-router.post("/memos/:id/manager-recommendation", requirePermission("hr:update"), async (req, res) => {
+router.post("/memos/:id/manager-recommendation", authorize({ feature: "hr.discipline", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -690,7 +839,7 @@ router.post("/memos/:id/manager-recommendation", requirePermission("hr:update"),
 });
 
 // Step 3: GM final decision + apply penalty
-router.post("/memos/:id/gm-decision", requirePermission("hr:discipline:approve"), async (req, res) => {
+router.post("/memos/:id/gm-decision", authorize({ feature: "hr.discipline", action: "approve" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -706,10 +855,10 @@ router.post("/memos/:id/gm-decision", requirePermission("hr:discipline:approve")
     if (!memo) throw new NotFoundError("المحضر غير موجود");
 
     // Pre-compute penalty details before the transition
-    const [assignment] = await rawQuery<any>(
+    const [assignment] = await rawQuery<AssignmentBriefRow>(
       `SELECT id, "companyId", "branchId", "employeeId", salary
-         FROM employee_assignments WHERE id = $1`,
-      [memo.assignmentId]
+         FROM employee_assignments WHERE id = $1 AND "companyId" = $2`,
+      [memo.assignmentId, scope.companyId]
     );
     if (!assignment) throw new NotFoundError("التعيين غير موجود");
 
@@ -766,7 +915,7 @@ router.post("/memos/:id/gm-decision", requirePermission("hr:discipline:approve")
         if (decision === "rejected") {
           if (memo.violationId) {
             await client.query(
-              `UPDATE employee_violations SET status = 'rejected' WHERE id = $1 AND "companyId" = $2 AND status = 'pending'`,
+              `UPDATE employee_violations SET status = 'rejected' WHERE id = $1 AND "companyId" = $2 AND status = 'pending' AND "deletedAt" IS NULL`,
               [memo.violationId, scope.companyId]
             );
           }
@@ -796,7 +945,7 @@ router.post("/memos/:id/gm-decision", requirePermission("hr:discipline:approve")
                       "regulationId" = COALESCE("regulationId", $1),
                       "occurrenceCount" = $2,
                       deduction = $3
-                WHERE id = $4 AND "companyId" = $5`,
+                WHERE id = $4 AND "companyId" = $5 AND "deletedAt" IS NULL`,
               [memo.regulationId, occurrenceCount, baseAmount + extraAmount, memo.violationId, scope.companyId]
             );
           }
@@ -838,7 +987,7 @@ router.post("/memos/:id/gm-decision", requirePermission("hr:discipline:approve")
 });
 
 // Cancel a memo
-router.post("/memos/:id/cancel", requirePermission("hr:update"), async (req, res) => {
+router.post("/memos/:id/cancel", authorize({ feature: "hr.discipline", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -859,9 +1008,9 @@ router.post("/memos/:id/cancel", requirePermission("hr:update"), async (req, res
       onApply: async (_row, _client) => {
         // إذا كان مرتبطاً بمخالفة، نُلغي ربطها
         if (memo.violationId) {
-          await rawExecute(
+          await _client.query(
             `UPDATE employee_violations SET status = 'cancelled'
-              WHERE id = $1 AND "companyId" = $2 AND status IN ('pending', 'under_review')`,
+              WHERE id = $1 AND "companyId" = $2 AND status IN ('pending', 'under_review') AND "deletedAt" IS NULL`,
             [memo.violationId, scope.companyId]
           );
         }
@@ -882,7 +1031,7 @@ router.post("/memos/:id/cancel", requirePermission("hr:update"), async (req, res
 // ─────────────────────────────────────────────────────────────────────────────
 // APPEAL — استئناف الموظف على قرار الجزاء
 // ─────────────────────────────────────────────────────────────────────────────
-router.post("/memos/:id/appeal", requirePermission("hr:read"), async (req, res) => {
+router.post("/memos/:id/appeal", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -931,7 +1080,7 @@ router.post("/memos/:id/appeal", requirePermission("hr:read"), async (req, res) 
   }
 });
 
-router.post("/memos/:id/appeal-decision", requirePermission("hr:discipline:approve"), async (req, res) => {
+router.post("/memos/:id/appeal-decision", authorize({ feature: "hr.discipline", action: "approve" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -955,8 +1104,8 @@ router.post("/memos/:id/appeal-decision", requirePermission("hr:discipline:appro
       after: { status: newStatus, decision, comment, memoNumber: memo.memoNumber },
       onApply: async (_row, _client) => {
         if (decision === "accepted" && memo.violationId) {
-          await rawExecute(
-            `UPDATE employee_violations SET status = 'appeal_accepted' WHERE id = $1 AND "companyId" = $2 AND status = 'approved'`,
+          await _client.query(
+            `UPDATE employee_violations SET status = 'appeal_accepted' WHERE id = $1 AND "companyId" = $2 AND status = 'approved' AND "deletedAt" IS NULL`,
             [memo.violationId, scope.companyId]
           );
         }
@@ -989,10 +1138,11 @@ router.post("/memos/:id/appeal-decision", requirePermission("hr:discipline:appro
 // ─────────────────────────────────────────────────────────────────────────────
 // CLOSE — إقفال المحضر وأرشفته
 // ─────────────────────────────────────────────────────────────────────────────
-router.post("/memos/:id/close", requirePermission("hr:update"), async (req, res) => {
+router.post("/memos/:id/close", authorize({ feature: "hr.discipline", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    const body = zodParse(closeMemoSchema.safeParse(req.body));
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
 
@@ -1009,14 +1159,14 @@ router.post("/memos/:id/close", requirePermission("hr:update"), async (req, res)
       after: { status: "closed", previousStatus: memo.status, memoNumber: memo.memoNumber },
       onApply: async (_row, _client) => {
         if (memo.violationId) {
-          await rawExecute(
-            `UPDATE employee_violations SET status = 'closed' WHERE id = $1 AND "companyId" = $2 AND status IN ('approved', 'rejected', 'appeal_accepted', 'cancelled')`,
+          await _client.query(
+            `UPDATE employee_violations SET status = 'closed' WHERE id = $1 AND "companyId" = $2 AND status IN ('approved', 'rejected', 'appeal_accepted', 'cancelled') AND "deletedAt" IS NULL`,
             [memo.violationId, scope.companyId]
           );
         }
         await logMemoEvent({
           memoId: id, companyId: scope.companyId, actorId: scope.userId,
-          actorRole: "hr", action: "closed", note: req.body.note ?? undefined,
+          actorRole: "hr", action: "closed", note: body.note ?? undefined,
         });
       },
     });
@@ -1029,12 +1179,12 @@ router.post("/memos/:id/close", requirePermission("hr:update"), async (req, res)
 });
 
 // Preview penalty without creating a memo (for UI)
-router.post("/penalty-preview", requirePermission("hr:read"), async (req, res) => {
+router.post("/penalty-preview", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const body = zodParse(penaltyPreviewSchema.safeParse(req.body));
     const { assignmentId, incidentType, incidentDate, durationMinutes, absenceDays, disruptsOthers, regulationId } = body;
-    const [assignment] = await rawQuery<any>(
+    const [assignment] = await rawQuery<AssignmentBriefRow>(
       `SELECT id, "employeeId", "companyId" FROM employee_assignments WHERE id = $1`,
       [assignmentId]
     );
@@ -1071,7 +1221,7 @@ router.post("/penalty-preview", requirePermission("hr:read"), async (req, res) =
 
 // Stats
 // ─── Per-employee violations snapshot — used by employee-detail and create form ───
-router.get("/employee/:employeeId/summary", requirePermission("hr:read"), async (req, res) => {
+router.get("/employee/:employeeId/summary", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const employeeId = parseId(req.params.employeeId, "employeeId");
@@ -1079,7 +1229,7 @@ router.get("/employee/:employeeId/summary", requirePermission("hr:read"), async 
       throw new ValidationError("معرف الموظف غير صالح");
     }
     const yearStart = `${currentYear()}-01-01`;
-    const [stats] = await rawQuery<any>(
+    const [stats] = await rawQuery<DisciplineStatsRow>(
       `SELECT
          COUNT(*) FILTER (WHERE status NOT IN ('cancelled','rejected'))                    AS "totalActive",
          COUNT(*) FILTER (WHERE status IN ('pending_employee','pending_manager','pending_gm','draft')) AS pending,
@@ -1092,7 +1242,7 @@ router.get("/employee/:employeeId/summary", requirePermission("hr:read"), async 
        WHERE "companyId" = $1 AND "employeeId" = $3 AND "deletedAt" IS NULL`,
       [scope.companyId, yearStart, employeeId]
     );
-    const recent = await rawQuery<any>(
+    const recent = await rawQuery<MemoRecentRow>(
       `SELECT id, "memoNumber", "incidentType", "incidentDate", status,
               "appliedPenaltyLabel", "appliedDeductionAmount", "appliedExtraDeduction",
               "occurrenceCount", "createdAt"
@@ -1108,10 +1258,10 @@ router.get("/employee/:employeeId/summary", requirePermission("hr:read"), async 
   }
 });
 
-router.get("/stats", requirePermission("hr:read"), async (req, res) => {
+router.get("/stats", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [totals] = await rawQuery<any>(
+    const [totals] = await rawQuery<DisciplineTotalsRow>(
       `SELECT
          COUNT(*) FILTER (WHERE status = 'pending_employee') AS "pendingEmployee",
          COUNT(*) FILTER (WHERE status = 'pending_manager')  AS "pendingManager",
@@ -1136,7 +1286,7 @@ router.get("/stats", requirePermission("hr:read"), async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /** GET /hr/discipline/auto-detection/settings — إعدادات الرصد التلقائي */
-router.get("/auto-detection/settings", requirePermission("hr:read"), async (req, res) => {
+router.get("/auto-detection/settings", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const settings = await getAutoDetectionSettings(scope.companyId);
@@ -1147,7 +1297,7 @@ router.get("/auto-detection/settings", requirePermission("hr:read"), async (req,
 });
 
 /** PUT /hr/discipline/auto-detection/settings — تحديث إعدادات الرصد التلقائي */
-router.put("/auto-detection/settings", requirePermission("hr:update"), async (req, res) => {
+router.put("/auto-detection/settings", authorize({ feature: "hr.discipline", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     if (!HR_ROLES.includes(scope.role)) {
@@ -1176,7 +1326,7 @@ router.put("/auto-detection/settings", requirePermission("hr:update"), async (re
 });
 
 /** POST /hr/discipline/auto-detection/run — تشغيل الرصد يدوياً */
-router.post("/auto-detection/run", requirePermission("hr:update"), async (req, res) => {
+router.post("/auto-detection/run", authorize({ feature: "hr.discipline", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     if (!HR_ROLES.includes(scope.role)) {
@@ -1207,12 +1357,12 @@ router.post("/auto-detection/run", requirePermission("hr:update"), async (req, r
 });
 
 /** GET /hr/discipline/auto-detection/log — سجل عمليات الرصد */
-router.get("/auto-detection/log", requirePermission("hr:read"), async (req, res) => {
+router.get("/auto-detection/log", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { limit, offset, fromDate, toDate } = req.query as any;
     const result = await getDetectionLog(scope.companyId, {
-      limit: limit ? Number(limit) : 50,
+      limit: Math.min(limit ? Number(limit) : 50, 500),
       offset: offset ? Number(offset) : 0,
       fromDate,
       toDate,
@@ -1224,11 +1374,11 @@ router.get("/auto-detection/log", requirePermission("hr:read"), async (req, res)
 });
 
 /** GET /hr/discipline/auto-detection/summary — ملخص إحصائي */
-router.get("/auto-detection/summary", requirePermission("hr:read"), async (req, res) => {
+router.get("/auto-detection/summary", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     // إحصائيات آخر 30 يوم
-    const stats = await rawQuery<any>(
+    const stats = await rawQuery<DetectionStatsRow>(
       `SELECT
          COUNT(*) AS "totalRuns",
          COUNT(*) AS "totalDetected",
@@ -1240,10 +1390,10 @@ router.get("/auto-detection/summary", requirePermission("hr:read"), async (req, 
        WHERE "companyId" = $1
          AND "detectedAt" >= NOW() - INTERVAL '30 days'`,
       [scope.companyId]
-    ).catch((e) => { logger.error(e, "hr discipline query failed"); return [{}]; });
+    ).catch((e) => { logger.error(e, "hr discipline query failed"); return [] as DetectionStatsRow[]; });
 
     // تفصيل حسب النوع من آخر 30 يوم
-    const byType = await rawQuery<any>(
+    const byType = await rawQuery<DetectionByTypeRow>(
       `SELECT
          d.value->>'type' AS type,
          COUNT(*) AS count

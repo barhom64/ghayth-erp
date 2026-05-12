@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { handleRouteError } from "../lib/errorHandler.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { todayISO, currentPeriod } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 
@@ -21,7 +21,7 @@ const sq1 = async (sql: string, params: any[] = [], fb: any = {}): Promise<any> 
   return rows[0] ?? fb;
 };
 
-router.get("/hr", requirePermission("hr:read"), async (req, res) => {
+router.get("/hr", authorize({ feature: "hr", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -58,7 +58,7 @@ router.get("/hr", requirePermission("hr:read"), async (req, res) => {
   }
 });
 
-router.get("/finance", requirePermission("finance:read"), async (req, res) => {
+router.get("/finance", authorize({ feature: "finance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -66,9 +66,9 @@ router.get("/finance", requirePermission("finance:read"), async (req, res) => {
 
     const [invoices, expenses, receivables, budgets] = await Promise.all([
       sq1(`SELECT COALESCE(SUM(total), 0) AS "totalRevenue", COALESCE(SUM("paidAmount"), 0) AS "totalPaid", COALESCE(SUM(total - "paidAmount"), 0) AS "outstanding", COUNT(*) AS count, COUNT(*) FILTER (WHERE status = 'overdue') AS overdue, COUNT(*) FILTER (WHERE status = 'paid') AS paid FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
-      sq1(`SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count FROM expense_claims WHERE "companyId" = $1 AND "createdAt" >= $2`, [cid, monthStart]),
+      sq1(`SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count FROM expense_claims WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "createdAt" >= $2`, [cid, monthStart]),
       sq1(`SELECT COALESCE(SUM(total - "paidAmount"), 0) AS amount, COUNT(*) AS count FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status IN ('sent','partial','overdue') AND "dueDate" < CURRENT_DATE`, [cid]),
-      sq1(`SELECT COUNT(*) AS total, 0 AS "avgUsage" FROM budget_lines bl JOIN chart_of_accounts ca ON ca.id = bl."accountId" WHERE ca."companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COALESCE(ROUND(AVG(CASE WHEN b.amount > 0 THEN (COALESCE(b.used,0)::numeric / b.amount) * 100 ELSE 0 END), 0), 0) AS "avgUsage" FROM budgets b WHERE b."companyId" = $1 AND b."deletedAt" IS NULL`, [cid]),
     ]);
 
     const monthlyRevenue = await safeQuery(
@@ -93,20 +93,20 @@ router.get("/finance", requirePermission("finance:read"), async (req, res) => {
   }
 });
 
-router.get("/fleet", requirePermission("fleet:read"), async (req, res) => {
+router.get("/fleet", authorize({ feature: "fleet", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
 
     const [vehicles, trips, maintenance, fuel] = await Promise.all([
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active' OR status = 'available') AS active, COUNT(*) FILTER (WHERE status = 'in_use') AS "inUse", COUNT(*) FILTER (WHERE status = 'needs_service') AS "needsService", COUNT(*) FILTER (WHERE status = 'out_of_service') AS "outOfService" FROM fleet_vehicles WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'in_progress') AS active, COUNT(*) FILTER (WHERE status = 'completed') AS completed, COALESCE(SUM(distance), 0) AS "totalDistance", COALESCE(SUM(cost), 0) AS "totalCost" FROM fleet_trips WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'in_progress') AS active, COUNT(*) FILTER (WHERE status = 'completed') AS completed, COALESCE(SUM(distance), 0) AS "totalDistance", COALESCE(SUM(cost), 0) AS "totalCost" FROM fleet_trips WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'pending' OR status = 'scheduled') AS pending, COALESCE(SUM(cost), 0) AS "totalCost" FROM fleet_maintenance WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
-      sq1(`SELECT COALESCE(SUM("totalCost"), 0) AS "totalCost", COALESCE(SUM(liters), 0) AS "totalLiters" FROM fleet_fuel_logs WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COALESCE(SUM("totalCost"), 0) AS "totalCost", COALESCE(SUM(liters), 0) AS "totalLiters" FROM fleet_fuel_logs WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
     ]);
 
     const monthlyTrips = await safeQuery(
-      `SELECT TO_CHAR(DATE_TRUNC('month', "startTime"), 'YYYY-MM') AS month, COUNT(*) AS trips, COALESCE(SUM(distance), 0) AS distance, COALESCE(SUM(cost), 0) AS cost FROM fleet_trips WHERE "companyId" = $1 AND "startTime" >= CURRENT_DATE - INTERVAL '6 months' GROUP BY month ORDER BY month`, [cid]
+      `SELECT TO_CHAR(DATE_TRUNC('month', "startTime"), 'YYYY-MM') AS month, COUNT(*) AS trips, COALESCE(SUM(distance), 0) AS distance, COALESCE(SUM(cost), 0) AS cost FROM fleet_trips WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "startTime" >= CURRENT_DATE - INTERVAL '6 months' GROUP BY month ORDER BY month`, [cid]
     );
 
     res.json({
@@ -121,7 +121,7 @@ router.get("/fleet", requirePermission("fleet:read"), async (req, res) => {
   }
 });
 
-router.get("/legal", requirePermission("legal:read"), async (req, res) => {
+router.get("/legal", authorize({ feature: "legal", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -129,7 +129,7 @@ router.get("/legal", requirePermission("legal:read"), async (req, res) => {
     const [contracts, cases, sessions] = await Promise.all([
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active') AS active, COUNT(*) FILTER (WHERE status = 'active' AND "endDate"::date - CURRENT_DATE <= 30) AS "expiringSoon", COALESCE(SUM(value), 0) AS "totalValue" FROM legal_contracts WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'open') AS open, COUNT(*) FILTER (WHERE status = 'in_progress') AS "inProgress", COUNT(*) FILTER (WHERE priority = 'high') AS "highPriority" FROM legal_cases WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
-      sq1(`SELECT COUNT(*) AS upcoming FROM legal_sessions ls JOIN legal_cases lc ON lc.id = ls."caseId" WHERE lc."companyId" = $1 AND lc."deletedAt" IS NULL AND ls."deletedAt" IS NULL AND ls."sessionDate" >= CURRENT_DATE AND ls."sessionDate" <= CURRENT_DATE + INTERVAL '30 days'`, [cid]),
+      sq1(`SELECT COUNT(*) AS upcoming FROM legal_sessions ls JOIN legal_cases lc ON lc.id = ls."caseId" WHERE lc."companyId" = $1 AND lc."deletedAt" IS NULL AND ls."sessionDate" >= CURRENT_DATE AND ls."sessionDate" <= CURRENT_DATE + INTERVAL '30 days'`, [cid]),
     ]);
 
     const casesByStatus = await safeQuery(
@@ -147,7 +147,7 @@ router.get("/legal", requirePermission("legal:read"), async (req, res) => {
   }
 });
 
-router.get("/properties", requirePermission("property:read"), async (req, res) => {
+router.get("/properties", authorize({ feature: "properties", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -155,8 +155,8 @@ router.get("/properties", requirePermission("property:read"), async (req, res) =
     const [units, rentalContracts, payments, maintenanceReqs] = await Promise.all([
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'available') AS available, COUNT(*) FILTER (WHERE status = 'rented') AS rented, COUNT(*) FILTER (WHERE status = 'maintenance') AS "underMaintenance" FROM property_units WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active') AS active, COUNT(*) FILTER (WHERE "endDate"::date - CURRENT_DATE <= 30 AND status = 'active') AS "expiringSoon", COALESCE(SUM("monthlyRent"), 0) AS "monthlyIncome" FROM rental_contracts WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
-      sq1(`SELECT COALESCE(SUM(amount), 0) AS "totalDue", COALESCE(SUM("paidAmount"), 0) AS "totalCollected", COUNT(*) FILTER (WHERE status = 'pending' AND "dueDate" < CURRENT_DATE) AS overdue FROM rent_payments rp JOIN rental_contracts rc ON rc.id = rp."contractId" WHERE rc."companyId" = $1 AND rc."deletedAt" IS NULL`, [cid]),
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status NOT IN ('completed','closed')) AS open, COUNT(*) FILTER (WHERE priority = 'critical') AS critical FROM maintenance_requests WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COALESCE(SUM(rp.amount), 0) AS "totalDue", COALESCE(SUM(rp."paidAmount"), 0) AS "totalCollected", COUNT(*) FILTER (WHERE rp.status = 'pending' AND rp."dueDate" < CURRENT_DATE) AS overdue FROM rent_payments rp JOIN rental_contracts rc ON rc.id = rp."contractId" WHERE rc."companyId" = $1 AND rc."deletedAt" IS NULL`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status NOT IN ('completed','closed')) AS open, COUNT(*) FILTER (WHERE priority = 'critical') AS critical FROM maintenance_requests WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
     ]);
 
     const occupancyRate = Number(units?.total ?? 0) > 0
@@ -178,7 +178,7 @@ router.get("/properties", requirePermission("property:read"), async (req, res) =
   }
 });
 
-router.get("/projects", async (req, res) => {
+router.get("/projects", authorize({ feature: "projects", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -186,7 +186,7 @@ router.get("/projects", async (req, res) => {
     const [projects, budgetInfo, tasks] = await Promise.all([
       sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active' OR status = 'in_progress') AS active, COUNT(*) FILTER (WHERE status = 'completed') AS completed, COUNT(*) FILTER (WHERE status = 'active' AND "endDate" < CURRENT_DATE) AS delayed, COALESCE(AVG(progress), 0) AS "avgProgress" FROM projects WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
       sq1(`SELECT COALESCE(SUM(budget), 0) AS "totalBudget", COALESCE(SUM("spentAmount"), 0) AS "totalSpent", COUNT(*) FILTER (WHERE budget > 0 AND "spentAmount" >= budget * 0.8) AS "overBudget" FROM projects WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'done') AS done, COUNT(*) FILTER (WHERE status = 'blocked') AS blocked, COUNT(*) FILTER (WHERE status NOT IN ('done','cancelled') AND "dueDate" < CURRENT_DATE) AS overdue FROM project_tasks pt JOIN projects p ON p.id = pt."projectId" WHERE p."companyId" = $1 AND p."deletedAt" IS NULL`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE pt.status = 'done') AS done, COUNT(*) FILTER (WHERE pt.status = 'blocked') AS blocked, COUNT(*) FILTER (WHERE pt.status NOT IN ('done','cancelled') AND pt."dueDate" < CURRENT_DATE) AS overdue FROM project_tasks pt JOIN projects p ON p.id = pt."projectId" WHERE p."companyId" = $1 AND p."deletedAt" IS NULL`, [cid]),
     ]);
 
     const budgetVariance = Number(budgetInfo?.totalBudget ?? 0) > 0
@@ -207,7 +207,7 @@ router.get("/projects", async (req, res) => {
   }
 });
 
-router.get("/crm", async (req, res) => {
+router.get("/crm", authorize({ feature: "crm", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -219,7 +219,7 @@ router.get("/crm", async (req, res) => {
     ]);
 
     const pipeline = await safeQuery(
-      `SELECT ps.name, ps."order", COUNT(o.id) AS count, COALESCE(SUM(o.value), 0) AS value FROM crm_pipeline_stages ps LEFT JOIN crm_opportunities o ON o."pipelineStageId" = ps.id AND o."companyId" = $1 WHERE ps."companyId" = $1 GROUP BY ps.id, ps.name, ps."order" ORDER BY ps."order"`, [cid]
+      `SELECT ps.name, ps."order", COUNT(o.id) AS count, COALESCE(SUM(o.value), 0) AS value FROM crm_pipeline_stages ps LEFT JOIN crm_opportunities o ON o."pipelineStageId" = ps.id AND o."companyId" = $1 AND o."deletedAt" IS NULL WHERE ps."companyId" = $1 GROUP BY ps.id, ps.name, ps."order" ORDER BY ps."order"`, [cid]
     );
 
     res.json({
@@ -233,7 +233,7 @@ router.get("/crm", async (req, res) => {
   }
 });
 
-router.get("/store", async (req, res) => {
+router.get("/store", authorize({ feature: "store", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -259,7 +259,7 @@ router.get("/store", async (req, res) => {
   }
 });
 
-router.get("/support", async (req, res) => {
+router.get("/support", authorize({ feature: "support", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -274,7 +274,7 @@ router.get("/support", async (req, res) => {
     );
 
     const weeklyTickets = await safeQuery(
-      `SELECT DATE("createdAt") AS date, COUNT(*) AS created, COUNT(*) FILTER (WHERE status IN ('resolved','closed')) AS resolved FROM support_tickets WHERE "companyId" = $1 AND "createdAt" >= CURRENT_DATE - INTERVAL '7 days' GROUP BY date ORDER BY date`, [cid]
+      `SELECT DATE("createdAt") AS date, COUNT(*) AS created, COUNT(*) FILTER (WHERE status IN ('resolved','closed')) AS resolved FROM support_tickets WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "createdAt" >= CURRENT_DATE - INTERVAL '7 days' GROUP BY date ORDER BY date`, [cid]
     );
 
     res.json({
@@ -288,21 +288,21 @@ router.get("/support", async (req, res) => {
   }
 });
 
-router.get("/tasks", async (req, res) => {
+router.get("/tasks", authorize({ feature: "tasks", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
 
     const [taskStats] = await Promise.all([
-      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'todo' OR status = 'pending') AS pending, COUNT(*) FILTER (WHERE status = 'in_progress') AS "inProgress", COUNT(*) FILTER (WHERE status = 'done' OR status = 'completed') AS completed, COUNT(*) FILTER (WHERE status NOT IN ('done','completed','cancelled') AND "dueDate" < CURRENT_DATE) AS overdue, COUNT(*) FILTER (WHERE priority = 'high' OR priority = 'critical') AS "highPriority" FROM tasks WHERE "companyId" = $1`, [cid]),
+      sq1(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'todo' OR status = 'pending') AS pending, COUNT(*) FILTER (WHERE status = 'in_progress') AS "inProgress", COUNT(*) FILTER (WHERE status = 'done' OR status = 'completed') AS completed, COUNT(*) FILTER (WHERE status NOT IN ('done','completed','cancelled') AND "scheduledDate" < CURRENT_DATE) AS overdue, COUNT(*) FILTER (WHERE priority = 'high' OR priority = 'critical') AS "highPriority" FROM tasks WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [cid]),
     ]);
 
     const byPriority = await safeQuery(
-      `SELECT COALESCE(priority, 'normal') AS priority, COUNT(*) AS count FROM tasks WHERE "companyId" = $1 AND status NOT IN ('done','completed','cancelled') GROUP BY priority`, [cid]
+      `SELECT COALESCE(priority, 'normal') AS priority, COUNT(*) AS count FROM tasks WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status NOT IN ('done','completed','cancelled') GROUP BY priority`, [cid]
     );
 
     const weeklyCompleted = await safeQuery(
-      `SELECT DATE("completedAt") AS date, COUNT(*) AS count FROM tasks WHERE "companyId" = $1 AND status IN ('done','completed') AND "completedAt" >= CURRENT_DATE - INTERVAL '7 days' GROUP BY date ORDER BY date`, [cid]
+      `SELECT DATE("completedAt") AS date, COUNT(*) AS count FROM tasks WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status IN ('done','completed') AND "completedAt" >= CURRENT_DATE - INTERVAL '7 days' GROUP BY date ORDER BY date`, [cid]
     );
 
     res.json({
@@ -315,7 +315,7 @@ router.get("/tasks", async (req, res) => {
   }
 });
 
-router.get("/warehouse", async (req, res) => {
+router.get("/warehouse", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;

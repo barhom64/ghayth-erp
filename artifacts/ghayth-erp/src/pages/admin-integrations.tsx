@@ -1,13 +1,18 @@
 import { useState } from "react";
+import { z } from "zod";
 import { PageShell } from "@/components/page-shell";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
+import {
+  FormShell,
+  FormTextField,
+  FormTextareaField,
+  FormSelectField,
+  FormGrid,
+} from "@/components/form-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -34,10 +39,32 @@ const CHANNEL_ICONS: Record<string, any> = {
   webhook: Webhook,
 };
 
+// Zod schema enforces JSON validity BEFORE submit (the old flow only
+// caught syntax errors with a try/catch around JSON.parse — and only
+// after the user had clicked the button). `z.string().refine()` runs
+// at validation time so the operator sees the error inline next to
+// the textarea.
+const integrationFormSchema = z.object({
+  name: z.string().trim().min(1, "الاسم مطلوب"),
+  type: z.enum(["email", "sms", "whatsapp", "webhook"]),
+  config: z
+    .string()
+    .refine((s) => {
+      try { JSON.parse(s); return true; } catch { return false; }
+    }, { message: "صيغة JSON غير صالحة" }),
+  status: z.enum(["active", "inactive", "error"]),
+});
+type IntegrationForm = z.infer<typeof integrationFormSchema>;
+const defaultIntegrationForm: IntegrationForm = {
+  name: "",
+  type: "email",
+  config: "{}",
+  status: "inactive",
+};
+
 function IntegrationsList() {
   const { data: intResp, isLoading, isError } = useApiQuery<any>(["admin-integrations"], "/admin/integrations");
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: "", type: "email", config: "{}", status: "inactive" });
   const { toast } = useToast();
   const integrations = asList(intResp);
 
@@ -45,13 +72,7 @@ function IntegrationsList() {
     "/admin/integrations",
     "POST",
     [["admin-integrations"]],
-    {
-      successMessage: "تم إنشاء التكامل",
-      onSuccess: () => {
-        setForm({ name: "", type: "email", config: "{}", status: "inactive" });
-        setShowForm(false);
-      },
-    }
+    { successMessage: "تم إنشاء التكامل" },
   );
   const toggleMut = useApiMutation<any, { id: number; status: string }>(
     (body) => `/admin/integrations/${body.id}`,
@@ -78,13 +99,8 @@ function IntegrationsList() {
   );
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
-  const handleCreate = () => {
-    let parsedConfig = {};
-    try { parsedConfig = JSON.parse(form.config); } catch { toast({ variant: "destructive", title: "خطأ في صيغة الإعدادات" }); return; }
-    createMut.mutate({ ...form, config: parsedConfig });
-  };
   const handleToggleStatus = (id: number, currentStatus: string) => {
     toggleMut.mutate({ id, status: currentStatus === "active" ? "inactive" : "active" });
   };
@@ -95,38 +111,51 @@ function IntegrationsList() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">التكاملات المُعدّة</h3>
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>
+        <GuardedButton perm="admin:create" size="sm" onClick={() => setShowForm(!showForm)}>
           {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة تكامل</>}
-        </Button>
+        </GuardedButton>
       </div>
       {showForm && (
         <Card>
-          <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div><Label>الاسم</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="اسم التكامل" /></div>
-            <div><Label>النوع</Label>
-              <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="email">بريد إلكتروني</SelectItem>
-                  <SelectItem value="sms">رسائل نصية</SelectItem>
-                  <SelectItem value="whatsapp">واتساب</SelectItem>
-                  <SelectItem value="webhook">خطاف استدعاء</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="md:col-span-2">
-              <Label>الإعدادات (بصيغة جيسون)</Label>
-              <Textarea
-                className="font-mono text-sm min-h-[100px]"
-                value={form.config}
-                onChange={(e) => setForm({ ...form, config: e.target.value })}
-                placeholder={form.type === "email" ? '{"host":"smtp.gmail.com","port":587,"user":"...","password":"...","from":"..."}' : form.type === "webhook" ? '{"url":"https://...","headers":{}}' : "{}"}
-                dir="ltr"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <Button onClick={handleCreate} disabled={!form.name || createMut.isPending}>حفظ التكامل</Button>
-            </div>
+          <CardContent className="p-4">
+            <FormShell
+              schema={integrationFormSchema}
+              defaultValues={defaultIntegrationForm}
+              submitLabel="حفظ التكامل"
+              secondaryActions={
+                <Button type="button" size="sm" variant="ghost" onClick={() => setShowForm(false)}>
+                  إلغاء
+                </Button>
+              }
+              onSubmit={async (values, ctx) => {
+                // Schema already guaranteed config is valid JSON; safe to parse.
+                const parsedConfig = JSON.parse(values.config);
+                await createMut.mutateAsync({ ...values, config: parsedConfig });
+                ctx.reset();
+                setShowForm(false);
+              }}
+            >
+              <FormGrid cols={2}>
+                <FormTextField name="name" label="الاسم" placeholder="اسم التكامل" required />
+                <FormSelectField
+                  name="type"
+                  label="النوع"
+                  options={[
+                    { value: "email", label: "بريد إلكتروني" },
+                    { value: "sms", label: "رسائل نصية" },
+                    { value: "whatsapp", label: "واتساب" },
+                    { value: "webhook", label: "خطاف استدعاء" },
+                  ]}
+                />
+                <FormTextareaField
+                  name="config"
+                  label="الإعدادات (بصيغة JSON)"
+                  description='يجب أن تكون JSON صالحًا. مثال للبريد: host, port, user, password, from'
+                  rows={5}
+                  className="md:col-span-2"
+                />
+              </FormGrid>
+            </FormShell>
           </CardContent>
         </Card>
       )}
@@ -161,13 +190,13 @@ function IntegrationsList() {
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Button variant="outline" size="sm" onClick={() => handleToggleStatus(intg.id, intg.status)}>
+                  <GuardedButton perm="admin:create" variant="outline" size="sm" onClick={() => handleToggleStatus(intg.id, intg.status)}>
                     {intg.status === "active" ? "تعطيل" : "تفعيل"}
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleTest(intg.id)}>
+                  </GuardedButton>
+                  <GuardedButton perm="admin:create" variant="outline" size="sm" onClick={() => handleTest(intg.id)}>
                     <Play className="h-3 w-3 me-1" />اختبار
-                  </Button>
-                  <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => handleDelete(intg.id)}>حذف</Button>
+                  </GuardedButton>
+                  <GuardedButton perm="admin:create" variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => handleDelete(intg.id)}>حذف</GuardedButton>
                 </div>
               </CardContent>
             </Card>
@@ -177,9 +206,9 @@ function IntegrationsList() {
           <div className="col-span-2 text-center py-12 text-gray-400">
             <Plug className="w-12 h-12 mx-auto mb-3 text-gray-300" />
             <p>لا توجد تكاملات مُعدّة</p>
-            <Button variant="outline" size="sm" className="mt-3" onClick={() => setShowForm(true)}>
+            <GuardedButton perm="admin:create" variant="outline" size="sm" className="mt-3" onClick={() => setShowForm(true)}>
               <Plus className="h-4 w-4 me-1" />إضافة تكامل
-            </Button>
+            </GuardedButton>
           </div>
         )}
       </div>
@@ -238,9 +267,9 @@ function IntegrationLogs() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">سجل الإرسال</h3>
-        <Button variant="outline" size="sm" onClick={handleRetry}>
+        <GuardedButton perm="admin:create" variant="outline" size="sm" onClick={handleRetry}>
           <RefreshCw className="h-4 w-4 me-1" />إعادة المحاولة للفاشلة
-        </Button>
+        </GuardedButton>
       </div>
       <Card>
         <CardContent className="p-0">

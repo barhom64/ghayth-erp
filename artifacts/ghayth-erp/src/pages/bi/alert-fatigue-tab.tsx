@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 export function AlertFatigueTab() {
   const { data: dcData, isLoading, isError } = useApiQuery<any>(["alert-daily-count"], "/bi/alert-fatigue/daily-count");
@@ -36,7 +37,7 @@ export function AlertFatigueTab() {
   const settings = (settingsData?.data || []) as any[];
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   return (
     <div className="space-y-6">
@@ -86,9 +87,9 @@ export function AlertFatigueTab() {
                 <SelectItem value="72">3 أيام</SelectItem>
               </SelectContent>
             </Select>
-            <Button onClick={handleMute} disabled={loading}>
+            <GuardedButton perm="bi:create" onClick={handleMute} disabled={loading}>
               <BellOff className="h-4 w-4 me-2" />كتم
-            </Button>
+            </GuardedButton>
           </div>
         </CardContent>
       </Card>

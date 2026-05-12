@@ -31,7 +31,7 @@ export default function KnowledgeBase() {
   const { data, isLoading, isError, error } = useApiQuery<any>(["support-kb"], "/support/kb");
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const rows = asList(data?.data || data);
 

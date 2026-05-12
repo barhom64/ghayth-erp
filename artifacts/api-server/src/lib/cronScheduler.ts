@@ -18,7 +18,7 @@ import {
   currentPeriod,
   roundTo2,
 } from "./businessHelpers.js";
-import { broadcastAlert } from "./notificationService.js";
+import { broadcastAlert, sendNotification } from "./notificationService.js";
 import { processFallbackChains } from "./notificationEngine.js";
 import { checkSlaStatus } from "./workflowEngine.js";
 import { runAllProactiveChecks, registerProactiveEventListeners } from "./proactiveEngine.js";
@@ -27,6 +27,14 @@ import { decryptSecret } from "./secrets.js";
 import { processDueRecurringJournals } from "./recurringJournalProcessor.js";
 import { scanObligations } from "./obligationsEngine.js";
 import { runAutoDetectionAllCompanies } from "./autoViolationEngine.js";
+import { getRedisRateLimitStatus, type RedisRateLimitStatus } from "./rateLimitStore.js";
+import { zatcaRetryDrain } from "./zatca/worker.js";
+import { dailyFxRateFetchCron } from "./fx/jobs.js";
+import { fxStalenessCheckCron } from "./fx/staleness-alert.js";
+import { lotExpiryScanCron } from "./inventory/lots.js";
+import { abcMonthlyClassificationCron } from "./inventory/abc-analysis.js";
+import { iqamaDailyAlertCron } from "./saudi-compliance/iqama-cron.js";
+import { saudizationMonthlySnapshotCron } from "./saudi-compliance/saudization-snapshot.js";
 
 async function getSystemTimezone(): Promise<string> {
   try {
@@ -144,7 +152,7 @@ async function documentExpiryAlerts(): Promise<string> {
   for (const company of companies) {
     // Scan 90-day window to cover all three alert thresholds (90, 30, 14 days)
     const docs = await rawQuery<any>(
-      `SELECT ed.id, ed."employeeId", ed."documentType", ed."expiryDate",
+      `SELECT ed.id, ed."employeeId", ed."type", ed."expiryDate",
               e.name AS "employeeName",
               (ed."expiryDate"::date - CURRENT_DATE) AS "daysLeft"
        FROM employee_documents ed
@@ -220,8 +228,8 @@ async function documentExpiryAlerts(): Promise<string> {
 
     // Company documents (commercial registration, municipality license, etc.)
     const companyDocAlerts = await rawQuery<any>(
-      `SELECT cd.id, NULL AS "employeeId", cd."documentType" AS "employeeName",
-              cd."documentType", cd."expiryDate",
+      `SELECT cd.id, NULL AS "employeeId", cd."type" AS "employeeName",
+              cd."type", cd."expiryDate",
               (cd."expiryDate"::date - CURRENT_DATE) AS "daysLeft"
        FROM company_documents cd
        WHERE cd."companyId"=$1 AND cd.status='active'
@@ -962,11 +970,11 @@ async function dailyDeductionCheck(): Promise<string> {
     for (const a of absentees) {
       // 1) خصم غياب في قيد الرواتب
       await rawExecute(
-        `INSERT INTO payroll_deductions ("companyId", "employeeId", type, amount, reason, date, "createdAt")
+        `INSERT INTO payroll_deductions ("companyId", "employeeId", type, amount, description, "effectiveDate", "createdAt")
          SELECT $1, $2, 'absence', 0, $3, CURRENT_DATE, NOW()
          WHERE NOT EXISTS (
            SELECT 1 FROM payroll_deductions
-           WHERE "companyId" = $1 AND "employeeId" = $2 AND date = CURRENT_DATE AND type = 'absence'
+           WHERE "companyId" = $1 AND "employeeId" = $2 AND "effectiveDate" = CURRENT_DATE AND type = 'absence'
          )`,
         [company.id, a.employeeId, `خصم غياب تلقائي — ${a.name}`]
       ).catch((e) => logger.error(e, "[cronScheduler] absence deduction insert failed"));
@@ -1024,15 +1032,13 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
       `SELECT i.id, i.ref, i."clientId", i.total, i."paidAmount", i."dueDate",
               c.name AS "clientName", c.phone AS "clientPhone",
               (CURRENT_DATE - i."dueDate"::date) AS "daysOverdue",
-              i."overduePhase"
+              i.status
        FROM invoices i
        LEFT JOIN clients c ON c.id = i."clientId"
-       WHERE i."companyId" = $1 AND i.status NOT IN ('paid','cancelled')
+       WHERE i."companyId" = $1 AND i.status NOT IN ('paid','cancelled','overdue')
          AND i."dueDate" < CURRENT_DATE`,
       [company.id]
     );
-
-    const PHASE_ORDER = ["alert", "first_notice", "reminder", "warning", "escalation", "legal"];
 
     for (const inv of invoices) {
       const days = Number(inv.daysOverdue);
@@ -1045,24 +1051,17 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
       else if (days >= 3) phase = "alert";
       if (!phase) continue;
 
-      const currentIdx = PHASE_ORDER.indexOf(inv.overduePhase || "");
-      const newIdx = PHASE_ORDER.indexOf(phase);
-      if (currentIdx >= newIdx) continue;
-
-      // Also flip the invoice status to 'overdue' when appropriate — reports,
-      // collection stages and dashboards key off invoices.status, not off
-      // overduePhase, so leaving status='sent' made overdue invoices
-      // invisible in half the UI.
+      // Flip the invoice status to 'overdue' when appropriate — reports,
+      // collection stages and dashboards key off invoices.status.
       await rawExecute(
         `UPDATE invoices
-            SET "overduePhase" = $1,
-                status = CASE
+            SET status = CASE
                   WHEN status IN ('sent','partial') THEN 'overdue'
                   ELSE status
                 END
-          WHERE id = $2`,
-        [phase, inv.id]
-      ).catch((e) => logger.error(e, "[cronScheduler] invoice overdue phase update failed"));
+          WHERE id = $1`,
+        [inv.id]
+      ).catch((e) => logger.error(e, "[cronScheduler] invoice overdue status update failed"));
 
       await broadcastAlert(
         company.id, "invoice_overdue",
@@ -1078,33 +1077,9 @@ async function dailyInvoiceOverdueEscalation(): Promise<string> {
 }
 
 async function dailyFuelMonitor(): Promise<string> {
-  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
-  let alerts = 0;
-  for (const company of companies) {
-    const vehicles = await rawQuery<any>(
-      `SELECT fv.id, fv."plateNumber",
-              COALESCE(SUM(fl.amount), 0) AS "monthlyFuel",
-              fv."monthlyFuelBudget"
-       FROM fleet_vehicles fv
-       LEFT JOIN fleet_fuel_logs fl ON fl."vehicleId" = fv.id
-         AND fl."createdAt" >= date_trunc('month', CURRENT_DATE)
-       WHERE fv."companyId" = $1 AND fv."monthlyFuelBudget" IS NOT NULL
-         AND fv."monthlyFuelBudget" > 0
-       GROUP BY fv.id, fv."plateNumber", fv."monthlyFuelBudget"
-       HAVING COALESCE(SUM(fl.amount), 0) > fv."monthlyFuelBudget" * 0.8`,
-      [company.id]
-    );
-    for (const v of vehicles) {
-      await broadcastAlert(
-        company.id, "fuel_budget_warning",
-        `استهلاك وقود مرتفع: ${v.plateNumber}`,
-        `الاستهلاك ${v.monthlyFuel} من الميزانية ${v.monthlyFuelBudget}`,
-        "warning", "fleet_vehicle", v.id
-      );
-      alerts++;
-    }
-  }
-  return `Fuel monitor: ${alerts} alerts`;
+  // Skipped: fleet_vehicles table does not have a "monthlyFuelBudget" column.
+  // Fuel budget monitoring requires a schema migration before it can be enabled.
+  return `Fuel monitor: 0 alerts (disabled — no monthlyFuelBudget column)`;
 }
 
 async function dailyInventoryCheck(): Promise<string> {
@@ -1112,11 +1087,11 @@ async function dailyInventoryCheck(): Promise<string> {
   let pos = 0;
   for (const company of companies) {
     const products = await rawQuery<any>(
-      `SELECT id, name, "currentStock", COALESCE("minStock", "safetyStock", 0) AS threshold
+      `SELECT id, name, "currentStock", COALESCE("minStock", 0) AS threshold
        FROM warehouse_products
        WHERE "companyId" = $1
-         AND COALESCE("minStock", "safetyStock", 0) > 0
-         AND "currentStock" < COALESCE("minStock", "safetyStock", 0)`,
+         AND COALESCE("minStock", 0) > 0
+         AND "currentStock" < COALESCE("minStock", 0)`,
       [company.id]
     );
     for (const p of products) {
@@ -1504,7 +1479,7 @@ async function weeklyHrReport(): Promise<string> {
       `SELECT
          COUNT(*) AS total,
          COUNT(*) FILTER (WHERE status = 'active') AS active,
-         COUNT(*) FILTER (WHERE "joinDate" >= CURRENT_DATE - INTERVAL '7 days') AS "newHires"
+         COUNT(*) FILTER (WHERE "hireDate" >= CURRENT_DATE - INTERVAL '7 days') AS "newHires"
        FROM employee_assignments WHERE "companyId" = $1`,
       [company.id]
     );
@@ -2497,7 +2472,7 @@ async function dailySystemHealthReport(): Promise<string> {
 
   for (const company of companies) {
     const [activeUsers] = await rawQuery<any>(
-      `SELECT COUNT(DISTINCT "assignmentId") AS cnt FROM activity_logs
+      `SELECT COUNT(DISTINCT "userId") AS cnt FROM activity_logs
        WHERE "companyId" = $1 AND "createdAt" > NOW() - INTERVAL '24 hours'`,
       [company.id]
     ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [{ cnt: 0 }]; });
@@ -2549,6 +2524,14 @@ async function weeklyDataCleanup(): Promise<string> {
     `DELETE FROM notification_log WHERE "createdAt" < NOW() - INTERVAL '90 days'`
   ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
   cleaned += oldNotifLogs;
+
+  // user_activity_log fills up fast (every page-view + action gets a row).
+  // 90 days is enough for behavioural-intelligence and proactive analytics;
+  // older rows would only inflate the table without analytical value.
+  const { affectedRows: oldActivityLogs } = await rawExecute(
+    `DELETE FROM user_activity_log WHERE "createdAt" < NOW() - INTERVAL '90 days'`
+  ).catch((e) => { logger.error(e, "[cronScheduler] cleanup query failed"); return { affectedRows: 0 }; });
+  cleaned += oldActivityLogs;
 
   try {
     await rawExecute(
@@ -2654,7 +2637,7 @@ async function dailyDunningAutoSend(): Promise<string> {
       // Find overdue invoices needing dunning
       const today = todayISO();
       const rows = await rawQuery<any>(
-        `SELECT i.id, i."invoiceNumber", i."dueDate", i.total, COALESCE(i."paidAmount",0) AS "paidAmount",
+        `SELECT i.id, i.ref, i."dueDate", i.total, COALESCE(i."paidAmount",0) AS "paidAmount",
                 i."clientId", COALESCE(i."lastDunningStage",0) AS "lastStage", i."lastDunningAt",
                 GREATEST(0, ($1::date - i."dueDate"::date))::int AS "daysPastDue"
          FROM invoices i
@@ -2857,7 +2840,74 @@ async function dailyAutoViolationDetection(): Promise<string> {
   return `الرصد التلقائي: ${result.totalDetected} واقعة مكتشفة، ${result.totalMemos} محضر جديد عبر ${result.companies} شركة`;
 }
 
-// ── Umrah cron handlers (C29-C32) ──
+// ── Umrah cron handlers (C27, C29-C32) ──
+
+// C27 — daily proactive overstay scan. Spec §15 row C27:
+// "SELECT معتمرين is_inside_kingdom AND actual_stay > program_duration → إنشاء غرامة + تنبيه"
+// Distinct from C28 (absconder) which only fires on status='violated'. This one
+// pre-empts: a pilgrim who is still INSIDE KSA but past their program-duration
+// gets flagged + a violation row added (de-duped via NOT EXISTS).
+async function umrahDailyOverstayScan(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
+  let detected = 0;
+  for (const c of companies) {
+    const overstayed = await rawQuery<any>(
+      `SELECT p.id, p."fullName", p."passportNumber", p."groupId", p."subAgentId",
+              p."actualStayDays", p."programDuration",
+              GREATEST(0, COALESCE(p."actualStayDays",0) - COALESCE(p."programDuration",0)) AS "overDays"
+         FROM umrah_pilgrims p
+        WHERE p."companyId"=$1
+          AND p."deletedAt" IS NULL
+          AND COALESCE(p."isInsideKingdom", true) = true
+          AND p.status NOT IN ('departed','cancelled','violated')
+          AND COALESCE(p."actualStayDays",0) > COALESCE(p."programDuration",0)
+          AND COALESCE(p."programDuration",0) > 0
+          AND NOT EXISTS (
+            SELECT 1 FROM umrah_violations v
+             WHERE v."companyId"=$1 AND v."mutamerId"=p.id
+               AND v.type='overstay' AND v."deletedAt" IS NULL
+          )`,
+      [c.id]
+    );
+    for (const o of overstayed) {
+      // Per-day penalty pulled from settings (default 0 — spec leaves it as a
+      // company-set value). The violation row is still created so the agent
+      // sees the breach even if penalty is 0.
+      const [setting] = await rawQuery<{ value: string }>(
+        `SELECT value FROM system_settings
+          WHERE key='umrah.overstay_daily_penalty'
+            AND ( ("companyId" IS NULL AND "branchId" IS NULL)
+                  OR ("companyId" = $1 AND "branchId" IS NULL) )
+          ORDER BY "companyId" NULLS FIRST LIMIT 1`,
+        [c.id]
+      );
+      const perDay = Number(setting?.value ?? 0);
+      const penalty = Math.max(0, Number(o.overDays) || 0) * perDay;
+      await rawExecute(
+        `INSERT INTO umrah_violations ("companyId","branchId",type,"referenceType","referenceNumber",
+          "mutamerId","groupId","subAgentId","penaltyAmount",status,description,"createdAt","updatedAt")
+         VALUES ($1,0,'overstay','passport',$2,$3,$4,$5,$6,'detected',$7,NOW(),NOW())`,
+        [
+          c.id, o.passportNumber || '', o.id, o.groupId, o.subAgentId, penalty,
+          `تجاوز مدة البرنامج بـ ${o.overDays} يوم — رصد تلقائي`,
+        ]
+      );
+      detected++;
+    }
+    if (overstayed.length > 0) {
+      const mgr = await getManagerAssignmentId(c.id, 0);
+      if (mgr) {
+        await createNotification({
+          companyId: c.id, assignmentId: mgr,
+          type: "umrah", title: "رصد معتمرين متجاوزين",
+          body: `${overstayed.length} معتمر تجاوز مدة البرنامج — تم إنشاء غرامات`,
+          priority: "high",
+        });
+      }
+    }
+  }
+  return `فحص المتجاوزين: ${detected} حالة جديدة عبر ${companies.length} شركة`;
+}
 
 async function umrahDailyAbsconderCheck(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
@@ -2867,7 +2917,7 @@ async function umrahDailyAbsconderCheck(): Promise<string> {
       `SELECT p.id, p."fullName", p."passportNumber", p."groupId", p."subAgentId"
        FROM umrah_pilgrims p
        WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
-         AND p.status = 'absconded'
+         AND p.status = 'violated'
          AND NOT EXISTS (
            SELECT 1 FROM umrah_violations v
            WHERE v."companyId"=$1 AND v."mutamerId"=p.id AND v.type='absconded' AND v."deletedAt" IS NULL
@@ -2972,7 +3022,7 @@ async function umrahVisaExpiryAlerts(): Promise<string> {
   let alerted = 0;
   for (const c of companies) {
     const expiring = await rawQuery<any>(
-      `SELECT p.id, p."fullName", p."visaNumber", p."visaExpiry", g."groupName"
+      `SELECT p.id, p."fullName", p."visaNumber", p."visaExpiry", g.name AS "groupName"
        FROM umrah_pilgrims p
        LEFT JOIN umrah_groups g ON g.id = p."groupId"
        WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
@@ -3033,6 +3083,328 @@ async function umrahMonthlyFinancialSummary(): Promise<string> {
   return `الملخص المالي الشهري للعمرة: ${sent} شركة`;
 }
 
+// --- Rate-limit fallback alerter (Task #176) ---------------------------------
+// Notify GM/owner when getRedisRateLimitStatus() degrades to fallback-memory
+// (and on recovery). Cooldown gates ALL fallback alerts (including flap
+// re-entries). State is persisted in `system_settings` for cross-replica
+// consistency under cron lock ownership changes.
+const RATE_LIMIT_STATE_KEY = "rate_limit_alerter_state";
+const RATE_LIMIT_REALERT_COOLDOWN_MS = 30 * 60_000;
+
+interface RateLimitAlerterState {
+  lastSeenStatus: RedisRateLimitStatus | null;
+  lastAlertedAt: number;
+  fallbackSince: number | null;
+}
+
+const EMPTY_RATE_LIMIT_STATE: RateLimitAlerterState = {
+  lastSeenStatus: null,
+  lastAlertedAt: 0,
+  fallbackSince: null,
+};
+
+async function loadRateLimitAlerterState(): Promise<RateLimitAlerterState> {
+  try {
+    const rows = await rawQuery<{ value: string }>(
+      `SELECT value FROM system_settings WHERE key = $1 AND "companyId" IS NULL AND "branchId" IS NULL`,
+      [RATE_LIMIT_STATE_KEY]
+    );
+    if (rows.length === 0 || !rows[0]?.value) return { ...EMPTY_RATE_LIMIT_STATE };
+    const parsed = JSON.parse(rows[0].value) as Partial<RateLimitAlerterState>;
+    return {
+      lastSeenStatus: (parsed.lastSeenStatus as RedisRateLimitStatus | null) ?? null,
+      lastAlertedAt: typeof parsed.lastAlertedAt === "number" ? parsed.lastAlertedAt : 0,
+      fallbackSince: typeof parsed.fallbackSince === "number" ? parsed.fallbackSince : null,
+    };
+  } catch (e) {
+    logger.error(e, "[cronScheduler] rate-limit alerter state load failed");
+    return { ...EMPTY_RATE_LIMIT_STATE };
+  }
+}
+
+async function saveRateLimitAlerterState(state: RateLimitAlerterState): Promise<void> {
+  const value = JSON.stringify(state);
+  try {
+    // Upsert via INSERT … ON CONFLICT against the partial unique index that
+    // covers `(key) WHERE "companyId" IS NULL AND "branchId" IS NULL` (see
+    // migration 006_system_settings_table.sql). This makes the read+write
+    // safe under concurrent ticks: the "DO UPDATE" branch atomically replaces
+    // the JSON blob with the latest decision.
+    await rawExecute(
+      `INSERT INTO system_settings (key, value, "createdAt", "updatedAt")
+       VALUES ($1, $2, NOW(), NOW())
+       ON CONFLICT (key) WHERE "companyId" IS NULL AND "branchId" IS NULL
+       DO UPDATE SET value = EXCLUDED.value, "updatedAt" = NOW()`,
+      [RATE_LIMIT_STATE_KEY, value]
+    );
+  } catch (e) {
+    logger.error(e, "[cronScheduler] rate-limit alerter state save failed");
+  }
+}
+
+interface RateLimitAdminRecipient {
+  companyId: number;
+  assignmentId: number;
+  email: string | null;
+}
+
+// Task #177: a configurable list of "infra admin" recipient emails that get
+// the rate-limit fallback / recovery email even if they aren't a GM/owner of
+// any tenant. Sources are merged (env + system_settings), de-duplicated case-
+// insensitively, and applied on top of the per-tenant GM list. Cooldown in
+// rateLimitFallbackAlertCheck still gates ALL emails (incl. these), so a
+// flapping outage cannot storm the inbox.
+const INFRA_ADMIN_EMAILS_SETTING_KEY = "infra_admin_emails";
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function parseEmailList(raw: string): string[] {
+  return raw
+    .split(/[,;\s]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 && EMAIL_RE.test(s));
+}
+
+function getInfraAdminEmailsFromEnv(): string[] {
+  const raw = process.env.INFRA_ADMIN_EMAILS ?? "";
+  return parseEmailList(raw);
+}
+
+async function getInfraAdminEmailsFromSettings(): Promise<string[]> {
+  try {
+    const rows = await rawQuery<{ value: string }>(
+      `SELECT value FROM system_settings WHERE key = $1 AND "companyId" IS NULL AND "branchId" IS NULL`,
+      [INFRA_ADMIN_EMAILS_SETTING_KEY]
+    );
+    if (rows.length === 0 || !rows[0]?.value) return [];
+    const v = rows[0].value;
+    // Accept both a JSON array (["a@x", "b@y"]) and a delimited string.
+    try {
+      const parsed = JSON.parse(v);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((x) => (typeof x === "string" ? x.trim() : ""))
+          .filter((s) => s.length > 0 && EMAIL_RE.test(s));
+      }
+    } catch {
+      /* fall through to delimited parsing */
+    }
+    return parseEmailList(v);
+  } catch (e) {
+    logger.error(e, "[cronScheduler] infra admin emails settings lookup failed");
+    return [];
+  }
+}
+
+async function getInfraAdminEmails(): Promise<string[]> {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const push = (e: string) => {
+    const k = e.toLowerCase();
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push(e);
+  };
+  for (const e of getInfraAdminEmailsFromEnv()) push(e);
+  for (const e of await getInfraAdminEmailsFromSettings()) push(e);
+  return out;
+}
+
+// Pivot company id used to satisfy the `email_queue."companyId"` column for
+// infra-admin emails (which are platform-wide, not tenant-scoped). Prefers a
+// company we already touched (admins[0]) so we never invent a foreign-key
+// mismatch; falls back to any active company.
+async function getPivotCompanyId(admins: RateLimitAdminRecipient[]): Promise<number | null> {
+  if (admins.length > 0 && admins[0]) return admins[0].companyId;
+  try {
+    const rows = await rawQuery<{ id: number }>(
+      `SELECT id FROM companies ORDER BY id ASC LIMIT 1`
+    );
+    return rows[0]?.id ?? null;
+  } catch (e) {
+    logger.error(e, "[cronScheduler] pivot company lookup failed");
+    return null;
+  }
+}
+
+async function sendInfraAdminEmails(
+  emails: string[],
+  pivotCompanyId: number | null,
+  type: "rate_limit_fallback" | "rate_limit_recovered",
+  title: string,
+  body: string,
+  excludeEmails: Iterable<string> = []
+): Promise<number> {
+  if (emails.length === 0 || pivotCompanyId === null) return 0;
+  // Dedupe against GM/owner mailboxes that already received the same alert
+  // through sendNotification — same human shouldn't get the same page twice.
+  const exclude = new Set<string>();
+  for (const e of excludeEmails) {
+    if (e) exclude.add(e.toLowerCase());
+  }
+  let queued = 0;
+  for (const toEmail of emails) {
+    if (exclude.has(toEmail.toLowerCase())) continue;
+    try {
+      await rawExecute(
+        `INSERT INTO email_queue ("companyId", "toEmail", "recipientName", subject, body, status, "createdAt", "refType", "refId")
+         VALUES ($1, $2, $3, $4, $5, 'pending', NOW(), $6, $7)`,
+        [pivotCompanyId, toEmail, "Infra Admin", title, body, "system_health", null]
+      );
+      queued++;
+    } catch (e) {
+      logger.error(e, `[cronScheduler] failed to queue infra-admin email for ${toEmail} (${type})`);
+    }
+  }
+  return queued;
+}
+
+// Resolve one GM/owner per company (with their login email if any). Used by
+// both the fallback alert and the recovery alert so the recipient set stays
+// consistent — anyone who got the "degraded" ping will get the "recovered"
+// ping from the same address.
+async function getRateLimitAlertRecipients(): Promise<RateLimitAdminRecipient[]> {
+  try {
+    return await rawQuery<RateLimitAdminRecipient>(
+      `SELECT DISTINCT ON (ea."companyId")
+              ea."companyId" AS "companyId",
+              ea.id          AS "assignmentId",
+              u.email        AS "email"
+       FROM employee_assignments ea
+       LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN users u ON u."employeeId" = e.id
+       WHERE ea.role IN ('general_manager','owner') AND ea.status = 'active'
+       ORDER BY ea."companyId",
+                CASE ea.role WHEN 'owner' THEN 1 WHEN 'general_manager' THEN 2 ELSE 3 END,
+                ea.id`
+    );
+  } catch (e) {
+    logger.error(e, "[cronScheduler] rate-limit alert recipient lookup failed");
+    return [];
+  }
+}
+
+export async function rateLimitFallbackAlertCheck(): Promise<string> {
+  const current = getRedisRateLimitStatus();
+  const state = await loadRateLimitAlerterState();
+  const previous = state.lastSeenStatus;
+
+  // `disabled` = REDIS_URL not set (intentional, e.g. local dev). Not a
+  // degradation worth alerting on — just clear any prior fallback timer.
+  if (current === "disabled") {
+    if (state.lastSeenStatus !== "disabled" || state.fallbackSince !== null) {
+      await saveRateLimitAlerterState({
+        lastSeenStatus: "disabled",
+        lastAlertedAt: 0,
+        fallbackSince: null,
+      });
+    }
+    return "skipped (REDIS_URL not configured)";
+  }
+
+  const now = Date.now();
+
+  if (current === "fallback-memory") {
+    const fallbackSince = state.fallbackSince ?? now;
+    const sinceLastAlert = now - state.lastAlertedAt;
+    const isTransition = previous !== null && previous !== "fallback-memory";
+    // Cooldown gates ALL fallback notifications (including fresh transitions
+    // back into fallback after a brief recovery), so a flapping outage
+    // — connected ↔ fallback every few minutes — cannot storm the inbox.
+    if (state.lastAlertedAt > 0 && sinceLastAlert < RATE_LIMIT_REALERT_COOLDOWN_MS) {
+      if (state.fallbackSince === null || state.lastSeenStatus !== "fallback-memory") {
+        await saveRateLimitAlerterState({
+          lastSeenStatus: "fallback-memory",
+          lastAlertedAt: state.lastAlertedAt,
+          fallbackSince,
+        });
+      }
+      return "fallback active, within cooldown";
+    }
+    const minutesInFallback = Math.floor((now - fallbackSince) / 60000);
+    const admins = await getRateLimitAlertRecipients();
+    const fallbackTitle = "تنبيه أمني: حدود الطلبات تعمل بالذاكرة المحلية فقط";
+    const fallbackBody = isTransition
+      ? "تعذّر الاتصال بـ Redis — حدود معدّل الطلبات (rate limit) عادت للذاكرة المحلية لكل خادم. يبقى الحد مطبّقاً ولكن مشاركته بين النسخ والإقلاعات معطّلة. تحقّق من المتغيّر REDIS_URL وحالة خادم Redis."
+      : `لا يزال نظام حدود الطلبات يعمل بالذاكرة المحلية منذ ${minutesInFallback} دقيقة — تحقّق من المتغيّر REDIS_URL وحالة خادم Redis.`;
+    for (const admin of admins) {
+      await sendNotification({
+        companyId: admin.companyId,
+        assignmentId: admin.assignmentId,
+        type: "rate_limit_fallback",
+        title: fallbackTitle,
+        body: fallbackBody,
+        priority: "high",
+        refType: "system_health",
+        // Push on both in-app AND email so an overnight degradation reaches an
+        // admin who isn't looking at the dashboard. Email is silently dropped
+        // by sendNotification when recipientEmail is unset, so this is safe
+        // even for admin users without an email on file.
+        channels: admin.email ? ["in_app", "email"] : ["in_app"],
+        recipientEmail: admin.email ?? undefined,
+      });
+    }
+    // Task #177: also email the configurable infra-admin recipient list
+    // (env INFRA_ADMIN_EMAILS + system_settings 'infra_admin_emails'). These
+    // are platform-level on-call addresses that may not map to any tenant GM.
+    // The 30-minute cooldown above gates this whole branch, so infra admins
+    // are not flooded by a flapping outage either.
+    const infraEmails = await getInfraAdminEmails();
+    const pivot = await getPivotCompanyId(admins);
+    const adminEmails = admins.map((a) => a.email).filter((e): e is string => !!e);
+    const infraQueued = await sendInfraAdminEmails(infraEmails, pivot, "rate_limit_fallback", fallbackTitle, fallbackBody, adminEmails);
+    await saveRateLimitAlerterState({
+      lastSeenStatus: "fallback-memory",
+      lastAlertedAt: now,
+      fallbackSince,
+    });
+    return `Rate-limit fallback alert sent to ${admins.length} admins + ${infraQueued} infra emails (${isTransition ? "transition" : `still degraded ${minutesInFallback}m`})`;
+  }
+
+  // current === "connected"
+  if (previous === "fallback-memory") {
+    const downtimeMin = state.fallbackSince ? Math.floor((now - state.fallbackSince) / 60000) : 0;
+    const admins = await getRateLimitAlertRecipients();
+    const recoveredTitle = "تم استعادة الاتصال بـ Redis";
+    const recoveredBody = `عادت حدود معدّل الطلبات إلى وضعها المشترك بين النسخ بعد ${downtimeMin} دقيقة من العمل بالذاكرة المحلية.`;
+    for (const admin of admins) {
+      await sendNotification({
+        companyId: admin.companyId,
+        assignmentId: admin.assignmentId,
+        type: "rate_limit_recovered",
+        title: recoveredTitle,
+        body: recoveredBody,
+        priority: "normal",
+        refType: "system_health",
+        channels: admin.email ? ["in_app", "email"] : ["in_app"],
+        recipientEmail: admin.email ?? undefined,
+      });
+    }
+    // Mirror the infra-admin email recipients on recovery too — anyone who
+    // was woken up by the "degraded" page deserves the all-clear.
+    const infraEmails = await getInfraAdminEmails();
+    const pivot = await getPivotCompanyId(admins);
+    const adminEmails = admins.map((a) => a.email).filter((e): e is string => !!e);
+    const infraQueued = await sendInfraAdminEmails(infraEmails, pivot, "rate_limit_recovered", recoveredTitle, recoveredBody, adminEmails);
+    // Preserve `lastAlertedAt` so a fresh fallback within the cooldown
+    // window after this recovery is still suppressed (flap suppression).
+    await saveRateLimitAlerterState({
+      lastSeenStatus: "connected",
+      lastAlertedAt: state.lastAlertedAt,
+      fallbackSince: null,
+    });
+    return `Rate-limit recovery alert sent to ${admins.length} admins + ${infraQueued} infra emails (downtime ${downtimeMin}m)`;
+  }
+
+  if (state.lastSeenStatus !== "connected") {
+    await saveRateLimitAlerterState({
+      lastSeenStatus: "connected",
+      lastAlertedAt: state.lastAlertedAt,
+      fallbackSince: null,
+    });
+  }
+  return "ok";
+}
+
 const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "gov_expiry_alerts", description: "تنبيهات انتهاء الإقامات والاستمارات (مقيم/تم)", schedule: "0 7 * * *", handler: govExpiryAlerts },
   { name: "document_expiry_alerts", description: "تنبيهات انتهاء وثائق الموظفين", schedule: "0 6 * * *", handler: documentExpiryAlerts },
@@ -3046,6 +3418,7 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "hourly_approval_escalation", description: "تصعيد الموافقات كل ساعة", schedule: "0 * * * *", handler: hourlyApprovalEscalation },
   { name: "daily_deduction_check", description: "خصومات الغياب اليومية", schedule: "0 23 * * *", handler: dailyDeductionCheck },
   { name: "daily_auto_violation_detection", description: "الرصد التلقائي للمخالفات — تأخر وغياب ومغادرة مبكرة وخروج GPS", schedule: "30 23 * * *", handler: dailyAutoViolationDetection },
+  { name: "umrah_daily_overstay_scan", description: "C27 — فحص المعتمرين المتجاوزين مدة البرنامج (داخل المملكة)", schedule: "0 6 * * *", handler: umrahDailyOverstayScan },
   { name: "umrah_daily_absconder_check", description: "فحص المعتمرين الهاربين يومياً وإنشاء غرامات", schedule: "0 6 * * *", handler: umrahDailyAbsconderCheck },
   { name: "umrah_overdue_invoice_escalation", description: "تصعيد فواتير العمرة المتأخرة يومياً", schedule: "0 8 * * *", handler: umrahOverdueInvoiceEscalation },
   { name: "umrah_weekly_agent_performance", description: "تقرير أداء وكلاء العمرة الأسبوعي", schedule: "0 9 * * 0", handler: umrahWeeklyAgentPerformance },
@@ -3079,6 +3452,13 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "daily_self_audit", description: "التدقيق الذاتي اليومي — كشف المخالفات والتناقضات", schedule: "0 7 * * *", handler: runSelfAuditAllCompanies },
   { name: "proactive_automation_engine", description: "الأتمتة الاستباقية — إنشاء مهام تلقائية", schedule: "0 7 * * *", handler: runAllProactiveChecks },
   { name: "email_queue_worker", description: "معالجة قائمة انتظار الإيميلات", schedule: "* * * * *", handler: processEmailQueue },
+  { name: "zatca_retry_drain", description: "محاولة إعادة إرسال فواتير ZATCA المعلقة", schedule: "* * * * *", handler: zatcaRetryDrain },
+  { name: "daily_fx_rate_fetch", description: "تحديث أسعار الصرف اليومية من المصادر الرسمية", schedule: "0 5 * * *", handler: dailyFxRateFetchCron },
+  { name: "fx_staleness_check", description: "تنبيه أسعار الصرف القديمة", schedule: "0 6 * * *", handler: fxStalenessCheckCron },
+  { name: "lot_expiry_scan", description: "تحويل الدفعات المنتهية تلقائياً إلى expired", schedule: "0 4 * * *", handler: lotExpiryScanCron },
+  { name: "iqama_daily_alert", description: "تنبيه انتهاء الإقامات (90/60/30/14/7/1 يوم)", schedule: "0 7 * * *", handler: iqamaDailyAlertCron },
+  { name: "saudization_monthly_snapshot", description: "لقطة شهرية للسعودة (نطاقات)", schedule: "0 2 1 * *", handler: saudizationMonthlySnapshotCron },
+  { name: "abc_monthly_classification", description: "تصنيف ABC الشهري للمنتجات (Pareto)", schedule: "0 3 1 * *", handler: abcMonthlyClassificationCron },
   { name: "sms_queue_worker", description: "معالجة قائمة انتظار الرسائل النصية", schedule: "* * * * *", handler: processSmsQueue },
   { name: "whatsapp_queue_worker", description: "معالجة قائمة انتظار واتساب", schedule: "* * * * *", handler: processWhatsAppQueue },
   { name: "weekly_logs_archiving", description: "أرشفة السجلات القديمة أسبوعياً", schedule: "0 3 * * 0", handler: weeklyLogsArchiving },
@@ -3094,7 +3474,48 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "monthly_bad_debt_reminder", description: "تذكير CFO باحتساب مخصص الديون المشكوك فيها", schedule: "0 9 1 * *", handler: monthlyBadDebtReminder },
   { name: "monthly_fx_revaluation_reminder", description: "تذكير CFO بترحيل إعادة تقييم العملات", schedule: "0 9 28 * *", handler: monthlyFxRevaluationReminder },
   { name: "daily_budget_variance_alert", description: "تنبيه تجاوز الميزانية اليومي", schedule: "0 10 * * *", handler: dailyBudgetVarianceAlert },
+  { name: "rate_limit_fallback_alert", description: "تنبيه عند انتقال حدود الطلبات إلى الذاكرة المحلية (Redis fallback)", schedule: "*/2 * * * *", handler: rateLimitFallbackAlertCheck },
+  { name: "rbac_v2_expired_grants_cleanup", description: "تنظيف منح RBAC v2 منتهية الصلاحية", schedule: "0 3 * * *", handler: rbacV2ExpiredGrantsCleanup },
 ];
+
+async function rbacV2ExpiredGrantsCleanup(): Promise<string> {
+  // Drop user-level grants whose expires_at has passed. We delete rather
+  // than mark as expired so the engine's hot-path query (which only
+  // selects rows with expires_at IS NULL OR expires_at > NOW()) doesn't
+  // grow unbounded.
+  const userGrants = await rawExecute(
+    `DELETE FROM rbac_user_grants
+      WHERE expires_at IS NOT NULL AND expires_at < NOW() - INTERVAL '7 days'`
+  );
+
+  // Same for time-bound role assignments (rbac_user_roles.expires_at).
+  // We keep them for a 7-day grace period after expiry for forensics,
+  // then remove them.
+  const userRoles = await rawExecute(
+    `DELETE FROM rbac_user_roles
+      WHERE expires_at IS NOT NULL AND expires_at < NOW() - INTERVAL '7 days'`
+  );
+
+  // Mark approved JIT requests whose grant has expired as 'expired' so
+  // the user's JIT history shows the lifecycle correctly. The matching
+  // rbac_user_grants row is already gone (deleted above) — this just
+  // updates the JIT request bookkeeping.
+  const jitExpired = await rawExecute(
+    `UPDATE rbac_jit_requests
+        SET status = 'expired', "updatedAt" = NOW()
+      WHERE status = 'approved' AND expires_at IS NOT NULL AND expires_at < NOW()`
+  );
+
+  // Bump cache version on every company that lost grants/roles so the
+  // engine refreshes its in-memory cache.
+  if ((userGrants.affectedRows ?? 0) > 0 || (userRoles.affectedRows ?? 0) > 0) {
+    await rawExecute(
+      `UPDATE rbac_cache_version SET version = version + 1, "updatedAt" = NOW()`
+    );
+  }
+
+  return `Removed ${userGrants.affectedRows ?? 0} expired user-grants, ${userRoles.affectedRows ?? 0} expired user-roles, marked ${jitExpired.affectedRows ?? 0} JIT requests as expired`;
+}
 
 export async function seedCronJobs(): Promise<void> {
   for (const job of JOB_DEFINITIONS) {

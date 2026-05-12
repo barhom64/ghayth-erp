@@ -170,7 +170,7 @@ export default function ClientsCreate() {
 
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/clients")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={!form.name || createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={!form.name || createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "حفظ العميل"}
         </Button>
       </div>

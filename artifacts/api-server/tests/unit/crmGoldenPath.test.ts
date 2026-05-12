@@ -69,8 +69,8 @@ describe("CRM stage state machine", () => {
   });
 
   it("rejects illegal stage transitions with ConflictError", () => {
-    const idx = CRM_ROUTE.indexOf("CRM_TRANSITIONS");
-    const section = CRM_ROUTE.slice(idx, idx + 1200);
+    const idx = CRM_ROUTE.indexOf("CRM_TRANSITIONS[existing.stage]");
+    const section = CRM_ROUTE.slice(idx, idx + 600);
     expect(section).toContain("ConflictError");
     expect(section).toContain("allowedNext");
   });

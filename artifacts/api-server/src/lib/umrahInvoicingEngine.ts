@@ -2,6 +2,7 @@ import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
 import { createGuardedJournalEntry, getAccountCodeFromMapping, emitEvent, createAuditLog, currentYear, currentMonthPadded, roundTo2 } from "./businessHelpers.js";
 import { NotFoundError, ConflictError, ValidationError } from "./errorHandler.js";
 import { logger } from "./logger.js";
+import { getProvider as getEInvoiceProvider } from "./einvoice/index.js";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Types
@@ -203,17 +204,17 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     invoiceId = invRes.rows[0].id;
 
     if (lineItems.length > 0) {
-      const cols = 7;
+      const cols = 8;
       const valuesSql: string[] = [];
       const params: any[] = [];
       for (const li of lineItems) {
         const base = params.length;
         valuesSql.push(`(${Array.from({ length: cols }, (_, i) => `$${base + i + 1}`).join(",")})`);
-        params.push(invoiceId, li.itemType, li.groupId, li.violationId, li.description, li.quantity, li.lineTotal);
+        params.push(invoiceId, li.itemType, li.groupId, li.violationId, li.description, li.quantity, li.unitPrice, li.lineTotal);
       }
       await client.query(
         `INSERT INTO umrah_sales_invoice_items
-         ("invoiceId","itemType","groupId","violationId",description,quantity,"lineTotal")
+         ("invoiceId","itemType","groupId","violationId",description,quantity,"unitPrice","lineTotal")
          VALUES ${valuesSql.join(",")}`,
         params
       );
@@ -266,6 +267,41 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
   }, { table: "umrah_sales_invoices", id: invoiceId });
 
   emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.invoice.generated", entity: "umrah_sales_invoices", entityId: invoiceId, details: JSON.stringify({ ref, total, subAgentId, groupCount: groups.length, pilgrimCount: totalPilgrims }) }).catch((e) => logger.error(e, "[umrahInvoicingEngine] background task failed"));
+
+  // E-invoice clearance (ZATCA + future jurisdictions). Goes through
+  // the vendor-neutral provider registry. The default `mock` provider
+  // returns cleared without touching any network — safe for dev/CI
+  // and for companies that haven't onboarded yet. Failures are
+  // non-blocking: the sales invoice + GL post stand even if the
+  // provider rejects (reconciliation handles the resubmit later).
+  (async () => {
+    try {
+      const provider = await getEInvoiceProvider(scope.companyId);
+      const result = await provider.submit({
+        id: invoiceId,
+        sourceType: "umrah_sales_invoices",
+        ref,
+        companyId: scope.companyId,
+        subtotal,
+        vatAmount,
+        total,
+        currency: "SAR",
+        issueDate: new Date().toISOString(),
+        buyer: { name: subAgent.clientName || "وكيل فرعي" },
+        lines: lineItems.map((li: any) => ({
+          description: li.description ?? "",
+          quantity: Number(li.quantity ?? 1),
+          unitPrice: Number(li.unitPrice ?? 0),
+          lineTotal: Number(li.lineTotal ?? 0),
+          vatAmount: 0,
+        })),
+      });
+      logger.info({ invoiceId, ref, provider: provider.name, status: result.status, uuid: result.uuid }, "[einvoice] umrah sales invoice cleared");
+    } catch (err) {
+      logger.error(err, `[einvoice] clearance failed for umrah sales invoice ${invoiceId} — non-blocking`);
+    }
+  })();
+
   createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_sales_invoices", entityId: invoiceId, after: { ref, total } }).catch((e) => logger.error(e, "[umrahInvoicingEngine] background task failed"));
 
   return { invoiceId, ref, subtotal, penaltiesTotal, vatRate, vatAmount, total, pilgrimCount: totalPilgrims, lineItems: lineItems.length, nuskInvoiceRefs, groupRefs };
@@ -580,7 +616,7 @@ export async function getDashboard(scope: Scope, seasonId: number) {
        COUNT(*)::int AS "totalMutamers",
        COUNT(*) FILTER (WHERE "isInsideKingdom" = TRUE)::int AS "insideKingdom",
        COUNT(*) FILTER (WHERE status = 'overstayed')::int AS "overstayCount",
-       COUNT(*) FILTER (WHERE status = 'absconded')::int AS "abscondedCount"
+       COUNT(*) FILTER (WHERE status = 'violated')::int AS "abscondedCount"
      FROM umrah_pilgrims
      WHERE "companyId" = $1 AND "seasonId" = $2 AND "deletedAt" IS NULL`,
     [scope.companyId, seasonId]

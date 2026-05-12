@@ -165,7 +165,7 @@ describe("Lifecycle state machines", () => {
   });
 
   it("no state machine has dead-end states (except terminal)", () => {
-    const terminalStates = new Set(["paid", "closed", "completed", "cancelled", "rejected", "terminated", "fulfilled", "lost", "expired", "resolved", "reversed", "received"]);
+    const terminalStates = new Set(["paid", "closed", "completed", "cancelled", "rejected", "terminated", "fulfilled", "lost", "expired", "resolved", "reversed", "received", "posted"]);
     const machines = ["invoices", "purchase_orders", "journal_entries", "hr_leave_requests"];
     for (const entity of machines) {
       const sm = getStateMachine(entity);

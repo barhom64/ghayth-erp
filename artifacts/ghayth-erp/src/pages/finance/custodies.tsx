@@ -1,14 +1,19 @@
 import { useState } from "react";
+import { z } from "zod";
 import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DatePicker } from "@/components/ui/date-picker";
+import {
+  FormShell,
+  FormTextField,
+  FormNumberField,
+  FormSelectField,
+  FormDateField,
+  FormGrid,
+} from "@/components/form-shell";
 import {
   KeyRound,
   DollarSign,
@@ -86,7 +91,7 @@ export default function CustodiesPage() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const filtered = applyFilters(items, filters, {
     searchFields: ["description", "ref", "employeeName", "purpose"],
@@ -328,8 +333,18 @@ export default function CustodiesPage() {
  * swallowed the server's structured detail and showed a generic
  * "حدث خطأ" toast instead.
  */
+const custodySchema = z.object({
+  assignmentId: z.string().min(1, "الموظف مطلوب"),
+  amount: z.coerce.number().positive("المبلغ يجب أن يكون موجبًا"),
+  description: z.string().trim(),
+  sourceAccountCode: z.string(),
+  purpose: z.string().trim(),
+  expectedReturnDate: z.string(),
+});
+type CustodyForm = z.infer<typeof custodySchema>;
+
 function CreateCustodyForm({ onDone }: { onDone: () => void }) {
-  const createMut = useApiMutation<unknown, any>(
+  const createMut = useApiMutation<unknown, Record<string, unknown>>(
     "/finance/custodies",
     "POST",
     [["custodies"]],
@@ -344,24 +359,6 @@ function CreateCustodyForm({ onDone }: { onDone: () => void }) {
     (a: any) => a.code?.startsWith("11") || a.code?.startsWith("12"),
   );
   const employees = employeesData?.data || [];
-  const [form, setForm] = useState({
-    assignmentId: "",
-    amount: "",
-    description: "",
-    sourceAccountCode: "",
-    purpose: "",
-    expectedReturnDate: "",
-  });
-
-  const handleSubmit = () => {
-    createMut.mutate({
-      ...form,
-      assignmentId: Number(form.assignmentId),
-      amount: Number(form.amount),
-      expectedReturnDate: form.expectedReturnDate || undefined,
-      purpose: form.purpose || undefined,
-    });
-  };
 
   return (
     <Card>
@@ -369,81 +366,63 @@ function CreateCustodyForm({ onDone }: { onDone: () => void }) {
         <CardTitle>عهدة جديدة</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label>الموظف</Label>
-            <Select value={form.assignmentId} onValueChange={(v) => setForm({ ...form, assignmentId: v })}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="اختر الموظف..." /></SelectTrigger>
-              <SelectContent>
-                {employees.map((e: any) => (
-                  <SelectItem key={e.assignmentId || e.id} value={(e.assignmentId || e.id).toString()}>
-                    {e.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>المبلغ</Label>
-            <Input
-              className="mt-1"
-              type="number"
-              value={form.amount}
-              onChange={(e) => setForm({ ...form, amount: e.target.value })}
+        <FormShell
+          schema={custodySchema}
+          defaultValues={{
+            assignmentId: "",
+            amount: 0,
+            description: "",
+            sourceAccountCode: "",
+            purpose: "",
+            expectedReturnDate: "",
+          }}
+          submitLabel="حفظ"
+          secondaryActions={
+            <Button type="button" variant="outline" onClick={onDone}>
+              إلغاء
+            </Button>
+          }
+          onSubmit={async (values) => {
+            await createMut.mutateAsync({
+              assignmentId: Number(values.assignmentId),
+              amount: values.amount,
+              description: values.description,
+              sourceAccountCode: values.sourceAccountCode,
+              purpose: values.purpose || undefined,
+              expectedReturnDate: values.expectedReturnDate || undefined,
+            });
+          }}
+        >
+          <FormGrid cols={2}>
+            <FormSelectField
+              name="assignmentId"
+              label="الموظف"
+              required
+              options={[
+                { value: "", label: "اختر الموظف..." },
+                ...employees.map((e: any) => ({
+                  value: String(e.assignmentId || e.id),
+                  label: e.name,
+                })),
+              ]}
             />
-          </div>
-          <div>
-            <Label>مصدر الصرف</Label>
-            <Select value={form.sourceAccountCode || "_default"} onValueChange={(v) => setForm({ ...form, sourceAccountCode: v === "_default" ? "" : v })}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="الخزنة النقدية (1100)" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_default">الخزنة النقدية (1100)</SelectItem>
-                {sourceAccounts.map((a: any) => (
-                  <SelectItem key={a.code || a.id} value={a.code}>
-                    {a.code} - {a.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>الوصف</Label>
-            <Input
-              className="mt-1"
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
+            <FormNumberField name="amount" label="المبلغ" required />
+            <FormSelectField
+              name="sourceAccountCode"
+              label="مصدر الصرف"
+              options={[
+                { value: "", label: "الخزنة النقدية (1100)" },
+                ...sourceAccounts.map((a: any) => ({
+                  value: a.code,
+                  label: `${a.code} - ${a.name}`,
+                })),
+              ]}
             />
-          </div>
-          <div>
-            <Label>الغرض</Label>
-            <Input
-              className="mt-1"
-              value={form.purpose}
-              onChange={(e) => setForm({ ...form, purpose: e.target.value })}
-              placeholder="غرض العهدة (اختياري)"
-            />
-          </div>
-          <div>
-            <Label>تاريخ الإرجاع المتوقع</Label>
-            <div className="mt-1">
-              <DatePicker
-                value={form.expectedReturnDate}
-                onChange={(v) => setForm({ ...form, expectedReturnDate: v })}
-              />
-            </div>
-          </div>
-        </div>
-        <div className="flex justify-end gap-2 mt-4">
-          <Button variant="outline" onClick={onDone}>
-            إلغاء
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={!form.assignmentId || !form.amount || createMut.isPending}
-          >
-            {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
-          </Button>
-        </div>
+            <FormTextField name="description" label="الوصف" />
+            <FormTextField name="purpose" label="الغرض" placeholder="غرض العهدة (اختياري)" />
+            <FormDateField name="expectedReturnDate" label="تاريخ الإرجاع المتوقع" />
+          </FormGrid>
+        </FormShell>
       </CardContent>
     </Card>
   );
@@ -456,8 +435,23 @@ function CreateCustodyForm({ onDone }: { onDone: () => void }) {
  * positive, not exceeding remaining) live here because they're pure
  * UX and the server enforces the same thing authoritatively.
  */
+function settleSchema(remaining: number) {
+  // The over-settlement guard used to live as a manual `if`
+  // (`if (Number(amount) > Number(custody.remainingAmount))`) and a
+  // local `clientError` string. Pushing it into zod means the submit
+  // button can't fire until the value is valid — and the error
+  // surfaces inline on the field, not at the bottom of the card.
+  return z.object({
+    amount: z.coerce
+      .number({ invalid_type_error: "أدخل رقمًا صحيحًا" })
+      .positive("المبلغ يجب أن يكون أكبر من صفر")
+      .max(remaining, `مبلغ التسوية يتجاوز المتبقي (${remaining})`),
+    description: z.string().trim(),
+  });
+}
+
 function SettleCustodyForm({ custody, onDone }: { custody: any; onDone: () => void }) {
-  const settleMut = useApiMutation<unknown, any>(
+  const settleMut = useApiMutation<unknown, { custodyRef: string; amount: number; description: string }>(
     "/finance/custodies/settle",
     "POST",
     [["custodies"]],
@@ -466,26 +460,9 @@ function SettleCustodyForm({ custody, onDone }: { custody: any; onDone: () => vo
       onSuccess: () => onDone(),
     },
   );
-  const [amount, setAmount] = useState(String(custody.remainingAmount || 0));
-  const [description, setDescription] = useState("");
-  const [clientError, setClientError] = useState<string | null>(null);
-
-  const handleSubmit = () => {
-    if (!amount || Number(amount) <= 0) {
-      setClientError("المبلغ مطلوب ويجب أن يكون أكبر من صفر");
-      return;
-    }
-    if (Number(amount) > Number(custody.remainingAmount)) {
-      setClientError("مبلغ التسوية يتجاوز المتبقي");
-      return;
-    }
-    setClientError(null);
-    settleMut.mutate({
-      custodyRef: custody.ref,
-      amount: Number(amount),
-      description,
-    });
-  };
+  const remaining = Number(custody.remainingAmount || 0);
+  const schema = settleSchema(remaining);
+  type SettleForm = z.infer<typeof schema>;
 
   return (
     <Card className="border-amber-200">
@@ -511,37 +488,28 @@ function SettleCustodyForm({ custody, onDone }: { custody: any; onDone: () => vo
             </p>
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label>مبلغ التسوية</Label>
-            <Input
-              className="mt-1"
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-          </div>
-          <div>
-            <Label>ملاحظات</Label>
-            <Input
-              className="mt-1"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="اختياري"
-            />
-          </div>
-        </div>
-        {clientError && (
-          <p className="text-xs text-red-600 mt-2">{clientError}</p>
-        )}
-        <div className="flex justify-end gap-2 mt-4">
-          <Button variant="outline" onClick={onDone}>
-            إلغاء
-          </Button>
-          <Button onClick={handleSubmit} disabled={!amount || settleMut.isPending}>
-            {settleMut.isPending ? "جاري التسوية..." : "تسوية"}
-          </Button>
-        </div>
+        <FormShell
+          schema={schema}
+          defaultValues={{ amount: remaining, description: "" } as SettleForm}
+          submitLabel="تسوية"
+          secondaryActions={
+            <Button type="button" variant="outline" onClick={onDone}>
+              إلغاء
+            </Button>
+          }
+          onSubmit={async (values) => {
+            await settleMut.mutateAsync({
+              custodyRef: custody.ref,
+              amount: values.amount,
+              description: values.description,
+            });
+          }}
+        >
+          <FormGrid cols={2}>
+            <FormNumberField name="amount" label="مبلغ التسوية" required />
+            <FormTextField name="description" label="ملاحظات" placeholder="اختياري" />
+          </FormGrid>
+        </FormShell>
       </CardContent>
     </Card>
   );

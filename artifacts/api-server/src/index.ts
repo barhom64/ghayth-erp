@@ -7,8 +7,9 @@ import { registerRulesEngineListener } from "./lib/rulesEngine.js";
 import "./lib/engines/hrEngine.js";
 import { seedDemoData } from "./lib/seedDemoData.js";
 import { bootstrapAdminUser } from "./lib/bootstrapAdmin.js";
+import { syncFeatureCatalog } from "./lib/rbac/catalogSync.js";
+import { syncLegacyToV2 } from "./lib/rbac/autoMigrate.js";
 import { pool } from "./lib/rawdb.js";
-import { flushAndClearDLQ } from "./lib/eventBus.js";
 import http from "http";
 
 const rawPort = process.env["PORT"];
@@ -54,6 +55,15 @@ async function start() {
     logger.info("Admin bootstrap complete");
   } catch (bootstrapErr) {
     logger.warn({ err: bootstrapErr }, "Admin bootstrap skipped or failed");
+  }
+
+  try {
+    const cat = await syncFeatureCatalog();
+    logger.info({ ...cat }, "RBAC v2: feature catalog synced");
+    const sync = await syncLegacyToV2();
+    logger.info({ ...sync }, "RBAC v2: legacy roles auto-migrated");
+  } catch (rbacErr) {
+    logger.warn({ err: rbacErr }, "RBAC v2 sync skipped or failed (legacy RBAC still active)");
   }
 
   if (process.env.SEED_DEMO_DATA === "true") {
@@ -104,13 +114,6 @@ async function start() {
         logger.error({ err }, "Error closing HTTP server");
       } else {
         logger.info("HTTP server closed");
-      }
-
-      try {
-        await flushAndClearDLQ();
-        logger.info("DLQ flushed");
-      } catch (dlqErr) {
-        logger.error({ err: dlqErr }, "Error flushing DLQ");
       }
 
       try {

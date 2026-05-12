@@ -10,8 +10,8 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { criticalPathLength } from "../lib/algorithms.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import {
@@ -199,7 +199,7 @@ const RISK_TRANSITIONS: Record<string, readonly string[]> = {
 };
 
 // Impact preview — shows exactly what will happen when the project is created
-router.post("/impact-preview", requirePermission("projects:read"), async (req, res) => {
+router.post("/impact-preview", authorize({ feature: "projects.list", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(impactPreviewSchema.safeParse(req.body ?? {}));
@@ -234,7 +234,7 @@ router.post("/impact-preview", requirePermission("projects:read"), async (req, r
 
     if (managerId) {
       const [manager] = await rawQuery<any>(
-        `SELECT name FROM employees WHERE id = $1`, [Number(managerId)]
+        `SELECT e.name FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`, [Number(managerId), scope.companyId]
       );
       const [[active]] = await Promise.all([
         rawQuery<any>(
@@ -312,7 +312,7 @@ router.post("/impact-preview", requirePermission("projects:read"), async (req, r
   }
 });
 
-router.get("/", requirePermission("projects:read"), async (req, res) => {
+router.get("/", authorize({ feature: "projects.list", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
@@ -336,7 +336,7 @@ router.get("/", requirePermission("projects:read"), async (req, res) => {
     }
 
     const rows = await rawQuery<any>(
-      `SELECT p.*, cl.name AS "clientName", e.name AS "managerName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=p."managerId" WHERE ${where} AND p."deletedAt" IS NULL ORDER BY p.id DESC LIMIT 500`,
+      `SELECT p.*, cl.name AS "clientName", e.name AS "managerName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=p."managerId" AND e."deletedAt" IS NULL WHERE ${where} AND p."deletedAt" IS NULL ORDER BY p.id DESC LIMIT 500`,
       params
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -389,14 +389,14 @@ function assertProjectMutable(project: any): void {
   }
 }
 
-router.post("/", requirePermission("projects:create"), async (req, res) => {
+router.post("/", authorize({ feature: "projects.list", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(createProjectSchema.safeParse(req.body));
     const scope = req.scope!;
     if (!isFullAccess(scope) && scope.role !== "projects_manager") {
       throw new ForbiddenError("لا تملك صلاحية إنشاء مشاريع", { fix: "راجع مدير الحساب للحصول على صلاحية projects_manager" });
     }
-    const b = req.body;
+    const b = parsed;
     if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
       throw new ValidationError("اسم المشروع مطلوب", { field: "name", fix: "أدخل اسماً واضحاً للمشروع" });
     }
@@ -434,28 +434,32 @@ router.post("/", requirePermission("projects:create"), async (req, res) => {
     }
     if (b.managerId) {
       const [emp] = await rawQuery<any>(
-        `SELECT id FROM employees WHERE id=$1 AND "deletedAt" IS NULL`,
-        [b.managerId]
+        `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`,
+        [b.managerId, scope.companyId]
       );
       if (!emp) {
         throw new ValidationError("مدير المشروع غير موجود", { field: "managerId", fix: "اختر موظفاً مسجلاً" });
       }
     }
     const managerId = scope.role === "projects_manager" ? scope.employeeId : b.managerId;
-    const { insertId } = await rawExecute(
-      `INSERT INTO projects ("companyId",name,description,"clientId","managerId","startDate","endDate",budget,status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [scope.companyId, b.name.trim(), b.description, b.clientId || null, managerId, b.startDate, b.endDate, b.budget || 0, b.status || 'planning']
-    );
+    let insertId!: number;
+    await withTransaction(async (client) => {
+      const ins = await client.query(
+        `INSERT INTO projects ("companyId",name,description,"clientId","managerId","startDate","endDate",budget,status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+        [scope.companyId, b.name.trim(), b.description, b.clientId || null, managerId, b.startDate, b.endDate, b.budget || 0, b.status || 'planning']
+      );
+      insertId = ins.rows[0].id;
 
-    if (b.phases && Array.isArray(b.phases)) {
-      for (let i = 0; i < b.phases.length; i++) {
-        const phase = b.phases[i];
-        await rawExecute(
-          `INSERT INTO project_phases ("projectId",name,"orderIndex","startDate","endDate") VALUES ($1,$2,$3,$4,$5)`,
-          [insertId, phase.name, i, phase.startDate, phase.endDate]
-        );
+      if (b.phases && Array.isArray(b.phases)) {
+        for (let i = 0; i < b.phases.length; i++) {
+          const phase = b.phases[i];
+          await client.query(
+            `INSERT INTO project_phases ("projectId",name,"orderIndex","startDate","endDate") VALUES ($1,$2,$3,$4,$5)`,
+            [insertId, phase.name, i, phase.startDate, phase.endDate]
+          );
+        }
       }
-    }
+    });
 
     const [row] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
@@ -506,7 +510,7 @@ router.post("/", requirePermission("projects:create"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Create project error:"); }
 });
 
-router.get("/:id", requirePermission("projects:read"), async (req, res) => {
+router.get("/:id", authorize({ feature: "projects.list", action: "view", resource: { table: "projects", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -525,8 +529,10 @@ router.get("/:id", requirePermission("projects:read"), async (req, res) => {
 
     const [project] = await rawQuery<any>(`SELECT p.*, cl.name AS "clientName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" AND cl."deletedAt" IS NULL WHERE ${detailWhere}`, detailParams);
     if (!project) throw new NotFoundError("المشروع غير موجود");
-    const phases = await rawQuery<any>(`SELECT * FROM project_phases WHERE "projectId"=$1 ORDER BY "orderIndex" LIMIT 500`, [project.id]);
-    const tasks = await rawQuery<any>(`SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" WHERE pt."projectId"=$1 ORDER BY pt."dueDate" LIMIT 500`, [project.id]);
+    const [phases, tasks] = await Promise.all([
+      rawQuery<any>(`SELECT * FROM project_phases WHERE "projectId"=$1 ORDER BY "orderIndex" LIMIT 500`, [project.id]),
+      rawQuery<any>(`SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" AND e."deletedAt" IS NULL WHERE pt."projectId"=$1 AND pt."deletedAt" IS NULL ORDER BY pt."dueDate" LIMIT 500`, [project.id]),
+    ]);
 
     let taskDeps: any[] = [];
     if (tasks.length > 0) {
@@ -577,7 +583,7 @@ router.get("/:id", requirePermission("projects:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Get project error:"); }
 });
 
-router.patch("/:id", requirePermission("projects:update"), async (req, res) => {
+router.patch("/:id", authorize({ feature: "projects.list", action: "update" }), async (req, res) => {
   try {
     const parsed = zodParse(updateProjectSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -640,8 +646,8 @@ router.patch("/:id", requirePermission("projects:update"), async (req, res) => {
     }
     if (b.managerId !== undefined && b.managerId !== existing.managerId) {
       const [emp] = await rawQuery<any>(
-        `SELECT id FROM employees WHERE id=$1 AND "deletedAt" IS NULL`,
-        [b.managerId]
+        `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`,
+        [b.managerId, scope.companyId]
       );
       if (!emp) {
         throw new ValidationError("مدير المشروع غير موجود", { field: "managerId", fix: "اختر موظفاً مسجلاً" });
@@ -664,7 +670,8 @@ router.patch("/:id", requirePermission("projects:update"), async (req, res) => {
     }
     if (Object.keys(after).length === 0) { res.json(existing); return; }
     params.push(id); params.push(scope.companyId);
-    await rawExecute(`UPDATE projects SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    const { affectedRows } = await rawExecute(`UPDATE projects SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("المشروع غير موجود");
     const [row] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
@@ -693,7 +700,7 @@ router.patch("/:id", requirePermission("projects:update"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Update project error:"); }
 });
 
-router.delete("/:id", requirePermission("projects:delete"), async (req, res) => {
+router.delete("/:id", authorize({ feature: "projects.list", action: "delete", resource: { table: "projects", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -716,7 +723,8 @@ router.delete("/:id", requirePermission("projects:delete"), async (req, res) => 
       );
     }
 
-    await rawExecute(`UPDATE projects SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE projects SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("المشروع غير موجود");
 
     createAuditLog({
       companyId: scope.companyId,
@@ -743,12 +751,12 @@ router.delete("/:id", requirePermission("projects:delete"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "Delete project error:"); }
 });
 
-router.post("/:id/phases", requirePermission("projects:create"), async (req, res) => {
+router.post("/:id/phases", authorize({ feature: "projects.tasks", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(createPhaseSchema.safeParse(req.body));
     const scope = req.scope!;
     const projectId = parseId(req.params.id, "id");
-    const b = req.body;
+    const b = parsed;
     if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
       throw new ValidationError("اسم المرحلة مطلوب", { field: "name", fix: "أدخل اسم المرحلة" });
     }
@@ -784,7 +792,7 @@ router.post("/:id/phases", requirePermission("projects:create"), async (req, res
   } catch (err) { handleRouteError(err, res, "Create phase error:"); }
 });
 
-router.patch("/:id/phases/:phaseId/complete", requirePermission("projects:update"), async (req, res) => {
+router.patch("/:id/phases/:phaseId/complete", authorize({ feature: "projects.tasks", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const projectId = parseId(req.params.id, "id");
@@ -859,17 +867,18 @@ router.patch("/:id/phases/:phaseId/complete", requirePermission("projects:update
     const tasks = await rawQuery<any>(`SELECT * FROM project_tasks WHERE "projectId"=$1 AND "deletedAt" IS NULL LIMIT 500`, [projectId]);
     const doneTasks = tasks.filter((t: any) => t.status === 'done').length;
     const progressPct = tasks.length > 0 ? Math.round((doneTasks / tasks.length) * 100) : 0;
-    await rawExecute(`UPDATE projects SET progress=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [progressPct, projectId, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE projects SET progress=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [progressPct, projectId, scope.companyId]);
+    if (!affectedRows) logger.warn({ projectId, progressPct }, "Project progress update matched no rows (possible race condition)");
 
     res.json({ message: 'تم إكمال المرحلة', phase, milestoneInvoiceCreated, progressPct });
   } catch (err) { handleRouteError(err, res, "Complete phase error:"); }
 });
 
-router.post("/:id/tasks", requirePermission("projects:create"), async (req, res) => {
+router.post("/:id/tasks", authorize({ feature: "projects.tasks", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(createTaskSchema.safeParse(req.body));
     const scope = req.scope!;
-    const b = req.body;
+    const b = parsed;
     const projectId = parseId(req.params.id, "id");
 
     if (!b.title || typeof b.title !== "string" || !b.title.trim()) {
@@ -880,8 +889,8 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
 
     if (b.assigneeId) {
       const [emp] = await rawQuery<any>(
-        `SELECT id FROM employees WHERE id=$1 AND "deletedAt" IS NULL`,
-        [b.assigneeId]
+        `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`,
+        [b.assigneeId, scope.companyId]
       );
       if (!emp) {
         throw new ValidationError("الموظف المُكلَّف غير موجود", { field: "assigneeId", fix: "اختر موظفاً مسجلاً" });
@@ -897,45 +906,49 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
       }
     }
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO project_tasks ("projectId","phaseId",title,description,"assigneeId",priority,status,"startDate","dueDate","estimatedHours") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [projectId, b.phaseId || null, b.title.trim(), b.description || null, b.assigneeId || null, b.priority || 'medium', 'todo', b.startDate || null, b.dueDate || null, b.estimatedHours || null]
-    );
-
-    if (Array.isArray(b.dependsOn) && b.dependsOn.length > 0) {
-      const valuesSql: string[] = [];
-      const params: any[] = [];
-      for (const depId of b.dependsOn) {
-        const base = params.length;
-        valuesSql.push(`($${base + 1},$${base + 2})`);
-        params.push(insertId, depId);
-      }
-      try {
-        await rawExecute(
-          `INSERT INTO project_task_dependencies ("taskId","dependsOnId") VALUES ${valuesSql.join(",")} ON CONFLICT DO NOTHING`,
-          params
-        );
-      } catch (depErr) {
-        logger.error(depErr, `Failed to create task dependencies for ${insertId}:`);
-      }
-
-      const placeholders = b.dependsOn.map((_: any, i: number) => `$${i + 1}`).join(',');
-      const blockedDeps = await rawQuery<any>(
-        `SELECT pt.status FROM project_tasks pt WHERE pt.id IN (${placeholders})`,
-        b.dependsOn
+    let insertId!: number;
+    await withTransaction(async (client) => {
+      const ins = await client.query(
+        `INSERT INTO project_tasks ("projectId","phaseId",title,description,"assigneeId",priority,status,"startDate","dueDate","estimatedHours") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+        [projectId, b.phaseId || null, b.title.trim(), b.description || null, b.assigneeId || null, b.priority || 'medium', 'todo', b.startDate || null, b.dueDate || null, b.estimatedHours || null]
       );
-      const allDepsDone = blockedDeps.every((d: any) => d.status === 'done');
-      if (!allDepsDone) {
-        await rawExecute(`UPDATE project_tasks SET status='blocked' WHERE id=$1 AND status='todo'`, [insertId]);
-      }
-    }
+      insertId = ins.rows[0].id;
 
-    const [row] = await rawQuery<any>(`SELECT * FROM project_tasks WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
+      if (Array.isArray(b.dependsOn) && b.dependsOn.length > 0) {
+        const valuesSql: string[] = [];
+        const params: any[] = [];
+        for (const depId of b.dependsOn) {
+          const base = params.length;
+          valuesSql.push(`($${base + 1},$${base + 2})`);
+          params.push(insertId, depId);
+        }
+        try {
+          await client.query(
+            `INSERT INTO project_task_dependencies ("taskId","dependsOnId") VALUES ${valuesSql.join(",")} ON CONFLICT DO NOTHING`,
+            params
+          );
+        } catch (depErr) {
+          logger.error(depErr, `Failed to create task dependencies for ${insertId}:`);
+        }
+
+        const placeholders = b.dependsOn.map((_: any, i: number) => `$${i + 1}`).join(',');
+        const blockedRes = await client.query(
+          `SELECT pt.status FROM project_tasks pt WHERE pt.id IN (${placeholders})`,
+          b.dependsOn
+        );
+        const allDepsDone = blockedRes.rows.every((d: any) => d.status === 'done');
+        if (!allDepsDone) {
+          await client.query(`UPDATE project_tasks SET status='blocked' WHERE id=$1 AND status='todo' AND "deletedAt" IS NULL`, [insertId]);
+        }
+      }
+    });
+
+    const [row] = await rawQuery<any>(`SELECT pt.* FROM project_tasks pt JOIN projects p ON p.id=pt."projectId" WHERE pt.id=$1 AND p."companyId"=$2 AND pt."deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     if (b.assigneeId) {
       const [assigneeAssignment] = await rawQuery<any>(
-        `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND status = 'active' LIMIT 1`,
-        [b.assigneeId]
+        `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
+        [b.assigneeId, scope.companyId]
       );
       if (assigneeAssignment) {
         createNotification({
@@ -988,12 +1001,12 @@ router.post("/:id/tasks", requirePermission("projects:create"), async (req, res)
 // auto-billing on done-state, and obligation completion. Re-route
 // through `assertProjectAccess(existingTask.projectId, scope)` so the
 // per-role gates apply.
-router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req, res) => {
+router.patch("/tasks/:taskId", authorize({ feature: "projects.tasks", action: "update" }), async (req, res) => {
   try {
     const parsed = zodParse(updateTaskSchema.safeParse(req.body));
     const scope = req.scope!;
     const taskId = parseId(req.params.taskId, "taskId");
-    const b = req.body;
+    const b = parsed;
 
     const [existingTask] = await rawQuery<any>(
       `SELECT pt.* FROM project_tasks pt
@@ -1006,7 +1019,7 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
 
     // State machine for task status transitions
     if (b.status !== undefined && b.status !== existingTask.status) {
-      if (!TASK_STATUSES.includes(b.status)) {
+      if (!(TASK_STATUSES as readonly string[]).includes(b.status)) {
         throw new ValidationError(
           `حالة مهمة غير صالحة: ${b.status}`,
           { field: "status", fix: `اختر من: ${TASK_STATUSES.join(", ")}` }
@@ -1045,7 +1058,48 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
       params.push(existingTask.status ?? "todo");
       taskWhere += ` AND status=$${params.length}`;
     }
-    await rawExecute(`UPDATE project_tasks SET ${sets.join(",")} WHERE ${taskWhere}`, params);
+    // Wrap task update + unblock dependents + project progress in a single transaction
+    const { task, unlockedTasks, progressPct } = await withTransaction(async (client) => {
+      await client.query(`UPDATE project_tasks SET ${sets.join(",")} WHERE ${taskWhere} AND "deletedAt" IS NULL`, params);
+
+      const taskRes = await client.query(`SELECT * FROM project_tasks WHERE id=$1 AND "deletedAt" IS NULL`, [taskId]);
+      const tsk = taskRes.rows[0];
+
+      let unlocked: any[] = [];
+      if (b.status === 'done' && tsk?.projectId) {
+        const candidateRes = await client.query(
+          `SELECT ptd."taskId",
+                  COUNT(*) FILTER (WHERE pt2.status != 'done') AS "pendingDeps"
+           FROM project_task_dependencies ptd
+           JOIN project_task_dependencies all_deps ON all_deps."taskId" = ptd."taskId"
+           JOIN project_tasks pt2 ON pt2.id = all_deps."dependsOnId"
+           WHERE ptd."dependsOnId" = $1
+           GROUP BY ptd."taskId"
+           HAVING COUNT(*) FILTER (WHERE pt2.status != 'done') = 0`,
+          [taskId]
+        );
+        const candidateIds = candidateRes.rows.map((d: any) => Number(d.taskId));
+        if (candidateIds.length > 0) {
+          const unblockRes = await client.query(
+            `UPDATE project_tasks SET status='todo'
+             WHERE id = ANY($1) AND status='blocked' AND "deletedAt" IS NULL
+             RETURNING *`,
+            [candidateIds]
+          );
+          unlocked = unblockRes.rows;
+        }
+      }
+
+      let pPct = 0;
+      if (tsk?.projectId) {
+        const allRes = await client.query(`SELECT status FROM project_tasks WHERE "projectId"=$1 AND "deletedAt" IS NULL LIMIT 500`, [tsk.projectId]);
+        const doneCount = allRes.rows.filter((t: any) => t.status === 'done').length;
+        pPct = allRes.rows.length > 0 ? Math.round((doneCount / allRes.rows.length) * 100) : 0;
+        await client.query(`UPDATE projects SET progress=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [pPct, tsk.projectId, scope.companyId]);
+      }
+
+      return { task: tsk, unlockedTasks: unlocked, progressPct: pPct };
+    });
 
     createAuditLog({
       companyId: scope.companyId,
@@ -1069,75 +1123,43 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
       after,
     }).catch((e) => logger.error(e, "projects background task failed"));
 
-    const [task] = await rawQuery<any>(`SELECT * FROM project_tasks WHERE id=$1 AND "deletedAt" IS NULL`, [taskId]);
-
-    let unlockedTasks: any[] = [];
-    if (b.status === 'done' && task?.projectId) {
-      const candidateTasks = await rawQuery<any>(
-        `SELECT ptd."taskId",
-                COUNT(*) FILTER (WHERE pt2.status != 'done') AS "pendingDeps"
-         FROM project_task_dependencies ptd
-         JOIN project_task_dependencies all_deps ON all_deps."taskId" = ptd."taskId"
-         JOIN project_tasks pt2 ON pt2.id = all_deps."dependsOnId"
-         WHERE ptd."dependsOnId" = $1
-         GROUP BY ptd."taskId"
-         HAVING COUNT(*) FILTER (WHERE pt2.status != 'done') = 0`,
-        [taskId]
+    // Notify assignees of unblocked tasks (fire-and-forget, outside transaction)
+    if (unlockedTasks.length > 0) {
+      const assigneeIds = Array.from(
+        new Set(unlockedTasks.map((t: any) => t.assigneeId).filter((x: any) => x != null))
       );
-
-      const candidateIds = candidateTasks.map((d: any) => Number(d.taskId));
-      if (candidateIds.length > 0) {
-        // 1) Single UPDATE that returns the rows that actually moved from
-        //    blocked -> todo, so we don't need a follow-up SELECT per row.
-        unlockedTasks = await rawQuery<any>(
-          `UPDATE project_tasks SET status='todo'
-           WHERE id = ANY($1) AND status='blocked'
-           RETURNING *`,
-          [candidateIds]
-        );
-
-        // 2) Resolve all assignment ids in one query, then notify.
-        const assigneeIds = Array.from(
-          new Set(unlockedTasks.map((t: any) => t.assigneeId).filter((x: any) => x != null))
-        );
-        if (assigneeIds.length > 0) {
-          try {
-            const asgnRows = await rawQuery<{ id: number; employeeId: number }>(
-              `SELECT DISTINCT ON ("employeeId") id, "employeeId"
-               FROM employee_assignments
-               WHERE "employeeId" = ANY($1) AND status='active'
-               ORDER BY "employeeId", id`,
-              [assigneeIds]
-            );
-            const empToAssignment = new Map<number, number>();
-            for (const r of asgnRows) empToAssignment.set(Number(r.employeeId), Number(r.id));
-
-            for (const t of unlockedTasks) {
-              const aid = empToAssignment.get(Number(t.assigneeId));
-              if (!aid) continue;
-              createNotification({
-                companyId: scope.companyId,
-                assignmentId: aid,
-                type: "task_unblocked",
-                title: "مهمة أصبحت متاحة للعمل",
-                body: `المهمة "${t.title}" أصبحت جاهزة — جميع المهام المعتمد عليها مكتملة`,
-                priority: "normal",
-                refType: "project_tasks",
-                refId: t.id,
-              }).catch((e) => logger.error(e, "projects background task failed"));
-            }
-          } catch (e) { logger.error(e, "Unlock notification error:"); }
-        }
+      if (assigneeIds.length > 0) {
+        try {
+          const asgnRows = await rawQuery<{ id: number; employeeId: number }>(
+            `SELECT DISTINCT ON ("employeeId") id, "employeeId"
+             FROM employee_assignments
+             WHERE "employeeId" = ANY($1) AND "companyId" = $2 AND status='active'
+             ORDER BY "employeeId", id`,
+            [assigneeIds, scope.companyId]
+          );
+          const empToAssignment = new Map<number, number>();
+          for (const r of asgnRows) empToAssignment.set(Number(r.employeeId), Number(r.id));
+          for (const t of unlockedTasks) {
+            const aid = empToAssignment.get(Number(t.assigneeId));
+            if (!aid) continue;
+            createNotification({
+              companyId: scope.companyId,
+              assignmentId: aid,
+              type: "task_unblocked",
+              title: "مهمة أصبحت متاحة للعمل",
+              body: `المهمة "${t.title}" أصبحت جاهزة — جميع المهام المعتمد عليها مكتملة`,
+              priority: "normal",
+              refType: "project_tasks",
+              refId: t.id,
+            }).catch((e) => logger.error(e, "projects background task failed"));
+          }
+        } catch (e) { logger.error(e, "Unlock notification error:"); }
       }
     }
 
     if (task?.projectId) {
-      const allTasks = await rawQuery<any>(`SELECT * FROM project_tasks WHERE "projectId"=$1 AND "deletedAt" IS NULL LIMIT 500`, [task.projectId]);
-      const doneTasks = allTasks.filter((t: any) => t.status === 'done').length;
-      const progressPct = allTasks.length > 0 ? Math.round((doneTasks / allTasks.length) * 100) : 0;
-      await rawExecute(`UPDATE projects SET progress=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [progressPct, task.projectId, scope.companyId]);
 
-      const [project] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "deletedAt" IS NULL`, [task.projectId]);
+      const [project] = await rawQuery<any>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [task.projectId, scope.companyId]);
 
       const budget = Number(project?.budget) || 0;
       const spentAmount = Number(project?.spentAmount) || 0;
@@ -1190,13 +1212,15 @@ router.patch("/tasks/:taskId", requirePermission("projects:update"), async (req,
   } catch (err) { handleRouteError(err, res, "Update project task error:"); }
 });
 
-router.get("/stats/summary", requirePermission("projects:read"), async (req, res) => {
+router.get("/stats/summary", authorize({ feature: "projects.list", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [projects] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='active') as active, COUNT(*) FILTER (WHERE status='completed') as completed FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [budget] = await rawQuery<any>(`SELECT COALESCE(SUM(budget),0) as "totalBudget", COALESCE(SUM("spentAmount"),0) as "totalSpent" FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [slipping] = await rawQuery<any>(`SELECT COUNT(*) as count FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL AND status='active' AND "endDate" < CURRENT_DATE`, [cid]);
+    const [[projects], [budget], [slipping]] = await Promise.all([
+      rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='active') as active, COUNT(*) FILTER (WHERE status='completed') as completed FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COALESCE(SUM(budget),0) as "totalBudget", COALESCE(SUM("spentAmount"),0) as "totalSpent" FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as count FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL AND status='active' AND "endDate" < CURRENT_DATE`, [cid]),
+    ]);
     res.json({
       totalProjects: Number(projects.total), activeProjects: Number(projects.active),
       completedProjects: Number(projects.completed), totalBudget: Number(budget.totalBudget),
@@ -1205,81 +1229,85 @@ router.get("/stats/summary", requirePermission("projects:read"), async (req, res
   } catch (err) { handleRouteError(err, res, "Projects stats error:"); }
 });
 
-router.get("/stats/overview", requirePermission("projects:read"), async (req, res) => {
+router.get("/stats/overview", authorize({ feature: "projects.list", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
 
-    const [counts] = await rawQuery<any>(
-      `SELECT
-         COUNT(*) as total,
-         COUNT(*) FILTER (WHERE status IN ('active','in_progress')) as active,
-         COUNT(*) FILTER (WHERE status='completed') as completed,
-         COUNT(*) FILTER (WHERE status='planning') as planning,
-         COUNT(*) FILTER (WHERE status='on_hold') as on_hold,
-         COUNT(*) FILTER (WHERE status='cancelled') as cancelled,
-         COUNT(*) FILTER (WHERE status IN ('active','in_progress') AND "endDate" < CURRENT_DATE) as slipping
-       FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
-      [cid]
-    );
-
-    const [budget] = await rawQuery<any>(
-      `SELECT COALESCE(SUM(budget),0) as "totalBudget",
-              COALESCE(SUM("spentAmount"),0) as "totalSpent"
-       FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
-      [cid]
-    );
-
-    const [taskCounts] = await rawQuery<any>(
-      `SELECT COUNT(*) as total,
-              COUNT(*) FILTER (WHERE pt.status='done') as done,
-              COUNT(*) FILTER (WHERE pt.status='in_progress') as in_progress,
-              COUNT(*) FILTER (WHERE pt.status='blocked') as blocked,
-              COUNT(*) FILTER (WHERE pt.status NOT IN ('done','cancelled') AND pt."dueDate" < CURRENT_DATE) as overdue
-       FROM project_tasks pt
-       JOIN projects p ON pt."projectId"=p.id
-       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL`,
-      [cid]
-    );
-
-    const slippingProjects = await rawQuery<any>(
-      `SELECT id, name, status, "endDate", progress, budget, "spentAmount",
-              (SELECT name FROM employees WHERE id=p."managerId") as "managerName"
-       FROM projects p
-       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
-         AND p.status IN ('active','in_progress') AND p."endDate" < CURRENT_DATE
-       ORDER BY p."endDate" LIMIT 10`,
-      [cid]
-    );
-
-    const recentProjects = await rawQuery<any>(
-      `SELECT id, name, status, progress, budget, "spentAmount", "endDate",
-              (SELECT name FROM employees WHERE id=p."managerId") as "managerName"
-       FROM projects p
-       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL AND p.status IN ('active','in_progress')
-       ORDER BY p."updatedAt" DESC LIMIT 8`,
-      [cid]
-    );
-
-    const upcomingMilestones = await rawQuery<any>(
-      `SELECT pm.id, pm.title, pm."targetDate", pm.status, p.name as "projectName", p.id as "projectId"
-       FROM project_milestones pm
-       JOIN projects p ON pm."projectId"=p.id
-       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
-         AND pm.status IN ('pending','in_progress')
-         AND pm."targetDate" >= CURRENT_DATE
-       ORDER BY pm."targetDate" LIMIT 8`,
-      [cid]
-    );
-
-    const openRisks = await rawQuery<any>(
-      `SELECT pr.id, pr.title, pr."riskLevel", pr."riskScore", pr.status, p.name as "projectName", p.id as "projectId"
-       FROM project_risks pr
-       JOIN projects p ON pr."projectId"=p.id
-       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL AND pr.status IN ('open','realized')
-       ORDER BY pr."riskScore" DESC LIMIT 8`,
-      [cid]
-    );
+    const [
+      [counts],
+      [budget],
+      [taskCounts],
+      slippingProjects,
+      recentProjects,
+      upcomingMilestones,
+      openRisks,
+    ] = await Promise.all([
+      rawQuery<any>(
+        `SELECT
+           COUNT(*) as total,
+           COUNT(*) FILTER (WHERE status IN ('active','in_progress')) as active,
+           COUNT(*) FILTER (WHERE status='completed') as completed,
+           COUNT(*) FILTER (WHERE status='planning') as planning,
+           COUNT(*) FILTER (WHERE status='on_hold') as on_hold,
+           COUNT(*) FILTER (WHERE status='cancelled') as cancelled,
+           COUNT(*) FILTER (WHERE status IN ('active','in_progress') AND "endDate" < CURRENT_DATE) as slipping
+         FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
+        [cid]
+      ),
+      rawQuery<any>(
+        `SELECT COALESCE(SUM(budget),0) as "totalBudget",
+                COALESCE(SUM("spentAmount"),0) as "totalSpent"
+         FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
+        [cid]
+      ),
+      rawQuery<any>(
+        `SELECT COUNT(*) as total,
+                COUNT(*) FILTER (WHERE pt.status='done') as done,
+                COUNT(*) FILTER (WHERE pt.status='in_progress') as in_progress,
+                COUNT(*) FILTER (WHERE pt.status='blocked') as blocked,
+                COUNT(*) FILTER (WHERE pt.status NOT IN ('done','cancelled') AND pt."dueDate" < CURRENT_DATE) as overdue
+         FROM project_tasks pt
+         JOIN projects p ON pt."projectId"=p.id
+         WHERE p."companyId"=$1 AND p."deletedAt" IS NULL`,
+        [cid]
+      ),
+      rawQuery<any>(
+        `SELECT id, name, status, "endDate", progress, budget, "spentAmount",
+                (SELECT name FROM employees WHERE id=p."managerId" AND "deletedAt" IS NULL) as "managerName"
+         FROM projects p
+         WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
+           AND p.status IN ('active','in_progress') AND p."endDate" < CURRENT_DATE
+         ORDER BY p."endDate" LIMIT 10`,
+        [cid]
+      ),
+      rawQuery<any>(
+        `SELECT id, name, status, progress, budget, "spentAmount", "endDate",
+                (SELECT name FROM employees WHERE id=p."managerId" AND "deletedAt" IS NULL) as "managerName"
+         FROM projects p
+         WHERE p."companyId"=$1 AND p."deletedAt" IS NULL AND p.status IN ('active','in_progress')
+         ORDER BY p."updatedAt" DESC LIMIT 8`,
+        [cid]
+      ),
+      rawQuery<any>(
+        `SELECT pm.id, pm.title, pm."targetDate", pm.status, p.name as "projectName", p.id as "projectId"
+         FROM project_milestones pm
+         JOIN projects p ON pm."projectId"=p.id
+         WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
+           AND pm.status IN ('pending','in_progress')
+           AND pm."targetDate" >= CURRENT_DATE
+         ORDER BY pm."targetDate" LIMIT 8`,
+        [cid]
+      ),
+      rawQuery<any>(
+        `SELECT pr.id, pr.title, pr."riskLevel", pr."riskScore", pr.status, p.name as "projectName", p.id as "projectId"
+         FROM project_risks pr
+         JOIN projects p ON pr."projectId"=p.id
+         WHERE p."companyId"=$1 AND p."deletedAt" IS NULL AND pr.status IN ('open','realized')
+         ORDER BY pr."riskScore" DESC LIMIT 8`,
+        [cid]
+      ),
+    ]);
 
     res.json({
       counts: {
@@ -1302,42 +1330,42 @@ router.get("/stats/overview", requirePermission("projects:read"), async (req, re
   } catch (err) { handleRouteError(err, res, "Projects overview error:"); }
 });
 
-router.get("/manager/:employeeId/workload", requirePermission("projects:read"), async (req, res) => {
+router.get("/manager/:employeeId/workload", authorize({ feature: "projects.list", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const employeeId = parseId(req.params.employeeId, "employeeId");
     if (!employeeId) throw new ValidationError("معرّف الموظف مطلوب");
 
-    const [counts] = await rawQuery<any>(
-      `SELECT
-         COUNT(*) FILTER (WHERE status IN ('active','in_progress')) as active,
-         COUNT(*) FILTER (WHERE status='on_hold') as on_hold,
-         COUNT(*) FILTER (WHERE status IN ('active','in_progress') AND "endDate" < CURRENT_DATE) as slipping,
-         COALESCE(SUM(budget) FILTER (WHERE status IN ('active','in_progress')),0) as "activeBudget",
-         COALESCE(SUM("spentAmount") FILTER (WHERE status IN ('active','in_progress')),0) as "activeSpent"
-       FROM projects
-       WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "managerId"=$2`,
-      [scope.companyId, employeeId]
-    );
-
-    const [taskCounts] = await rawQuery<any>(
-      `SELECT COUNT(*) as total,
-              COUNT(*) FILTER (WHERE pt.status NOT IN ('done','cancelled')) as open,
-              COUNT(*) FILTER (WHERE pt.status NOT IN ('done','cancelled') AND pt."dueDate" < CURRENT_DATE) as overdue
-       FROM project_tasks pt
-       JOIN projects p ON pt."projectId"=p.id
-       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
-         AND (p."managerId"=$2 OR pt."assigneeId"=$2)`,
-      [scope.companyId, employeeId]
-    );
-
-    const recent = await rawQuery<any>(
-      `SELECT id, name, status, progress, "endDate"
-       FROM projects
-       WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "managerId"=$2 AND status IN ('active','in_progress','planning')
-       ORDER BY "updatedAt" DESC LIMIT 5`,
-      [scope.companyId, employeeId]
-    );
+    const [[counts], [taskCounts], recent] = await Promise.all([
+      rawQuery<any>(
+        `SELECT
+           COUNT(*) FILTER (WHERE status IN ('active','in_progress')) as active,
+           COUNT(*) FILTER (WHERE status='on_hold') as on_hold,
+           COUNT(*) FILTER (WHERE status IN ('active','in_progress') AND "endDate" < CURRENT_DATE) as slipping,
+           COALESCE(SUM(budget) FILTER (WHERE status IN ('active','in_progress')),0) as "activeBudget",
+           COALESCE(SUM("spentAmount") FILTER (WHERE status IN ('active','in_progress')),0) as "activeSpent"
+         FROM projects
+         WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "managerId"=$2`,
+        [scope.companyId, employeeId]
+      ),
+      rawQuery<any>(
+        `SELECT COUNT(*) as total,
+                COUNT(*) FILTER (WHERE pt.status NOT IN ('done','cancelled')) as open,
+                COUNT(*) FILTER (WHERE pt.status NOT IN ('done','cancelled') AND pt."dueDate" < CURRENT_DATE) as overdue
+         FROM project_tasks pt
+         JOIN projects p ON pt."projectId"=p.id
+         WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
+           AND (p."managerId"=$2 OR pt."assigneeId"=$2)`,
+        [scope.companyId, employeeId]
+      ),
+      rawQuery<any>(
+        `SELECT id, name, status, progress, "endDate"
+         FROM projects
+         WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "managerId"=$2 AND status IN ('active','in_progress','planning')
+         ORDER BY "updatedAt" DESC LIMIT 5`,
+        [scope.companyId, employeeId]
+      ),
+    ]);
 
     res.json({
       projects: {
@@ -1355,7 +1383,7 @@ router.get("/manager/:employeeId/workload", requirePermission("projects:read"), 
 // PROJECT MILESTONES — معالم المشروع
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/:id/milestones", requirePermission("projects:read"), async (req, res) => {
+router.get("/:id/milestones", authorize({ feature: "projects.tasks", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const projectId = parseId(req.params.id, "id");
@@ -1368,11 +1396,11 @@ router.get("/:id/milestones", requirePermission("projects:read"), async (req, re
   } catch (err) { handleRouteError(err, res, "Milestones error:"); }
 });
 
-router.post("/:id/milestones", requirePermission("projects:create"), async (req, res) => {
+router.post("/:id/milestones", authorize({ feature: "projects.tasks", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(createMilestoneSchema.safeParse(req.body));
     const scope = req.scope!;
-    const b = req.body;
+    const b = parsed;
     const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
     if (!b.title || typeof b.title !== "string" || !b.title.trim()) {
@@ -1382,8 +1410,8 @@ router.post("/:id/milestones", requirePermission("projects:create"), async (req,
       throw new ValidationError("تاريخ المعلَم المستهدف مطلوب", { field: "targetDate", fix: "حدد التاريخ المستهدف" });
     }
     const { insertId } = await rawExecute(
-      `INSERT INTO project_milestones ("projectId","companyId",title,description,"targetDate",status,"completedDate")
-       VALUES ($1,$2,$3,$4,$5,'pending',$6)`,
+      `INSERT INTO project_milestones ("projectId","companyId",name,title,description,"targetDate",status,"completedDate")
+       VALUES ($1,$2,$3,$3,$4,$5,'pending',$6)`,
       [projectId, scope.companyId, b.title, b.description || null, b.targetDate, b.completedDate || null]
     );
 
@@ -1429,7 +1457,7 @@ router.post("/:id/milestones", requirePermission("projects:create"), async (req,
       details: JSON.stringify({ projectId, title: b.title, targetDate: b.targetDate }),
     }).catch((e) => logger.error(e, "projects background task failed"));
 
-    const [row] = await rawQuery<any>(`SELECT * FROM project_milestones WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM project_milestones WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create milestone error:"); }
 });
@@ -1446,7 +1474,7 @@ router.post("/:id/milestones", requirePermission("projects:create"), async (req,
 // driven invoice/delivery workflow on projects they shouldn't touch.
 // Re-route through `assertProjectAccess(existing.projectId, scope)`
 // after the company-scoped lookup so the same role gates apply.
-router.patch("/milestones/:milestoneId", requirePermission("projects:update"), async (req, res) => {
+router.patch("/milestones/:milestoneId", authorize({ feature: "projects.tasks", action: "update" }), async (req, res) => {
   try {
     const parsed = zodParse(updateMilestoneSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -1522,7 +1550,7 @@ router.patch("/milestones/:milestoneId", requirePermission("projects:update"), a
 // PROJECT RISKS — مخاطر المشروع
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/:id/risks", requirePermission("projects:read"), async (req, res) => {
+router.get("/:id/risks", authorize({ feature: "projects.tasks", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const projectId = parseId(req.params.id, "id");
@@ -1535,15 +1563,19 @@ router.get("/:id/risks", requirePermission("projects:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Project risks error:"); }
 });
 
-router.post("/:id/risks", requirePermission("projects:create"), async (req, res) => {
+router.post("/:id/risks", authorize({ feature: "projects.tasks", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(createRiskSchema.safeParse(req.body));
     const scope = req.scope!;
-    const b = req.body;
+    const b = parsed;
     const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
     if (!b.title || typeof b.title !== "string" || !b.title.trim()) {
       throw new ValidationError("عنوان المخاطرة مطلوب", { field: "title", fix: "أدخل وصفاً مختصراً للمخاطرة" });
+    }
+    if (b.responsibleId) {
+      const [resp] = await rawQuery<{ id: number }>(`SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`, [b.responsibleId, scope.companyId]);
+      if (!resp) throw new ValidationError("الموظف المسؤول غير موجود", { field: "responsibleId", fix: "اختر موظفاً من قائمة الموظفين." });
     }
     const probability = Math.min(5, Math.max(1, Number(b.probability || 3)));
     const impact = Math.min(5, Math.max(1, Number(b.impact || 3)));
@@ -1587,7 +1619,7 @@ router.post("/:id/risks", requirePermission("projects:create"), async (req, res)
 // probability / impact / mitigation / status on risks across every
 // project in the company — including projects the caller's role does
 // not have read access to via `assertProjectAccess`.
-router.patch("/risks/:riskId", requirePermission("projects:update"), async (req, res) => {
+router.patch("/risks/:riskId", authorize({ feature: "projects.tasks", action: "update" }), async (req, res) => {
   try {
     const parsed = zodParse(updateRiskSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -1674,7 +1706,7 @@ router.patch("/risks/:riskId", requirePermission("projects:update"), async (req,
 // PROJECT RESOURCES — تخصيص موارد المشروع
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/:id/resources", requirePermission("projects:read"), async (req, res) => {
+router.get("/:id/resources", authorize({ feature: "projects.list", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const projectId = parseId(req.params.id, "id");
@@ -1682,7 +1714,7 @@ router.get("/:id/resources", requirePermission("projects:read"), async (req, res
     const rows = await rawQuery<any>(
       `SELECT pr.*, e.name AS "employeeName", ea."jobTitle" AS "employeeJobTitle"
        FROM project_resources pr
-       LEFT JOIN employees e ON e.id=pr."employeeId"
+       LEFT JOIN employees e ON e.id=pr."employeeId" AND e."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea.status='active'
        WHERE pr."projectId"=$1 AND pr."companyId"=$2
        ORDER BY pr.id`,
@@ -1692,14 +1724,22 @@ router.get("/:id/resources", requirePermission("projects:read"), async (req, res
   } catch (err) { handleRouteError(err, res, "Project resources error:"); }
 });
 
-router.post("/:id/resources", requirePermission("projects:create"), async (req, res) => {
+router.post("/:id/resources", authorize({ feature: "projects.list", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(createResourceSchema.safeParse(req.body));
     const scope = req.scope!;
-    const b = req.body;
+    const b = parsed;
     const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
     assertProjectMutable(project);
+    if (b.employeeId) {
+      const [emp] = await rawQuery<{ id: number }>(`SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`, [b.employeeId, scope.companyId]);
+      if (!emp) throw new ValidationError("الموظف غير موجود", { field: "employeeId", fix: "اختر موظفاً من قائمة الموظفين." });
+    }
+    if (b.taskId) {
+      const [task] = await rawQuery<{ id: number }>(`SELECT id FROM project_tasks WHERE id = $1 AND "projectId" = $2 AND "deletedAt" IS NULL LIMIT 1`, [b.taskId, projectId]);
+      if (!task) throw new ValidationError("المهمة غير موجودة", { field: "taskId", fix: "اختر مهمة من مهام المشروع." });
+    }
     const { insertId } = await rawExecute(
       `INSERT INTO project_resources ("projectId","companyId","employeeId","taskId",role,"allocatedHours","budgetAllocated","startDate","endDate")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
@@ -1707,7 +1747,7 @@ router.post("/:id/resources", requirePermission("projects:create"), async (req, 
        b.role || 'member', b.allocatedHours || 0, b.budgetAllocated || 0,
        b.startDate || null, b.endDate || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM project_resources WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM project_resources WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -1737,23 +1777,25 @@ router.post("/:id/resources", requirePermission("projects:create"), async (req, 
 // PROJECT COST TRACKING — تتبع التكاليف الفعلية
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/:id/costs", requirePermission("projects:read"), async (req, res) => {
+router.get("/:id/costs", authorize({ feature: "projects.list", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
-    const rows = await rawQuery<any>(
-      `SELECT pc.*, e.name AS "enteredByName"
-       FROM project_costs pc
-       LEFT JOIN employees e ON e.id=pc."enteredBy"
-       WHERE pc."projectId"=$1 AND pc."companyId"=$2
-       ORDER BY pc."costDate" DESC LIMIT 500`,
-      [projectId, scope.companyId]
-    );
-    const [totals] = await rawQuery<any>(
-      `SELECT COALESCE(SUM(amount),0) AS "totalActual" FROM project_costs WHERE "projectId"=$1 AND "companyId"=$2`,
-      [projectId, scope.companyId]
-    );
+    const [rows, [totals]] = await Promise.all([
+      rawQuery<any>(
+        `SELECT pc.*, e.name AS "enteredByName"
+         FROM project_costs pc
+         LEFT JOIN employees e ON e.id=pc."enteredBy" AND e."deletedAt" IS NULL
+         WHERE pc."projectId"=$1 AND pc."companyId"=$2
+         ORDER BY pc."costDate" DESC LIMIT 500`,
+        [projectId, scope.companyId]
+      ),
+      rawQuery<any>(
+        `SELECT COALESCE(SUM(amount),0) AS "totalActual" FROM project_costs WHERE "projectId"=$1 AND "companyId"=$2`,
+        [projectId, scope.companyId]
+      ),
+    ]);
     res.json({
       data: rows, total: rows.length,
       totalActual: Number(totals?.totalActual || 0),
@@ -1763,11 +1805,11 @@ router.get("/:id/costs", requirePermission("projects:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Project costs error:"); }
 });
 
-router.post("/:id/costs", requirePermission("projects:create"), async (req, res) => {
+router.post("/:id/costs", authorize({ feature: "projects.list", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(createCostSchema.safeParse(req.body));
     const scope = req.scope!;
-    const b = req.body;
+    const b = parsed;
     const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
     assertProjectMutable(project);
@@ -1782,18 +1824,21 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
       throw new ValidationError("المبلغ يجب أن يكون أكبر من صفر", { field: "amount", fix: "أدخل قيمة موجبة" });
     }
     const costDate = b.costDate || todayISO();
-    const { insertId } = await rawExecute(
-      `INSERT INTO project_costs ("projectId","companyId",description,amount,category,"costDate","enteredBy",notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [projectId, scope.companyId, b.description, b.amount,
-       b.category || 'other', costDate,
-       scope.employeeId || null, b.notes || null]
-    );
-    // Update project spentAmount
-    await rawExecute(
-      `UPDATE projects SET "spentAmount"=COALESCE("spentAmount",0)+$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
-      [b.amount, projectId, scope.companyId]
-    );
+    let insertId!: number;
+    await withTransaction(async (client) => {
+      const ins = await client.query(
+        `INSERT INTO project_costs ("projectId","companyId",description,amount,category,"costDate","enteredBy",notes)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+        [projectId, scope.companyId, b.description, b.amount,
+         b.category || 'other', costDate,
+         scope.employeeId || null, b.notes || null]
+      );
+      insertId = ins.rows[0].id;
+      await client.query(
+        `UPDATE projects SET "spentAmount"=COALESCE("spentAmount",0)+$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+        [b.amount, projectId, scope.companyId]
+      );
+    });
 
     // ─── GL POSTING: project cost → WIP ──────────────────────────────────
     // DR WIP (1350) / CR Cash|AP|Inventory depending on source.
@@ -1812,10 +1857,11 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
           );
           // Stamp a note in the cost row so users see the reason.
           await rawExecute(
-            `UPDATE project_costs SET notes = COALESCE(notes,'') || $1 WHERE id=$2`,
+            `UPDATE project_costs SET notes = COALESCE(notes,'') || $1 WHERE id=$2 AND "companyId"=$3`,
             [
               ` [GL skipped: الفترة المالية "${period.periodName ?? ""}" مغلقة]`,
               insertId,
+              scope.companyId,
             ]
           ).catch((e) => logger.error(e, "projects background task failed"));
         } else {
@@ -1831,7 +1877,7 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
       logger.error(glErr, `[projects-gl] journal entry failed for project cost ${insertId}:`);
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM project_costs WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM project_costs WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -1863,7 +1909,7 @@ router.post("/:id/costs", requirePermission("projects:create"), async (req, res)
 // after all costs have been recorded. Idempotent: if the project is already
 // completed, returns without posting a duplicate entry.
 // ─────────────────────────────────────────────────────────────────────────────
-router.post("/:id/close", requirePermission("projects:update"), async (req, res) => {
+router.post("/:id/close", authorize({ feature: "projects.list", action: "update" }), async (req, res) => {
   try {
     const parsed = zodParse(closeProjectSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -2013,24 +2059,26 @@ router.post("/:id/close", requirePermission("projects:update"), async (req, res)
 // GANTT DATA — بيانات مخطط غانت
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/:id/gantt", requirePermission("projects:read"), async (req, res) => {
+router.get("/:id/gantt", authorize({ feature: "projects.list", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
 
-    const phases = await rawQuery<any>(
-      `SELECT * FROM project_phases WHERE "projectId"=$1 ORDER BY "orderIndex" LIMIT 500`,
-      [projectId]
-    );
-    const tasks = await rawQuery<any>(
-      `SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" WHERE pt."projectId"=$1 ORDER BY pt."startDate","phaseId" LIMIT 500`,
-      [projectId]
-    );
-    const milestones = await rawQuery<any>(
-      `SELECT * FROM project_milestones WHERE "projectId"=$1 AND "companyId"=$2 ORDER BY "targetDate"`,
-      [projectId, scope.companyId]
-    );
+    const [phases, tasks, milestones] = await Promise.all([
+      rawQuery<any>(
+        `SELECT * FROM project_phases WHERE "projectId"=$1 ORDER BY "orderIndex" LIMIT 500`,
+        [projectId]
+      ),
+      rawQuery<any>(
+        `SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" AND e."deletedAt" IS NULL WHERE pt."projectId"=$1 ORDER BY pt."startDate","phaseId" LIMIT 500`,
+        [projectId]
+      ),
+      rawQuery<any>(
+        `SELECT * FROM project_milestones WHERE "projectId"=$1 AND "companyId"=$2 ORDER BY "targetDate"`,
+        [projectId, scope.companyId]
+      ),
+    ]);
     const dependencies = tasks.length > 0
       ? await rawQuery<any>(
           `SELECT * FROM project_task_dependencies WHERE "taskId" IN (${tasks.map((_: any, i: number) => `$${i+1}`).join(',')})`,
@@ -2072,7 +2120,7 @@ router.get("/:id/gantt", requirePermission("projects:read"), async (req, res) =>
 // PROJECT-LINKED LETTERS — المراسلات المرتبطة بالمشروع
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/:id/letters", requirePermission("projects:read"), async (req, res) => {
+router.get("/:id/letters", authorize({ feature: "projects.list", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const projectId = parseId(req.params.id, "id");

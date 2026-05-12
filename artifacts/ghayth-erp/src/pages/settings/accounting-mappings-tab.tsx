@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,7 +20,7 @@ export function AccountingMappingsTab() {
   const [saving, setSaving] = useState<string | null>(null);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const postingAccounts = accounts.filter((a: any) => a.allowPosting !== false);
 
@@ -93,14 +94,15 @@ export function AccountingMappingsTab() {
                       <Badge className="text-xs bg-gray-100 text-gray-600 font-mono">{mapping.operationType}</Badge>
                     </div>
                     {modified && (
-                      <Button
+                      <GuardedButton
+                        perm="settings:create"
                         size="sm"
                         onClick={() => handleSave(mapping.operationType, mapping)}
                         disabled={saving === mapping.operationType}
                       >
                         <Save className="h-3 w-3 me-1" />
                         {saving === mapping.operationType ? "جاري الحفظ..." : "حفظ"}
-                      </Button>
+                      </GuardedButton>
                     )}
                   </div>
 

@@ -11,6 +11,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/hooks/use-toast";
 import { Autocomplete, type AutocompleteOption } from "@/components/ui/autocomplete";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { AlertCircle, Paperclip, Link2 } from "lucide-react";
@@ -223,6 +224,7 @@ export default function ExpensesCreate() {
   };
 
   const { form, setForm, clearDraft, isDirty, hasDraft } = useAutoDraft("expense-create", defaultForm);
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const attachmentRequired = ATTACHMENT_REQUIRED_TYPES.includes(form.operationType) ||
     (form.operationType === "payment" && Number(form.amount) >= 5000);
@@ -241,30 +243,21 @@ export default function ExpensesCreate() {
   }, [form.operationType, form.relatedEntityName, form.period, form.amount, form.autoDescription, form.expenseType]);
 
   if (accountsLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const vatAmount = form.vatRate ? Math.round(Number(form.amount) * (Number(form.vatRate) / 100) * 100) / 100 : 0;
   const totalWithVat = Number(form.amount) + vatAmount;
 
   const handleSubmit = async () => {
-    if (!form.accountCode) {
-      toast({ variant: "destructive", title: "بند المصروفات مطلوب" });
-      return;
-    }
-    if (!form.amount) {
-      toast({ variant: "destructive", title: "المبلغ مطلوب" });
-      return;
-    }
-    if (!form.branchId) {
-      toast({ variant: "destructive", title: "الفرع مطلوب" });
-      return;
-    }
-    if (!form.costCenter) {
-      toast({ variant: "destructive", title: "مركز التكلفة مطلوب" });
-      return;
-    }
-    if (attachmentRequired && !form.attachmentUrl) {
-      toast({ variant: "destructive", title: "المرفق إلزامي", description: "هذا النوع من العمليات يتطلب إرفاق مستند داعم (فاتورة، وصل، أو إشعار)" });
+    const firstError = validate({
+      accountCode: form.accountCode ? null : "بند المصروفات مطلوب",
+      amount: form.amount ? null : "المبلغ مطلوب",
+      branchId: form.branchId ? null : "الفرع مطلوب",
+      costCenter: form.costCenter ? null : "مركز التكلفة مطلوب",
+      attachmentUrl: attachmentRequired && !form.attachmentUrl ? "المرفق إلزامي — هذا النوع من العمليات يتطلب إرفاق مستند داعم" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
@@ -306,6 +299,7 @@ export default function ExpensesCreate() {
       clearDraft();
       setLocation("/finance/expenses");
     } catch (err: any) {
+      setApiError(err);
       toast({ variant: "destructive", title: "خطأ في الحفظ", description: err?.message || "حدث خطأ أثناء إضافة المصروف" });
     }
   };
@@ -744,7 +738,7 @@ export default function ExpensesCreate() {
 
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/finance/expenses")}>إلغاء</Button>
-          <Button onClick={handleSubmit} disabled={createMut.isPending}>
+          <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>
             {createMut.isPending ? "جاري الحفظ..." : "حفظ المصروف"}
           </Button>
         </div>

@@ -86,7 +86,7 @@ function QuickCreateDialog({
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
-          <Button onClick={handleCreate} disabled={createMut.isPending}>
+          <Button onClick={handleCreate} disabled={createMut.isPending} rateLimitAware>
             {createMut.isPending ? "جاري الإنشاء..." : "إنشاء"}
           </Button>
         </div>
@@ -316,6 +316,24 @@ export const SupplierSelect = buildEntitySelect({
   getName: (r) => r?.name || `#${r?.id}`,
 });
 
+export const DriverSelect = buildEntitySelect({
+  queryKey: "drivers-list",
+  endpoint: "/fleet/drivers?limit=500",
+  defaultLabel: "السائق",
+  defaultPlaceholder: "اختر السائق",
+  searchPlaceholder: "ابحث عن سائق...",
+  createTitle: "إضافة سائق جديد",
+  createLabel: "+ سائق جديد",
+  createApiPath: "/fleet/drivers",
+  createFields: [
+    { key: "name", label: "اسم السائق", required: true },
+    { key: "phone", label: "الهاتف" },
+    { key: "licenseNumber", label: "رقم الرخصة" },
+  ],
+  getName: (r) => r?.name || `#${r?.id}`,
+  getSublabel: (r) => r?.licenseNumber || r?.phone || "",
+});
+
 export const BranchSelect = buildEntitySelect({
   queryKey: "branches-list",
   endpoint: "/settings/branches",
@@ -367,19 +385,19 @@ export const ProjectSelect = buildEntitySelect({
 
 export const AccountSelect = buildEntitySelect({
   queryKey: "chart-of-accounts",
-  endpoint: "/finance/accounts/chart?limit=500",
+  endpoint: "/finance/accounts?limit=500",
   defaultLabel: "الحساب",
   defaultPlaceholder: "اختر الحساب",
   searchPlaceholder: "ابحث عن حساب (اسم أو رقم)...",
   createTitle: "إضافة حساب جديد",
   createLabel: "+ حساب جديد",
-  createApiPath: "/finance/accounts/chart",
+  createApiPath: "/finance/accounts",
   createFields: [
     { key: "code", label: "رقم الحساب", required: true },
-    { key: "nameAr", label: "اسم الحساب", required: true },
+    { key: "name", label: "اسم الحساب", required: true },
   ],
   getValueField: "code",
-  getName: (r) => r?.nameAr ? `${r.code} - ${r.nameAr}` : r?.code || `#${r?.id}`,
+  getName: (r) => r?.name ? `${r.code} - ${r.name}` : r?.code || `#${r?.id}`,
   getSublabel: (r) => r?.type || "",
 });
 

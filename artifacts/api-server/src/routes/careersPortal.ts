@@ -6,15 +6,33 @@ import { handleRouteError, ValidationError, NotFoundError, ConflictError, Forbid
 } from "../lib/errorHandler.js";
 import { hashPassword, verifyPassword } from "../lib/auth.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
+import { makeRateLimitStore } from "../lib/rateLimitStore.js";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
 const SECRET: string = process.env.JWT_SECRET ?? (() => { throw new Error("JWT_SECRET is required for careers portal"); })();
+
+interface ApplicantAccountSummary {
+  id: number;
+  name: string;
+  email: string;
+  phone: string | null;
+  createdAt: string;
+}
+
+interface ApplicationDetailRow {
+  id: number;
+  status: string;
+  coverLetter: string | null;
+  createdAt: string;
+  jobTitle: string;
+  department: string | null;
+  location: string | null;
+}
 
 const careersRegisterSchema = z.object({
   name: z.string().min(1, "الاسم مطلوب"),
@@ -41,7 +59,7 @@ const careersProfileUpdateSchema = z.object({
 });
 
 const careersResumeUpdateSchema = z.object({
-  resumeUrl: z.string().min(1, "رابط السيرة الذاتية مطلوب"),
+  resumeUrl: z.string().url("رابط السيرة الذاتية غير صالح"),
 });
 
 const careersApplySchema = z.object({
@@ -55,6 +73,7 @@ const portalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   validate: { ip: false, trustProxy: false },
+  store: makeRateLimitStore("careers:portal"),
 });
 
 function signApplicantToken(accountId: number): string {
@@ -68,7 +87,7 @@ function careersAuth(req: Request, res: Response, next: NextFunction): void {
     return;
   }
   try {
-    const payload: any = jwt.verify(auth.slice(7), SECRET);
+    const payload: any = jwt.verify(auth.slice(7), SECRET, { algorithms: ["HS256"] });
     if (payload.type !== "careers_portal") {
       res.status(401).json({ error: "غير مصرح" });
       return;
@@ -110,7 +129,11 @@ router.post("/auth/register", portalLimiter, async (req: Request, res: Response)
     }).catch((e) => logger.error(e, "careersPortal background task failed"));
     emitEvent({ companyId: 0, branchId: 0, userId: result.insertId, action: "careers.account.registered", entity: "applicant_accounts", entityId: result.insertId, details: JSON.stringify({ name: name.trim(), email: email.trim().toLowerCase() }) }).catch((e) => logger.error(e, "careersPortal background task failed"));
 
-    res.status(201).json({ token, accountId: result.insertId });
+    const [row] = await rawQuery<ApplicantAccountSummary>(
+      `SELECT id, name, email, phone, "createdAt" FROM applicant_accounts WHERE id = $1`,
+      [result.insertId]
+    );
+    res.status(201).json({ token, account: row || { id: result.insertId } });
   } catch (err) {
     handleRouteError(err, res, "تسجيل حساب متقدم");
   }
@@ -158,15 +181,18 @@ router.post("/auth/login", portalLimiter, async (req: Request, res: Response) =>
 
 router.get("/jobs", portalLimiter, async (_req: Request, res: Response) => {
   try {
+    const companyId = Number(_req.query.companyId) || 0;
+    if (!companyId) { res.json({ data: [] }); return; }
     const rows = await rawQuery(
       `SELECT id, title, department, location, type, description, requirements,
               "salaryMin", "salaryMax", status, "closingDate", "createdAt"
        FROM job_postings
-       WHERE status = 'open'
+       WHERE "companyId" = $1 AND status = 'open'
          AND "deletedAt" IS NULL
          AND ("isPublic" IS NULL OR "isPublic" = true)
          AND ("closingDate" IS NULL OR "closingDate" >= CURRENT_DATE)
-       ORDER BY "createdAt" DESC LIMIT 500`
+       ORDER BY "createdAt" DESC LIMIT 500`,
+      [companyId]
     );
     res.json({ data: rows });
   } catch (err) {
@@ -181,8 +207,8 @@ router.get("/jobs/:id", portalLimiter, async (req: Request, res: Response) => {
       `SELECT id, title, department, location, type, description, requirements,
               "salaryMin", "salaryMax", status, "closingDate", "createdAt"
        FROM job_postings
-       WHERE id = $1 AND status = 'open' AND "deletedAt" IS NULL`,
-      [id]
+       WHERE id = $1 AND "companyId" = $2 AND status = 'open' AND "deletedAt" IS NULL`,
+      [id, Number(req.query.companyId) || 0]
     );
     if (rows.length === 0) {
       throw new NotFoundError("الوظيفة غير موجودة");
@@ -329,7 +355,15 @@ router.post("/apply", careersAuth, async (req: Request, res: Response) => {
     }).catch((e) => logger.error(e, "careersPortal background task failed"));
     emitEvent({ companyId: 0, branchId: 0, userId: applicantId, action: "careers.application.submitted", entity: "job_applications", entityId: result.insertId, details: JSON.stringify({ postingId, applicantId }) }).catch((e) => logger.error(e, "careersPortal background task failed"));
 
-    res.status(201).json({ applicationId: result.insertId, message: "تم تقديم طلبك بنجاح" });
+    const [row] = await rawQuery<ApplicationDetailRow>(
+      `SELECT ja.id, ja.status, ja."coverLetter", ja."createdAt",
+              jp.title AS "jobTitle", jp.department, jp.location
+       FROM job_applications ja
+       JOIN job_postings jp ON jp.id = ja."postingId"
+       WHERE ja.id = $1 AND ja."deletedAt" IS NULL`,
+      [result.insertId]
+    );
+    res.status(201).json(row || { id: result.insertId });
   } catch (err) {
     handleRouteError(err, res, "تقديم طلب توظيف");
   }

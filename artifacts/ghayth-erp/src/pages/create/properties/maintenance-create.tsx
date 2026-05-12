@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -7,7 +6,6 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
-import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
 import { TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
@@ -24,10 +22,9 @@ export default function PropertyMaintenanceCreate() {
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("property_maintenance_create", {
     unitId: "", category: "", description: "", priority: "medium", cost: "",
   });
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const handleSubmit = async () => {
     const firstError = validate({
@@ -45,11 +42,11 @@ export default function PropertyMaintenanceCreate() {
         category: form.category || undefined,
         description: form.description,
         priority: form.priority,
-        cost: form.cost ? Number(form.cost) : undefined,
+        estimatedCost: form.cost ? Number(form.cost) : undefined,
       });
       clearDraft();
       toast({ title: "تم إنشاء طلب الصيانة بنجاح" });
-      setLocation("/properties");
+      setLocation("/properties/maintenance");
     } catch (err: any) {
       setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الطلب", description: err?.fix ?? err?.message });
@@ -57,7 +54,7 @@ export default function PropertyMaintenanceCreate() {
   };
 
   return (
-    <CreatePageLayout title="طلب صيانة جديد" backPath="/properties">
+    <CreatePageLayout title="طلب صيانة جديد" backPath="/properties/maintenance">
       {hasDraft && (
         <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
@@ -109,10 +106,9 @@ export default function PropertyMaintenanceCreate() {
         <TextAreaField label="الوصف" required value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} rows={3} error={fieldErrors.description} className="md:col-span-2" />
         <NumberField label="التكلفة" value={form.cost} onChange={(v) => setForm((f) => ({ ...f, cost: v }))} placeholder="0" step={0.01} min={0} error={fieldErrors.cost} />
       </div>
-      <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">
-        <Button variant="outline" onClick={() => setLocation("/properties")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={createMut.isPending}>
+        <Button variant="outline" onClick={() => setLocation("/properties/maintenance")}>إلغاء</Button>
+        <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الإرسال..." : "إرسال الطلب"}
         </Button>
       </div>

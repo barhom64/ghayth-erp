@@ -2,9 +2,8 @@ import { handleRouteError, NotFoundError, parseId, zodParse } from "../lib/error
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { requireRole } from "../middlewares/roleGuard.js";
-import { ACTION_CENTER_ROLES, OWNER_GM_ROLES, EXEC_ROLES } from "../lib/rbacCatalog.js";
 import { aiEngine } from "../lib/aiEngine.js";
 import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import { calculateEmployeeKPIs, getCompanyKPIs } from "../lib/kpiEngine.js";
@@ -80,7 +79,7 @@ const smartAssignSchema = z.object({
 
 const router = Router();
 
-router.get("/alerts", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/alerts", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { severity, isRead } = req.query as any;
@@ -93,7 +92,7 @@ router.get("/alerts", requirePermission("admin:read"), async (req, res): Promise
   } catch (err) { handleRouteError(err, res, "Alerts error:"); }
 });
 
-router.post("/alerts/scan", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/alerts/scan", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const result = await runSmartAlerts(scope.companyId);
@@ -111,7 +110,7 @@ router.post("/alerts/scan", requirePermission("admin:write"), async (req, res): 
   } catch (err) { handleRouteError(err, res, "Alert scan error:"); }
 });
 
-router.patch("/alerts/:id/read", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.patch("/alerts/:id/read", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -133,7 +132,7 @@ router.patch("/alerts/:id/read", requirePermission("admin:write"), async (req, r
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.get("/kpis", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/kpis", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { employeeId, metricName } = req.query as any;
@@ -146,7 +145,7 @@ router.get("/kpis", requirePermission("admin:read"), async (req, res): Promise<v
   } catch (err) { handleRouteError(err, res, "KPIs error:"); }
 });
 
-router.get("/kpis/employee/:employeeId", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/kpis/employee/:employeeId", authorize({ feature: "admin", action: "view" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const employeeId = parseId(req.params.employeeId, "employeeId");
@@ -156,7 +155,7 @@ router.get("/kpis/employee/:employeeId", requirePermission("admin:read"), async 
   } catch (err) { handleRouteError(err, res, "Employee KPI error:"); }
 });
 
-router.get("/daily-schedule", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/daily-schedule", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -166,7 +165,7 @@ router.get("/daily-schedule", requirePermission("admin:read"), async (req, res):
   } catch (err) { handleRouteError(err, res, "Daily schedule error:"); }
 });
 
-router.get("/daily-schedule/employee/:employeeId", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/daily-schedule/employee/:employeeId", authorize({ feature: "admin", action: "view" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const employeeId = parseId(req.params.employeeId, "employeeId");
@@ -176,49 +175,137 @@ router.get("/daily-schedule/employee/:employeeId", requirePermission("admin:read
   } catch (err) { handleRouteError(err, res, "Employee schedule error:"); }
 });
 
-router.get("/overview", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/overview", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
 
-    const [employees] = await rawQuery<any>(`SELECT COUNT(*) as total FROM employee_assignments WHERE "companyId"=$1 AND status='active'`, [cid]);
-    const [vehicles] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_vehicles WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [properties] = await rawQuery<any>(`SELECT COUNT(*) as total FROM property_units WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [projects] = await rawQuery<any>(`SELECT COUNT(*) as active FROM projects WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]);
-    const [tickets] = await rawQuery<any>(`SELECT COUNT(*) as open FROM support_tickets WHERE "companyId"=$1 AND status='open' AND "deletedAt" IS NULL`, [cid]);
-    const [revenue] = await rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) as total FROM invoices WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "createdAt" >= date_trunc('month', CURRENT_DATE)`, [cid]);
-    const [alerts] = await rawQuery<any>(`SELECT COUNT(*) as unread FROM smart_alerts WHERE "companyId"=$1 AND "isRead"=false`, [cid]);
+    const [[employees], [vehicles], [properties], [projects], [tickets], [revenue], [alerts]] = await Promise.all([
+      rawQuery<any>(`SELECT COUNT(*) as total FROM employee_assignments WHERE "companyId"=$1 AND status='active'`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_vehicles WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as total FROM property_units WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as active FROM projects WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as open FROM support_tickets WHERE "companyId"=$1 AND status='open' AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) as total FROM invoices WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "createdAt" >= date_trunc('month', CURRENT_DATE)`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as unread FROM smart_alerts WHERE "companyId"=$1 AND "isRead"=false`, [cid]),
+    ]);
 
     res.json({
-      totalEmployees: Number(employees.total),
-      totalVehicles: Number(vehicles.total),
-      totalProperties: Number(properties.total),
-      activeProjects: Number(projects.active),
-      openTickets: Number(tickets.open),
-      monthlyRevenue: Number(revenue.total),
-      unreadAlerts: Number(alerts.unread),
+      totalEmployees: Number(employees?.total ?? 0),
+      totalVehicles: Number(vehicles?.total ?? 0),
+      totalProperties: Number(properties?.total ?? 0),
+      activeProjects: Number(projects?.active ?? 0),
+      openTickets: Number(tickets?.open ?? 0),
+      monthlyRevenue: Number(revenue?.total ?? 0),
+      unreadAlerts: Number(alerts?.unread ?? 0),
     });
   } catch (err) { handleRouteError(err, res, "Intelligence overview error:"); }
 });
 
-router.get("/suggestions", requireRole(...ACTION_CENTER_ROLES), async (req, res): Promise<void> => {
+router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_manager", "finance_manager", "owner"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const suggestions: Array<{ id: string; type: string; severity: string; title: string; description: string; action: string; actionLink?: string }> = [];
+    type Suggestion = { id: string; type: string; severity: string; title: string; description: string; action: string; actionLink?: string };
+    const suggestions: Suggestion[] = [];
 
-    const overloadedEmployees = await rawQuery<any>(
-      `SELECT e.name,
-              (SELECT COUNT(*) FROM tasks t WHERE t."assignedTo" = ea.id AND t."companyId" = $1
-               AND t.status NOT IN ('completed','cancelled'))::int AS "activeTasks"
-       FROM employee_assignments ea
-       JOIN employees e ON e.id = ea."employeeId"
-       WHERE ea."companyId" = $1 AND ea.status = 'active'
-         AND (SELECT COUNT(*) FROM tasks t WHERE t."assignedTo" = ea.id AND t."companyId" = $1
-              AND t.status NOT IN ('completed','cancelled'))::int > 6
-       LIMIT 5`,
-      [cid]
-    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
+    const [overloadedEmployees, expiringContracts, overdueClients, slowDepartments, costlyVehicles, prodDrops, revTrendRows, churnClients] = await Promise.all([
+      rawQuery<any>(
+        `SELECT e.name,
+                (SELECT COUNT(*) FROM tasks t WHERE t."assignedTo" = ea.id AND t."companyId" = $1
+                 AND t.status NOT IN ('completed','cancelled') AND t."deletedAt" IS NULL)::int AS "activeTasks"
+         FROM employee_assignments ea
+         JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
+         WHERE ea."companyId" = $1 AND ea.status = 'active'
+           AND (SELECT COUNT(*) FROM tasks t WHERE t."assignedTo" = ea.id AND t."companyId" = $1
+                AND t.status NOT IN ('completed','cancelled') AND t."deletedAt" IS NULL)::int > 6
+         LIMIT 5`,
+        [cid]
+      ).catch((e) => { logger.error(e, "intelligence query failed"); return []; }),
+      rawQuery<any>(
+        `SELECT id, title, "endDate",
+                (lc."endDate"::date - CURRENT_DATE) AS "daysLeft"
+         FROM legal_contracts lc
+         WHERE lc."companyId" = $1 AND lc.status = 'active' AND lc."deletedAt" IS NULL
+           AND lc."endDate"::date - CURRENT_DATE BETWEEN 0 AND 30
+         ORDER BY "daysLeft" ASC LIMIT 5`,
+        [cid]
+      ).catch((e) => { logger.error(e, "intelligence query failed"); return []; }),
+      rawQuery<any>(
+        `SELECT c.name,
+                COALESCE(SUM(i.total - i."paidAmount"), 0) AS "overdueAmount",
+                MAX(CURRENT_DATE - i."dueDate"::date) AS "maxDaysLate"
+         FROM invoices i
+         JOIN clients c ON c.id = i."clientId"
+         WHERE i."companyId" = $1 AND i."deletedAt" IS NULL AND i.status IN ('overdue','sent') AND i."dueDate" < CURRENT_DATE
+         GROUP BY c.name
+         HAVING MAX(CURRENT_DATE - i."dueDate"::date) > 30
+         ORDER BY "maxDaysLate" DESC LIMIT 5`,
+        [cid]
+      ).catch((e) => { logger.error(e, "intelligence query failed"); return []; }),
+      rawQuery<any>(
+        `SELECT COALESCE(d.name, 'بدون قسم') AS department,
+                ROUND(AVG(EXTRACT(EPOCH FROM (COALESCE(lr."approvedAt", NOW()) - lr."createdAt")) / 86400), 1) AS "avgDays"
+         FROM hr_leave_requests lr
+         LEFT JOIN employees e ON e.id = lr."employeeId"
+         LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1
+         LEFT JOIN departments d ON d.id = ea."departmentId"
+         WHERE lr."companyId" = $1 AND lr.status = 'pending' AND lr."deletedAt" IS NULL
+         GROUP BY d.name
+         HAVING AVG(EXTRACT(EPOCH FROM (NOW() - lr."createdAt")) / 86400) > 2
+         ORDER BY "avgDays" DESC LIMIT 3`,
+        [cid]
+      ).catch((e) => { logger.error(e, "intelligence query failed"); return []; }),
+      rawQuery<any>(
+        `SELECT fv.id, fv."plateNumber",
+                COALESCE(SUM(fm.cost), 0)::float AS "maintenanceCost"
+         FROM fleet_maintenance fm
+         JOIN fleet_vehicles fv ON fv.id = fm."vehicleId"
+         WHERE fm."companyId" = $1
+           AND fm."createdAt" >= NOW() - INTERVAL '12 months'
+           AND fm."deletedAt" IS NULL
+           AND fv."deletedAt" IS NULL
+         GROUP BY fv.id, fv."plateNumber"
+         ORDER BY "maintenanceCost" DESC LIMIT 3`,
+        [cid]
+      ).catch((e) => { logger.error(e, "intelligence query failed"); return []; }),
+      rawQuery<any>(
+        `WITH recent AS (
+           SELECT t."assignedTo", COUNT(*) FILTER (WHERE t.status='completed')::float / NULLIF(COUNT(*),0) AS rate
+           FROM tasks t WHERE t."companyId"=$1 AND t."deletedAt" IS NULL AND t."scheduledDate"::date >= CURRENT_DATE - INTERVAL '7 days'
+           GROUP BY t."assignedTo"
+         ),
+         historical AS (
+           SELECT t."assignedTo", COUNT(*) FILTER (WHERE t.status='completed')::float / NULLIF(COUNT(*),0) AS rate
+           FROM tasks t WHERE t."companyId"=$1 AND t."deletedAt" IS NULL AND t."scheduledDate"::date BETWEEN CURRENT_DATE - INTERVAL '37 days' AND CURRENT_DATE - INTERVAL '8 days'
+           GROUP BY t."assignedTo"
+         )
+         SELECT r."assignedTo", e.name,
+                ROUND(r.rate * 100)::int AS "recentRate",
+                ROUND(h.rate * 100)::int AS "historicalRate"
+         FROM recent r JOIN historical h ON h."assignedTo"=r."assignedTo"
+         JOIN employee_assignments ea2 ON ea2.id=r."assignedTo"
+         JOIN employees e ON e.id=ea2."employeeId"
+         WHERE h.rate > 0.3 AND r.rate < h.rate * 0.7
+         LIMIT 3`,
+        [cid]
+      ).catch((e) => { logger.error(e, "intelligence query failed"); return []; }),
+      rawQuery<any>(
+        `SELECT
+           COALESCE(SUM(CASE WHEN "createdAt" >= CURRENT_DATE - INTERVAL '30 days' THEN "paidAmount" ELSE 0 END),0)::float AS curr,
+           COALESCE(SUM(CASE WHEN "createdAt" BETWEEN CURRENT_DATE - INTERVAL '60 days' AND CURRENT_DATE - INTERVAL '30 days' THEN "paidAmount" ELSE 0 END),0)::float AS prev
+         FROM invoices WHERE "companyId"=$1 AND "deletedAt" IS NULL AND status NOT IN ('cancelled','draft')`,
+        [cid]
+      ).catch((e) => { logger.error(e, "intelligence query failed"); return [] as any[]; }),
+      rawQuery<any>(
+        `SELECT c.name, rs."recencyDays", rs."churnScore"
+         FROM client_rfm_scores rs
+         JOIN clients c ON c.id=rs."clientId"
+         WHERE rs."companyId"=$1 AND rs."churnRisk"='high'
+         ORDER BY rs."churnScore" DESC LIMIT 3`,
+        [cid]
+      ).catch((e) => { logger.error(e, "intelligence query failed"); return []; }),
+    ]);
 
     for (const emp of overloadedEmployees) {
       suggestions.push({
@@ -228,17 +315,6 @@ router.get("/suggestions", requireRole(...ACTION_CENTER_ROLES), async (req, res)
         action: "توزيع المهام", actionLink: "/tasks",
       });
     }
-
-    const expiringContracts = await rawQuery<any>(
-      `SELECT id, title, "endDate",
-              (lc."endDate"::date - CURRENT_DATE) AS "daysLeft"
-       FROM legal_contracts lc
-       WHERE lc."companyId" = $1 AND lc.status = 'active' AND lc."deletedAt" IS NULL
-         AND lc."endDate"::date - CURRENT_DATE BETWEEN 0 AND 30
-       ORDER BY "daysLeft" ASC LIMIT 5`,
-      [cid]
-    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
-
     for (const c of expiringContracts) {
       suggestions.push({
         id: `contract-${c.id}`, type: "contract_expiring", severity: c.daysLeft <= 7 ? "critical" : "warning",
@@ -247,20 +323,6 @@ router.get("/suggestions", requireRole(...ACTION_CENTER_ROLES), async (req, res)
         action: "مراجعة العقد", actionLink: "/legal/contracts",
       });
     }
-
-    const overdueClients = await rawQuery<any>(
-      `SELECT c.name,
-              COALESCE(SUM(i.total - i."paidAmount"), 0) AS "overdueAmount",
-              MAX(CURRENT_DATE - i."dueDate"::date) AS "maxDaysLate"
-       FROM invoices i
-       JOIN clients c ON c.id = i."clientId"
-       WHERE i."companyId" = $1 AND i."deletedAt" IS NULL AND i.status IN ('overdue','sent') AND i."dueDate" < CURRENT_DATE
-       GROUP BY c.name
-       HAVING MAX(CURRENT_DATE - i."dueDate"::date) > 30
-       ORDER BY "maxDaysLate" DESC LIMIT 5`,
-      [cid]
-    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
-
     for (const cl of overdueClients) {
       suggestions.push({
         id: `overdue-${cl.name}`, type: "client_overdue", severity: cl.maxDaysLate > 60 ? "critical" : "warning",
@@ -269,21 +331,6 @@ router.get("/suggestions", requireRole(...ACTION_CENTER_ROLES), async (req, res)
         action: "متابعة التحصيل", actionLink: "/finance/invoices",
       });
     }
-
-    const slowDepartments = await rawQuery<any>(
-      `SELECT COALESCE(d.name, 'بدون قسم') AS department,
-              ROUND(AVG(EXTRACT(EPOCH FROM (COALESCE(lr."approvedAt", NOW()) - lr."createdAt")) / 86400), 1) AS "avgDays"
-       FROM hr_leave_requests lr
-       LEFT JOIN employees e ON e.id = lr."employeeId"
-       LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1
-       LEFT JOIN departments d ON d.id = ea."departmentId"
-       WHERE lr."companyId" = $1 AND lr.status = 'pending'
-       GROUP BY d.name
-       HAVING AVG(EXTRACT(EPOCH FROM (NOW() - lr."createdAt")) / 86400) > 2
-       ORDER BY "avgDays" DESC LIMIT 3`,
-      [cid]
-    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
-
     for (const dept of slowDepartments) {
       suggestions.push({
         id: `slow-dept-${dept.department}`, type: "slow_approvals", severity: "info",
@@ -292,50 +339,14 @@ router.get("/suggestions", requireRole(...ACTION_CENTER_ROLES), async (req, res)
         action: "مراجعة الموافقات", actionLink: "/hr/leaves",
       });
     }
-
-    const costlyVehicles = await rawQuery<any>(
-      `SELECT fv.id, fv."plateNumber",
-              COALESCE(SUM(fm.cost), 0)::float AS "maintenanceCost"
-       FROM fleet_maintenance fm
-       JOIN fleet_vehicles fv ON fv.id = fm."vehicleId"
-       WHERE fm."companyId" = $1
-         AND fm."createdAt" >= NOW() - INTERVAL '12 months'
-       GROUP BY fv.id, fv."plateNumber"
-       ORDER BY "maintenanceCost" DESC LIMIT 3`,
-      [cid]
-    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
-
     for (const v of costlyVehicles) {
       suggestions.push({
         id: `vehicle-${v.id}`, type: "vehicle_costly", severity: "warning",
         title: `مركبة ${v.plateNumber} تكلفة صيانتها مرتفعة`,
-        description: `تكلفة الصيانة ${Number(v.maintenanceCost).toLocaleString()} مقابل قيمة ${Number(v.vehicleValue).toLocaleString()} — يُقترح استبدال المركبة`,
+        description: `تكلفة الصيانة ${Number(v.maintenanceCost).toLocaleString()} — يُقترح استبدال المركبة`,
         action: "مراجعة المركبة", actionLink: "/fleet",
       });
     }
-
-    // Historical: productivity drop analysis
-    const prodDrops = await rawQuery<any>(
-      `WITH recent AS (
-         SELECT t."assignedTo", COUNT(*) FILTER (WHERE t.status='completed')::float / NULLIF(COUNT(*),0) AS rate
-         FROM tasks t WHERE t."companyId"=$1 AND t."scheduledDate"::date >= CURRENT_DATE - INTERVAL '7 days'
-         GROUP BY t."assignedTo"
-       ),
-       historical AS (
-         SELECT t."assignedTo", COUNT(*) FILTER (WHERE t.status='completed')::float / NULLIF(COUNT(*),0) AS rate
-         FROM tasks t WHERE t."companyId"=$1 AND t."scheduledDate"::date BETWEEN CURRENT_DATE - INTERVAL '37 days' AND CURRENT_DATE - INTERVAL '8 days'
-         GROUP BY t."assignedTo"
-       )
-       SELECT r."assignedTo", e.name,
-              ROUND(r.rate * 100)::int AS "recentRate",
-              ROUND(h.rate * 100)::int AS "historicalRate"
-       FROM recent r JOIN historical h ON h."assignedTo"=r."assignedTo"
-       JOIN employee_assignments ea2 ON ea2.id=r."assignedTo"
-       JOIN employees e ON e.id=ea2."employeeId"
-       WHERE h.rate > 0.3 AND r.rate < h.rate * 0.7
-       LIMIT 3`,
-      [cid]
-    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
     for (const emp of prodDrops) {
       suggestions.push({
         id: `prod-drop-${emp.assignedTo}`, type: "productivity_drop_historical", severity: "warning",
@@ -344,15 +355,6 @@ router.get("/suggestions", requireRole(...ACTION_CENTER_ROLES), async (req, res)
         action: "عرض التحليل", actionLink: "/insights",
       });
     }
-
-    // Historical: revenue trend analysis
-    const revTrendRows = await rawQuery<any>(
-      `SELECT
-         COALESCE(SUM(CASE WHEN "createdAt" >= CURRENT_DATE - INTERVAL '30 days' THEN "paidAmount" ELSE 0 END),0)::float AS curr,
-         COALESCE(SUM(CASE WHEN "createdAt" BETWEEN CURRENT_DATE - INTERVAL '60 days' AND CURRENT_DATE - INTERVAL '30 days' THEN "paidAmount" ELSE 0 END),0)::float AS prev
-       FROM invoices WHERE "companyId"=$1 AND "deletedAt" IS NULL AND status NOT IN ('cancelled','draft')`,
-      [cid]
-    ).catch((e) => { logger.error(e, "intelligence query failed"); return [] as any[]; });
     const revTrend = revTrendRows[0] ?? null;
     if (revTrend && revTrend.prev > 0) {
       const revChange = Math.round(((revTrend.curr - revTrend.prev) / revTrend.prev) * 100);
@@ -372,16 +374,6 @@ router.get("/suggestions", requireRole(...ACTION_CENTER_ROLES), async (req, res)
         });
       }
     }
-
-    // Historical: high churn risk clients from RFM
-    const churnClients = await rawQuery<any>(
-      `SELECT c.name, rs."recencyDays", rs."churnScore"
-       FROM client_rfm_scores rs
-       JOIN clients c ON c.id=rs."clientId"
-       WHERE rs."companyId"=$1 AND rs."churnRisk"='high'
-       ORDER BY rs."churnScore" DESC LIMIT 3`,
-      [cid]
-    ).catch((e) => { logger.error(e, "intelligence query failed"); return []; });
     for (const cl of churnClients) {
       suggestions.push({
         id: `churn-hist-${cl.name}`, type: "churn_risk_historical", severity: "warning",
@@ -395,7 +387,7 @@ router.get("/suggestions", requireRole(...ACTION_CENTER_ROLES), async (req, res)
   } catch (err) { handleRouteError(err, res, "Smart suggestions"); }
 });
 
-router.post("/ai/categorize", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/ai/categorize", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const body = zodParse(aiCategorizeSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -415,7 +407,7 @@ router.post("/ai/categorize", requirePermission("admin:write"), async (req, res)
   } catch (err) { handleRouteError(err, res, "AI categorize error:"); }
 });
 
-router.post("/ai/draft-reply", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/ai/draft-reply", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const body = zodParse(aiDraftReplySchema.safeParse(req.body));
     const scope = req.scope!;
@@ -435,7 +427,7 @@ router.post("/ai/draft-reply", requirePermission("admin:write"), async (req, res
   } catch (err) { handleRouteError(err, res, "AI draft reply error:"); }
 });
 
-router.post("/ai/translate", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/ai/translate", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const body = zodParse(aiTranslateSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -455,7 +447,7 @@ router.post("/ai/translate", requirePermission("admin:write"), async (req, res):
   } catch (err) { handleRouteError(err, res, "AI translate error:"); }
 });
 
-router.post("/ai/summarize", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/ai/summarize", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const body = zodParse(aiSummarizeSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -475,7 +467,7 @@ router.post("/ai/summarize", requirePermission("admin:write"), async (req, res):
   } catch (err) { handleRouteError(err, res, "AI summarize error:"); }
 });
 
-router.post("/ai/evaluate-rules", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/ai/evaluate-rules", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const body = zodParse(aiEvaluateRulesSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -495,7 +487,7 @@ router.post("/ai/evaluate-rules", requirePermission("admin:write"), async (req, 
   } catch (err) { handleRouteError(err, res, "AI rules engine error:"); }
 });
 
-router.post("/ai/forecast", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/ai/forecast", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const body = zodParse(aiForecastSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -515,7 +507,7 @@ router.post("/ai/forecast", requirePermission("admin:write"), async (req, res): 
   } catch (err) { handleRouteError(err, res, "AI forecast error:"); }
 });
 
-router.post("/algorithms/haversine", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/algorithms/haversine", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const body = zodParse(haversineSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -538,7 +530,7 @@ router.post("/algorithms/haversine", requirePermission("admin:write"), async (re
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.post("/algorithms/moving-average", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/algorithms/moving-average", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const body = zodParse(movingAverageSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -561,7 +553,7 @@ router.post("/algorithms/moving-average", requirePermission("admin:write"), asyn
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.post("/algorithms/load-balance", requirePermission("admin:write"), async (req, res): Promise<void> => {
+router.post("/algorithms/load-balance", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
   try {
     const body = zodParse(loadBalanceSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -585,7 +577,7 @@ router.post("/algorithms/load-balance", requirePermission("admin:write"), async 
 });
 
 
-router.get("/activity/stats", requireRole(...OWNER_GM_ROLES, "branch_manager"), async (req, res): Promise<void> => {
+router.get("/activity/stats", requireRole("branch_manager", "general_manager", "owner", "admin"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const days = Number(req.query.days) || 30;
@@ -596,7 +588,7 @@ router.get("/activity/stats", requireRole(...OWNER_GM_ROLES, "branch_manager"), 
 
 // ── Client Analytics ─────────────────────────────────────────────────────────
 
-router.get("/clients/analytics", requireRole(...EXEC_ROLES, "branch_manager"), async (req, res): Promise<void> => {
+router.get("/clients/analytics", requireRole("branch_manager", "general_manager", "owner", "finance_manager"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const summary = await getClientAnalyticsSummary(scope.companyId);
@@ -604,7 +596,7 @@ router.get("/clients/analytics", requireRole(...EXEC_ROLES, "branch_manager"), a
   } catch (err) { handleRouteError(err, res, "Client analytics error:"); }
 });
 
-router.get("/clients/analytics/recalculate", requireRole(...OWNER_GM_ROLES, "branch_manager"), async (req, res): Promise<void> => {
+router.get("/clients/analytics/recalculate", requireRole("branch_manager", "general_manager", "owner"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const count = await calculateAllClientsRFM(scope.companyId);
@@ -612,7 +604,7 @@ router.get("/clients/analytics/recalculate", requireRole(...OWNER_GM_ROLES, "bra
   } catch (err) { handleRouteError(err, res, "RFM recalculate error:"); }
 });
 
-router.get("/clients/:clientId/rfm", requireRole(...EXEC_ROLES, "branch_manager"), async (req, res): Promise<void> => {
+router.get("/clients/:clientId/rfm", requireRole("branch_manager", "general_manager", "owner", "finance_manager"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const clientId = parseId(req.params.clientId, "clientId");
@@ -623,7 +615,7 @@ router.get("/clients/:clientId/rfm", requireRole(...EXEC_ROLES, "branch_manager"
   } catch (err) { handleRouteError(err, res, "Client RFM error:"); }
 });
 
-router.get("/seasonal-patterns", requireRole(...EXEC_ROLES, "branch_manager"), async (req, res): Promise<void> => {
+router.get("/seasonal-patterns", requireRole("branch_manager", "general_manager", "owner", "finance_manager"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const patterns = await detectSeasonalPatterns(scope.companyId);
@@ -633,7 +625,7 @@ router.get("/seasonal-patterns", requireRole(...EXEC_ROLES, "branch_manager"), a
 
 // ── Smart Recommendations ─────────────────────────────────────────────────────
 
-router.get("/recommendations", requirePermission("admin:read"), async (req, res): Promise<void> => {
+router.get("/recommendations", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const recs = await getPersonalizedRecommendations(
@@ -645,7 +637,7 @@ router.get("/recommendations", requirePermission("admin:read"), async (req, res)
 
 // ── Company KPIs ──────────────────────────────────────────────────────────────
 
-router.get("/company-kpis", requireRole(...EXEC_ROLES, "branch_manager"), async (req, res): Promise<void> => {
+router.get("/company-kpis", requireRole("branch_manager", "general_manager", "owner", "finance_manager"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const kpis = await getCompanyKPIs(scope.companyId);
@@ -655,7 +647,7 @@ router.get("/company-kpis", requireRole(...EXEC_ROLES, "branch_manager"), async 
 
 // ── Smart Task Assignment ──────────────────────────────────────────────────────
 
-router.post("/smart-assign", requireRole(...ACTION_CENTER_ROLES), async (req, res): Promise<void> => {
+router.post("/smart-assign", requireRole("branch_manager", "general_manager", "owner", "hr_manager"), async (req, res): Promise<void> => {
   try {
     const body = zodParse(smartAssignSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -676,8 +668,8 @@ router.post("/smart-assign", requireRole(...ACTION_CENTER_ROLES), async (req, re
     const [emp] = await rawQuery<any>(
       `SELECT e.id, e.name, e.email,
               (SELECT COUNT(*) FROM tasks t JOIN employee_assignments ea3 ON ea3.id = t."assignedTo"
-               WHERE ea3."employeeId"=e.id AND t."companyId"=$1 AND t.status NOT IN ('completed','cancelled'))::int AS "currentTasks"
-       FROM employees e WHERE e.id=$2`,
+               WHERE ea3."employeeId"=e.id AND t."companyId"=$1 AND t.status NOT IN ('completed','cancelled') AND t."deletedAt" IS NULL)::int AS "currentTasks"
+       FROM employees e WHERE e.id=$2 AND e."deletedAt" IS NULL`,
       [scope.companyId, result.employeeId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "smart_assign", entityId: result.assignmentId, after: { employeeId: result.employeeId, taskType: taskType ?? "general" } }).catch((e) => logger.error(e, "intelligence background task failed"));
@@ -705,7 +697,7 @@ router.post("/smart-assign", requireRole(...ACTION_CENTER_ROLES), async (req, re
 
 // ── Insights Dashboard ────────────────────────────────────────────────────────
 
-router.get("/insights-summary", requireRole(...OWNER_GM_ROLES, "branch_manager"), async (req, res): Promise<void> => {
+router.get("/insights-summary", requireRole("branch_manager", "general_manager", "owner"), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;

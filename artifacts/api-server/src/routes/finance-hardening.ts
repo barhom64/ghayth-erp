@@ -11,7 +11,7 @@ import { z } from "zod";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import {
   createAuditLog,
   emitEvent,
@@ -58,6 +58,7 @@ const createManualJournalSchema = z.object({
   lines: z.array(journalLineSchema).min(2),
   costCenter: z.string().optional(),
   notes: z.string().optional(),
+  date: z.string().optional(),
 });
 
 const reviewJournalSchema = z.object({
@@ -88,7 +89,7 @@ const updateBankGuaranteeSchema = z.object({
   beneficiary: z.string().optional(),
   amount: z.coerce.number().optional(),
   expiryDate: z.string().optional(),
-  status: z.string().optional(),
+  status: z.enum(["active", "expired", "released", "renewed", "cancelled"]).optional(),
   notes: z.string().optional(),
   attachmentUrl: z.string().optional(),
   guaranteeType: z.string().optional(),
@@ -127,7 +128,7 @@ const createProjectSchema = z.object({
 // FISCAL PERIODS — FULL CRUD + OPEN/CLOSE/REOPEN
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.get("/fiscal-periods-v2", requirePermission("finance:read"), async (req, res) => {
+financeHardeningRouter.get("/fiscal-periods-v2", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -147,7 +148,7 @@ financeHardeningRouter.get("/fiscal-periods-v2", requirePermission("finance:read
   }
 });
 
-financeHardeningRouter.post("/fiscal-periods-v2", requirePermission("finance:create"), async (req, res) => {
+financeHardeningRouter.post("/fiscal-periods-v2", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -183,7 +184,7 @@ financeHardeningRouter.post("/fiscal-periods-v2", requirePermission("finance:cre
   }
 });
 
-financeHardeningRouter.post("/fiscal-periods-v2/:id/close", requirePermission("finance:create"), async (req, res) => {
+financeHardeningRouter.post("/fiscal-periods-v2/:id/close", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -253,7 +254,7 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/close", requirePermission("f
   }
 });
 
-financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", requirePermission("finance:create"), async (req, res) => {
+financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -303,7 +304,7 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", requirePermission("
 // draft → pending_review → approved → posted
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.post("/journal-manual", requirePermission("finance:create"), async (req, res) => {
+financeHardeningRouter.post("/journal-manual", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -337,7 +338,7 @@ financeHardeningRouter.post("/journal-manual", requirePermission("finance:create
     });
 
     await rawExecute(
-      `UPDATE journal_entries SET "approvalStatus"='draft', "isManual"=TRUE, "costCenter"=$1 WHERE id=$2 AND "companyId"=$3`,
+      `UPDATE journal_entries SET "approvalStatus"='draft', "isManual"=TRUE, "costCenter"=$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
       [costCenter ?? null, journalId, scope.companyId]
     );
 
@@ -359,17 +360,21 @@ financeHardeningRouter.post("/journal-manual", requirePermission("finance:create
       after: { ref, totalDebit, lineCount: lines.length, approvalStatus: "draft", isManual: true },
     }).catch((err) => logger.error(err, "[audit] journal.manual_created:"));
 
-    res.status(201).json({
-      id: journalId, ref, description, totalDebit, totalCredit,
-      approvalStatus: "draft", isManual: true,
-      message: "تم إنشاء القيد اليدوي بحالة مسودة — يحتاج مراجعة واعتماد قبل الترحيل",
-    });
+    const [createdManualJournal] = await rawQuery<any>(
+      `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit, 'description', jl.description)) AS lines
+       FROM journal_entries je
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
+       GROUP BY je.id`,
+      [journalId, scope.companyId]
+    );
+    res.status(201).json({ ...(createdManualJournal || { id: journalId }), message: "تم إنشاء القيد اليدوي بحالة مسودة — يحتاج مراجعة واعتماد قبل الترحيل" });
   } catch (err) {
     handleRouteError(err, res, "Create manual journal error:");
   }
 });
 
-financeHardeningRouter.get("/journal-manual", requirePermission("finance:read"), async (req, res) => {
+financeHardeningRouter.get("/journal-manual", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
@@ -385,11 +390,11 @@ financeHardeningRouter.get("/journal-manual", requirePermission("finance:read"),
        FROM journal_entries je
        LEFT JOIN journal_lines jl ON jl."journalId"=je.id
        LEFT JOIN employee_assignments ea_rev ON ea_rev.id=je."reviewedBy"
-       LEFT JOIN employees e_rev ON e_rev.id=ea_rev."employeeId"
+       LEFT JOIN employees e_rev ON e_rev.id=ea_rev."employeeId" AND e_rev."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea_apr ON ea_apr.id=je."approvedBy"
-       LEFT JOIN employees e_apr ON e_apr.id=ea_apr."employeeId"
+       LEFT JOIN employees e_apr ON e_apr.id=ea_apr."employeeId" AND e_apr."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea_cre ON ea_cre.id=je."createdBy"
-       LEFT JOIN employees e_cre ON e_cre.id=ea_cre."employeeId"
+       LEFT JOIN employees e_cre ON e_cre.id=ea_cre."employeeId" AND e_cre."deletedAt" IS NULL
        WHERE ${conditions.join(" AND ")}
        GROUP BY je.id, e_rev.name, e_apr.name, e_cre.name
        ORDER BY je."createdAt" DESC LIMIT 100`,
@@ -401,7 +406,7 @@ financeHardeningRouter.get("/journal-manual", requirePermission("finance:read"),
   }
 });
 
-financeHardeningRouter.get("/journal-manual/:id", requirePermission("finance:read"), async (req, res) => {
+financeHardeningRouter.get("/journal-manual/:id", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -411,7 +416,7 @@ financeHardeningRouter.get("/journal-manual/:id", requirePermission("finance:rea
        FROM journal_entries je
        LEFT JOIN journal_lines jl ON jl."journalId"=je.id
        LEFT JOIN employee_assignments ea_cre ON ea_cre.id=je."createdBy"
-       LEFT JOIN employees e_cre ON e_cre.id=ea_cre."employeeId"
+       LEFT JOIN employees e_cre ON e_cre.id=ea_cre."employeeId" AND e_cre."deletedAt" IS NULL
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
        GROUP BY je.id, e_cre.name`,
       [id, scope.companyId]
@@ -436,7 +441,7 @@ financeHardeningRouter.get("/journal-manual/:id", requirePermission("finance:rea
 // for approvalStatus are no longer permitted on this entity.
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.patch("/journal-manual/:id/submit", requirePermission("finance:update"), async (req, res) => {
+financeHardeningRouter.patch("/journal-manual/:id/submit", authorize({ feature: "finance.hardening", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -473,7 +478,7 @@ financeHardeningRouter.patch("/journal-manual/:id/submit", requirePermission("fi
   }
 });
 
-financeHardeningRouter.patch("/journal-manual/:id/review", requirePermission("finance:update"), async (req, res) => {
+financeHardeningRouter.patch("/journal-manual/:id/review", authorize({ feature: "finance.hardening", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -537,7 +542,7 @@ financeHardeningRouter.patch("/journal-manual/:id/review", requirePermission("fi
   }
 });
 
-financeHardeningRouter.patch("/journal-manual/:id/approve", requirePermission("finance:update"), async (req, res) => {
+financeHardeningRouter.patch("/journal-manual/:id/approve", authorize({ feature: "finance.hardening", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -589,7 +594,7 @@ financeHardeningRouter.patch("/journal-manual/:id/approve", requirePermission("f
   }
 });
 
-financeHardeningRouter.patch("/journal-manual/:id/post", requirePermission("finance:update"), async (req, res) => {
+financeHardeningRouter.patch("/journal-manual/:id/post", authorize({ feature: "finance.hardening", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -639,7 +644,7 @@ financeHardeningRouter.patch("/journal-manual/:id/post", requirePermission("fina
 // BANK GUARANTEES
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.get("/bank-guarantees", requirePermission("finance:read"), async (req, res) => {
+financeHardeningRouter.get("/bank-guarantees", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -672,7 +677,7 @@ financeHardeningRouter.get("/bank-guarantees", requirePermission("finance:read")
   }
 });
 
-financeHardeningRouter.post("/bank-guarantees", requirePermission("finance:create"), async (req, res) => {
+financeHardeningRouter.post("/bank-guarantees", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -708,7 +713,7 @@ financeHardeningRouter.post("/bank-guarantees", requirePermission("finance:creat
   }
 });
 
-financeHardeningRouter.patch("/bank-guarantees/:id", requirePermission("finance:update"), async (req, res) => {
+financeHardeningRouter.patch("/bank-guarantees/:id", authorize({ feature: "finance.hardening", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -757,7 +762,7 @@ financeHardeningRouter.patch("/bank-guarantees/:id", requirePermission("finance:
   }
 });
 
-financeHardeningRouter.delete("/bank-guarantees/:id", requirePermission("finance:delete"), async (req, res) => {
+financeHardeningRouter.delete("/bank-guarantees/:id", authorize({ feature: "finance.hardening", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -827,7 +832,7 @@ financeHardeningRouter.delete("/bank-guarantees/:id", requirePermission("finance
 // go through `applyTransition` so the graph is enforced centrally.
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.post("/bank-guarantees/:id/cancel", requirePermission("finance:create"), async (req, res) => {
+financeHardeningRouter.post("/bank-guarantees/:id/cancel", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -874,7 +879,7 @@ financeHardeningRouter.post("/bank-guarantees/:id/cancel", requirePermission("fi
   }
 });
 
-financeHardeningRouter.post("/bank-guarantees/:id/release", requirePermission("finance:create"), async (req, res) => {
+financeHardeningRouter.post("/bank-guarantees/:id/release", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -923,7 +928,7 @@ financeHardeningRouter.post("/bank-guarantees/:id/release", requirePermission("f
 // INTERCOMPANY TRANSACTIONS
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.get("/intercompany", requirePermission("finance:read"), async (req, res) => {
+financeHardeningRouter.get("/intercompany", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -943,7 +948,7 @@ financeHardeningRouter.get("/intercompany", requirePermission("finance:read"), a
   }
 });
 
-financeHardeningRouter.post("/intercompany", requirePermission("finance:create"), async (req, res) => {
+financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -1039,51 +1044,57 @@ financeHardeningRouter.post("/intercompany", requirePermission("finance:create")
       after: { ref, toCompanyId: Number(toCompanyId), amount: Number(amount), txDate },
     }).catch((err) => logger.error(err, "[audit] intercompany.created:"));
 
-    res.status(201).json({
-      ref, fromJournalId, toJournalId, amount: Number(amount),
-      message: `تم تسجيل المعاملة البينية ${ref} وإنشاء قيدين محاسبيين`,
-    });
+    const [createdIntercompany] = await rawQuery<any>(
+      `SELECT ic.*, fc.name AS "fromCompanyName", tc.name AS "toCompanyName"
+       FROM intercompany_transactions ic
+       LEFT JOIN companies fc ON fc.id = ic."fromCompanyId"
+       LEFT JOIN companies tc ON tc.id = ic."toCompanyId"
+       WHERE ic.ref = $1 AND (ic."fromCompanyId" = $2 OR ic."toCompanyId" = $2) AND ic."deletedAt" IS NULL
+       LIMIT 1`,
+      [ref, scope.companyId]
+    );
+    res.status(201).json({ ...(createdIntercompany || { ref, fromJournalId, toJournalId, amount: Number(amount) }), message: `تم تسجيل المعاملة البينية ${ref} وإنشاء قيدين محاسبيين` });
   } catch (err) {
     handleRouteError(err, res, "Create intercompany transaction error:");
   }
 });
 
-financeHardeningRouter.get("/intercompany/consolidation", requirePermission("finance:read"), async (req, res) => {
+financeHardeningRouter.get("/intercompany/consolidation", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const companies = scope.allowedCompanies ?? [scope.companyId];
 
-    const [balanceSheet] = await rawQuery<any>(
-      `SELECT
-         COALESCE(SUM(CASE WHEN coa.type='asset' THEN jl.debit - jl.credit ELSE 0 END),0) AS "totalAssets",
-         COALESCE(SUM(CASE WHEN coa.type='liability' THEN jl.credit - jl.debit ELSE 0 END),0) AS "totalLiabilities",
-         COALESCE(SUM(CASE WHEN coa.type='equity' THEN jl.credit - jl.debit ELSE 0 END),0) AS "totalEquity"
-       FROM journal_lines jl
-       JOIN journal_entries je ON je.id=jl."journalId"
-       JOIN chart_of_accounts coa ON coa.code=jl."accountCode" AND coa."companyId"=je."companyId"
-       WHERE je."companyId" = ANY($1) AND je."deletedAt" IS NULL AND je.status = 'posted' AND je.type != 'intercompany'`,
-      [companies]
-    );
-
-    const intercompanyTotal = await rawQuery<any>(
-      `SELECT SUM(amount) AS total FROM intercompany_transactions
-       WHERE ("fromCompanyId" = ANY($1) OR "toCompanyId" = ANY($1))
-         AND status='posted' AND "deletedAt" IS NULL`,
-      [companies]
-    );
-
-    const byCompany = await rawQuery<any>(
-      `SELECT je."companyId", c.name AS "companyName",
-              COALESCE(SUM(CASE WHEN coa.type='revenue' THEN jl.credit ELSE 0 END),0) AS revenue,
-              COALESCE(SUM(CASE WHEN coa.type='expense' THEN jl.debit ELSE 0 END),0) AS expenses
-       FROM journal_lines jl
-       JOIN journal_entries je ON je.id=jl."journalId"
-       JOIN chart_of_accounts coa ON coa.code=jl."accountCode" AND coa."companyId"=je."companyId"
-       JOIN companies c ON c.id=je."companyId"
-       WHERE je."companyId" = ANY($1) AND je."deletedAt" IS NULL AND je.status = 'posted'
-       GROUP BY je."companyId", c.name`,
-      [companies]
-    );
+    const [[balanceSheet], intercompanyTotal, byCompany] = await Promise.all([
+      rawQuery<any>(
+        `SELECT
+           COALESCE(SUM(CASE WHEN coa.type='asset' THEN jl.debit - jl.credit ELSE 0 END),0) AS "totalAssets",
+           COALESCE(SUM(CASE WHEN coa.type='liability' THEN jl.credit - jl.debit ELSE 0 END),0) AS "totalLiabilities",
+           COALESCE(SUM(CASE WHEN coa.type='equity' THEN jl.credit - jl.debit ELSE 0 END),0) AS "totalEquity"
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id=jl."journalId"
+         JOIN chart_of_accounts coa ON coa.code=jl."accountCode" AND coa."companyId"=je."companyId"
+         WHERE je."companyId" = ANY($1) AND je."deletedAt" IS NULL AND je.status = 'posted' AND je.type != 'intercompany'`,
+        [companies]
+      ),
+      rawQuery<any>(
+        `SELECT SUM(amount) AS total FROM intercompany_transactions
+         WHERE ("fromCompanyId" = ANY($1) OR "toCompanyId" = ANY($1))
+           AND status='posted' AND "deletedAt" IS NULL`,
+        [companies]
+      ),
+      rawQuery<any>(
+        `SELECT je."companyId", c.name AS "companyName",
+                COALESCE(SUM(CASE WHEN coa.type='revenue' THEN jl.credit ELSE 0 END),0) AS revenue,
+                COALESCE(SUM(CASE WHEN coa.type='expense' THEN jl.debit ELSE 0 END),0) AS expenses
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id=jl."journalId"
+         JOIN chart_of_accounts coa ON coa.code=jl."accountCode" AND coa."companyId"=je."companyId"
+         JOIN companies c ON c.id=je."companyId"
+         WHERE je."companyId" = ANY($1) AND je."deletedAt" IS NULL AND je.status = 'posted'
+         GROUP BY je."companyId", c.name`,
+        [companies]
+      ),
+    ]);
 
     res.json({
       consolidatedBalance: balanceSheet,
@@ -1099,7 +1110,7 @@ financeHardeningRouter.get("/intercompany/consolidation", requirePermission("fin
 // PROJECTS
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.get("/projects", requirePermission("finance:read"), async (req, res) => {
+financeHardeningRouter.get("/projects", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -1111,7 +1122,8 @@ financeHardeningRouter.get("/projects", requirePermission("finance:read"), async
        LEFT JOIN journal_lines jl ON jl."journalId"=je.id AND jl.debit > 0
        WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
        GROUP BY p.id
-       ORDER BY p."createdAt" DESC`,
+       ORDER BY p."createdAt" DESC
+       LIMIT 500`,
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
@@ -1120,7 +1132,7 @@ financeHardeningRouter.get("/projects", requirePermission("finance:read"), async
   }
 });
 
-financeHardeningRouter.post("/projects", requirePermission("finance:create"), async (req, res) => {
+financeHardeningRouter.post("/projects", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -1157,7 +1169,7 @@ financeHardeningRouter.post("/projects", requirePermission("finance:create"), as
   }
 });
 
-financeHardeningRouter.get("/projects/:id", requirePermission("finance:read"), async (req, res) => {
+financeHardeningRouter.get("/projects/:id", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1174,7 +1186,7 @@ financeHardeningRouter.get("/projects/:id", requirePermission("finance:read"), a
   }
 });
 
-financeHardeningRouter.get("/projects/:id/costs", requirePermission("finance:read"), async (req, res) => {
+financeHardeningRouter.get("/projects/:id/costs", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1211,66 +1223,64 @@ financeHardeningRouter.get("/projects/:id/costs", requirePermission("finance:rea
 // CASH FLOW FORECAST
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.get("/cash-flow-forecast", requirePermission("finance:read"), async (req, res) => {
+financeHardeningRouter.get("/cash-flow-forecast", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const inflow30 = await rawQuery<any>(
-      `SELECT i.ref, i.total - i."paidAmount" AS expected, i."dueDate", c.name AS "clientName"
-       FROM invoices i
-       LEFT JOIN clients c ON c.id=i."clientId" AND c."deletedAt" IS NULL
-       WHERE i."companyId"=$1 AND i."deletedAt" IS NULL
-         AND i.status IN ('sent','partial','overdue')
-         AND i."dueDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
-       ORDER BY i."dueDate"`,
-      [scope.companyId]
-    );
-
-    const inflow60 = await rawQuery<any>(
-      `SELECT i.ref, i.total - i."paidAmount" AS expected, i."dueDate", c.name AS "clientName"
-       FROM invoices i
-       LEFT JOIN clients c ON c.id=i."clientId" AND c."deletedAt" IS NULL
-       WHERE i."companyId"=$1 AND i."deletedAt" IS NULL
-         AND i.status IN ('sent','partial','overdue')
-         AND i."dueDate" BETWEEN CURRENT_DATE + INTERVAL '31 days' AND CURRENT_DATE + INTERVAL '60 days'
-       ORDER BY i."dueDate"`,
-      [scope.companyId]
-    );
-
-    const inflow90 = await rawQuery<any>(
-      `SELECT i.ref, i.total - i."paidAmount" AS expected, i."dueDate", c.name AS "clientName"
-       FROM invoices i
-       LEFT JOIN clients c ON c.id=i."clientId" AND c."deletedAt" IS NULL
-       WHERE i."companyId"=$1 AND i."deletedAt" IS NULL
-         AND i.status IN ('sent','partial','overdue')
-         AND i."dueDate" BETWEEN CURRENT_DATE + INTERVAL '61 days' AND CURRENT_DATE + INTERVAL '90 days'
-       ORDER BY i."dueDate"`,
-      [scope.companyId]
-    );
-
-    const outflow30 = await rawQuery<any>(
-      `SELECT po.ref, po."totalAmount" AS expected, po."expectedDelivery" AS "dueDate", s.name AS "supplierName", 'purchase_order' AS type
-       FROM purchase_orders po
-       LEFT JOIN suppliers s ON s.id=po."supplierId"
-       WHERE po."companyId"=$1 AND po."deletedAt" IS NULL AND po.status IN ('approved','pending')
-         AND po."expectedDelivery" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
-       UNION ALL
-       SELECT 'PAYROLL' AS ref, COALESCE(SUM(ea.salary),0) AS expected,
-              (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month - 1 day')::date AS "dueDate",
-              'رواتب الموظفين' AS "supplierName", 'payroll' AS type
-       FROM employee_assignments ea
-       JOIN employees em ON em.id=ea."employeeId"
-       WHERE ea."companyId"=$1 AND ea.status='active' AND ea.salary IS NOT NULL
-       GROUP BY 1,3,4,5`,
-      [scope.companyId]
-    );
-
-    const [cashBalance] = await rawQuery<any>(
-      `SELECT COALESCE(SUM(jl.debit) - SUM(jl.credit), 0) AS balance
-       FROM journal_lines jl
-       JOIN journal_entries je ON je.id=jl."journalId"
-       WHERE je."companyId"=$1 AND je."deletedAt" IS NULL AND je.status = 'posted' AND jl."accountCode" LIKE '11%'`,
-      [scope.companyId]
-    );
+    const [inflow30, inflow60, inflow90, outflow30, [cashBalance]] = await Promise.all([
+      rawQuery<any>(
+        `SELECT i.ref, i.total - i."paidAmount" AS expected, i."dueDate", c.name AS "clientName"
+         FROM invoices i
+         LEFT JOIN clients c ON c.id=i."clientId" AND c."deletedAt" IS NULL
+         WHERE i."companyId"=$1 AND i."deletedAt" IS NULL
+           AND i.status IN ('sent','partial','overdue')
+           AND i."dueDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
+         ORDER BY i."dueDate"`,
+        [scope.companyId]
+      ),
+      rawQuery<any>(
+        `SELECT i.ref, i.total - i."paidAmount" AS expected, i."dueDate", c.name AS "clientName"
+         FROM invoices i
+         LEFT JOIN clients c ON c.id=i."clientId" AND c."deletedAt" IS NULL
+         WHERE i."companyId"=$1 AND i."deletedAt" IS NULL
+           AND i.status IN ('sent','partial','overdue')
+           AND i."dueDate" BETWEEN CURRENT_DATE + INTERVAL '31 days' AND CURRENT_DATE + INTERVAL '60 days'
+         ORDER BY i."dueDate"`,
+        [scope.companyId]
+      ),
+      rawQuery<any>(
+        `SELECT i.ref, i.total - i."paidAmount" AS expected, i."dueDate", c.name AS "clientName"
+         FROM invoices i
+         LEFT JOIN clients c ON c.id=i."clientId" AND c."deletedAt" IS NULL
+         WHERE i."companyId"=$1 AND i."deletedAt" IS NULL
+           AND i.status IN ('sent','partial','overdue')
+           AND i."dueDate" BETWEEN CURRENT_DATE + INTERVAL '61 days' AND CURRENT_DATE + INTERVAL '90 days'
+         ORDER BY i."dueDate"`,
+        [scope.companyId]
+      ),
+      rawQuery<any>(
+        `SELECT po.ref, po."totalAmount" AS expected, po."expectedDelivery" AS "dueDate", s.name AS "supplierName", 'purchase_order' AS type
+         FROM purchase_orders po
+         LEFT JOIN suppliers s ON s.id=po."supplierId"
+         WHERE po."companyId"=$1 AND po."deletedAt" IS NULL AND po.status IN ('approved','pending')
+           AND po."expectedDelivery" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
+         UNION ALL
+         SELECT 'PAYROLL' AS ref, COALESCE(SUM(ea.salary),0) AS expected,
+                (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month - 1 day')::date AS "dueDate",
+                'رواتب الموظفين' AS "supplierName", 'payroll' AS type
+         FROM employee_assignments ea
+         JOIN employees em ON em.id=ea."employeeId"
+         WHERE ea."companyId"=$1 AND ea.status='active' AND ea.salary IS NOT NULL
+         GROUP BY 1,3,4,5`,
+        [scope.companyId]
+      ),
+      rawQuery<any>(
+        `SELECT COALESCE(SUM(jl.debit) - SUM(jl.credit), 0) AS balance
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id=jl."journalId"
+         WHERE je."companyId"=$1 AND je."deletedAt" IS NULL AND je.status = 'posted' AND jl."accountCode" LIKE '11%'`,
+        [scope.companyId]
+      ),
+    ]);
 
     const currentBalance = Number(cashBalance?.balance ?? 0);
     const totalInflow30 = inflow30.reduce((s: number, r: any) => s + Number(r.expected), 0);
@@ -1297,7 +1307,7 @@ financeHardeningRouter.get("/cash-flow-forecast", requirePermission("finance:rea
 // COST CENTER REPORT
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.get("/cost-center-report", requirePermission("finance:read"), async (req, res) => {
+financeHardeningRouter.get("/cost-center-report", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate, costCenter } = req.query as any;
@@ -1317,7 +1327,7 @@ financeHardeningRouter.get("/cost-center-report", requirePermission("finance:rea
          COALESCE(SUM(CASE WHEN coa.type='revenue' THEN jl.credit ELSE 0 END),0) AS "totalRevenue"
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId"=je.id
-       LEFT JOIN chart_of_accounts coa ON coa.code=jl."accountCode" AND coa."companyId"=je."companyId"
+       LEFT JOIN chart_of_accounts coa ON coa.code=jl."accountCode" AND coa."companyId"=je."companyId" AND coa."deletedAt" IS NULL
        WHERE ${conditions.join(" AND ")}
        GROUP BY je."costCenter"
        ORDER BY "totalExpenses" DESC`,
@@ -1342,7 +1352,7 @@ financeHardeningRouter.get("/cost-center-report", requirePermission("finance:rea
 });
 
 // Financial Posting Failures dashboard — surfaces operations where GL entry failed
-financeHardeningRouter.get("/posting-failures", requirePermission("finance:read"), async (req, res) => {
+financeHardeningRouter.get("/posting-failures", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const resolved = req.query.resolved === "true";
@@ -1358,7 +1368,7 @@ financeHardeningRouter.get("/posting-failures", requirePermission("finance:read"
   }
 });
 
-financeHardeningRouter.patch("/posting-failures/:id/resolve", requirePermission("finance:approve"), async (req, res) => {
+financeHardeningRouter.patch("/posting-failures/:id/resolve", authorize({ feature: "finance.hardening", action: "approve" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatDateAr as formatDate } from "@/lib/formatters";
 import { Textarea } from "@/components/ui/textarea";
@@ -8,7 +9,6 @@ import { Plus, ScrollText } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -137,7 +137,7 @@ export default function JournalManualPage() {
   );
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const columns: DataTableColumn<JournalManualRow>[] = [
     {
@@ -173,31 +173,40 @@ export default function JournalManualPage() {
             <button className="text-blue-600 hover:underline text-xs">عرض</button>
           </Link>
           {row.approvalStatus === "draft" && (
-            <button
+            <GuardedButton
+              perm="finance:create"
+              variant="link"
+              size="sm"
+              className="text-amber-600 hover:underline text-xs p-0 h-auto"
               onClick={() => setActionModal({ type: "submit", journal: row })}
-              className="text-amber-600 hover:underline text-xs"
             >
               إرسال للمراجعة
-            </button>
+            </GuardedButton>
           )}
           {row.approvalStatus === "pending_review" && (
-            <button
+            <GuardedButton
+              perm="finance:approve"
+              variant="link"
+              size="sm"
+              className="text-indigo-600 hover:underline text-xs p-0 h-auto"
               onClick={() => {
                 setActionNotes("");
                 setActionModal({ type: "review", journal: row });
               }}
-              className="text-indigo-600 hover:underline text-xs"
             >
               مراجعة
-            </button>
+            </GuardedButton>
           )}
           {row.approvalStatus === "approved" && (
-            <button
+            <GuardedButton
+              perm="finance:approve"
+              variant="link"
+              size="sm"
+              className="text-emerald-600 hover:underline text-xs p-0 h-auto"
               onClick={() => setActionModal({ type: "post", journal: row })}
-              className="text-emerald-600 hover:underline text-xs"
             >
               ترحيل
-            </button>
+            </GuardedButton>
           )}
         </div>
       ),
@@ -286,16 +295,18 @@ export default function JournalManualPage() {
             </AlertDialogHeader>
             <AlertDialogFooter className="flex-row justify-start gap-2">
               {actionModal.type === "submit" && (
-                <AlertDialogAction
+                <GuardedButton
+                  perm="finance:create"
                   disabled={submitMutation.isPending}
                   onClick={() => submitMutation.mutate({ id: actionModal.journal.id })}
                 >
                   {submitMutation.isPending ? "جارٍ الإرسال..." : "إرسال"}
-                </AlertDialogAction>
+                </GuardedButton>
               )}
               {actionModal.type === "review" && (
                 <>
-                  <Button
+                  <GuardedButton
+                    perm="finance:approve"
                     variant="outline"
                     className="border-red-300 text-red-600"
                     disabled={reviewMutation.isPending}
@@ -308,8 +319,9 @@ export default function JournalManualPage() {
                     }
                   >
                     رفض
-                  </Button>
-                  <AlertDialogAction
+                  </GuardedButton>
+                  <GuardedButton
+                    perm="finance:approve"
                     disabled={reviewMutation.isPending}
                     onClick={() =>
                       reviewMutation.mutate({
@@ -320,16 +332,17 @@ export default function JournalManualPage() {
                     }
                   >
                     موافقة
-                  </AlertDialogAction>
+                  </GuardedButton>
                 </>
               )}
               {actionModal.type === "post" && (
-                <AlertDialogAction
+                <GuardedButton
+                  perm="finance:approve"
                   disabled={postMutation.isPending}
                   onClick={() => postMutation.mutate({ id: actionModal.journal.id })}
                 >
                   {postMutation.isPending ? "جارٍ الترحيل..." : "ترحيل"}
-                </AlertDialogAction>
+                </GuardedButton>
               )}
               <AlertDialogCancel>إلغاء</AlertDialogCancel>
             </AlertDialogFooter>

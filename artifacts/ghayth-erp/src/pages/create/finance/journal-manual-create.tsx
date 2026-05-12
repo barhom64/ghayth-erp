@@ -7,10 +7,12 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { CostCenterSelect } from "@/components/shared/entity-selects";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { formatCurrency, roundMoney , todayLocal } from "@/lib/formatters";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { NumberField } from "@/components/shared/form-field-wrapper";
 
 type JournalLine = { accountCode: string; description: string; debit: number; credit: number };
 
@@ -29,6 +31,7 @@ export default function JournalManualCreatePage() {
     notes: "",
     lines: [emptyLine(), emptyLine()],
   });
+  const { fieldErrors, validate } = useFieldErrors();
 
   const { data: coaData, isLoading, isError } = useApiQuery<any>(
     ["chart-of-accounts"],
@@ -46,7 +49,7 @@ export default function JournalManualCreatePage() {
   );
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const coa = coaData?.data ?? coaData ?? [];
 
@@ -71,7 +74,11 @@ export default function JournalManualCreatePage() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!isBalanced) { toast({ variant: "destructive", title: "القيد غير متوازن — يجب أن يتساوى مجموع المدين والدائن" }); return; }
+    const firstError = validate({
+      description: form.description ? null : "البيان مطلوب",
+      balance: !isBalanced ? "القيد غير متوازن — يجب أن يتساوى مجموع المدين والدائن" : null,
+    });
+    if (firstError) { toast({ variant: "destructive", title: firstError }); return; }
     createMutation.mutate({ ...form, date: form.date || undefined });
   }
 
@@ -134,10 +141,10 @@ export default function JournalManualCreatePage() {
                         <Input value={line.description} onChange={e => updateLine(i, "description", e.target.value)} placeholder="البيان" />
                       </td>
                       <td className="px-2 py-1">
-                        <Input className="w-24" type="number" min="0" step="0.01" value={line.debit || ""} onChange={e => updateLine(i, "debit", e.target.value)} placeholder="0" />
+                        <NumberField label="مدين" className="w-24" min={0} value={line.debit || ""} onChange={v => updateLine(i, "debit", v)} placeholder="0" />
                       </td>
                       <td className="px-2 py-1">
-                        <Input className="w-24" type="number" min="0" step="0.01" value={line.credit || ""} onChange={e => updateLine(i, "credit", e.target.value)} placeholder="0" />
+                        <NumberField label="دائن" className="w-24" min={0} value={line.credit || ""} onChange={v => updateLine(i, "credit", v)} placeholder="0" />
                       </td>
                       <td className="px-2 py-1">
                         <button type="button" onClick={() => removeLine(i)} className="text-red-400 hover:text-red-600 text-lg leading-none">&times;</button>
@@ -176,7 +183,7 @@ export default function JournalManualCreatePage() {
 
             <div className="flex justify-end gap-3 pt-2">
               <Button type="button" variant="outline" onClick={() => navigate("/finance/journal-manual")}>إلغاء</Button>
-              <Button type="submit" disabled={createMutation.isPending || !isBalanced}>
+              <Button type="submit" disabled={createMutation.isPending || !isBalanced} rateLimitAware>
                 {createMutation.isPending ? "جاري الإنشاء..." : "إنشاء القيد"}
               </Button>
             </div>

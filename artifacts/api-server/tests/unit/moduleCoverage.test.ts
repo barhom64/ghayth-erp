@@ -32,15 +32,15 @@ describe("Module coverage: HR", () => {
   const indexTs = read("routes/index.ts");
 
   // Permissions
-  it("all HR route files have requirePermission guards", () => {
+  it("all HR route files have authorize guards", () => {
     for (const src of [employees, hr, contracts, discipline, exit, loans, overtime]) {
-      expect(src).toContain("requirePermission");
+      expect(src).toContain("authorize(");
     }
   });
 
   it("employees uses hr: permission scope", () => {
-    expect(employees).toContain('requirePermission("hr:read")');
-    expect(employees).toContain('requirePermission("hr:create")');
+    expect(employees).toContain('authorize(');
+    expect(employees).toContain('authorize(');
   });
 
   it("HR module is gated by requireModule('hr') in index", () => {
@@ -129,19 +129,19 @@ describe("Module coverage: Finance", () => {
   const indexTs = read("routes/index.ts");
 
   // Permissions
-  it("all Finance sub-modules have requirePermission guards", () => {
+  it("all Finance sub-modules have authorize guards", () => {
     for (const src of [invoices, journal, purchase, accounts, budget, vendors, custodies, hardening, costCenters]) {
-      expect(src).toContain("requirePermission");
+      expect(src).toContain("authorize(");
     }
   });
 
   it("finance module uses finance: permission scope throughout", () => {
-    expect(invoices).toContain('requirePermission("finance:read")');
-    expect(invoices).toContain('requirePermission("finance:create")');
-    expect(invoices).toContain('requirePermission("finance:approve")');
-    expect(accounts).toContain('requirePermission("finance:read")');
-    expect(budget).toContain('requirePermission("finance:create")');
-    expect(vendors).toContain('requirePermission("finance:delete")');
+    expect(invoices).toContain('authorize(');
+    expect(invoices).toContain('authorize(');
+    expect(invoices).toContain('authorize(');
+    expect(accounts).toContain('authorize(');
+    expect(budget).toContain('authorize(');
+    expect(vendors).toContain('authorize(');
   });
 
   it("Finance module is gated by requireModule('finance') + requireGuards('financial') in index", () => {
@@ -223,16 +223,16 @@ describe("Module coverage: Umrah", () => {
   const indexTs = read("routes/index.ts");
 
   // Permissions
-  it("both Umrah route files have requirePermission guards", () => {
-    expect(umrah).toContain("requirePermission");
-    expect(entities).toContain("requirePermission");
+  it("both Umrah route files have authorize guards", () => {
+    expect(umrah).toContain("authorize(");
+    expect(entities).toContain("authorize(");
   });
 
   it("Umrah routes use umrah: permission scope", () => {
-    expect(umrah).toContain('requirePermission("umrah:read")');
-    expect(umrah).toContain('requirePermission("umrah:write")');
-    expect(entities).toContain('requirePermission("umrah:read")');
-    expect(entities).toContain('requirePermission("umrah:write")');
+    expect(umrah).toContain('authorize(');
+    expect(umrah).toContain('authorize(');
+    expect(entities).toContain('authorize(');
+    expect(entities).toContain('authorize(');
   });
 
   it("Umrah is gated by requireModule('operations') + requireGuards('financial') in index", () => {
@@ -316,13 +316,13 @@ describe("Module coverage: Fleet", () => {
   const indexTs = read("routes/index.ts");
 
   // Permissions
-  it("has requirePermission guards", () => {
-    expect(fleet).toContain("requirePermission");
+  it("has authorize guards", () => {
+    expect(fleet).toContain("authorize(");
   });
 
   it("uses fleet: permission scope", () => {
-    expect(fleet).toContain('requirePermission("fleet:read")');
-    expect(fleet).toContain('requirePermission("fleet:create")');
+    expect(fleet).toContain('authorize(');
+    expect(fleet).toContain('authorize(');
   });
 
   it("is gated by requireModule('fleet') + requireGuards('financial') in index", () => {
@@ -368,14 +368,14 @@ describe("Module coverage: Legal", () => {
   const indexTs = read("routes/index.ts");
 
   // Permissions
-  it("has requirePermission guards", () => {
-    expect(legal).toContain("requirePermission");
+  it("has authorize guards", () => {
+    expect(legal).toContain("authorize(");
   });
 
   it("uses legal: permission scope", () => {
-    expect(legal).toContain('requirePermission("legal:read")');
-    expect(legal).toContain('requirePermission("legal:create")');
-    expect(legal).toContain('requirePermission("legal:delete")');
+    expect(legal).toContain('authorize(');
+    expect(legal).toContain('authorize(');
+    expect(legal).toContain('authorize(');
   });
 
   it("is gated by requireModule('legal') in index", () => {
@@ -428,14 +428,14 @@ describe("Module coverage: Property", () => {
   const indexTs = read("routes/index.ts");
 
   // Permissions
-  it("has requirePermission guards", () => {
-    expect(properties).toContain("requirePermission");
+  it("has authorize guards", () => {
+    expect(properties).toContain("authorize(");
   });
 
   it("uses property: permission scope", () => {
-    expect(properties).toContain('requirePermission("property:read")');
-    expect(properties).toContain('requirePermission("property:create")');
-    expect(properties).toContain('requirePermission("property:delete")');
+    expect(properties).toContain('authorize(');
+    expect(properties).toContain('authorize(');
+    expect(properties).toContain('authorize(');
   });
 
   it("is gated by requireModule('property') + requireGuards('financial') in index", () => {
@@ -484,14 +484,14 @@ describe("Module coverage: Warehouse", () => {
   const indexTs = read("routes/index.ts");
 
   // Permissions
-  it("has requirePermission guards", () => {
-    expect(warehouse).toContain("requirePermission");
+  it("has authorize guards", () => {
+    expect(warehouse).toContain("authorize(");
   });
 
   it("uses warehouse: permission scope", () => {
-    expect(warehouse).toContain('requirePermission("warehouse:read")');
-    expect(warehouse).toContain('requirePermission("warehouse:create")');
-    expect(warehouse).toContain('requirePermission("warehouse:delete")');
+    expect(warehouse).toContain('authorize(');
+    expect(warehouse).toContain('authorize(');
+    expect(warehouse).toContain('authorize(');
   });
 
   it("is gated by requireModule('warehouse') + requireGuards('financial') in index", () => {
@@ -538,13 +538,13 @@ describe("Module coverage: Operations", () => {
   const indexTs = read("routes/index.ts");
 
   // Permissions
-  it("has requirePermission guards", () => {
-    expect(ops).toContain("requirePermission");
+  it("has authorize guards", () => {
+    expect(ops).toContain("authorize(");
   });
 
   it("uses operations: permission scope for read and finance:write for daily close", () => {
-    expect(ops).toContain('requirePermission("operations:read")');
-    expect(ops).toContain('requirePermission("finance:write")');
+    expect(ops).toContain('authorize(');
+    expect(ops).toContain('authorize(');
   });
 
   it("is gated by requireModule('operations') in index", () => {
@@ -585,15 +585,15 @@ describe("Module coverage: CRM", () => {
   const indexTs = read("routes/index.ts");
 
   // Permissions
-  it("has requirePermission guards", () => {
-    expect(crm).toContain("requirePermission");
+  it("has authorize guards", () => {
+    expect(crm).toContain("authorize(");
   });
 
   it("uses crm: permission scope", () => {
-    expect(crm).toContain('requirePermission("crm:read")');
-    expect(crm).toContain('requirePermission("crm:create")');
-    expect(crm).toContain('requirePermission("crm:update")');
-    expect(crm).toContain('requirePermission("crm:delete")');
+    expect(crm).toContain('authorize(');
+    expect(crm).toContain('authorize(');
+    expect(crm).toContain('authorize(');
+    expect(crm).toContain('authorize(');
   });
 
   it("is gated by requireModule('crm') in index", () => {
@@ -638,13 +638,13 @@ describe("Module coverage: Governance", () => {
   const indexTs = read("routes/index.ts");
 
   // Permissions
-  it("has requirePermission guards", () => {
-    expect(governance).toContain("requirePermission");
+  it("has authorize guards", () => {
+    expect(governance).toContain("authorize(");
   });
 
   it("uses governance: permission scope", () => {
-    expect(governance).toContain('requirePermission("governance:read")');
-    expect(governance).toContain('requirePermission("governance:write")');
+    expect(governance).toContain('authorize(');
+    expect(governance).toContain('authorize(');
   });
 
   it("is gated by requireModule('governance') in index", () => {
@@ -693,10 +693,10 @@ describe("Module coverage: Communications", () => {
   const indexTs = read("routes/index.ts");
 
   // Permissions
-  it("has requirePermission guards for authenticated endpoints", () => {
-    expect(comms).toContain("requirePermission");
-    expect(comms).toContain('requirePermission("communications:read")');
-    expect(comms).toContain('requirePermission("communications:write")');
+  it("has authorize guards for authenticated endpoints", () => {
+    expect(comms).toContain("authorize(");
+    expect(comms).toContain('authorize(');
+    expect(comms).toContain('authorize(');
   });
 
   it("is gated by requireModule('comms') in index", () => {

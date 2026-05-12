@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext, useCallback } from "react";
 import { useLocation } from "wouter";
 import { apiFetch } from "./api";
+import { setObsUser } from "./observability";
 
 interface UserRole {
   id: number;
@@ -83,9 +84,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         branchName: data.branchName,
         userRoles: data.userRoles || [],
       });
+      // Tie subsequent observability captures to this user. Once a real
+      // backend (Sentry / Datadog / …) is wired in, every error after
+      // login carries the user/role/company so triage doesn't have to
+      // cross-reference logs.
+      setObsUser({
+        id: data.id,
+        role: data.role,
+        companyId: data.companyId,
+        branchId: data.branchId,
+      });
     } catch {
       localStorage.removeItem("erp_assignments");
       setUser(null);
+      setObsUser(null);
     } finally {
       setLoading(false);
     }
@@ -114,6 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("erp_assignments");
     setUser(null);
     setAssignments([]);
+    setObsUser(null);
     setLocation("/login");
   };
 

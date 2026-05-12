@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Button } from "@/components/ui/button";
 import { Plus, Users, AlertTriangle, Plane, UserPlus } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Link, useLocation } from "wouter";
 import { AdvancedFilters, useFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -31,7 +32,7 @@ export default function UmrahPilgrims() {
   ];
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const columns: DataTableColumn<any>[] = [
     {
@@ -78,7 +79,7 @@ export default function UmrahPilgrims() {
           <p className="text-sm text-muted-foreground mt-0.5">متابعة ملفات المعتمرين وحالاتهم</p>
         </div>
         <Link href="/umrah/pilgrims/create">
-          <Button className="gap-2"><Plus className="h-4 w-4" />إضافة معتمر</Button>
+          <GuardedButton perm="umrah:create" className="gap-2"><Plus className="h-4 w-4" />إضافة معتمر</GuardedButton>
         </Link>
       </div>
 

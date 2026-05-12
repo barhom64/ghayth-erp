@@ -4,6 +4,7 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -83,7 +84,7 @@ export default function Evaluation360UpwardPage() {
   const avgScore = Math.round(Object.values(scores).reduce((a, b) => a + b, 0) / Object.values(scores).length);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   function handleSubmit() {
     if (!managerId) {
@@ -220,7 +221,8 @@ export default function Evaluation360UpwardPage() {
         <Link href={`/hr/evaluation-360/${cycleId}`}>
           <Button variant="outline">إلغاء</Button>
         </Link>
-        <Button
+        <GuardedButton
+          perm="hr:create"
           onClick={handleSubmit}
           disabled={submitMutation.isPending}
           className="bg-purple-600 hover:bg-purple-700"
@@ -228,7 +230,7 @@ export default function Evaluation360UpwardPage() {
         >
           <Shield className="w-4 h-4 me-1" />
           {submitMutation.isPending ? "جارٍ الإرسال..." : "إرسال بشكل سري"}
-        </Button>
+        </GuardedButton>
       </div>
     </PageShell>
   );

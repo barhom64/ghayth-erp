@@ -25,6 +25,7 @@ import { PageShell, PageSection } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 /**
  * Finance Dashboard — R.1.5 of the Reference UI/UX phase.
@@ -225,7 +226,7 @@ export default function FinanceDashboard() {
     pendingManualJournals.isError;
 
   if (isAnyLoading) return <LoadingSpinner />;
-  if (isAnyError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isAnyError) return <ErrorState />;
 
   const periods = asList<FiscalPeriodRow>(fiscalPeriods.data?.data);
   const openPeriod = periods.find((p) => p.status === "open");
@@ -266,12 +267,12 @@ export default function FinanceDashboard() {
           <Button asChild variant="outline" size="sm">
             <Link href="/finance/accounts">شجرة الحسابات</Link>
           </Button>
-          <Button asChild size="sm">
+          <GuardedButton perm="finance:create" asChild size="sm">
             <Link href="/finance/journal-manual/create">
               <Plus className="h-4 w-4 me-1" />
               قيد يدوي جديد
             </Link>
-          </Button>
+          </GuardedButton>
         </div>
       }
     >

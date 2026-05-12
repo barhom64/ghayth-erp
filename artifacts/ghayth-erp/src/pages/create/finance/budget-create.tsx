@@ -1,22 +1,18 @@
-import { useState } from "react";
-import { todayLocal } from "@/lib/formatters";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
-import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const now = new Date();
 const DRAFT_KEY = "finance_budget_create";
-const INITIAL = { accountCode: "", period: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`, amount: "", date: todayLocal() };
+const INITIAL = { accountCode: "", period: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`, amount: "" };
 
 export default function BudgetCreate() {
   const [, setLocation] = useLocation();
@@ -26,11 +22,11 @@ export default function BudgetCreate() {
   const accounts = accountsData?.data || [];
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
+
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const handleSubmit = async () => {
     let periodError: string | null = null;
@@ -54,7 +50,6 @@ export default function BudgetCreate() {
         accountCode: form.accountCode,
         period: form.period,
         amount: Number(form.amount),
-        date: form.date || undefined,
       });
       clearDraft();
       toast({ title: "تم إضافة بند الميزانية بنجاح" });
@@ -74,11 +69,6 @@ export default function BudgetCreate() {
         </div>
       )}
       <CreationDateField />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <FormFieldWrapper label="التاريخ">
-          <DatePicker value={form.date} onChange={(v) => setForm((f) => ({ ...f, date: v }))} />
-        </FormFieldWrapper>
-      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <FormFieldWrapper label="الحساب" required error={fieldErrors.accountCode}>
           <Select value={form.accountCode} onValueChange={(v) => setForm((f) => ({ ...f, accountCode: v }))}>
@@ -95,10 +85,9 @@ export default function BudgetCreate() {
         </FormFieldWrapper>
         <NumberField label="المبلغ المخصص" required value={form.amount} onChange={(v) => setForm((f) => ({ ...f, amount: v }))} step={0.01} min={0} error={fieldErrors.amount} />
       </div>
-      <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/finance/budget")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={createMut.isPending}>
+        <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
         </Button>
       </div>

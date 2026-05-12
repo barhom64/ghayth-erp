@@ -10,16 +10,11 @@ function getPool(): pg.Pool {
     if (!process.env.DATABASE_URL) {
       throw new Error("DATABASE_URL must be set");
     }
-    const poolMax = Math.min(Math.max(Number(process.env.PG_POOL_MAX) || 20, 1), 100);
     _pool = new Pool({
       connectionString: process.env.DATABASE_URL,
-      max: poolMax,
+      max: Number(process.env.PG_POOL_MAX) || 20,
       idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 10_000,
-      statement_timeout: 30_000,
-    });
-    _pool.on("error", (err) => {
-      logger.error({ err }, "Unexpected PG pool error");
+      connectionTimeoutMillis: 5_000,
     });
   }
   return _pool;
@@ -53,7 +48,8 @@ export async function rawExecute(
 ): Promise<{ insertId: number; affectedRows: number }> {
   const cleanSQL = sql.trimEnd().replace(/;$/, "");
   const hasReturning = /RETURNING/i.test(cleanSQL);
-  const finalSQL = hasReturning ? cleanSQL : `${cleanSQL} RETURNING id`;
+  const isDDL = /^\s*(CREATE|ALTER|DROP|TRUNCATE|COMMENT|GRANT|REVOKE|SET|DO|VACUUM|ANALYZE|REINDEX)\b/i.test(cleanSQL);
+  const finalSQL = hasReturning || isDDL ? cleanSQL : `${cleanSQL} RETURNING id`;
 
   const result = await pool.query(finalSQL, cleanParams(params));
   const insertId = result.rows[0]?.id ?? 0;
@@ -70,7 +66,11 @@ export async function withTransaction<T>(
     await client.query("COMMIT");
     return result;
   } catch (err) {
-    await client.query("ROLLBACK");
+    try {
+      await client.query("ROLLBACK");
+    } catch (rollbackErr) {
+      logger.error(rollbackErr, "[withTransaction] ROLLBACK failed — original error follows");
+    }
     throw err;
   } finally {
     client.release();

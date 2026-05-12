@@ -46,7 +46,7 @@ export default function ExitCreate() {
   );
 
   if (employeesQ.isLoading) return <LoadingSpinner />;
-  if (employeesQ.isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (employeesQ.isError) return <ErrorState />;
 
   const salary = Number(selectedEmployee?.salary || selectedEmployee?.basicSalary || 0);
   const hireDate = selectedEmployee?.hireDate || selectedEmployee?.joinDate;
@@ -219,7 +219,7 @@ export default function ExitCreate() {
 
         {/* أزرار الإرسال */}
         <div className="flex items-center gap-3 pt-4 border-t">
-          <Button type="submit" disabled={createMut.isPending} className="gap-1.5 bg-red-600 hover:bg-red-700">
+          <Button type="submit" disabled={createMut.isPending} className="gap-1.5 bg-red-600 hover:bg-red-700" rateLimitAware>
             <LogOut className="h-4 w-4" />
             {createMut.isPending ? "جاري الإنشاء..." : "إنشاء طلب نهاية الخدمة"}
           </Button>

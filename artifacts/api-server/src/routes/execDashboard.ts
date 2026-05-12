@@ -15,6 +15,7 @@ import { handleRouteError, ForbiddenError } from "../lib/errorHandler.js";
 import { obligationSummary } from "../lib/obligationsEngine.js";
 import { EXEC_ROLES } from "../lib/rbacCatalog.js";
 import { logger } from "../lib/logger.js";
+import { authorize } from "../lib/rbac/authorize.js";
 
 export const execDashboardRouter = Router();
 execDashboardRouter.use(authMiddleware);
@@ -30,27 +31,29 @@ async function safe<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
   try { return await fn(); } catch (e) { logger.error(e, "exec dashboard query failed"); return fallback; }
 }
 
-execDashboardRouter.get("/overview", async (req, res) => {
+execDashboardRouter.get("/overview", authorize({ feature: "dashboard.executive", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     requireExec(scope);
     const companyId = scope.companyId;
 
+    // All 12 dashboard sections are independent — run in parallel.
+    const [cashPosition, ar, ap, obligations, slaBreaches, stuckWorkflows, budgetOverages, dunning, expiringContracts, fleetMaintenance, hrDocExpiries, mtd] = await Promise.all([
     // ─── 1. CASH POSITION ─────────────────────────────────────────────────
-    const cashPosition = await safe(async () => {
+    safe(async () => {
       const rows = await rawQuery<any>(
         `SELECT code, name, "currentBalance"
          FROM chart_of_accounts
-         WHERE "companyId"=$1 AND code LIKE '11%' AND type='asset'
+         WHERE "companyId"=$1 AND code LIKE '11%' AND type='asset' AND "deletedAt" IS NULL
          ORDER BY code`,
         [companyId]
       );
       const total = rows.reduce((s: number, r: any) => s + Number(r.currentBalance ?? 0), 0);
       return { total: roundTo2(total), accounts: rows };
-    }, { total: 0, accounts: [] });
+    }, { total: 0, accounts: [] }),
 
     // ─── 2. AR AGING ───────────────────────────────────────────────────────
-    const ar = await safe(async () => {
+    safe(async () => {
       const [sums] = await rawQuery<any>(
         `SELECT
           COALESCE(SUM(total - COALESCE("paidAmount",0)), 0) AS total,
@@ -76,27 +79,27 @@ execDashboardRouter.get("/overview", async (req, res) => {
         d61_90: Number(sums?.b61_90 ?? 0),
         d90_plus: Number(sums?.b90_plus ?? 0),
       };
-    }, { total: 0, current: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90_plus: 0 });
+    }, { total: 0, current: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90_plus: 0 }),
 
     // ─── 3. AP EXPOSURE (open POs) ────────────────────────────────────────
-    const ap = await safe(async () => {
+    safe(async () => {
       const [sums] = await rawQuery<any>(
-        `SELECT COALESCE(SUM(total), 0) AS total, COUNT(*)::int AS count
+        `SELECT COALESCE(SUM("totalAmount"), 0) AS total, COUNT(*)::int AS count
          FROM purchase_orders
          WHERE "companyId"=$1 AND status NOT IN ('paid','cancelled','draft') AND "deletedAt" IS NULL`,
         [companyId]
       );
       return { total: Number(sums?.total ?? 0), count: Number(sums?.count ?? 0) };
-    }, { total: 0, count: 0 });
+    }, { total: 0, count: 0 }),
 
     // ─── 4. OBLIGATIONS SUMMARY ───────────────────────────────────────────
-    const obligations = await safe(
+    safe(
       () => obligationSummary(companyId),
       { pending: 0, breached: 0, escalatedL1: 0, escalatedL2: 0, dueIn24h: 0, dueIn7d: 0, byType: {} }
-    );
+    ),
 
     // ─── 5. SLA BREACHES (support + workflow) ─────────────────────────────
-    const slaBreaches = await safe(async () => {
+    safe(async () => {
       const [support] = await rawQuery<any>(
         `SELECT COUNT(*)::int AS n FROM support_tickets
          WHERE "companyId"=$1 AND status='open' AND "deletedAt" IS NULL AND "slaDeadline" < NOW()`,
@@ -105,28 +108,28 @@ execDashboardRouter.get("/overview", async (req, res) => {
       const [workflow] = await rawQuery<any>(
         `SELECT COUNT(*)::int AS n FROM workflow_instances
          WHERE "companyId"=$1 AND status IN ('pending','in_review','escalated')
-           AND "slaStatus" IN ('breached','at_risk')`,
+           AND "slaStatus" IN ('breached','at_risk') AND "deletedAt" IS NULL`,
         [companyId]
       ).catch((e) => { logger.error(e, "exec dashboard query failed"); return [{ n: 0 }]; });
       return {
         support: Number(support?.n ?? 0),
         workflow: Number(workflow?.n ?? 0),
       };
-    }, { support: 0, workflow: 0 });
+    }, { support: 0, workflow: 0 }),
 
     // ─── 6. STUCK WORKFLOWS (pending >3 days) ─────────────────────────────
-    const stuckWorkflows = await safe(async () => {
+    safe(async () => {
       const [r] = await rawQuery<any>(
         `SELECT COUNT(*)::int AS n FROM workflow_instances
          WHERE "companyId"=$1 AND status IN ('pending','in_review')
-           AND "createdAt" < NOW() - INTERVAL '3 days'`,
+           AND "createdAt" < NOW() - INTERVAL '3 days' AND "deletedAt" IS NULL`,
         [companyId]
       );
       return Number(r?.n ?? 0);
-    }, 0);
+    }, 0),
 
     // ─── 7. BUDGET OVERAGES (current month) ───────────────────────────────
-    const budgetOverages = await safe(async () => {
+    safe(async () => {
       const period = currentPeriod();
       const [y, m] = period.split("-").map(Number);
       const periodStart = `${y}-${String(m).padStart(2, "0")}-01`;
@@ -166,24 +169,25 @@ execDashboardRouter.get("/overview", async (req, res) => {
         over100: withPct.filter((r: any) => r.pct > 100).length,
         top5: withPct.slice(0, 5),
       };
-    }, { count: 0, over100: 0, top5: [] });
+    }, { count: 0, over100: 0, top5: [] }),
 
     // ─── 8. DUNNING PIPELINE ──────────────────────────────────────────────
-    const dunning = await safe(async () => {
+    safe(async () => {
       const rows = await rawQuery<any>(
-        `SELECT "lastDunningStage" AS stage, COUNT(*)::int AS count,
-                COALESCE(SUM(total - COALESCE("paidAmount",0)), 0) AS amount
-         FROM invoices
-         WHERE "companyId"=$1 AND status NOT IN ('paid','cancelled')
-           AND "deletedAt" IS NULL AND "lastDunningStage" > 0
-         GROUP BY "lastDunningStage" ORDER BY "lastDunningStage"`,
+        `SELECT dl.level AS stage, COUNT(DISTINCT i.id)::int AS count,
+                COALESCE(SUM(i.total - COALESCE(i."paidAmount",0)), 0) AS amount
+         FROM dunning_letters dl
+         JOIN invoices i ON i.id = dl."invoiceId" AND i."deletedAt" IS NULL
+         WHERE dl."companyId"=$1 AND i.status NOT IN ('paid','cancelled')
+           AND dl."deletedAt" IS NULL AND dl.level > 0
+         GROUP BY dl.level ORDER BY dl.level`,
         [companyId]
       );
       return rows;
-    }, []);
+    }, []),
 
     // ─── 9. PROPERTY CONTRACTS EXPIRING (60 days) ─────────────────────────
-    const expiringContracts = await safe(async () => {
+    safe(async () => {
       const [r] = await rawQuery<any>(
         `SELECT COUNT(*)::int AS n FROM property_contracts
          WHERE "companyId"=$1 AND status='active'
@@ -191,10 +195,10 @@ execDashboardRouter.get("/overview", async (req, res) => {
         [companyId]
       );
       return Number(r?.n ?? 0);
-    }, 0);
+    }, 0),
 
     // ─── 10. FLEET MAINTENANCE DUE (30 days) ──────────────────────────────
-    const fleetMaintenance = await safe(async () => {
+    safe(async () => {
       const [r] = await rawQuery<any>(
         `SELECT COUNT(*)::int AS n FROM fleet_vehicles
          WHERE "companyId"=$1 AND "deletedAt" IS NULL
@@ -203,22 +207,22 @@ execDashboardRouter.get("/overview", async (req, res) => {
         [companyId]
       );
       return Number(r?.n ?? 0);
-    }, 0);
+    }, 0),
 
     // ─── 11. HR DOCUMENT EXPIRIES (30 days) ───────────────────────────────
-    const hrDocExpiries = await safe(async () => {
+    safe(async () => {
       const [r] = await rawQuery<any>(
         `SELECT COUNT(*)::int AS n FROM employees
-         WHERE "companyId"=$1 AND status='active'
+         WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL
            AND ("iqamaExpiry"::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
                 OR "passportExpiry"::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days')`,
         [companyId]
       );
       return Number(r?.n ?? 0);
-    }, 0);
+    }, 0),
 
     // ─── 12. MONTH-TO-DATE FINANCIALS ─────────────────────────────────────
-    const mtd = await safe(async () => {
+    safe(async () => {
       const period = currentPeriod();
       const [y, m] = period.split("-").map(Number);
       const start = `${y}-${String(m).padStart(2, "0")}-01`;
@@ -248,7 +252,8 @@ execDashboardRouter.get("/overview", async (req, res) => {
         expense: Number(expense?.v ?? 0),
         net: Number(revenue?.v ?? 0) - Number(expense?.v ?? 0),
       };
-    }, { revenue: 0, expense: 0, net: 0 });
+    }, { revenue: 0, expense: 0, net: 0 }),
+    ]); // end Promise.all
 
     // ─── ROLL-UP RISK SCORE ───────────────────────────────────────────────
     // Composite: 0..100 — higher means more attention needed
@@ -301,7 +306,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
 });
 
 // Drill-down: top overdue invoices
-execDashboardRouter.get("/overdue-invoices", async (req, res) => {
+execDashboardRouter.get("/overdue-invoices", authorize({ feature: "dashboard.executive", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     requireExec(scope);
@@ -310,7 +315,7 @@ execDashboardRouter.get("/overdue-invoices", async (req, res) => {
               i.total, COALESCE(i."paidAmount",0) AS "paidAmount",
               (i.total - COALESCE(i."paidAmount",0)) AS outstanding,
               (CURRENT_DATE - i."dueDate"::date)::int AS "daysPastDue",
-              COALESCE(i."lastDunningStage",0) AS "dunningStage",
+              COALESCE((SELECT MAX(dl.level) FROM dunning_letters dl WHERE dl."invoiceId" = i.id AND dl."deletedAt" IS NULL), 0) AS "dunningStage",
               c.name AS "clientName"
        FROM invoices i
        LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
@@ -329,7 +334,7 @@ execDashboardRouter.get("/overdue-invoices", async (req, res) => {
 });
 
 // Drill-down: critical obligations
-execDashboardRouter.get("/critical-obligations", async (req, res) => {
+execDashboardRouter.get("/critical-obligations", authorize({ feature: "dashboard.executive", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     requireExec(scope);

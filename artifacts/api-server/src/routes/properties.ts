@@ -12,7 +12,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded, roundTo2, generateTimeRef } from "../lib/businessHelpers.js";
 import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
@@ -111,7 +111,7 @@ const updateContractSchema = z.object({
   depositAmount: z.coerce.number().optional().nullable(),
   paymentDay: z.coerce.number().optional().nullable(),
   notes: z.string().optional().nullable(),
-  status: z.string().optional(),
+  status: z.enum(["active", "expired", "cancelled"]).optional(),
   contractNumber: z.string().optional().nullable(),
   ejarNumber: z.string().optional().nullable(),
   contractType: z.string().optional().nullable(),
@@ -163,7 +163,7 @@ const createContractSchema = z.object({
   depositAmount: z.coerce.number().optional().nullable(),
   paymentDay: z.coerce.number().optional().nullable(),
   notes: z.string().optional().nullable(),
-  status: z.string().optional().nullable(),
+  status: z.enum(["active", "expired", "cancelled"]).optional().nullable(),
   contractNumber: z.string().optional().nullable(),
   ejarNumber: z.string().optional().nullable(),
   contractType: z.string().optional().nullable(),
@@ -500,7 +500,7 @@ const DEPOSIT_TRANSITIONS: Record<string, readonly string[]> = {
 // short-circuit in requirePermission, so legitimate workflows are
 // unaffected. Aligning these five routes with the established
 // requirePermission pattern used by fleet, hr, crm, etc.
-router.get("/units", requirePermission("property:read"), async (req, res) => {
+router.get("/units", authorize({ feature: "properties.units", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, search, buildingId } = req.query as any;
@@ -518,23 +518,22 @@ router.get("/units", requirePermission("property:read"), async (req, res) => {
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 100));
     const offset = (page - 1) * limit;
     conditions.push(`u."deletedAt" IS NULL`);
+    const countParams = [...params];
     const limitIdx = params.length + 1;
     const offsetIdx = params.length + 2;
     params.push(limit, offset);
-    const rows = await rawQuery<any>(
-      `SELECT u.* FROM property_units u WHERE ${conditions.join(" AND ")} ORDER BY u."buildingName", u."unitNumber" LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
-      params
-    );
-    // Drop the LIMIT/OFFSET params before running the COUNT(*) query so it
-    // still matches the `conditions` WHERE clause.
-    params.pop();
-    params.pop();
-    const [countRow] = await rawQuery<any>(`SELECT COUNT(*) as total FROM property_units u WHERE ${conditions.join(" AND ")}`, params);
+    const [rows, [countRow]] = await Promise.all([
+      rawQuery<any>(
+        `SELECT u.* FROM property_units u WHERE ${conditions.join(" AND ")} ORDER BY u."buildingName", u."unitNumber" LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+        params
+      ),
+      rawQuery<any>(`SELECT COUNT(*) as total FROM property_units u WHERE ${conditions.join(" AND ")}`, countParams),
+    ]);
     res.json({ data: rows, total: Number(countRow?.total || rows.length), page, pageSize: limit });
   } catch (err) { handleRouteError(err, res, "Property units error:"); }
 });
 
-router.post("/units", requirePermission("property:create"), async (req, res) => {
+router.post("/units", authorize({ feature: "properties.units", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createUnitSchema.safeParse(req.body));
@@ -589,7 +588,7 @@ router.post("/units", requirePermission("property:create"), async (req, res) => 
        b.ownerId || null, b.parkingSpaces || 0, b.acType || null,
        b.hasKitchen || false, b.yearlyRent || null, b.insurancePolicy || null, b.insuranceExpiry || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM property_units WHERE id=$1 AND "deletedAt" IS NULL`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM property_units WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     // The GET /units/:id handler renders a timeline straight from audit_logs
     // where entity='property_units', so without this write the unit would
@@ -613,7 +612,7 @@ router.post("/units", requirePermission("property:create"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "Create unit error:"); }
 });
 
-router.get("/units/:id", requirePermission("property:read"), async (req, res) => {
+router.get("/units/:id", authorize({ feature: "properties.units", action: "view", resource: { table: "property_units", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -633,7 +632,7 @@ router.get("/units/:id", requirePermission("property:read"), async (req, res) =>
         [id, scope.companyId]
       ),
       rawQuery<any>(
-        `SELECT * FROM maintenance_requests WHERE "unitId"=$1 AND "companyId"=$2 ORDER BY id DESC LIMIT 20`,
+        `SELECT * FROM maintenance_requests WHERE "unitId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL ORDER BY id DESC LIMIT 20`,
         [id, scope.companyId]
       ),
       rawQuery<any>(
@@ -646,7 +645,7 @@ router.get("/units/:id", requirePermission("property:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Get unit error:"); }
 });
 
-router.get("/units/:id/impact-preview", requirePermission("property:read"), async (req, res) => {
+router.get("/units/:id/impact-preview", authorize({ feature: "properties.units", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -659,7 +658,7 @@ router.get("/units/:id/impact-preview", requirePermission("property:read"), asyn
   } catch (err) { handleRouteError(err, res, "Impact preview error:"); }
 });
 
-router.patch("/units/:id", requirePermission("property:update"), async (req, res) => {
+router.patch("/units/:id", authorize({ feature: "properties.units", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -765,8 +764,10 @@ router.patch("/units/:id", requirePermission("property:update"), async (req, res
       return;
     }
     params.push(id);
-    await rawExecute(`UPDATE property_units SET ${sets.join(",")} WHERE id=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM property_units WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
+    params.push(scope.companyId);
+    const { affectedRows } = await rawExecute(`UPDATE property_units SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("الوحدة غير موجودة");
+    const [row] = await rawQuery<any>(`SELECT * FROM property_units WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -794,7 +795,7 @@ router.patch("/units/:id", requirePermission("property:update"), async (req, res
   } catch (err) { handleRouteError(err, res, "Update unit error:"); }
 });
 
-router.delete("/units/:id", requirePermission("property:delete"), async (req, res) => {
+router.delete("/units/:id", authorize({ feature: "properties.units", action: "delete", resource: { table: "property_units", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -815,7 +816,7 @@ router.delete("/units/:id", requirePermission("property:delete"), async (req, re
       );
     }
     const [activeMaint] = await rawQuery<any>(
-      `SELECT id FROM maintenance_requests WHERE "unitId"=$1 AND "companyId"=$2 AND status NOT IN ('completed','closed','rejected','cancelled') LIMIT 1`,
+      `SELECT id FROM maintenance_requests WHERE "unitId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL AND status NOT IN ('completed','closed','rejected','cancelled') LIMIT 1`,
       [id, scope.companyId]
     );
     if (activeMaint) {
@@ -825,7 +826,8 @@ router.delete("/units/:id", requirePermission("property:delete"), async (req, re
       );
     }
 
-    await rawExecute(`UPDATE property_units SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE property_units SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("الوحدة غير موجودة");
 
     emitEvent({
       companyId: scope.companyId,
@@ -849,7 +851,7 @@ router.delete("/units/:id", requirePermission("property:delete"), async (req, re
 });
 
 // Impact preview — shows what will happen when the rental contract is created
-router.post("/contracts/impact-preview", requirePermission("property:read"), async (req, res) => {
+router.post("/contracts/impact-preview", authorize({ feature: "properties.contracts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { unitId, tenantId, monthlyRent, startDate, endDate, securityDeposit } = zodParse(contractImpactPreviewSchema.safeParse(req.body));
@@ -979,7 +981,7 @@ router.post("/contracts/impact-preview", requirePermission("property:read"), asy
   }
 });
 
-router.get("/contracts", requirePermission("property:read"), async (req, res) => {
+router.get("/contracts", authorize({ feature: "properties.contracts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
@@ -995,7 +997,7 @@ router.get("/contracts", requirePermission("property:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Rental contracts error:"); }
 });
 
-router.get("/contracts/:id", requirePermission("property:read"), async (req, res) => {
+router.get("/contracts/:id", authorize({ feature: "properties.contracts", action: "view", resource: { table: "property_contracts", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const contractId = parseId(req.params.id, "id");
@@ -1012,7 +1014,7 @@ router.get("/contracts/:id", requirePermission("property:read"), async (req, res
   } catch (err) { handleRouteError(err, res, "Get contract error:"); }
 });
 
-router.post("/contracts", requirePermission("property:create"), async (req, res) => {
+router.post("/contracts", authorize({ feature: "properties.contracts", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createContractSchema.safeParse(req.body)) as any;
@@ -1111,6 +1113,11 @@ router.post("/contracts", requirePermission("property:create"), async (req, res)
       else if (frequency === 'semi_annual') installmentCount = Math.ceil(contractMonths / 6);
       else if (frequency === 'annual') installmentCount = Math.ceil(contractMonths / 12);
       else installmentCount = contractMonths;
+    }
+
+    if (b.ownerId) {
+      const [owner] = await rawQuery<{ id: number }>(`SELECT id FROM property_owners WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`, [b.ownerId, scope.companyId]);
+      if (!owner) throw new ValidationError("المالك غير موجود", { field: "ownerId", fix: "اختر مالكاً مسجلاً." });
     }
 
     const contractNumber = b.contractNumber || generateTimeRef("RC");
@@ -1218,7 +1225,7 @@ router.post("/contracts", requirePermission("property:create"), async (req, res)
   }
 });
 
-router.patch("/contracts/:id", requirePermission("property:update"), async (req, res) => {
+router.patch("/contracts/:id", authorize({ feature: "properties.contracts", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1337,7 +1344,7 @@ router.patch("/contracts/:id", requirePermission("property:update"), async (req,
     addField("registrationDate", b.registrationDate);
     if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
-    const rows = await rawQuery<any>(`UPDATE rental_contracts SET ${fields.join(", ")}, "updatedAt"=NOW() WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
+    const rows = await rawQuery<any>(`UPDATE rental_contracts SET ${fields.join(", ")}, "updatedAt"=NOW() WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`, params);
     if (rows.length === 0) throw new NotFoundError("العقد غير موجود");
 
     createAuditLog({
@@ -1366,7 +1373,7 @@ router.patch("/contracts/:id", requirePermission("property:update"), async (req,
   } catch (err) { handleRouteError(err, res, "Update contract error:"); }
 });
 
-router.delete("/contracts/:id", requirePermission("property:delete"), async (req, res) => {
+router.delete("/contracts/:id", authorize({ feature: "properties.contracts", action: "delete", resource: { table: "property_contracts", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1381,7 +1388,8 @@ router.delete("/contracts/:id", requirePermission("property:delete"), async (req
         { field: "status", fix: "أنهِ العقد عبر /contracts/:id/terminate قبل الحذف" }
       );
     }
-    await rawExecute(`UPDATE rental_contracts SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE rental_contracts SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("العقد غير موجود");
 
     emitEvent({
       companyId: scope.companyId,
@@ -1410,7 +1418,7 @@ router.delete("/contracts/:id", requirePermission("property:delete"), async (req
 // ────────────────────────────────────────────────────────────────────────────
 
 /** Renew an active contract — extends endDate, generates new installments, resets obligations */
-router.post("/contracts/:id/renew", requirePermission("property:update"), async (req, res) => {
+router.post("/contracts/:id/renew", authorize({ feature: "properties.contracts", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1530,7 +1538,7 @@ router.post("/contracts/:id/renew", requirePermission("property:update"), async 
 });
 
 /** Terminate an active contract — early termination with optional fee */
-router.post("/contracts/:id/terminate", requirePermission("property:update"), async (req, res) => {
+router.post("/contracts/:id/terminate", authorize({ feature: "properties.contracts", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1574,7 +1582,7 @@ router.post("/contracts/:id/terminate", requirePermission("property:update"), as
         // Free the unit
         if (contract.unitId) {
           await client.query(
-            `UPDATE property_units SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status IN ('occupied','rented')`,
+            `UPDATE property_units SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status IN ('occupied','rented') AND "deletedAt" IS NULL`,
             [contract.unitId, scope.companyId]
           );
         }
@@ -1621,7 +1629,7 @@ router.post("/contracts/:id/terminate", requirePermission("property:update"), as
   }
 });
 
-router.get("/tenants/list", requirePermission("property:read"), async (req, res) => {
+router.get("/tenants/list", authorize({ feature: "properties.tenants", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { search } = req.query as any;
@@ -1632,66 +1640,68 @@ router.get("/tenants/list", requirePermission("property:read"), async (req, res)
       tParams.push(`%${search}%`);
       tConditions.push(`(t.name ILIKE $${tParams.length} OR t.phone ILIKE $${tParams.length} OR t."nationalId" ILIKE $${tParams.length})`);
     }
-    const standaloneRows = await rawQuery<any>(
-      `SELECT
-        t.id,
-        t.name,
-        t.phone,
-        t.email,
-        t."nationalId",
-        t.nationality,
-        COUNT(DISTINCT c.id) AS "totalContracts",
-        COUNT(DISTINCT c.id) FILTER (WHERE c.status='active') AS "activeContracts",
-        MAX(CASE WHEN c.status='active' THEN u."unitNumber" END) AS "currentUnit",
-        COALESCE(SUM(rp."paidAmount"),0) AS "totalPaid",
-        COALESCE(SUM(CASE WHEN rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE THEN rp.amount - rp."paidAmount" ELSE 0 END),0) AS "overdueAmount",
-        t."createdAt"
-       FROM tenants t
-       LEFT JOIN rental_contracts c ON (c."tenantId"=t.id OR c."tenantName"=t.name) AND c."companyId"=$1 AND c."deletedAt" IS NULL
-       LEFT JOIN property_units u ON u.id=c."unitId"
-       LEFT JOIN rent_payments rp ON rp."contractId"=c.id
-       WHERE ${tConditions.join(" AND ")}
-       GROUP BY t.id, t.name, t.phone, t.email, t."nationalId", t.nationality, t."createdAt"
-       ORDER BY t.name
-       LIMIT 500`,
-      tParams
-    );
-
     const conditions = [`c."companyId" = $1`];
     const cParams: any[] = [scope.companyId];
     if (search) { cParams.push(`%${search}%`); conditions.push(`(c."tenantName" ILIKE $${cParams.length} OR c."tenantPhone" ILIKE $${cParams.length} OR c."tenantIdNumber" ILIKE $${cParams.length})`); }
-    const contractRows = await rawQuery<any>(
-      `SELECT
-        CONCAT('c-', ROW_NUMBER() OVER (ORDER BY c."tenantName")) AS id,
-        c."tenantName" AS name,
-        c."tenantPhone" AS phone,
-        c."tenantEmail" AS email,
-        c."tenantIdNumber" AS "nationalId",
-        NULL AS nationality,
-        COUNT(DISTINCT c.id) AS "totalContracts",
-        COUNT(DISTINCT c.id) FILTER (WHERE c.status='active') AS "activeContracts",
-        MAX(CASE WHEN c.status='active' THEN u."unitNumber" END) AS "currentUnit",
-        COALESCE(SUM(rp."paidAmount"),0) AS "totalPaid",
-        COALESCE(SUM(CASE WHEN rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE THEN rp.amount - rp."paidAmount" ELSE 0 END),0) AS "overdueAmount",
-        TRUE AS "contractOnly"
-       FROM rental_contracts c
-       LEFT JOIN property_units u ON u.id=c."unitId"
-       LEFT JOIN rent_payments rp ON rp."contractId"=c.id
-       WHERE ${conditions.join(" AND ")}
-         AND c."tenantName" NOT IN (SELECT name FROM tenants WHERE "companyId"=$1)
-         AND (c."tenantId" IS NULL OR c."tenantId" NOT IN (SELECT id FROM tenants WHERE "companyId"=$1))
-       GROUP BY c."tenantName", c."tenantPhone", c."tenantEmail", c."tenantIdNumber"
-       ORDER BY c."tenantName"
-       LIMIT 500`,
-      cParams
-    );
+
+    const [standaloneRows, contractRows] = await Promise.all([
+      rawQuery<any>(
+        `SELECT
+          t.id,
+          t.name,
+          t.phone,
+          t.email,
+          t."nationalId",
+          t.nationality,
+          COUNT(DISTINCT c.id) AS "totalContracts",
+          COUNT(DISTINCT c.id) FILTER (WHERE c.status='active') AS "activeContracts",
+          MAX(CASE WHEN c.status='active' THEN u."unitNumber" END) AS "currentUnit",
+          COALESCE(SUM(rp."paidAmount"),0) AS "totalPaid",
+          COALESCE(SUM(CASE WHEN rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE THEN rp.amount - rp."paidAmount" ELSE 0 END),0) AS "overdueAmount",
+          t."createdAt"
+         FROM tenants t
+         LEFT JOIN rental_contracts c ON (c."tenantId"=t.id OR c."tenantName"=t.name) AND c."companyId"=$1 AND c."deletedAt" IS NULL
+         LEFT JOIN property_units u ON u.id=c."unitId"
+         LEFT JOIN rent_payments rp ON rp."contractId"=c.id
+         WHERE ${tConditions.join(" AND ")}
+         GROUP BY t.id, t.name, t.phone, t.email, t."nationalId", t.nationality, t."createdAt"
+         ORDER BY t.name
+         LIMIT 500`,
+        tParams
+      ),
+      rawQuery<any>(
+        `SELECT
+          CONCAT('c-', ROW_NUMBER() OVER (ORDER BY c."tenantName")) AS id,
+          c."tenantName" AS name,
+          c."tenantPhone" AS phone,
+          c."tenantEmail" AS email,
+          c."tenantIdNumber" AS "nationalId",
+          NULL AS nationality,
+          COUNT(DISTINCT c.id) AS "totalContracts",
+          COUNT(DISTINCT c.id) FILTER (WHERE c.status='active') AS "activeContracts",
+          MAX(CASE WHEN c.status='active' THEN u."unitNumber" END) AS "currentUnit",
+          COALESCE(SUM(rp."paidAmount"),0) AS "totalPaid",
+          COALESCE(SUM(CASE WHEN rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE THEN rp.amount - rp."paidAmount" ELSE 0 END),0) AS "overdueAmount",
+          TRUE AS "contractOnly"
+         FROM rental_contracts c
+         LEFT JOIN property_units u ON u.id=c."unitId"
+         LEFT JOIN rent_payments rp ON rp."contractId"=c.id
+         WHERE ${conditions.join(" AND ")}
+           AND c."tenantName" NOT IN (SELECT name FROM tenants WHERE "companyId"=$1)
+           AND (c."tenantId" IS NULL OR c."tenantId" NOT IN (SELECT id FROM tenants WHERE "companyId"=$1))
+         GROUP BY c."tenantName", c."tenantPhone", c."tenantEmail", c."tenantIdNumber"
+         ORDER BY c."tenantName"
+         LIMIT 500`,
+        cParams
+      ),
+    ]);
 
     const allRows = [...standaloneRows, ...contractRows];
     res.json({ data: allRows, total: allRows.length });
   } catch (err) { handleRouteError(err, res, "Tenants list error:"); }
 });
 
-router.patch("/tenants/:id", requirePermission("property:update"), async (req, res) => {
+router.patch("/tenants/:id", authorize({ feature: "properties.tenants", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1753,7 +1763,7 @@ router.patch("/tenants/:id", requirePermission("property:update"), async (req, r
     addField("notes", b.notes);
     if (fields.length === 0) { res.json(existing); return; }
     params.push(id); params.push(scope.companyId);
-    const rows = await rawQuery<any>(`UPDATE tenants SET ${fields.join(", ")}, "updatedAt"=NOW() WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
+    const rows = await rawQuery<any>(`UPDATE tenants SET ${fields.join(", ")}, "updatedAt"=NOW() WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`, params);
     if (!rows[0]) throw new NotFoundError("المستأجر غير موجود");
 
     createAuditLog({
@@ -1782,7 +1792,7 @@ router.patch("/tenants/:id", requirePermission("property:update"), async (req, r
   } catch (err) { handleRouteError(err, res, "Update tenant error:"); }
 });
 
-router.delete("/tenants/:id", requirePermission("property:delete"), async (req, res) => {
+router.delete("/tenants/:id", authorize({ feature: "properties.tenants", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1805,7 +1815,8 @@ router.delete("/tenants/:id", requirePermission("property:delete"), async (req, 
       );
     }
 
-    await rawExecute(`UPDATE tenants SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE tenants SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("المستأجر غير موجود");
 
     emitEvent({
       companyId: scope.companyId,
@@ -1828,7 +1839,7 @@ router.delete("/tenants/:id", requirePermission("property:delete"), async (req, 
   } catch (err) { handleRouteError(err, res, "Delete tenant error:"); }
 });
 
-router.get("/payments", requirePermission("property:read"), async (req, res) => {
+router.get("/payments", authorize({ feature: "properties.payments", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, contractId } = req.query as any;
@@ -1844,7 +1855,7 @@ router.get("/payments", requirePermission("property:read"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "Rent payments error:"); }
 });
 
-router.get("/payments/:id", requirePermission("property:read"), async (req, res): Promise<any> => {
+router.get("/payments/:id", authorize({ feature: "properties.payments", action: "view", resource: { table: "rent_payments", idParam: "id" } }), async (req, res): Promise<any> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1861,7 +1872,7 @@ router.get("/payments/:id", requirePermission("property:read"), async (req, res)
   } catch (err) { handleRouteError(err, res, "Property payment detail error:"); }
 });
 
-router.post("/payments/:id/pay", requirePermission("property:update"), async (req, res) => {
+router.post("/payments/:id/pay", authorize({ feature: "properties.payments", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { id } = req.params;
@@ -1876,11 +1887,11 @@ router.post("/payments/:id/pay", requirePermission("property:update"), async (re
     const { row, journalEntryId: finalJournalId } = await withTransaction(async (client) => {
       // Lock the payment row to prevent concurrent pay requests.
       const lockRes = await client.query(
-        `SELECT rp.*, c.status AS "contractStatus", c."tenantName", u."unitNumber", u."buildingName", u.id AS "unitId"
+        `SELECT rp.*, c.status AS "contractStatus", c."tenantName", c."companyId" AS "contractCompanyId", u."unitNumber", u."buildingName", u.id AS "unitId"
            FROM rent_payments rp
            JOIN rental_contracts c ON c.id = rp."contractId"
            LEFT JOIN property_units u ON u.id = c."unitId"
-          WHERE rp.id = $1 AND rp."companyId" = $2
+          WHERE rp.id = $1 AND c."companyId" = $2
           FOR UPDATE OF rp`,
         [Number(id), scope.companyId]
       );
@@ -1930,9 +1941,9 @@ router.post("/payments/:id/pay", requirePermission("property:update"), async (re
                 "paidDate"   = $2,
                 method       = $3,
                 status       = CASE WHEN "paidAmount" + $1 >= amount THEN 'paid' ELSE 'partial' END,
-                "journalEntryId" = COALESCE("journalEntryId", $4),
+                notes        = COALESCE(notes || E'\n', '') || 'JE#' || COALESCE($4::text, '-'),
                 "updatedAt"  = NOW()
-          WHERE id = $5`,
+          WHERE id = $5 AND "deletedAt" IS NULL`,
         [paidAmount, b.paidDate || todayISO(), b.method || 'bank_transfer', journalEntryId, Number(id)]
       );
 
@@ -1957,7 +1968,7 @@ router.post("/payments/:id/pay", requirePermission("property:update"), async (re
   } catch (err) { handleRouteError(err, res, "Record rent payment error:"); }
 });
 
-router.post("/late-rent/escalate", requirePermission("property:create"), async (req, res) => {
+router.post("/late-rent/escalate", authorize({ feature: "properties.payments", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -2038,14 +2049,14 @@ router.post("/late-rent/escalate", requirePermission("property:create"), async (
         // H11 fix: use proper 2-decimal financial rounding.
         const penaltyResult = await withTransaction(async (client) => {
           const lockRes = await client.query(
-            `SELECT id, amount FROM rent_payments WHERE id = $1 FOR UPDATE`,
+            `SELECT id, amount FROM rent_payments WHERE id = $1 AND "deletedAt" IS NULL FOR UPDATE`,
             [payment.id]
           );
           const locked = lockRes.rows[0];
           if (!locked) throw new NotFoundError("القسط غير موجود");
           const lateFee = roundTo2(Number(locked.amount) * 0.02);
           await client.query(
-            `UPDATE rent_payments SET amount=amount+$1, notes=CONCAT(COALESCE(notes,''), ' | غرامة تأخير 2%: ',$2::text) WHERE id=$3`,
+            `UPDATE rent_payments SET amount=amount+$1, notes=CONCAT(COALESCE(notes,''), ' | غرامة تأخير 2%: ',$2::text) WHERE id=$3 AND "deletedAt" IS NULL`,
             [lateFee, lateFee.toFixed(2), locked.id]
           );
           return { lateFee, newAmount: Number(locked.amount) + lateFee };
@@ -2095,7 +2106,7 @@ router.post("/late-rent/escalate", requirePermission("property:create"), async (
   } catch (err) { handleRouteError(err, res, "Late rent escalation error:"); }
 });
 
-router.get("/maintenance-requests", requirePermission("property:read"), async (req, res) => {
+router.get("/maintenance-requests", authorize({ feature: "properties.maintenance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
@@ -2110,7 +2121,7 @@ router.get("/maintenance-requests", requirePermission("property:read"), async (r
   } catch (err) { handleRouteError(err, res, "Maintenance requests error:"); }
 });
 
-router.get("/maintenance/:id", requirePermission("property:read"), async (req, res) => {
+router.get("/maintenance/:id", authorize({ feature: "properties.maintenance", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2129,7 +2140,7 @@ router.get("/maintenance/:id", requirePermission("property:read"), async (req, r
   } catch (err) { handleRouteError(err, res, "Get maintenance request detail error:"); }
 });
 
-router.post("/maintenance-requests", requirePermission("property:create"), async (req, res) => {
+router.post("/maintenance-requests", authorize({ feature: "properties.maintenance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createMaintenanceRequestSchema.safeParse(req.body)) as any;
@@ -2177,6 +2188,18 @@ router.post("/maintenance-requests", requirePermission("property:create"), async
 
     let assignedTechnicianId = b.assignedTo || null;
     let techDistance: number | null = null;
+    if (assignedTechnicianId) {
+      const [tech] = await rawQuery<{ id: number }>(
+        `SELECT id FROM technicians WHERE id = $1 AND "companyId" = $2 AND status != 'inactive'`,
+        [assignedTechnicianId, scope.companyId]
+      );
+      if (!tech) {
+        throw new ValidationError("الفني المختار غير موجود", {
+          field: "assignedTo",
+          fix: "اختر فنياً مسجلاً ونشطاً في الشركة",
+        });
+      }
+    }
     if (!assignedTechnicianId && technicians.length > 0) {
       let best = technicians[0];
       let bestScore = -Infinity;
@@ -2215,8 +2238,8 @@ router.post("/maintenance-requests", requirePermission("property:create"), async
       try {
         const [techEmp] = await rawQuery<any>(
           `SELECT t."employeeId", ea.id AS "assignmentId" FROM technicians t
-           LEFT JOIN employee_assignments ea ON ea."employeeId"=t."employeeId" AND ea.status='active'
-           WHERE t.id=$1`, [assignedTechnicianId]);
+           LEFT JOIN employee_assignments ea ON ea."employeeId"=t."employeeId" AND ea.status='active' AND ea."companyId"=$2
+           WHERE t.id=$1 AND t."companyId"=$2`, [assignedTechnicianId, scope.companyId]);
         if (techEmp?.assignmentId) {
           createNotification({
             companyId: scope.companyId,
@@ -2256,8 +2279,8 @@ router.post("/maintenance-requests", requirePermission("property:create"), async
       let techAssignmentId = null;
       if (assignedTechnicianId) {
         const [techEmp] = await rawQuery<any>(
-          `SELECT ea.id FROM technicians t LEFT JOIN employee_assignments ea ON ea."employeeId"=t."employeeId" AND ea.status='active' WHERE t.id=$1`,
-          [assignedTechnicianId]
+          `SELECT ea.id FROM technicians t LEFT JOIN employee_assignments ea ON ea."employeeId"=t."employeeId" AND ea.status='active' AND ea."companyId"=$2 WHERE t.id=$1 AND t."companyId"=$2`,
+          [assignedTechnicianId, scope.companyId]
         );
         if (techEmp) techAssignmentId = techEmp.id;
       }
@@ -2289,14 +2312,14 @@ router.post("/maintenance-requests", requirePermission("property:create"), async
   } catch (err) { handleRouteError(err, res, "Create maintenance request error:"); }
 });
 
-router.patch("/maintenance-requests/:id/approve", requirePermission("property:update"), async (req, res) => {
+router.patch("/maintenance-requests/:id/approve", authorize({ feature: "properties.maintenance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { approved, notes } = zodParse(approveMaintenanceSchema.safeParse(req.body));
 
     const [mr] = await rawQuery<any>(
-      `SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`,
+      `SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!mr) throw new NotFoundError("طلب الصيانة غير موجود");
@@ -2356,12 +2379,12 @@ router.patch("/maintenance-requests/:id/approve", requirePermission("property:up
   }
 });
 
-router.post("/maintenance-requests/:id/complete", requirePermission("property:create"), async (req, res) => {
+router.post("/maintenance-requests/:id/complete", authorize({ feature: "properties.maintenance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(completeMaintenanceSchema.safeParse(req.body)) as any;
-    const [mr] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [mr] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!mr) throw new NotFoundError("الطلب غير موجود");
 
     // Closure preconditions — report + after photos + cost + materials.
@@ -2456,11 +2479,11 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
     if (mr.assignedTo) {
       try {
         const completedCount = await rawQuery<any>(
-          `SELECT COUNT(*) AS cnt FROM maintenance_requests WHERE "assignedTo"=$1 AND status='completed' AND "companyId"=$2`,
+          `SELECT COUNT(*) AS cnt FROM maintenance_requests WHERE "assignedTo"=$1 AND status='completed' AND "companyId"=$2 AND "deletedAt" IS NULL`,
           [mr.assignedTo, scope.companyId]
         );
         const newRating = Math.min(5, 3 + Math.log10(Number(completedCount[0]?.cnt || 1) + 1));
-        await rawExecute(`UPDATE technicians SET rating=$1 WHERE id=$2`, [parseFloat(newRating.toFixed(2)), mr.assignedTo]);
+        await rawExecute(`UPDATE technicians SET rating=$1 WHERE id=$2 AND "companyId"=$3`, [parseFloat(newRating.toFixed(2)), mr.assignedTo, scope.companyId]);
       } catch (ratingErr) {
         logger.error(ratingErr, "Failed to update technician rating:");
       }
@@ -2527,7 +2550,7 @@ router.post("/maintenance-requests/:id/complete", requirePermission("property:cr
   }
 });
 
-router.get("/technicians", requirePermission("property:read"), async (req, res) => {
+router.get("/technicians", authorize({ feature: "properties.maintenance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(`SELECT * FROM technicians WHERE "companyId"=$1 ORDER BY name LIMIT 500`, [scope.companyId]);
@@ -2535,7 +2558,7 @@ router.get("/technicians", requirePermission("property:read"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "Technicians error:"); }
 });
 
-router.get("/tenants", requirePermission("property:read"), async (req, res) => {
+router.get("/tenants", authorize({ feature: "properties.tenants", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { search } = req.query as any;
@@ -2547,11 +2570,11 @@ router.get("/tenants", requirePermission("property:read"), async (req, res) => {
       `SELECT id, name, phone, email, "nationalId", nationality, "idType", notes, "createdAt" FROM tenants WHERE ${whereClause} ORDER BY name LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Tenants error:"); }
 });
 
-router.post("/tenants", requirePermission("property:create"), async (req, res) => {
+router.post("/tenants", authorize({ feature: "properties.tenants", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createTenantSchema.safeParse(req.body)) as any;
@@ -2579,7 +2602,7 @@ router.post("/tenants", requirePermission("property:create"), async (req, res) =
        b.emergencyContact || null, b.emergencyName || null, b.maritalStatus || null, b.occupation || null,
        b.monthlyIncome || null, b.previousAddress || null, b.previousLandlord || null, b.previousLandlordPhone || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM tenants WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM tenants WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "tenants", entityId: insertId,
@@ -2594,7 +2617,9 @@ router.post("/tenants", requirePermission("property:create"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "Create tenant error:"); }
 });
 
-router.get("/tenants/:id", requirePermission("property:read"), async (req, res) => {
+// RBAC v2: tenant detail with maskFields — nationalId/phone are
+// declared sensitive in featureCatalog so per-role policies mask them.
+router.get("/tenants/:id", authorize({ feature: "properties.tenants", action: "view", resource: { table: "tenants", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rawId = decodeURIComponent(String(req.params.id));
@@ -2662,7 +2687,7 @@ router.get("/tenants/:id", requirePermission("property:read"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "Tenant detail error:"); }
 });
 
-router.get("/buildings", requirePermission("property:read"), async (req, res) => {
+router.get("/buildings", authorize({ feature: "properties.buildings", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { search } = req.query as any;
@@ -2690,7 +2715,7 @@ router.get("/buildings", requirePermission("property:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Buildings list error:"); }
 });
 
-router.get("/buildings/:id", requirePermission("property:read"), async (req, res) => {
+router.get("/buildings/:id", authorize({ feature: "properties.buildings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2701,7 +2726,7 @@ router.get("/buildings/:id", requirePermission("property:read"), async (req, res
         COUNT(u.id) FILTER (WHERE u.status='available') AS "availableUnits"
        FROM property_buildings b
        LEFT JOIN property_units u ON (u."buildingId"=b.id OR u."buildingName"=b.name) AND u."companyId"=b."companyId"
-       WHERE b.id=$1 AND b."companyId"=$2
+       WHERE b.id=$1 AND b."companyId"=$2 AND b."deletedAt" IS NULL
        GROUP BY b.id`,
       [id, scope.companyId]
     );
@@ -2710,7 +2735,7 @@ router.get("/buildings/:id", requirePermission("property:read"), async (req, res
   } catch (err) { handleRouteError(err, res, "Building detail error:"); }
 });
 
-router.post("/buildings", requirePermission("property:create"), async (req, res) => {
+router.post("/buildings", authorize({ feature: "properties.buildings", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createBuildingSchema.safeParse(req.body)) as any;
@@ -2726,6 +2751,10 @@ router.post("/buildings", requirePermission("property:create"), async (req, res)
         throw new ValidationError("المالك غير موجود", { field: "ownerId", fix: "اختر مالكاً مسجلاً" });
       }
     }
+    if (b.managerId) {
+      const [mgr] = await rawQuery<{ id: number }>(`SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`, [b.managerId, scope.companyId]);
+      if (!mgr) throw new ValidationError("المدير غير موجود", { field: "managerId", fix: "اختر موظفاً من قائمة الموظفين." });
+    }
     const nationalAddress = b.nationalAddress ? (typeof b.nationalAddress === 'string' ? b.nationalAddress : JSON.stringify(b.nationalAddress)) : null;
     const { insertId } = await rawExecute(
       `INSERT INTO property_buildings ("companyId",name,address,city,type,"deedNumber","deedDate","buildingPermitNumber","nationalAddress","latitude","longitude","totalUnits","totalArea","yearBuilt","ownerId","managerId","notes")
@@ -2734,7 +2763,7 @@ router.post("/buildings", requirePermission("property:create"), async (req, res)
        b.deedNumber || null, b.deedDate || null, b.buildingPermitNumber || null, nationalAddress, b.latitude || null, b.longitude || null,
        b.totalUnits || 0, b.totalArea || null, b.yearBuilt || null, b.ownerId || null, b.managerId || null, b.description || b.notes || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM property_buildings WHERE id=$1 AND "deletedAt" IS NULL`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM property_buildings WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "property_buildings", entityId: insertId,
@@ -2782,7 +2811,7 @@ router.post("/buildings", requirePermission("property:create"), async (req, res)
   } catch (err) { handleRouteError(err, res, "Create building error:"); }
 });
 
-router.patch("/buildings/:id", requirePermission("property:update"), async (req, res) => {
+router.patch("/buildings/:id", authorize({ feature: "properties.buildings", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2828,8 +2857,12 @@ router.patch("/buildings/:id", requirePermission("property:update"), async (req,
     }
     if (Object.keys(after).length === 0) { res.json(existing); return; }
     params.push(id);
-    await rawExecute(`UPDATE property_buildings SET ${sets.join(",")}, "updatedAt"=NOW() WHERE id=$${params.length}`, params);
-    const [row] = await rawQuery<any>(`SELECT * FROM property_buildings WHERE id=$1 AND "deletedAt" IS NULL`, [id]);
+    // sets already starts with `"updatedAt"=NOW()` — do not append a second
+    // assignment or PostgreSQL raises 42601 "multiple assignments to same column".
+    params.push(scope.companyId);
+    const { affectedRows } = await rawExecute(`UPDATE property_buildings SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("المبنى غير موجود");
+    const [row] = await rawQuery<any>(`SELECT * FROM property_buildings WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -2857,7 +2890,7 @@ router.patch("/buildings/:id", requirePermission("property:update"), async (req,
   } catch (err) { handleRouteError(err, res, "Update building error:"); }
 });
 
-router.delete("/buildings/:id", requirePermission("property:delete"), async (req, res) => {
+router.delete("/buildings/:id", authorize({ feature: "properties.buildings", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2878,7 +2911,8 @@ router.delete("/buildings/:id", requirePermission("property:delete"), async (req
       );
     }
 
-    await rawExecute(`UPDATE property_buildings SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE property_buildings SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("المبنى غير موجود");
 
     emitEvent({
       companyId: scope.companyId,
@@ -2901,7 +2935,7 @@ router.delete("/buildings/:id", requirePermission("property:delete"), async (req
   } catch (err) { handleRouteError(err, res, "Delete building error:"); }
 });
 
-router.get("/maintenance", requirePermission("property:read"), async (req, res) => {
+router.get("/maintenance", authorize({ feature: "properties.maintenance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status } = req.query as any;
@@ -2916,7 +2950,7 @@ router.get("/maintenance", requirePermission("property:read"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "Property maintenance error:"); }
 });
 
-router.post("/maintenance", requirePermission("property:create"), async (req, res) => {
+router.post("/maintenance", authorize({ feature: "properties.maintenance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createMaintenanceSimpleSchema.safeParse(req.body)) as any;
@@ -2958,37 +2992,48 @@ router.post("/maintenance", requirePermission("property:create"), async (req, re
   } catch (err) { handleRouteError(err, res, "Create property maintenance error:"); }
 });
 
-router.get("/stats", requirePermission("property:read"), async (req, res) => {
+router.get("/stats", authorize({ feature: "properties.units", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [units] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='available') as available, COUNT(*) FILTER (WHERE status='rented') as rented, COUNT(*) FILTER (WHERE status='under_maintenance') as "underMaintenance" FROM property_units WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [contracts] = await rawQuery<any>(`
-      SELECT
-        COUNT(*) as active,
-        COUNT(*) FILTER (WHERE status='active' AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days') as "expiring30",
-        COUNT(*) FILTER (WHERE status='active' AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '60 days') as "expiring60",
-        COUNT(*) FILTER (WHERE status='active' AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '90 days') as "expiring90"
-      FROM rental_contracts WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [revenue] = await rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) as "totalCollected", COALESCE(SUM(amount),0) as "totalExpected" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" WHERE c."companyId"=$1 AND c."deletedAt" IS NULL`, [cid]);
-    const [monthlyRevenue] = await rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) as "monthlyCollected", COALESCE(SUM(amount),0) as "monthlyExpected" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND DATE_TRUNC('month',rp."dueDate")=DATE_TRUNC('month',CURRENT_DATE)`, [cid]);
-    const [annualRevenue] = await rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) as "annualCollected", COALESCE(SUM(amount),0) as "annualExpected" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND DATE_TRUNC('year',rp."dueDate")=DATE_TRUNC('year',CURRENT_DATE)`, [cid]);
-    const [overdue] = await rawQuery<any>(`SELECT COUNT(*) as count, COALESCE(SUM(amount - "paidAmount"),0) as "overdueAmount" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE`, [cid]);
-    const [maintenance] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status NOT IN ('completed','closed')) as "openTickets", COUNT(*) FILTER (WHERE priority='critical') as "criticalTickets" FROM maintenance_requests WHERE "companyId"=$1`, [cid]);
-    const buildingPerf = await rawQuery<any>(`
-      SELECT b.id, b.name,
-        COUNT(u.id) AS "totalUnits",
-        COUNT(u.id) FILTER (WHERE u.status='rented') AS "rentedUnits",
-        COALESCE(SUM(rp."paidAmount"),0) AS "totalRevenue",
-        COALESCE(SUM(rp.amount),0) AS "totalExpected"
-      FROM property_buildings b
-      LEFT JOIN property_units u ON u."buildingId"=b.id AND u."companyId"=$1
-      LEFT JOIN rental_contracts rc ON rc."unitId"=u.id AND rc."companyId"=$1 AND rc."deletedAt" IS NULL
-      LEFT JOIN rent_payments rp ON rp."contractId"=rc.id
-      WHERE b."companyId"=$1
-      GROUP BY b.id, b.name
-      ORDER BY "totalRevenue" DESC
-    `, [cid]);
+    const [
+      [units],
+      [contracts],
+      [revenue],
+      [monthlyRevenue],
+      [annualRevenue],
+      [overdue],
+      [maintenance],
+      buildingPerf,
+    ] = await Promise.all([
+      rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='available') as available, COUNT(*) FILTER (WHERE status='rented') as rented, COUNT(*) FILTER (WHERE status='under_maintenance') as "underMaintenance" FROM property_units WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`
+        SELECT
+          COUNT(*) as active,
+          COUNT(*) FILTER (WHERE status='active' AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days') as "expiring30",
+          COUNT(*) FILTER (WHERE status='active' AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '60 days') as "expiring60",
+          COUNT(*) FILTER (WHERE status='active' AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '90 days') as "expiring90"
+        FROM rental_contracts WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) as "totalCollected", COALESCE(SUM(amount),0) as "totalExpected" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" WHERE c."companyId"=$1 AND c."deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) as "monthlyCollected", COALESCE(SUM(amount),0) as "monthlyExpected" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND DATE_TRUNC('month',rp."dueDate")=DATE_TRUNC('month',CURRENT_DATE)`, [cid]),
+      rawQuery<any>(`SELECT COALESCE(SUM("paidAmount"),0) as "annualCollected", COALESCE(SUM(amount),0) as "annualExpected" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND DATE_TRUNC('year',rp."dueDate")=DATE_TRUNC('year',CURRENT_DATE)`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as count, COALESCE(SUM(amount - "paidAmount"),0) as "overdueAmount" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status NOT IN ('completed','closed')) as "openTickets", COUNT(*) FILTER (WHERE priority='critical') as "criticalTickets" FROM maintenance_requests WHERE "companyId"=$1`, [cid]),
+      rawQuery<any>(`
+        SELECT b.id, b.name,
+          COUNT(u.id) AS "totalUnits",
+          COUNT(u.id) FILTER (WHERE u.status='rented') AS "rentedUnits",
+          COALESCE(SUM(rp."paidAmount"),0) AS "totalRevenue",
+          COALESCE(SUM(rp.amount),0) AS "totalExpected"
+        FROM property_buildings b
+        LEFT JOIN property_units u ON u."buildingId"=b.id AND u."companyId"=$1
+        LEFT JOIN rental_contracts rc ON rc."unitId"=u.id AND rc."companyId"=$1 AND rc."deletedAt" IS NULL
+        LEFT JOIN rent_payments rp ON rp."contractId"=rc.id
+        WHERE b."companyId"=$1
+        GROUP BY b.id, b.name
+        ORDER BY "totalRevenue" DESC
+      `, [cid]),
+    ]);
     const occupancyRate = Number(units.total) > 0 ? Math.round((Number(units.rented) / Number(units.total)) * 100) : 0;
     const collectionRate = Number(revenue.totalExpected) > 0 ? Math.round((Number(revenue.totalCollected) / Number(revenue.totalExpected)) * 100) : 0;
     res.json({
@@ -3025,11 +3070,11 @@ router.get("/stats", requirePermission("property:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Properties stats error:"); }
 });
 
-router.patch("/maintenance-requests/:id", requirePermission("property:update"), async (req, res) => {
+router.patch("/maintenance-requests/:id", authorize({ feature: "properties.maintenance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("الطلب غير موجود");
     const b = zodParse(updateMaintenanceRequestSchema.safeParse(req.body)) as any;
 
@@ -3089,7 +3134,9 @@ router.patch("/maintenance-requests/:id", requirePermission("property:update"), 
       }
     }
     params.push(id);
-    await rawExecute(`UPDATE maintenance_requests SET ${sets.join(",")} WHERE id=$${params.length}`, params);
+    params.push(scope.companyId);
+    const { affectedRows } = await rawExecute(`UPDATE maintenance_requests SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
+    if (!affectedRows) throw new NotFoundError("طلب الصيانة غير موجود");
     if (b.status && b.status !== existing.status) {
       await createAuditLog({
         userId: scope.userId, entity: "maintenance_requests", entityId: id,
@@ -3156,47 +3203,55 @@ router.patch("/maintenance-requests/:id", requirePermission("property:update"), 
         });
       } catch (taskErr) { logger.error(taskErr, "PATCH completion follow-up task error:"); }
     }
-    const [row] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update maintenance request error:"); }
 });
 
-router.get("/operations-dashboard", requirePermission("property:read"), async (req, res) => {
+router.get("/operations-dashboard", authorize({ feature: "properties.units", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [unitStats] = await rawQuery<any>(
-      `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='available') as available,
-        COUNT(*) FILTER (WHERE status='rented') as rented,
-        COUNT(*) FILTER (WHERE status='under_maintenance') as maintenance
-       FROM property_units WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]
-    );
-    const expiringContracts = await rawQuery<any>(
-      `SELECT c.id, c."tenantName", c."endDate", u."unitNumber", u."buildingName"
-       FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId"
-       WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND c.status='active' AND c."endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
-       ORDER BY c."endDate"`, [cid]
-    );
-    const overduePayments = await rawQuery<any>(
-      `SELECT rp.id, rp.amount, rp."paidAmount", rp."dueDate", c."tenantName", u."unitNumber"
-       FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId"
-       LEFT JOIN property_units u ON u.id=c."unitId"
-       WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE
-       ORDER BY rp."dueDate" LIMIT 20`, [cid]
-    );
-    const openMaintenance = await rawQuery<any>(
-      `SELECT mr.id, mr.category, mr.description, mr.priority, mr.status, mr."createdAt", mr."slaDeadline",
-        u."unitNumber", u."buildingName", mr."tenantName"
-       FROM maintenance_requests mr LEFT JOIN property_units u ON u.id=mr."unitId"
-       WHERE mr."companyId"=$1 AND mr.status NOT IN ('completed','closed','rejected')
-       ORDER BY mr.priority DESC, mr."createdAt" LIMIT 20`, [cid]
-    );
-    const [collectionSummary] = await rawQuery<any>(
-      `SELECT COALESCE(SUM(amount),0) as expected, COALESCE(SUM("paidAmount"),0) as collected
-       FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId"
-       WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND rp."dueDate" >= date_trunc('month', CURRENT_DATE)
-         AND rp."dueDate" < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'`, [cid]
-    );
+    const [
+      [unitStats],
+      expiringContracts,
+      overduePayments,
+      openMaintenance,
+      [collectionSummary],
+    ] = await Promise.all([
+      rawQuery<any>(
+        `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='available') as available,
+          COUNT(*) FILTER (WHERE status='rented') as rented,
+          COUNT(*) FILTER (WHERE status='under_maintenance') as maintenance
+         FROM property_units WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]
+      ),
+      rawQuery<any>(
+        `SELECT c.id, c."tenantName", c."endDate", u."unitNumber", u."buildingName"
+         FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId"
+         WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND c.status='active' AND c."endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
+         ORDER BY c."endDate"`, [cid]
+      ),
+      rawQuery<any>(
+        `SELECT rp.id, rp.amount, rp."paidAmount", rp."dueDate", c."tenantName", u."unitNumber"
+         FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId"
+         LEFT JOIN property_units u ON u.id=c."unitId"
+         WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE
+         ORDER BY rp."dueDate" LIMIT 20`, [cid]
+      ),
+      rawQuery<any>(
+        `SELECT mr.id, mr.category, mr.description, mr.priority, mr.status, mr."createdAt", mr."slaDeadline",
+          u."unitNumber", u."buildingName", mr."tenantName"
+         FROM maintenance_requests mr LEFT JOIN property_units u ON u.id=mr."unitId"
+         WHERE mr."companyId"=$1 AND mr.status NOT IN ('completed','closed','rejected')
+         ORDER BY mr.priority DESC, mr."createdAt" LIMIT 20`, [cid]
+      ),
+      rawQuery<any>(
+        `SELECT COALESCE(SUM(amount),0) as expected, COALESCE(SUM("paidAmount"),0) as collected
+         FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId"
+         WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND rp."dueDate" >= date_trunc('month', CURRENT_DATE)
+           AND rp."dueDate" < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'`, [cid]
+      ),
+    ]);
     res.json({
       units: unitStats,
       expiringContracts,
@@ -3210,7 +3265,7 @@ router.get("/operations-dashboard", requirePermission("property:read"), async (r
   } catch (err) { handleRouteError(err, res, "Operations dashboard error:"); }
 });
 
-router.get("/owners", requirePermission("property:read"), async (req, res) => {
+router.get("/owners", authorize({ feature: "properties.owners", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { search } = req.query as any;
@@ -3229,20 +3284,22 @@ router.get("/owners", requirePermission("property:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "Property owners error:"); }
 });
 
-router.get("/owners/:id", requirePermission("property:read"), async (req, res) => {
+router.get("/owners/:id", authorize({ feature: "properties.owners", action: "view", resource: { table: "owners", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [owner] = await rawQuery<any>(`SELECT * FROM property_owners WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!owner) throw new NotFoundError("المالك غير موجود");
-    const buildings = await rawQuery<any>(`SELECT * FROM property_buildings WHERE "ownerId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 500`, [id, scope.companyId]);
-    const units = await rawQuery<any>(`SELECT * FROM property_units WHERE "ownerId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 500`, [id, scope.companyId]);
-    const contracts = await rawQuery<any>(`SELECT c.*, u."unitNumber", u."buildingName" FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId" WHERE c."ownerId"=$1 AND c."companyId"=$2 AND c."deletedAt" IS NULL ORDER BY c.id DESC LIMIT 500`, [id, scope.companyId]);
+    const [buildings, units, contracts] = await Promise.all([
+      rawQuery<any>(`SELECT * FROM property_buildings WHERE "ownerId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 500`, [id, scope.companyId]),
+      rawQuery<any>(`SELECT * FROM property_units WHERE "ownerId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 500`, [id, scope.companyId]),
+      rawQuery<any>(`SELECT c.*, u."unitNumber", u."buildingName" FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId" WHERE c."ownerId"=$1 AND c."companyId"=$2 AND c."deletedAt" IS NULL ORDER BY c.id DESC LIMIT 500`, [id, scope.companyId]),
+    ]);
     res.json({ ...owner, buildings, units, contracts });
   } catch (err) { handleRouteError(err, res, "Owner detail error:"); }
 });
 
-router.post("/owners", requirePermission("property:create"), async (req, res) => {
+router.post("/owners", authorize({ feature: "properties.owners", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createOwnerSchema.safeParse(req.body)) as any;
@@ -3284,7 +3341,7 @@ router.post("/owners", requirePermission("property:create"), async (req, res) =>
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
       [scope.companyId, b.ownerType || 'individual', b.name, b.nationalId || null, b.crNumber || null, b.phone || null, b.email || null, b.iban || null, b.bankName || null, b.address || null, b.city || null, b.authorizationNumber || null, b.authorizationDate || null, b.authorizationExpiry || null, b.notes || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM property_owners WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM property_owners WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "property_owners", entityId: insertId,
@@ -3299,11 +3356,11 @@ router.post("/owners", requirePermission("property:create"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "Create owner error:"); }
 });
 
-router.patch("/owners/:id", requirePermission("property:update"), async (req, res) => {
+router.patch("/owners/:id", authorize({ feature: "properties.owners", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(`SELECT id FROM property_owners WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT id FROM property_owners WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المالك غير موجود");
     const b = zodParse(updateOwnerSchema.safeParse(req.body)) as any;
     const fields: string[] = [];
@@ -3325,7 +3382,7 @@ router.patch("/owners/:id", requirePermission("property:update"), async (req, re
     addField("notes", b.notes);
     if (fields.length === 0) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
-    const rows = await rawQuery<any>(`UPDATE property_owners SET ${fields.join(", ")}, "updatedAt"=NOW() WHERE id = $${params.length - 1} AND "companyId" = $${params.length} RETURNING *`, params);
+    const rows = await rawQuery<any>(`UPDATE property_owners SET ${fields.join(", ")}, "updatedAt"=NOW() WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`, params);
     if (!rows[0]) throw new NotFoundError("المالك غير موجود");
 
     createAuditLog({
@@ -3350,7 +3407,7 @@ router.patch("/owners/:id", requirePermission("property:update"), async (req, re
   } catch (err) { handleRouteError(err, res, "Update owner error:"); }
 });
 
-router.delete("/owners/:id", requirePermission("property:delete"), async (req, res) => {
+router.delete("/owners/:id", authorize({ feature: "properties.owners", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -3381,7 +3438,8 @@ router.delete("/owners/:id", requirePermission("property:delete"), async (req, r
       );
     }
 
-    await rawExecute(`UPDATE property_owners SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE property_owners SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("المالك غير موجود");
 
     emitEvent({
       companyId: scope.companyId,
@@ -3404,7 +3462,7 @@ router.delete("/owners/:id", requirePermission("property:delete"), async (req, r
   } catch (err) { handleRouteError(err, res, "Delete owner error:"); }
 });
 
-router.get("/contracts/:id/schedule", requirePermission("property:read"), async (req, res) => {
+router.get("/contracts/:id/schedule", authorize({ feature: "properties.contracts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const contractId = parseId(req.params.id, "id");
@@ -3418,7 +3476,7 @@ router.get("/contracts/:id/schedule", requirePermission("property:read"), async 
   } catch (err) { handleRouteError(err, res, "Payment schedule error:"); }
 });
 
-router.post("/contracts/:id/schedule/:installmentId/pay", requirePermission("property:create"), async (req, res) => {
+router.post("/contracts/:id/schedule/:installmentId/pay", authorize({ feature: "properties.contracts", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const contractId = parseId(req.params.id, "id");
@@ -3441,8 +3499,8 @@ router.post("/contracts/:id/schedule/:installmentId/pay", requirePermission("pro
     const newStatus = newPaid >= Number(existing.amount) ? 'paid' : 'partial';
     const receiptNumber = b.receiptNumber || generateTimeRef("RCP");
     await rawExecute(
-      `UPDATE contract_payment_schedule SET "paidAmount"=$1, "paidDate"=$2, method=$3, status=$4, "receiptNumber"=$5, "updatedAt"=NOW() WHERE id=$6`,
-      [newPaid, b.paidDate || todayISO(), b.method || 'bank_transfer', newStatus, receiptNumber, installmentId]
+      `UPDATE contract_payment_schedule SET "paidAmount"=$1, "paidDate"=$2, method=$3, status=$4, "receiptNumber"=$5, "updatedAt"=NOW() WHERE id=$6 AND "companyId"=$7`,
+      [newPaid, b.paidDate || todayISO(), b.method || 'bank_transfer', newStatus, receiptNumber, installmentId, scope.companyId]
     );
     if (paidAmount > 0) {
       const { propertiesEngine } = await import("../lib/engines/index.js");
@@ -3458,7 +3516,7 @@ router.post("/contracts/:id/schedule/:installmentId/pay", requirePermission("pro
         }
       ).catch((e) => logger.error(e, "properties background task failed"));
     }
-    const [row] = await rawQuery<any>(`SELECT * FROM contract_payment_schedule WHERE id=$1`, [installmentId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM contract_payment_schedule WHERE id=$1 AND "companyId"=$2`, [installmentId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -3483,7 +3541,7 @@ router.post("/contracts/:id/schedule/:installmentId/pay", requirePermission("pro
 // PROPERTY INSPECTIONS — جدول فحص دوري للوحدات
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/inspections", requirePermission("property:read"), async (req, res) => {
+router.get("/inspections", authorize({ feature: "properties.maintenance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { unitId, status } = req.query as any;
@@ -3504,7 +3562,7 @@ router.get("/inspections", requirePermission("property:read"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "Inspections error:"); }
 });
 
-router.post("/inspections", requirePermission("property:create"), async (req, res) => {
+router.post("/inspections", authorize({ feature: "properties.maintenance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createInspectionSchema.safeParse(req.body)) as any;
@@ -3531,7 +3589,7 @@ router.post("/inspections", requirePermission("property:create"), async (req, re
        b.findings ? JSON.stringify(b.findings) : null,
        b.conditionRating || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM property_inspections WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM property_inspections WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -3552,7 +3610,7 @@ router.post("/inspections", requirePermission("property:create"), async (req, re
   } catch (err) { handleRouteError(err, res, "Create inspection error:"); }
 });
 
-router.patch("/inspections/:id", requirePermission("property:update"), async (req, res) => {
+router.patch("/inspections/:id", authorize({ feature: "properties.maintenance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -3651,7 +3709,7 @@ router.patch("/inspections/:id", requirePermission("property:update"), async (re
 // SECURITY DEPOSITS — ودائع ضمان
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/deposits", requirePermission("property:read"), async (req, res) => {
+router.get("/deposits", authorize({ feature: "properties.payments", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, contractId } = req.query as any;
@@ -3673,7 +3731,7 @@ router.get("/deposits", requirePermission("property:read"), async (req, res) => 
   } catch (err) { handleRouteError(err, res, "Security deposits error:"); }
 });
 
-router.post("/deposits", requirePermission("property:create"), async (req, res) => {
+router.post("/deposits", authorize({ feature: "properties.payments", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createDepositSchema.safeParse(req.body)) as any;
@@ -3735,12 +3793,12 @@ router.post("/deposits", requirePermission("property:create"), async (req, res) 
       details: `وديعة عقد #${b.contractId} بقيمة ${b.amount}`,
     }).catch((e) => logger.error(e, "properties background task failed"));
 
-    const [row] = await rawQuery<any>(`SELECT * FROM property_security_deposits WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM property_security_deposits WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create deposit error:"); }
 });
 
-router.patch("/deposits/:id/refund", requirePermission("property:update"), async (req, res) => {
+router.patch("/deposits/:id/refund", authorize({ feature: "properties.payments", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -3799,7 +3857,7 @@ router.patch("/deposits/:id/refund", requirePermission("property:update"), async
       skipUpdatedAt: true,
     });
 
-    const [row] = await rawQuery<any>(`SELECT * FROM property_security_deposits WHERE id=$1`, [id]);
+    const [row] = await rawQuery<any>(`SELECT * FROM property_security_deposits WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.json(row);
   } catch (err) {
     const mapped = lifecycleErrorResponse(err);
@@ -3812,7 +3870,7 @@ router.patch("/deposits/:id/refund", requirePermission("property:update"), async
 // OCCUPANCY REPORT — تقرير الإشغال التفاعلي
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/occupancy-report", requirePermission("property:read"), async (req, res) => {
+router.get("/occupancy-report", authorize({ feature: "properties.units", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { buildingId } = req.query as any;
@@ -3862,7 +3920,7 @@ router.get("/occupancy-report", requirePermission("property:read"), async (req, 
   } catch (err) { handleRouteError(err, res, "Occupancy report error:"); }
 });
 
-router.get("/tenants/:id/letters", requirePermission("property:read"), async (req, res) => {
+router.get("/tenants/:id/letters", authorize({ feature: "properties.tenants", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const tenantId = parseId(req.params.id, "id");

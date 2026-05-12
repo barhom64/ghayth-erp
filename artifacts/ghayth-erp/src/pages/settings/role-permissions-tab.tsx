@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Shield, Pencil, Save } from "lucide-react";
@@ -16,7 +17,7 @@ export function RolePermissionsTab() {
   const [editModules, setEditModules] = useState<string[]>([]);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const allModules = [
     { key: "home", label: "الرئيسية" }, { key: "hr", label: "الموارد البشرية" },
@@ -90,7 +91,7 @@ export function RolePermissionsTab() {
                     </Button>
                   ) : (
                     <div className="flex gap-2">
-                      <Button size="sm" onClick={handleSave} rateLimitAware><Save className="h-4 w-4 me-1" />حفظ</Button>
+                      <GuardedButton perm="settings:create" size="sm" onClick={handleSave} rateLimitAware><Save className="h-4 w-4 me-1" />حفظ</GuardedButton>
                       <Button size="sm" variant="ghost" onClick={() => setEditingRole(null)}>إلغاء</Button>
                     </div>
                   )}

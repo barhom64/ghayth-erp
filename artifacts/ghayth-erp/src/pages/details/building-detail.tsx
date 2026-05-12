@@ -1,5 +1,10 @@
 import { useRoute, Link } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,12 +18,14 @@ import { useAppContext } from "@/contexts/app-context";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 export default function BuildingDetail() {
   const [, params] = useRoute("/properties/buildings/:id");
   const id = params?.id;
   const { permissions, roleLevel } = useAppContext();
   const canManage = permissions.canManageProperty || roleLevel >= 50;
+  const { extraTabs, hideTabs } = useRegistryTabs("building", id ?? 0);
 
   const { data: building, isLoading, isError, refetch } = useApiQuery<any>(
     ["building-detail", id || ""],
@@ -39,8 +46,25 @@ export default function BuildingDetail() {
 
   const subtitleParts = building ? [building.city, building.address, building.floors && `${building.floors} طوابق`].filter(Boolean).join(" — ") : "";
 
+  const editDelete = useDetailEditDelete({
+    entityLabel: "المبنى",
+    patchPath: `/properties/buildings/${id}`,
+    deletePath: `/properties/buildings/${id}`,
+    listPath: "/properties/buildings",
+    initialValues: building,
+    fields: [
+      { key: "name", label: "اسم المبنى" },
+      { key: "address", label: "العنوان" },
+      { key: "city", label: "المدينة" },
+      { key: "floors", label: "عدد الطوابق", type: "number" },
+    ],
+    invalidateKeys: [["building-detail", id || ""], ["buildings"]],
+    onSaved: () => refetch(),
+  });
+
   const overview = (
     <>
+      <InlineEditCard hook={editDelete} />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="border-0 shadow-sm bg-blue-50/50">
           <CardContent className="p-4 text-center">
@@ -150,9 +174,14 @@ export default function BuildingDetail() {
   );
 
   const actions = (
-    <Badge variant="outline">
-      {building?.type === "residential" ? "سكني" : building?.type === "commercial" ? "تجاري" : building?.type === "mixed" ? "مختلط" : building?.type}
-    </Badge>
+    <DetailActionButtons
+      hook={editDelete}
+      extra={
+        <Badge variant="outline">
+          {building?.type === "residential" ? "سكني" : building?.type === "commercial" ? "تجاري" : building?.type === "mixed" ? "مختلط" : building?.type}
+        </Badge>
+      }
+    />
   );
 
   return (
@@ -166,6 +195,8 @@ export default function BuildingDetail() {
       isLoading={isLoading}
       error={isError ? true : undefined}
       onRetry={refetch}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       overview={overview}
       actions={actions}
     />

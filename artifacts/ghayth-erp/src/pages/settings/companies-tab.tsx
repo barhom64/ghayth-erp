@@ -1,14 +1,27 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2, Plus, X, Pencil, Trash2, CheckCircle, Zap } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from "@/contexts/app-context";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import { FormShell, FormTextField, FormGrid } from "@/components/form-shell";
+
+// Replaces the old `if (!form.name.trim())` toast guard. Schema also
+// trims so leading/trailing whitespace can't slip through.
+const companyFormSchema = z.object({
+  name: z.string().trim().min(1, "اسم الشركة مطلوب"),
+  nameEn: z.string().trim(),
+  taxNumber: z.string().trim(),
+  crNumber: z.string().trim(),
+});
+type CompanyForm = z.infer<typeof companyFormSchema>;
+const blankCompany: CompanyForm = { name: "", nameEn: "", taxNumber: "", crNumber: "" };
 
 export function CompaniesTab() {
   const { refreshFilters } = useAppContext();
@@ -17,9 +30,15 @@ export function CompaniesTab() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState<number | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ name: "", nameEn: "", taxNumber: "", crNumber: "" });
+  // Initial values for the FormShell — switches between blank and the
+  // edited row when the user clicks "تعديل". Stored as a single ref-
+  // like state so the FormShell `key` prop can re-mount the form on
+  // edit-target change (resets dirty/error state cleanly).
+  const [formInitial, setFormInitial] = useState<CompanyForm>(blankCompany);
   const [lastBootstrapOps, setLastBootstrapOps] = useState<string[] | null>(null);
+  // Delete dialog state — replaces window.confirm() for the most
+  // destructive operation in settings.
+  const [deletingCompany, setDeletingCompany] = useState<{ id: number; name: string } | null>(null);
   const items = asList(data);
 
   const companyColumns: DataTableColumn<any>[] = [
@@ -35,7 +54,7 @@ export function CompaniesTab() {
         </div>
       ),
     },
-    { key: "taxNumber", header: "الرقم الضريبي", searchable: true, render: (r: any) => <span className="text-gray-500">{r.taxNumber || "-"}</span> },
+    { key: "taxNumber", header: "الرقم الضريبي", searchable: true, render: (r: any) => <span className="text-gray-500">{r.vatNumber || "-"}</span> },
     { key: "crNumber", header: "السجل التجاري", searchable: true, render: (r: any) => <span className="text-gray-500">{r.crNumber || "-"}</span> },
     {
       key: "actions",
@@ -46,7 +65,7 @@ export function CompaniesTab() {
           <Button variant="ghost" size="sm" onClick={() => handleEdit(r)} title="تعديل"><Pencil className="h-4 w-4" /></Button>
           <Button
             variant="ghost" size="sm"
-            onClick={() => { if (confirm("تحذير: حذف الشركة سيؤثر على جميع البيانات المرتبطة بها. هل أنت متأكد؟")) handleDelete(r.id); }}
+            onClick={() => setDeletingCompany({ id: r.id, name: r.name || "—" })}
             disabled={deleting === r.id}
             title="حذف"
             className="text-red-500 hover:text-red-700"
@@ -59,60 +78,48 @@ export function CompaniesTab() {
   ];
 
   if (isLoading) return <DataTable columns={companyColumns} data={[]} isLoading={true} searchPlaceholder={null} noToolbar />;
-  if (isError) return <DataTable columns={companyColumns} data={[]} isError={true} onRetry={() => window.location.reload()} searchPlaceholder={null} noToolbar />;
+  if (isError) return <DataTable columns={companyColumns} data={[]} isError={true} searchPlaceholder={null} noToolbar />;
 
   const resetForm = () => {
-    setForm({ name: "", nameEn: "", taxNumber: "", crNumber: "" });
+    setFormInitial(blankCompany);
     setEditingId(null);
     setShowForm(false);
     setLastBootstrapOps(null);
   };
 
   const handleEdit = (item: any) => {
-    setForm({
+    setFormInitial({
       name: item.name || "",
       nameEn: item.nameEn || "",
-      taxNumber: item.taxNumber || "",
+      taxNumber: item.vatNumber || "",
       crNumber: item.crNumber || "",
     });
     setEditingId(item.id);
     setShowForm(true);
   };
 
-  const handleSave = async () => {
-    if (!form.name.trim()) {
-      toast({ title: "خطأ", description: "اسم الشركة مطلوب", variant: "destructive" });
-      return;
+  const handleSave = async (values: CompanyForm) => {
+    if (editingId) {
+      await apiFetch(`/settings/companies/${editingId}`, {
+        method: "PUT",
+        body: JSON.stringify(values),
+      });
+      toast({ title: "تم التعديل", description: "تم تعديل بيانات الشركة بنجاح" });
+      resetForm();
+    } else {
+      const result = await apiFetch<any>("/settings/companies", {
+        method: "POST",
+        body: JSON.stringify(values),
+      });
+      setLastBootstrapOps(result.operations || null);
+      toast({
+        title: "تمت إضافة الشركة بنجاح",
+        description: `تم إعداد ${result.operations?.length || 0} إعداد تلقائي`,
+      });
+      setShowForm(false);
     }
-    setCreating(true);
-    try {
-      if (editingId) {
-        await apiFetch(`/settings/companies/${editingId}`, {
-          method: "PUT",
-          body: JSON.stringify(form),
-        });
-        toast({ title: "تم التعديل", description: "تم تعديل بيانات الشركة بنجاح" });
-        resetForm();
-      } else {
-        const result = await apiFetch<any>("/settings/companies", {
-          method: "POST",
-          body: JSON.stringify(form),
-        });
-        setLastBootstrapOps(result.operations || null);
-        toast({
-          title: "تمت إضافة الشركة بنجاح",
-          description: `تم إعداد ${result.operations?.length || 0} إعداد تلقائي`,
-        });
-        setShowForm(false);
-        setForm({ name: "", nameEn: "", taxNumber: "", crNumber: "" });
-      }
-      refetch();
-      refreshFilters();
-    } catch (e: any) {
-      toast({ title: "خطأ", description: e.message || "فشلت العملية", variant: "destructive" });
-    } finally {
-      setCreating(false);
-    }
+    refetch();
+    refreshFilters();
   };
 
   const handleDelete = async (id: number) => {
@@ -136,9 +143,9 @@ export function CompaniesTab() {
           <Building2 className="h-5 w-5" />
           إدارة الشركات
         </h3>
-        <Button size="sm" onClick={() => { if (showForm) resetForm(); else setShowForm(true); }}>
+        <GuardedButton perm="admin:create" size="sm" onClick={() => { if (showForm) resetForm(); else setShowForm(true); }}>
           {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />شركة جديدة</>}
-        </Button>
+        </GuardedButton>
       </div>
 
       {lastBootstrapOps && (
@@ -167,39 +174,39 @@ export function CompaniesTab() {
               {editingId ? "تعديل بيانات الشركة" : "إنشاء شركة جديدة (تهيئة تلقائية)"}
             </CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label>اسم الشركة (عربي) <span className="text-red-500">*</span></Label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="مثال: شركة الفيصل التجارية" />
-            </div>
-            <div>
-              <Label>اسم الشركة (إنجليزي)</Label>
-              <Input value={form.nameEn} onChange={(e) => setForm({ ...form, nameEn: e.target.value })} placeholder="Al-Faisal Trading Co." />
-            </div>
-            <div>
-              <Label>الرقم الضريبي</Label>
-              <Input value={form.taxNumber} onChange={(e) => setForm({ ...form, taxNumber: e.target.value })} placeholder="300000000000003" />
-            </div>
-            <div>
-              <Label>رقم السجل التجاري</Label>
-              <Input value={form.crNumber} onChange={(e) => setForm({ ...form, crNumber: e.target.value })} placeholder="1010000000" />
-            </div>
-            {!editingId && (
-              <div className="md:col-span-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
-                <p className="text-sm text-blue-700 font-medium mb-1 flex items-center gap-1.5">
-                  <Zap className="h-4 w-4" />
-                  سيتم إنشاء ما يلي تلقائياً:
-                </p>
-                <p className="text-xs text-blue-600">
-                  فرع افتراضي، 10 أنواع إجازات، 3 ورديات، 5 سلاسل موافقات، 6 مكونات رواتب، 26 حساباً محاسبياً، 6 أدوار، 8 بادئات ترقيم، سلم عقوبات، 120+ إعداد
-                </p>
-              </div>
-            )}
-            <div className="md:col-span-2">
-              <Button onClick={handleSave} disabled={creating} rateLimitAware>
-                {creating ? "جاري الإنشاء..." : (editingId ? "تحديث الشركة" : "إنشاء الشركة")}
-              </Button>
-            </div>
+          <CardContent>
+            <FormShell
+              key={editingId ?? "new"}
+              schema={companyFormSchema}
+              defaultValues={formInitial}
+              submitLabel={editingId ? "تحديث الشركة" : "إنشاء الشركة"}
+              secondaryActions={
+                <Button type="button" size="sm" variant="ghost" onClick={resetForm}>
+                  إلغاء
+                </Button>
+              }
+              onSubmit={async (values) => {
+                await handleSave(values);
+              }}
+            >
+              <FormGrid cols={2}>
+                <FormTextField name="name" label="اسم الشركة (عربي)" required placeholder="مثال: شركة الفيصل التجارية" />
+                <FormTextField name="nameEn" label="اسم الشركة (إنجليزي)" placeholder="Al-Faisal Trading Co." />
+                <FormTextField name="taxNumber" label="الرقم الضريبي" placeholder="300000000000003" />
+                <FormTextField name="crNumber" label="رقم السجل التجاري" placeholder="1010000000" />
+              </FormGrid>
+              {!editingId && (
+                <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                  <p className="text-sm text-blue-700 font-medium mb-1 flex items-center gap-1.5">
+                    <Zap className="h-4 w-4" />
+                    سيتم إنشاء ما يلي تلقائياً:
+                  </p>
+                  <p className="text-xs text-blue-600">
+                    فرع افتراضي، 10 أنواع إجازات، 3 ورديات، 5 سلاسل موافقات، 6 مكونات رواتب، 26 حساباً محاسبياً، 6 أدوار، 8 بادئات ترقيم، سلم عقوبات، 120+ إعداد
+                  </p>
+                </div>
+              )}
+            </FormShell>
           </CardContent>
         </Card>
       )}
@@ -210,6 +217,20 @@ export function CompaniesTab() {
         searchPlaceholder="بحث في الشركات..."
         emptyMessage="لا توجد شركات مضافة"
         pageSize={0}
+      />
+
+      <ConfirmDeleteDialog
+        open={deletingCompany !== null}
+        onOpenChange={(v) => { if (!v) setDeletingCompany(null); }}
+        entity={{
+          type: "company",
+          id: deletingCompany?.id ?? 0,
+          name: deletingCompany?.name ?? "",
+        }}
+        deletePath={`/settings/companies/${deletingCompany?.id}`}
+        invalidateKeys={[["settings-companies"]]}
+        successMessage="تم الحذف"
+        onDeleted={() => { setDeletingCompany(null); refetch(); refreshFilters(); }}
       />
     </div>
   );

@@ -8,14 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import {
-  Building, FileText, Banknote, Wrench, Users, Clock, DollarSign,
+  Building, FileText, Banknote, Wrench, Users, DollarSign,
   AlertTriangle, XCircle, Info, Pencil,
   Compass, Paintbrush, Star, Image as ImageIcon, MapPin, BedDouble, Bath, Maximize2
 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
-import { EntityDocuments } from "@/components/shared/entity-documents";
-import { EntityTimeline } from "@/components/shared/entity-timeline";
+
 import { EntityObligations } from "@/components/shared/entity-obligations";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
@@ -24,6 +23,7 @@ import { CheckSquare, BookOpen } from "lucide-react";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const TABS = [
@@ -33,8 +33,6 @@ const TABS = [
   { key: "maintenance", label: "الصيانة", icon: Wrench },
   { key: "finance", label: "الملف المالي", icon: BookOpen },
   { key: "tasks", label: "المهام", icon: CheckSquare },
-  { key: "documents", label: "المستندات", icon: FileText },
-  { key: "timeline", label: "السجل الزمني", icon: Clock },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -44,8 +42,8 @@ const STATUS_OPTIONS = [
   { value: "rented", label: "مؤجرة" },
   { value: "maintenance", label: "تحت صيانة" },
   { value: "reserved", label: "محجوزة" },
-  { value: "defaulted", label: "متعثرة" },
-  { value: "expired", label: "منتهي العقد" },
+  { value: "under_maintenance", label: "تحت الصيانة" },
+  { value: "out_of_service", label: "خارج الخدمة" },
 ];
 
 const STATUS_COLORS: Record<string, string> = {
@@ -53,8 +51,8 @@ const STATUS_COLORS: Record<string, string> = {
   rented: "bg-blue-100 text-blue-700 border-blue-200",
   maintenance: "bg-amber-100 text-amber-700 border-amber-200",
   reserved: "bg-purple-100 text-purple-700 border-purple-200",
-  defaulted: "bg-red-100 text-red-700 border-red-200",
-  expired: "bg-gray-100 text-gray-700 border-gray-200",
+  under_maintenance: "bg-amber-100 text-amber-700 border-amber-200",
+  out_of_service: "bg-red-100 text-red-700 border-red-200",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -62,8 +60,8 @@ const STATUS_LABELS: Record<string, string> = {
   rented: "مؤجرة",
   maintenance: "تحت صيانة",
   reserved: "محجوزة",
-  defaulted: "متعثرة",
-  expired: "منتهي العقد",
+  under_maintenance: "تحت الصيانة",
+  out_of_service: "خارج الخدمة",
 };
 
 const DIRECTION_LABELS: Record<string, string> = {
@@ -103,6 +101,7 @@ export default function UnitDetail() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
+  const { hideTabs: registryHideTabs } = useRegistryTabs("property_unit", id ?? 0);
 
   const { data: unit, isLoading, isError, error } = useApiQuery<any>(
     ["unit-detail", id || ""],
@@ -642,25 +641,6 @@ export default function UnitDetail() {
         <LinkedTasks entityType="property-unit" entityId={id} includeMaintenanceTasks />
       )}
 
-      {activeTab === "documents" && id && (
-        <div className="space-y-4">
-          <EntityObligations entityType="property-unit" entityId={id} hideWhenEmpty />
-          <EntityDocuments entityType="property-unit" entityId={id} />
-        </div>
-      )}
-
-      {activeTab === "timeline" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Clock className="h-5 w-5 text-muted-foreground" /> السجل الزمني
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {id && <EntityTimeline entityType="property-unit" entityId={id} maxItems={30} />}
-          </CardContent>
-        </Card>
-      )}
 
       {id && <EntityComments entityType="unit" entityId={id} />}
       {id && <EntityTags entityType="unit" entityId={id} />}
@@ -673,14 +653,15 @@ export default function UnitDetail() {
       subtitle={`${unit?.buildingName || "-"}${unit?.address ? ` — ${unit.address}` : ""}`}
       backPath="/properties"
       backLabel="الوحدات"
-      status={{ label: STATUS_LABELS[unit?.status] || unit?.status, tone: unit?.status === "available" ? "success" : unit?.status === "rented" ? "info" : unit?.status === "maintenance" ? "warning" : unit?.status === "defaulted" ? "destructive" : "muted" }}
+      status={{ label: STATUS_LABELS[unit?.status] || unit?.status, tone: unit?.status === "available" ? "success" : unit?.status === "rented" ? "info" : (unit?.status === "maintenance" || unit?.status === "under_maintenance") ? "warning" : unit?.status === "out_of_service" ? "destructive" : "muted" }}
       entityType="property-unit"
       entityId={id || ""}
       isLoading={isLoading}
       error={isError ? error : undefined}
-      onRetry={() => window.location.reload()}
+     
       createdAt={unit?.createdAt}
       updatedAt={unit?.updatedAt}
+      hideTabs={registryHideTabs}
       overview={overview}
       actions={actions}
     />

@@ -4,18 +4,18 @@ import { logPageView } from "../lib/activityTracker.js";
 import { handleRouteError, zodParse } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
-import rateLimit from "express-rate-limit";
+import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
 import { z } from "zod";
 
 const router = Router();
 
-const activityLimiter = rateLimit({
+// Per-user activity-ingest limiter. Re-ordered below to run AFTER
+// authMiddleware so req.scope is set; owner/admin exempt.
+const activityLimiter = createPerUserLimiter({
+  prefix: "activity:ingest",
   windowMs: 60 * 1000,
   max: 120,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "تم تجاوز الحد الأقصى للطلبات" },
-  validate: { ip: false, trustProxy: false },
+  message: "تم تجاوز الحد الأقصى للطلبات",
 });
 
 const logActivitySchema = z.object({
@@ -23,7 +23,7 @@ const logActivitySchema = z.object({
   sessionId: z.string().optional(),
 });
 
-router.post("/intelligence/activity", activityLimiter, authMiddleware, async (req, res): Promise<void> => {
+router.post("/intelligence/activity", authMiddleware, activityLimiter, async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { page, sessionId } = zodParse(logActivitySchema.safeParse(req.body));

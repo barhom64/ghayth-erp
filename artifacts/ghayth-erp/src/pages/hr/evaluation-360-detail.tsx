@@ -3,12 +3,14 @@ import { useRoute, Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import {
   ArrowRight, Target, Users, Shield, BarChart3, TrendingUp,
   CheckCircle, Clock, Star, AlertCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 function ScoreCircle({ score, label, color = "blue" }: { score: number | null; label: string; color?: string }) {
   const colorMap: Record<string, string> = {
@@ -126,6 +128,7 @@ function RadarChart({ data }: { data: { label: string; value: number; color: str
 export default function Evaluation360DetailPage() {
   const [, params] = useRoute("/hr/evaluation-360/:id");
   const cycleId = params?.id ?? "";
+  const { extraTabs, hideTabs } = useRegistryTabs("hr-evaluation-360", cycleId ?? "");
   const [tab, setTab] = useState<"system" | "peers" | "upward" | "summary">("summary");
 
   const { data, isLoading, isError } = useApiQuery<any>(
@@ -151,10 +154,10 @@ export default function Evaluation360DetailPage() {
   const actions = (
     <div className="flex items-center gap-2 flex-wrap">
       <Link href={`/hr/evaluation-360/${cycleId}/peer`}>
-        <Button variant="outline" size="sm"><Users className="w-4 h-4 me-1" />إضافة تقييم مدير/زميل</Button>
+        <GuardedButton perm="hr:create" variant="outline" size="sm"><Users className="w-4 h-4 me-1" />إضافة تقييم مدير/زميل</GuardedButton>
       </Link>
       <Link href={`/hr/evaluation-360/${cycleId}/upward`}>
-        <Button variant="outline" size="sm"><Shield className="w-4 h-4 me-1" />تقييم عكسي سري</Button>
+        <GuardedButton perm="hr:create" variant="outline" size="sm"><Shield className="w-4 h-4 me-1" />تقييم عكسي سري</GuardedButton>
       </Link>
     </div>
   );
@@ -338,7 +341,7 @@ export default function Evaluation360DetailPage() {
         <div className="space-y-4">
           <div className="flex justify-end">
             <Link href={`/hr/evaluation-360/${cycleId}/peer`}>
-              <Button size="sm"><Users className="w-4 h-4 me-1" />إضافة تقييم</Button>
+              <GuardedButton perm="hr:create" size="sm"><Users className="w-4 h-4 me-1" />إضافة تقييم</GuardedButton>
             </Link>
           </div>
 
@@ -412,7 +415,7 @@ export default function Evaluation360DetailPage() {
         <div className="space-y-4">
           <div className="flex justify-end">
             <Link href={`/hr/evaluation-360/${cycleId}/upward`}>
-              <Button size="sm" variant="outline"><Shield className="w-4 h-4 me-1" />إرسال تقييم عكسي سري</Button>
+              <GuardedButton perm="hr:create" size="sm" variant="outline"><Shield className="w-4 h-4 me-1" />إرسال تقييم عكسي سري</GuardedButton>
             </Link>
           </div>
 
@@ -464,9 +467,11 @@ export default function Evaluation360DetailPage() {
       backLabel="العودة"
       entityType="hr-evaluation-360"
       entityId={cycleId}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       isLoading={isLoading}
       error={isError || (!isLoading && !data?.cycle) ? true : undefined}
-      onRetry={() => window.location.reload()}
+     
       overview={overview}
       actions={actions}
       createdAt={cycle?.createdAt}

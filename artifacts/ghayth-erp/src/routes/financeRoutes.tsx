@@ -10,6 +10,7 @@ const Dashboard = lazy(() => import("@/pages/finance/dashboard"));
 const Accounts = lazy(() => import("@/pages/finance/accounts"));
 const AccountsCreate = lazy(() => import("@/pages/create/finance/accounts-create"));
 const AccountsEdit = lazy(() => import("@/pages/create/finance/accounts-edit"));
+const AccountDetail = lazy(() => import("@/pages/details/account-detail"));
 const Vouchers = lazy(() => import("@/pages/finance/vouchers"));
 const VouchersCreate = lazy(() => import("@/pages/create/finance/vouchers-create"));
 const VoucherDetail = lazy(() => import("@/pages/details/voucher-detail"));
@@ -56,6 +57,7 @@ const BatchDepreciate = lazy(() => import("@/pages/create/finance/batch-deprecia
 const InventoryCosting = lazy(() => import("@/pages/finance/inventory-costing"));
 const BankGuarantees = lazy(() => import("@/pages/finance/bank-guarantees"));
 const JournalManual = lazy(() => import("@/pages/finance/journal-manual"));
+const GLPostingQueue = lazy(() => import("@/pages/finance/gl-posting-queue"));
 const JournalManualCreate = lazy(() => import("@/pages/create/finance/journal-manual-create"));
 const JournalManualDetail = lazy(() => import("@/pages/finance/journal-manual-detail"));
 const Intercompany = lazy(() => import("@/pages/finance/intercompany"));
@@ -79,6 +81,7 @@ export const financeRoutes = [
   { path: "/finance/accounts", component: Accounts },
   { path: "/finance/accounts/create", component: AccountsCreate },
   { path: "/finance/accounts/:id/edit", component: AccountsEdit },
+  { path: "/finance/accounts/:id", component: AccountDetail },
   { path: "/finance/vouchers", component: Vouchers },
   { path: "/finance/vouchers/create", component: VouchersCreate },
   { path: "/finance/vouchers/:id", component: VoucherDetail },
@@ -127,6 +130,7 @@ export const financeRoutes = [
   { path: "/finance/journal-manual", component: JournalManual },
   { path: "/finance/journal-manual/create", component: JournalManualCreate },
   { path: "/finance/journal-manual/:id", component: JournalManualDetail },
+  { path: "/finance/gl-posting-queue", component: GLPostingQueue },
   { path: "/finance/intercompany", component: Intercompany },
   { path: "/finance/intercompany/consolidation/create", component: IntercompanyConsolidationCreate },
   { path: "/finance/cash-flow-forecast", component: CashFlowForecast },

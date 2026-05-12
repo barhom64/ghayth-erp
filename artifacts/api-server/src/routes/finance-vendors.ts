@@ -9,13 +9,47 @@ import {
   zodParse,
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { emitEvent, createAuditLog, currentPeriod } from "../lib/businessHelpers.js";
 import { applyTransition } from "../lib/lifecycleEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { pushToDLQ } from "../lib/eventBus.js";
 import { logger } from "../lib/logger.js";
 import { z } from "zod";
+import type { SupplierRow } from "../lib/dbTypes.js";
+
+// Extend SupplierRow with the columns that exist in schema but aren't in
+// the early Drizzle definition (rating, status, category etc).
+type VendorRow = SupplierRow & {
+  status?: string | null;
+  rating?: number | string | null;
+  totalSpent?: number | string | null;
+  onTimeRate?: number | string | null;
+};
+
+interface CountRow { count: string | number }
+interface VendorStatsRow {
+  totalOrders: number | string;
+  totalSpent: number | string;
+  onTimeOrders: number | string;
+  lateOrders: number | string;
+}
+interface PurchaseOrderJoinedRow {
+  id: number;
+  ref?: string | null;
+  orderDate?: string | null;
+  total: number | string;
+  status: string;
+  vendorName?: string | null;
+}
+interface VendorPaymentRow {
+  id: number;
+  vendorId: number;
+  amount: number | string;
+  paymentDate: string;
+  reference?: string | null;
+  status?: string | null;
+}
 
 // ── Zod schemas ──────────────────────────────────────────────────────────────
 const createVendorSchema = z.object({
@@ -46,22 +80,25 @@ const approvalSchema = z.object({
 export const vendorsRouter = Router();
 vendorsRouter.use(authMiddleware);
 
-vendorsRouter.get("/vendors", requirePermission("finance:read"), async (req, res) => {
+// RBAC v2: vendors carry sensitive fields (bankAccount, taxNumber).
+// finance.vendors field policies will mask them per role; the engine
+// applies maskFields() over the response automatically.
+vendorsRouter.get("/vendors", authorize({ feature: "finance.vendors", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters);
-    const rows = await rawQuery<any>(
-      `SELECT * FROM suppliers WHERE ${where} AND "deletedAt" IS NULL ORDER BY name`,
+    const { where, params } = buildScopedWhere(scope, filters, { softDeleteColumn: '"deletedAt"' });
+    const rows = await rawQuery<VendorRow>(
+      `SELECT * FROM suppliers WHERE ${where} ORDER BY name LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
-  } catch (_e) {
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
+  } catch (_e) { logger.error(_e, "vendors list query failed");
     res.json({ data: [], total: 0, page: 1, pageSize: 0 });
   }
 });
 
-vendorsRouter.post("/vendors", requirePermission("finance:create"), async (req, res) => {
+vendorsRouter.post("/vendors", authorize({ feature: "finance.vendors", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { name, contactPerson, phone, email, taxNumber, address, paymentTerms, category } = zodParse(createVendorSchema.safeParse(req.body ?? {}));
@@ -89,19 +126,20 @@ vendorsRouter.post("/vendors", requirePermission("finance:create"), async (req, 
       after: { name },
     }).catch((err) => logger.error(err, "[audit] vendor.created:"));
 
-    res.status(201).json({ id: insertId, ...req.body });
+    const [row] = await rawQuery<VendorRow>(`SELECT * FROM suppliers WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    res.status(201).json(row || { id: insertId, name, contactPerson, phone, email, taxNumber, category });
   } catch (err) {
     handleRouteError(err, res, "Create vendor error:");
   }
 });
 
-vendorsRouter.patch("/vendors/:id", requirePermission("finance:update"), async (req, res) => {
+vendorsRouter.patch("/vendors/:id", authorize({ feature: "finance.vendors", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const vendorId = parseId(req.params.id, "id");
     const { name, contactPerson, phone, email, taxNumber, category } = zodParse(updateVendorSchema.safeParse(req.body ?? {}));
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     let idx = 1;
     if (name) { sets.push(`name = $${idx++}`); params.push(name); }
     if (contactPerson !== undefined) { sets.push(`"contactPerson" = $${idx++}`); params.push(contactPerson); }
@@ -116,7 +154,7 @@ vendorsRouter.patch("/vendors/:id", requirePermission("finance:update"), async (
       });
     }
     params.push(vendorId, scope.companyId);
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<VendorRow>(
       `UPDATE suppliers SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
@@ -146,23 +184,23 @@ vendorsRouter.patch("/vendors/:id", requirePermission("finance:update"), async (
   }
 });
 
-vendorsRouter.delete("/vendors/:id", requirePermission("finance:delete"), async (req, res) => {
+vendorsRouter.delete("/vendors/:id", authorize({ feature: "finance.vendors", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
     const vendorId = parseId(req.params.id, "id");
 
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<{ id: number; name: string }>(
       `SELECT id, name FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [vendorId, scope.companyId]
     );
     if (!existing) throw new NotFoundError("المورد غير موجود");
 
-    const [openOrders] = await rawQuery<any>(
-      `SELECT COUNT(*) AS cnt FROM purchase_orders WHERE "supplierId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status NOT IN ('cancelled','received','closed')`,
+    const [openOrders] = await rawQuery<{ cnt: string | number }>(
+      `SELECT COUNT(*) AS cnt FROM purchase_orders WHERE "supplierId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status NOT IN ('cancelled','received','completed')`,
       [vendorId, scope.companyId]
     );
-    const [openRequests] = await rawQuery<any>(
+    const [openRequests] = await rawQuery<{ cnt: string | number }>(
       `SELECT COUNT(*) AS cnt FROM purchase_requests WHERE "supplierId" = $1 AND "companyId" = $2 AND status NOT IN ('cancelled','rejected','completed')`,
       [vendorId, scope.companyId]
     );
@@ -181,7 +219,7 @@ vendorsRouter.delete("/vendors/:id", requirePermission("finance:delete"), async 
       );
     }
 
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<{ id: number }>(
       `UPDATE suppliers SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
       [vendorId, scope.companyId]
     );
@@ -211,7 +249,7 @@ vendorsRouter.delete("/vendors/:id", requirePermission("finance:delete"), async 
   }
 });
 
-vendorsRouter.get("/stats", requirePermission("finance:read"), async (req, res) => {
+vendorsRouter.get("/stats", authorize({ feature: "finance.vendors", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -219,7 +257,13 @@ vendorsRouter.get("/stats", requirePermission("finance:read"), async (req, res) 
     const monthStart = currentPeriod() + "-01";
     params.push(monthStart);
 
-    const [stats] = await rawQuery<any>(
+    interface RevenueStatsRow {
+      totalRevenue: number | string;
+      pendingAmount: number | string;
+      overdueAmount: number | string;
+      paidThisMonth: number | string;
+    }
+    const [stats] = await rawQuery<RevenueStatsRow>(
       `SELECT
          COALESCE(SUM("paidAmount"), 0) AS "totalRevenue",
          COALESCE(SUM(total - "paidAmount") FILTER (WHERE status IN ('sent','partial')), 0) AS "pendingAmount",
@@ -241,10 +285,20 @@ vendorsRouter.get("/stats", requirePermission("finance:read"), async (req, res) 
   }
 });
 
-vendorsRouter.get("/receivables", requirePermission("finance:read"), async (req, res) => {
+vendorsRouter.get("/receivables", authorize({ feature: "finance.vendors", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    interface ReceivableRow {
+      id: number;
+      ref?: string | null;
+      total: number | string;
+      paidAmount: number | string;
+      dueDate?: string | null;
+      status: string;
+      remainingAmount: number | string;
+      clientName?: string | null;
+    }
+    const rows = await rawQuery<ReceivableRow>(
       `SELECT i.id, i.ref, i.total, i."paidAmount", i."dueDate", i.status,
               (i.total - COALESCE(i."paidAmount", 0)) AS "remainingAmount",
               c.name AS "clientName"
@@ -261,11 +315,12 @@ vendorsRouter.get("/receivables", requirePermission("finance:read"), async (req,
   }
 });
 
-vendorsRouter.get("/receivables/:id", requirePermission("finance:read"), async (req, res) => {
+vendorsRouter.get("/receivables/:id", authorize({ feature: "finance.vendors", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(
+    interface ReceivableDetailRow extends Record<string, unknown> { clientName?: string | null }
+    const [row] = await rawQuery<ReceivableDetailRow>(
       `SELECT i.*, c.name AS "clientName"
        FROM invoices i
        LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
@@ -277,10 +332,17 @@ vendorsRouter.get("/receivables/:id", requirePermission("finance:read"), async (
   } catch (err) { handleRouteError(err, res, "Receivable detail error:"); }
 });
 
-vendorsRouter.get("/payments", requirePermission("finance:read"), async (req, res) => {
+vendorsRouter.get("/payments", authorize({ feature: "finance.vendors", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    interface PaymentRow {
+      id: number;
+      ref?: string | null;
+      description?: string | null;
+      createdAt: string;
+      amount: number | string;
+    }
+    const rows = await rawQuery<PaymentRow>(
       `SELECT je.id, je.ref, je.description, je."createdAt",
               COALESCE(SUM(jl.credit), 0) AS amount
        FROM journal_entries je
@@ -298,16 +360,27 @@ vendorsRouter.get("/payments", requirePermission("finance:read"), async (req, re
   }
 });
 
-vendorsRouter.get("/commitments", requirePermission("finance:read"), async (req, res) => {
+vendorsRouter.get("/commitments", authorize({ feature: "finance.vendors", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    interface CommitmentRow {
+      id: number;
+      ref?: string | null;
+      totalAmount: number | string;
+      amount: number | string;
+      status: string;
+      createdAt: string;
+      dueDate?: string | null;
+      supplierName?: string | null;
+      vendorName?: string | null;
+    }
+    const rows = await rawQuery<CommitmentRow>(
       `SELECT po.id, po.ref, po."totalAmount", po."totalAmount" AS amount,
               po.status, po."createdAt", po."expectedDelivery" AS "dueDate",
               s.name AS "supplierName", s.name AS "vendorName"
        FROM purchase_orders po
        LEFT JOIN suppliers s ON s.id = po."supplierId" AND s."deletedAt" IS NULL
-       WHERE po."companyId" = $1 AND po.status NOT IN ('cancelled','closed','received') AND po."deletedAt" IS NULL
+       WHERE po."companyId" = $1 AND po.status NOT IN ('cancelled','completed','received') AND po."deletedAt" IS NULL
        ORDER BY po."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );
@@ -317,15 +390,16 @@ vendorsRouter.get("/commitments", requirePermission("finance:read"), async (req,
   }
 });
 
-vendorsRouter.get("/commitments/:id", requirePermission("finance:read"), async (req, res) => {
+vendorsRouter.get("/commitments/:id", authorize({ feature: "finance.vendors", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(
+    interface CommitmentDetailRow extends Record<string, unknown> { supplierName?: string | null }
+    const [row] = await rawQuery<CommitmentDetailRow>(
       `SELECT po.*, s.name AS "supplierName"
        FROM purchase_orders po
        LEFT JOIN suppliers s ON s.id = po."supplierId" AND s."deletedAt" IS NULL
-       WHERE po.id = $1 AND po."companyId" = $2`,
+       WHERE po.id = $1 AND po."companyId" = $2 AND po."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("الالتزام غير موجود");
@@ -333,16 +407,17 @@ vendorsRouter.get("/commitments/:id", requirePermission("finance:read"), async (
   } catch (err) { handleRouteError(err, res, "Commitment detail error:"); }
 });
 
-vendorsRouter.get("/financial-requests/:id", requirePermission("finance:read"), async (req, res) => {
+vendorsRouter.get("/financial-requests/:id", authorize({ feature: "finance.vendors", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(
+    interface FinancialRequestRow extends Record<string, unknown> { submittedByName?: string | null }
+    const [row] = await rawQuery<FinancialRequestRow>(
       `SELECT wr.*, e.name AS "submittedByName"
        FROM workflow_requests wr
-       LEFT JOIN employee_assignments ea ON ea.id = wr."submittedBy"
+       LEFT JOIN employee_assignments ea ON ea.id = wr."requestedBy"
        LEFT JOIN employees e ON e.id = ea."employeeId"
-       WHERE wr.id = $1 AND wr."companyId" = $2`,
+       WHERE wr.id = $1 AND wr."companyId" = $2 AND wr."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("الطلب المالي غير موجود");
@@ -350,16 +425,25 @@ vendorsRouter.get("/financial-requests/:id", requirePermission("finance:read"), 
   } catch (err) { handleRouteError(err, res, "Financial request detail error:"); }
 });
 
-vendorsRouter.get("/financial-requests", requirePermission("finance:read"), async (req, res) => {
+vendorsRouter.get("/financial-requests", authorize({ feature: "finance.vendors", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
-      `SELECT wr.id, wr."requestType", wr.title, wr.status, wr.amount, wr."createdAt",
+    interface FinancialRequestListRow {
+      id: number;
+      workflowType?: string | null;
+      entityType: string;
+      status: string;
+      notes?: string | null;
+      createdAt: string;
+      submittedByName?: string | null;
+    }
+    const rows = await rawQuery<FinancialRequestListRow>(
+      `SELECT wr.id, wr."workflowType", wr."entityType", wr.status, wr.notes, wr."createdAt",
               e.name AS "submittedByName"
        FROM workflow_requests wr
-       LEFT JOIN employee_assignments ea ON ea.id = wr."submittedBy"
+       LEFT JOIN employee_assignments ea ON ea.id = wr."requestedBy"
        LEFT JOIN employees e ON e.id = ea."employeeId"
-       WHERE wr."companyId" = $1 AND wr."requestType" IN ('expense','salary_advance','custody','purchase_order')
+       WHERE wr."companyId" = $1 AND wr."deletedAt" IS NULL AND wr."entityType" IN ('expense','salary_advance','custody','purchase_order')
        ORDER BY wr."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );
@@ -373,7 +457,7 @@ vendorsRouter.get("/financial-requests", requirePermission("finance:read"), asyn
 // Phase 7.1 — migrated from finance.ts (canonical ownership consolidation)
 // ─────────────────────────────────────────────────────────────────────────────
 
-vendorsRouter.get("/vendors/:id", requirePermission("finance:read"), async (req, res) => {
+vendorsRouter.get("/vendors/:id", authorize({ feature: "finance.vendors", action: "view" }), async (req, res) => {
   try {
     const scope = (req as any).scope!;
     const id = parseId(req.params.id, "id");
@@ -382,7 +466,12 @@ vendorsRouter.get("/vendors/:id", requirePermission("finance:read"), async (req,
     // has no `total` column. This was broken in the original finance.ts
     // handler but was never exercised at runtime; fixed during Phase 7.1
     // migration after a fresh smoke test caught the column-not-found error.
-    const [vendor] = await rawQuery<any>(
+    type VendorDetailRow = VendorRow & {
+      totalPurchases: number | string;
+      activeOrders: number;
+      lastOrderAt?: string | null;
+    };
+    const [vendor] = await rawQuery<VendorDetailRow>(
       `SELECT s.*,
               COALESCE((SELECT SUM("totalAmount") FROM purchase_orders po WHERE po."supplierId" = s.id AND po."deletedAt" IS NULL), 0)::numeric AS "totalPurchases",
               COALESCE((SELECT COUNT(*) FROM purchase_orders po WHERE po."supplierId" = s.id AND po."deletedAt" IS NULL AND po.status IN ('pending','approved','sent')), 0)::int AS "activeOrders",
@@ -402,7 +491,7 @@ vendorsRouter.get("/vendors/:id", requirePermission("finance:read"), async (req,
 // APPROVAL ENDPOINTS — commitments, receivables, vouchers, financial-requests, budgets
 // ─────────────────────────────────────────────────────────────────────────────
 
-vendorsRouter.patch("/commitments/:id/approve", requirePermission("finance:update"), async (req, res) => {
+vendorsRouter.patch("/commitments/:id/approve", authorize({ feature: "finance.vendors", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -429,7 +518,7 @@ vendorsRouter.patch("/commitments/:id/approve", requirePermission("finance:updat
   } catch (err) { handleRouteError(err, res, "Commitment approval error:"); }
 });
 
-vendorsRouter.patch("/receivables/:id/approve", requirePermission("finance:update"), async (req, res) => {
+vendorsRouter.patch("/receivables/:id/approve", authorize({ feature: "finance.vendors", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -456,7 +545,7 @@ vendorsRouter.patch("/receivables/:id/approve", requirePermission("finance:updat
   } catch (err) { handleRouteError(err, res, "Receivable approval error:"); }
 });
 
-vendorsRouter.patch("/vouchers/:id/approve", requirePermission("finance:update"), async (req, res) => {
+vendorsRouter.patch("/vouchers/:id/approve", authorize({ feature: "finance.vendors", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -483,7 +572,7 @@ vendorsRouter.patch("/vouchers/:id/approve", requirePermission("finance:update")
   } catch (err) { handleRouteError(err, res, "Voucher approval error:"); }
 });
 
-vendorsRouter.patch("/financial-requests/:id/approve", requirePermission("finance:update"), async (req, res) => {
+vendorsRouter.patch("/financial-requests/:id/approve", authorize({ feature: "finance.vendors", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -509,7 +598,7 @@ vendorsRouter.patch("/financial-requests/:id/approve", requirePermission("financ
   } catch (err) { handleRouteError(err, res, "Financial request approval error:"); }
 });
 
-vendorsRouter.patch("/budgets/:id/approve", requirePermission("finance:update"), async (req, res) => {
+vendorsRouter.patch("/budgets/:id/approve", authorize({ feature: "finance.vendors", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

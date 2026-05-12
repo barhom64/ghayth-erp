@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Save, CreditCard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -18,6 +19,7 @@ export default function PaymentRecord() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("properties_payment_record", { amount: "", method: "bank_transfer", receiptNumber: "" });
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const { data: contractResp, isLoading, isError } = useApiQuery<any>(
@@ -28,8 +30,6 @@ export default function PaymentRecord() {
   const schedule = Array.isArray(contract?.schedule) ? contract.schedule : [];
   const installment = schedule.find((i: any) => String(i.id) === params?.installmentId);
 
-  const [form, setForm] = useState({ amount: "", method: "bank_transfer", receiptNumber: "" });
-
   useEffect(() => {
     if (installment) {
       setForm(f => ({ ...f, amount: String(installment.amount || "") }));
@@ -37,7 +37,7 @@ export default function PaymentRecord() {
   }, [installment]);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const handleSave = async () => {
     const firstError = validate({
@@ -58,6 +58,7 @@ export default function PaymentRecord() {
         }),
       });
       toast({ title: "تم تسجيل الدفعة بنجاح" });
+      clearDraft();
       qc.invalidateQueries({ queryKey: ["property-contract"] });
       qc.invalidateQueries({ queryKey: ["property-contracts"] });
       setLocation(`/properties/contracts`);
@@ -74,6 +75,12 @@ export default function PaymentRecord() {
       subtitle={installment ? `القسط رقم ${installment.installmentNumber} — المبلغ: ${formatCurrency(installment.amount)}` : "تحميل..."}
       backPath="/properties/contracts"
     >
+      {hasDraft && (
+        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+          <span>تم استعادة مسودة محفوظة سابقاً</span>
+          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+        </div>
+      )}
       <div className="space-y-4">
         <h3 className="flex items-center gap-2 text-lg font-semibold">
           <CreditCard className="h-5 w-5 text-blue-500" /> بيانات الدفعة
@@ -103,7 +110,7 @@ export default function PaymentRecord() {
 
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/properties/contracts")}>إلغاء</Button>
-        <Button onClick={handleSave} disabled={saving} className="gap-2">
+        <Button onClick={handleSave} disabled={saving} className="gap-2" rateLimitAware>
           <Save className="h-4 w-4" /> {saving ? "جاري التسجيل..." : "تأكيد الدفع"}
         </Button>
       </div>

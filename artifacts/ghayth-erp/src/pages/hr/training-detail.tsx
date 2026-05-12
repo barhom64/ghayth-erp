@@ -14,6 +14,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const TRAINING_LIFECYCLE = [
   { key: "planned",   label: "مخطط" },
@@ -47,6 +48,8 @@ const STATUS_TONE_MAP: Record<string, "success" | "warning" | "info" | "muted" |
 export default function TrainingDetailPage() {
   const [, params] = useRoute("/hr/training/:id");
   const id = params?.id;
+
+  const { extraTabs, hideTabs } = useRegistryTabs("training_program", id ?? "");
 
   const { data: program, isLoading, isError } = useApiQuery<any>(
     ["training-program", id ?? ""],
@@ -257,8 +260,10 @@ export default function TrainingDetailPage() {
       entityId={id ?? ""}
       isLoading={isLoading}
       error={isError || (!isLoading && !program) ? true : undefined}
-      onRetry={() => window.location.reload()}
+     
       overview={overview}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       status={program?.status ? { label: program.status, tone: STATUS_TONE_MAP[program.status] ?? "default" } : undefined}
       createdAt={program?.createdAt}
       updatedAt={program?.updatedAt}

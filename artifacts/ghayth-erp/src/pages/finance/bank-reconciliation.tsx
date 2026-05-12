@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
@@ -43,7 +44,7 @@ export default function BankReconciliationPage() {
   const autoMatchMutation = useApiMutation("/finance/bank-reconciliation/auto-match", "POST");
 
   if (batchesLoading) return <LoadingSpinner />;
-  if (batchesError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (batchesError) return <ErrorState />;
 
   function parseCSVLine(line: string): string[] {
     const result: string[] = [];
@@ -147,10 +148,10 @@ export default function BankReconciliationPage() {
               <Label>ملف جدولي</Label>
               <div className="flex gap-2 mt-1">
                 <input ref={fileRef} type="file" accept=".csv" onChange={handleFileImport} className="hidden" /> {/* file input: keep raw */}
-                <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importing} className="flex-1">
+                <GuardedButton perm="finance:create" variant="outline" onClick={() => fileRef.current?.click()} disabled={importing} className="flex-1">
                   <Upload className="h-4 w-4 me-2" />
                   {importing ? "جارٍ الاستيراد..." : "اختر ملف جدولي"}
-                </Button>
+                </GuardedButton>
               </div>
               <p className="text-xs text-gray-400 mt-1">الأعمدة المتوقعة: date, description, debit, credit (أو amount)</p>
             </div>
@@ -207,10 +208,10 @@ export default function BankReconciliationPage() {
                 <p className="text-xl font-bold text-red-600">{detail?.summary?.unmatchedCount ?? 0}</p>
               </CardContent></Card>
             </div>
-            <Button onClick={handleAutoMatch} disabled={autoMatching} className="bg-blue-600 hover:bg-blue-700">
+            <GuardedButton perm="finance:approve" onClick={handleAutoMatch} disabled={autoMatching} className="bg-blue-600 hover:bg-blue-700">
               <RefreshCw className={`h-4 w-4 me-2 ${autoMatching ? "animate-spin" : ""}`} />
               {autoMatching ? "جارٍ المطابقة..." : "مطابقة تلقائية"}
-            </Button>
+            </GuardedButton>
           </div>
 
           <Card>

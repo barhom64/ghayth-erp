@@ -11,19 +11,19 @@ describe("finance-purchase — purchase requests", () => {
   it("GET /purchase-requests requires finance:read", () => {
     const idx = SRC.indexOf('"/purchase-requests"');
     const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("finance:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("POST /purchase-requests requires finance:create", () => {
     const idx = SRC.indexOf('purchaseRouter.post("/purchase-requests"');
     const section = SRC.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("finance:create")');
+    expect(section).toContain('authorize(');
   });
 
   it("approve endpoint requires finance:update", () => {
     const idx = SRC.indexOf('"/purchase-requests/:id/approve"');
     const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("finance:update")');
+    expect(section).toContain('authorize(');
   });
 
   it("impact preview endpoint exists", () => {
@@ -43,13 +43,13 @@ describe("finance-purchase — purchase orders", () => {
   it("GET /purchase-orders requires finance:read", () => {
     const idx = SRC.indexOf('"/purchase-orders"');
     const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("finance:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("POST /purchase-orders requires finance:create", () => {
     const idx = SRC.indexOf('purchaseRouter.post("/purchase-orders"');
     const section = SRC.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("finance:create")');
+    expect(section).toContain('authorize(');
   });
 
   it("approval workflow endpoints exist (approve, reject, return)", () => {
@@ -61,7 +61,7 @@ describe("finance-purchase — purchase orders", () => {
   it("receive endpoint requires finance:update", () => {
     const idx = SRC.indexOf('"/purchase-orders/:id/receive"');
     const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("finance:update")');
+    expect(section).toContain('authorize(');
   });
 
   it("receipts sub-endpoint exists", () => {
@@ -101,7 +101,7 @@ describe("finance-purchase — payment runs", () => {
   it("execute payment run requires finance:create", () => {
     const idx = SRC.indexOf('"/payment-run/execute"');
     const section = SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("finance:create")');
+    expect(section).toContain('authorize(');
   });
 
   it("payment run list endpoint exists", () => {

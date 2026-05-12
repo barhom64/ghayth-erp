@@ -33,7 +33,7 @@ export default function TCOPage() {
   ].filter((d) => d.value > 0) : [];
 
   if (isVehiclesLoading) return <LoadingSpinner />;
-  if (isVehiclesError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isVehiclesError) return <ErrorState />;
 
   return (
     <PageShell

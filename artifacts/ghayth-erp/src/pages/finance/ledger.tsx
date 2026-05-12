@@ -3,6 +3,7 @@ import { useRoute, Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -47,7 +48,7 @@ export default function LedgerPage() {
   const balance = summary?.balance || 0;
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   return (
     <PageShell
@@ -67,12 +68,12 @@ export default function LedgerPage() {
           {account && <Badge variant="outline">{typeMap[account.type] || account.type}</Badge>}
           <DatePicker value={startDate} onChange={setStartDate} className="w-40" placeholder="من" />
           <DatePicker value={endDate} onChange={setEndDate} className="w-40" placeholder="إلى" />
-          <Button variant="outline" size="sm" onClick={() => window.print()}>
+          <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => window.print()}>
             <Printer className="h-3.5 w-3.5 me-1" />طباعة
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => exportCSV(entries, ["date", "ref", "description", "debit", "credit", "runningBalance"], `ledger-${code}.csv`)}>
+          </GuardedButton>
+          <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV(entries, ["date", "ref", "description", "debit", "credit", "runningBalance"], `ledger-${code}.csv`)}>
             <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
-          </Button>
+          </GuardedButton>
         </>
       }
     >

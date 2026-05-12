@@ -7,9 +7,11 @@ import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, pool } from "../lib/rawdb.js";
 import { hashPassword } from "../lib/auth.js";
 import { logger } from "../lib/logger.js";
-import rateLimit from "express-rate-limit";
+import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
+import { getRedisRateLimitStatus } from "../lib/rateLimitStore.js";
 import { integrationService } from "../lib/integrationService.js";
-import { requirePermission, invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
+import { invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import crypto from "node:crypto";
 import { ADMIN_ROLES } from "../lib/rbacCatalog.js";
@@ -24,7 +26,12 @@ const createUserSchema = z.object({
 });
 
 const resetPasswordSchema = z.object({
-  newPassword: z.string().min(8, "كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل"),
+  newPassword: z.string()
+    .min(8, "كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل")
+    .regex(/[A-Z]/, "يجب أن تحتوي على حرف كبير واحد على الأقل")
+    .regex(/[a-z]/, "يجب أن تحتوي على حرف صغير واحد على الأقل")
+    .regex(/[0-9]/, "يجب أن تحتوي على رقم واحد على الأقل")
+    .regex(/[^a-zA-Z0-9]/, "يجب أن تحتوي على رمز خاص واحد على الأقل"),
 });
 
 const createRoleSchema = z.object({
@@ -56,10 +63,10 @@ const bulkRolePermissionsSchema = z.object({
 
 const createIntegrationSchema = z.object({
   name: z.string().min(1, "اسم التكامل مطلوب"),
-  type: z.string().min(1, "نوع التكامل مطلوب"),
+  type: z.enum(["email", "sms", "whatsapp", "webhook"]),
   config: z.any().optional(),
   enabled: z.boolean().optional(),
-  status: z.string().optional(),
+  status: z.enum(["active", "inactive", "error"]).optional(),
   maxRetries: z.coerce.number().int().min(0).optional(),
 });
 
@@ -73,9 +80,9 @@ const createCustomRoleSchema = z.object({
 
 const updateIntegrationSchema = z.object({
   name: z.string().min(1, "اسم التكامل مطلوب").optional(),
-  type: z.string().min(1, "نوع التكامل مطلوب").optional(),
+  type: z.enum(["email", "sms", "whatsapp", "webhook"]).optional(),
   config: z.any().optional(),
-  status: z.string().optional(),
+  status: z.enum(["active", "inactive", "error"]).optional(),
   maxRetries: z.coerce.number().int().min(0).optional(),
 });
 
@@ -83,13 +90,17 @@ const testIntegrationSchema = z.object({
   testRecipient: z.string().optional(),
 });
 
-const resetPasswordLimiter = rateLimit({
+// Per-user limiter for admin password resets. The /admin router is mounted
+// after authMiddleware in routes/index.ts (and gated by requireMinLevel(90)),
+// so req.scope is always set here. Owner/admin roles are NOT exempted because
+// this is the admin endpoint itself — the cap is a per-actor safety net
+// against a runaway script, not against admins as a class.
+const resetPasswordLimiter = createPerUserLimiter({
+  prefix: "admin:reset-pw",
   windowMs: 60 * 1000,
   max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "تم تجاوز الحد الأقصى لمحاولات إعادة تعيين كلمة المرور. يرجى المحاولة بعد دقيقة" },
-  validate: { ip: false, trustProxy: false },
+  message: "تم تجاوز الحد الأقصى لمحاولات إعادة تعيين كلمة المرور. يرجى المحاولة بعد دقيقة",
+  skip: () => false,
 });
 
 const ADMIN_ROLE_LEVEL = 90;
@@ -121,7 +132,7 @@ async function userBelongsToCompany(userId: number, companyId: number): Promise<
   return !!row;
 }
 
-router.get("/users", requirePermission("admin:read"), async (req, res) => {
+router.get("/users", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -141,7 +152,7 @@ router.get("/users", requirePermission("admin:read"), async (req, res) => {
   } catch (e: any) { logger.error(e, "Get users error"); handleRouteError(e, res, "خطأ غير متوقع"); }
 });
 
-router.post("/users", requirePermission("admin:write"), async (req, res) => {
+router.post("/users", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -220,7 +231,7 @@ router.post("/users", requirePermission("admin:write"), async (req, res) => {
   } catch (e: any) { logger.error(e, "Create user error"); handleRouteError(e, res, "خطأ غير متوقع"); }
 });
 
-router.patch("/users/:id", requirePermission("admin:write"), async (req, res) => {
+router.patch("/users/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -251,27 +262,30 @@ router.patch("/users/:id", requirePermission("admin:write"), async (req, res) =>
     if (employeeId !== undefined) { params.push(employeeId || null); sets.push(`"employeeId"=$${params.length}`); }
     if (!sets.length) { throw new ValidationError("لا توجد بيانات للتحديث"); }
     params.push(id);
-    await rawExecute(`UPDATE users SET ${sets.join(",")} WHERE id=$${params.length}`, params);
-    // Revoke all refresh tokens when user is deactivated
-    if (isActive === false) {
-      await rawExecute(`UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE "userId" = $1 AND "revokedAt" IS NULL`, [id]);
-    }
-    if (role !== undefined) {
-      const roleDef = PREDEFINED_ROLES.find(r => r.roleKey === role) || { roleKey: role, label: role, modules: [], level: 10 };
-      const customRoleDef = await rawQuery<any>(
-        `SELECT label, level, modules FROM custom_roles WHERE "companyId"=$1 AND "roleKey"=$2 LIMIT 1`,
-        [scope.companyId, role]
-      ).then(rows => rows[0]).catch((e) => { logger.error(e, "custom role lookup failed"); return null; });
-      const finalDef = customRoleDef
-        ? { roleKey: role, label: customRoleDef.label, level: customRoleDef.level, modules: Array.isArray(customRoleDef.modules) ? customRoleDef.modules : JSON.parse(customRoleDef.modules || "[]") }
-        : roleDef;
-      await rawExecute(
-        `INSERT INTO user_roles ("userId","roleKey",label,level,modules,"companyId","createdAt")
-         VALUES ($1,$2,$3,$4,$5,$6,NOW())
-         ON CONFLICT ("userId","roleKey","companyId") DO UPDATE SET label=EXCLUDED.label, level=EXCLUDED.level, modules=EXCLUDED.modules`,
-        [id, finalDef.roleKey, finalDef.label, finalDef.level, JSON.stringify(finalDef.modules), scope.companyId]
-      ).catch((e) => logger.error(e, "admin background task failed"));
-    }
+    await withTransaction(async (tx) => {
+      const userRes = await tx.query(`UPDATE users SET ${sets.join(",")} WHERE id=$${params.length} RETURNING id`, params);
+      if (!userRes.rowCount) throw new NotFoundError("المستخدم غير موجود");
+      if (isActive === false) {
+        await tx.query(`UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE "userId" = $1 AND "revokedAt" IS NULL`, [id]);
+      }
+      if (role !== undefined) {
+        const roleDef = PREDEFINED_ROLES.find(r => r.roleKey === role) || { roleKey: role, label: role, modules: [], level: 10 };
+        const { rows: customRows } = await tx.query(
+          `SELECT label, level, modules FROM custom_roles WHERE "companyId"=$1 AND "roleKey"=$2 LIMIT 1`,
+          [scope.companyId, role]
+        );
+        const customRoleDef = customRows[0] ?? null;
+        const finalDef = customRoleDef
+          ? { roleKey: role, label: customRoleDef.label, level: customRoleDef.level, modules: Array.isArray(customRoleDef.modules) ? customRoleDef.modules : JSON.parse(customRoleDef.modules || "[]") }
+          : roleDef;
+        await tx.query(
+          `INSERT INTO user_roles ("userId","roleKey",label,level,modules,"companyId","createdAt")
+           VALUES ($1,$2,$3,$4,$5,$6,NOW())
+           ON CONFLICT ("userId","roleKey","companyId") DO UPDATE SET label=EXCLUDED.label, level=EXCLUDED.level, modules=EXCLUDED.modules`,
+          [id, finalDef.roleKey, finalDef.label, finalDef.level, JSON.stringify(finalDef.modules), scope.companyId]
+        );
+      }
+    });
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "update", entity: "users", entityId: id,
@@ -289,7 +303,7 @@ router.patch("/users/:id", requirePermission("admin:write"), async (req, res) =>
   } catch (e: any) { handleRouteError(e, res, "خطأ غير متوقع"); }
 });
 
-router.delete("/users/:id", requirePermission("admin:write"), async (req, res) => {
+router.delete("/users/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -318,6 +332,10 @@ router.delete("/users/:id", requirePermission("admin:write"), async (req, res) =
            AND ea."companyId"=$2`,
         [id, scope.companyId]
       );
+      await tx.query(
+        `UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE "userId" = $1 AND "revokedAt" IS NULL`,
+        [id]
+      );
     });
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
@@ -334,7 +352,7 @@ router.delete("/users/:id", requirePermission("admin:write"), async (req, res) =
   } catch (e: any) { handleRouteError(e, res, "خطأ غير متوقع"); }
 });
 
-router.post("/users/:id/reset-password", resetPasswordLimiter, requirePermission("admin:write"), async (req, res) => {
+router.post("/users/:id/reset-password", resetPasswordLimiter, authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -353,8 +371,21 @@ router.post("/users/:id/reset-password", resetPasswordLimiter, requirePermission
     const parsed = zodParse(resetPasswordSchema.safeParse(req.body));
     const { newPassword } = parsed;
     const hashed = await hashPassword(newPassword);
-    const result = await rawExecute(`UPDATE users SET "passwordHash"=$1 WHERE id=$2`, [hashed, id]);
-    if (result.affectedRows === 0) { throw new NotFoundError("المستخدم غير موجود"); }
+    // Atomic: rotate password AND revoke existing refresh tokens together.
+    // Same reasoning as /auth/change-password — half-applied state would
+    // leave old tokens valid after a forced password reset, defeating the
+    // point of the reset.
+    await withTransaction(async (client) => {
+      const { rowCount: passwordUpdated } = await client.query(
+        `UPDATE users SET "passwordHash"=$1 WHERE id=$2`,
+        [hashed, id],
+      );
+      if (!passwordUpdated) throw new NotFoundError("المستخدم غير موجود");
+      await client.query(
+        `UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE "userId" = $1 AND "revokedAt" IS NULL`,
+        [id],
+      );
+    });
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "password_reset", entity: "users", entityId: id,
@@ -370,15 +401,18 @@ router.post("/users/:id/reset-password", resetPasswordLimiter, requirePermission
   } catch (e: any) { handleRouteError(e, res, "خطأ غير متوقع"); }
 });
 
-router.get("/roles", requirePermission("admin:read"), async (req, res) => {
+router.get("/roles", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     await assertAdmin(req);
-    const rows = await rawQuery(`SELECT * FROM roles ORDER BY name LIMIT 500`);
+    const scope = req.scope!;
+    const systemRoles = await rawQuery(`SELECT * FROM roles ORDER BY name LIMIT 100`, []);
+    const customRoles = await rawQuery(`SELECT * FROM custom_roles WHERE "companyId" = $1 ORDER BY label LIMIT 500`, [scope.companyId]);
+    const rows = [...systemRoles, ...customRoles];
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (e: any) { logger.error(e, "Get roles error"); handleRouteError(e, res, "خطأ غير متوقع"); }
 });
 
-router.post("/roles", requirePermission("admin:write"), async (req, res) => {
+router.post("/roles", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -417,7 +451,8 @@ router.post("/roles", requirePermission("admin:write"), async (req, res) => {
       entityId: 0,
       details: JSON.stringify({ roleKey, label, level: roleLevel }),
     }).catch((e) => logger.error(e, "admin background task failed"));
-    res.status(201).json({ success: true, roleKey, label, level: roleLevel, modules: mods });
+    const [row] = await rawQuery<any>(`SELECT * FROM custom_roles WHERE "companyId"=$1 AND "roleKey"=$2`, [scope.companyId, roleKey]);
+    res.status(201).json(row || { roleKey, label, level: roleLevel, modules: mods });
   } catch (e: any) { logger.error(e, "Create role error"); handleRouteError(e, res, "خطأ غير متوقع"); }
 });
 
@@ -438,7 +473,7 @@ const PREDEFINED_ROLES = [
   { roleKey: "employee", label: "موظف", modules: ["home","requests","documents","comms"], level: 10 },
 ];
 
-router.get("/predefined-roles", requirePermission("admin:read"), async (req, res) => {
+router.get("/predefined-roles", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -463,7 +498,7 @@ router.get("/predefined-roles", requirePermission("admin:read"), async (req, res
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.get("/user-roles/:userId", requirePermission("admin:read"), async (req, res) => {
+router.get("/user-roles/:userId", authorize({ feature: "admin", action: "view" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -480,7 +515,7 @@ router.get("/user-roles/:userId", requirePermission("admin:read"), async (req, r
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.post("/user-roles", requirePermission("admin:write"), async (req, res) => {
+router.post("/user-roles", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -522,11 +557,12 @@ router.post("/user-roles", requirePermission("admin:write"), async (req, res) =>
       entityId: userId,
       details: JSON.stringify({ roleKey: def.roleKey, label: def.label }),
     }).catch((e) => logger.error(e, "admin background task failed"));
-    res.status(201).json({ success: true, roleKey: def.roleKey });
+    const [row] = await rawQuery<any>(`SELECT * FROM user_roles WHERE "userId"=$1 AND "roleKey"=$2 AND "companyId"=$3`, [userId, def.roleKey, scope.companyId]);
+    res.status(201).json(row || { userId, roleKey: def.roleKey });
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.delete("/user-roles/:id", requirePermission("admin:write"), async (req, res) => {
+router.delete("/user-roles/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -554,7 +590,7 @@ router.delete("/user-roles/:id", requirePermission("admin:write"), async (req, r
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.get("/integrations", requirePermission("admin:read"), async (req, res) => {
+router.get("/integrations", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -566,7 +602,7 @@ router.get("/integrations", requirePermission("admin:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.post("/integrations", requirePermission("admin:write"), async (req, res) => {
+router.post("/integrations", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -594,7 +630,7 @@ router.post("/integrations", requirePermission("admin:write"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.patch("/integrations/:id", requirePermission("admin:write"), async (req, res) => {
+router.patch("/integrations/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -632,7 +668,7 @@ router.patch("/integrations/:id", requirePermission("admin:write"), async (req, 
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.delete("/integrations/:id", requirePermission("admin:write"), async (req, res) => {
+router.delete("/integrations/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -657,7 +693,7 @@ router.delete("/integrations/:id", requirePermission("admin:write"), async (req,
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.post("/integrations/:id/test", requirePermission("admin:write"), async (req, res) => {
+router.post("/integrations/:id/test", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -690,7 +726,7 @@ router.post("/integrations/:id/test", requirePermission("admin:write"), async (r
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.get("/integration-logs", requirePermission("admin:read"), async (req, res) => {
+router.get("/integration-logs", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -706,14 +742,14 @@ router.get("/integration-logs", requirePermission("admin:read"), async (req, res
     const [countRow] = await rawQuery<any>(`SELECT COUNT(*) AS total FROM integration_logs WHERE ${where}`, params);
     params.push(pageLimit, pageOffset);
     const rows = await rawQuery(
-      `SELECT * FROM integration_logs WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      `SELECT id, "integrationId", channel, status, "errorMessage", "createdAt" FROM integration_logs WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
     );
     res.json({ data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset });
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.post("/integration-logs/retry", requirePermission("admin:write"), async (req, res) => {
+router.post("/integration-logs/retry", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -733,7 +769,7 @@ router.post("/integration-logs/retry", requirePermission("admin:write"), async (
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.get("/system-health", requirePermission("admin:read"), async (req, res) => {
+router.get("/system-health", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     await assertAdmin(req);
 
@@ -752,71 +788,90 @@ router.get("/system-health", requirePermission("admin:read"), async (req, res) =
     const scope = req.scope!;
     const cid = scope.companyId;
 
-    const [cronJobs] = await rawQuery<any>(
-      `SELECT
-        COUNT(*) as total,
-        COUNT(*) FILTER (WHERE "isActive" = true) as active,
-        COUNT(*) FILTER (WHERE "lastStatus" = 'failed') as failed
-       FROM cron_jobs`
-    ).catch((e) => { logger.error(e, "admin query failed"); return [{ total: 0, active: 0, failed: 0 }]; });
+    const [
+      cronJobsRow,
+      recentCrons,
+      recentCronLogs,
+      recentErrors,
+      failedLoginsRow,
+      userCountRow,
+      companyCountRow,
+      employeeCountRow,
+      sizeRow,
+      tableCountRow,
+      integrationStatsRow,
+      pendingMessagesRow,
+    ] = await Promise.all([
+      rawQuery<any>(
+        `SELECT
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE "isActive" = true) as active,
+          COUNT(*) FILTER (WHERE "lastStatus" = 'failed') as failed
+         FROM cron_jobs`
+      ).catch((e) => { logger.error(e, "admin query failed"); return [{ total: 0, active: 0, failed: 0 }]; }),
 
-    const recentCrons = await rawQuery<any>(
-      `SELECT name, "lastRunAt", "lastStatus", "lastError", schedule, "isActive"
-       FROM cron_jobs ORDER BY "lastRunAt" DESC NULLS LAST LIMIT 20`
-    ).catch((e) => { logger.error(e, "admin query failed"); return []; });
+      rawQuery<any>(
+        `SELECT name, "lastRunAt", "lastStatus", "lastError", schedule, "isActive"
+         FROM cron_jobs ORDER BY "lastRunAt" DESC NULLS LAST LIMIT 20`
+      ).catch((e) => { logger.error(e, "admin query failed"); return []; }),
 
-    const recentCronLogs = await rawQuery<any>(
-      `SELECT "jobName", status, duration, result, error, "createdAt"
-       FROM cron_logs ORDER BY "createdAt" DESC LIMIT 20`
-    ).catch((e) => { logger.error(e, "admin query failed"); return []; });
+      rawQuery<any>(
+        `SELECT "jobName", status, duration, result, error, "createdAt"
+         FROM cron_logs ORDER BY "createdAt" DESC LIMIT 20`
+      ).catch((e) => { logger.error(e, "admin query failed"); return []; }),
 
-    const recentErrors = await rawQuery<any>(
-      `SELECT action, entity, details, "createdAt"
-       FROM event_logs WHERE (action LIKE '%error%' OR action LIKE '%failed%')
-         AND ("companyId"=$1 OR "companyId" IS NULL)
-       ORDER BY "createdAt" DESC LIMIT 20`,
-      [cid]
-    ).catch((e) => { logger.error(e, "admin query failed"); return []; });
+      rawQuery<any>(
+        `SELECT action, entity, details, "createdAt"
+         FROM event_logs WHERE (action LIKE '%error%' OR action LIKE '%failed%')
+           AND ("companyId"=$1 OR "companyId" IS NULL)
+         ORDER BY "createdAt" DESC LIMIT 20`,
+        [cid]
+      ).catch((e) => { logger.error(e, "admin query failed"); return []; }),
 
-    const [failedLogins] = await rawQuery<any>(
-      `SELECT COUNT(*) as count FROM event_logs
-       WHERE action IN ('login.failed','auth.failed') AND "createdAt" > NOW() - INTERVAL '24 hours'
-         AND ("companyId"=$1 OR "companyId" IS NULL)`,
-      [cid]
-    ).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; });
+      rawQuery<any>(
+        `SELECT COUNT(*) as count FROM event_logs
+         WHERE action IN ('login.failed','auth.failed') AND "createdAt" > NOW() - INTERVAL '24 hours'
+           AND ("companyId"=$1 OR "companyId" IS NULL)`,
+        [cid]
+      ).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; }),
 
-    const [userCount] = await rawQuery<any>(`SELECT COUNT(*) as count FROM users`).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; });
-    const [companyCount] = await rawQuery<any>(`SELECT COUNT(*) as count FROM companies`).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; });
-    const [employeeCount] = await rawQuery<any>(
-      `SELECT COUNT(DISTINCT e.id) as count FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id WHERE ea."companyId"=$1`,
-      [cid]
-    ).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; });
+      rawQuery<any>(`SELECT COUNT(*) as count FROM users`).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; }),
 
-    let dbSize = "N/A";
-    try {
-      const [sizeRow] = await rawQuery<any>(`SELECT pg_size_pretty(pg_database_size(current_database())) as size`);
-      dbSize = sizeRow?.size || "N/A";
-    } catch (e) { logger.error(e, "admin stats: db size query failed"); }
+      rawQuery<any>(`SELECT COUNT(*) as count FROM companies`).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; }),
 
-    let tableCount = 0;
-    try {
-      const [tc] = await rawQuery<any>(`SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema='public'`);
-      tableCount = Number(tc?.count || 0);
-    } catch (e) { logger.error(e, "admin stats: table count query failed"); }
+      rawQuery<any>(
+        `SELECT COUNT(DISTINCT e.id) as count FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id WHERE ea."companyId"=$1 AND e."deletedAt" IS NULL`,
+        [cid]
+      ).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; }),
 
-    const [integrationStats] = await rawQuery<any>(
-      `SELECT
-        COUNT(*) as total,
-        COUNT(*) FILTER (WHERE status = 'active') as active,
-        COUNT(*) FILTER (WHERE status = 'error') as errored
-       FROM integrations WHERE "companyId"=$1`,
-      [cid]
-    ).catch((e) => { logger.error(e, "admin query failed"); return [{ total: 0, active: 0, errored: 0 }]; });
+      rawQuery<any>(`SELECT pg_size_pretty(pg_database_size(current_database())) as size`).catch((e) => { logger.error(e, "admin stats: db size query failed"); return [{ size: "N/A" }]; }),
 
-    const [pendingMessages] = await rawQuery<any>(
-      `SELECT COUNT(*) as count FROM integration_logs WHERE status IN ('pending','retrying') AND "companyId"=$1`,
-      [cid]
-    ).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; });
+      rawQuery<any>(`SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema='public'`).catch((e) => { logger.error(e, "admin stats: table count query failed"); return [{ count: 0 }]; }),
+
+      rawQuery<any>(
+        `SELECT
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE status = 'active') as active,
+          COUNT(*) FILTER (WHERE status = 'error') as errored
+         FROM integrations WHERE "companyId"=$1`,
+        [cid]
+      ).catch((e) => { logger.error(e, "admin query failed"); return [{ total: 0, active: 0, errored: 0 }]; }),
+
+      rawQuery<any>(
+        `SELECT COUNT(*) as count FROM integration_logs WHERE status IN ('pending','retrying') AND "companyId"=$1`,
+        [cid]
+      ).catch((e) => { logger.error(e, "admin query failed"); return [{ count: 0 }]; }),
+    ]);
+
+    const [cronJobs] = cronJobsRow;
+    const [failedLogins] = failedLoginsRow;
+    const [userCount] = userCountRow;
+    const [companyCount] = companyCountRow;
+    const [employeeCount] = employeeCountRow;
+    const dbSize = sizeRow[0]?.size || "N/A";
+    const tableCount = Number(tableCountRow[0]?.count || 0);
+    const [integrationStats] = integrationStatsRow;
+    const [pendingMessages] = pendingMessagesRow;
 
     res.json({
       timestamp: new Date().toISOString(),
@@ -836,6 +891,10 @@ router.get("/system-health", requirePermission("admin:read"), async (req, res) =
           errored: Number(integrationStats?.errored || 0),
           pendingMessages: Number(pendingMessages?.count || 0),
         },
+        // Rate-limit backend status. `fallback-memory` means caps are still
+        // enforced but only per-process — the operator should investigate
+        // why Redis is unreachable. See lib/rateLimitStore.ts.
+        redisRateLimit: getRedisRateLimitStatus(),
       },
       cronJobs: recentCrons,
       recentCronLogs,
@@ -852,7 +911,7 @@ router.get("/system-health", requirePermission("admin:read"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.get("/violations-report", requirePermission("admin:read"), async (req, res) => {
+router.get("/violations-report", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -873,56 +932,68 @@ router.get("/violations-report", requirePermission("admin:read"), async (req, re
     const whereClause = conditions.join(" AND ");
 
     const paginated = [...params, pageLimit, pageOffset];
-    const violations = await rawQuery(
-      `SELECT * FROM audit_violations WHERE ${whereClause} ORDER BY "createdAt" DESC LIMIT $${paginated.length - 1} OFFSET $${paginated.length}`,
-      paginated
-    );
+    const [
+      violations,
+      totalCountRow,
+      summaryRow,
+      byType,
+      byDepartment,
+      trend,
+    ] = await Promise.all([
+      rawQuery(
+        `SELECT * FROM audit_violations WHERE ${whereClause} ORDER BY "createdAt" DESC LIMIT $${paginated.length - 1} OFFSET $${paginated.length}`,
+        paginated
+      ),
 
-    const [totalCount] = await rawQuery<any>(
-      `SELECT COUNT(*)::int AS count FROM audit_violations WHERE ${whereClause}`,
-      params
-    );
+      rawQuery<any>(
+        `SELECT COUNT(*)::int AS count FROM audit_violations WHERE ${whereClause}`,
+        params
+      ),
 
-    const [summary] = await rawQuery<any>(
-      `SELECT
-         COUNT(*) AS total,
-         COUNT(*) FILTER (WHERE status='open') AS open,
-         COUNT(*) FILTER (WHERE status='resolved') AS resolved,
-         COUNT(*) FILTER (WHERE priority='critical') AS critical,
-         COUNT(*) FILTER (WHERE priority='high') AS high,
-         COUNT(*) FILTER (WHERE priority='medium') AS medium,
-         COUNT(*) FILTER (WHERE priority='low') AS low
-       FROM audit_violations WHERE "companyId"=$1 AND "auditDate"=CURRENT_DATE`,
-      [scope.companyId]
-    );
+      rawQuery<any>(
+        `SELECT
+           COUNT(*) AS total,
+           COUNT(*) FILTER (WHERE status='open') AS open,
+           COUNT(*) FILTER (WHERE status='resolved') AS resolved,
+           COUNT(*) FILTER (WHERE priority='critical') AS critical,
+           COUNT(*) FILTER (WHERE priority='high') AS high,
+           COUNT(*) FILTER (WHERE priority='medium') AS medium,
+           COUNT(*) FILTER (WHERE priority='low') AS low
+         FROM audit_violations WHERE "companyId"=$1 AND "auditDate"=CURRENT_DATE`,
+        [scope.companyId]
+      ),
 
-    const byType = await rawQuery<any>(
-      `SELECT type, COUNT(*)::int AS count
-       FROM audit_violations WHERE "companyId"=$1 AND status='open'
-       GROUP BY type ORDER BY count DESC`,
-      [scope.companyId]
-    );
+      rawQuery<any>(
+        `SELECT type, COUNT(*)::int AS count
+         FROM audit_violations WHERE "companyId"=$1 AND status='open'
+         GROUP BY type ORDER BY count DESC`,
+        [scope.companyId]
+      ),
 
-    const byDepartment = await rawQuery<any>(
-      `SELECT department, COUNT(*)::int AS count
-       FROM audit_violations WHERE "companyId"=$1 AND status='open' AND department IS NOT NULL
-       GROUP BY department ORDER BY count DESC`,
-      [scope.companyId]
-    );
+      rawQuery<any>(
+        `SELECT department, COUNT(*)::int AS count
+         FROM audit_violations WHERE "companyId"=$1 AND status='open' AND department IS NOT NULL
+         GROUP BY department ORDER BY count DESC`,
+        [scope.companyId]
+      ),
 
-    const trend = await rawQuery<any>(
-      `SELECT "auditDate"::text AS date, COUNT(*)::int AS count
-       FROM audit_violations WHERE "companyId"=$1
-         AND "auditDate" >= CURRENT_DATE - INTERVAL '30 days'
-       GROUP BY "auditDate" ORDER BY "auditDate"`,
-      [scope.companyId]
-    );
+      rawQuery<any>(
+        `SELECT "auditDate"::text AS date, COUNT(*)::int AS count
+         FROM audit_violations WHERE "companyId"=$1
+           AND "auditDate" >= CURRENT_DATE - INTERVAL '30 days'
+         GROUP BY "auditDate" ORDER BY "auditDate"`,
+        [scope.companyId]
+      ),
+    ]);
+
+    const [totalCount] = totalCountRow;
+    const [summary] = summaryRow;
 
     res.json({ data: violations, summary, byType, byDepartment, trend, total: totalCount?.count || violations.length });
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.patch("/violations/:id/resolve", requirePermission("admin:write"), async (req, res) => {
+router.patch("/violations/:id/resolve", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -959,13 +1030,13 @@ router.patch("/violations/:id/resolve", requirePermission("admin:write"), async 
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.get("/security-log", requirePermission("admin:read"), async (req, res) => {
+router.get("/security-log", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
     const { userId, reason, from, to, page = "1", limit: lim = "50" } = req.query as any;
-    const pageNum = Math.max(Number(page), 1);
-    const pageSize = Math.min(Math.max(Number(lim), 1), 200);
+    const pageNum = Math.max(Number(page) || 1, 1);
+    const pageSize = Math.min(Math.max(Number(lim) || 50, 1), 200);
     const offset = (pageNum - 1) * pageSize;
 
     const conditions = [`sl."companyId" = $1`];
@@ -1024,7 +1095,7 @@ router.get("/security-log", requirePermission("admin:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.get("/role-permissions", requirePermission("admin:read"), async (req, res) => {
+router.get("/role-permissions", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -1040,7 +1111,7 @@ router.get("/role-permissions", requirePermission("admin:read"), async (req, res
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.post("/role-permissions", requirePermission("admin:write"), async (req, res) => {
+router.post("/role-permissions", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -1050,24 +1121,27 @@ router.post("/role-permissions", requirePermission("admin:write"), async (req, r
       [role, permission, scope.companyId]
     );
     invalidatePermissionCache(role, scope.companyId);
-    createAuditLog({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "create", entity: "role_permissions", entityId: r.insertId,
-      after: { role, permission },
-    }).catch((e) => logger.error(e, "admin background task failed"));
-    emitEvent({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "admin.role_permission.created",
-      entity: "role_permissions",
-      entityId: r.insertId,
-      details: JSON.stringify({ role, permission }),
-    }).catch((e) => logger.error(e, "admin background task failed"));
-    res.status(201).json({ success: true, id: r.insertId, role, permission });
+    if (r.insertId) {
+      createAuditLog({
+        companyId: scope.companyId, userId: scope.userId,
+        action: "create", entity: "role_permissions", entityId: r.insertId,
+        after: { role, permission },
+      }).catch((e) => logger.error(e, "admin background task failed"));
+      emitEvent({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "admin.role_permission.created",
+        entity: "role_permissions",
+        entityId: r.insertId,
+        details: JSON.stringify({ role, permission }),
+      }).catch((e) => logger.error(e, "admin background task failed"));
+    }
+    const [row] = await rawQuery<any>(`SELECT * FROM role_permissions WHERE id=$1 AND "companyId"=$2`, [r.insertId || 0, scope.companyId]);
+    res.status(201).json(row || { id: r.insertId, role, permission });
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.put("/role-permissions/bulk", requirePermission("admin:write"), async (req, res) => {
+router.put("/role-permissions/bulk", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -1105,7 +1179,7 @@ router.put("/role-permissions/bulk", requirePermission("admin:write"), async (re
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
-router.delete("/role-permissions/:id", requirePermission("admin:write"), async (req, res) => {
+router.delete("/role-permissions/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     await assertAdmin(req);
     const scope = req.scope!;
@@ -1139,8 +1213,9 @@ import { DOMAIN_REGISTRY, getSystemStats, getDomain } from "../lib/domainRegistr
 import { STATE_MACHINES } from "../lib/lifecycleEngine.js";
 import { EVENT_CATALOG, countEventsByDomain } from "../lib/eventCatalog.js";
 import { PERMISSIONS, ROLE_PERMISSIONS } from "../lib/rbacCatalog.js";
+import { ENTITY_REGISTRY, getEntitiesByDomain, getMissingCoverage, getCoverageSummary } from "../lib/entityRegistry.js";
 
-router.get("/governance/policy-audit", requirePermission("admin:read"), async (req, res) => {
+router.get("/governance/policy-audit", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const violations = await runFullPolicyAudit(scope.companyId);
@@ -1148,11 +1223,11 @@ router.get("/governance/policy-audit", requirePermission("admin:read"), async (r
   } catch (err) { handleRouteError(err, res, "Policy audit error:"); }
 });
 
-router.get("/governance/role-strategies", requirePermission("admin:read"), async (_req, res) => {
+router.get("/governance/role-strategies", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
   res.json({ strategies: ROLE_STRATEGIES, separationOfDuties: SEPARATION_OF_DUTIES, sensitiveOperations: SENSITIVE_OPERATIONS });
 });
 
-router.get("/governance/system-guards", requirePermission("admin:read"), async (req, res) => {
+router.get("/governance/system-guards", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const companyId = req.scope?.companyId;
     if (!companyId) {
@@ -1162,20 +1237,19 @@ router.get("/governance/system-guards", requirePermission("admin:read"), async (
     const result = await checkSystemGuards(companyId, "all", { date: todayISO() });
     res.json(result);
   } catch (err: any) {
-    logger.error(err, "System guards error");
-    res.status(500).json({ allowed: false, violations: [], error: "خطأ في فحص حراسة النظام" });
+    handleRouteError(err, res, "System guards error");
   }
 });
 
-router.get("/governance/domain-registry", requirePermission("admin:read"), async (_req, res) => {
+router.get("/governance/domain-registry", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
   try {
     res.json({ domains: DOMAIN_REGISTRY, stats: getSystemStats() });
   } catch (err) { handleRouteError(err, res, "Domain registry error:"); }
 });
 
-router.get("/governance/gl-reconciliation", requirePermission("admin:read"), async (req, res) => {
+router.get("/governance/gl-reconciliation", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
-    const companyId = (req as any).companyId;
+    const companyId = req.scope!.companyId;
     const mismatches = await rawQuery<any>(
       `SELECT
          coa.code,
@@ -1201,13 +1275,13 @@ router.get("/governance/gl-reconciliation", requirePermission("admin:read"), asy
   } catch (err) { handleRouteError(err, res, "GL reconciliation error:"); }
 });
 
-router.get("/governance/lifecycle-machines", requirePermission("admin:read"), async (_req, res) => {
+router.get("/governance/lifecycle-machines", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
   try {
     res.json({ machines: STATE_MACHINES, total: STATE_MACHINES.length });
   } catch (err) { handleRouteError(err, res, "Lifecycle machines error:"); }
 });
 
-router.get("/governance/event-dlq", requirePermission("admin:read"), async (req, res) => {
+router.get("/governance/event-dlq", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const onlyUnresolved = req.query.unresolved !== "false";
@@ -1230,12 +1304,13 @@ router.get("/governance/event-dlq", requirePermission("admin:read"), async (req,
   } catch (err) { handleRouteError(err, res, "DLQ list error:"); }
 });
 
-router.post("/governance/event-dlq/:id/replay", requirePermission("admin:write"), async (req, res) => {
+router.post("/governance/event-dlq/:id/replay", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
+    const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [entry] = await rawQuery<any>(
-      `SELECT id, "eventName", payload, "retryCount" FROM event_dlq WHERE id=$1 AND "resolvedAt" IS NULL`,
-      [id]
+      `SELECT id, "eventName", payload, "retryCount" FROM event_dlq WHERE id=$1 AND "resolvedAt" IS NULL AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      [id, scope.companyId]
     );
     if (!entry) throw new NotFoundError("لم يتم العثور على عنصر في قائمة الفشل");
     if (!entry.eventName) throw new ValidationError("الحدث الأصلي غير معروف، لا يمكن إعادة المحاولة");
@@ -1244,55 +1319,61 @@ router.post("/governance/event-dlq/:id/replay", requirePermission("admin:write")
     const payload = typeof entry.payload === "string" ? JSON.parse(entry.payload) : entry.payload;
     eventBus.emit(entry.eventName, payload);
     await rawExecute(
-      `UPDATE event_dlq SET "retryCount"="retryCount"+1, "resolvedAt"=NOW() WHERE id=$1`,
-      [id]
+      `UPDATE event_dlq SET "retryCount"="retryCount"+1, "resolvedAt"=NOW() WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
+      [id, scope.companyId]
     );
     res.json({ replayed: true, eventName: entry.eventName });
   } catch (err) { handleRouteError(err, res, "DLQ replay error:"); }
 });
 
-router.delete("/governance/event-dlq/:id", requirePermission("admin:write"), async (req, res) => {
+router.delete("/governance/event-dlq/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
+    const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    await rawExecute(`UPDATE event_dlq SET "resolvedAt"=NOW() WHERE id=$1`, [id]);
+    const { affectedRows } = await rawExecute(`UPDATE event_dlq SET "resolvedAt"=NOW() WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود");
     res.json({ resolved: true });
   } catch (err) { handleRouteError(err, res, "DLQ resolve error:"); }
 });
 
-router.get("/governance/event-catalog", requirePermission("admin:read"), async (req, res) => {
-  const scope = req.scope!;
-  const byDomain = countEventsByDomain();
-  const recentEvents = await rawQuery<any>(
-    `SELECT action, entity, "createdAt" FROM event_logs
-     WHERE "companyId" = $1 ORDER BY "createdAt" DESC LIMIT 20`,
-    [scope.companyId]
-  );
-  res.json({
-    total: EVENT_CATALOG.length,
-    byDomain,
-    catalog: EVENT_CATALOG.map(e => ({ action: e.name, domain: e.domain, label: e.label, critical: e.critical })),
-    recentEvents,
-  });
+router.get("/governance/event-catalog", authorize({ feature: "admin", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const byDomain = countEventsByDomain();
+    const recentEvents = await rawQuery<any>(
+      `SELECT action, entity, "createdAt" FROM event_logs
+       WHERE "companyId" = $1 ORDER BY "createdAt" DESC LIMIT 20`,
+      [scope.companyId]
+    );
+    res.json({
+      total: EVENT_CATALOG.length,
+      byDomain,
+      catalog: EVENT_CATALOG.map(e => ({ action: e.name, domain: e.domain, label: e.label, critical: e.critical })),
+      recentEvents,
+    });
+  } catch (err) { handleRouteError(err, res, "Event catalog error:"); }
 });
 
-router.get("/governance/rbac-matrix", requirePermission("admin:read"), async (req, res) => {
-  const scope = req.scope!;
-  const customPerms = await rawQuery<any>(
-    `SELECT role, permission FROM role_permissions WHERE "companyId" = $1 LIMIT 500`,
-    [scope.companyId]
-  );
-  res.json({
-    permissions: PERMISSIONS,
-    roleDefaults: ROLE_PERMISSIONS,
-    customPermissions: customPerms,
-    totalPermissions: PERMISSIONS.length,
-    totalRoles: Object.keys(ROLE_PERMISSIONS).length,
-  });
+router.get("/governance/rbac-matrix", authorize({ feature: "admin", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const customPerms = await rawQuery<any>(
+      `SELECT role, permission FROM role_permissions WHERE "companyId" = $1 LIMIT 500`,
+      [scope.companyId]
+    );
+    res.json({
+      permissions: PERMISSIONS,
+      roleDefaults: ROLE_PERMISSIONS,
+      customPermissions: customPerms,
+      totalPermissions: PERMISSIONS.length,
+      totalRoles: Object.keys(ROLE_PERMISSIONS).length,
+    });
+  } catch (err) { handleRouteError(err, res, "RBAC matrix error:"); }
 });
 
 // ── System Master Registry endpoints ──
 
-router.get("/system-registry", requirePermission("admin:read"), async (req, res) => {
+router.get("/system-registry", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const stats = getSystemStats();
@@ -1307,6 +1388,7 @@ router.get("/system-registry", requirePermission("admin:read"), async (req, res)
       [scope.companyId]
     );
 
+    const coverageSummary = getCoverageSummary();
     res.json({
       overview: {
         domains: stats.domains,
@@ -1318,6 +1400,8 @@ router.get("/system-registry", requirePermission("admin:read"), async (req, res)
         roles: Object.keys(ROLE_PERMISSIONS).length,
         cronJobs: stats.cronJobs,
         glDomains: stats.glDomains,
+        registeredEntities: ENTITY_REGISTRY.length,
+        coverage: coverageSummary,
       },
       domains: DOMAIN_REGISTRY.map(d => ({
         id: d.id,
@@ -1333,22 +1417,80 @@ router.get("/system-registry", requirePermission("admin:read"), async (req, res)
   } catch (err) { handleRouteError(err, res, "System registry error:"); }
 });
 
-router.get("/system-registry/entities", requirePermission("admin:read"), async (_req, res) => {
+router.get("/system-registry/entities", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
-    const entities = DOMAIN_REGISTRY.flatMap(d =>
-      d.tables.map(t => ({
-        table: t,
-        domain: d.id,
-        domainLabel: d.label,
-        hasLifecycle: STATE_MACHINES.some((m: any) => m.entity === t),
-        lifecycle: STATE_MACHINES.find((m: any) => m.entity === t) || null,
-      }))
-    );
+    const domain = req.query.domain as string | undefined;
+    const entities = domain ? getEntitiesByDomain(domain) : ENTITY_REGISTRY;
     res.json({ entities, total: entities.length });
   } catch (err) { handleRouteError(err, res, "Entity registry error:"); }
 });
 
-router.get("/system-registry/actions", requirePermission("admin:read"), async (req, res) => {
+router.get("/system-registry/coverage", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
+  try {
+    const gaps = getMissingCoverage();
+    const summary = getCoverageSummary();
+    const bySeverity = { critical: 0, high: 0, medium: 0, low: 0 };
+    const byCategory: Record<string, number> = {};
+    for (const g of gaps) {
+      bySeverity[g.severity]++;
+      byCategory[g.category] = (byCategory[g.category] || 0) + 1;
+    }
+    res.json({ gaps, total: gaps.length, bySeverity, byCategory, summary });
+  } catch (err) { handleRouteError(err, res, "Coverage analysis error:"); }
+});
+
+router.get("/system-registry/notifications", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
+  try {
+    const byDomain: Record<string, Array<{ entityId: string; entityLabel: string; notifications: string[] }>> = {};
+    for (const entity of ENTITY_REGISTRY) {
+      if (entity.notifications.length === 0) continue;
+      if (!byDomain[entity.domain]) byDomain[entity.domain] = [];
+      byDomain[entity.domain].push({
+        entityId: entity.id,
+        entityLabel: entity.label,
+        notifications: entity.notifications,
+      });
+    }
+    const totalTypes = ENTITY_REGISTRY.reduce((s, e) => s + e.notifications.length, 0);
+    const entitiesWithNotifications = ENTITY_REGISTRY.filter(e => e.notifications.length > 0).length;
+    res.json({ byDomain, totalTypes, entitiesWithNotifications, totalEntities: ENTITY_REGISTRY.length });
+  } catch (err) { handleRouteError(err, res, "Notification registry error:"); }
+});
+
+router.get("/system-registry/reports", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
+  try {
+    const byDomain: Record<string, Array<{ entityId: string; entityLabel: string; reports: string[] }>> = {};
+    for (const entity of ENTITY_REGISTRY) {
+      if (entity.reports.length === 0) continue;
+      if (!byDomain[entity.domain]) byDomain[entity.domain] = [];
+      byDomain[entity.domain].push({
+        entityId: entity.id,
+        entityLabel: entity.label,
+        reports: entity.reports,
+      });
+    }
+    const totalReports = ENTITY_REGISTRY.reduce((s, e) => s + e.reports.length, 0);
+    const entitiesWithReports = ENTITY_REGISTRY.filter(e => e.reports.length > 0).length;
+    res.json({ byDomain, totalReports, entitiesWithReports, totalEntities: ENTITY_REGISTRY.length });
+  } catch (err) { handleRouteError(err, res, "Report registry error:"); }
+});
+
+router.get("/system-registry/print-templates", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
+  try {
+    const templates = ENTITY_REGISTRY
+      .filter(e => e.print?.hasTemplate)
+      .map(e => ({
+        entityId: e.id,
+        entityLabel: e.label,
+        domain: e.domain,
+        templateKey: e.print!.templateKey,
+        detailRoute: e.routes.detail,
+      }));
+    res.json({ templates, total: templates.length });
+  } catch (err) { handleRouteError(err, res, "Print templates error:"); }
+});
+
+router.get("/system-registry/actions", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const domain = req.query.domain as string | undefined;
@@ -1376,7 +1518,7 @@ router.get("/system-registry/actions", requirePermission("admin:read"), async (r
   } catch (err) { handleRouteError(err, res, "Action registry error:"); }
 });
 
-router.get("/system-registry/pages", requirePermission("admin:read"), async (_req, res) => {
+router.get("/system-registry/pages", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
   try {
     const pages = [
       { path: "/", component: "Dashboard", domain: "core", lazy: true },
@@ -1408,7 +1550,7 @@ router.get("/system-registry/pages", requirePermission("admin:read"), async (_re
   } catch (err) { handleRouteError(err, res, "Page registry error:"); }
 });
 
-router.get("/system-registry/missing", requirePermission("admin:read"), async (req, res) => {
+router.get("/system-registry/missing", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -1445,7 +1587,7 @@ router.get("/system-registry/missing", requirePermission("admin:read"), async (r
 
 // ─── System Health Checks (structured pass/fail) ────────────────────────
 
-router.get("/system-health-checks", requirePermission("admin:read"), async (req, res) => {
+router.get("/system-health-checks", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const checks: { name: string; status: "ok" | "warn" | "error"; detail?: string }[] = [];
@@ -1599,7 +1741,7 @@ router.get("/system-health-checks", requirePermission("admin:read"), async (req,
 
 // ─── Domain Dependency Graph ────────────────────────────────────────────
 
-router.get("/system-health/dependency-graph", requirePermission("admin:read"), async (_req, res) => {
+router.get("/system-health/dependency-graph", authorize({ feature: "admin", action: "list" }), async (_req, res) => {
   try {
     const graph: { from: string; to: string; via: string }[] = [];
 
@@ -1642,7 +1784,7 @@ router.get("/system-health/dependency-graph", requirePermission("admin:read"), a
 // SYSTEM STOPS — زر الإيقاف الطارئ (Red Button)
 // ============================================================================
 
-router.get("/system-stops", requirePermission("admin:read"), async (req, res) => {
+router.get("/system-stops", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(
@@ -1658,25 +1800,27 @@ router.get("/system-stops", requirePermission("admin:read"), async (req, res) =>
   } catch (err) { handleRouteError(err, res, "List system stops"); }
 });
 
-router.post("/system-stops", requirePermission("admin:write"), async (req, res) => {
+const systemStopSchema = z.object({
+  scope: z.enum(["financial", "hr", "operational", "all"]).optional().default("all"),
+  reason: z.string().min(1, "سبب الإيقاف مطلوب"),
+});
+
+router.post("/system-stops", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { scope: stopScope, reason } = req.body;
-    if (!reason || typeof reason !== "string") throw new ValidationError("سبب الإيقاف مطلوب");
-    const validScopes = ["financial", "hr", "operational", "all"];
-    const s = validScopes.includes(stopScope) ? stopScope : "all";
+    const { scope: s, reason } = zodParse(systemStopSchema.safeParse(req.body));
     const [row] = await rawQuery<{ id: number }>(
       `INSERT INTO system_stops ("companyId", scope, reason, "activatedBy")
        VALUES ($1, $2, $3, $4) RETURNING id`,
       [scope.companyId, s, reason, scope.userId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.activated", entity: "system_stops", entityId: row.id, after: { scope: s, reason } }).catch(() => {});
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.activated", entity: "system_stops", entityId: row.id, details: `إيقاف نظام (${s}): ${reason}` }).catch(() => {});
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.activated", entity: "system_stops", entityId: row.id, after: { scope: s, reason } }).catch((e) => logger.error(e, "audit log failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.activated", entity: "system_stops", entityId: row.id, details: `إيقاف نظام (${s}): ${reason}` }).catch((e) => logger.error(e, "emit event failed"));
     res.status(201).json({ id: row.id, message: `تم تفعيل إيقاف النظام — النطاق: ${s}` });
   } catch (err) { handleRouteError(err, res, "Create system stop"); }
 });
 
-router.patch("/system-stops/:id/deactivate", requirePermission("admin:write"), async (req, res) => {
+router.patch("/system-stops/:id/deactivate", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1685,8 +1829,8 @@ router.patch("/system-stops/:id/deactivate", requirePermission("admin:write"), a
        WHERE id=$2 AND "companyId"=$3 AND active=true`,
       [scope.userId, id, scope.companyId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.deactivated", entity: "system_stops", entityId: id, after: {} }).catch(() => {});
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.deactivated", entity: "system_stops", entityId: id, details: "إلغاء إيقاف النظام" }).catch(() => {});
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.deactivated", entity: "system_stops", entityId: id, after: {} }).catch((e) => logger.error(e, "audit log failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "system.stop.deactivated", entity: "system_stops", entityId: id, details: "إلغاء إيقاف النظام" }).catch((e) => logger.error(e, "emit event failed"));
     res.json({ message: "تم إلغاء تفعيل الإيقاف" });
   } catch (err) { handleRouteError(err, res, "Deactivate system stop"); }
 });

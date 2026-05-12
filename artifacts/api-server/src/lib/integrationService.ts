@@ -145,13 +145,13 @@ export async function sendViaIntegration(options: SendOptions): Promise<{ succes
 
   if (result.success) {
     await rawExecute(
-      `UPDATE integrations SET "lastSuccessAt"=NOW(), "retryCount"=0 WHERE id=$1`,
-      [integration.id]
+      `UPDATE integrations SET "lastSuccessAt"=NOW(), "retryCount"=0 WHERE id=$1 AND "companyId"=$2`,
+      [integration.id, companyId]
     );
   } else {
     await rawExecute(
-      `UPDATE integrations SET "lastFailureAt"=NOW(), "lastError"=$2, "retryCount"="retryCount"+1 WHERE id=$1`,
-      [integration.id, result.error]
+      `UPDATE integrations SET "lastFailureAt"=NOW(), "lastError"=$2, "retryCount"="retryCount"+1 WHERE id=$1 AND "companyId"=$3`,
+      [integration.id, result.error, companyId]
     );
   }
 
@@ -190,8 +190,8 @@ export async function retryFailedMessages(companyId?: number): Promise<{ retried
     if (result.success) succeeded++;
 
     await rawExecute(
-      `UPDATE integration_logs SET "retryAttempt"="retryAttempt"+1, status=$2 WHERE id=$1`,
-      [log.id, result.success ? "sent" : "retrying"]
+      `UPDATE integration_logs SET "retryAttempt"="retryAttempt"+1, status=$2 WHERE id=$1 AND "companyId"=$3`,
+      [log.id, result.success ? "sent" : "retrying", log.companyId]
     );
   }
 

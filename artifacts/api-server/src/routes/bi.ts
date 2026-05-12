@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { handleRouteError, ValidationError, ConflictError,
   parseId,
   zodParse,
@@ -44,7 +44,7 @@ const muteAlertSchema = z.object({
   reason: z.string().optional().nullable(),
 });
 
-router.get("/dashboards", requirePermission("bi:read"), async (req, res) => {
+router.get("/dashboards", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM bi_dashboards WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
@@ -52,7 +52,7 @@ router.get("/dashboards", requirePermission("bi:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.post("/dashboards", requirePermission("bi:write"), async (req, res) => {
+router.post("/dashboards", authorize({ feature: "bi", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const body = zodParse(createDashboardSchema.safeParse(req.body));
@@ -71,7 +71,7 @@ router.post("/dashboards", requirePermission("bi:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.get("/kpis", requirePermission("bi:read"), async (req, res) => {
+router.get("/kpis", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM bi_kpis WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY module, name LIMIT 500`, [scope.companyId]);
@@ -79,7 +79,7 @@ router.get("/kpis", requirePermission("bi:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.post("/kpis", requirePermission("bi:write"), async (req, res) => {
+router.post("/kpis", authorize({ feature: "bi", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const body = zodParse(createKpiSchema.safeParse(req.body));
@@ -98,7 +98,7 @@ router.post("/kpis", requirePermission("bi:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.get("/reports", requirePermission("bi:read"), async (req, res) => {
+router.get("/reports", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM bi_reports WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
@@ -106,7 +106,7 @@ router.get("/reports", requirePermission("bi:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.post("/reports", requirePermission("bi:write"), async (req, res) => {
+router.post("/reports", authorize({ feature: "bi", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const body = zodParse(createReportSchema.safeParse(req.body));
@@ -125,13 +125,13 @@ router.post("/reports", requirePermission("bi:write"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.get("/overview", requirePermission("bi:read"), async (req, res) => {
+router.get("/overview", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
     const [row] = await rawQuery<any>(
       `SELECT
-         (SELECT COUNT(*) FROM employee_assignments WHERE "companyId" = $1) AS employees,
+         (SELECT COUNT(*) FROM employee_assignments WHERE "companyId" = $1 AND status = 'active') AS employees,
          (SELECT COUNT(*) FROM clients WHERE "companyId" = $1 AND "deletedAt" IS NULL) AS clients,
          (SELECT COUNT(*) FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL) AS invoices,
          (SELECT COUNT(*) FROM projects WHERE "companyId" = $1 AND "deletedAt" IS NULL) AS projects,
@@ -152,7 +152,7 @@ router.get("/overview", requirePermission("bi:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
-router.get("/operations/sla-delays", requirePermission("bi:read"), async (req, res) => {
+router.get("/operations/sla-delays", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -185,7 +185,7 @@ router.get("/operations/sla-delays", requirePermission("bi:read"), async (req, r
   } catch (err) { handleRouteError(err, res, "SLA delays"); }
 });
 
-router.get("/operations/rejection-rate", requirePermission("bi:read"), async (req, res) => {
+router.get("/operations/rejection-rate", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -211,7 +211,7 @@ router.get("/operations/rejection-rate", requirePermission("bi:read"), async (re
   } catch (err) { handleRouteError(err, res, "Rejection rate"); }
 });
 
-router.get("/operations/bottleneck", requirePermission("bi:read"), async (req, res) => {
+router.get("/operations/bottleneck", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -242,7 +242,7 @@ router.get("/operations/bottleneck", requirePermission("bi:read"), async (req, r
     );
 
     const approvalParams: any[] = [cid];
-    const approvalConds = [`lr."companyId" = $1`, `lr.status = 'pending'`];
+    const approvalConds = [`lr."companyId" = $1`, `lr.status = 'pending'`, `lr."deletedAt" IS NULL`];
     if (from) { approvalParams.push(from); approvalConds.push(`lr."createdAt" >= $${approvalParams.length}::date`); }
     if (to) { approvalParams.push(to); approvalConds.push(`lr."createdAt" <= $${approvalParams.length}::date`); }
     if (departmentId) {
@@ -255,7 +255,7 @@ router.get("/operations/bottleneck", requirePermission("bi:read"), async (req, r
          COUNT(*) AS "pendingApprovals",
          ROUND(AVG(EXTRACT(EPOCH FROM (NOW() - lr."createdAt")) / 3600), 1) AS "avgWaitHours"
        FROM hr_leave_requests lr
-       LEFT JOIN employees e ON e.id = lr."employeeId"
+       LEFT JOIN employees e ON e.id = lr."employeeId" AND e."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 AND ea.status = 'active'
        LEFT JOIN departments d ON d.id = ea."departmentId"
        WHERE ${approvalConds.join(" AND ")}
@@ -269,7 +269,7 @@ router.get("/operations/bottleneck", requirePermission("bi:read"), async (req, r
   } catch (err) { handleRouteError(err, res, "Bottleneck analysis"); }
 });
 
-router.get("/operations/employee-productivity", requirePermission("bi:read"), async (req, res) => {
+router.get("/operations/employee-productivity", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -297,7 +297,7 @@ router.get("/operations/employee-productivity", requirePermission("bi:read"), as
            THEN ROUND(COUNT(*) FILTER (WHERE t.status = 'completed')::numeric / att.worked_hours, 2)
            ELSE 0 END AS "productivityRate"
        FROM tasks t
-       JOIN employees e ON e.id = t."assignedTo"
+       JOIN employees e ON e.id = t."assignedTo" AND e."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 AND ea.status = 'active'
        LEFT JOIN departments d ON d.id = ea."departmentId"
        LEFT JOIN LATERAL (
@@ -318,12 +318,12 @@ router.get("/operations/employee-productivity", requirePermission("bi:read"), as
   } catch (err) { handleRouteError(err, res, "Employee productivity"); }
 });
 
-router.get("/operations/approval-timeliness", requirePermission("bi:read"), async (req, res) => {
+router.get("/operations/approval-timeliness", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
     const { from, to, departmentId } = req.query as any;
-    const conditions = [`lr."companyId" = $1`];
+    const conditions = [`lr."companyId" = $1`, `lr."deletedAt" IS NULL`];
     const params: any[] = [cid];
     if (from) { params.push(from); conditions.push(`lr."createdAt" >= $${params.length}::date`); }
     if (to) { params.push(to); conditions.push(`lr."createdAt" <= $${params.length}::date`); }
@@ -342,7 +342,7 @@ router.get("/operations/approval-timeliness", requirePermission("bi:read"), asyn
          ROUND(AVG(CASE WHEN lr.status = 'approved' AND lr."approvedAt" IS NOT NULL
            THEN EXTRACT(EPOCH FROM (lr."approvedAt" - lr."createdAt")) / 3600 END), 1) AS "avgApprovalHours"
        FROM hr_leave_requests lr
-       LEFT JOIN employees e ON e.id = lr."employeeId"
+       LEFT JOIN employees e ON e.id = lr."employeeId" AND e."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 AND ea.status = 'active'
        WHERE ${conditions.join(" AND ")}`,
       params
@@ -351,7 +351,7 @@ router.get("/operations/approval-timeliness", requirePermission("bi:read"), asyn
   } catch (err) { handleRouteError(err, res, "Approval timeliness"); }
 });
 
-router.get("/operations/avg-completion-time", requirePermission("bi:read"), async (req, res) => {
+router.get("/operations/avg-completion-time", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -382,7 +382,7 @@ router.get("/operations/avg-completion-time", requirePermission("bi:read"), asyn
   } catch (err) { handleRouteError(err, res, "Avg completion time"); }
 });
 
-router.get("/operations/trend", requirePermission("bi:read"), async (req, res) => {
+router.get("/operations/trend", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -414,7 +414,7 @@ router.get("/operations/trend", requirePermission("bi:read"), async (req, res) =
   } catch (err) { handleRouteError(err, res, "Operations trend"); }
 });
 
-router.get("/admin-reports/daily", requirePermission("bi:read"), async (req, res) => {
+router.get("/admin-reports/daily", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -427,7 +427,7 @@ router.get("/admin-reports/daily", requirePermission("bi:read"), async (req, res
          COUNT(*) FILTER (WHERE status = 'absent') AS absent,
          COUNT(*) FILTER (WHERE status = 'late') AS late
        FROM attendance
-       WHERE "companyId" = $1 AND date = $2::date`,
+       WHERE "companyId" = $1 AND date = $2::date AND "deletedAt" IS NULL`,
       [cid, date]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0, present: 0, absent: 0, late: 0 }]; });
 
@@ -453,7 +453,7 @@ router.get("/admin-reports/daily", requirePermission("bi:read"), async (req, res
 
     const [leaves] = await rawQuery<any>(
       `SELECT COUNT(*) AS total FROM hr_leave_requests
-       WHERE "companyId" = $1 AND DATE("createdAt") = $2::date`,
+       WHERE "companyId" = $1 AND DATE("createdAt") = $2::date AND "deletedAt" IS NULL`,
       [cid, date]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0 }]; });
 
@@ -493,7 +493,7 @@ router.get("/admin-reports/daily", requirePermission("bi:read"), async (req, res
   } catch (err) { handleRouteError(err, res, "Daily report"); }
 });
 
-router.get("/admin-reports/weekly", requirePermission("bi:read"), async (req, res) => {
+router.get("/admin-reports/weekly", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -516,7 +516,7 @@ router.get("/admin-reports/weekly", requirePermission("bi:read"), async (req, re
            COUNT(*) FILTER (WHERE status = 'present') AS present,
            ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'present') / NULLIF(COUNT(*), 0), 0) AS "presentRate"
          FROM attendance
-         WHERE "companyId" = $1 AND date BETWEEN $2::date AND $3::date`,
+         WHERE "companyId" = $1 AND date BETWEEN $2::date AND $3::date AND "deletedAt" IS NULL`,
         [cid, startDate, endDate]
       ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0, present: 0, presentRate: 0 }]; });
 
@@ -586,7 +586,7 @@ router.get("/admin-reports/weekly", requirePermission("bi:read"), async (req, re
   } catch (err) { handleRouteError(err, res, "Weekly report"); }
 });
 
-router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, res) => {
+router.get("/admin-reports/monthly", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -615,7 +615,7 @@ router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, r
            COUNT(*) FILTER (WHERE status = 'absent') AS absent,
            COUNT(*) FILTER (WHERE status = 'late') AS late,
            ROUND(100.0 * COUNT(*) FILTER (WHERE status = 'present') / NULLIF(COUNT(*), 0), 0) AS "presentRate"
-         FROM attendance WHERE "companyId" = $1 AND date BETWEEN $2::date AND $3::date`,
+         FROM attendance WHERE "companyId" = $1 AND date BETWEEN $2::date AND $3::date AND "deletedAt" IS NULL`,
         [cid, startDate, endDate]
       ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0, present: 0, absent: 0, late: 0, presentRate: 0 }]; });
 
@@ -644,7 +644,7 @@ router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, r
            COUNT(*) FILTER (WHERE status = 'rejected') AS rejected,
            SUM(CASE WHEN status = 'approved' THEN days ELSE 0 END) AS "totalDays"
          FROM hr_leave_requests
-         WHERE "companyId" = $1 AND DATE("createdAt") BETWEEN $2::date AND $3::date`,
+         WHERE "companyId" = $1 AND DATE("createdAt") BETWEEN $2::date AND $3::date AND "deletedAt" IS NULL`,
         [cid, startDate, endDate]
       ).catch((e) => { logger.error(e, "bi query failed"); return [{ total: 0, approved: 0, rejected: 0, totalDays: 0 }]; });
 
@@ -717,7 +717,7 @@ router.get("/admin-reports/monthly", requirePermission("bi:read"), async (req, r
 });
 
 
-router.get("/ceo-dashboard", requirePermission("bi:read"), async (req, res) => {
+router.get("/ceo-dashboard", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -757,18 +757,18 @@ router.get("/ceo-dashboard", requirePermission("bi:read"), async (req, res) => {
       `SELECT
          COUNT(*) FILTER (WHERE status = 'present') AS "presentToday",
          COUNT(*) AS "totalToday"
-       FROM attendance WHERE "companyId" = $1 AND date = CURRENT_DATE`,
+       FROM attendance WHERE "companyId" = $1 AND date = CURRENT_DATE AND "deletedAt" IS NULL`,
       [cid]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
     const [pendingLeave] = await rawQuery<any>(
-      `SELECT COUNT(*) AS cnt FROM hr_leave_requests WHERE "companyId" = $1 AND status = 'pending'`,
+      `SELECT COUNT(*) AS cnt FROM hr_leave_requests WHERE "companyId" = $1 AND status = 'pending' AND "deletedAt" IS NULL`,
       [cid]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{ cnt: 0 }]; });
 
     const [ops] = await rawQuery<any>(
       `SELECT
-         COUNT(*) FILTER (WHERE status NOT IN ('completed','cancelled') AND "scheduledDate" < CURRENT_DATE) AS "overdueProjects",
+         COUNT(*) FILTER (WHERE status NOT IN ('completed','cancelled') AND "endDate" < CURRENT_DATE) AS "overdueProjects",
          COUNT(*) AS "totalProjects"
        FROM projects WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [cid]
@@ -780,7 +780,7 @@ router.get("/ceo-dashboard", requirePermission("bi:read"), async (req, res) => {
     ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
     const [maintenance] = await rawQuery<any>(
-      `SELECT COUNT(*) FILTER (WHERE status = 'pending') AS "pendingMaintenance" FROM maintenance_requests WHERE "companyId" = $1`,
+      `SELECT COUNT(*) FILTER (WHERE status = 'pending') AS "pendingMaintenance" FROM maintenance_requests WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [cid]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
 
@@ -843,7 +843,7 @@ router.get("/ceo-dashboard", requirePermission("bi:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "CEO dashboard"); }
 });
 
-router.get("/reports/branch-performance", requirePermission("bi:read"), async (req, res) => {
+router.get("/reports/branch-performance", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -856,69 +856,74 @@ router.get("/reports/branch-performance", requirePermission("bi:read"), async (r
       [cid]
     );
 
-    const result = await Promise.all(branches.map(async (branch: any) => {
-      const [revenue] = await rawQuery<any>(
-        `SELECT COALESCE(SUM("paidAmount"), 0) AS revenue, COALESCE(SUM(total), 0) AS invoiced,
-                COUNT(*) AS invoiceCount
-         FROM invoices WHERE "companyId" = $1 AND "branchId" = $2 AND "deletedAt" IS NULL
-           AND DATE("createdAt") BETWEEN $3::date AND $4::date`,
-        [cid, branch.id, dateFrom, dateTo]
-      ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
-
-      const [expenses] = await rawQuery<any>(
-        `SELECT COALESCE(SUM(amount), 0) AS expenses FROM vouchers
-         WHERE "companyId" = $1 AND "branchId" = $2 AND type = 'payment'
-           AND DATE("createdAt") BETWEEN $3::date AND $4::date`,
-        [cid, branch.id, dateFrom, dateTo]
-      ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
-
-      const [employees] = await rawQuery<any>(
-        `SELECT COUNT(*) AS total FROM employee_assignments
-         WHERE "companyId" = $1 AND "branchId" = $2 AND status = 'active'`,
-        [cid, branch.id]
-      ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
-
-      const [attRow] = await rawQuery<any>(
-        `SELECT
-           COUNT(*) FILTER (WHERE status = 'present') AS present,
-           COUNT(*) AS total
+    const branchIds = branches.map((b: any) => b.id);
+    const [revenueRows, expenseRows, employeeRows, attRows, ticketRows, satRows] = await Promise.all([
+      rawQuery<any>(
+        `SELECT "branchId", COALESCE(SUM("paidAmount"), 0) AS revenue, COALESCE(SUM(total), 0) AS invoiced, COUNT(*) AS "invoiceCount"
+         FROM invoices WHERE "companyId" = $1 AND "branchId" = ANY($2::int[]) AND "deletedAt" IS NULL
+           AND DATE("createdAt") BETWEEN $3::date AND $4::date
+         GROUP BY "branchId"`,
+        [cid, branchIds, dateFrom, dateTo]
+      ).catch((e) => { logger.error(e, "bi query failed"); return []; }),
+      rawQuery<any>(
+        `SELECT "branchId", COALESCE(SUM(amount), 0) AS expenses FROM vouchers
+         WHERE "companyId" = $1 AND "branchId" = ANY($2::int[]) AND type = 'payment'
+           AND DATE("createdAt") BETWEEN $3::date AND $4::date
+         GROUP BY "branchId"`,
+        [cid, branchIds, dateFrom, dateTo]
+      ).catch((e) => { logger.error(e, "bi query failed"); return []; }),
+      rawQuery<any>(
+        `SELECT "branchId", COUNT(*) AS total FROM employee_assignments
+         WHERE "companyId" = $1 AND "branchId" = ANY($2::int[]) AND status = 'active'
+         GROUP BY "branchId"`,
+        [cid, branchIds]
+      ).catch((e) => { logger.error(e, "bi query failed"); return []; }),
+      rawQuery<any>(
+        `SELECT "branchId", COUNT(*) FILTER (WHERE status = 'present') AS present, COUNT(*) AS total
          FROM attendance
-         WHERE "companyId" = $1 AND "branchId" = $2
-           AND date BETWEEN $3::date AND $4::date`,
-        [cid, branch.id, dateFrom, dateTo]
-      ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
-
-      const [ticketsRow] = await rawQuery<any>(
-        `SELECT COUNT(*) AS cnt FROM support_tickets
-         WHERE "companyId" = $1 AND status = 'open'`,
-        [cid]
-      ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
-
-      const [satisfactionRow] = await rawQuery<any>(
-        `SELECT COALESCE(AVG(rating), 0) AS avg FROM support_tickets
-         WHERE "companyId" = $1 AND rating IS NOT NULL
-           AND DATE("createdAt") BETWEEN $2::date AND $3::date`,
-        [cid, dateFrom, dateTo]
-      ).catch((e) => { logger.error(e, "bi query failed"); return [{}]; });
-
-      const rev = Number(revenue?.revenue ?? 0);
-      const exp = Number(expenses?.expenses ?? 0);
-      const attTotal = Number(attRow?.total ?? 0);
-      const attPresent = Number(attRow?.present ?? 0);
-
+         WHERE "companyId" = $1 AND "branchId" = ANY($2::int[])
+           AND date BETWEEN $3::date AND $4::date AND "deletedAt" IS NULL
+         GROUP BY "branchId"`,
+        [cid, branchIds, dateFrom, dateTo]
+      ).catch((e) => { logger.error(e, "bi query failed"); return []; }),
+      rawQuery<any>(
+        `SELECT "branchId", COUNT(*) AS cnt FROM support_tickets
+         WHERE "companyId" = $1 AND "branchId" = ANY($2::int[]) AND status = 'open'
+         GROUP BY "branchId"`,
+        [cid, branchIds]
+      ).catch((e) => { logger.error(e, "bi query failed"); return []; }),
+      rawQuery<any>(
+        `SELECT "branchId", COALESCE(AVG(rating), 0) AS avg FROM support_tickets
+         WHERE "companyId" = $1 AND "branchId" = ANY($2::int[]) AND rating IS NOT NULL
+           AND DATE("createdAt") BETWEEN $3::date AND $4::date
+         GROUP BY "branchId"`,
+        [cid, branchIds, dateFrom, dateTo]
+      ).catch((e) => { logger.error(e, "bi query failed"); return []; }),
+    ]);
+    const revMap = new Map(revenueRows.map((r: any) => [r.branchId, r]));
+    const expMap = new Map(expenseRows.map((r: any) => [r.branchId, r]));
+    const empMap = new Map(employeeRows.map((r: any) => [r.branchId, r]));
+    const attMap = new Map(attRows.map((r: any) => [r.branchId, r]));
+    const tickMap = new Map(ticketRows.map((r: any) => [r.branchId, r]));
+    const satMap = new Map(satRows.map((r: any) => [r.branchId, r]));
+    const result = branches.map((branch: any) => {
+      const rev = Number(revMap.get(branch.id)?.revenue ?? 0);
+      const exp = Number(expMap.get(branch.id)?.expenses ?? 0);
+      const attTotal = Number(attMap.get(branch.id)?.total ?? 0);
+      const attPresent = Number(attMap.get(branch.id)?.present ?? 0);
       return {
         branchId: branch.id,
         branchName: branch.name,
         revenue: rev,
         expenses: exp,
         netProfit: rev - exp,
-        invoiceCount: Number(revenue?.invoiceCount ?? 0),
-        employees: Number(employees?.total ?? 0),
+        invoiceCount: Number(revMap.get(branch.id)?.invoiceCount ?? 0),
+        employees: Number(empMap.get(branch.id)?.total ?? 0),
         attendanceRate: attTotal > 0 ? Math.round((attPresent / attTotal) * 100) : 0,
-        openTickets: Number(ticketsRow?.cnt ?? 0),
-        clientSatisfaction: Math.round(Number(satisfactionRow?.avg ?? 0) * 10) / 10,
+        openTickets: Number(tickMap.get(branch.id)?.cnt ?? 0),
+        clientSatisfaction: Math.round(Number(satMap.get(branch.id)?.avg ?? 0) * 10) / 10,
       };
-    }));
+    });
 
     result.sort((a: any, b: any) => b.revenue - a.revenue);
     result.forEach((r: any, i: number) => { r.rank = i + 1; });
@@ -927,7 +932,7 @@ router.get("/reports/branch-performance", requirePermission("bi:read"), async (r
   } catch (err) { handleRouteError(err, res, "Branch performance report"); }
 });
 
-router.get("/reports/vendor-performance", requirePermission("bi:read"), async (req, res) => {
+router.get("/reports/vendor-performance", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -949,7 +954,7 @@ router.get("/reports/vendor-performance", requirePermission("bi:read"), async (r
        FROM suppliers v
        LEFT JOIN purchase_orders po ON po."supplierId" = v.id AND po."companyId" = $1
          AND DATE(po."createdAt") BETWEEN $2::date AND $3::date
-       WHERE v."companyId" = $1
+       WHERE v."companyId" = $1 AND v."deletedAt" IS NULL
        GROUP BY v.id, v.name
        HAVING COUNT(po.id) > 0
        ORDER BY "totalSpend" DESC`,
@@ -977,7 +982,7 @@ router.get("/reports/vendor-performance", requirePermission("bi:read"), async (r
   } catch (err) { handleRouteError(err, res, "Vendor performance report"); }
 });
 
-router.get("/reports/fleet-tco", requirePermission("bi:read"), async (req, res) => {
+router.get("/reports/fleet-tco", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -999,17 +1004,17 @@ router.get("/reports/fleet-tco", requirePermission("bi:read"), async (req, res) 
        FROM fleet_vehicles fv
        LEFT JOIN LATERAL (
          SELECT COALESCE(SUM(cost), 0) AS total FROM fleet_maintenance
-         WHERE "vehicleId" = fv.id AND "companyId" = $1
+         WHERE "vehicleId" = fv.id AND "companyId" = $1 AND "deletedAt" IS NULL
        ) fm_total ON true
        LEFT JOIN LATERAL (
-         SELECT COALESCE(SUM(amount), 0) AS total FROM fleet_fuel_logs
-         WHERE "vehicleId" = fv.id AND "companyId" = $1
+         SELECT COALESCE(SUM("totalCost"), 0) AS total FROM fleet_fuel_logs
+         WHERE "vehicleId" = fv.id AND "companyId" = $1 AND "deletedAt" IS NULL
        ) fuel_total ON true
        LEFT JOIN LATERAL (
-         SELECT COALESCE(SUM("premiumAmount"), 0) AS total FROM fleet_insurance
-         WHERE "vehicleId" = fv.id AND "companyId" = $1
+         SELECT COALESCE(SUM(premium), 0) AS total FROM fleet_insurance
+         WHERE "vehicleId" = fv.id AND "companyId" = $1 AND "deletedAt" IS NULL
        ) ins_total ON true
-       WHERE fv."companyId" = $1
+       WHERE fv."companyId" = $1 AND fv."deletedAt" IS NULL
        ORDER BY fv."plateNumber"`,
       [cid]
     ).catch((e) => { logger.error(e, "bi query failed"); return []; });
@@ -1045,7 +1050,7 @@ router.get("/reports/fleet-tco", requirePermission("bi:read"), async (req, res) 
   } catch (err) { handleRouteError(err, res, "Fleet TCO report"); }
 });
 
-router.get("/reports/department-leave-balance", requirePermission("bi:read"), async (req, res) => {
+router.get("/reports/department-leave-balance", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -1061,6 +1066,7 @@ router.get("/reports/department-leave-balance", requirePermission("bi:read"), as
              SELECT 1 FROM hr_leave_requests lr
              WHERE lr."employeeId" = ea."employeeId"
                AND lr.status = 'approved'
+               AND lr."deletedAt" IS NULL
                AND CURRENT_DATE BETWEEN lr."startDate" AND lr."endDate"
            )
          ) AS "onLeaveNow",
@@ -1098,7 +1104,7 @@ router.get("/reports/department-leave-balance", requirePermission("bi:read"), as
   } catch (err) { handleRouteError(err, res, "Department leave balance"); }
 });
 
-router.get("/reports/property-occupancy", requirePermission("bi:read"), async (req, res) => {
+router.get("/reports/property-occupancy", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -1114,9 +1120,9 @@ router.get("/reports/property-occupancy", requirePermission("bi:read"), async (r
          ROUND(AVG(rc."monthlyRent") FILTER (WHERE rc.status = 'active'), 0) AS "avgMonthlyRent",
          COALESCE(SUM(rc."monthlyRent") FILTER (WHERE rc.status = 'active'), 0) AS "totalMonthlyRevenue"
        FROM property_buildings pb
-       LEFT JOIN property_units pu ON pu."buildingId" = pb.id
-       LEFT JOIN rental_contracts rc ON rc."unitId" = pu.id AND rc.status = 'active'
-       WHERE pb."companyId" = $1
+       LEFT JOIN property_units pu ON pu."buildingId" = pb.id AND pu."deletedAt" IS NULL
+       LEFT JOIN rental_contracts rc ON rc."unitId" = pu.id AND rc.status = 'active' AND rc."deletedAt" IS NULL
+       WHERE pb."companyId" = $1 AND pb."deletedAt" IS NULL
        GROUP BY pb.id, pb.name, pb.address
        ORDER BY pb.name`,
       [cid]
@@ -1144,7 +1150,7 @@ router.get("/reports/property-occupancy", requirePermission("bi:read"), async (r
   } catch (err) { handleRouteError(err, res, "Property occupancy report"); }
 });
 
-router.get("/reports/training-roi", requirePermission("bi:read"), async (req, res) => {
+router.get("/reports/training-roi", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -1160,7 +1166,7 @@ router.get("/reports/training-roi", requirePermission("bi:read"), async (req, re
          COALESCE(SUM(t.cost), 0) AS "totalCost",
          ROUND(AVG(tp.score), 1) AS "avgScore"
        FROM training_participants tp
-       JOIN training_programs t ON t.id = tp."trainingId"
+       JOIN training_programs t ON t.id = tp."trainingId" AND t."deletedAt" IS NULL
        WHERE t."companyId" = $1
          AND DATE(t."startDate") BETWEEN $2::date AND $3::date`,
       [cid, dateFrom, dateTo]
@@ -1177,7 +1183,7 @@ router.get("/reports/training-roi", requirePermission("bi:read"), async (req, re
          ROUND(COALESCE(t.cost, 0) / NULLIF(COUNT(tp."employeeId"), 0), 0) AS "costPerParticipant"
        FROM training_programs t
        LEFT JOIN training_participants tp ON tp."trainingId" = t.id
-       WHERE t."companyId" = $1 AND DATE(t."startDate") BETWEEN $2::date AND $3::date
+       WHERE t."companyId" = $1 AND DATE(t."startDate") BETWEEN $2::date AND $3::date AND t."deletedAt" IS NULL
        GROUP BY t.id, t.title, t.type, t.cost
        ORDER BY cost DESC
        LIMIT 20`,
@@ -1200,7 +1206,7 @@ router.get("/reports/training-roi", requirePermission("bi:read"), async (req, re
   } catch (err) { handleRouteError(err, res, "Training ROI report"); }
 });
 
-router.get("/ai-insights", requirePermission("bi:read"), async (req, res) => {
+router.get("/ai-insights", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -1261,7 +1267,7 @@ router.get("/ai-insights", requirePermission("bi:read"), async (req, res) => {
   } catch (err) { handleRouteError(err, res, "AI insights"); }
 });
 
-router.patch("/ai-insights/:id/dismiss", requirePermission("bi:write"), async (req, res) => {
+router.patch("/ai-insights/:id/dismiss", authorize({ feature: "bi", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1275,7 +1281,7 @@ router.patch("/ai-insights/:id/dismiss", requirePermission("bi:write"), async (r
   } catch (err) { handleRouteError(err, res, "Dismiss insight"); }
 });
 
-router.patch("/ai-insights/:id/read", requirePermission("bi:write"), async (req, res) => {
+router.patch("/ai-insights/:id/read", authorize({ feature: "bi", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1289,7 +1295,7 @@ router.patch("/ai-insights/:id/read", requirePermission("bi:write"), async (req,
   } catch (err) { handleRouteError(err, res, "Mark insight read"); }
 });
 
-router.get("/alert-fatigue/settings", requirePermission("bi:read"), async (req, res) => {
+router.get("/alert-fatigue/settings", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -1300,7 +1306,7 @@ router.get("/alert-fatigue/settings", requirePermission("bi:read"), async (req, 
   } catch (err) { handleRouteError(err, res, "Alert fatigue settings"); }
 });
 
-router.post("/alert-fatigue/mute", requirePermission("bi:write"), async (req, res) => {
+router.post("/alert-fatigue/mute", authorize({ feature: "bi", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const body = zodParse(muteAlertSchema.safeParse(req.body));
@@ -1319,7 +1325,7 @@ router.post("/alert-fatigue/mute", requirePermission("bi:write"), async (req, re
   } catch (err) { handleRouteError(err, res, "Mute alert type"); }
 });
 
-router.delete("/alert-fatigue/mute/:alertType", requirePermission("bi:write"), async (req, res) => {
+router.delete("/alert-fatigue/mute/:alertType", authorize({ feature: "bi", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { alertType } = req.params;
@@ -1333,7 +1339,7 @@ router.delete("/alert-fatigue/mute/:alertType", requirePermission("bi:write"), a
   } catch (err) { handleRouteError(err, res, "Unmute alert type"); }
 });
 
-router.get("/alert-fatigue/daily-count", requirePermission("bi:read"), async (req, res) => {
+router.get("/alert-fatigue/daily-count", authorize({ feature: "bi", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(
@@ -1345,6 +1351,116 @@ router.get("/alert-fatigue/daily-count", requirePermission("bi:read"), async (re
     const count = Number(row?.today_count ?? 0);
     res.json({ todayCount: count, dailyLimit: limit, isOverLimit: count >= limit });
   } catch (err) { handleRouteError(err, res, "Alert fatigue daily count"); }
+});
+
+// ─── Umrah season summary (operations/finance unified report) ────────────────
+//
+// Aggregates the umrah module's per-season metrics into a single BI report.
+// Closes the cross-cutting BI gap: until now /bi/* knew about every module
+// except umrah. The endpoint joins seasons → pilgrims/groups/invoices/penalties
+// in four parallel queries and rolls the result up per-season so the UI can
+// render a single table.
+router.get("/reports/umrah-season-summary", authorize({ feature: "bi", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const cid = scope.companyId;
+
+    const seasons = await rawQuery<any>(
+      `SELECT id, title, "hijriYear", "startDate", "endDate", status, "isCurrent"
+         FROM umrah_seasons
+        WHERE "companyId" = $1 AND "deletedAt" IS NULL
+        ORDER BY "hijriYear" DESC, "startDate" DESC NULLS LAST
+        LIMIT 50`,
+      [cid]
+    ).catch((e) => { logger.error(e, "bi umrah seasons query failed"); return []; });
+    const seasonIds: number[] = seasons.map((s: any) => s.id).filter(Boolean);
+
+    if (seasonIds.length === 0) {
+      res.json({ data: [], summary: { totalSeasons: 0 } });
+      return;
+    }
+
+    const [pilgrimStats, salesStats, penaltyStats, groupStats] = await Promise.all([
+      rawQuery<any>(
+        `SELECT "seasonId",
+                COUNT(*)::int                                                  AS total,
+                COUNT(*) FILTER (WHERE status IN ('arrived','active'))::int    AS active,
+                COUNT(*) FILTER (WHERE status = 'departed')::int               AS departed,
+                COUNT(*) FILTER (WHERE COALESCE("overstayDays", 0) > 0)::int   AS overstay,
+                COUNT(*) FILTER (WHERE status = 'violated')::int               AS violated
+           FROM umrah_pilgrims
+          WHERE "companyId" = $1 AND "seasonId" = ANY($2::int[]) AND "deletedAt" IS NULL
+          GROUP BY "seasonId"`,
+        [cid, seasonIds]
+      ).catch((e) => { logger.error(e, "bi umrah pilgrims query failed"); return []; }),
+      rawQuery<any>(
+        `SELECT "seasonId",
+                COALESCE(SUM(total), 0)::numeric(12,2)        AS "invoiced",
+                COALESCE(SUM("paidAmount"), 0)::numeric(12,2) AS "paid",
+                COUNT(*) FILTER (WHERE status IN ('sent','partial','overdue'))::int AS "pendingCount"
+           FROM umrah_sales_invoices
+          WHERE "companyId" = $1 AND "seasonId" = ANY($2::int[])
+            AND "deletedAt" IS NULL AND status != 'cancelled'
+          GROUP BY "seasonId"`,
+        [cid, seasonIds]
+      ).catch((e) => { logger.error(e, "bi umrah invoices query failed"); return []; }),
+      rawQuery<any>(
+        `SELECT "seasonId",
+                COUNT(*)::int                                                   AS total,
+                COUNT(*) FILTER (WHERE status IN ('pending','invoiced'))::int   AS open,
+                COALESCE(SUM(amount) FILTER (WHERE status IN ('pending','invoiced')), 0)::numeric(12,2) AS "openAmount"
+           FROM umrah_penalties
+          WHERE "companyId" = $1 AND "seasonId" = ANY($2::int[])
+          GROUP BY "seasonId"`,
+        [cid, seasonIds]
+      ).catch((e) => { logger.error(e, "bi umrah penalties query failed"); return []; }),
+      rawQuery<any>(
+        `SELECT "seasonId",
+                COUNT(*)::int                                                AS total,
+                COUNT(*) FILTER (WHERE "salesInvoiceId" IS NOT NULL)::int    AS invoiced
+           FROM umrah_groups
+          WHERE "companyId" = $1 AND "seasonId" = ANY($2::int[]) AND "deletedAt" IS NULL
+          GROUP BY "seasonId"`,
+        [cid, seasonIds]
+      ).catch((e) => { logger.error(e, "bi umrah groups query failed"); return []; }),
+    ]);
+
+    const pilgrimsBy = new Map(pilgrimStats.map((r: any) => [r.seasonId, r]));
+    const salesBy    = new Map(salesStats.map((r: any) => [r.seasonId, r]));
+    const penaltyBy  = new Map(penaltyStats.map((r: any) => [r.seasonId, r]));
+    const groupsBy   = new Map(groupStats.map((r: any) => [r.seasonId, r]));
+
+    const data = seasons.map((s: any) => {
+      const p   = pilgrimsBy.get(s.id) || { total: 0, active: 0, departed: 0, overstay: 0, violated: 0 };
+      const sa  = salesBy.get(s.id)    || { invoiced: 0, paid: 0, pendingCount: 0 };
+      const pen = penaltyBy.get(s.id)  || { total: 0, open: 0, openAmount: 0 };
+      const g   = groupsBy.get(s.id)   || { total: 0, invoiced: 0 };
+      return {
+        seasonId: s.id,
+        title: s.title,
+        hijriYear: s.hijriYear,
+        startDate: s.startDate,
+        endDate: s.endDate,
+        status: s.status,
+        isCurrent: s.isCurrent,
+        pilgrims:  { total: Number(p.total), active: Number(p.active), departed: Number(p.departed), overstay: Number(p.overstay), violated: Number(p.violated) },
+        groups:    { total: Number(g.total), invoiced: Number(g.invoiced) },
+        sales:     { invoiced: Number(sa.invoiced), paid: Number(sa.paid), outstanding: Number(sa.invoiced) - Number(sa.paid), pendingCount: Number(sa.pendingCount) },
+        penalties: { total: Number(pen.total), open: Number(pen.open), openAmount: Number(pen.openAmount) },
+      };
+    });
+
+    const summary = {
+      totalSeasons: seasons.length,
+      totalPilgrims: data.reduce((s: number, r: any) => s + r.pilgrims.total, 0),
+      totalInvoiced: data.reduce((s: number, r: any) => s + r.sales.invoiced, 0),
+      totalPaid: data.reduce((s: number, r: any) => s + r.sales.paid, 0),
+      totalOutstanding: data.reduce((s: number, r: any) => s + r.sales.outstanding, 0),
+      totalOverstay: data.reduce((s: number, r: any) => s + r.pilgrims.overstay, 0),
+    };
+
+    res.json({ data, summary });
+  } catch (err) { handleRouteError(err, res, "BI umrah season summary"); }
 });
 
 export default router;

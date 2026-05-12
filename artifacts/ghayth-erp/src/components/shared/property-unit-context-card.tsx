@@ -60,7 +60,8 @@ const STATUS_LABELS: Record<string, { label: string; className: string }> = {
   rented: { label: "مؤجَّرة", className: "bg-blue-50 text-blue-700 border-blue-200" },
   reserved: { label: "محجوزة", className: "bg-amber-50 text-amber-700 border-amber-200" },
   maintenance: { label: "تحت الصيانة", className: "bg-orange-50 text-orange-700 border-orange-200" },
-  unavailable: { label: "غير متاحة", className: "bg-gray-50 text-gray-700 border-gray-200" },
+  under_maintenance: { label: "تحت الصيانة", className: "bg-orange-50 text-orange-700 border-orange-200" },
+  out_of_service: { label: "خارج الخدمة", className: "bg-red-50 text-red-700 border-red-200" },
 };
 
 /**
@@ -110,7 +111,7 @@ export function PropertyUnitContextCard({
   );
 
   const statusInfo = STATUS_LABELS[data.status || ""] || { label: data.status || "—", className: "" };
-  const notAvailable = data.status === "rented" || data.status === "reserved" || data.status === "maintenance";
+  const notAvailable = data.status === "rented" || data.status === "reserved" || data.status === "maintenance" || data.status === "under_maintenance" || data.status === "out_of_service";
 
   return (
     <Card className={cn("border-emerald-200 bg-emerald-50/40", className)}>

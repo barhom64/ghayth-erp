@@ -1,20 +1,42 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { Building2, Plus, TrendingDown, Calculator, CheckCircle, DollarSign, PackageCheck } from "lucide-react";
+import { Building2, Plus, X, TrendingDown, Calculator, CheckCircle, DollarSign, PackageCheck } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { UnifiedDateInput } from "@/components/ui/unified-date-input";
+import {
+  FormShell,
+  FormTextField,
+  FormNumberField,
+  FormSelectField,
+  FormDateField,
+  FormTextareaField,
+  FormGrid,
+} from "@/components/form-shell";
+
+const assetSchema = z.object({
+  name: z.string().trim().min(1, "اسم الأصل مطلوب"),
+  code: z.string().trim(),
+  category: z.string().trim(),
+  purchaseDate: z.string().min(1, "تاريخ الشراء مطلوب"),
+  purchaseCost: z.coerce.number().positive("التكلفة يجب أن تكون موجبة"),
+  salvageValue: z.coerce.number().nonnegative(),
+  usefulLifeYears: z.coerce.number().int().min(1).max(50),
+  depreciationMethod: z.enum(["straight_line", "declining_balance"]),
+  description: z.string().trim(),
+});
+type AssetForm = z.infer<typeof assetSchema>;
 
 export default function FixedAssetsPage() {
   const [, navigate] = useLocation();
@@ -28,33 +50,23 @@ export default function FixedAssetsPage() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["fixed-assets"], "/finance/fixed-assets");
   const assets = data?.data || [];
 
-  const createMutation = useApiMutation("/finance/fixed-assets", "POST");
+  const createMutation = useApiMutation<unknown, AssetForm>(
+    "/finance/fixed-assets",
+    "POST",
+    [["fixed-assets"]],
+    {
+      successMessage: "تم إضافة الأصل",
+      onSuccess: () => { setShowCreate(false); refetch(); },
+    },
+  );
   const depreciateMutation = useApiMutation(
     selectedAsset ? `/finance/fixed-assets/${selectedAsset.id}/depreciate` : "/finance/fixed-assets/0/depreciate",
     "POST"
   );
   const batchDepMutation = useApiMutation("/finance/fixed-assets/depreciate-all", "POST");
 
-  const [form, setForm] = useState({
-    name: "", code: "", category: "", purchaseDate: "", purchaseCost: "", salvageValue: "0",
-    usefulLifeYears: "5", depreciationMethod: "straight_line", description: "",
-  });
-
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    try {
-      await createMutation.mutateAsync({
-        ...form,
-        purchaseCost: Number(form.purchaseCost),
-        salvageValue: Number(form.salvageValue),
-        usefulLifeYears: Number(form.usefulLifeYears),
-      });
-      setShowCreate(false);
-      setForm({ name: "", code: "", category: "", purchaseDate: "", purchaseCost: "", salvageValue: "0", usefulLifeYears: "5", depreciationMethod: "straight_line", description: "" });
-      refetch();
-    } catch (err: any) {
-      // error handled by mutation hook toast
-    }
+  async function handleCreate(values: AssetForm) {
+    await createMutation.mutateAsync(values);
   }
 
   async function handleDepreciate() {
@@ -93,13 +105,13 @@ export default function FixedAssetsPage() {
       actions={
         <>
           <Link href="/finance/fixed-assets/batch-depreciate">
-            <Button variant="outline" size="sm">
+            <GuardedButton perm="finance:approve" variant="outline" size="sm">
               <TrendingDown className="h-4 w-4 me-2" />إهلاك دفعي
-            </Button>
+            </GuardedButton>
           </Link>
-          <Button onClick={() => setShowCreate(true)}>
+          <GuardedButton perm="finance:create" onClick={() => setShowCreate(true)}>
             <Plus className="h-4 w-4 me-1" />أصل جديد
-          </Button>
+          </GuardedButton>
         </>
       }
     >
@@ -127,13 +139,14 @@ export default function FixedAssetsPage() {
           ) },
           { key: "status", header: "الحالة", render: (a: any) => <PageStatusBadge status={a.status} domain="asset" /> },
           { key: "actions", header: "", render: (a: any) => (
-            <Button
+            <GuardedButton
+              perm="finance:approve"
               variant="ghost"
               size="sm"
               onClick={() => { setSelectedAsset(a); setDepResult(null); setShowDepreciate(true); }}
             >
               <Calculator className="h-4 w-4" />
-            </Button>
+            </GuardedButton>
           ) },
         ] as DataTableColumn<any>[]}
         data={assets}
@@ -148,67 +161,55 @@ export default function FixedAssetsPage() {
       />
 
       {showCreate && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-lg">
-            <CardHeader>
-              <CardTitle>إضافة أصل ثابت</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleCreate} className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label>اسم الأصل *</Label>
-                    <Input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-                  </div>
-                  <div>
-                    <Label>الكود</Label>
-                    <Input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} />
-                  </div>
-                  <div>
-                    <Label>الفئة</Label>
-                    <Input value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} placeholder="مثال: معدات، مباني" />
-                  </div>
-                  <div>
-                    <Label>تاريخ الشراء *</Label>
-                    <UnifiedDateInput required value={form.purchaseDate} onChange={(iso) => setForm(f => ({ ...f, purchaseDate: iso }))} />
-                  </div>
-                  <div>
-                    <Label>تكلفة الشراء (﷼) *</Label>
-                    <Input type="number" required min="1" step="0.01" value={form.purchaseCost} onChange={e => setForm(f => ({ ...f, purchaseCost: e.target.value }))} />
-                  </div>
-                  <div>
-                    <Label>قيمة الخردة (﷼)</Label>
-                    <Input type="number" min="0" step="0.01" value={form.salvageValue} onChange={e => setForm(f => ({ ...f, salvageValue: e.target.value }))} />
-                  </div>
-                  <div>
-                    <Label>العمر الإنتاجي (سنوات)</Label>
-                    <Input type="number" min="1" max="50" value={form.usefulLifeYears} onChange={e => setForm(f => ({ ...f, usefulLifeYears: e.target.value }))} />
-                  </div>
-                  <div>
-                    <Label>طريقة الإهلاك</Label>
-                    <Select value={form.depreciationMethod} onValueChange={v => setForm(f => ({ ...f, depreciationMethod: v }))}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="straight_line">القسط الثابت</SelectItem>
-                        <SelectItem value="declining_balance">القسط المتناقص</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div>
-                  <Label>الوصف</Label>
-                  <Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
-                </div>
-                <div className="flex gap-2 justify-end">
-                  <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>إلغاء</Button>
-                  <Button type="submit" disabled={createMutation.isPending}>
-                    {createMutation.isPending ? "جارٍ الحفظ..." : "حفظ الأصل"}
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
+        <Card className="border-2 border-primary/20">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">إضافة أصل ثابت</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <FormShell
+              schema={assetSchema}
+              defaultValues={{
+                name: "",
+                code: "",
+                category: "",
+                purchaseDate: "",
+                purchaseCost: 0,
+                salvageValue: 0,
+                usefulLifeYears: 5,
+                depreciationMethod: "straight_line" as const,
+                description: "",
+              }}
+              submitLabel="حفظ الأصل"
+              secondaryActions={
+                <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>
+                  <X className="w-4 h-4 me-1" /> إلغاء
+                </Button>
+              }
+              onSubmit={async (values) => {
+                await handleCreate(values);
+              }}
+            >
+              <FormGrid cols={2}>
+                <FormTextField name="name" label="اسم الأصل" required />
+                <FormTextField name="code" label="الكود" />
+                <FormTextField name="category" label="الفئة" placeholder="مثال: معدات، مباني" />
+                <FormDateField name="purchaseDate" label="تاريخ الشراء" required />
+                <FormNumberField name="purchaseCost" label="تكلفة الشراء (﷼)" required />
+                <FormNumberField name="salvageValue" label="قيمة الخردة (﷼)" />
+                <FormNumberField name="usefulLifeYears" label="العمر الإنتاجي (سنوات)" />
+                <FormSelectField
+                  name="depreciationMethod"
+                  label="طريقة الإهلاك"
+                  options={[
+                    { value: "straight_line", label: "القسط الثابت" },
+                    { value: "declining_balance", label: "القسط المتناقص" },
+                  ]}
+                />
+                <FormTextareaField name="description" label="الوصف" className="col-span-2" rows={2} />
+              </FormGrid>
+            </FormShell>
+          </CardContent>
+        </Card>
       )}
 
       {showDepreciate && selectedAsset && (
@@ -238,7 +239,7 @@ export default function FixedAssetsPage() {
               )}
               <div className="flex gap-2 justify-end">
                 <Button variant="outline" onClick={() => { setShowDepreciate(false); setDepResult(null); }}>إغلاق</Button>
-                <Button onClick={handleDepreciate} disabled={depreciateMutation.isPending}>
+                <Button onClick={handleDepreciate} disabled={depreciateMutation.isPending} rateLimitAware>
                   {depreciateMutation.isPending ? "جارٍ الإهلاك..." : "تسجيل الإهلاك"}
                 </Button>
               </div>

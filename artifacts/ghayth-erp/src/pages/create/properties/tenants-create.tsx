@@ -209,7 +209,7 @@ export default function TenantsCreate() {
         <TextAreaField label="ملاحظات" value={form.notes} onChange={v => set("notes", v)} placeholder="أي ملاحظات إضافية..." rows={3} />
 
         <div className="flex justify-end pt-2">
-          <Button onClick={handleSubmit} disabled={createMut.isPending} className="min-w-32">
+          <Button onClick={handleSubmit} disabled={createMut.isPending} className="min-w-32" rateLimitAware>
             {createMut.isPending ? "جاري الحفظ..." : "إضافة المستأجر"}
           </Button>
         </div>

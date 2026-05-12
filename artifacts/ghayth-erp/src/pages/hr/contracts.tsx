@@ -8,6 +8,7 @@ import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -145,10 +146,10 @@ export default function ContractsPage() {
       subtitle="إدارة جميع عقود الموظفين"
       actions={
         <Link href="/hr/contracts/create">
-          <Button className="gap-1.5">
+          <GuardedButton perm="hr:create" className="gap-1.5">
             <Plus className="h-4 w-4" />
             عقد جديد
-          </Button>
+          </GuardedButton>
         </Link>
       }
     >
@@ -210,7 +211,7 @@ function ActionsMenu({
   const canSubmit = status === "draft" || approvalStatus === "draft";
   const canApprove = approvalStatus === "pending_approval";
   const canReject = approvalStatus === "pending_approval";
-  const canSign = approvalStatus === "approved";
+  const canSign = approvalStatus === "approved" || approvalStatus === "signed";
   const canActivate = approvalStatus === "signed";
   const canTerminate = status === "active";
 

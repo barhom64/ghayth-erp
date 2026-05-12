@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { DetailPageLayout, type ExtraTab } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -17,17 +18,41 @@ import {
   DollarSign,
   Clock,
 } from "lucide-react";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 
 export default function VendorDetailPage() {
   const [, params] = useRoute("/finance/vendors/:id");
   const [, navigate] = useLocation();
   const id = params?.id || "";
+  const { hideTabs: registryHideTabs } = useRegistryTabs("vendor", id ?? "");
 
   const { data: vendor, isLoading, isError, refetch } = useApiQuery<any>(
     ["vendor", id],
     id ? `/finance/vendors/${id}` : null,
     !!id
   );
+
+  const editDelete = useDetailEditDelete({
+    entityLabel: "المورد",
+    patchPath: `/finance/vendors/${id}`,
+    deletePath: `/finance/vendors/${id}`,
+    listPath: "/finance/vendors",
+    initialValues: vendor,
+    fields: [
+      { key: "name", label: "الاسم" },
+      { key: "contactPerson", label: "جهة الاتصال" },
+      { key: "phone", label: "الهاتف" },
+      { key: "email", label: "البريد الإلكتروني" },
+      { key: "taxNumber", label: "الرقم الضريبي" },
+      { key: "address", label: "العنوان" },
+    ],
+    invalidateKeys: [["vendor", id], ["vendors"]],
+    onSaved: () => refetch(),
+  });
 
   const { data: poResp } = useApiQuery<any>(
     ["vendor-pos", id],
@@ -102,6 +127,7 @@ export default function VendorDetailPage() {
 
   const overview = (
     <>
+      <InlineEditCard hook={editDelete} />
       <div className="grid gap-4 md:grid-cols-4">
         <KpiCard icon={DollarSign} label="إجمالي المشتريات" value={formatCurrency(totalPurchases)} color="text-blue-600 bg-blue-50" />
         <KpiCard icon={CreditCard} label="مدفوعات معلقة" value={formatCurrency(pendingPayments)} color="text-orange-600 bg-orange-50" />
@@ -182,17 +208,7 @@ export default function VendorDetailPage() {
     },
   ];
 
-  const actions = (
-    <Button
-      variant="outline"
-      size="sm"
-      className="gap-1"
-      onClick={() => navigate("/finance/vendors")}
-    >
-      <Pencil className="h-4 w-4" />
-      تعديل
-    </Button>
-  );
+  const actions = <DetailActionButtons hook={editDelete} />;
 
   return (
     <DetailPageLayout
@@ -202,6 +218,7 @@ export default function VendorDetailPage() {
       backLabel="العودة للموردين"
       entityType="vendor"
       entityId={id}
+      hideTabs={registryHideTabs}
       isLoading={isLoading}
       error={isError ? true : undefined}
       onRetry={() => refetch()}

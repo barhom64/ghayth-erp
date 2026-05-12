@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { BiTabsNav } from "@/components/shared/bi-tabs-nav";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 function useChartExport() {
   const { toast } = useToast();
@@ -86,9 +87,9 @@ function SlaDelaysTab({ from, to, departmentId }: { from: string; to: string; de
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-orange-500" /> تأخر الطلبات حسب القسم</CardTitle>
-            <Button variant="ghost" size="sm" className="gap-1" onClick={() => exportChart(chartRef.current, "sla-delays.png")}>
+            <GuardedButton perm="bi:export" variant="ghost" size="sm" className="gap-1" onClick={() => exportChart(chartRef.current, "sla-delays.png")}>
               <Download className="h-4 w-4" />
-            </Button>
+            </GuardedButton>
           </div>
         </CardHeader>
         <CardContent>
@@ -387,7 +388,7 @@ function TrendTab({ from, to, departmentId }: { from: string; to: string; depart
   if (departmentId) params.set("departmentId", departmentId);
   const qs = params.toString() ? `?${params.toString()}` : "";
   const { data, isError } = useApiQuery<any>(["bi-trend", from, to, departmentId], `/bi/operations/trend${qs}`);
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
   const rows = data?.data || [];
 
   return (
@@ -424,7 +425,7 @@ function ApprovalTimeliness({ from, to, departmentId }: { from: string; to: stri
   if (departmentId) params.set("departmentId", departmentId);
   const qs = params.toString() ? `?${params.toString()}` : "";
   const { data, isError } = useApiQuery<any>(["bi-approval-timeliness", from, to, departmentId], `/bi/operations/approval-timeliness${qs}`);
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
   if (!data) return null;
 
   return (
@@ -467,9 +468,9 @@ export default function BiOperationsPage() {
       title="تحليل الأداء التشغيلي"
       subtitle="تحليل شامل للاختناقات والإنتاجية وأداء العمليات"
       actions={
-        <Button variant="outline" size="sm" onClick={() => window.print()} className="print:hidden gap-2">
+        <GuardedButton perm="bi:export" variant="outline" size="sm" onClick={() => window.print()} className="print:hidden gap-2">
           <Printer className="w-4 h-4" /> طباعة
-        </Button>
+        </GuardedButton>
       }
     >
       <BiTabsNav />

@@ -25,7 +25,7 @@ export default function AttendanceReportsPage() {
   const isError = statsError || monthlyError;
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const filteredMonthly = applyFilters(monthly, filters, { searchFields: ["employeeName"] });
   const filteredDeductions = applyFilters(deductions, filters, { searchFields: ["employeeName"], statusField: "status" });

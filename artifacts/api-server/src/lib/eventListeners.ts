@@ -60,12 +60,7 @@ async function logAudit(event: string, payload: EventPayload) {
   }
 }
 
-let _listenersRegistered = false;
-
 export function registerEventListeners() {
-  if (_listenersRegistered) return;
-  _listenersRegistered = true;
-
   eventBus.on("employee.created", async (payload) => {
     await logEvent("employee.created", payload);
     await logAudit("employee.created", { ...payload, action: "create" });
@@ -494,8 +489,8 @@ export function registerEventListeners() {
       const [letter] = await rawQuery<any>(
         `SELECT ol.*, e.name AS "employeeName", e.email AS "employeeEmail", e.phone AS "employeePhone"
          FROM official_letters ol
-         LEFT JOIN employees e ON e.id = ol."employeeId"
-         WHERE ol.id = $1 AND ol."companyId" = $2`,
+         LEFT JOIN employees e ON e.id = ol."employeeId" AND e."deletedAt" IS NULL
+         WHERE ol.id = $1 AND ol."companyId" = $2 AND ol."deletedAt" IS NULL`,
         [letterId, payload.companyId]
       );
 
@@ -528,8 +523,8 @@ export function registerEventListeners() {
 
       // Mark the letter as dispatched so we never double-queue it.
       await rawExecute(
-        `UPDATE official_letters SET "sentAt" = NOW() WHERE id = $1 AND "sentAt" IS NULL`,
-        [letterId]
+        `UPDATE official_letters SET "sentAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "sentAt" IS NULL AND "deletedAt" IS NULL`,
+        [letterId, payload.companyId]
       );
 
       // Notify HR management that the letter went out.
@@ -1213,7 +1208,7 @@ export function registerEventListeners() {
 
     // Cross-module: auto-post GL journal for umrah agent invoice (AR ↔ Revenue)
     const [glEntry] = await rawQuery<any>(
-      `SELECT id FROM journal_entries WHERE "sourceType"='umrah_sales_invoices' AND "sourceId"=$1 AND "companyId"=$2 LIMIT 1`,
+      `SELECT id FROM journal_entries WHERE "sourceType"='umrah_sales_invoices' AND "sourceId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
       [payload.entityId, payload.companyId]
     );
     if (!glEntry) {
@@ -1289,7 +1284,7 @@ export function registerEventListeners() {
 
     // Cross-module: verify GL journal entry was posted for the payment
     const [glEntry] = await rawQuery<any>(
-      `SELECT id FROM journal_entries WHERE "sourceType"='umrah_payments' AND "sourceId"=$1 AND "companyId"=$2 LIMIT 1`,
+      `SELECT id FROM journal_entries WHERE "sourceType"='umrah_payments' AND "sourceId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
       [payload.entityId, payload.companyId]
     );
     if (!glEntry) {
@@ -1328,7 +1323,7 @@ export function registerEventListeners() {
     if (details.allocations && Array.isArray(details.allocations)) {
       for (const alloc of details.allocations as Array<{ invoiceId: number }>) {
         const [inv] = await rawQuery<any>(
-          `SELECT status FROM umrah_sales_invoices WHERE id=$1 AND "companyId"=$2`,
+          `SELECT status FROM umrah_sales_invoices WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
           [alloc.invoiceId, payload.companyId]
         );
         if (inv?.status === "paid") {
@@ -1364,7 +1359,7 @@ export function registerEventListeners() {
     // Cross-module: verify GL accrual was posted
     if (finalAmount > 0) {
       const [glEntry] = await rawQuery<any>(
-        `SELECT id FROM journal_entries WHERE "sourceType"='employee_commission_calculations' AND "sourceId"=$1 AND "companyId"=$2 LIMIT 1`,
+        `SELECT id FROM journal_entries WHERE "sourceType"='employee_commission_calculations' AND "sourceId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
         [planId, payload.companyId]
       );
       if (!glEntry) {
@@ -1434,7 +1429,7 @@ export function registerEventListeners() {
           );
           if (existingLine) {
             await rawExecute(
-              `UPDATE payroll_lines SET commission=$1, "netSalary"="netSalary"+$1 WHERE id=$2`,
+              `UPDATE payroll_lines SET commission=$1, "netSalary"="netSalary"+$1 WHERE id=$2 AND "deletedAt" IS NULL`,
               [finalAmount, existingLine.id]
             );
           } else {
@@ -1606,7 +1601,7 @@ export function registerEventListeners() {
     const maintenanceId = payload.maintenanceId as number;
     for (const part of parts) {
       await rawExecute(
-        `UPDATE warehouse_products SET "currentStock"="currentStock"-$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3`,
+        `UPDATE warehouse_products SET "currentStock"="currentStock"-$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
         [part.quantity, part.productId, payload.companyId]
       );
       await rawExecute(

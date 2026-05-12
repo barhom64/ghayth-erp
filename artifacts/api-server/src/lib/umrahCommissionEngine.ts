@@ -30,6 +30,38 @@ interface CommissionPlan {
   partialTiersAllowed: boolean;
   violationBlocksCommission: boolean;
   status: string;
+  version: number;
+}
+
+// Only the shaping fields — what actually influences the number.
+// Stored as planSnapshot on each calculation row so re-reading a
+// historical calc is always reproducible.
+function buildPlanSnapshot(plan: CommissionPlan) {
+  return {
+    planName: plan.planName,
+    commissionType: plan.commissionType,
+    percentageRate: plan.percentageRate,
+    fixedAmount: plan.fixedAmount,
+    conditionType: plan.conditionType,
+    minProfitPerVisa: plan.minProfitPerVisa,
+    minSalesPercent: plan.minSalesPercent,
+    minAvgPrice: plan.minAvgPrice,
+    excludedMonths: plan.excludedMonths,
+    tierUnit: plan.tierUnit,
+    partialTiersAllowed: plan.partialTiersAllowed,
+    violationBlocksCommission: plan.violationBlocksCommission,
+    baseSalary: plan.baseSalary,
+  };
+}
+
+function buildTiersSnapshot(tiers: CommissionTier[]) {
+  return tiers.map((t) => ({
+    fromCount: t.fromCount,
+    toCount: t.toCount,
+    bonusPerUnit: t.bonusPerUnit,
+    isCumulative: t.isCumulative,
+    tierOrder: t.tierOrder,
+  }));
 }
 
 interface CommissionTier {
@@ -82,6 +114,10 @@ export async function calculateCommissionForPlan(
     [planId]
   );
 
+  const planSnapshot = JSON.stringify(buildPlanSnapshot(plan));
+  const tiersSnapshot = JSON.stringify(buildTiersSnapshot(tiers));
+  const planVersion = plan.version ?? 1;
+
   return withTransaction(async (client) => {
     const txQuery: QueryFn = (sql, params) => client.query(sql, params);
     const result = await compute(txQuery, plan, tiers, month, year);
@@ -98,12 +134,14 @@ export async function calculateCommissionForPlan(
          "totalMutamers"=$1, "avgProfitPerVisa"=$2, "salesPercent"=$3, "avgSalePrice"=$4,
          "conditionMet"=$5, "conditionDetails"=$6, "completedTiers"=$7, "commissionAmount"=$8,
          "hasViolations"=$9, "finalAmount"=$10, "isExcludedMonth"=$11, status='calculated',
-         "updatedBy"=$12, "updatedAt"=NOW()
-         WHERE id=$13 AND "companyId"=$14`,
+         "planVersion"=$12, "planSnapshot"=$13::jsonb, "tiersSnapshot"=$14::jsonb,
+         "updatedBy"=$15, "updatedAt"=NOW()
+         WHERE id=$16 AND "companyId"=$17`,
         [
           result.totalMutamers, result.avgProfitPerVisa, result.salesPercent, result.avgSalePrice,
           result.conditionMet, result.conditionDetails, result.completedTiers, result.commissionAmount,
           result.hasViolations, result.finalAmount, result.isExcludedMonth,
+          planVersion, planSnapshot, tiersSnapshot,
           userId, existing.id, plan.companyId,
         ]
       );
@@ -113,13 +151,16 @@ export async function calculateCommissionForPlan(
          ("companyId","branchId","planId","employeeId",month,year,
           "totalMutamers","avgProfitPerVisa","salesPercent","avgSalePrice",
           "conditionMet","conditionDetails","completedTiers","commissionAmount",
-          "hasViolations","finalAmount","isExcludedMonth",status,"createdBy","createdAt","updatedAt")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'calculated',$18,NOW(),NOW())`,
+          "hasViolations","finalAmount","isExcludedMonth",
+          "planVersion","planSnapshot","tiersSnapshot",
+          status,"createdBy","createdAt","updatedAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19::jsonb,$20::jsonb,'calculated',$21,NOW(),NOW())`,
         [
           plan.companyId, plan.branchId, planId, plan.employeeId, month, year,
           result.totalMutamers, result.avgProfitPerVisa, result.salesPercent, result.avgSalePrice,
           result.conditionMet, result.conditionDetails, result.completedTiers, result.commissionAmount,
           result.hasViolations, result.finalAmount, result.isExcludedMonth,
+          planVersion, planSnapshot, tiersSnapshot,
           userId,
         ]
       );
@@ -207,8 +248,9 @@ async function compute(
      WHERE p."companyId" = $1 AND p."seasonId" = $2
        AND EXTRACT(MONTH FROM p."createdAt") = $3
        AND EXTRACT(YEAR FROM p."createdAt") = $4
-       AND p."deletedAt" IS NULL`,
-    [plan.companyId, plan.seasonId, month, year]
+       AND p."deletedAt" IS NULL
+       AND p."createdBy" IN (SELECT u.id FROM users u WHERE u."employeeId" = $5)`,
+    [plan.companyId, plan.seasonId, month, year, plan.employeeId]
   )).rows[0] ?? { total: 0, avg_profit: 0, avg_price: 0 };
 
   const totalMutamers = Number(mutamerStats.total) || 0;
@@ -227,10 +269,10 @@ async function compute(
   const employeeSalesRes = (await queryFn(
     `SELECT COALESCE(SUM(ni."totalAmount"), 0)::numeric(12,2) AS emp_sales
      FROM umrah_nusk_invoices ni
-     JOIN umrah_pilgrims p ON p."companyId" = ni."companyId" AND p."groupId" = ni."groupId"
      WHERE ni."companyId" = $1 AND EXTRACT(MONTH FROM ni."issueDate") = $2 AND EXTRACT(YEAR FROM ni."issueDate") = $3
-       AND ni."deletedAt" IS NULL`,
-    [plan.companyId, month, year]
+       AND ni."deletedAt" IS NULL
+       AND ni."createdBy" IN (SELECT u.id FROM users u WHERE u."employeeId" = $4)`,
+    [plan.companyId, month, year, plan.employeeId]
   )).rows[0];
   const salesPercent = totalCompanySales > 0
     ? Math.round((Number(employeeSalesRes?.emp_sales) / totalCompanySales) * 10000) / 100
@@ -238,19 +280,26 @@ async function compute(
 
   const { conditionMet, conditionDetails } = checkConditions(plan, avgProfitPerVisa, salesPercent);
 
+  // Per-employee scoping per spec §9 + acceptance #15:
+  // Only block this plan's commission if the violation is attributed to
+  // the plan-owner's assignment (responsibleAssignmentId match). Rows
+  // without the attribution still block (backward-compat with un-tagged
+  // legacy violations) so behaviour does not regress.
   const violationRes = (await queryFn(
     `SELECT COUNT(*)::int AS cnt FROM umrah_violations v
      WHERE v."companyId" = $1 AND v.status IN ('detected','open')
        AND v."createdAt" >= DATE_TRUNC('month', MAKE_DATE($2, $3, 1))
        AND v."createdAt" < DATE_TRUNC('month', MAKE_DATE($2, $3, 1)) + INTERVAL '1 month'
        AND v."deletedAt" IS NULL
+       AND ( v."responsibleAssignmentId" IS NULL
+             OR v."responsibleAssignmentId" = $5 )
        AND EXISTS (
          SELECT 1 FROM umrah_pilgrims p
          WHERE p."companyId" = v."companyId" AND p."seasonId" = $4
            AND (p.id = v."mutamerId" OR p."groupId" = v."groupId")
            AND p."deletedAt" IS NULL
        )`,
-    [plan.companyId, year, month, plan.seasonId]
+    [plan.companyId, year, month, plan.seasonId, plan.assignmentId ?? -1]
   )).rows[0];
   const hasViolations = Number(violationRes?.cnt) > 0;
 

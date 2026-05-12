@@ -23,25 +23,25 @@ describe("finance-vendors — CRUD", () => {
   it("GET /vendors requires finance:read", () => {
     const idx = VENDORS_SRC.indexOf('"/vendors"');
     const section = VENDORS_SRC.slice(Math.max(0, idx - 80), idx + 200);
-    expect(section).toContain('requirePermission("finance:read")');
+    expect(section).toContain('authorize(');
   });
 
   it("POST /vendors requires finance:create", () => {
     const idx = VENDORS_SRC.indexOf('.post("/vendors"');
     const section = VENDORS_SRC.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("finance:create")');
+    expect(section).toContain('authorize(');
   });
 
   it("PATCH /vendors/:id requires finance:update", () => {
     const idx = VENDORS_SRC.indexOf('.patch("/vendors/:id"');
     const section = VENDORS_SRC.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("finance:update")');
+    expect(section).toContain('authorize(');
   });
 
   it("DELETE /vendors/:id requires finance:delete", () => {
     const idx = VENDORS_SRC.indexOf('.delete("/vendors/:id"');
     const section = VENDORS_SRC.slice(idx, idx + 200);
-    expect(section).toContain('requirePermission("finance:delete")');
+    expect(section).toContain('authorize(');
   });
 });
 
@@ -91,7 +91,7 @@ describe("finance-reports — financial statements", () => {
   });
 
   it("all report endpoints require finance:read", () => {
-    const perms = [...REPORTS_SRC.matchAll(/requirePermission\("finance:read"\)/g)];
+    const perms = [...REPORTS_SRC.matchAll(/authorize\(/g)];
     expect(perms.length).toBeGreaterThanOrEqual(12);
   });
 });

@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CheckSquare, Plus, Pencil, Trash2, Check, X, PlayCircle, CheckCircle2, Loader2, Copy, Eye, ChevronDown, ChevronUp, Link2 } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
+import { priorityLabel } from "@/lib/priority-labels";
 import { useAppContext } from "@/contexts/app-context";
 import { DeleteConfirmImpact } from "@/components/delete-confirm-impact";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
@@ -19,6 +20,7 @@ import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/entity-tags";
 import { BulkActionsBar, useBulkSelection } from "@/components/shared/bulk-actions";
 import { ProjectsTabsNav } from "@/components/shared/projects-tabs-nav";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 const statusOptions = [
   { value: "pending", label: "معلق", color: "bg-amber-100 text-amber-700" },
@@ -27,7 +29,6 @@ const statusOptions = [
   { value: "overdue", label: "متأخر", color: "bg-rose-100 text-rose-700" },
 ];
 
-const priorityLabels: Record<string, string> = { high: "عالية", medium: "متوسطة", low: "منخفضة" };
 const typeLabels: Record<string, string> = { task: "مهمة عامة", meeting: "اجتماع", call: "مكالمة" };
 
 const ENTITY_TYPE_LABELS: Record<string, string> = {
@@ -108,7 +109,7 @@ export default function Tasks() {
   const saving = updateMut.isPending || deleteMut.isPending;
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const tasks = asList(tasksResp);
   const preFiltered = applyFilters(tasks, filters, {
@@ -166,7 +167,7 @@ export default function Tasks() {
         r.priority === "medium" ? "bg-amber-100 text-amber-700" :
         "bg-emerald-100 text-emerald-700"
       }`}>
-        {priorityLabels[r.priority] || r.priority}
+        {priorityLabel(r.priority)}
       </span>
     ) },
     { key: "status", header: "الحالة", sortable: true, render: (r: any) => <PageStatusBadge status={r.status} /> },
@@ -260,7 +261,7 @@ export default function Tasks() {
       title="إدارة المهام"
       actions={
         <Link href="/tasks/create">
-          <Button className="gap-2"><Plus className="h-4 w-4" /> مهمة جديدة</Button>
+          <GuardedButton perm="tasks:create" className="gap-2"><Plus className="h-4 w-4" /> مهمة جديدة</GuardedButton>
         </Link>
       }
     >

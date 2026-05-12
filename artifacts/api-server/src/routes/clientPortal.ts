@@ -3,6 +3,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { hashPassword, verifyPassword } from "../lib/auth.js";
 import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
+import { makeRateLimitStore } from "../lib/rateLimitStore.js";
 import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, isTypedError,
   parseId,
   zodParse,
@@ -13,6 +14,61 @@ import type { Request, Response, NextFunction } from "express";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
+
+interface PortalAccountStatusRow {
+  id: number;
+  isActive: boolean;
+}
+
+interface PortalAccountLoginRow {
+  id: number;
+  clientId: number;
+  companyId: number;
+  passwordHash: string;
+  isActive: boolean;
+  mustChangePassword: boolean;
+  clientName: string;
+  clientEmail: string | null;
+  clientPhone: string | null;
+}
+
+interface TicketReplyPortalRow {
+  id: number;
+  message: string;
+  senderType: "client" | "staff";
+  senderName: string | null;
+  createdAt: string;
+}
+
+interface CsatRatingRow {
+  id: number;
+  ticketId: number;
+  companyId: number;
+  assigneeId: number | null;
+  score: number;
+  comment: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+interface KbArticleListRow {
+  id: number;
+  title: string;
+  category: string | null;
+  tags: unknown;
+  views: number | null;
+  helpful: number | null;
+  notHelpful: number | null;
+  createdAt: string;
+}
+
+interface KbArticleRow extends KbArticleListRow {
+  content: string | null;
+  status: string;
+  companyId: number | null;
+  deletedAt: string | null;
+  updatedAt: string | null;
+}
 
 const portalLoginSchema = z.object({
   email: z.string().email("البريد الإلكتروني غير صالح"),
@@ -62,6 +118,7 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "تم تجاوز الحد الأقصى لمحاولات الدخول. يرجى المحاولة بعد دقيقة" },
   validate: { ip: false, trustProxy: false },
+  store: makeRateLimitStore("portal:login"),
 });
 
 export interface PortalScope {
@@ -76,7 +133,7 @@ function signPortalToken(payload: { accountId: number; clientId: number; company
 }
 
 function verifyPortalToken(token: string): PortalScope {
-  return jwt.verify(token, SECRET!) as any;
+  return jwt.verify(token, SECRET!, { algorithms: ["HS256"] }) as any;
 }
 
 async function portalAuthMiddleware(req: Request & { portalScope?: PortalScope }, res: Response, next: NextFunction): Promise<void> {
@@ -92,7 +149,7 @@ async function portalAuthMiddleware(req: Request & { portalScope?: PortalScope }
       res.status(401).json({ error: "توكن غير صالح" });
       return;
     }
-    const [account] = await rawQuery<any>(
+    const [account] = await rawQuery<PortalAccountStatusRow>(
       `SELECT id, "isActive" FROM client_portal_accounts WHERE id = $1 AND "clientId" = $2 AND "companyId" = $3`,
       [payload.accountId, payload.clientId, payload.companyId]
     );
@@ -181,7 +238,7 @@ router.post("/auth/login", loginLimiter, async (req, res) => {
     const body = zodParse(portalLoginSchema.safeParse(req.body));
     const { email: rawEmail, password } = body;
     const email = rawEmail.trim().toLowerCase();
-    const [account] = await rawQuery<any>(
+    const [account] = await rawQuery<PortalAccountLoginRow>(
       `SELECT cpa.id, cpa."clientId", cpa."companyId", cpa."passwordHash", cpa."isActive", cpa."mustChangePassword",
               c.name AS "clientName", c.email AS "clientEmail", c.phone AS "clientPhone"
        FROM client_portal_accounts cpa
@@ -239,7 +296,7 @@ protectedRouter.get("/me", withPortalScope(async (req, res) => {
               cpa.email AS "portalEmail", cpa."mustChangePassword", cpa."lastLoginAt"
        FROM clients c
        JOIN client_portal_accounts cpa ON cpa."clientId" = c.id AND cpa."companyId" = c."companyId"
-       WHERE ${where}`,
+       WHERE ${where} AND c."deletedAt" IS NULL`,
       params
     );
     if (!client) throw new NotFoundError("العميل غير موجود");
@@ -260,7 +317,7 @@ protectedRouter.get("/dashboard", withPortalScope(async (req, res) => {
          COALESCE(SUM(total) - SUM("paidAmount"), 0) AS "totalOutstanding",
          COUNT(*) AS "invoiceCount",
          COUNT(*) FILTER (WHERE status = 'paid') AS "paidCount",
-         COUNT(*) FILTER (WHERE status = 'pending') AS "pendingCount",
+         COUNT(*) FILTER (WHERE status = 'pending_approval') AS "pendingCount",
          COUNT(*) FILTER (WHERE status NOT IN ('paid','cancelled') AND "dueDate" < CURRENT_DATE) AS "overdueCount"
        FROM invoices
        WHERE ${where} AND "deletedAt" IS NULL`,
@@ -306,7 +363,7 @@ protectedRouter.get("/invoices", withPortalScope(async (req, res) => {
     const scope = req.portalScope;
     const { status, page = "1", limit: lim = "20" } = req.query as any;
     const pageNum = Math.max(Number(page) || 1, 1);
-    const perPage = Number(lim) || 20;
+    const perPage = Math.min(Number(lim) || 20, 500);
     const offset = (pageNum - 1) * perPage;
 
     const extra: string[] = ["\"deletedAt\" IS NULL"];
@@ -323,7 +380,7 @@ protectedRouter.get("/invoices", withPortalScope(async (req, res) => {
     const offsetParam = params.length;
 
     const invoices = await portalScopedQuery<any>(scope,
-      `SELECT id, ref, status, total, "paidAmount", "dueDate", "issueDate", notes, "createdAt"
+      `SELECT id, ref, status, total, "paidAmount", "dueDate", "createdAt" AS "issueDate", notes, "createdAt"
        FROM invoices
        WHERE ${where}
        ORDER BY "createdAt" DESC
@@ -366,7 +423,7 @@ protectedRouter.get("/tickets", withPortalScope(async (req, res) => {
     const scope = req.portalScope;
     const { status, page = "1", limit: lim = "20" } = req.query as any;
     const pageNum = Math.max(Number(page) || 1, 1);
-    const perPage = Number(lim) || 20;
+    const perPage = Math.min(Number(lim) || 20, 500);
     const offset = (pageNum - 1) * perPage;
 
     const extraParams: any[] = [];
@@ -408,7 +465,7 @@ protectedRouter.get("/tickets/:id", withPortalScope(async (req, res) => {
     const [ticket] = await portalScopedQuery<any>(scope,
       `SELECT id, ref, title, description, status, priority, category, "createdAt", "updatedAt"
        FROM support_tickets
-       WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2`,
+       WHERE id = $3 AND "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [scope.clientId, scope.companyId, id]
     );
     if (!ticket) throw new NotFoundError("الطلب غير موجود");
@@ -427,10 +484,10 @@ protectedRouter.get("/tickets/:id/replies", withPortalScope(async (req, res) => 
       [scope.clientId, scope.companyId, id]
     );
     if (!ticket) throw new NotFoundError("الطلب غير موجود");
-    const replies = await rawQuery<any>(
-      `SELECT tr.id, tr.message, CASE WHEN tr."isInternal" THEN 'agent' ELSE 'client' END AS "senderType", tr."authorName" AS "senderName", tr."createdAt"
+    const replies = await rawQuery<TicketReplyPortalRow>(
+      `SELECT tr.id, tr.message, CASE WHEN tr."authorId" IS NULL THEN 'client' ELSE 'staff' END AS "senderType", tr."authorName" AS "senderName", tr."createdAt"
        FROM ticket_replies tr
-       WHERE tr."ticketId" = $1
+       WHERE tr."ticketId" = $1 AND ("isInternal" = FALSE OR "isInternal" IS NULL) AND tr."deletedAt" IS NULL
        ORDER BY tr."createdAt" ASC`,
       [id]
     );
@@ -463,7 +520,7 @@ protectedRouter.post("/tickets/:id/replies", withPortalScope(async (req, res) =>
       [id, message]
     );
     const { supportEngine } = await import("../lib/engines/index.js");
-    await supportEngine.markTicketInProgress(id);
+    await supportEngine.markTicketInProgress(id, scope.companyId);
     createAuditLog({
       companyId: scope.companyId, userId: scope.accountId,
       action: "create", entity: "ticket_replies", entityId: id,
@@ -604,7 +661,7 @@ protectedRouter.post("/invoices/:id/pay", withPortalScope(async (req, res) => {
   }
 }));
 
-protectedRouter.post("/invoices/:id/csat", withPortalScope(async (req, res) => {
+protectedRouter.post("/tickets/:id/csat", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
     const id = parseId(req.params.id, "id");
@@ -622,14 +679,15 @@ protectedRouter.post("/invoices/:id/csat", withPortalScope(async (req, res) => {
     );
     createAuditLog({
       companyId: scope.companyId, userId: scope.accountId,
-      action: "create", entity: "invoice_csat", entityId: id,
+      action: "create", entity: "ticket_csat", entityId: id,
     }).catch((e) => logger.error(e, "clientPortal background task failed"));
     emitEvent({
       companyId: scope.companyId, userId: scope.accountId,
-      action: "portal.csat.submitted", entity: "invoice_csat", entityId: id,
+      action: "portal.csat.submitted", entity: "ticket_csat", entityId: id,
       details: JSON.stringify({ score, ticketId: id, clientId: scope.clientId }),
     }).catch((e) => logger.error(e, "clientPortal background task failed"));
-    res.status(201).json({ ticketId: id, score, comment });
+    const [row] = await rawQuery<CsatRatingRow>(`SELECT * FROM ticket_csat_ratings WHERE "ticketId"=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    res.status(201).json(row || { ticketId: id, score, comment });
   } catch (err) {
     handleRouteError(err, res, "Portal CSAT error:");
   }
@@ -643,7 +701,7 @@ protectedRouter.get("/kb", withPortalScope(async (req, res) => {
     const params: any[] = [scope.companyId];
     if (category) { params.push(category); conditions.push(`category=$${params.length}`); }
     if (q) { params.push(`%${q}%`); conditions.push(`(title ILIKE $${params.length} OR content ILIKE $${params.length})`); }
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<KbArticleListRow>(
       `SELECT id, title, category, tags, views, helpful, "notHelpful", "createdAt" FROM kb_articles WHERE ${conditions.join(' AND ')} ORDER BY views DESC LIMIT 50`,
       params
     );
@@ -657,12 +715,12 @@ protectedRouter.get("/kb/:id", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<KbArticleRow>(
       `SELECT * FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND status='published' AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("المقالة غير موجودة");
-    await rawExecute(`UPDATE kb_articles SET views=COALESCE(views,0)+1 WHERE id=$1`, [id]).catch((e) => logger.error(e, "clientPortal background task failed"));
+    await rawExecute(`UPDATE kb_articles SET views=COALESCE(views,0)+1 WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]).catch((e) => logger.error(e, "clientPortal background task failed"));
     res.json(row);
   } catch (err) {
     handleRouteError(err, res, "Portal KB article error:");
@@ -674,10 +732,11 @@ protectedRouter.post("/kb/:id/feedback", withPortalScope(async (req, res) => {
     const id = parseId(req.params.id, "id");
     const body = zodParse(portalKbFeedbackSchema.safeParse(req.body));
     const { helpful } = body;
+    const scope = req.portalScope!;
     if (helpful === true || helpful === 'true') {
-      await rawExecute(`UPDATE kb_articles SET helpful=COALESCE(helpful,0)+1 WHERE id=$1`, [id]);
+      await rawExecute(`UPDATE kb_articles SET helpful=COALESCE(helpful,0)+1 WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     } else {
-      await rawExecute(`UPDATE kb_articles SET "notHelpful"=COALESCE("notHelpful",0)+1 WHERE id=$1`, [id]);
+      await rawExecute(`UPDATE kb_articles SET "notHelpful"=COALESCE("notHelpful",0)+1 WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     }
     createAuditLog({
       companyId: req.portalScope!.companyId, userId: req.portalScope!.accountId,

@@ -15,6 +15,7 @@ import { ApprovalActions } from "@/components/approval-actions";
 import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 export default function TicketDetail() {
   const [, params] = useRoute("/support/:id");
@@ -25,6 +26,7 @@ export default function TicketDetail() {
   const [newReply, setNewReply] = useState("");
   const [sending, setSending] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("support_ticket", id ?? 0);
 
   const { data: ticket, isLoading, isError, error, refetch } = useApiQuery<any>(["ticket-detail", id || ""], `/support/tickets/${id}`, !!id);
 
@@ -119,7 +121,7 @@ export default function TicketDetail() {
             <div className="border-t pt-4 space-y-3">
               <Textarea placeholder="اكتب رداً..." value={newReply} onChange={(e) => setNewReply(e.target.value)} className="min-h-[80px]" />
               <div className="flex justify-end">
-                <Button className="gap-2" disabled={!newReply.trim() || sending} onClick={handleSendReply}><Send className="w-4 h-4" /> إرسال الرد</Button>
+                <Button className="gap-2" disabled={!newReply.trim() || sending} onClick={handleSendReply} rateLimitAware><Send className="w-4 h-4" /> إرسال الرد</Button>
               </div>
             </div>
           </CardContent>
@@ -206,6 +208,8 @@ export default function TicketDetail() {
       onRetry={refetch}
       createdAt={ticket?.createdAt}
       updatedAt={ticket?.updatedAt}
+      extraTabs={registryExtraTabs}
+      hideTabs={registryHideTabs}
       overview={overview}
       actions={
         <div className="flex items-center gap-2">

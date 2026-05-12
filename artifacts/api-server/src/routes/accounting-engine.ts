@@ -5,7 +5,7 @@ import { handleRouteError, NotFoundError, ForbiddenError,
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { logger } from "../lib/logger.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { FINANCE_ROLES } from "../lib/rbacCatalog.js";
@@ -90,8 +90,8 @@ export async function validateAccountingMapping(
             da.code AS "debitCode", da.name AS "debitName",
             ca.code AS "creditCode", ca.name AS "creditName"
      FROM accounting_mappings am
-     LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId" AND da."deletedAt" IS NULL AND da."deletedAt" IS NULL
-     LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId" AND ca."deletedAt" IS NULL AND ca."deletedAt" IS NULL
+     LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId"
+     LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId"
      WHERE am."companyId" = $1 AND am."operationType" = $2 AND am."isActive" = true`,
     [companyId, operationType]
   );
@@ -124,7 +124,7 @@ export async function validateAccountingMapping(
 // ACCOUNTING MAPPINGS CRUD
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/accounting-mappings", requirePermission("finance:read"), async (req, res) => {
+router.get("/accounting-mappings", authorize({ feature: "finance.accounting_engine", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -132,8 +132,8 @@ router.get("/accounting-mappings", requirePermission("finance:read"), async (req
               da.code AS "debitCode", da.name AS "debitName",
               ca.code AS "creditCode", ca.name AS "creditName"
        FROM accounting_mappings am
-       LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId" AND da."deletedAt" IS NULL
-       LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId" AND ca."deletedAt" IS NULL
+       LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId"
+       LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId"
        WHERE am."companyId" = $1
        ORDER BY am."operationType" ASC
        LIMIT 500`,
@@ -145,32 +145,36 @@ router.get("/accounting-mappings", requirePermission("finance:read"), async (req
   }
 });
 
-router.post("/accounting-mappings/batch", requirePermission("finance:write"), async (req, res) => {
+router.post("/accounting-mappings/batch", authorize({ feature: "finance.accounting_engine", action: "create" }), async (req, res) => {
   try {
     const parsedBody = zodParse(batchAccountingMappingsSchema.safeParse(req.body));
     const scope = req.scope!;
     requireFinance(scope);
     const { mappings } = parsedBody;
 
-    for (const m of mappings) {
-      await rawExecute(
-        `INSERT INTO accounting_mappings
-          ("companyId","operationType","operationLabel","debitAccountId","creditAccountId","debitAccountCode","creditAccountCode","isActive")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-         ON CONFLICT ("companyId","operationType") DO UPDATE SET
-          "debitAccountId" = EXCLUDED."debitAccountId",
-          "creditAccountId" = EXCLUDED."creditAccountId",
-          "debitAccountCode" = EXCLUDED."debitAccountCode",
-          "creditAccountCode" = EXCLUDED."creditAccountCode",
-          "updatedAt" = NOW()`,
-        [
-          scope.companyId, m.operationType, m.operationLabel ?? m.operationType,
-          m.debitAccountId ?? null, m.creditAccountId ?? null,
-          m.debitAccountCode ?? null, m.creditAccountCode ?? null,
-          m.isActive ?? true,
-        ]
-      );
-    }
+    await withTransaction(async (client) => {
+      for (const m of mappings) {
+        await client.query(
+          `INSERT INTO accounting_mappings
+            ("companyId","operationType","operationLabel","debitAccountId","creditAccountId","debitAccountCode","creditAccountCode","isActive")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+           ON CONFLICT ("companyId","operationType") DO UPDATE SET
+            "debitAccountId" = EXCLUDED."debitAccountId",
+            "creditAccountId" = EXCLUDED."creditAccountId",
+            "debitAccountCode" = EXCLUDED."debitAccountCode",
+            "creditAccountCode" = EXCLUDED."creditAccountCode",
+            "operationLabel" = EXCLUDED."operationLabel",
+            "isActive" = EXCLUDED."isActive",
+            "updatedAt" = NOW()`,
+          [
+            scope.companyId, m.operationType, m.operationLabel ?? m.operationType,
+            m.debitAccountId ?? null, m.creditAccountId ?? null,
+            m.debitAccountCode ?? null, m.creditAccountCode ?? null,
+            m.isActive ?? true,
+          ]
+        );
+      }
+    });
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "accounting_mappings", entityId: scope.companyId, after: { batch: true, count: mappings.length, operationTypes: mappings.map((m: any) => m.operationType) } }).catch((e) => logger.error(e, "accounting-engine background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.mappings.batch_updated", entity: "accounting_mappings", entityId: scope.companyId, details: JSON.stringify({ count: mappings.length, operationTypes: mappings.map((m: any) => m.operationType) }) }).catch((e) => logger.error(e, "accounting-engine background task failed"));
@@ -180,7 +184,7 @@ router.post("/accounting-mappings/batch", requirePermission("finance:write"), as
   }
 });
 
-router.get("/accounting-mappings/:operationType", requirePermission("finance:read"), async (req, res) => {
+router.get("/accounting-mappings/:operationType", authorize({ feature: "finance.accounting_engine", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<any>(
@@ -188,8 +192,8 @@ router.get("/accounting-mappings/:operationType", requirePermission("finance:rea
               da.code AS "debitCode", da.name AS "debitName",
               ca.code AS "creditCode", ca.name AS "creditName"
        FROM accounting_mappings am
-       LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId" AND da."deletedAt" IS NULL
-       LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId" AND ca."deletedAt" IS NULL
+       LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId"
+       LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId"
        WHERE am."companyId" = $1 AND am."operationType" = $2`,
       [scope.companyId, req.params.operationType]
     );
@@ -200,7 +204,7 @@ router.get("/accounting-mappings/:operationType", requirePermission("finance:rea
   }
 });
 
-router.put("/accounting-mappings/:operationType", requirePermission("finance:write"), async (req, res) => {
+router.put("/accounting-mappings/:operationType", authorize({ feature: "finance.accounting_engine", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(updateAccountingMappingSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -252,8 +256,8 @@ router.put("/accounting-mappings/:operationType", requirePermission("finance:wri
     const [updated] = await rawQuery<any>(
       `SELECT am.*, da.code AS "debitCode", da.name AS "debitName", ca.code AS "creditCode", ca.name AS "creditName"
        FROM accounting_mappings am
-       LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId" AND da."deletedAt" IS NULL
-       LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId" AND ca."deletedAt" IS NULL
+       LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId"
+       LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId"
        WHERE am."companyId" = $1 AND am."operationType" = $2`,
       [scope.companyId, operationType]
     );
@@ -266,7 +270,7 @@ router.put("/accounting-mappings/:operationType", requirePermission("finance:wri
 });
 
 // Validate mapping endpoint
-router.get("/accounting-mappings/:operationType/validate", requirePermission("finance:read"), async (req, res) => {
+router.get("/accounting-mappings/:operationType/validate", authorize({ feature: "finance.accounting_engine", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const result = await validateAccountingMapping(scope.companyId, String(req.params.operationType));
@@ -280,7 +284,7 @@ router.get("/accounting-mappings/:operationType/validate", requirePermission("fi
 // JOURNAL ENTRY TEMPLATES CRUD
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/journal-templates", requirePermission("finance:read"), async (req, res) => {
+router.get("/journal-templates", authorize({ feature: "finance.accounting_engine", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { operationType } = req.query as any;
@@ -291,6 +295,7 @@ router.get("/journal-templates", requirePermission("finance:read"), async (req, 
       conditions.push(`jt."operationType" = $${params.length}`);
     }
 
+    conditions.push(`jt."deletedAt" IS NULL`);
     const templates = await rawQuery<any>(
       `SELECT jt.*
        FROM journal_entry_templates jt
@@ -300,15 +305,25 @@ router.get("/journal-templates", requirePermission("finance:read"), async (req, 
       params
     );
 
-    for (const t of templates) {
-      t.lines = await rawQuery<any>(
+    if (templates.length > 0) {
+      const templateIds = templates.map((t: any) => t.id);
+      const allLines = await rawQuery<any>(
         `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
          FROM journal_entry_template_lines tl
-         LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId" AND ca."deletedAt" IS NULL
-         WHERE tl."templateId" = $1
-         ORDER BY tl."sortOrder", tl.id LIMIT 500`,
-        [t.id]
+         LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId" AND ca."companyId" = $2
+         WHERE tl."templateId" = ANY($1::int[])
+         ORDER BY tl."templateId", tl."sortOrder", tl.id`,
+        [templateIds, scope.companyId]
       );
+      const linesByTemplate = new Map<number, any[]>();
+      for (const line of allLines) {
+        const arr = linesByTemplate.get(line.templateId) ?? [];
+        arr.push(line);
+        linesByTemplate.set(line.templateId, arr);
+      }
+      for (const t of templates) {
+        t.lines = linesByTemplate.get(t.id) ?? [];
+      }
     }
 
     res.json({ data: templates, total: templates.length });
@@ -317,7 +332,7 @@ router.get("/journal-templates", requirePermission("finance:read"), async (req, 
   }
 });
 
-router.post("/journal-templates", requirePermission("finance:write"), async (req, res) => {
+router.post("/journal-templates", authorize({ feature: "finance.accounting_engine", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(createJournalTemplateSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -352,9 +367,9 @@ router.post("/journal-templates", requirePermission("finance:write"), async (req
     template.lines = await rawQuery<any>(
       `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
        FROM journal_entry_template_lines tl
-       LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId" AND ca."deletedAt" IS NULL
+       LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId" AND ca."companyId" = $2
        WHERE tl."templateId" = $1 ORDER BY tl."sortOrder" LIMIT 500`,
-      [result]
+      [result, scope.companyId]
     );
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "journal_entry_templates", entityId: result, after: template }).catch((e) => logger.error(e, "accounting-engine background task failed"));
@@ -365,7 +380,7 @@ router.post("/journal-templates", requirePermission("finance:write"), async (req
   }
 });
 
-router.put("/journal-templates/:id", requirePermission("finance:write"), async (req, res) => {
+router.put("/journal-templates/:id", authorize({ feature: "finance.accounting_engine", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(updateJournalTemplateSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -374,41 +389,43 @@ router.put("/journal-templates/:id", requirePermission("finance:write"), async (
     const { name, description, branchId, activityType, isActive, lines } = body;
 
     const [existing] = await rawQuery<any>(
-      `SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("القالب غير موجود");
 
-    await rawExecute(
-      `UPDATE journal_entry_templates SET
-        name = COALESCE($1, name),
-        description = COALESCE($2, description),
-        "branchId" = $3, "activityType" = $4,
-        "isActive" = COALESCE($5, "isActive"), "updatedAt" = NOW()
-       WHERE id = $6 AND "companyId" = $7`,
-      [name ?? null, description ?? null, branchId ?? null, activityType ?? null, isActive ?? null, id, scope.companyId]
-    );
+    await withTransaction(async (client) => {
+      await client.query(
+        `UPDATE journal_entry_templates SET
+          name = COALESCE($1, name),
+          description = COALESCE($2, description),
+          "branchId" = $3, "activityType" = $4,
+          "isActive" = COALESCE($5, "isActive"), "updatedAt" = NOW()
+         WHERE id = $6 AND "companyId" = $7 AND "deletedAt" IS NULL`,
+        [name ?? null, description ?? null, branchId ?? null, activityType ?? null, isActive ?? null, id, scope.companyId]
+      );
 
-    if (Array.isArray(lines)) {
-      await rawExecute(`DELETE FROM journal_entry_template_lines WHERE "templateId" = $1`, [id]);
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        await rawExecute(
-          `INSERT INTO journal_entry_template_lines ("templateId","accountId","accountCode","lineType",description,"sortOrder")
-           VALUES ($1,$2,$3,$4,$5,$6)`,
-          [id, line.accountId ?? null, line.accountCode ?? null, line.lineType, line.description ?? null, i]
-        );
+      if (Array.isArray(lines)) {
+        await client.query(`DELETE FROM journal_entry_template_lines WHERE "templateId" = $1`, [id]);
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          await client.query(
+            `INSERT INTO journal_entry_template_lines ("templateId","accountId","accountCode","lineType",description,"sortOrder")
+             VALUES ($1,$2,$3,$4,$5,$6)`,
+            [id, line.accountId ?? null, line.accountCode ?? null, line.lineType, line.description ?? null, i]
+          );
+        }
       }
-    }
+    });
 
     const [template] = await rawQuery<any>(`SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     if (!template) throw new NotFoundError("القالب غير موجود");
     template.lines = await rawQuery<any>(
       `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
        FROM journal_entry_template_lines tl
-       LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId" AND ca."deletedAt" IS NULL
+       LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId" AND ca."companyId" = $2
        WHERE tl."templateId" = $1 ORDER BY tl."sortOrder" LIMIT 500`,
-      [id]
+      [id, scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "journal_entry_templates", entityId: id, before: existing, after: template }).catch((e) => logger.error(e, "accounting-engine background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.journal_template.updated", entity: "journal_entry_templates", entityId: id, details: JSON.stringify({ name, operationType: existing.operationType }) }).catch((e) => logger.error(e, "accounting-engine background task failed"));
@@ -418,7 +435,7 @@ router.put("/journal-templates/:id", requirePermission("finance:write"), async (
   }
 });
 
-router.delete("/journal-templates/:id", requirePermission("finance:write"), async (req, res) => {
+router.delete("/journal-templates/:id", authorize({ feature: "finance.accounting_engine", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -428,7 +445,8 @@ router.delete("/journal-templates/:id", requirePermission("finance:write"), asyn
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("القالب غير موجود");
-    await rawExecute(`UPDATE journal_entry_templates SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const { affectedRows } = await rawExecute(`UPDATE journal_entry_templates SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("السجل غير موجود");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "journal_entry_templates", entityId: id, before: existing }).catch((e) => logger.error(e, "accounting-engine background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.journal_template.deleted", entity: "journal_entry_templates", entityId: id, details: JSON.stringify({ name: existing.name }) }).catch((e) => logger.error(e, "accounting-engine background task failed"));
     res.json({ message: "تم حذف القالب" });
@@ -441,7 +459,7 @@ router.delete("/journal-templates/:id", requirePermission("finance:write"), asyn
 // SUBSIDIARY ACCOUNTS CRUD
 // ─────────────────────────────────────────────────────────────────────────────
 
-router.get("/subsidiary-accounts", requirePermission("finance:read"), async (req, res) => {
+router.get("/subsidiary-accounts", authorize({ feature: "finance.accounting_engine", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId } = req.query as any;
@@ -466,7 +484,7 @@ router.get("/subsidiary-accounts", requirePermission("finance:read"), async (req
   }
 });
 
-router.get("/subsidiary-accounts/entity/:entityType/:entityId", requirePermission("finance:read"), async (req, res) => {
+router.get("/subsidiary-accounts/entity/:entityType/:entityId", authorize({ feature: "finance.accounting_engine", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType } = req.params;
@@ -486,7 +504,7 @@ router.get("/subsidiary-accounts/entity/:entityType/:entityId", requirePermissio
   }
 });
 
-router.post("/subsidiary-accounts", requirePermission("finance:write"), async (req, res) => {
+router.post("/subsidiary-accounts", authorize({ feature: "finance.accounting_engine", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(createSubsidiaryAccountSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -504,8 +522,8 @@ router.post("/subsidiary-accounts", requirePermission("finance:write"), async (r
     const [row] = await rawQuery<any>(
       `SELECT sa.*, ca.code AS "accountCode", ca.name AS "accountName"
        FROM subsidiary_accounts sa JOIN chart_of_accounts ca ON ca.id = sa."accountId"
-       WHERE sa.id = $1`,
-      [insertId]
+       WHERE sa.id = $1 AND sa."companyId" = $2`,
+      [insertId, scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "subsidiary_accounts", entityId: insertId, after: row }).catch((e) => logger.error(e, "accounting-engine background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "accounting.subsidiary_account.created", entity: "subsidiary_accounts", entityId: insertId, details: JSON.stringify({ entityType, entityId, accountType }) }).catch((e) => logger.error(e, "accounting-engine background task failed"));
@@ -515,7 +533,7 @@ router.post("/subsidiary-accounts", requirePermission("finance:write"), async (r
   }
 });
 
-router.delete("/subsidiary-accounts/:id", requirePermission("finance:write"), async (req, res) => {
+router.delete("/subsidiary-accounts/:id", authorize({ feature: "finance.accounting_engine", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -563,48 +581,45 @@ export async function createSubsidiaryAccountsForEntity(
       );
     }
 
-    for (const acc of accountsToCreate) {
-      const [parentAccount] = await rawQuery<any>(
-        `SELECT id, code FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2`,
-        [companyId, acc.parentCode]
-      );
-      if (!parentAccount) continue;
-
-      const seqRes = await rawQuery<any>(
-        `SELECT COUNT(*) AS cnt FROM subsidiary_accounts WHERE "companyId" = $1 AND "accountType" = $2`,
-        [companyId, acc.accountType]
-      );
-      const seq = Number(seqRes[0]?.cnt ?? 0) + 1;
-      const newCode = `${acc.parentCode}-${String(entityId).padStart(4, "0")}`;
-      const [existingAcc] = await rawQuery<any>(
-        `SELECT id FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2`,
-        [companyId, newCode]
-      );
-
-      let accountId: number;
-      if (existingAcc) {
-        accountId = existingAcc.id;
-      } else {
-        const { insertId } = await rawExecute(
-          `INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "parentId", level, "allowPosting", "isAnalytical", "isActive")
-           VALUES ($1,$2,$3,$4,
-             (SELECT type FROM chart_of_accounts WHERE id = $5),
-             $5,
-             (SELECT level + 1 FROM chart_of_accounts WHERE id = $5),
-             true, true, true)
-           RETURNING id`,
-          [companyId, newCode, `${entityName} - ${acc.suffix}`, `${entityName} - ${acc.suffix}`, parentAccount.id]
+    await withTransaction(async (client) => {
+      for (const acc of accountsToCreate) {
+        const { rows: [parentAccount] } = await client.query(
+          `SELECT id, code FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2 AND "deletedAt" IS NULL`,
+          [companyId, acc.parentCode]
         );
-        accountId = insertId;
-      }
+        if (!parentAccount) continue;
 
-      await rawExecute(
-        `INSERT INTO subsidiary_accounts ("companyId","entityType","entityId","accountType","accountId")
-         VALUES ($1,$2,$3,$4,$5)
-         ON CONFLICT ("companyId","entityType","entityId","accountType") DO NOTHING`,
-        [companyId, entityType, entityId, acc.accountType, accountId]
-      );
-    }
+        const newCode = `${acc.parentCode}-${String(entityId).padStart(4, "0")}`;
+        const { rows: [existingAcc] } = await client.query(
+          `SELECT id FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2 AND "deletedAt" IS NULL`,
+          [companyId, newCode]
+        );
+
+        let accountId: number;
+        if (existingAcc) {
+          accountId = existingAcc.id;
+        } else {
+          const { rows: [newAcc] } = await client.query(
+            `INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "parentId", level, "allowPosting", "isAnalytical", "isActive")
+             VALUES ($1,$2,$3,$4,
+               (SELECT type FROM chart_of_accounts WHERE id = $5),
+               $5,
+               (SELECT level + 1 FROM chart_of_accounts WHERE id = $5),
+               true, true, true)
+             RETURNING id`,
+            [companyId, newCode, `${entityName} - ${acc.suffix}`, `${entityName} - ${acc.suffix}`, parentAccount.id]
+          );
+          accountId = newAcc.id;
+        }
+
+        await client.query(
+          `INSERT INTO subsidiary_accounts ("companyId","entityType","entityId","accountType","accountId")
+           VALUES ($1,$2,$3,$4,$5)
+           ON CONFLICT ("companyId","entityType","entityId","accountType") DO NOTHING`,
+          [companyId, entityType, entityId, acc.accountType, accountId]
+        );
+      }
+    });
   } catch (err) {
     logger.error(err, "createSubsidiaryAccountsForEntity error:");
   }

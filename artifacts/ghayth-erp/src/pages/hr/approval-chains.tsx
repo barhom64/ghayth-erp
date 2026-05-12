@@ -19,7 +19,7 @@ export default function ApprovalChainsPage() {
   const items = data?.data || [];
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const filtered = applyFilters(items, filters, {
     searchFields: ["employeeName", "leaveTypeName"],

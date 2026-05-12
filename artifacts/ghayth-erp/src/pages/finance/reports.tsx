@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -32,9 +33,9 @@ function exportCSV(rows: any[], headers: string[], filename: string) {
 
 function PrintButton() {
   return (
-    <Button variant="outline" size="sm" onClick={() => window.print()}>
+    <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => window.print()}>
       <Printer className="h-3.5 w-3.5 me-1" />طباعة
-    </Button>
+    </GuardedButton>
   );
 }
 
@@ -148,7 +149,7 @@ function TrialBalance({ dateParams, startDate, endDate }: { dateParams: string; 
   const byType = data?.byType || {};
   const [viewMode, setViewMode] = useState<"tree" | "flat">("tree");
 
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const tree = useMemo(() => {
     if (!rows.length) return [];
@@ -203,9 +204,9 @@ function TrialBalance({ dateParams, startDate, endDate }: { dateParams: string; 
         </div>
         <div className="flex gap-2">
           <PrintButton />
-          <Button variant="outline" size="sm" onClick={() => exportCSV(rows, ["code", "name", "type", "totalDebit", "totalCredit", "balance"], "trial-balance.csv")}>
+          <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV(rows, ["code", "name", "type", "totalDebit", "totalCredit", "balance"], "trial-balance.csv")}>
             <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
-          </Button>
+          </GuardedButton>
           <MultiExportButton
             exports={[
               { endpoint: "/export/excel/trial-balance", filename: "trial-balance.xlsx", type: "excel", label: "تصدير إكسل", params: { startDate, endDate } },
@@ -313,7 +314,7 @@ function IncomeStatement({ dateParams, startDate, endDate }: { dateParams: strin
   const summary = data?.summary || {};
 
   if (isLoading) return <div className="mt-4 space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const totalRevenue = Number(summary.totalRevenue || 0);
   const totalExpenses = Number(summary.totalExpenses || 0);
@@ -364,9 +365,9 @@ function IncomeStatement({ dateParams, startDate, endDate }: { dateParams: strin
     <div className="space-y-4 mt-4">
       <div className="flex justify-end gap-2">
         <PrintButton />
-        <Button variant="outline" size="sm" onClick={() => exportCSV([...revenues.map((r: any) => ({ ...r, section: "إيرادات" })), ...expenses.map((e: any) => ({ ...e, section: "مصروفات" }))], ["section", "code", "name", "amount"], "income-statement.csv")}>
+        <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV([...revenues.map((r: any) => ({ ...r, section: "إيرادات" })), ...expenses.map((e: any) => ({ ...e, section: "مصروفات" }))], ["section", "code", "name", "amount"], "income-statement.csv")}>
           <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
-        </Button>
+        </GuardedButton>
         <MultiExportButton
           exports={[
             { endpoint: "/export/excel/income-statement", filename: "income-statement.xlsx", type: "excel", label: "تصدير إكسل", params: { startDate, endDate } },
@@ -457,7 +458,7 @@ function BalanceSheet({ dateParams }: { dateParams: string }) {
   const equity = data?.equity || [];
 
   if (isLoading) return <div className="mt-4 space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const totalAssets = Number(summary.totalAssets || 0);
   const totalLiabilities = Number(summary.totalLiabilities || 0);
@@ -502,9 +503,9 @@ function BalanceSheet({ dateParams }: { dateParams: string }) {
     <div className="space-y-4 mt-4">
       <div className="flex justify-end gap-2">
         <PrintButton />
-        <Button variant="outline" size="sm" onClick={() => exportCSV([...assets, ...liabilities, ...equity], ["code", "name", "type", "balance"], "balance-sheet.csv")}>
+        <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV([...assets, ...liabilities, ...equity], ["code", "name", "type", "balance"], "balance-sheet.csv")}>
           <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
-        </Button>
+        </GuardedButton>
       </div>
 
       <div className="grid gap-3 grid-cols-3">
@@ -554,7 +555,7 @@ function CashFlow({ dateParams }: { dateParams: string }) {
   const outflows = data?.outflows || [];
 
   if (isLoading) return <div className="mt-4 space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const inflowColumns: DataTableColumn<any>[] = [
     { key: "description", header: "البيان", render: (f) => <span className="font-medium">{f.description || "-"}</span> },
@@ -572,9 +573,9 @@ function CashFlow({ dateParams }: { dateParams: string }) {
     <div className="space-y-4 mt-4">
       <div className="flex justify-end gap-2">
         <PrintButton />
-        <Button variant="outline" size="sm" onClick={() => exportCSV([...inflows.map((f: any) => ({ ...f, type: "وارد" })), ...outflows.map((f: any) => ({ ...f, type: "صادر" }))], ["type", "description", "amount", "date"], "cash-flow.csv")}>
+        <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV([...inflows.map((f: any) => ({ ...f, type: "وارد" })), ...outflows.map((f: any) => ({ ...f, type: "صادر" }))], ["type", "description", "amount", "date"], "cash-flow.csv")}>
           <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
-        </Button>
+        </GuardedButton>
       </div>
       <div className="grid gap-3 grid-cols-3">
         <Card className="bg-green-50"><CardContent className="p-4 text-center">
@@ -636,7 +637,7 @@ function CashBankStatement({ dateParams }: { dateParams: string }) {
   const entries = data?.entries || [];
   const summary = data?.summary || {};
 
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const cashBankColumns: DataTableColumn<any>[] = [
     { key: "date", header: "التاريخ", render: (e) => <span className="text-xs text-gray-500">{e.date ? formatDateAr(e.date) : "-"}</span> },
@@ -667,9 +668,9 @@ function CashBankStatement({ dateParams }: { dateParams: string }) {
           </SelectContent>
         </Select>
         <PrintButton />
-        <Button variant="outline" size="sm" onClick={() => exportCSV(entries, ["ref", "description", "debit", "credit", "runningBalance", "date"], `cash-${accountCode}.csv`)}>
+        <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV(entries, ["ref", "description", "debit", "credit", "runningBalance", "date"], `cash-${accountCode}.csv`)}>
           <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
-        </Button>
+        </GuardedButton>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
@@ -711,7 +712,7 @@ function CustodyAdvances({ dateParams }: { dateParams: string }) {
   const summary = data?.summary || {};
 
   if (isLoading) return <div className="mt-4 space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const custodyColumns: DataTableColumn<any>[] = [
     { key: "ref", header: "المرجع", render: (c) => <span className="font-mono text-xs text-blue-600">{c.ref}</span> },
@@ -725,9 +726,9 @@ function CustodyAdvances({ dateParams }: { dateParams: string }) {
     <div className="space-y-4 mt-4">
       <div className="flex justify-end gap-2">
         <PrintButton />
-        <Button variant="outline" size="sm" onClick={() => exportCSV([...custodies, ...advances], ["ref", "description", "amount", "employeeName", "date", "type"], "custody-advances.csv")}>
+        <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV([...custodies, ...advances], ["ref", "description", "amount", "employeeName", "date", "type"], "custody-advances.csv")}>
           <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
-        </Button>
+        </GuardedButton>
       </div>
 
       <div className="grid gap-3 grid-cols-3">
@@ -785,7 +786,7 @@ function ExpensesAnalysis({ dateParams }: { dateParams: string }) {
   const rows = data?.data || [];
   const summary = data?.summary || {};
 
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const expensesColumns: DataTableColumn<any>[] = [
     { key: "label", header: groupBy === "account" ? "الحساب" : groupBy === "branch" ? "الفرع" : "الموظف", searchable: true, render: (r) => <span className="font-medium">{r.label || "-"}</span> },
@@ -821,9 +822,9 @@ function ExpensesAnalysis({ dateParams }: { dateParams: string }) {
           </SelectContent>
         </Select>
         <PrintButton />
-        <Button variant="outline" size="sm" onClick={() => exportCSV(rows, ["key", "label", "amount", "entryCount"], "expenses-analysis.csv")}>
+        <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV(rows, ["key", "label", "amount", "entryCount"], "expenses-analysis.csv")}>
           <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
-        </Button>
+        </GuardedButton>
       </div>
 
       <Card><CardContent className="p-4 text-center">
@@ -851,7 +852,7 @@ function RevenueAnalysis({ dateParams }: { dateParams: string }) {
   const summary = data?.summary || {};
 
   if (isLoading) return <div className="mt-4 space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const byAccountColumns: DataTableColumn<any>[] = [
     {
@@ -883,9 +884,9 @@ function RevenueAnalysis({ dateParams }: { dateParams: string }) {
     <div className="space-y-4 mt-4">
       <div className="flex justify-end gap-2">
         <PrintButton />
-        <Button variant="outline" size="sm" onClick={() => exportCSV(byAccount, ["code", "name", "amount", "entryCount"], "revenue-analysis.csv")}>
+        <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV(byAccount, ["code", "name", "amount", "entryCount"], "revenue-analysis.csv")}>
           <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
-        </Button>
+        </GuardedButton>
       </div>
 
       <Card><CardContent className="p-4 text-center">
@@ -933,7 +934,7 @@ function BudgetVariance() {
   const rows = data?.data || [];
   const summary = data?.summary || {};
 
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const varianceColor = (v: number) => v >= 0 ? "#16a34a" : "#dc2626";
 
@@ -978,9 +979,9 @@ function BudgetVariance() {
       <div className="flex items-center gap-3">
         <Input type="month" className="w-40" value={period} onChange={(e) => setPeriod(e.target.value)} />
         <PrintButton />
-        <Button variant="outline" size="sm" onClick={() => exportCSV(rows, ["accountCode", "accountName", "budget", "actual", "variance", "usagePct"], "budget-variance.csv")}>
+        <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV(rows, ["accountCode", "accountName", "budget", "actual", "variance", "usagePct"], "budget-variance.csv")}>
           <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
-        </Button>
+        </GuardedButton>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
@@ -1038,7 +1039,7 @@ function EntityStatement({ startDate, endDate }: { startDate: string; endDate: s
     enabled
   );
 
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   const rows = data?.rows || [];
   const summary = data?.summary || {};
@@ -1099,9 +1100,9 @@ function EntityStatement({ startDate, endDate }: { startDate: string; endDate: s
         {rows.length > 0 && (
           <>
             <PrintButton />
-            <Button variant="outline" size="sm" onClick={() => exportCSV(rowsWithBalance, ["ref", "description", "debit", "credit", "runningBalance", "date", "type"], `entity-statement-${entityId}.csv`)}>
+            <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV(rowsWithBalance, ["ref", "description", "debit", "credit", "runningBalance", "date", "type"], `entity-statement-${entityId}.csv`)}>
               <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
-            </Button>
+            </GuardedButton>
           </>
         )}
       </div>

@@ -1,7 +1,7 @@
 import { handleRouteError, NotFoundError, parseId, zodParse } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
@@ -14,24 +14,100 @@ const preferencesSchema = z.object({
   enabled: z.boolean().optional(),
 });
 
+// Row shape for the per-user notifications list. Schema source-of-truth
+// is db/schema.sql; @workspace/db Drizzle definitions don't cover this
+// table yet.
+interface NotificationListRow {
+  id: number;
+  type: string;
+  title: string;
+  body?: string | null;
+  priority?: string | null;
+  isRead: boolean;
+  createdAt: string;
+  refType?: string | null;
+  refId?: number | null;
+  actionUrl?: string | null;
+}
+
+// Cursor mode shares the (createdAt, id) keyset pattern documented in
+// docs/CURSOR_PAGINATION.md and first rolled out on /admin/audit-logs.
+interface NotificationCursor { t: string; i: number }
+
+interface NotificationPreferenceRow {
+  id: number;
+  userId: number;
+  companyId: number;
+  channel: string;
+  category: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+function encodeCursor(c: NotificationCursor): string {
+  return Buffer.from(JSON.stringify(c), "utf8").toString("base64url");
+}
+
+function decodeCursor(s: string): NotificationCursor | null {
+  try {
+    const raw = Buffer.from(s, "base64url").toString("utf8");
+    const obj = JSON.parse(raw) as Partial<NotificationCursor>;
+    if (typeof obj.t !== "string" || typeof obj.i !== "number") return null;
+    if (Number.isNaN(Date.parse(obj.t))) return null;
+    return { t: obj.t, i: obj.i };
+  } catch {
+    return null;
+  }
+}
+
 const router = Router();
 
-router.get("/", requirePermission("notifications:read"), async (req, res) => {
+router.get("/", authorize({ feature: "notifications", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const page = Math.max(1, Number(req.query.page) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 50));
+    const cursor = typeof req.query.cursor === "string" ? req.query.cursor : undefined;
+
+    // ── Cursor mode (opt-in, non-breaking) ────────────────────────
+    if (cursor) {
+      const decoded = decodeCursor(cursor);
+      if (!decoded) {
+        res.status(400).json({ error: "cursor غير صالح" });
+        return;
+      }
+      const rows = await rawQuery<NotificationListRow>(
+        `SELECT id, type, title, body, priority, "isRead", "createdAt", "refType", "refId", "actionUrl"
+         FROM notifications
+         WHERE "assignmentId" = $1 AND "companyId" = $2
+           AND ("createdAt", id) < ($3::timestamptz, $4)
+         ORDER BY "createdAt" DESC, id DESC
+         LIMIT $5`,
+        [scope.activeAssignmentId, scope.companyId, decoded.t, decoded.i, pageSize + 1],
+      );
+      const hasMore = rows.length > pageSize;
+      const data = hasMore ? rows.slice(0, pageSize) : rows;
+      const last = data[data.length - 1];
+      const nextCursor = hasMore && last
+        ? encodeCursor({ t: String(last.createdAt), i: last.id })
+        : null;
+      res.json({ data, pageSize, cursor: nextCursor, hasMore });
+      return;
+    }
+
+    // ── Legacy page/limit mode ────────────────────────────────────
+    const page = Math.max(1, Number(req.query.page) || 1);
     const offset = (page - 1) * pageSize;
 
     const [[countRow], notifications] = await Promise.all([
-      rawQuery<{ count: string }>(`SELECT COUNT(*) AS count FROM notifications WHERE "assignmentId" = $1`, [scope.activeAssignmentId]),
-      rawQuery<any>(
+      rawQuery<{ count: string }>(`SELECT COUNT(*) AS count FROM notifications WHERE "assignmentId" = $1 AND "companyId" = $2`, [scope.activeAssignmentId, scope.companyId]),
+      rawQuery<NotificationListRow>(
         `SELECT id, type, title, body, priority, "isRead", "createdAt", "refType", "refId", "actionUrl"
          FROM notifications
-         WHERE "assignmentId" = $1
-         ORDER BY "createdAt" DESC
-         LIMIT $2 OFFSET $3`,
-        [scope.activeAssignmentId, pageSize, offset]
+         WHERE "assignmentId" = $1 AND "companyId" = $2
+         ORDER BY "createdAt" DESC, id DESC
+         LIMIT $3 OFFSET $4`,
+        [scope.activeAssignmentId, scope.companyId, pageSize, offset],
       ),
     ]);
 
@@ -41,15 +117,15 @@ router.get("/", requirePermission("notifications:read"), async (req, res) => {
   }
 });
 
-router.patch("/:id/read", requirePermission("notifications:write"), async (req, res) => {
+router.patch("/:id/read", authorize({ feature: "notifications", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
 
     const { affectedRows } = await rawExecute(
       `UPDATE notifications SET "isRead" = true, "readAt" = NOW()
-       WHERE id = $1 AND "assignmentId" = $2 RETURNING id`,
-      [id, scope.activeAssignmentId]
+       WHERE id = $1 AND "assignmentId" = $2 AND "companyId" = $3 RETURNING id`,
+      [id, scope.activeAssignmentId, scope.companyId]
     );
 
     if (!affectedRows) {
@@ -69,13 +145,13 @@ router.patch("/:id/read", requirePermission("notifications:write"), async (req, 
   }
 });
 
-router.get("/unread-count", requirePermission("notifications:read"), async (req, res) => {
+router.get("/unread-count", authorize({ feature: "notifications", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const [row] = await rawQuery<{ count: string }>(
       `SELECT COUNT(*) AS count FROM notifications
-       WHERE "assignmentId" = $1 AND "isRead" = false`,
-      [scope.activeAssignmentId]
+       WHERE "assignmentId" = $1 AND "companyId" = $2 AND "isRead" = false`,
+      [scope.activeAssignmentId, scope.companyId]
     );
     res.json({ count: Number(row?.count ?? 0) });
   } catch (err) {
@@ -83,10 +159,10 @@ router.get("/unread-count", requirePermission("notifications:read"), async (req,
   }
 });
 
-router.get("/preferences", requirePermission("notifications:read"), async (req, res) => {
+router.get("/preferences", authorize({ feature: "notifications", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<NotificationPreferenceRow>(
       `SELECT * FROM notification_preferences WHERE "userId" = $1 AND "companyId" = $2 ORDER BY category`,
       [scope.userId, scope.companyId]
     );
@@ -96,7 +172,7 @@ router.get("/preferences", requirePermission("notifications:read"), async (req, 
   }
 });
 
-router.post("/preferences", requirePermission("notifications:write"), async (req, res) => {
+router.post("/preferences", authorize({ feature: "notifications", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(preferencesSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -104,11 +180,11 @@ router.post("/preferences", requirePermission("notifications:write"), async (req
     const { insertId } = await rawExecute(
       `INSERT INTO notification_preferences ("userId","companyId",channel,category,enabled)
        VALUES ($1,$2,$3,$4,$5)
-       ON CONFLICT ("userId", channel, category) DO UPDATE SET enabled = $5, "updatedAt" = NOW()
+       ON CONFLICT ("userId", "companyId", channel, category) DO UPDATE SET enabled = $5, "updatedAt" = NOW()
        RETURNING id`,
       [scope.userId, scope.companyId, channel || 'in_app', category || 'general', enabled !== false]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM notification_preferences WHERE id = $1`, [insertId]);
+    const [row] = await rawQuery<NotificationPreferenceRow>(`SELECT * FROM notification_preferences WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "upsert_notification_preference",
@@ -123,13 +199,13 @@ router.post("/preferences", requirePermission("notifications:write"), async (req
   }
 });
 
-router.patch("/mark-all-read", requirePermission("notifications:write"), async (req, res) => {
+router.patch("/mark-all-read", authorize({ feature: "notifications", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { affectedRows } = await rawExecute(
       `UPDATE notifications SET "isRead" = true, "readAt" = NOW()
-       WHERE "assignmentId" = $1 AND "isRead" = false`,
-      [scope.activeAssignmentId]
+       WHERE "assignmentId" = $1 AND "companyId" = $2 AND "isRead" = false`,
+      [scope.activeAssignmentId, scope.companyId]
     );
 
     createAuditLog({

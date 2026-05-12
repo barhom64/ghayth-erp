@@ -1,6 +1,11 @@
 import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 import { DetailPageLayout, type RelatedEntity } from "@/components/shared/detail-page-layout";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
@@ -10,6 +15,7 @@ import { Edit, Package, Star, Bus, Utensils, Calendar } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
   active: "متاح",
@@ -29,6 +35,7 @@ export default function UmrahPackageDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/umrah/packages/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("umrah-package", id ?? 0);
 
   const { data: pkg, isLoading, error, refetch } = useApiQuery<any>(
     ["umrah-package", String(id)],
@@ -70,12 +77,27 @@ export default function UmrahPackageDetail() {
     return [{ kind: "info-grid", items }];
   }, [pkg, id]);
 
-  const handleEdit = () => {
-    setLocation(`/umrah/packages/${id}/edit`);
-  };
+  const editDelete = useDetailEditDelete({
+    entityLabel: "الباقة",
+    patchPath: `/umrah/packages/${id}`,
+    deletePath: `/umrah/packages/${id}`,
+    listPath: "/umrah/packages",
+    initialValues: pkg,
+    fields: [
+      { key: "name", label: "اسم الباقة" },
+      { key: "price", label: "السعر", type: "number" },
+      { key: "capacity", label: "السعة", type: "number" },
+      { key: "description", label: "الوصف" },
+    ],
+    invalidateKeys: [["umrah-package", String(id)], ["umrah-packages"]],
+    onSaved: () => refetch(),
+  });
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
+      <div className="md:col-span-3">
+        <InlineEditCard hook={editDelete} />
+      </div>
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
@@ -228,24 +250,25 @@ export default function UmrahPackageDetail() {
       relatedEntities={relatedEntities}
       entityType="umrah-package"
       entityId={id ?? 0}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       overview={overview}
       isLoading={isLoading}
       error={error}
       onRetry={refetch}
       actions={
-        <>
-          <EntityPrintButton
-            branchId={pkg?.branchId}
-            title={`الباقة — ${pkg?.name || ""}`}
-            ref={`PKG-${id}`}
-            date={formatDateAr(new Date().toISOString())}
-            sections={printSections}
-          />
-          <GuardedButton perm="operations:update" variant="outline" size="sm" onClick={handleEdit} disabled={!pkg}>
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
-        </>
+        <DetailActionButtons
+          hook={editDelete}
+          extra={
+            <EntityPrintButton
+              branchId={pkg?.branchId}
+              title={`الباقة — ${pkg?.name || ""}`}
+              ref={`PKG-${id}`}
+              date={formatDateAr(new Date().toISOString())}
+              sections={printSections}
+            />
+          }
+        />
       }
     />
   );

@@ -14,6 +14,7 @@ import { useMemo } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -118,7 +119,7 @@ export default function ViolationsPage() {
         title="المخالفات والجزاءات"
         breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "المخالفات والجزاءات" }]}
       >
-        <ErrorState onRetry={() => window.location.reload()} />
+        <ErrorState />
       </PageShell>
     );
   }
@@ -136,9 +137,9 @@ export default function ViolationsPage() {
             </Button>
           </Link>
           <Link href="/hr/violations/create">
-            <Button size="sm" className="gap-1.5">
+            <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
               <Plus className="h-4 w-4" /> تسجيل مخالفة
-            </Button>
+            </GuardedButton>
           </Link>
         </div>
       }

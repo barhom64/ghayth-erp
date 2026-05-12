@@ -8,6 +8,7 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { Pencil, CheckCircle, XCircle, Info, AlertTriangle, ShieldAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { cn } from "@/lib/utils";
 import { CreatePageLayout } from "@/components/create-page-layout";
 
@@ -15,8 +16,7 @@ const VEHICLE_STATUS_OPTIONS = [
   { value: "available", label: "متاحة" },
   { value: "in_use", label: "قيد الاستخدام" },
   { value: "maintenance", label: "في الصيانة" },
-  { value: "reserved", label: "محجوزة" },
-  { value: "accident", label: "حادث" },
+  { value: "out_of_service", label: "خارج الخدمة" },
 ];
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -43,6 +43,7 @@ export default function VehicleStatusChangePage() {
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("fleet_vehicle_status_change", {
     selectedNewStatus: "",
   });
+  const { fieldErrors, validate } = useFieldErrors();
   const selectedNewStatus = form.selectedNewStatus;
   const setSelectedNewStatus = (v: string) => setForm(f => ({ ...f, selectedNewStatus: v }));
   const [impactData, setImpactData] = useState<any>(null);
@@ -170,6 +171,7 @@ export default function VehicleStatusChangePage() {
         <Button
           disabled={!selectedNewStatus || !impactData || !impactData.canProceed || confirming}
           onClick={applyStatusChange}
+          rateLimitAware
         >
           {confirming ? "جاري التطبيق..." : "تطبيق التغيير"}
         </Button>

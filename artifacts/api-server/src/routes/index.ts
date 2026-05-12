@@ -14,6 +14,7 @@ import hrRouter from "./hr.js";
 // no more /finance fallback router.
 import { invoicesRouter } from "./finance-invoices.js";
 import { journalRouter } from "./finance-journal.js";
+import { glHelpersRouter } from "./finance-gl-helpers.js";
 import { purchaseRouter } from "./finance-purchase.js";
 import { reportsRouter } from "./finance-reports.js";
 import { custodiesRouter } from "./finance-custodies.js";
@@ -43,6 +44,7 @@ import rulesRouter from "./rules.js";
 import moduleDashboardsRouter from "./moduleDashboards.js";
 import adminRouter from "./admin.js";
 import permissionsRouter from "./permissions.js";
+import rbacV2Router from "./rbacV2.js";
 import auditLogsRouter from "./auditLogs.js";
 import searchRouter from "./search.js";
 import activityLogRouter from "./activityLog.js";
@@ -64,11 +66,16 @@ import operationsCenterRouter from "./operationsCenter.js";
 import notificationEngineRouter from "./notification-engine.js";
 import { requireModule, requireMinLevel } from "../middlewares/roleGuard.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { csrfMiddleware } from "../middlewares/csrfMiddleware.js";
+import rateLimit from "express-rate-limit";
+import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
+import { makeRateLimitStore } from "../lib/rateLimitStore.js";
 import { rawQuery } from "../lib/rawdb.js";
 import clientPortalRouter from "./clientPortal.js";
 import publicDataRouter from "./publicData.js";
 import careersPortalRouter from "./careersPortal.js";
 import { exportRouter } from "./export.js";
+import importRouter from "./import.js";
 import { scheduledReportsRouter } from "./scheduled-reports.js";
 import { govIntegrationsRouter } from "./gov-integrations.js";
 import pdplRouter from "./pdpl.js";
@@ -93,12 +100,49 @@ import { requireGuards } from "../lib/systemGovernor.js";
 const router: IRouter = Router();
 
 router.use(healthRouter);
+
+// Per-IP limiter for the truly anonymous surfaces. Replaces the old
+// blanket /api globalLimiter that lived in app.ts and unfairly counted
+// authenticated traffic. Anonymous endpoints don't have a userId to key
+// off, so per-IP is the only honest option here.
+//
+// /api/health is excluded so liveness probes never trip the cap.
+const anonymousIpLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: process.env.NODE_ENV === "production" ? 100 : 2000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "تم تجاوز الحد الأقصى للطلبات. يرجى المحاولة لاحقاً" },
+  validate: { ip: false, trustProxy: false },
+  store: makeRateLimitStore("anon:ip"),
+});
+
 router.use(storageRouter);
 router.use(activityIngestRouter);
+// /auth is special: it mixes anonymous endpoints (/login, /register,
+// /refresh) with authenticated ones (/me, /logout, /switch-assignment,
+// /change-password). We deliberately do NOT mount anonymousIpLimiter on
+// the whole /auth router — that would throw an IP cap on the
+// authenticated endpoints too. Instead, the anonymous endpoints inside
+// auth.ts each have their own per-IP limiter (loginLimiter, refreshLimiter,
+// registerLimiter), and the authenticated ones use per-user limiters
+// (authedUserLimiter / changePasswordLimiter) declared inside auth.ts.
 router.use("/auth", authRouter);
+// /portal mixes anonymous login with authenticated portal API. The
+// router applies loginLimiter per-IP on /login and a portal JWT
+// middleware on the rest, so adding a router-wide IP limiter here would
+// double-cap authenticated portal users. Skip it.
 router.use("/portal", clientPortalRouter);
-router.use("/public", publicDataRouter);
+// /careers mixes anonymous applicant flows with authenticated ones
+// behind a careers JWT. Same reasoning as /portal — don't add a
+// router-wide IP cap; portalLimiter inside careersPortal.ts handles the
+// anonymous traffic.
 router.use("/careers", careersPortalRouter);
+// /public is fully anonymous → per-IP cap is correct here.
+router.use("/public", anonymousIpLimiter, publicDataRouter);
+// /pdpl mixes anonymous /privacy-notice with authenticated endpoints.
+// Limiters live inside pdpl.ts: per-IP on /privacy-notice, per-user
+// (pdplUserLimiter) on the authenticated routes.
 router.use("/pdpl", pdplRouter);
 
 router.get("/settings/display", async (req, res) => {
@@ -111,7 +155,7 @@ router.get("/settings/display", async (req, res) => {
       try {
         const jwt = await import("jsonwebtoken");
         const SECRET = process.env.JWT_SECRET;
-        const payload: any = jwt.default.verify(rawToken, SECRET!);
+        const payload: any = jwt.default.verify(rawToken, SECRET!, { algorithms: ["HS256"] });
         if (payload?.companyId && payload?.type !== "client_portal") companyId = payload.companyId;
       } catch (e) { logger.debug(e, "public-settings JWT decode (optional)"); }
     }
@@ -161,10 +205,78 @@ router.get("/_routes", (req, res, next): void => {
 });
 
 router.use(authMiddleware);
+router.use(csrfMiddleware);
+
+// Per-user catch-all limiter for ALL authenticated /api traffic. Replaces
+// the blanket per-IP globalLimiter that used to live in app.ts. Mounted
+// here so it runs after authMiddleware (req.scope is set) and BEFORE any
+// module router, giving every authenticated route a baseline per-user
+// budget. Module-specific limiters below stack on top with their own
+// (smaller-prefix, often tighter) budgets — both must pass.
+const globalUserLimiter = createPerUserLimiter({
+  prefix: "api:global",
+  windowMs: 60 * 1000,
+  max: process.env.NODE_ENV === "production" ? 600 : 6000,
+  message: "تم تجاوز الحد الأقصى للطلبات. يرجى المحاولة لاحقاً",
+});
+router.use(globalUserLimiter);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Per-user rate limiters for heavy modules.
+//
+// Same shape as the umrah limiter below: mounted AFTER authMiddleware,
+// keyed off req.scope.userId, owner/admin roles exempt. The cap is generous
+// (300/min — ~5/sec sustained, well above any realistic human pace) so a
+// normal session is never throttled, but a runaway loop or misbehaving
+// client is still capped. Each module has its own prefix so a finance-heavy
+// session doesn't eat into a fleet click's budget.
+//
+// Anonymous traffic can never reach these — authMiddleware rejects it first
+// — and the global /api limiter in app.ts still covers anonymous abuse.
+// ─────────────────────────────────────────────────────────────────────────────
+const umrahUserLimiter = createPerUserLimiter({
+  prefix: "umrah",
+  windowMs: 60 * 1000,
+  max: 300,
+  message: "تم تجاوز الحد الأقصى لطلبات العمرة. يرجى المحاولة لاحقاً",
+});
+const financeUserLimiter = createPerUserLimiter({
+  prefix: "finance",
+  windowMs: 60 * 1000,
+  max: 300,
+  message: "تم تجاوز الحد الأقصى لطلبات المالية. يرجى المحاولة لاحقاً",
+});
+const propertiesUserLimiter = createPerUserLimiter({
+  prefix: "properties",
+  windowMs: 60 * 1000,
+  max: 300,
+  message: "تم تجاوز الحد الأقصى لطلبات العقارات. يرجى المحاولة لاحقاً",
+});
+const fleetUserLimiter = createPerUserLimiter({
+  prefix: "fleet",
+  windowMs: 60 * 1000,
+  max: 300,
+  message: "تم تجاوز الحد الأقصى لطلبات الأسطول. يرجى المحاولة لاحقاً",
+});
+const warehouseUserLimiter = createPerUserLimiter({
+  prefix: "warehouse",
+  windowMs: 60 * 1000,
+  max: 300,
+  message: "تم تجاوز الحد الأقصى لطلبات المستودع. يرجى المحاولة لاحقاً",
+});
+const hrUserLimiter = createPerUserLimiter({
+  prefix: "hr",
+  windowMs: 60 * 1000,
+  max: 300,
+  message: "تم تجاوز الحد الأقصى لطلبات الموارد البشرية. يرجى المحاولة لاحقاً",
+});
 
 router.use("/dashboard", dashboardRouter);
 router.use("/employees", requireModule("hr"), employeesRouter);
 router.use("/clients", requireModule("crm"), clientsRouter);
+// Per-user HR limiter mounted once on /hr so it runs exactly once per
+// request, regardless of which sub-router handles it. See umrah notes below.
+router.use("/hr", hrUserLimiter);
 router.use("/hr", requireModule("hr"), hrRouter);
 router.use("/hr/discipline", requireModule("hr"), disciplineRouter);
 router.use("/hr", requireModule("hr"), loansRouter);
@@ -172,8 +284,12 @@ router.use("/hr", requireModule("hr"), overtimeRouter);
 router.use("/hr", requireModule("hr"), exitRouter);
 router.use("/hr/training", requireModule("hr"), trainingRouter);
 router.use("/hr/recruitment", requireModule("hr"), recruitmentRouter);
+// Per-user finance limiter — mounted once on /finance so the dozen+
+// finance sub-routers below share a single per-user budget.
+router.use("/finance", financeUserLimiter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), invoicesRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), journalRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), glHelpersRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), purchaseRouter);
 router.use("/finance", requireModule("finance"), reportsRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), custodiesRouter);
@@ -192,8 +308,11 @@ router.use("/finance", requireModule("finance"), requireGuards("financial"), cos
 // finance-vendors.ts, and finance-reports.ts during canonicalisation.
 router.use("/notifications", notificationsRouter);
 router.use("/tasks", requireModule("operations"), tasksRouter);
+router.use("/fleet", fleetUserLimiter);
 router.use("/fleet", requireModule("fleet"), requireGuards("financial"), fleetRouter);
+router.use("/warehouse", warehouseUserLimiter);
 router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseRouter);
+router.use("/properties", propertiesUserLimiter);
 router.use("/properties", requireModule("property"), requireGuards("financial"), propertiesRouter);
 router.use("/legal", requireModule("legal"), legalRouter);
 router.use("/projects", requireModule("operations"), projectsRouter);
@@ -217,6 +336,7 @@ router.use("/rules", requireModule("settings"), requireMinLevel(70), rulesRouter
 router.use("/module-dashboards", requireModule("bi"), moduleDashboardsRouter);
 router.use("/admin", requireModule("admin"), requireMinLevel(90), adminRouter);
 router.use("/permissions", permissionsRouter);
+router.use("/rbac/v2", rbacV2Router);
 router.use("/audit-logs", requireMinLevel(70), auditLogsRouter);
 router.use("/search", searchRouter);
 router.use("/activity-log", requireMinLevel(70), activityLogRouter);
@@ -226,10 +346,16 @@ router.use("/impact-preview", impactPreviewRouter);
 router.use("/my-space", mySpaceRouter);
 router.use("/action-center", actionCenterRouter);
 router.use("/entity-meta", entityMetaRouter);
+// Mount the umrah limiter once on the /umrah prefix so it runs exactly once per
+// request, regardless of which sub-router (umrahRouter / umrahEntitiesRouter)
+// ultimately handles it. Mounting it on each router would cause double-counting
+// when Express falls through from the first router to the second.
+router.use("/umrah", umrahUserLimiter);
 router.use("/umrah", requireModule("operations"), requireGuards("financial"), umrahRouter);
 router.use("/umrah", requireModule("operations"), requireGuards("financial"), umrahEntitiesRouter);
 router.use("/operations-center", requireModule("operations"), requireMinLevel(40), operationsCenterRouter);
 router.use("/export", requireMinLevel(30), exportRouter);
+router.use("/import", requireMinLevel(50), importRouter);
 router.use("/scheduled-reports", requireMinLevel(50), scheduledReportsRouter);
 router.use("/notification-engine", requireModule("notifications"), notificationEngineRouter);
 router.use("/gov-integrations", govIntegrationsRouter);

@@ -13,6 +13,7 @@ import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Plus } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 interface TransportEntry {
   id: number;
@@ -73,14 +74,14 @@ export default function UmrahTransport() {
   };
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => window.location.reload()} />;
+  if (isError) return <ErrorState />;
 
   return (
     <PageShell
       title="النقل والمواصلات"
       subtitle="إدارة رحلات نقل المعتمرين والمواصلات"
       breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "النقل والمواصلات" }]}
-      actions={<Button onClick={() => setShowForm(!showForm)} className="gap-2"><Plus className="h-4 w-4" />رحلة جديدة</Button>}
+      actions={<GuardedButton perm="umrah:create" onClick={() => setShowForm(!showForm)} className="gap-2"><Plus className="h-4 w-4" />رحلة جديدة</GuardedButton>}
     >
       {showForm && (
         <Card>

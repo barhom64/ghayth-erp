@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useRateLimitCooldown } from "@/hooks/use-rate-limit-cooldown";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UnifiedDateRange } from "@/components/ui/unified-date-range";
 import { Badge } from "@/components/ui/badge";
@@ -123,6 +124,9 @@ function ConfigBasedFilters({ config, values, onChange, onExportCSV, resultCount
   className?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
+  // Task #170 — pause typing while a 429 cooldown is active so we don't
+  // fire a fresh request on every keystroke and keep getting throttled.
+  const cooldown = useRateLimitCooldown();
   const activeCount = [values.status, values.branch, values.dateFrom, values.dateTo]
     .filter(Boolean).length +
     (config.extraFilters?.filter(f => values[f.key]) || []).length;
@@ -144,11 +148,26 @@ function ConfigBasedFilters({ config, values, onChange, onExportCSV, resultCount
           <div className="relative flex-1 min-w-[200px] max-w-md">
             <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
-              placeholder={config.searchPlaceholder || "بحث..."}
+              placeholder={cooldown.isCoolingDown ? cooldown.label : (config.searchPlaceholder || "بحث...")}
               value={values.search}
-              onChange={e => update("search", e.target.value)}
+              onChange={e => {
+                if (cooldown.isCoolingDown) return;
+                update("search", e.target.value);
+              }}
+              disabled={cooldown.isCoolingDown}
+              aria-disabled={cooldown.isCoolingDown}
+              title={cooldown.isCoolingDown ? cooldown.label : undefined}
               className="ps-9"
             />
+            {cooldown.isCoolingDown && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="mt-1 text-[11px] text-amber-600"
+              >
+                {cooldown.label}
+              </div>
+            )}
           </div>
         )}
 
