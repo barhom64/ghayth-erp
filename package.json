@@ -15,6 +15,7 @@
     "check:ghost-rows": "node scripts/src/check-ghost-rows.mjs",
     "audit:boundaries": "node scripts/src/audit-domain-boundaries.mjs",
     "audit:domain-routes": "node scripts/src/audit-domain-routes.mjs",
+    "audit:system-review": "node audit/system-review/tooling/run-all.mjs",
     "guard": "bash scripts/guard.sh",
     "postinstall": "bash scripts/install-hooks.sh",
     "db:bootstrap": "bash db/bootstrap.sh",

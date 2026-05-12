@@ -3,6 +3,7 @@ import { formatCurrency } from "@/lib/formatters";
 import { useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Plus, Wrench, CheckCircle, Clock, DollarSign } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -44,7 +45,7 @@ export default function FleetMaintenancePage() {
       loading={isLoading}
       actions={
         <Link href="/fleet/maintenance/create">
-          <Button size="sm"><Plus className="h-4 w-4 me-1" />إضافة صيانة</Button>
+          <GuardedButton perm="fleet:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة صيانة</GuardedButton>
         </Link>
       }
     >

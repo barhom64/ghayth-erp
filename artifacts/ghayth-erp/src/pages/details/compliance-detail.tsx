@@ -13,6 +13,7 @@ import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
   compliant: "ملتزم",
@@ -34,6 +35,7 @@ export default function ComplianceDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/governance/compliance/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("compliance", id ?? 0);
 
   const { toast } = useToast();
 
@@ -277,6 +279,8 @@ export default function ComplianceDetail() {
       isLoading={isLoading}
       error={error}
       onRetry={refetch}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       actions={
         <>
           {compliance && (

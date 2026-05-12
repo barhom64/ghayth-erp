@@ -14,6 +14,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
@@ -451,7 +452,8 @@ export default function ActionCenter() {
                         <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
                       ) : activeTab === "workflows" ? (
                         <>
-                          <Button
+                          <GuardedButton
+                            perm="workflow:approve"
                             size="sm"
                             variant="ghost"
                             className="h-8 w-8 p-0 text-green-600 hover:bg-green-50 hover:text-green-700"
@@ -459,8 +461,9 @@ export default function ActionCenter() {
                             onClick={(e) => { e.preventDefault(); handleWorkflowDecision(item.id, "approve"); }}
                           >
                             <Check className="w-4 h-4" />
-                          </Button>
-                          <Button
+                          </GuardedButton>
+                          <GuardedButton
+                            perm="workflow:approve"
                             size="sm"
                             variant="ghost"
                             className="h-8 w-8 p-0 text-amber-600 hover:bg-amber-50 hover:text-amber-700"
@@ -468,8 +471,9 @@ export default function ActionCenter() {
                             onClick={(e) => { e.preventDefault(); handleWorkflowDecision(item.id, "return"); }}
                           >
                             <CornerUpLeft className="w-4 h-4" />
-                          </Button>
-                          <Button
+                          </GuardedButton>
+                          <GuardedButton
+                            perm="workflow:reject"
                             size="sm"
                             variant="ghost"
                             className="h-8 w-8 p-0 text-red-600 hover:bg-red-50 hover:text-red-700"
@@ -477,11 +481,12 @@ export default function ActionCenter() {
                             onClick={(e) => { e.preventDefault(); handleWorkflowDecision(item.id, "reject"); }}
                           >
                             <XIcon className="w-4 h-4" />
-                          </Button>
+                          </GuardedButton>
                         </>
                       ) : (
                         <>
-                          <Button
+                          <GuardedButton
+                            perm="approval:approve"
                             size="sm"
                             variant="ghost"
                             className="h-8 w-8 p-0 text-green-600 hover:bg-green-50 hover:text-green-700"
@@ -489,8 +494,9 @@ export default function ActionCenter() {
                             onClick={(e) => { e.preventDefault(); handleApproval(activeTab, item.id, true); }}
                           >
                             <Check className="w-4 h-4" />
-                          </Button>
-                          <Button
+                          </GuardedButton>
+                          <GuardedButton
+                            perm="approval:reject"
                             size="sm"
                             variant="ghost"
                             className="h-8 w-8 p-0 text-red-600 hover:bg-red-50 hover:text-red-700"
@@ -498,7 +504,7 @@ export default function ActionCenter() {
                             onClick={(e) => { e.preventDefault(); handleApproval(activeTab, item.id, false); }}
                           >
                             <XIcon className="w-4 h-4" />
-                          </Button>
+                          </GuardedButton>
                         </>
                       )}
                     </div>

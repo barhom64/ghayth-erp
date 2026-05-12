@@ -3,6 +3,7 @@ import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Plus, FilePlus } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -96,10 +97,10 @@ export default function OpeningBalancesPage() {
       loading={isLoading}
       actions={
         <Link href="/finance/opening-balances/create">
-          <Button size="sm">
+          <GuardedButton perm="finance:create" size="sm">
             <Plus className="h-4 w-4 me-1" />
             قيد أرصدة افتتاحية جديد
-          </Button>
+          </GuardedButton>
         </Link>
       }
     >

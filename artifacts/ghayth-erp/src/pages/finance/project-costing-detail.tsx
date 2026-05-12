@@ -3,6 +3,7 @@ import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { resolveStatus, type StatusTone } from "@/components/page-status-badge";
 import { DetailPageLayout, type ExtraTab } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
@@ -25,6 +26,7 @@ const TONE_MAP: Record<StatusTone, "success" | "warning" | "info" | "muted" | "d
 export default function ProjectCostingDetailPage() {
   const [, params] = useRoute("/finance/project-costing/:id");
   const id = params?.id || "";
+  const { extraTabs, hideTabs } = useRegistryTabs("project-costing", id ?? "");
 
   const { data: project, isLoading, isError, refetch } = useApiQuery<any>(
     ["project-finance-detail", id],
@@ -106,6 +108,8 @@ export default function ProjectCostingDetailPage() {
       updatedAt={project?.updatedAt}
       entityType="project-costing"
       entityId={id}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       isLoading={isLoading}
       error={isError ? true : undefined}
       onRetry={() => refetch()}

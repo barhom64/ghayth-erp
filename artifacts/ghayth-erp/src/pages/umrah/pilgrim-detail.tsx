@@ -7,9 +7,12 @@ import { Button } from "@/components/ui/button";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Save, User, Calendar, AlertTriangle } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_OPTIONS = [
   { value: "pending", label: "لم يصل" },
@@ -34,6 +37,7 @@ const STATUS_TONES: Record<string, "success" | "warning" | "info" | "muted" | "d
 export default function PilgrimDetail() {
   const [, params] = useRoute("/umrah/pilgrims/:id");
   const id = params?.id || "";
+  const { extraTabs, hideTabs } = useRegistryTabs("pilgrim", id ?? "");
   const { data, refetch, isLoading, isError } = useApiQuery<any>(["umrah-pilgrim", id], id ? `/umrah/pilgrims/${id}` : null);
   const [newStatus, setNewStatus] = useState("");
   const { toast } = useToast();
@@ -120,6 +124,10 @@ export default function PilgrimDetail() {
           <CardContent><p className="text-sm">{data.notes}</p></CardContent>
         </Card>
       )}
+
+      {data?.id && (
+        <UmrahAttachmentsPanel entityType="mutamer" entityId={data.id} />
+      )}
     </div>
   );
 
@@ -131,9 +139,9 @@ export default function PilgrimDetail() {
           {STATUS_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
         </SelectContent>
       </Select>
-      <Button onClick={updateStatus} disabled={!newStatus} className="gap-2" size="sm">
+      <GuardedButton perm="umrah:create" onClick={updateStatus} disabled={!newStatus} className="gap-2" size="sm">
         <Save className="h-4 w-4" />تحديث
-      </Button>
+      </GuardedButton>
     </div>
   );
 
@@ -146,6 +154,8 @@ export default function PilgrimDetail() {
       status={data?.status ? { label: STATUS_OPTIONS.find(o => o.value === data.status)?.label || data.status, tone: STATUS_TONES[data.status] || "default" } : undefined}
       entityType="pilgrim"
       entityId={data?.id || id}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       isLoading={isLoading}
       error={isError ? true : undefined}
       onRetry={() => refetch()}

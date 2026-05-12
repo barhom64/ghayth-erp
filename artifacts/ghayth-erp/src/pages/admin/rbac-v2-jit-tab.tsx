@@ -1,15 +1,34 @@
 import { useState } from "react";
+import { z } from "zod";
+import { useFormContext, useWatch } from "react-hook-form";
 import { useApiQuery, apiFetch } from "@/lib/api";
-import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Clock, Check, X, AlertTriangle, Plus, Hourglass, ShieldCheck, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  FormShell,
+  FormNumberField,
+  FormSelectField,
+  FormTextareaField,
+  FormGrid,
+} from "@/components/form-shell";
+
+// Justification floor (10 chars) lives in the schema so the submit
+// button can't fire below the threshold. Request minutes are capped
+// 5..1440 per the original imperative <Input min={5} max={1440}>.
+const jitRequestSchema = z.object({
+  featureKey: z.string().min(1, "اختر الميزة المطلوبة"),
+  action: z.string().min(1, "اختر الإجراء"),
+  scope: z.string().min(1, "اختر النطاق"),
+  justification: z.string().trim().min(10, "السبب يجب أن يكون 10 أحرف على الأقل").max(500),
+  requestedMinutes: z.coerce.number().int().min(5).max(1440),
+});
+type JitRequestForm = z.infer<typeof jitRequestSchema>;
 
 interface JitRequest {
   id: number;
@@ -106,11 +125,22 @@ export function JitRequestsTab() {
             للحالات الاستثنائية: أطلب صلاحية مؤقتة بمبرّر، يعتمدها مديرك، ويسحبها النظام تلقائياً عند انتهاء المدة.
           </p>
         </div>
-        <Button onClick={() => setShowRequest(true)}>
-          <Plus className="h-4 w-4 me-1" />
-          طلب جديد
-        </Button>
+        <GuardedButton perm="admin:create" onClick={() => setShowRequest(!showRequest)}>
+          {showRequest ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />طلب جديد</>}
+        </GuardedButton>
       </div>
+
+      {showRequest && (
+        <Card className="border-2 border-primary/20">
+          <CardHeader className="pb-2"><CardTitle className="text-base">طلب صلاحية مؤقتة</CardTitle></CardHeader>
+          <CardContent>
+            <JitRequestForm
+              features={features}
+              onCreated={() => { setShowRequest(false); refetchAll(); }}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs defaultValue="pending" dir="rtl">
         <TabsList>
@@ -150,14 +180,14 @@ export function JitRequestsTab() {
                         </p>
                       </div>
                       <div className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => setDecisionDialog({ id: r.id, mode: "reject" })}>
+                        <GuardedButton perm="admin:create" size="sm" variant="outline" onClick={() => setDecisionDialog({ id: r.id, mode: "reject" })}>
                           <X className="h-4 w-4 me-1" />
                           رفض
-                        </Button>
-                        <Button size="sm" onClick={() => setDecisionDialog({ id: r.id, mode: "approve" })}>
+                        </GuardedButton>
+                        <GuardedButton perm="admin:create" size="sm" onClick={() => setDecisionDialog({ id: r.id, mode: "approve" })}>
                           <Check className="h-4 w-4 me-1" />
                           اعتماد
-                        </Button>
+                        </GuardedButton>
                       </div>
                     </div>
                   </CardContent>
@@ -223,12 +253,6 @@ export function JitRequestsTab() {
         </TabsContent>
       </Tabs>
 
-      <RequestDialog
-        open={showRequest}
-        onClose={() => setShowRequest(false)}
-        features={features}
-        onCreated={refetchAll}
-      />
       <DecisionDialog
         info={decisionDialog}
         onClose={() => setDecisionDialog(null)}
@@ -238,126 +262,127 @@ export function JitRequestsTab() {
   );
 }
 
-function RequestDialog({ open, onClose, features, onCreated }: {
-  open: boolean; onClose: () => void; features: Feature[]; onCreated: () => void;
+function JitRequestForm({ features, onCreated }: {
+  features: Feature[]; onCreated: () => void;
 }) {
   const { toast } = useToast();
-  const [form, setForm] = useState({
-    featureKey: "",
-    action: "view",
-    scope: "self",
-    justification: "",
-    requestedMinutes: 60,
-  });
-  const [busy, setBusy] = useState(false);
 
-  const submit = async () => {
-    if (!form.featureKey || !form.justification || form.justification.length < 10) {
-      toast({
-        title: "بيانات ناقصة",
-        description: "السبب يجب أن يكون 10 أحرف على الأقل",
-        variant: "destructive",
-      });
-      return;
-    }
-    setBusy(true);
+  const submit = async (values: JitRequestForm) => {
     try {
       await apiFetch("/rbac/v2/jit/request", {
         method: "POST",
-        body: JSON.stringify(form),
+        body: JSON.stringify(values),
       });
       toast({ title: "تم تقديم الطلب", description: "سيُراجَع من المسؤول" });
       onCreated();
-      onClose();
-      setForm({ featureKey: "", action: "view", scope: "self", justification: "", requestedMinutes: 60 });
     } catch (err: any) {
       toast({ title: "فشل التقديم", description: err?.message || "خطأ", variant: "destructive" });
-    } finally {
-      setBusy(false);
     }
   };
 
-  const feat = features.find((f) => f.feature_key === form.featureKey);
-
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>طلب صلاحية مؤقتة</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs text-gray-600 mb-1 block">الميزة المطلوبة</label>
-            <Select value={form.featureKey} onValueChange={(v) => setForm((f) => ({ ...f, featureKey: v, action: "view" }))}>
-              <SelectTrigger><SelectValue placeholder="اختر ميزة..." /></SelectTrigger>
-              <SelectContent>
-                {features.map((f) => (
-                  <SelectItem key={f.feature_key} value={f.feature_key} className="text-sm">
-                    {f.label_ar}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs text-gray-600 mb-1 block">الإجراء</label>
-              <Select value={form.action} onValueChange={(v) => setForm((f) => ({ ...f, action: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {(feat?.available_actions || ["view"]).map((a) => (
-                    <SelectItem key={a} value={a} className="text-sm">{a}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-xs text-gray-600 mb-1 block">النطاق</label>
-              <Select value={form.scope} onValueChange={(v) => setForm((f) => ({ ...f, scope: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {(feat?.available_scopes || ["self"]).map((s) => (
-                    <SelectItem key={s} value={s} className="text-sm">{SCOPE_LABELS[s] || s}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div>
-            <label className="text-xs text-gray-600 mb-1 block">المدة (دقائق): 5 - 1440 (يوم كامل)</label>
-            <Input
-              type="number"
-              min={5}
-              max={1440}
-              value={form.requestedMinutes}
-              onChange={(e) => setForm((f) => ({ ...f, requestedMinutes: Number(e.target.value) }))}
-            />
-            <p className="text-[10px] text-gray-500 mt-1">
-              {form.requestedMinutes >= 60 ? `${Math.floor(form.requestedMinutes / 60)} ساعة ${form.requestedMinutes % 60} د` : `${form.requestedMinutes} دقيقة`}
-            </p>
-          </div>
-          <div>
-            <label className="text-xs text-gray-600 mb-1 block">
-              السبب ({form.justification.length}/500)
-            </label>
-            <textarea
-              value={form.justification}
-              onChange={(e) => setForm((f) => ({ ...f, justification: e.target.value.slice(0, 500) }))}
-              placeholder="اشرح بدقّة لماذا تحتاج هذه الصلاحية وما العمل الذي ستنفّذه (10 أحرف على الأقل)"
-              className="w-full border rounded p-2 text-sm h-24 resize-none"
-              minLength={10}
-              maxLength={500}
-            />
-          </div>
-        </div>
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={onClose}>إلغاء</Button>
-          <Button onClick={submit} disabled={busy}>
-            {busy ? "تقديم..." : "تقديم الطلب"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <FormShell
+      schema={jitRequestSchema}
+      defaultValues={{
+        featureKey: "",
+        action: "view",
+        scope: "self",
+        justification: "",
+        requestedMinutes: 60,
+      }}
+      submitLabel="تقديم الطلب"
+      onSubmit={async (values) => {
+        await submit(values);
+      }}
+    >
+      <FormSelectField
+        name="featureKey"
+        label="الميزة المطلوبة"
+        required
+        options={[
+          { value: "", label: "اختر ميزة..." },
+          ...features.map((f) => ({ value: f.feature_key, label: f.label_ar })),
+        ]}
+      />
+      <FormGrid cols={2}>
+        <ActionField features={features} />
+        <ScopeField features={features} />
+      </FormGrid>
+      <div className="mt-3">
+        <FormNumberField
+          name="requestedMinutes"
+          label="المدة (دقائق): 5 - 1440 (يوم كامل)"
+          required
+        />
+        <MinutesHint />
+      </div>
+      <div className="mt-3">
+        <FormTextareaField
+          name="justification"
+          label="السبب"
+          required
+          rows={4}
+          placeholder="اشرح بدقّة لماذا تحتاج هذه الصلاحية وما العمل الذي ستنفّذه (10 أحرف على الأقل)"
+        />
+        <JustificationCounter />
+      </div>
+    </FormShell>
+  );
+}
+
+// Dependent dropdowns — same pattern as rbac-v2-sod (#372). The
+// action/scope lists are derived from the selected feature's
+// available_* arrays; key={selectedFeature} remounts the field so
+// stale values can't slip through.
+function ActionField({ features }: { features: Feature[] }) {
+  const selectedFeature = useWatch<JitRequestForm, "featureKey">({ name: "featureKey" });
+  const feat = features.find((f) => f.feature_key === selectedFeature);
+  return (
+    <FormSelectField
+      key={`action-${selectedFeature}`}
+      name="action"
+      label="الإجراء"
+      required
+      options={(feat?.available_actions || ["view"]).map((a) => ({ value: a, label: a }))}
+    />
+  );
+}
+
+function ScopeField({ features }: { features: Feature[] }) {
+  const selectedFeature = useWatch<JitRequestForm, "featureKey">({ name: "featureKey" });
+  const feat = features.find((f) => f.feature_key === selectedFeature);
+  return (
+    <FormSelectField
+      key={`scope-${selectedFeature}`}
+      name="scope"
+      label="النطاق"
+      required
+      options={(feat?.available_scopes || ["self"]).map((s) => ({
+        value: s,
+        label: SCOPE_LABELS[s] || s,
+      }))}
+    />
+  );
+}
+
+// Live hint under the minutes input — converts to "X ساعة Y د".
+function MinutesHint() {
+  const minutes = useWatch<JitRequestForm, "requestedMinutes">({ name: "requestedMinutes" });
+  const n = Number(minutes) || 0;
+  return (
+    <p className="text-[10px] text-gray-500 mt-1">
+      {n >= 60 ? `${Math.floor(n / 60)} ساعة ${n % 60} د` : `${n} دقيقة`}
+    </p>
+  );
+}
+
+// Live character counter for the justification textarea.
+function JustificationCounter() {
+  const justification = useWatch<JitRequestForm, "justification">({ name: "justification" });
+  return (
+    <p className="text-[10px] text-gray-400 mt-1">
+      {(justification || "").length} / 500
+    </p>
   );
 }
 

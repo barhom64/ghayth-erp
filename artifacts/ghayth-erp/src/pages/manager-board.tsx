@@ -16,7 +16,9 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { getApprovalEndpoint, getApprovalMethod, getApprovalBadgeClass, buildAllPending } from "@/lib/approval-registry";
 import { PromptDialog } from "@/components/shared/prompt-dialog";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 function formatTimeAgo(timestamp: string): string {
   const now = Date.now();
@@ -63,88 +65,33 @@ export default function ManagerBoard() {
   );
 
   type ApprovalBody = { _type: string; _itemId: number; approved: boolean; reason?: string; notes?: string };
-  const endpointFor = (type: string, id: number) => {
-    const map: Record<string, string> = {
-      leave: `/hr/leave-requests/${id}/approve`,
-      advance: `/finance/salary-advances/${id}/approve`,
-      custody: `/finance/custodies/${id}/approve`,
-      letter: `/hr/official-letters/${id}/approve`,
-      purchase: `/finance/purchase-requests/${id}/approve`,
-      expense: `/finance/expenses/${id}/approve`,
-      loan: `/hr/loans/${id}/approve`,
-      overtime: `/hr/overtime/${id}/approve`,
-      exit: `/hr/exit/${id}/approve`,
-      transfer: `/hr/transfers/${id}/approve`,
-      excuse: `/hr/excuse-requests/${id}/approve`,
-      violation: `/hr/violations/${id}/approve`,
-      purchase_order: `/finance/purchase-orders/${id}/approve`,
-      training: `/hr/programs/${id}/approve`,
-      maintenance: `/property/maintenance-requests/${id}/approve`,
-      journal: `/finance/journal-manual/${id}/approve`,
-      inventory: `/warehouse/inventory-counts/${id}/approve`,
-    };
-    return map[type];
+  const mutOpts = {
+    successMessage: false as const,
+    onSuccess: (_d: any, body: ApprovalBody) => {
+      toast({ title: body.approved ? "تم الاعتماد بنجاح" : "تم الرفض" });
+      refetchAction();
+      const key = `${body._type}-${body._itemId}`;
+      setProcessingIds(prev => { const s = new Set(prev); s.delete(key); return s; });
+    },
+    onError: (_e: any, body: ApprovalBody) => {
+      const key = `${body._type}-${body._itemId}`;
+      setProcessingIds(prev => { const s = new Set(prev); s.delete(key); return s; });
+    },
   };
-  const approvalMut = useApiMutation<any, ApprovalBody>(
-    (body) => endpointFor(body._type, body._itemId),
-    "PATCH",
-    [["action-center"]],
-    {
-      successMessage: false,
-      onSuccess: (_d, body) => {
-        toast({ title: body.approved ? "تم الاعتماد بنجاح" : "تم الرفض" });
-        refetchAction();
-        const key = `${body._type}-${body._itemId}`;
-        setProcessingIds(prev => { const s = new Set(prev); s.delete(key); return s; });
-      },
-      onError: (_e, body) => {
-        const key = `${body._type}-${body._itemId}`;
-        setProcessingIds(prev => { const s = new Set(prev); s.delete(key); return s; });
-      },
-    }
+  const patchMut = useApiMutation<any, ApprovalBody>(
+    (body) => getApprovalEndpoint(body._type, body._itemId), "PATCH", [["action-center"]], mutOpts,
   );
+  const postMut = useApiMutation<any, ApprovalBody>(
+    (body) => getApprovalEndpoint(body._type, body._itemId), "POST", [["action-center"]], mutOpts,
+  );
+  const approvalMut = { mutate: (body: ApprovalBody) => (getApprovalMethod(body._type) === "POST" ? postMut : patchMut).mutate(body) };
 
   if (actionLoading) return <LoadingSpinner />;
   if (actionError) return <ErrorState />;
 
   const pending = actionData || {};
-  const leaves = pending.pendingLeaves || [];
-  const advances = pending.pendingAdvances || [];
-  const custodies = pending.pendingCustodies || [];
-  const letters = pending.pendingLetters || [];
-  const purchases = pending.pendingPurchases || [];
-  const expenses = pending.pendingExpenses || [];
-  const loans = pending.pendingLoans || [];
-  const overtime = pending.pendingOvertime || [];
-  const exitRequests = pending.pendingExitRequests || [];
-  const transfers = pending.pendingTransfers || [];
-  const excuses = pending.pendingExcuses || [];
-  const violations = pending.pendingViolations || [];
-  const purchaseOrders = pending.pendingPurchaseOrders || [];
-  const trainings = pending.pendingTrainings || [];
-  const maintenanceRequests = pending.pendingMaintenance || [];
-  const journals = pending.pendingJournals || [];
-  const inventoryCounts = pending.pendingInventory || [];
   const workflows = pending.pendingWorkflows || [];
-  const allPending = [
-    ...leaves.map((l: any) => ({ ...l, _type: "leave", _label: "إجازة" })),
-    ...advances.map((a: any) => ({ ...a, _type: "advance", _label: "سلفة" })),
-    ...custodies.map((c: any) => ({ ...c, _type: "custody", _label: "عُهدة" })),
-    ...letters.map((l: any) => ({ ...l, _type: "letter", _label: "خطاب" })),
-    ...purchases.map((p: any) => ({ ...p, _type: "purchase", _label: "طلب شراء" })),
-    ...expenses.map((e: any) => ({ ...e, _type: "expense", _label: "مصروف" })),
-    ...loans.map((l: any) => ({ ...l, _type: "loan", _label: "قرض" })),
-    ...overtime.map((o: any) => ({ ...o, _type: "overtime", _label: "عمل إضافي" })),
-    ...exitRequests.map((e: any) => ({ ...e, _type: "exit", _label: "مغادرة" })),
-    ...transfers.map((t: any) => ({ ...t, _type: "transfer", _label: "نقل" })),
-    ...excuses.map((e: any) => ({ ...e, _type: "excuse", _label: "استئذان" })),
-    ...violations.map((v: any) => ({ ...v, _type: "violation", _label: "مخالفة" })),
-    ...purchaseOrders.map((p: any) => ({ ...p, _type: "purchase_order", _label: "أمر شراء" })),
-    ...trainings.map((t: any) => ({ ...t, _type: "training", _label: "تدريب" })),
-    ...maintenanceRequests.map((m: any) => ({ ...m, _type: "maintenance", _label: "صيانة" })),
-    ...journals.map((j: any) => ({ ...j, _type: "journal", _label: "قيد يدوي" })),
-    ...inventoryCounts.map((i: any) => ({ ...i, _type: "inventory", _label: "جرد" })),
-  ];
+  const allPending = buildAllPending(pending);
   const urgentPending = allPending.filter((r: any) => r.priority === "high" || r.priority === "urgent");
   const todayPending = allPending.filter((r: any) => {
     const created = new Date(r.createdAt);
@@ -191,25 +138,7 @@ export default function ManagerBoard() {
         const isUrgent = item.priority === "high" || item.priority === "urgent";
         return (
           <>
-            <Badge className={cn("text-[10px]",
-              item._type === "leave" ? "bg-blue-100 text-blue-700" :
-              item._type === "advance" ? "bg-green-100 text-green-700" :
-              item._type === "letter" ? "bg-purple-100 text-purple-700" :
-              item._type === "purchase" ? "bg-amber-100 text-amber-700" :
-              item._type === "expense" ? "bg-rose-100 text-rose-700" :
-              item._type === "loan" ? "bg-teal-100 text-teal-700" :
-              item._type === "overtime" ? "bg-cyan-100 text-cyan-700" :
-              item._type === "exit" ? "bg-red-100 text-red-700" :
-              item._type === "transfer" ? "bg-indigo-100 text-indigo-700" :
-              item._type === "excuse" ? "bg-sky-100 text-sky-700" :
-              item._type === "violation" ? "bg-red-100 text-red-700" :
-              item._type === "purchase_order" ? "bg-orange-100 text-orange-700" :
-              item._type === "training" ? "bg-violet-100 text-violet-700" :
-              item._type === "maintenance" ? "bg-yellow-100 text-yellow-700" :
-              item._type === "journal" ? "bg-lime-100 text-lime-700" :
-              item._type === "inventory" ? "bg-emerald-100 text-emerald-700" :
-              "bg-gray-100 text-gray-700"
-            )}>
+            <Badge className={cn("text-[10px]", getApprovalBadgeClass(item._type))}>
               {item._label}
             </Badge>
             {isUrgent && <Badge className="text-[10px] ms-1 bg-red-100 text-red-700">عاجل</Badge>}
@@ -246,12 +175,12 @@ export default function ManagerBoard() {
         const isProcessing = processingIds.has(key);
         return (
           <div className="flex gap-1">
-            <Button size="sm" disabled={isProcessing} className="h-7 bg-green-600 hover:bg-green-700 text-xs" onClick={() => doApprove(item)}>
+            <GuardedButton perm="hr:approve" size="sm" disabled={isProcessing} className="h-7 bg-green-600 hover:bg-green-700 text-xs" onClick={() => doApprove(item)}>
               {isProcessing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-            </Button>
-            <Button size="sm" variant="outline" disabled={isProcessing} className="h-7 text-xs border-red-300 text-red-600 hover:bg-red-50" onClick={() => doReject(item)}>
+            </GuardedButton>
+            <GuardedButton perm="hr:approve" size="sm" variant="outline" disabled={isProcessing} className="h-7 text-xs border-red-300 text-red-600 hover:bg-red-50" onClick={() => doReject(item)}>
               <XIcon className="h-3 w-3" />
-            </Button>
+            </GuardedButton>
           </div>
         );
       },
@@ -313,13 +242,13 @@ export default function ManagerBoard() {
                       <p className="text-xs text-gray-500 mt-0.5">{item.reason || item.description || item.leaveTypeName || "—"}</p>
                     </div>
                     <div className="flex gap-1 shrink-0">
-                      <Button size="sm" disabled={isProcessing} className="h-7 bg-green-600 hover:bg-green-700 text-xs gap-1" onClick={() => doApprove(item)}>
+                      <GuardedButton perm="hr:approve" size="sm" disabled={isProcessing} className="h-7 bg-green-600 hover:bg-green-700 text-xs gap-1" onClick={() => doApprove(item)}>
                         {isProcessing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
                         موافقة
-                      </Button>
-                      <Button size="sm" variant="outline" disabled={isProcessing} className="h-7 text-xs gap-1 border-red-300 text-red-700 hover:bg-red-50" onClick={() => doReject(item)}>
+                      </GuardedButton>
+                      <GuardedButton perm="hr:approve" size="sm" variant="outline" disabled={isProcessing} className="h-7 text-xs gap-1 border-red-300 text-red-700 hover:bg-red-50" onClick={() => doReject(item)}>
                         <XIcon className="h-3 w-3" />رفض
-                      </Button>
+                      </GuardedButton>
                     </div>
                   </div>
                 );

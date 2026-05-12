@@ -2500,93 +2500,80 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
       [scope.companyId]
     );
 
-    // Late + early-departure deductions per assignment
-    const lateDeductionRows = await rawQuery<any>(
-      `SELECT "assignmentId", COALESCE(SUM(amount), 0) AS total
-       FROM attendance_deductions
-       WHERE "companyId" = $1 AND period = $2 AND status = 'pending_payroll' AND type IN ('late', 'early_departure')
-       GROUP BY "assignmentId"`,
-      [scope.companyId, targetPeriod]
-    );
+    const [lateDeductionRows, penaltyDeductionRows, violationRows, absenceRows, loanRows, hrLoanRows, overtimeRows, hrOtRows] = await Promise.all([
+      rawQuery<any>(
+        `SELECT "assignmentId", COALESCE(SUM(amount), 0) AS total
+         FROM attendance_deductions
+         WHERE "companyId" = $1 AND period = $2 AND status = 'pending_payroll' AND type IN ('late', 'early_departure')
+         GROUP BY "assignmentId"`,
+        [scope.companyId, targetPeriod]
+      ),
+      rawQuery<any>(
+        `SELECT "assignmentId", COALESCE(SUM(amount), 0) AS total
+         FROM attendance_deductions
+         WHERE "companyId" = $1 AND period = $2 AND status = 'pending_payroll' AND type = 'penalty'
+         GROUP BY "assignmentId"`,
+        [scope.companyId, targetPeriod]
+      ),
+      rawQuery<any>(
+        `SELECT "assignmentId", COALESCE(SUM(amount), 0) AS total
+         FROM attendance_deductions
+         WHERE "companyId" = $1 AND period = $2 AND status = 'pending_payroll' AND type = 'violation'
+         GROUP BY "assignmentId"`,
+        [scope.companyId, targetPeriod]
+      ),
+      rawQuery<any>(
+        `SELECT a."assignmentId", COUNT(*) AS "absentDays"
+         FROM attendance a
+         WHERE a."companyId" = $1 AND TO_CHAR(a.date, 'YYYY-MM') = $2 AND a.status = 'absent' AND a."deletedAt" IS NULL
+         GROUP BY a."assignmentId"`,
+        [scope.companyId, targetPeriod]
+      ),
+      rawQuery<any>(
+        `SELECT la."assignmentId", COALESCE(SUM(la."monthlyInstallment"), 0) AS "installment"
+         FROM loan_accounts la
+         WHERE la."companyId" = $1 AND la.status = 'active' AND la."remainingAmount" > 0
+         GROUP BY la."assignmentId"`,
+        [scope.companyId]
+      ),
+      rawQuery<any>(
+        `SELECT li."assignmentId", COALESCE(SUM(li.amount), 0) AS "installment"
+         FROM hr_loan_installments li
+         WHERE li."companyId" = $1 AND li.period = $2 AND li.status = 'pending'
+         GROUP BY li."assignmentId"`,
+        [scope.companyId, targetPeriod]
+      ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; }),
+      rawQuery<any>(
+        `SELECT a."assignmentId", COALESCE(SUM(a."overtimeMinutes"), 0) AS "totalOvertimeMinutes"
+         FROM attendance a
+         WHERE a."companyId" = $1 AND TO_CHAR(a.date, 'YYYY-MM') = $2 AND a."overtimeMinutes" > 0 AND a."deletedAt" IS NULL
+         GROUP BY a."assignmentId"`,
+        [scope.companyId, targetPeriod]
+      ),
+      rawQuery<any>(
+        `SELECT "assignmentId", COALESCE(SUM("totalAmount"), 0) AS "otAmount"
+         FROM hr_overtime_requests
+         WHERE "companyId" = $1 AND TO_CHAR("overtimeDate", 'YYYY-MM') = $2 AND status = 'approved' AND "deletedAt" IS NULL
+         GROUP BY "assignmentId"`,
+        [scope.companyId, targetPeriod]
+      ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; }),
+    ]);
     const lateMap = new Map<number, number>();
     for (const d of lateDeductionRows) lateMap.set(Number(d.assignmentId), Number(d.total));
-
-    // Penalty deductions per assignment (type = 'penalty')
-    const penaltyDeductionRows = await rawQuery<any>(
-      `SELECT "assignmentId", COALESCE(SUM(amount), 0) AS total
-       FROM attendance_deductions
-       WHERE "companyId" = $1 AND period = $2 AND status = 'pending_payroll' AND type = 'penalty'
-       GROUP BY "assignmentId"`,
-      [scope.companyId, targetPeriod]
-    );
     const penaltyMap = new Map<number, number>();
     for (const d of penaltyDeductionRows) penaltyMap.set(Number(d.assignmentId), Number(d.total));
-
-    // Violation deductions per assignment (from attendance_deductions type='violation' only, not employee_violations to avoid double-counting with late/penalty)
-    const violationRows = await rawQuery<any>(
-      `SELECT "assignmentId", COALESCE(SUM(amount), 0) AS total
-       FROM attendance_deductions
-       WHERE "companyId" = $1 AND period = $2 AND status = 'pending_payroll' AND type = 'violation'
-       GROUP BY "assignmentId"`,
-      [scope.companyId, targetPeriod]
-    );
     const violationMap = new Map<number, number>();
     for (const d of violationRows) violationMap.set(Number(d.assignmentId), Number(d.total));
-
-    // Absence days per assignment
-    const absenceRows = await rawQuery<any>(
-      `SELECT a."assignmentId", COUNT(*) AS "absentDays"
-       FROM attendance a
-       WHERE a."companyId" = $1 AND TO_CHAR(a.date, 'YYYY-MM') = $2 AND a.status = 'absent' AND a."deletedAt" IS NULL
-       GROUP BY a."assignmentId"`,
-      [scope.companyId, targetPeriod]
-    );
     const absenceMap = new Map<number, number>();
     for (const row of absenceRows) absenceMap.set(Number(row.assignmentId), Number(row.absentDays ?? 0));
-
-    // Loan installments per assignment (legacy loan_accounts)
-    const loanRows = await rawQuery<any>(
-      `SELECT la."assignmentId", COALESCE(SUM(la."monthlyInstallment"), 0) AS "installment"
-       FROM loan_accounts la
-       WHERE la."companyId" = $1 AND la.status = 'active' AND la."remainingAmount" > 0
-       GROUP BY la."assignmentId"`,
-      [scope.companyId]
-    );
     const loanMap = new Map<number, number>();
     for (const row of loanRows) loanMap.set(Number(row.assignmentId), Number(row.installment ?? 0));
-
-    // HR loan installments per assignment (hr_employee_loans module)
-    const hrLoanRows = await rawQuery<any>(
-      `SELECT li."assignmentId", COALESCE(SUM(li.amount), 0) AS "installment"
-       FROM hr_loan_installments li
-       WHERE li."companyId" = $1 AND li.period = $2 AND li.status = 'pending'
-       GROUP BY li."assignmentId"`,
-      [scope.companyId, targetPeriod]
-    ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
     for (const row of hrLoanRows) {
       const aId = Number(row.assignmentId);
       loanMap.set(aId, (loanMap.get(aId) ?? 0) + Number(row.installment ?? 0));
     }
-
-    // Overtime per assignment (from attendance records)
-    const overtimeRows = await rawQuery<any>(
-      `SELECT a."assignmentId", COALESCE(SUM(a."overtimeMinutes"), 0) AS "totalOvertimeMinutes"
-       FROM attendance a
-       WHERE a."companyId" = $1 AND TO_CHAR(a.date, 'YYYY-MM') = $2 AND a."overtimeMinutes" > 0 AND a."deletedAt" IS NULL
-       GROUP BY a."assignmentId"`,
-      [scope.companyId, targetPeriod]
-    );
     const overtimeMap = new Map<number, number>();
     for (const row of overtimeRows) overtimeMap.set(Number(row.assignmentId), Number(row.totalOvertimeMinutes ?? 0));
-
-    // Approved overtime requests (HR module — with correct multipliers)
-    const hrOtRows = await rawQuery<any>(
-      `SELECT "assignmentId", COALESCE(SUM("totalAmount"), 0) AS "otAmount"
-       FROM hr_overtime_requests
-       WHERE "companyId" = $1 AND TO_CHAR("overtimeDate", 'YYYY-MM') = $2 AND status = 'approved' AND "deletedAt" IS NULL
-       GROUP BY "assignmentId"`,
-      [scope.companyId, targetPeriod]
-    ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
     const hrOtMap = new Map<number, number>();
     for (const row of hrOtRows) hrOtMap.set(Number(row.assignmentId), Number(row.otAmount ?? 0));
 
@@ -3193,22 +3180,24 @@ router.get("/attendance-stats", authorize({ feature: "hr.attendance", action: "l
   try {
     const scope = req.scope!;
     const month = (req.query.month as string) ?? currentPeriod();
-    const [present] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND status='present' AND "deletedAt" IS NULL`,
-      [scope.companyId, month]
-    );
-    const [absent] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND status='absent' AND "deletedAt" IS NULL`,
-      [scope.companyId, month]
-    );
-    const [late] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND "lateMinutes">0 AND "deletedAt" IS NULL`,
-      [scope.companyId, month]
-    );
-    const [totalEmp] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM employee_assignments WHERE "companyId"=$1 AND status='active'`,
-      [scope.companyId]
-    );
+    const [[present], [absent], [late], [totalEmp]] = await Promise.all([
+      rawQuery<any>(
+        `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND status='present' AND "deletedAt" IS NULL`,
+        [scope.companyId, month]
+      ),
+      rawQuery<any>(
+        `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND status='absent' AND "deletedAt" IS NULL`,
+        [scope.companyId, month]
+      ),
+      rawQuery<any>(
+        `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND "lateMinutes">0 AND "deletedAt" IS NULL`,
+        [scope.companyId, month]
+      ),
+      rawQuery<any>(
+        `SELECT COUNT(*) AS count FROM employee_assignments WHERE "companyId"=$1 AND status='active'`,
+        [scope.companyId]
+      ),
+    ]);
     res.json({
       present: Number(present?.count ?? 0),
       absent: Number(absent?.count ?? 0),
@@ -3222,18 +3211,12 @@ router.get("/attendance-stats", authorize({ feature: "hr.attendance", action: "l
 router.get("/leave-stats", authorize({ feature: "hr.leaves", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [pending] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='pending' AND "deletedAt" IS NULL`, [scope.companyId]
-    );
-    const [approved] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='approved' AND "deletedAt" IS NULL`, [scope.companyId]
-    );
-    const [rejected] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='rejected' AND "deletedAt" IS NULL`, [scope.companyId]
-    );
-    const [total] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]
-    );
+    const [[pending], [approved], [rejected], [total]] = await Promise.all([
+      rawQuery<any>(`SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='pending' AND "deletedAt" IS NULL`, [scope.companyId]),
+      rawQuery<any>(`SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='approved' AND "deletedAt" IS NULL`, [scope.companyId]),
+      rawQuery<any>(`SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='rejected' AND "deletedAt" IS NULL`, [scope.companyId]),
+      rawQuery<any>(`SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]),
+    ]);
     res.json({
       pending: Number(pending?.count ?? 0),
       approved: Number(approved?.count ?? 0),
@@ -3638,15 +3621,11 @@ router.get("/violations-stats", authorize({ feature: "hr.violations", action: "l
   try {
     const scope = req.scope!;
     const currentMonth = currentPeriod();
-    const [total] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM employee_violations WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]
-    );
-    const [thisMonthRow] = await rawQuery<any>(
-      `SELECT COUNT(*) AS count FROM employee_violations WHERE "companyId"=$1 AND "deletedAt" IS NULL AND period = $2`, [scope.companyId, currentMonth]
-    );
-    const [totalDeductions] = await rawQuery<any>(
-      `SELECT COALESCE(SUM(deduction),0) AS total FROM employee_violations WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]
-    );
+    const [[total], [thisMonthRow], [totalDeductions]] = await Promise.all([
+      rawQuery<any>(`SELECT COUNT(*) AS count FROM employee_violations WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]),
+      rawQuery<any>(`SELECT COUNT(*) AS count FROM employee_violations WHERE "companyId"=$1 AND "deletedAt" IS NULL AND period = $2`, [scope.companyId, currentMonth]),
+      rawQuery<any>(`SELECT COALESCE(SUM(deduction),0) AS total FROM employee_violations WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]),
+    ]);
     res.json({
       total: Number(total?.count ?? 0),
       thisMonth: Number(thisMonthRow?.count ?? 0),
@@ -4695,25 +4674,27 @@ router.patch("/official-letters/:id/approve", authorize({ feature: "hr.organizat
 router.get("/stats", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [empCount] = await rawQuery<any>(
-      `SELECT COUNT(DISTINCT ea."employeeId") AS count FROM employee_assignments ea WHERE ea."companyId" = $1`,
-      [scope.companyId]
-    );
-    const [leaveCount] = await rawQuery<any>(
-      `SELECT COUNT(*) AS total,
-              COUNT(*) FILTER(WHERE status='pending') AS pending,
-              COUNT(*) FILTER(WHERE status='approved') AS approved
-       FROM hr_leave_requests WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
-      [scope.companyId]
-    );
-    const [violationCount] = await rawQuery<any>(
-      `SELECT COUNT(*) AS total FROM employee_violations WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
-      [scope.companyId]
-    );
-    const [payrollCount] = await rawQuery<any>(
-      `SELECT COUNT(*) AS total FROM payroll_runs WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
-      [scope.companyId]
-    );
+    const [[empCount], [leaveCount], [violationCount], [payrollCount]] = await Promise.all([
+      rawQuery<any>(
+        `SELECT COUNT(DISTINCT ea."employeeId") AS count FROM employee_assignments ea WHERE ea."companyId" = $1`,
+        [scope.companyId]
+      ),
+      rawQuery<any>(
+        `SELECT COUNT(*) AS total,
+                COUNT(*) FILTER(WHERE status='pending') AS pending,
+                COUNT(*) FILTER(WHERE status='approved') AS approved
+         FROM hr_leave_requests WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
+        [scope.companyId]
+      ),
+      rawQuery<any>(
+        `SELECT COUNT(*) AS total FROM employee_violations WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
+        [scope.companyId]
+      ),
+      rawQuery<any>(
+        `SELECT COUNT(*) AS total FROM payroll_runs WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
+        [scope.companyId]
+      ),
+    ]);
     res.json({
       employees: Number(empCount?.count ?? 0),
       leaveRequests: Number(leaveCount?.total ?? 0),
@@ -5738,11 +5719,11 @@ router.get("/delegations", authorize({ feature: "hr.organization", action: "list
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
-      `SELECT d.id, d."fromUserId" AS "delegatorId", d."toUserId" AS "delegateId", d.scope, d.reason, d.status, d."startDate", d."endDate", d."createdAt",
+      `SELECT d.id, d."delegatorId", d."delegateId", d.scope, d.reason, d.status, d."startDate", d."endDate", d."createdAt",
               e1.name AS "delegatorName", e2.name AS "delegateName"
        FROM delegations d
-       LEFT JOIN employees e1 ON e1.id = d."fromUserId"
-       LEFT JOIN employees e2 ON e2.id = d."toUserId"
+       LEFT JOIN employees e1 ON e1.id = d."delegatorId"
+       LEFT JOIN employees e2 ON e2.id = d."delegateId"
        WHERE d."companyId" = $1
        ORDER BY d."createdAt" DESC
        LIMIT 50`,
@@ -6672,27 +6653,28 @@ router.get("/turnover-report", authorize({ feature: "hr.employees", action: "lis
     const { year } = req.query as any;
     const targetYear = year ? Number(year) : currentYear();
 
-    const [totalActive] = await rawQuery<any>(
-      `SELECT COUNT(DISTINCT "employeeId") AS count FROM employee_assignments
-       WHERE "companyId"=$1 AND status='active'`,
-      [scope.companyId]
-    );
-
-    const terminated = await rawQuery<any>(
-      `SELECT ec."terminationReason" AS "terminationType", ec."terminatedAt" AS "terminationDate",
-              e.name AS "employeeName", ea."departmentId", ea."branchId",
-              d.name AS "deptName", b.name AS "branchName",
-              EXTRACT(MONTH FROM ec."terminatedAt") AS month
-       FROM employee_contracts ec
-       JOIN employees e ON e.id=ec."employeeId"
-       LEFT JOIN employee_assignments ea ON ea."employeeId"=ec."employeeId" AND ea."companyId"=$1
-       LEFT JOIN departments d ON d.id=ea."departmentId"
-       LEFT JOIN branches b ON b.id=ea."branchId"
-       WHERE ec."companyId"=$1 AND ec."terminatedAt" IS NOT NULL
-         AND ec."deletedAt" IS NULL
-         AND EXTRACT(YEAR FROM ec."terminatedAt")=$2`,
-      [scope.companyId, targetYear]
-    );
+    const [[totalActive], terminated] = await Promise.all([
+      rawQuery<any>(
+        `SELECT COUNT(DISTINCT "employeeId") AS count FROM employee_assignments
+         WHERE "companyId"=$1 AND status='active'`,
+        [scope.companyId]
+      ),
+      rawQuery<any>(
+        `SELECT ec."terminationReason" AS "terminationType", ec."terminatedAt" AS "terminationDate",
+                e.name AS "employeeName", ea."departmentId", ea."branchId",
+                d.name AS "deptName", b.name AS "branchName",
+                EXTRACT(MONTH FROM ec."terminatedAt") AS month
+         FROM employee_contracts ec
+         JOIN employees e ON e.id=ec."employeeId"
+         LEFT JOIN employee_assignments ea ON ea."employeeId"=ec."employeeId" AND ea."companyId"=$1
+         LEFT JOIN departments d ON d.id=ea."departmentId"
+         LEFT JOIN branches b ON b.id=ea."branchId"
+         WHERE ec."companyId"=$1 AND ec."terminatedAt" IS NOT NULL
+           AND ec."deletedAt" IS NULL
+           AND EXTRACT(YEAR FROM ec."terminatedAt")=$2`,
+        [scope.companyId, targetYear]
+      ),
+    ]);
 
     const totalTerminated = terminated.length;
     const totalActiveCount = Number(totalActive?.count || 0);

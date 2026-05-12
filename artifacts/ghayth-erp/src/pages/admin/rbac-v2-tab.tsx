@@ -3,6 +3,7 @@ import { useApiQuery, apiFetch } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -353,10 +354,10 @@ export function RbacV2Tab() {
                     <History className="h-4 w-4 me-1" />
                     السجل
                   </Button>
-                  <Button size="sm" onClick={saveCurrentTab} disabled={saving}>
+                  <GuardedButton perm="admin:create" size="sm" onClick={saveCurrentTab} disabled={saving}>
                     <Save className="h-4 w-4 me-1" />
                     {saving ? "حفظ..." : "حفظ"}
-                  </Button>
+                  </GuardedButton>
                 </div>
               </CardHeader>
 

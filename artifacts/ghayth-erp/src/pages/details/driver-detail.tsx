@@ -15,6 +15,7 @@ import { AlertTriangle, CheckCircle2, Edit, IdCard, Phone, User, Car } from "luc
 import { formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
   available: "متاح",
@@ -55,6 +56,7 @@ export default function DriverDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/fleet/drivers/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("driver", id ?? 0);
 
   const { data: driver, isLoading, error, refetch } = useApiQuery<any>(
     ["driver-detail", String(id)],
@@ -295,6 +297,8 @@ export default function DriverDetail() {
       isLoading={isLoading}
       error={error}
       onRetry={refetch}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       actions={
         <>
           <EntityPrintButton

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
 
 const timelineIcons: Record<string, any> = {
@@ -68,6 +69,8 @@ export default function CustodyDetailPage() {
     id ? `/finance/custodies/${id}` : null,
     !!id,
   );
+
+  const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("custody", id || "");
 
   const progressPercent =
     data?.amount > 0 ? Math.min(100, Math.round((data.settledAmount / data.amount) * 100)) : 0;
@@ -314,6 +317,8 @@ export default function CustodyDetailPage() {
       error={isError ? true : undefined}
       onRetry={() => refetch()}
       overview={overview}
+      extraTabs={registryExtraTabs}
+      hideTabs={registryHideTabs}
     />
   );
 }

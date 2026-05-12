@@ -44,7 +44,7 @@ describe("HR domain registry completeness", () => {
     expect(hr.lifecycleEntities).toContain("hr_leave_requests");
     expect(hr.lifecycleEntities).toContain("hr_exit_requests");
     expect(hr.lifecycleEntities).toContain("hr_inquiry_memos");
-    expect(hr.lifecycleEntities).toContain("hr_transfers");
+    expect(hr.lifecycleEntities).toContain("employee_transfers");
   });
 
   it("has obligation types for compliance", () => {
