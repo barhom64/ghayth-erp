@@ -56,6 +56,36 @@ function buildMountMap() {
 
 const MOUNT_MAP = buildMountMap();
 
+// app.ts mounts a global `auditMiddleware` that auto-logs any mutating
+// request whose path matches a prefix in its ENTITY_MAP. Endpoints under
+// those prefixes do NOT need an explicit createAuditLog() call. Without
+// this awareness the scanner produces a wall of false-positive
+// "missing-audit" findings for routes like /hr/check-in, /finance/expenses,
+// etc. that are already covered by the middleware.
+const AUDIT_MW = join(REPO, "artifacts/api-server/src/middlewares/auditMiddleware.ts");
+function buildAuditedPrefixes() {
+  try {
+    const src = readFileSync(AUDIT_MW, "utf8");
+    const block = src.match(/ENTITY_MAP\s*:[^=]*=\s*\{([\s\S]*?)\};/);
+    if (!block) return [];
+    const prefixes = [];
+    for (const m of block[1].matchAll(/["']([^"']+)["']\s*:\s*["'][^"']+["']/g)) {
+      prefixes.push(m[1]);
+    }
+    // Sort longest first so "/hr/check-in" wins over "/hr".
+    return prefixes.sort((a, b) => b.length - a.length);
+  } catch {
+    return [];
+  }
+}
+const AUDITED_PREFIXES = buildAuditedPrefixes();
+function isAuditedByMiddleware(fullPath) {
+  for (const p of AUDITED_PREFIXES) {
+    if (fullPath === p || fullPath.startsWith(p + "/")) return true;
+  }
+  return false;
+}
+
 function scanFile(file) {
   const src = readFileSync(file, "utf8");
   const lines = src.split(/\r?\n/);
@@ -95,7 +125,7 @@ function scanFile(file) {
       mountPrefix: prefix,
       file: fileRel,
       line: i + 1,
-      hasAudit: /createAuditLog\s*\(/.test(win),
+      hasAudit: /createAuditLog\s*\(/.test(win) || isAuditedByMiddleware(joined),
       hasEmitEvent: /emitEvent\s*\(/.test(win),
       hasLifecycle: /applyTransition\s*\(|nextState\s*\(/.test(win),
       hasNotification: /sendNotification\s*\(|queueNotification\s*\(|notify\(/.test(win),

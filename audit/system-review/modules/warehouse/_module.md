@@ -3,7 +3,7 @@
 > الموجة: **2** | عدد الصفحات: **13** | أوراق منشأة: **13**
 
 ## KPIs
-- مشاكل إجمالية: **1** (🔴 0 / ⚠ 1 / ℹ 0)
+- مشاكل إجمالية: **0** (🔴 0 / ⚠ 0 / ℹ 0)
 
 ## الصفحات
 
@@ -11,7 +11,7 @@
 |--------|--------|--------|------|-----------|--------|--------|
 | [/warehouse](./warehouse.md) | `/warehouse` | `warehouse` | 387 | 0 | 6 | 0 |
 | [/warehouse/create](./warehouse-create.md) | `/warehouse/create` | `create` | 114 | 1 | 3 | 0 |
-| [/warehouse/movements/create](./warehouse-movements-create.md) | `/warehouse/movements/create` | `create` | 113 | 1 | 3 | 1 |
+| [/warehouse/movements/create](./warehouse-movements-create.md) | `/warehouse/movements/create` | `create` | 113 | 1 | 3 | 0 |
 | [/warehouse/categories/create](./warehouse-categories-create.md) | `/warehouse/categories/create` | `create` | 60 | 1 | 3 | 0 |
 | [/warehouse/suppliers/create](./warehouse-suppliers-create.md) | `/warehouse/suppliers/create` | `create` | 83 | 1 | 3 | 0 |
 | [/warehouse/products/:id](./warehouse-products-byid.md) | `/warehouse/products/:id` | `:id` | 297 | 0 | 0 | 0 |

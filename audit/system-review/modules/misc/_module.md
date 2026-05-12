@@ -3,13 +3,13 @@
 > الموجة: **4** | عدد الصفحات: **16** | أوراق منشأة: **16**
 
 ## KPIs
-- مشاكل إجمالية: **5** (🔴 1 / ⚠ 4 / ℹ 0)
+- مشاكل إجمالية: **1** (🔴 1 / ⚠ 0 / ℹ 0)
 
 ## الصفحات
 
 | الصفحة | المسار | الكيان | سطور | API calls | أزرار | مشاكل |
 |--------|--------|--------|------|-----------|--------|--------|
-| [/dashboard](./dashboard.md) | `/dashboard` | `dashboard` | 979 | 4 | 8 | 4 |
+| [/dashboard](./dashboard.md) | `/dashboard` | `dashboard` | 979 | 4 | 8 | 0 |
 | [/my-space](./my-space.md) | `/my-space` | `my-space` | 129 | 1 | 1 | 0 |
 | [/my-requests](./my-requests.md) | `/my-requests` | `my-requests` | 194 | 1 | 3 | 0 |
 | [/my-leave-request](./my-leave-request.md) | `/my-leave-request` | `my-leave-request` | 11 | 0 | 0 | 0 |

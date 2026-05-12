@@ -14,7 +14,7 @@
 ## 2. الأزرار والإجراءات
 | الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
 |------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(write)_ | `/finance/purchase-requests` | POST | — | ✅ | ✅ | — | ✅ | ✅ | — |
+| _(write)_ | `/finance/purchase-requests` | POST | ✅ | ✅ | ✅ | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
 - L113: "مسح المسودة" → `clearDraft`

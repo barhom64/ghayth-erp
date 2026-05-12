@@ -3,7 +3,7 @@
 > الموجة: **1** | عدد الصفحات: **81** | أوراق منشأة: **81**
 
 ## KPIs
-- مشاكل إجمالية: **35** (🔴 29 / ⚠ 6 / ℹ 0)
+- مشاكل إجمالية: **29** (🔴 29 / ⚠ 0 / ℹ 0)
 
 ## الصفحات
 
@@ -11,21 +11,21 @@
 |--------|--------|--------|------|-----------|--------|--------|
 | [/hr](./hr.md) | `/hr` | `hr` | 317 | 0 | 1 | 0 |
 | [/employees](./employees.md) | `/employees` | `employees` | 359 | 0 | 4 | 0 |
-| [/employees/create](./employees-create.md) | `/employees/create` | `create` | 483 | 1 | 5 | 2 |
+| [/employees/create](./employees-create.md) | `/employees/create` | `create` | 483 | 1 | 5 | 1 |
 | [/employees/:id](./employees-byid.md) | `/employees/:id` | `:id` | 963 | 1 | 8 | 0 |
 | [/hr/attendance](./hr-attendance.md) | `/hr/attendance` | `attendance` | 365 | 0 | 3 | 1 |
-| [/hr/attendance/create](./hr-attendance-create.md) | `/hr/attendance/create` | `create` | 180 | 2 | 4 | 2 |
+| [/hr/attendance/create](./hr-attendance-create.md) | `/hr/attendance/create` | `create` | 180 | 2 | 4 | 0 |
 | [/hr/attendance/:id](./hr-attendance-byid.md) | `/hr/attendance/:id` | `:id` | 292 | 0 | 0 | 0 |
 | [/hr/attendance/reports](./hr-attendance-reports.md) | `/hr/attendance/reports` | `reports` | 118 | 0 | 0 | 1 |
 | [/hr/attendance/field-tracking](./hr-attendance-field-tracking.md) | `/hr/attendance/field-tracking` | `field-tracking` | 125 | 1 | 0 | 1 |
 | [/hr/attendance/qr-scanner](./hr-attendance-qr-scanner.md) | `/hr/attendance/qr-scanner` | `qr-scanner` | 152 | 0 | 2 | 0 |
 | [/hr/leaves](./hr-leaves.md) | `/hr/leaves` | `leaves` | 286 | 0 | 2 | 1 |
-| [/hr/leaves/create](./hr-leaves-create.md) | `/hr/leaves/create` | `create` | 222 | 3 | 3 | 1 |
+| [/hr/leaves/create](./hr-leaves-create.md) | `/hr/leaves/create` | `create` | 222 | 3 | 3 | 0 |
 | [/hr/leaves/:id](./hr-leaves-byid.md) | `/hr/leaves/:id` | `:id` | 293 | 0 | 0 | 0 |
 | [/hr/leaves/management](./hr-leaves-management.md) | `/hr/leaves/management` | `management` | 176 | 4 | 0 | 1 |
 | [/hr/leaves/approval-chains](./hr-leaves-approval-chains.md) | `/hr/leaves/approval-chains` | `approval-chains` | 134 | 1 | 0 | 1 |
 | [/hr/payroll](./hr-payroll.md) | `/hr/payroll` | `payroll` | 172 | 0 | 2 | 1 |
-| [/hr/payroll/create](./hr-payroll-create.md) | `/hr/payroll/create` | `create` | 191 | 3 | 3 | 1 |
+| [/hr/payroll/create](./hr-payroll-create.md) | `/hr/payroll/create` | `create` | 191 | 3 | 3 | 0 |
 | [/hr/payroll/salary-components](./hr-payroll-salary-components.md) | `/hr/payroll/salary-components` | `salary-components` | 179 | 1 | 2 | 0 |
 | [/hr/payroll/:id](./hr-payroll-byid.md) | `/hr/payroll/:id` | `:id` | 368 | 0 | 0 | 0 |
 | [/hr/performance](./hr-performance.md) | `/hr/performance` | `performance` | 137 | 1 | 1 | 1 |
@@ -69,7 +69,7 @@
 | [/hr/employee-profile/:id](./hr-employee-profile-byid.md) | `/hr/employee-profile/:id` | `:id` | 18 | 0 | 0 | 0 |
 | [/hr/employee-activation](./hr-employee-activation.md) | `/hr/employee-activation` | `employee-activation` | 324 | 1 | 3 | 1 |
 | [/hr/onboarding-review](./hr-onboarding-review.md) | `/hr/onboarding-review` | `onboarding-review` | 178 | 2 | 0 | 1 |
-| [/hr/evaluation-360/create](./hr-evaluation-360-create.md) | `/hr/evaluation-360/create` | `create` | 200 | 1 | 4 | 1 |
+| [/hr/evaluation-360/create](./hr-evaluation-360-create.md) | `/hr/evaluation-360/create` | `create` | 200 | 1 | 4 | 0 |
 | [/hr/evaluation-360/history/:employeeId](./hr-evaluation-360-history-byid.md) | `/hr/evaluation-360/history/:employeeId` | `:employeeId` | 116 | 0 | 2 | 0 |
 | [/hr/evaluation-360](./hr-evaluation-360.md) | `/hr/evaluation-360` | `evaluation-360` | 179 | 1 | 1 | 1 |
 | [/hr/evaluation-360/:id/peer](./hr-evaluation-360-byid-peer.md) | `/hr/evaluation-360/:id/peer` | `peer` | 195 | 1 | 3 | 0 |

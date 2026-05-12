@@ -3,7 +3,7 @@
 > الموجة: **2** | عدد الصفحات: **26** | أوراق منشأة: **26**
 
 ## KPIs
-- مشاكل إجمالية: **2** (🔴 1 / ⚠ 1 / ℹ 0)
+- مشاكل إجمالية: **1** (🔴 1 / ⚠ 0 / ℹ 0)
 
 ## الصفحات
 
@@ -15,7 +15,7 @@
 | [/fleet/drivers/create](./fleet-drivers-create.md) | `/fleet/drivers/create` | `create` | 160 | 1 | 3 | 0 |
 | [/fleet/drivers/:id](./fleet-drivers-byid.md) | `/fleet/drivers/:id` | `:id` | 346 | 1 | 0 | 0 |
 | [/fleet/trips](./fleet-trips.md) | `/fleet/trips` | `trips` | 119 | 1 | 1 | 0 |
-| [/fleet/trips/create](./fleet-trips-create.md) | `/fleet/trips/create` | `create` | 118 | 1 | 3 | 1 |
+| [/fleet/trips/create](./fleet-trips-create.md) | `/fleet/trips/create` | `create` | 118 | 1 | 3 | 0 |
 | [/fleet/trips/:id](./fleet-trips-byid.md) | `/fleet/trips/:id` | `:id` | 298 | 0 | 2 | 0 |
 | [/fleet/maintenance](./fleet-maintenance.md) | `/fleet/maintenance` | `maintenance` | 93 | 1 | 1 | 0 |
 | [/fleet/maintenance/create](./fleet-maintenance-create.md) | `/fleet/maintenance/create` | `create` | 129 | 1 | 3 | 0 |

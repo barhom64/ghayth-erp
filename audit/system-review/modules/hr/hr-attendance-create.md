@@ -14,8 +14,8 @@
 ## 2. الأزرار والإجراءات
 | الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
 |------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(write)_ | `/hr/check-in` | POST | — | — | — | — | ✅ | ✅ | — |
-| _(write)_ | `/hr/check-out` | POST | — | — | — | — | ✅ | ✅ | ✅ |
+| _(write)_ | `/hr/check-in` | POST | ✅ | — | — | — | ✅ | ✅ | — |
+| _(write)_ | `/hr/check-out` | POST | ✅ | — | — | — | ✅ | ✅ | ✅ |
 
 ### تفاصيل الأزرار المرئية
 - L101: "مسح المسودة" → `clearDraft`
