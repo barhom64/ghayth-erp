@@ -23,13 +23,28 @@ _لم تُلتقط أزرار._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/governance.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+سجل المخاطر (Risk Register). يُغذّي audits + CAPA + exec dashboard.
+
+| الحركة | الوحدة الهدف | مدخل API | مدخل DB | الحالة |
+|--------|--------------|----------|---------|--------|
+| تسجيل risk | governance | POST `/governance/risks` | `governance_risks` | ✅ |
+| تصنيف (financial/operational/compliance/strategic) | governance | `risks.category` | ✅ |
+| تقدير impact + probability → score | governance | calculated field | ✅ |
+| ربط بـ owner (موظف مسؤول) | hr | `risks.ownerId` → `employees` | ✅ |
+| تخطيط mitigation | governance | `risk_mitigations` per risk | ✅ |
+| ربط بـ audits + findings | governance | `audit_risk_links` two-way | ✅ |
+| ربط بـ CAPA (لو raised من finding) | governance | `governance_capa.linkedRiskId` | ✅ |
+| ميزانية للـ mitigation | finance/budget | `risks.mitigationBudget` → `budgets.committed` | ⚠ تحقق |
+| review دوري | governance | cron يفحص `risks.lastReviewDate` | escalation | ✅ |
+| heat map للـ exec | bi | aggregation per category × probability × impact | view | ✅ |
+| إشعارات للـ owner + manager | comms | event=`risk_assigned\|review_due\|mitigated` | `notifications` | ✅ |
+| تكامل ISO 31000 reporting | gov-integrations | اختياري | ⚠ |
+| Audit log | core | `auditMiddleware` (`/governance/risks` لو مضاف) | `audit_logs` | ⚠ تحقق |
+
+تحقق يدوي:
+- [ ] هل risk بـ score > حد معيّن (مثلاً 15/25) يفتح CAPA تلقائياً؟
+- [ ] هل تجاهل review متكرر (3 dates fail) يطلق escalation لمدير الـ governance؟
+- [ ] هل ربط risk بـ project يحدّث `projects.riskExposure` aggregate؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `risks` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

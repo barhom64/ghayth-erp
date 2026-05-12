@@ -25,13 +25,28 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/communications.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+إنشاء خطاب رسمي جديد (للموظفين/الحكومة/جهات خارجية).
+
+| الحركة | الوحدة الهدف | مدخل API | مدخل DB | الحالة |
+|--------|--------------|----------|---------|--------|
+| إنشاء خطاب من قالب | documents | POST `/documents/from-template/:id` | `documents.entityType='letter'` | ✅ |
+| ترقيم تلقائي (registry) | communications | `letters_sequence` per company per year | ✅ |
+| سير موافقة (3 طبقات للرسمي) | governance/workflows | `business_rules.letter_approval` | `approval_chains` | ✅ |
+| توقيع رقمي | digital-signature | `digital_signatures.letterId` | ✅ |
+| ربط بـ entity (موظف/شركة/مشروع) | متغيّر | `letters.entityType + entityId` polymorphic | ✅ |
+| إرسال (email/print/registered mail) | comms | POST `/letters/:id/send` | `letter_deliveries` (with delivery method + recipient) | ⚠ |
+| تتبّع التسليم | comms | للبريد المسجّل: tracking number | `letter_tracking_log` | ⚠ |
+| ربط بـ correspondence | communications | راجع `correspondence.md` | ✅ |
+| ربط بقضية قانونية | legal | `legal_cases.lettersIds` | ✅ |
+| أرشفة بعد التسليم | documents | تلقائي post-send | ✅ |
+| إشعارات (المُرسِل + المستلم + الجهة) | comms | event=`letter_drafted\|sent\|delivered\|acknowledged` | `notifications` | ✅ |
+| تكامل بريد رسمي/ESS | gov-integrations | اختياري | ⚠ |
+| Audit log | core | `auditMiddleware` (`/letters` لو مضاف) | `audit_logs` | ⚠ تحقق |
+
+تحقق يدوي:
+- [ ] هل خطاب رفض/توبيخ يخفي محتواه عن غير المعنيين تلقائياً؟
+- [ ] هل سحب الخطاب بعد التوقيع يتطلب موافقة + يولّد retraction record؟
+- [ ] هل التزام خط زمني (deadline) للرد على خطابات معيّنة محسوب آلياً؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `create` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
