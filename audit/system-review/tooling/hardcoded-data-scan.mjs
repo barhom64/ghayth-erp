@@ -1,0 +1,111 @@
+#!/usr/bin/env node
+// hardcoded-data-scan.mjs — Read-only.
+// Scans every source-file in _page-inventory.json for likely hardcoded
+// data that should come from the API or i18n:
+//   - mock arrays: `const \w+ = [` containing object literals on next 2 lines
+//   - dummy names / values: e.g. "أحمد محمد", "test@", "0501234567"
+//   - magic numbers / dates inside JSX text nodes
+//
+// Conservative: flags candidates with file:line; does NOT auto-fix.
+// Output: tooling/_hardcoded-hits.json
+
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { join, dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const REPO = resolve(__dirname, "../../..");
+const INV = JSON.parse(readFileSync(join(__dirname, "_page-inventory.json"), "utf8"));
+
+// Patterns
+const DUMMY_NAMES = [
+  /["'`]أحمد محمد["'`]/,
+  /["'`]فاطمة["'`]/,
+  /["'`]Mohammed Ali["'`]/i,
+  /["'`]John Doe["'`]/i,
+  /["'`]Test User["'`]/i,
+  /["'`]example@/i,
+  /["'`]test@/i,
+];
+const DUMMY_PHONES = /["'`]05\d{8}["'`]/; // KSA mobile-shaped
+const DUMMY_IBAN = /SA\d{2}[A-Z0-9]{20}/;
+const FAKE_AVATAR = /\/avatars\/(?:1|2|3|4|5)\.png/;
+// Match obvious placeholders in *content* (not React `placeholder=` attrs)
+const PLACEHOLDER = /(\blorem ipsum\b|TODO\s*\(?\s*mock|FIXME\s*mock|XXX\s*mock|stub data|fake data)/i;
+
+function scanFile(src) {
+  const hits = [];
+  const lines = src.split(/\r?\n/);
+
+  // Mock arrays: `const xxx = [` followed within 5 lines by `{`
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    const m = l.match(/\bconst\s+(\w*(?:mock|fake|dummy|sample|fixture|seed|demo)\w*)\s*=\s*\[/i);
+    if (m) {
+      hits.push({ line: i + 1, kind: "mock-array", evidence: `${m[1]} = [...]`, text: l.trim().slice(0, 120) });
+      continue;
+    }
+    // const xxx = [   ... { ... } ... ] inline literal with objects
+    if (/\bconst\s+\w+\s*=\s*\[\s*$/.test(l) || /\bconst\s+\w+\s*=\s*\[\s*\{/.test(l)) {
+      const window = lines.slice(i, Math.min(lines.length, i + 8)).join("\n");
+      // Heuristic: contains 2+ `name:` or `id:` literal pairs
+      if ((window.match(/\b(id|name|title|label)\s*:/g) || []).length >= 2 &&
+          !/useApi|fetch\(|axios/.test(window) &&
+          /\d+/.test(window)) {
+        hits.push({ line: i + 1, kind: "inline-data-array", text: l.trim().slice(0, 120) });
+      }
+    }
+  }
+
+  // Per-line pattern scans
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (DUMMY_NAMES.some((re) => re.test(l))) {
+      hits.push({ line: i + 1, kind: "dummy-name", text: l.trim().slice(0, 120) });
+    }
+    if (DUMMY_PHONES.test(l)) {
+      hits.push({ line: i + 1, kind: "dummy-phone", text: l.trim().slice(0, 120) });
+    }
+    if (DUMMY_IBAN.test(l)) {
+      hits.push({ line: i + 1, kind: "dummy-iban", text: l.trim().slice(0, 120) });
+    }
+    if (FAKE_AVATAR.test(l)) {
+      hits.push({ line: i + 1, kind: "fake-avatar", text: l.trim().slice(0, 120) });
+    }
+    if (PLACEHOLDER.test(l)) {
+      hits.push({ line: i + 1, kind: "placeholder", text: l.trim().slice(0, 120) });
+    }
+  }
+
+  return hits;
+}
+
+const result = {};
+let totalHits = 0;
+for (const row of INV) {
+  if (!row.sourceFile) continue;
+  const full = join(REPO, row.sourceFile);
+  if (!existsSync(full)) continue;
+  const src = readFileSync(full, "utf8");
+  const hits = scanFile(src);
+  if (hits.length) {
+    result[row.path] = {
+      sourceFile: row.sourceFile,
+      module: row.module,
+      hits,
+    };
+    totalHits += hits.length;
+  }
+}
+
+writeFileSync(join(__dirname, "_hardcoded-hits.json"), JSON.stringify(result, null, 2));
+console.log(`hardcoded-data-scan: ${Object.keys(result).length} pages with hits, ${totalHits} total hits`);
+
+// Breakdown by kind
+const byKind = {};
+for (const r of Object.values(result)) {
+  for (const h of r.hits) byKind[h.kind] = (byKind[h.kind] || 0) + 1;
+}
+for (const [k, n] of Object.entries(byKind).sort((a, b) => b[1] - a[1])) {
+  console.log(`  ${k.padEnd(20)} ${n}`);
+}

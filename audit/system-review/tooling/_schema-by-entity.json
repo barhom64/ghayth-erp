@@ -1,0 +1,799 @@
+{
+  "companies": {
+    "exportName": "companies",
+    "tableName": "companies",
+    "columnCount": 13,
+    "columns": [
+      "id",
+      "name",
+      "nameEn",
+      "taxNumber",
+      "crNumber",
+      "address",
+      "phone",
+      "email",
+      "logoUrl",
+      "currency",
+      "timezone",
+      "status",
+      "createdAt"
+    ],
+    "audit": {
+      "tenant": false,
+      "createdBy": false,
+      "updatedBy": false,
+      "createdAt": true,
+      "updatedAt": false,
+      "softDelete": false,
+      "lifecycle": true
+    },
+    "fks": []
+  },
+  "branches": {
+    "exportName": "branches",
+    "tableName": "branches",
+    "columnCount": 17,
+    "columns": [
+      "id",
+      "companyId",
+      "name",
+      "nameEn",
+      "address",
+      "phone",
+      "email",
+      "lat",
+      "lon",
+      "taxNumber",
+      "crNumber",
+      "logoUrl",
+      "footerText",
+      "city",
+      "website",
+      "status",
+      "createdAt"
+    ],
+    "audit": {
+      "tenant": true,
+      "createdBy": false,
+      "updatedBy": false,
+      "createdAt": true,
+      "updatedAt": false,
+      "softDelete": false,
+      "lifecycle": true
+    },
+    "fks": [
+      {
+        "to": "companies",
+        "col": "id"
+      }
+    ]
+  },
+  "employees": {
+    "exportName": "employees",
+    "tableName": "employees",
+    "columnCount": 13,
+    "columns": [
+      "id",
+      "name",
+      "nameEn",
+      "empNumber",
+      "nationalId",
+      "phone",
+      "email",
+      "dateOfBirth",
+      "gender",
+      "nationality",
+      "status",
+      "createdAt",
+      "updatedAt"
+    ],
+    "audit": {
+      "tenant": false,
+      "createdBy": false,
+      "updatedBy": false,
+      "createdAt": true,
+      "updatedAt": true,
+      "softDelete": false,
+      "lifecycle": true
+    },
+    "fks": []
+  },
+  "employee_assignments": {
+    "exportName": "employeeAssignments",
+    "tableName": "employee_assignments",
+    "columnCount": 12,
+    "columns": [
+      "id",
+      "employeeId",
+      "companyId",
+      "branchId",
+      "role",
+      "jobTitle",
+      "departmentId",
+      "salary",
+      "status",
+      "startDate",
+      "endDate",
+      "createdAt"
+    ],
+    "audit": {
+      "tenant": true,
+      "createdBy": false,
+      "updatedBy": false,
+      "createdAt": true,
+      "updatedAt": false,
+      "softDelete": false,
+      "lifecycle": true
+    },
+    "fks": [
+      {
+        "to": "employees",
+        "col": "id"
+      },
+      {
+        "to": "companies",
+        "col": "id"
+      },
+      {
+        "to": "branches",
+        "col": "id"
+      }
+    ]
+  },
+  "attendance": {
+    "exportName": "attendance",
+    "tableName": "attendance",
+    "columnCount": 16,
+    "columns": [
+      "id",
+      "assignmentId",
+      "companyId",
+      "branchId",
+      "date",
+      "checkIn",
+      "checkOut",
+      "lateMinutes",
+      "overtimeMinutes",
+      "status",
+      "notes",
+      "checkInLat",
+      "checkInLon",
+      "checkOutLat",
+      "checkOutLon",
+      "createdAt"
+    ],
+    "audit": {
+      "tenant": true,
+      "createdBy": false,
+      "updatedBy": false,
+      "createdAt": true,
+      "updatedAt": false,
+      "softDelete": false,
+      "lifecycle": true
+    },
+    "fks": [
+      {
+        "to": "employeeAssignments",
+        "col": "id"
+      },
+      {
+        "to": "companies",
+        "col": "id"
+      },
+      {
+        "to": "branches",
+        "col": "id"
+      }
+    ]
+  },
+  "hr_leave_types": {
+    "exportName": "hrLeaveTypes",
+    "tableName": "hr_leave_types",
+    "columnCount": 7,
+    "columns": [
+      "id",
+      "companyId",
+      "name",
+      "annualDays",
+      "isPaid",
+      "requiresApproval",
+      "createdAt"
+    ],
+    "audit": {
+      "tenant": true,
+      "createdBy": false,
+      "updatedBy": false,
+      "createdAt": true,
+      "updatedAt": false,
+      "softDelete": false,
+      "lifecycle": false
+    },
+    "fks": [
+      {
+        "to": "companies",
+        "col": "id"
+      }
+    ]
+  },
+  "hr_leave_requests": {
+    "exportName": "hrLeaveRequests",
+    "tableName": "hr_leave_requests",
+    "columnCount": 13,
+    "columns": [
+      "id",
+      "employeeId",
+      "companyId",
+      "leaveTypeId",
+      "startDate",
+      "endDate",
+      "days",
+      "reason",
+      "status",
+      "approvedBy",
+      "approvedAt",
+      "rejectedReason",
+      "createdAt"
+    ],
+    "audit": {
+      "tenant": true,
+      "createdBy": false,
+      "updatedBy": false,
+      "createdAt": true,
+      "updatedAt": false,
+      "softDelete": false,
+      "lifecycle": true
+    },
+    "fks": [
+      {
+        "to": "employees",
+        "col": "id"
+      },
+      {
+        "to": "companies",
+        "col": "id"
+      },
+      {
+        "to": "hrLeaveTypes",
+        "col": "id"
+      }
+    ]
+  },
+  "hr_leave_balances": {
+    "exportName": "hrLeaveBalances",
+    "tableName": "hr_leave_balances",
+    "columnCount": 10,
+    "columns": [
+      "id",
+      "companyId",
+      "employeeId",
+      "assignmentId",
+      "leaveTypeId",
+      "year",
+      "entitled",
+      "used",
+      "reserved",
+      "remaining"
+    ],
+    "audit": {
+      "tenant": true,
+      "createdBy": false,
+      "updatedBy": false,
+      "createdAt": false,
+      "updatedAt": false,
+      "softDelete": false,
+      "lifecycle": false
+    },
+    "fks": [
+      {
+        "to": "companies",
+        "col": "id"
+      },
+      {
+        "to": "employees",
+        "col": "id"
+      },
+      {
+        "to": "hrLeaveTypes",
+        "col": "id"
+      }
+    ]
+  },
+  "journal_entries": {
+    "exportName": "journalEntries",
+    "tableName": "journal_entries",
+    "columnCount": 12,
+    "columns": [
+      "id",
+      "companyId",
+      "branchId",
+      "createdBy",
+      "ref",
+      "description",
+      "type",
+      "status",
+      "sourceType",
+      "sourceId",
+      "deletedAt",
+      "createdAt"
+    ],
+    "audit": {
+      "tenant": true,
+      "createdBy": true,
+      "updatedBy": false,
+      "createdAt": true,
+      "updatedAt": false,
+      "softDelete": true,
+      "lifecycle": true
+    },
+    "fks": [
+      {
+        "to": "companies",
+        "col": "id"
+      },
+      {
+        "to": "branches",
+        "col": "id"
+      }
+    ]
+  },
+  "journal_lines": {
+    "exportName": "journalLines",
+    "tableName": "journal_lines",
+    "columnCount": 7,
+    "columns": [
+      "id",
+      "journalId",
+      "accountCode",
+      "accountId",
+      "debit",
+      "credit",
+      "description"
+    ],
+    "audit": {
+      "tenant": false,
+      "createdBy": false,
+      "updatedBy": false,
+      "createdAt": false,
+      "updatedAt": false,
+      "softDelete": false,
+      "lifecycle": false
+    },
+    "fks": [
+      {
+        "to": "journalEntries",
+        "col": "id"
+      }
+    ]
+  },
+  "chart_of_accounts": {
+    "exportName": "chartOfAccounts",
+    "tableName": "chart_of_accounts",
+    "columnCount": 8,
+    "columns": [
+      "id",
+      "companyId",
+      "code",
+      "name",
+      "type",
+      "parentCode",
+      "status",
+      "createdAt"
+    ],
+    "audit": {
+      "tenant": true,
+      "createdBy": false,
+      "updatedBy": false,
+      "createdAt": true,
+      "updatedAt": false,
+      "softDelete": false,
+      "lifecycle": true
+    },
+    "fks": [
+      {
+        "to": "companies",
+        "col": "id"
+      }
+    ]
+  },
+  "budgets": {
+    "exportName": "budgets",
+    "tableName": "budgets",
+    "columnCount": 8,
+    "columns": [
+      "id",
+      "companyId",
+      "branchId",
+      "accountCode",
+      "period",
+      "amount",
+      "used",
+      "createdAt"
+    ],
+    "audit": {
+      "tenant": true,
+      "createdBy": false,
+      "updatedBy": false,
+      "createdAt": true,
+      "updatedAt": false,
+      "softDelete": false,
+      "lifecycle": false
+    },
+    "fks": [
+      {
+        "to": "companies",
+        "col": "id"
+      }
+    ]
+  },
+  "purchase_requests": {
+    "exportName": "purchaseRequests",
+    "tableName": "purchase_requests",
+    "columnCount": 13,
+    "columns": [
+      "id",
+      "companyId",
+      "branchId",
+      "ref",
+      "requestedBy",
+      "supplierId",
+      "status",
+      "totalAmount",
+      "notes",
+      "expectedDelivery",
+      "approvedBy",
+      "approvedAt",
+      "createdAt"
+    ],
+    "audit": {
+      "tenant": true,
+      "createdBy": false,
+      "updatedBy": false,
+      "createdAt": true,
+      "updatedAt": false,
+      "softDelete": false,
+      "lifecycle": true
+    },
+    "fks": [
+      {
+        "to": "companies",
+        "col": "id"
+      }
+    ]
+  },
+  "purchase_orders": {
+    "exportName": "purchaseOrders",
+    "tableName": "purchase_orders",
+    "columnCount": 12,
+    "columns": [
+      "id",
+      "companyId",
+      "branchId",
+      "ref",
+      "supplierId",
+      "requestId",
+      "status",
+      "totalAmount",
+      "notes",
+      "expectedDelivery",
+      "createdBy",
+      "createdAt"
+    ],
+    "audit": {
+      "tenant": true,
+      "createdBy": true,
+      "updatedBy": false,
+      "createdAt": true,
+      "updatedAt": false,
+      "softDelete": false,
+      "lifecycle": true
+    },
+    "fks": [
+      {
+        "to": "companies",
+        "col": "id"
+      }
+    ]
+  },
+  "suppliers": {
+    "exportName": "suppliers",
+    "tableName": "suppliers",
+    "columnCount": 12,
+    "columns": [
+      "id",
+      "companyId",
+      "name",
+      "contactPerson",
+      "phone",
+      "email",
+      "taxNumber",
+      "address",
+      "paymentTerms",
+      "category",
+      "deletedAt",
+      "createdAt"
+    ],
+    "audit": {
+      "tenant": true,
+      "createdBy": false,
+      "updatedBy": false,
+      "createdAt": true,
+      "updatedAt": false,
+      "softDelete": true,
+      "lifecycle": false
+    },
+    "fks": [
+      {
+        "to": "companies",
+        "col": "id"
+      }
+    ]
+  },
+  "clients": {
+    "exportName": "clients",
+    "tableName": "clients",
+    "columnCount": 10,
+    "columns": [
+      "id",
+      "companyId",
+      "name",
+      "phone",
+      "email",
+      "taxNumber",
+      "address",
+      "status",
+      "deletedAt",
+      "createdAt"
+    ],
+    "audit": {
+      "tenant": true,
+      "createdBy": false,
+      "updatedBy": false,
+      "createdAt": true,
+      "updatedAt": false,
+      "softDelete": true,
+      "lifecycle": true
+    },
+    "fks": [
+      {
+        "to": "companies",
+        "col": "id"
+      }
+    ]
+  },
+  "invoices": {
+    "exportName": "invoices",
+    "tableName": "invoices",
+    "columnCount": 12,
+    "columns": [
+      "id",
+      "companyId",
+      "branchId",
+      "clientId",
+      "ref",
+      "description",
+      "total",
+      "paidAmount",
+      "dueDate",
+      "status",
+      "deletedAt",
+      "createdAt"
+    ],
+    "audit": {
+      "tenant": true,
+      "createdBy": false,
+      "updatedBy": false,
+      "createdAt": true,
+      "updatedAt": false,
+      "softDelete": true,
+      "lifecycle": true
+    },
+    "fks": [
+      {
+        "to": "companies",
+        "col": "id"
+      },
+      {
+        "to": "clients",
+        "col": "id"
+      }
+    ]
+  },
+  "payroll_runs": {
+    "exportName": "payrollRuns",
+    "tableName": "payroll_runs",
+    "columnCount": 8,
+    "columns": [
+      "id",
+      "companyId",
+      "period",
+      "status",
+      "totalNet",
+      "runBy",
+      "deletedAt",
+      "createdAt"
+    ],
+    "audit": {
+      "tenant": true,
+      "createdBy": false,
+      "updatedBy": false,
+      "createdAt": true,
+      "updatedAt": false,
+      "softDelete": true,
+      "lifecycle": true
+    },
+    "fks": [
+      {
+        "to": "companies",
+        "col": "id"
+      }
+    ]
+  },
+  "payroll_lines": {
+    "exportName": "payrollLines",
+    "tableName": "payroll_lines",
+    "columnCount": 18,
+    "columns": [
+      "id",
+      "runId",
+      "assignmentId",
+      "employeeId",
+      "basic",
+      "housingAllowance",
+      "transportAllowance",
+      "grossSalary",
+      "gosi",
+      "gosiEmployer",
+      "lateDeduction",
+      "absenceDeduction",
+      "violationDeduction",
+      "loanDeduction",
+      "overtime",
+      "overtimeHours",
+      "netSalary",
+      "deletedAt"
+    ],
+    "audit": {
+      "tenant": true,
+      "createdBy": false,
+      "updatedBy": false,
+      "createdAt": false,
+      "updatedAt": false,
+      "softDelete": true,
+      "lifecycle": false
+    },
+    "fks": [
+      {
+        "to": "payrollRuns",
+        "col": "id"
+      },
+      {
+        "to": "employeeAssignments",
+        "col": "id"
+      },
+      {
+        "to": "employees",
+        "col": "id"
+      }
+    ]
+  },
+  "employee_violations": {
+    "exportName": "employeeViolations",
+    "tableName": "employee_violations",
+    "columnCount": 10,
+    "columns": [
+      "id",
+      "companyId",
+      "assignmentId",
+      "type",
+      "description",
+      "severity",
+      "deduction",
+      "period",
+      "deletedAt",
+      "createdAt"
+    ],
+    "audit": {
+      "tenant": true,
+      "createdBy": false,
+      "updatedBy": false,
+      "createdAt": true,
+      "updatedAt": false,
+      "softDelete": true,
+      "lifecycle": false
+    },
+    "fks": [
+      {
+        "to": "companies",
+        "col": "id"
+      },
+      {
+        "to": "employeeAssignments",
+        "col": "id"
+      }
+    ]
+  },
+  "approval_chains": {
+    "exportName": "approvalChains",
+    "tableName": "approval_chains",
+    "columnCount": 8,
+    "columns": [
+      "id",
+      "companyId",
+      "name",
+      "chainType",
+      "minAmount",
+      "maxAmount",
+      "isActive",
+      "createdAt"
+    ],
+    "audit": {
+      "tenant": true,
+      "createdBy": false,
+      "updatedBy": false,
+      "createdAt": true,
+      "updatedAt": false,
+      "softDelete": false,
+      "lifecycle": false
+    },
+    "fks": [
+      {
+        "to": "companies",
+        "col": "id"
+      }
+    ]
+  },
+  "approval_chain_steps": {
+    "exportName": "approvalChainSteps",
+    "tableName": "approval_chain_steps",
+    "columnCount": 6,
+    "columns": [
+      "id",
+      "chainId",
+      "stepOrder",
+      "requiredRole",
+      "timeoutHours",
+      "autoApproveOnTimeout"
+    ],
+    "audit": {
+      "tenant": false,
+      "createdBy": false,
+      "updatedBy": false,
+      "createdAt": false,
+      "updatedAt": false,
+      "softDelete": false,
+      "lifecycle": false
+    },
+    "fks": [
+      {
+        "to": "approvalChains",
+        "col": "id"
+      }
+    ]
+  },
+  "event_dlq": {
+    "exportName": "eventDlq",
+    "tableName": "event_dlq",
+    "columnCount": 9,
+    "columns": [
+      "id",
+      "type",
+      "payload",
+      "error",
+      "companyId",
+      "retryCount",
+      "resolved",
+      "createdAt",
+      "resolvedAt"
+    ],
+    "audit": {
+      "tenant": true,
+      "createdBy": false,
+      "updatedBy": false,
+      "createdAt": true,
+      "updatedAt": false,
+      "softDelete": false,
+      "lifecycle": false
+    },
+    "fks": []
+  }
+}
