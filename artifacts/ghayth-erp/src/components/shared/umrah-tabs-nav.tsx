@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Users, Package, Calendar, Receipt, Bus,
   UserCircle, AlertTriangle, Upload, UserPlus, Tag, Briefcase, ShieldAlert,
+  ClipboardList,
 } from "lucide-react";
 
 const TABS = [
@@ -19,6 +20,7 @@ const TABS = [
   { href: "/umrah/transport", label: "النقل", icon: Bus, match: ["/umrah/transport"] },
   { href: "/umrah/penalties", label: "الغرامات", icon: AlertTriangle, match: ["/umrah/penalties"] },
   { href: "/umrah/import", label: "الاستيراد", icon: Upload, match: ["/umrah/import"] },
+  { href: "/umrah/daily-runsheet", label: "كشف اليوم", icon: ClipboardList, match: ["/umrah/daily-runsheet"] },
 ];
 
 export function UmrahTabsNav() {
