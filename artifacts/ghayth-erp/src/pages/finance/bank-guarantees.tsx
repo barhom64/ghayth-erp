@@ -4,6 +4,7 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useAppContext } from "@/contexts/app-context";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
@@ -454,10 +455,10 @@ export default function BankGuaranteesPage() {
         ]}
         loading={isLoading}
         actions={
-          <Button size="sm" onClick={openNew}>
+          <GuardedButton perm="finance:create" size="sm" onClick={openNew}>
             <Plus className="h-4 w-4 me-1" />
             ضمان جديد
-          </Button>
+          </GuardedButton>
         }
       >
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

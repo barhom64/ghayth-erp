@@ -19,6 +19,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { AlertTriangle, DollarSign, Clock, Zap, XCircle, MinusCircle } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { AdvancedFilters, useFilters } from "@/components/shared/advanced-filters";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -152,9 +153,9 @@ export default function UmrahPenalties() {
               إعفاء جماعي ({selectedIds.length})
             </Button>
           )}
-          <Button variant="outline" onClick={runPenaltyEngine} className="gap-2" rateLimitAware>
+          <GuardedButton perm="umrah:approve" variant="outline" onClick={runPenaltyEngine} className="gap-2" rateLimitAware>
             <Zap className="h-4 w-4" />تشغيل محرك الغرامات
-          </Button>
+          </GuardedButton>
         </div>
       </div>
 
@@ -227,12 +228,12 @@ export default function UmrahPenalties() {
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => { e.preventDefault(); handleBulkSubmit(); }}
+            <GuardedButton perm="umrah:approve"
+              onClick={(e: React.MouseEvent) => { e.preventDefault(); handleBulkSubmit(); }}
               disabled={bulkWaiveMutation.isPending}
             >
               {bulkWaiveMutation.isPending ? "جارٍ الإعفاء..." : "تأكيد الإعفاء"}
-            </AlertDialogAction>
+            </GuardedButton>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

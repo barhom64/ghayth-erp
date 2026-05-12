@@ -5,6 +5,7 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { SALARY_COMPONENT_TYPES, SALARY_CATEGORIES } from "@/lib/hr-type-maps";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Plus, DollarSign, TrendingUp, Percent, FileText } from "lucide-react";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -96,9 +97,9 @@ export default function SalaryComponentsPage() {
       subtitle="إدارة البدلات والخصومات والمكونات الراتبية"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "مكونات الرواتب" }]}
       actions={
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>
+        <GuardedButton perm="hr:create" size="sm" onClick={() => setShowForm(!showForm)}>
           <Plus className="h-4 w-4 me-1" />{showForm ? "إلغاء" : "إضافة مكون"}
-        </Button>
+        </GuardedButton>
       }
     >
       <KpiGrid items={[
