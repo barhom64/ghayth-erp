@@ -134,21 +134,123 @@ WHERE iqamaExpiry IS NOT NULL
 
 ## 6) Module Layout
 
+### 6.1 Provider abstractions
+
+Two interfaces split the work so payroll code doesn't know **which** bank's WPS format it's emitting or **whether** the Mudad client is real or mocked.
+
+```ts
+// lib/saudi-compliance/wps/format.ts
+export interface WpsFormatProvider {
+  /** Bank id, e.g. "ncb", "riyad", "alrajhi", "sabb". */
+  readonly id: string;
+
+  /** Bank name for UI display. */
+  readonly displayName: string;
+
+  /**
+   * Render a payroll run as the bank's expected file format.
+   * Returns the raw bytes (CSV / fixed-width / XML — bank's choice)
+   * plus the canonical filename per the bank's spec.
+   */
+  build(run: WpsRun, lines: WpsLine[]): { filename: string; bytes: Buffer };
+
+  /**
+   * Parse the bank's acknowledgement file back into structured rows
+   * so we can mark per-employee success/failure.
+   */
+  parseAck(text: string): WpsAckLine[];
+}
+
+// lib/saudi-compliance/payroll/export-provider.ts
+export interface PayrollExportProvider {
+  /** Provider id, e.g. "mudad", "wps-ncb", "wps-alrajhi", "mock". */
+  readonly id: string;
+
+  /** Whether this provider is currently configured for the company. */
+  isAvailable(companyId: number): Promise<boolean>;
+
+  /**
+   * Submit a payroll run for processing. Always async; never throws
+   * on a bank-level rejection — return `status: "rejected"` instead.
+   */
+  submit(run: PayrollRun): Promise<PayrollSubmissionResult>;
+
+  /** Reconcile bank/Mudad acknowledgement back to our settlement rows. */
+  reconcile(ackBlob: unknown): Promise<{ matched: number; unmatched: number }>;
+
+  /** Pre-flight (credentials valid, certificate not expired, etc.). */
+  health(companyId: number): Promise<{ ok: boolean; details: string[] }>;
+}
+```
+
+### 6.2 Registry — config-driven dispatch
+
+```ts
+// lib/saudi-compliance/payroll/registry.ts
+const PROVIDERS: Record<string, () => PayrollExportProvider> = {
+  "mudad":        () => new MudadProvider(),
+  "wps-ncb":      () => new WpsProvider("ncb"),
+  "wps-alrajhi":  () => new WpsProvider("alrajhi"),
+  "wps-riyad":    () => new WpsProvider("riyad"),
+  "wps-sabb":     () => new WpsProvider("sabb"),
+  "mock":         () => new MockProvider(),
+};
+
+export async function getPayrollProvider(companyId: number): Promise<PayrollExportProvider> {
+  const id = await readPayrollProviderConfig(companyId)
+    ?? process.env.PAYROLL_EXPORT_PROVIDER_DEFAULT
+    ?? "mock";
+  const factory = PROVIDERS[id];
+  if (!factory) throw new Error(`Unknown payroll export provider: ${id}`);
+  return factory();
+}
+```
+
+### 6.3 What payroll code may import
+
+```ts
+// ✅ allowed
+import { getPayrollProvider } from "../lib/saudi-compliance/payroll/registry.js";
+import type { PayrollSubmissionResult } from "../lib/saudi-compliance/payroll/export-provider.js";
+
+// ❌ forbidden
+import { MudadClient } from "../lib/saudi-compliance/mudad/client.js";
+import { buildAlRajhiFile } from "../lib/saudi-compliance/wps/formats/alrajhi.js";
+```
+
+### 6.4 File layout
+
 ```
 artifacts/api-server/src/lib/saudi-compliance/
 ├── index.ts            — public API
 ├── types.ts            — WpsRun, WpsLine, NitaqatCategory, MudadSettlement
+├── payroll/
+│   ├── export-provider.ts  — `PayrollExportProvider` interface
+│   ├── registry.ts         — config-driven dispatch
+│   └── providers/
+│       ├── mock.ts         — in-memory provider for dev + tests
+│       ├── mudad.ts        — Mudad implementation
+│       └── wps.ts          — WPS implementation (delegates to a WpsFormatProvider per bank)
 ├── wps/
-│   ├── builder.ts      — buildWpsFile(payroll, format) — pure
-│   ├── parser.ts       — parseAckFile(text) — pure
-│   └── formats/        — per-bank format adapters (NCB, Riyad, Al Rajhi)
+│   ├── builder.ts      — generic WPS run aggregation (pure)
+│   ├── format.ts       — `WpsFormatProvider` interface
+│   ├── parser.ts       — generic ack envelope (pure)
+│   └── formats/        — per-bank format adapters (NCB, Riyad, Al Rajhi, SABB)
 ├── nitaqat.ts          — classifyNitaqat(saudi, total, sector) — pure
 ├── iqama-alerts.ts     — daily cron: select expiring + emit
 ├── mudad/
-│   ├── client.ts       — REST API client (OAuth)
+│   ├── client.ts       — REST API client (OAuth) — used ONLY by providers/mudad.ts
 │   └── reconcile.ts    — match Mudad refs to settlements
 └── reports.ts          — per-nationality + Saudization trend
 ```
+
+### 6.5 Why the WPS / Mudad split matters
+
+WPS is **file-based** (every bank wants a different file format, submitted via the bank's portal or SFTP). Mudad is **API-based** (single REST endpoint, OAuth). A naive design would couple payroll directly to whichever is configured for that company; the registry lets us:
+
+- Run a multi-tenant install where Company A uses Mudad and Company B uses WPS-Al-Rajhi without forking the codebase.
+- Swap to a future government-mandated payroll system (e.g. if WPS is sunset) by adding one provider entry.
+- Test the payroll flow end-to-end against the `mock` provider in CI without any network or credential dependency.
 
 ## 7) خطة التنفيذ (4-6 أسابيع)
 
