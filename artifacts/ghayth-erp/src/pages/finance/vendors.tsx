@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Plus, Users, Phone, Mail, Star, Building2, Calendar } from "lucide-react";
@@ -117,12 +118,12 @@ export default function VendorsPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "الموردون" }]}
       loading={isLoading}
       actions={
-        <Button size="sm" asChild>
+        <GuardedButton perm="finance:create" size="sm" asChild>
           <Link href={createPath}>
             <Plus className="h-4 w-4 me-1" />
             إضافة مورد
           </Link>
-        </Button>
+        </GuardedButton>
       }
     >
       <FinanceTabsNav />

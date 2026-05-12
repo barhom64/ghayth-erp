@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 // Phase A — HR recruitment on unified primitives.
 import { PageShell } from "@/components/page-shell";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
@@ -168,10 +169,10 @@ export default function RecruitmentPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-2">
           <Link href="/hr/recruitment/create">
-            <Button size="sm"><Plus className="h-4 w-4 me-1" />وظيفة جديدة</Button>
+            <GuardedButton perm="hr:create" size="sm"><Plus className="h-4 w-4 me-1" />وظيفة جديدة</GuardedButton>
           </Link>
           <Link href="/hr/recruitment/applicants/create">
-            <Button size="sm" variant="outline"><Plus className="h-4 w-4 me-1" />إضافة متقدم</Button>
+            <GuardedButton perm="hr:create" size="sm" variant="outline"><Plus className="h-4 w-4 me-1" />إضافة متقدم</GuardedButton>
           </Link>
         </div>
       </div>

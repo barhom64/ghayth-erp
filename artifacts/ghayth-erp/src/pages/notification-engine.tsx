@@ -19,6 +19,7 @@ import {
   Trash2, RefreshCw, ArrowRight, AlertCircle, CheckCircle, XCircle,
   BarChart3, Clock, Shield, Webhook, ChevronDown, ChevronUp,
 } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 const CHANNEL_LABELS: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
   in_app: { label: "داخلي", icon: <Bell className="h-4 w-4" />, color: "bg-blue-100 text-blue-700" },
@@ -135,7 +136,7 @@ function RoutingRulesTab() {
                             ))}
                           </SelectContent>
                         </Select>
-                        <Button size="sm" onClick={saveRule}><Save className="h-3 w-3 ml-1" /> حفظ</Button>
+                        <GuardedButton perm="settings:create" size="sm" onClick={saveRule}><Save className="h-3 w-3 ml-1" /> حفظ</GuardedButton>
                         <Button size="sm" variant="outline" onClick={() => setEditId(null)}>إلغاء</Button>
                       </div>
                     </div>
@@ -232,9 +233,9 @@ function TemplatesTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">قوالب الرسائل</h3>
-        <Button size="sm" onClick={() => setShowNew(!showNew)}>
+        <GuardedButton perm="settings:create" size="sm" onClick={() => setShowNew(!showNew)}>
           <Plus className="h-4 w-4 ml-1" /> قالب جديد
-        </Button>
+        </GuardedButton>
       </div>
 
       {showNew && (
@@ -268,7 +269,7 @@ function TemplatesTab() {
             </div>
             <div className="flex gap-2 justify-end">
               <Button size="sm" variant="outline" onClick={() => setShowNew(false)}>إلغاء</Button>
-              <Button size="sm" onClick={createTemplate}><Save className="h-3 w-3 ml-1" /> إنشاء</Button>
+              <GuardedButton perm="settings:create" size="sm" onClick={createTemplate}><Save className="h-3 w-3 ml-1" /> إنشاء</GuardedButton>
             </div>
           </CardContent>
         </Card>
@@ -301,20 +302,20 @@ function TemplatesTab() {
                     <div className="flex gap-1">
                       {isEditing ? (
                         <>
-                          <Button size="sm" onClick={saveEdit}><Save className="h-3 w-3 ml-1" /> حفظ</Button>
+                          <GuardedButton perm="settings:create" size="sm" onClick={saveEdit}><Save className="h-3 w-3 ml-1" /> حفظ</GuardedButton>
                           <Button size="sm" variant="outline" onClick={() => setEditId(null)}>إلغاء</Button>
                         </>
                       ) : (
                         <>
-                          <Button size="sm" variant="ghost" onClick={() => {
+                          <GuardedButton perm="settings:create" size="sm" variant="ghost" onClick={() => {
                             setEditId(tId);
                             setEditBody(t.bodyTemplate as string);
                             setEditTitle((t.titleTemplate as string) ?? "");
-                          }}>تعديل</Button>
+                          }}>تعديل</GuardedButton>
                           {!isDefault && (
-                            <Button size="sm" variant="ghost" className="text-red-500" onClick={() => deleteTemplate(tId)}>
+                            <GuardedButton perm="settings:create" size="sm" variant="ghost" className="text-red-500" onClick={() => deleteTemplate(tId)}>
                               <Trash2 className="h-3 w-3" />
-                            </Button>
+                            </GuardedButton>
                           )}
                         </>
                       )}
@@ -405,9 +406,9 @@ function FallbackChainsTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">سلاسل التصعيد</h3>
-        <Button size="sm" onClick={() => setShowNew(!showNew)}>
+        <GuardedButton perm="settings:create" size="sm" onClick={() => setShowNew(!showNew)}>
           <Plus className="h-4 w-4 ml-1" /> سلسلة جديدة
-        </Button>
+        </GuardedButton>
       </div>
       <p className="text-sm text-muted-foreground">
         عند فشل إرسال إشعار على قناة معينة، يتم المحاولة تلقائياً على القناة التالية في السلسلة.
@@ -455,7 +456,7 @@ function FallbackChainsTab() {
             <Button size="sm" variant="outline" onClick={addStep}><Plus className="h-3 w-3 ml-1" /> خطوة</Button>
             <div className="flex gap-2 justify-end">
               <Button size="sm" variant="outline" onClick={() => setShowNew(false)}>إلغاء</Button>
-              <Button size="sm" onClick={createChain}><Save className="h-3 w-3 ml-1" /> إنشاء</Button>
+              <GuardedButton perm="settings:create" size="sm" onClick={createChain}><Save className="h-3 w-3 ml-1" /> إنشاء</GuardedButton>
             </div>
           </CardContent>
         </Card>
@@ -479,9 +480,9 @@ function FallbackChainsTab() {
                   {!!chain.description && <p className="text-xs text-muted-foreground">{String(chain.description)}</p>}
                 </div>
                 {!isGlobal && (
-                  <Button size="sm" variant="ghost" className="text-red-500" onClick={() => deleteChain(chain.id as number)}>
+                  <GuardedButton perm="settings:create" size="sm" variant="ghost" className="text-red-500" onClick={() => deleteChain(chain.id as number)}>
                     <Trash2 className="h-3 w-3" />
-                  </Button>
+                  </GuardedButton>
                 )}
               </div>
               <div className="flex items-center gap-2 mt-3 flex-wrap">
@@ -558,9 +559,9 @@ function WebhooksTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">خطافات الاستدعاء الصادرة</h3>
-        <Button size="sm" onClick={() => setShowNew(!showNew)}>
+        <GuardedButton perm="settings:create" size="sm" onClick={() => setShowNew(!showNew)}>
           <Plus className="h-4 w-4 ml-1" /> خطاف استدعاء جديد
-        </Button>
+        </GuardedButton>
       </div>
       <p className="text-sm text-muted-foreground">
         إرسال إشعارات الأحداث لأنظمة خارجية (سلاك، تيمز، أنظمة أخرى) عبر طلبات استدعاء شبكية.
@@ -591,7 +592,7 @@ function WebhooksTab() {
             </div>
             <div className="flex gap-2 justify-end">
               <Button size="sm" variant="outline" onClick={() => setShowNew(false)}>إلغاء</Button>
-              <Button size="sm" onClick={createWebhook}><Save className="h-3 w-3 ml-1" /> إنشاء</Button>
+              <GuardedButton perm="settings:create" size="sm" onClick={createWebhook}><Save className="h-3 w-3 ml-1" /> إنشاء</GuardedButton>
             </div>
           </CardContent>
         </Card>
@@ -629,9 +630,9 @@ function WebhooksTab() {
                     </Badge>
                   )}
                   <Switch checked={wh.isActive as boolean} onCheckedChange={() => toggleWebhook(wh.id as number, wh.isActive as boolean)} />
-                  <Button size="sm" variant="ghost" className="text-red-500" onClick={() => deleteWebhook(wh.id as number)}>
+                  <GuardedButton perm="settings:create" size="sm" variant="ghost" className="text-red-500" onClick={() => deleteWebhook(wh.id as number)}>
                     <Trash2 className="h-3 w-3" />
-                  </Button>
+                  </GuardedButton>
                 </div>
               </div>
               <div className="flex flex-wrap gap-1 mt-2">
@@ -891,9 +892,9 @@ function PreferencesTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">تفضيلات الإشعارات الشخصية</h3>
-        <Button size="sm" onClick={saveAll} disabled={!dirty}>
+        <GuardedButton perm="settings:create" size="sm" onClick={saveAll} disabled={!dirty}>
           <Save className="h-4 w-4 ml-1" /> حفظ التفضيلات
-        </Button>
+        </GuardedButton>
       </div>
       <p className="text-sm text-muted-foreground">
         اختر القنوات التي تريد استقبال الإشعارات عليها لكل نوع من الأحداث.

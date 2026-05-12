@@ -390,6 +390,29 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
   { key: "calendar.my", moduleKey: "calendar", labelAr: "تقويمي", icon: "Calendar",
     availableActions: ["view", "list", "create", "update", "delete"], availableScopes: ["self"],
     selfService: true, displayOrder: 70 },
+
+  // ═══════════════════════════════════════════════════════════════
+  // Dashboards & cross-module views
+  // ═══════════════════════════════════════════════════════════════
+  { key: "dashboard", moduleKey: "dashboard", labelAr: "لوحة القيادة", icon: "LayoutDashboard",
+    availableActions: ["view", "list"], availableScopes: ALL_SCOPES, displayOrder: 10 },
+  { key: "dashboard.action_center", parentKey: "dashboard", moduleKey: "dashboard", labelAr: "مركز المهام", icon: "ListChecks",
+    availableActions: ["view", "list"], availableScopes: ALL_SCOPES, displayOrder: 11 },
+  { key: "dashboard.executive", parentKey: "dashboard", moduleKey: "dashboard", labelAr: "لوحة القيادة التنفيذية", icon: "LineChart",
+    availableActions: ["view"], availableScopes: ["company", "multi_company", "all"], displayOrder: 12 },
+
+  // ═══════════════════════════════════════════════════════════════
+  // My Space sub-features
+  // ═══════════════════════════════════════════════════════════════
+  { key: "my_space.payslip", parentKey: "my_space", moduleKey: "my-space", labelAr: "كشف الراتب", icon: "Receipt",
+    availableActions: ["view"], availableScopes: ["self"],
+    selfService: true, displayOrder: 51 },
+
+  // ═══════════════════════════════════════════════════════════════
+  // Admin sub-features
+  // ═══════════════════════════════════════════════════════════════
+  { key: "admin.approvals", parentKey: "admin", moduleKey: "admin", labelAr: "سجل الاعتمادات", icon: "CheckCircle",
+    availableActions: ["view", "list"], availableScopes: ALL_SCOPES, displayOrder: 1810 },
 ];
 
 /**

@@ -4,6 +4,7 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { formatCurrency, todayLocal } from "@/lib/formatters";
@@ -88,10 +89,10 @@ export default function ProjectCostingPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "تكاليف المشاريع" }]}
       loading={isLoading}
       actions={
-        <Button onClick={() => setShowAddCost(true)} disabled={list.length === 0}>
+        <GuardedButton perm="finance:create" onClick={() => setShowAddCost(true)} disabled={list.length === 0}>
           <Plus className="h-4 w-4 ml-2" />
           تسجيل تكلفة
-        </Button>
+        </GuardedButton>
       }
     >
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

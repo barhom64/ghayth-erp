@@ -5,6 +5,7 @@ import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import {
   ArrowRightLeft, Plus, CheckCircle, XCircle, Clock,
   FileText, AlertTriangle,
@@ -203,10 +204,10 @@ export default function TransfersPage() {
       subtitle="إدارة طلبات نقل الموظفين بين الفروع والأقسام"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
-        <Button onClick={() => setShowForm(!showForm)} size="sm" className="gap-1.5">
+        <GuardedButton perm="hr:create" onClick={() => setShowForm(!showForm)} size="sm" className="gap-1.5">
           <Plus className="h-4 w-4" />
           طلب نقل جديد
-        </Button>
+        </GuardedButton>
       }
     >
       {/* KPI cards */}

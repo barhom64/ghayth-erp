@@ -505,7 +505,7 @@ export async function softDeleteJournalEntry(
   );
 }
 
-type ApprovalChainType = "leaves" | "purchases" | "expenses" | "advances" | "letters" | "procurement" | "loans" | "overtime" | "exit";
+type ApprovalChainType = "leaves" | "purchases" | "expenses" | "advances" | "letters" | "procurement" | "loans" | "overtime" | "exit" | "umrah_commission_plan";
 
 interface ApprovalChainResult {
   requiresApproval: boolean;
@@ -693,6 +693,7 @@ function chainTypeLabel(t: ApprovalChainType): string {
     leaves: "إجازات", purchases: "مشتريات", expenses: "مصروفات",
     advances: "سلفة/عهدة", letters: "خطاب رسمي", procurement: "مشتريات",
     loans: "سلفة موظف", overtime: "وقت إضافي", exit: "نهاية خدمة",
+    umrah_commission_plan: "خطة عمولة عمرة",
   };
   return map[t] ?? t;
 }
@@ -705,6 +706,10 @@ export function refTypeToChainType(refType: string): ApprovalChainType | null {
     purchase_request: "procurement",
     hr_employee_loan: "loans", hr_overtime_request: "overtime",
     hr_exit_request: "exit",
+    // Umrah commission plans pass through an approval chain when the
+    // base salary or tier bonuses exceed company thresholds — invoked
+    // by umrah-entities.ts: POST /umrah/commission-plans.
+    employee_commission_plan: "umrah_commission_plan",
   };
   return map[refType] ?? null;
 }

@@ -8,6 +8,7 @@ import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/compon
 import { useAppContext } from "@/contexts/app-context";
 import { FileBarChart, Plus } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 export function ReportsTab() {
   const { data: reportsResp, isLoading, isError, error, refetch } = useApiQuery<any>(["bi-reports"], "/bi/reports");
@@ -47,7 +48,7 @@ export function ReportsTab() {
             resultCount={filtered.length}
           />
         </div>
-        {canWrite && <Link href="/bi/reports/create"><Button className="gap-2"><Plus className="h-4 w-4" /> إضافة تقرير</Button></Link>}
+        {canWrite && <Link href="/bi/reports/create"><GuardedButton perm="bi:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة تقرير</GuardedButton></Link>}
       </div>
       <Card>
         <CardHeader><CardTitle>التقارير</CardTitle></CardHeader>
