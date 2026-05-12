@@ -8,19 +8,16 @@
 - الكومبوننت: `AdminRoles`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `roles`
-- سطور الملف: 393
+- سطور الملف: 412
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L218: "(بلا تسمية)" → `() => setActiveTab(activeTab === "create" ? "modules" : "create")`
-- L256: "(بلا تسمية)" → `saveModules` 🔒
-- L257: "(بلا تسمية)" → `() => setEditingRole(null)`
-- L260: "(بلا تسمية)" → `() => startEdit(r)`
-- L380: "(بلا تسمية)" → `createNewRole` 🔒
-- L383: "(بلا تسمية)" → `() => setNewRole({ roleKey: "", label: "", level: "10", modules: []`
+- L264: "(بلا تسمية)" → `saveModules` 🔒
+- L265: "(بلا تسمية)" → `() => setEditingRole(null)`
+- L268: "(بلا تسمية)" → `() => startEdit(r)`
 
 ### القراءات (GET)
 - GET `/admin/predefined-roles`

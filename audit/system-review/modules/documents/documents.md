@@ -8,25 +8,19 @@
 - الكومبوننت: `DocumentsPage`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `documents`
-- سطور الملف: 428
+- سطور الملف: 429
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L137: "رفع مستند"
-- L138: "إنشاء مستند"
-- L200: "(بلا تسمية)" → `() => handleDownload(d.id, d.fileName)`
-- L205: "الإصدارات"
-- L210: "(بلا تسمية)" → `() => handleStatusChange(d.id, "approved")`
-- L215: "(بلا تسمية)" → `() => handleStatusChange(d.id, "cancelled")`
-- L220: "(بلا تسمية)" → `() => handleStatusChange(d.id, "draft")`
-- L268: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L279: "(بلا تسمية)" → `() => setShowForm(false)`
-- L304: "(بلا تسمية)" → `() => setShowForm(true)`
-- L346: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L357: "(بلا تسمية)" → `() => setShowForm(false)`
+- L201: "(بلا تسمية)" → `() => handleDownload(d.id, d.fileName)`
+- L206: "الإصدارات"
+- L221: "(بلا تسمية)" → `() => handleStatusChange(d.id, "draft")`
+- L280: "(بلا تسمية)" → `() => setShowForm(false)`
+- L305: "(بلا تسمية)" → `() => setShowForm(true)`
+- L358: "(بلا تسمية)" → `() => setShowForm(false)`
 
 ### القراءات (GET)
 - GET `/documents/folders`

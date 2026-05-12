@@ -3,19 +3,19 @@
 ## 1. الميتاداتا
 - المسار: `/umrah/pilgrims/:id`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/pilgrim-detail.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:41`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:50`
 - المجموعة: `operations`
 - الكومبوننت: `PilgrimDetail`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 168
+- سطور الملف: 169
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L141: "تحديث" → `updateStatus` 🔒
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
 _لا قراءات._

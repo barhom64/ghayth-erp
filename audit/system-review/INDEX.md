@@ -6,46 +6,39 @@
 
 ## الإحصاءات
 
-- **إجمالي المسارات المسجّلة:** 379
-- **مسارات بأوراق منشأة:** 379
-- **إجمالي المشاكل الآلية:** 81
-  - 🔴 high: 64
-  - ⚠ medium: 14
-  - ℹ low: 3
+- **إجمالي المسارات المسجّلة:** 382
+- **مسارات بأوراق منشأة:** 382
+- **إجمالي المشاكل الآلية:** 0
+  - 🔴 high: 0
+  - ⚠ medium: 0
+  - ℹ low: 0
 
 ## الفئات الكبرى
 
-- hardcoded-inline-data-array: **60**
-- missing-audit: **7**
-- modeling-no-tenant: **4**
-- modeling-no-createdAt: **4**
-- orphan-button: **3**
-- hardcoded-dummy-iban: **2**
-- hardcoded-dummy-name: **1**
 
 ## الوحدات
 
 | الموجة | الوحدة | عدد الصفحات | منشأة | مشاكل | high | medium |
 |--------|--------|------------|--------|--------|------|--------|
-| 1 | [`finance`](./modules/finance/_module.md) | 67 | 67 | 16 | 7 | 6 |
+| 1 | [`finance`](./modules/finance/_module.md) | 67 | 67 | 0 | 0 | 0 |
 | 1 | [`governance`](./modules/governance/_module.md) | 14 | 14 | 0 | 0 | 0 |
-| 1 | [`hr`](./modules/hr/_module.md) | 81 | 81 | 29 | 29 | 0 |
-| 2 | [`fleet`](./modules/fleet/_module.md) | 26 | 26 | 1 | 1 | 0 |
+| 1 | [`hr`](./modules/hr/_module.md) | 81 | 81 | 0 | 0 | 0 |
+| 2 | [`fleet`](./modules/fleet/_module.md) | 26 | 26 | 0 | 0 | 0 |
 | 2 | [`legal`](./modules/legal/_module.md) | 13 | 13 | 0 | 0 | 0 |
-| 2 | [`properties`](./modules/properties/_module.md) | 30 | 30 | 4 | 1 | 3 |
-| 2 | [`store`](./modules/store/_module.md) | 6 | 6 | 2 | 2 | 0 |
+| 2 | [`properties`](./modules/properties/_module.md) | 30 | 30 | 0 | 0 | 0 |
+| 2 | [`store`](./modules/store/_module.md) | 6 | 6 | 0 | 0 | 0 |
 | 2 | [`warehouse`](./modules/warehouse/_module.md) | 13 | 13 | 0 | 0 | 0 |
-| 3 | [`communications`](./modules/communications/_module.md) | 6 | 6 | 1 | 1 | 0 |
-| 3 | [`crm`](./modules/crm/_module.md) | 9 | 9 | 1 | 1 | 0 |
+| 3 | [`communications`](./modules/communications/_module.md) | 6 | 6 | 0 | 0 | 0 |
+| 3 | [`crm`](./modules/crm/_module.md) | 9 | 9 | 0 | 0 | 0 |
 | 3 | [`support`](./modules/support/_module.md) | 5 | 5 | 0 | 0 | 0 |
-| 4 | [`bi`](./modules/bi/_module.md) | 13 | 13 | 2 | 1 | 1 |
-| 4 | [`documents`](./modules/documents/_module.md) | 7 | 7 | 2 | 2 | 0 |
-| 4 | [`misc`](./modules/misc/_module.md) | 16 | 16 | 1 | 1 | 0 |
-| 4 | [`requests`](./modules/requests/_module.md) | 6 | 6 | 3 | 3 | 0 |
-| 5 | [`admin`](./modules/admin/_module.md) | 17 | 17 | 1 | 1 | 0 |
+| 4 | [`bi`](./modules/bi/_module.md) | 13 | 13 | 0 | 0 | 0 |
+| 4 | [`documents`](./modules/documents/_module.md) | 7 | 7 | 0 | 0 | 0 |
+| 4 | [`misc`](./modules/misc/_module.md) | 16 | 16 | 0 | 0 | 0 |
+| 4 | [`requests`](./modules/requests/_module.md) | 6 | 6 | 0 | 0 | 0 |
+| 5 | [`admin`](./modules/admin/_module.md) | 17 | 17 | 0 | 0 | 0 |
 | 5 | [`settings`](./modules/settings/_module.md) | 6 | 6 | 0 | 0 | 0 |
 | — | [`marketing`](./modules/marketing/_module.md) | 2 | 2 | 0 | 0 | 0 |
-| — | [`operations`](./modules/operations/_module.md) | 39 | 39 | 10 | 10 | 0 |
+| — | [`operations`](./modules/operations/_module.md) | 42 | 42 | 0 | 0 | 0 |
 | — | [`root`](./modules/root/_module.md) | 3 | 3 | 0 | 0 | 0 |
 
 ## النتائج الموحّدة

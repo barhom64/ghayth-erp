@@ -8,15 +8,14 @@
 - الكومبوننت: `SalaryComponents`
 - subKey: `payroll` | minRoleLevel: —
 - الكيان المستنبط: `salary-components`
-- سطور الملف: 179
+- سطور الملف: 180
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L99: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L132: "(بلا تسمية)" → `() => setShowForm(false)`
+- L133: "(بلا تسمية)" → `() => setShowForm(false)`
 
 ### القراءات (GET)
 - GET `/hr/salary-components`

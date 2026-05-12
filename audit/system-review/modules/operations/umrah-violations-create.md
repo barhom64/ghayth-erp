@@ -1,27 +1,29 @@
-# /umrah/daily-runsheet — `artifacts/ghayth-erp/src/pages/umrah/daily-runsheet.tsx`
+# /umrah/violations/create — `artifacts/ghayth-erp/src/pages/umrah/violation-create.tsx`
 
 ## 1. الميتاداتا
-- المسار: `/umrah/daily-runsheet`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/daily-runsheet.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:75`
+- المسار: `/umrah/violations/create`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/violation-create.tsx`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:72`
 - المجموعة: `operations`
-- الكومبوننت: `UmrahDailyRunsheet`
+- الكومبوننت: `UmrahViolationCreate`
 - subKey: — | minRoleLevel: —
-- الكيان المستنبط: `daily-runsheet`
-- سطور الملف: 177
+- الكيان المستنبط: `create`
+- سطور الملف: 316
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
-_لا توجد طلبات كتابة من هذه الصفحة._
+| الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
+|------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
+| _(write)_ | `/umrah/violations` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-- L135: "(بلا تسمية)" → `() => refetch()`
+- L98: "(بلا تسمية)"
+- L219: "(بلا تسمية)" → `() => setLocation("/umrah/violations")`
 
 ### القراءات (GET)
 _لا قراءات._
 
-### استدعاءات fetch خام (تحتاج مراجعة يدوية)
-- `/api/umrah/reports/daily-runsheet/pdf?date=${date}`
+
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
 - [ ] **TBD** — راجع `docs/blueprints/operations.md` (إن وُجد) وعدّد:
@@ -33,7 +35,7 @@ _لا قراءات._
 - يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
 
 ## 4. النمذجة
-_لم يتم العثور على جدول Drizzle بالاسم المستنبط `daily-runsheet` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
+_لم يتم العثور على جدول Drizzle بالاسم المستنبط `create` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.

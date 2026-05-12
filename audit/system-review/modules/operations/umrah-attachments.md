@@ -1,14 +1,14 @@
-# /properties/contracts/:id — `artifacts/ghayth-erp/src/pages/properties/contract-detail.tsx`
+# /umrah/attachments — `artifacts/ghayth-erp/src/pages/umrah/attachments.tsx`
 
 ## 1. الميتاداتا
-- المسار: `/properties/contracts/:id`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/properties/contract-detail.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/propertyRoutes.tsx:47`
-- المجموعة: `properties`
-- الكومبوننت: `ContractDetail`
+- المسار: `/umrah/attachments`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/attachments.tsx`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:78`
+- المجموعة: `operations`
+- الكومبوننت: `UmrahAttachments`
 - subKey: — | minRoleLevel: —
-- الكيان المستنبط: `:id`
-- سطور الملف: 327
+- الكيان المستنبط: `attachments`
+- سطور الملف: 185
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
@@ -23,7 +23,7 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/properties.md` (إن وُجد) وعدّد:
+- [ ] **TBD** — راجع `docs/blueprints/operations.md` (إن وُجد) وعدّد:
   - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
   - تأثير الأرصدة (balances, balances_history)
   - الإشعارات (notifications)
@@ -32,13 +32,11 @@ _لا قراءات._
 - يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
 
 ## 4. النمذجة
-_لم يتم العثور على جدول Drizzle بالاسم المستنبط `:id` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
+_لم يتم العثور على جدول Drizzle بالاسم المستنبط `attachments` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
-- Runtime audit: **✅ PASS** — render=SKIP | fetch=SKIP | CTA=SKIP | nav=SKIP | smoke=SKIP
-- ملاحظة: `unresolved: /api/properties/contracts → 401`
-- landedUrl: `?`
-- توصية: مغلق
+- Runtime audit: **N/A** — لم يُشغّل بعد لهذا المسار.
+- توصية: **TBD**
