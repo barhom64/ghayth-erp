@@ -6,7 +6,6 @@ import { Router } from "express";
 import { logger } from "../lib/logger.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { sendNotification } from "../lib/notificationService.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
@@ -657,9 +656,11 @@ router.get("/stats", authorize({ feature: "communications", action: "list" }), a
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [comm] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE channel='whatsapp') as whatsapp, COUNT(*) FILTER (WHERE channel='sms') as sms, COUNT(*) FILTER (WHERE channel='email') as email, COUNT(*) FILTER (WHERE channel='pbx') as pbx FROM communications_log WHERE "companyId"=$1`, [cid]);
-    const [wa] = await rawQuery<any>(`SELECT COUNT(*) as pending FROM whatsapp_queue WHERE "companyId"=$1 AND status='pending'`, [cid]);
-    const [sms] = await rawQuery<any>(`SELECT COUNT(*) as pending FROM sms_queue WHERE "companyId"=$1 AND status='pending'`, [cid]);
+    const [[comm], [wa], [sms]] = await Promise.all([
+      rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE channel='whatsapp') as whatsapp, COUNT(*) FILTER (WHERE channel='sms') as sms, COUNT(*) FILTER (WHERE channel='email') as email, COUNT(*) FILTER (WHERE channel='pbx') as pbx FROM communications_log WHERE "companyId"=$1`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as pending FROM whatsapp_queue WHERE "companyId"=$1 AND status='pending'`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as pending FROM sms_queue WHERE "companyId"=$1 AND status='pending'`, [cid]),
+    ]);
     res.json({
       total: Number(comm.total),
       whatsapp: Number(comm.whatsapp),
@@ -689,35 +690,40 @@ router.get("/queue-stats", authorize({ feature: "communications", action: "list"
     type QueueRow = { id: number; recipient: string; message: string; status: string; attemptCount: number | null; errorMessage: string | null; createdAt: string; sentAt: string | null };
 
     const smsParams: unknown[] = [cid];
-    const smsStats = await rawQuery<StatusCount>(
-      `SELECT status, COUNT(*) as count FROM sms_queue WHERE "companyId"=$1${buildDateFilter("sms_queue", smsParams)} GROUP BY status`,
-      smsParams
-    );
+    const smsDateFilter = buildDateFilter("sms_queue", smsParams);
     const waParams: unknown[] = [cid];
-    const waStats = await rawQuery<StatusCount>(
-      `SELECT status, COUNT(*) as count FROM whatsapp_queue WHERE "companyId"=$1${buildDateFilter("whatsapp_queue", waParams)} GROUP BY status`,
-      waParams
-    );
+    const waDateFilter = buildDateFilter("whatsapp_queue", waParams);
     const emailParams: unknown[] = [cid];
-    const emailStats = await rawQuery<StatusCount>(
-      `SELECT status, COUNT(*) as count FROM email_queue WHERE "companyId"=$1${buildDateFilter("email_queue", emailParams)} GROUP BY status`,
-      emailParams
-    );
-    const pushCount = await rawQuery<{ count: string }>(
-      `SELECT COUNT(*) as count FROM push_subscriptions WHERE "companyId"=$1`,
-      [cid]
-    );
+    const emailDateFilter = buildDateFilter("email_queue", emailParams);
 
-    const recentSms = await rawQuery<QueueRow>(
-      `SELECT id, "recipientPhone" AS recipient, message, status, "attemptCount", "errorMessage", "createdAt", "sentAt"
-       FROM sms_queue WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 20`,
-      [cid]
-    );
-    const recentWa = await rawQuery<QueueRow>(
-      `SELECT id, phone AS recipient, message, status, "attemptCount", "errorMessage", "createdAt", "sentAt"
-       FROM whatsapp_queue WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 20`,
-      [cid]
-    );
+    const [smsStats, waStats, emailStats, pushCount, recentSms, recentWa] = await Promise.all([
+      rawQuery<StatusCount>(
+        `SELECT status, COUNT(*) as count FROM sms_queue WHERE "companyId"=$1${smsDateFilter} GROUP BY status`,
+        smsParams
+      ),
+      rawQuery<StatusCount>(
+        `SELECT status, COUNT(*) as count FROM whatsapp_queue WHERE "companyId"=$1${waDateFilter} GROUP BY status`,
+        waParams
+      ),
+      rawQuery<StatusCount>(
+        `SELECT status, COUNT(*) as count FROM email_queue WHERE "companyId"=$1${emailDateFilter} GROUP BY status`,
+        emailParams
+      ),
+      rawQuery<{ count: string }>(
+        `SELECT COUNT(*) as count FROM push_subscriptions WHERE "companyId"=$1`,
+        [cid]
+      ),
+      rawQuery<QueueRow>(
+        `SELECT id, "recipientPhone" AS recipient, message, status, "attemptCount", "errorMessage", "createdAt", "sentAt"
+         FROM sms_queue WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 20`,
+        [cid]
+      ),
+      rawQuery<QueueRow>(
+        `SELECT id, phone AS recipient, message, status, "attemptCount", "errorMessage", "createdAt", "sentAt"
+         FROM whatsapp_queue WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 20`,
+        [cid]
+      ),
+    ]);
 
     const toMap = (rows: StatusCount[]): Record<string, number> => {
       const m: Record<string, number> = {};

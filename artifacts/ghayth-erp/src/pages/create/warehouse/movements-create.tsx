@@ -89,6 +89,10 @@ export default function MovementsCreate() {
             <SelectContent>
               <SelectItem value="in">إدخال</SelectItem>
               <SelectItem value="out">إخراج</SelectItem>
+              <SelectItem value="return">إرجاع</SelectItem>
+              <SelectItem value="transfer_in">تحويل وارد</SelectItem>
+              <SelectItem value="transfer_out">تحويل صادر</SelectItem>
+              <SelectItem value="adjustment">تعديل</SelectItem>
             </SelectContent>
           </Select>
         </FormFieldWrapper>

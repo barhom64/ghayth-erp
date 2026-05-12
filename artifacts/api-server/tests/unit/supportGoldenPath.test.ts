@@ -289,7 +289,10 @@ describe("Support security contracts", () => {
 
   it("ticket list filters deletedAt IS NULL", () => {
     const listIdx = SUPPORT_ROUTE.indexOf('router.get("/tickets"');
-    const listSection = SUPPORT_ROUTE.slice(listIdx, listIdx + 900);
+    // Slice widened from 900 → 1600 after the handler grew (added
+    // buildScopedWhere + status/priority filters + LEFT JOIN soft-delete
+    // predicates) so the SELECT body falls within the captured range.
+    const listSection = SUPPORT_ROUTE.slice(listIdx, listIdx + 1600);
     expect(listSection).toContain('"deletedAt" IS NULL');
   });
 

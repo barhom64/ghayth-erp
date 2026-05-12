@@ -10,6 +10,7 @@ import { Edit, AlertTriangle } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
   open: "مفتوح",
@@ -79,6 +80,7 @@ export default function RiskDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/governance/risks/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("risk", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["risk", String(id)],
@@ -343,6 +345,8 @@ export default function RiskDetail() {
       relatedEntities={relatedEntities}
       entityType="risk"
       entityId={id ?? 0}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       overview={overview}
       isLoading={isLoading}
       error={error}

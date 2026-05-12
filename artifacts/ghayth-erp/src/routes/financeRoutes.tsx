@@ -57,6 +57,7 @@ const BatchDepreciate = lazy(() => import("@/pages/create/finance/batch-deprecia
 const InventoryCosting = lazy(() => import("@/pages/finance/inventory-costing"));
 const BankGuarantees = lazy(() => import("@/pages/finance/bank-guarantees"));
 const JournalManual = lazy(() => import("@/pages/finance/journal-manual"));
+const GLPostingQueue = lazy(() => import("@/pages/finance/gl-posting-queue"));
 const JournalManualCreate = lazy(() => import("@/pages/create/finance/journal-manual-create"));
 const JournalManualDetail = lazy(() => import("@/pages/finance/journal-manual-detail"));
 const Intercompany = lazy(() => import("@/pages/finance/intercompany"));
@@ -129,6 +130,7 @@ export const financeRoutes = [
   { path: "/finance/journal-manual", component: JournalManual },
   { path: "/finance/journal-manual/create", component: JournalManualCreate },
   { path: "/finance/journal-manual/:id", component: JournalManualDetail },
+  { path: "/finance/gl-posting-queue", component: GLPostingQueue },
   { path: "/finance/intercompany", component: Intercompany },
   { path: "/finance/intercompany/consolidation/create", component: IntercompanyConsolidationCreate },
   { path: "/finance/cash-flow-forecast", component: CashFlowForecast },

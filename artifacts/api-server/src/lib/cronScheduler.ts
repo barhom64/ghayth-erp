@@ -32,6 +32,7 @@ import { zatcaRetryDrain } from "./zatca/worker.js";
 import { dailyFxRateFetchCron } from "./fx/jobs.js";
 import { fxStalenessCheckCron } from "./fx/staleness-alert.js";
 import { lotExpiryScanCron } from "./inventory/lots.js";
+import { abcMonthlyClassificationCron } from "./inventory/abc-analysis.js";
 import { iqamaDailyAlertCron } from "./saudi-compliance/iqama-cron.js";
 import { saudizationMonthlySnapshotCron } from "./saudi-compliance/saudization-snapshot.js";
 
@@ -2839,7 +2840,74 @@ async function dailyAutoViolationDetection(): Promise<string> {
   return `الرصد التلقائي: ${result.totalDetected} واقعة مكتشفة، ${result.totalMemos} محضر جديد عبر ${result.companies} شركة`;
 }
 
-// ── Umrah cron handlers (C29-C32) ──
+// ── Umrah cron handlers (C27, C29-C32) ──
+
+// C27 — daily proactive overstay scan. Spec §15 row C27:
+// "SELECT معتمرين is_inside_kingdom AND actual_stay > program_duration → إنشاء غرامة + تنبيه"
+// Distinct from C28 (absconder) which only fires on status='violated'. This one
+// pre-empts: a pilgrim who is still INSIDE KSA but past their program-duration
+// gets flagged + a violation row added (de-duped via NOT EXISTS).
+async function umrahDailyOverstayScan(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
+  let detected = 0;
+  for (const c of companies) {
+    const overstayed = await rawQuery<any>(
+      `SELECT p.id, p."fullName", p."passportNumber", p."groupId", p."subAgentId",
+              p."actualStayDays", p."programDuration",
+              GREATEST(0, COALESCE(p."actualStayDays",0) - COALESCE(p."programDuration",0)) AS "overDays"
+         FROM umrah_pilgrims p
+        WHERE p."companyId"=$1
+          AND p."deletedAt" IS NULL
+          AND COALESCE(p."isInsideKingdom", true) = true
+          AND p.status NOT IN ('departed','cancelled','violated')
+          AND COALESCE(p."actualStayDays",0) > COALESCE(p."programDuration",0)
+          AND COALESCE(p."programDuration",0) > 0
+          AND NOT EXISTS (
+            SELECT 1 FROM umrah_violations v
+             WHERE v."companyId"=$1 AND v."mutamerId"=p.id
+               AND v.type='overstay' AND v."deletedAt" IS NULL
+          )`,
+      [c.id]
+    );
+    for (const o of overstayed) {
+      // Per-day penalty pulled from settings (default 0 — spec leaves it as a
+      // company-set value). The violation row is still created so the agent
+      // sees the breach even if penalty is 0.
+      const [setting] = await rawQuery<{ value: string }>(
+        `SELECT value FROM system_settings
+          WHERE key='umrah.overstay_daily_penalty'
+            AND ( ("companyId" IS NULL AND "branchId" IS NULL)
+                  OR ("companyId" = $1 AND "branchId" IS NULL) )
+          ORDER BY "companyId" NULLS FIRST LIMIT 1`,
+        [c.id]
+      );
+      const perDay = Number(setting?.value ?? 0);
+      const penalty = Math.max(0, Number(o.overDays) || 0) * perDay;
+      await rawExecute(
+        `INSERT INTO umrah_violations ("companyId","branchId",type,"referenceType","referenceNumber",
+          "mutamerId","groupId","subAgentId","penaltyAmount",status,description,"createdAt","updatedAt")
+         VALUES ($1,0,'overstay','passport',$2,$3,$4,$5,$6,'detected',$7,NOW(),NOW())`,
+        [
+          c.id, o.passportNumber || '', o.id, o.groupId, o.subAgentId, penalty,
+          `تجاوز مدة البرنامج بـ ${o.overDays} يوم — رصد تلقائي`,
+        ]
+      );
+      detected++;
+    }
+    if (overstayed.length > 0) {
+      const mgr = await getManagerAssignmentId(c.id, 0);
+      if (mgr) {
+        await createNotification({
+          companyId: c.id, assignmentId: mgr,
+          type: "umrah", title: "رصد معتمرين متجاوزين",
+          body: `${overstayed.length} معتمر تجاوز مدة البرنامج — تم إنشاء غرامات`,
+          priority: "high",
+        });
+      }
+    }
+  }
+  return `فحص المتجاوزين: ${detected} حالة جديدة عبر ${companies.length} شركة`;
+}
 
 async function umrahDailyAbsconderCheck(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
@@ -2954,7 +3022,7 @@ async function umrahVisaExpiryAlerts(): Promise<string> {
   let alerted = 0;
   for (const c of companies) {
     const expiring = await rawQuery<any>(
-      `SELECT p.id, p."fullName", p."visaNumber", p."visaExpiry", g."groupName"
+      `SELECT p.id, p."fullName", p."visaNumber", p."visaExpiry", g.name AS "groupName"
        FROM umrah_pilgrims p
        LEFT JOIN umrah_groups g ON g.id = p."groupId"
        WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
@@ -3350,6 +3418,7 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "hourly_approval_escalation", description: "تصعيد الموافقات كل ساعة", schedule: "0 * * * *", handler: hourlyApprovalEscalation },
   { name: "daily_deduction_check", description: "خصومات الغياب اليومية", schedule: "0 23 * * *", handler: dailyDeductionCheck },
   { name: "daily_auto_violation_detection", description: "الرصد التلقائي للمخالفات — تأخر وغياب ومغادرة مبكرة وخروج GPS", schedule: "30 23 * * *", handler: dailyAutoViolationDetection },
+  { name: "umrah_daily_overstay_scan", description: "C27 — فحص المعتمرين المتجاوزين مدة البرنامج (داخل المملكة)", schedule: "0 6 * * *", handler: umrahDailyOverstayScan },
   { name: "umrah_daily_absconder_check", description: "فحص المعتمرين الهاربين يومياً وإنشاء غرامات", schedule: "0 6 * * *", handler: umrahDailyAbsconderCheck },
   { name: "umrah_overdue_invoice_escalation", description: "تصعيد فواتير العمرة المتأخرة يومياً", schedule: "0 8 * * *", handler: umrahOverdueInvoiceEscalation },
   { name: "umrah_weekly_agent_performance", description: "تقرير أداء وكلاء العمرة الأسبوعي", schedule: "0 9 * * 0", handler: umrahWeeklyAgentPerformance },
@@ -3389,6 +3458,7 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "lot_expiry_scan", description: "تحويل الدفعات المنتهية تلقائياً إلى expired", schedule: "0 4 * * *", handler: lotExpiryScanCron },
   { name: "iqama_daily_alert", description: "تنبيه انتهاء الإقامات (90/60/30/14/7/1 يوم)", schedule: "0 7 * * *", handler: iqamaDailyAlertCron },
   { name: "saudization_monthly_snapshot", description: "لقطة شهرية للسعودة (نطاقات)", schedule: "0 2 1 * *", handler: saudizationMonthlySnapshotCron },
+  { name: "abc_monthly_classification", description: "تصنيف ABC الشهري للمنتجات (Pareto)", schedule: "0 3 1 * *", handler: abcMonthlyClassificationCron },
   { name: "sms_queue_worker", description: "معالجة قائمة انتظار الرسائل النصية", schedule: "* * * * *", handler: processSmsQueue },
   { name: "whatsapp_queue_worker", description: "معالجة قائمة انتظار واتساب", schedule: "* * * * *", handler: processWhatsAppQueue },
   { name: "weekly_logs_archiving", description: "أرشفة السجلات القديمة أسبوعياً", schedule: "0 3 * * 0", handler: weeklyLogsArchiving },

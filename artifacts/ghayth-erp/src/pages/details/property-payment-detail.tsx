@@ -13,6 +13,7 @@ import { PAYMENT_METHODS } from "@/lib/finance-type-maps";
 import { useToast } from "@/hooks/use-toast";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 /**
  * PropertyPaymentDetail — unified detail page for a single property
@@ -56,6 +57,7 @@ export default function PropertyPaymentDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/properties/payments/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("property-payment", id ?? 0);
   const { toast } = useToast();
   const [previewAttachment, setPreviewAttachment] = useState<PreviewableAttachment | null>(null);
 
@@ -353,6 +355,8 @@ export default function PropertyPaymentDetail() {
         relatedEntities={relatedEntities}
         entityType="property-payment"
         entityId={id ?? 0}
+        extraTabs={extraTabs}
+        hideTabs={hideTabs}
         overview={overview}
         isLoading={isLoading}
         error={error}

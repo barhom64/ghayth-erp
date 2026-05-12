@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -74,7 +75,7 @@ export default function ShiftsPage() {
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "إدارة الورديات" }]}
       actions={
         <Link href="/hr/shifts/create">
-          <Button size="sm"><Plus className="h-4 w-4 me-1" />إضافة وردية</Button>
+          <GuardedButton perm="hr:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة وردية</GuardedButton>
         </Link>
       }
     >

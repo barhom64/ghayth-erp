@@ -316,6 +316,24 @@ export const SupplierSelect = buildEntitySelect({
   getName: (r) => r?.name || `#${r?.id}`,
 });
 
+export const DriverSelect = buildEntitySelect({
+  queryKey: "drivers-list",
+  endpoint: "/fleet/drivers?limit=500",
+  defaultLabel: "السائق",
+  defaultPlaceholder: "اختر السائق",
+  searchPlaceholder: "ابحث عن سائق...",
+  createTitle: "إضافة سائق جديد",
+  createLabel: "+ سائق جديد",
+  createApiPath: "/fleet/drivers",
+  createFields: [
+    { key: "name", label: "اسم السائق", required: true },
+    { key: "phone", label: "الهاتف" },
+    { key: "licenseNumber", label: "رقم الرخصة" },
+  ],
+  getName: (r) => r?.name || `#${r?.id}`,
+  getSublabel: (r) => r?.licenseNumber || r?.phone || "",
+});
+
 export const BranchSelect = buildEntitySelect({
   queryKey: "branches-list",
   endpoint: "/settings/branches",

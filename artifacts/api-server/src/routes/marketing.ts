@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { handleRouteError, ValidationError, NotFoundError,
   parseId,
@@ -9,6 +8,42 @@ import { handleRouteError, ValidationError, NotFoundError,
 } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
+
+// Local row shapes for marketing tables (not in @workspace/db schema).
+
+interface MarketingCampaignRow {
+  id: number;
+  companyId: number;
+  name: string;
+  description?: string | null;
+  type?: string | null;
+  channel?: string | null;
+  status?: string | null;
+  budget?: number | string | null;
+  spent?: number | string | null;
+  revenue?: number | string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  targetAudience?: string | null;
+  createdAt: string;
+  updatedAt?: string | null;
+  deletedAt?: string | null;
+}
+
+interface CountRow { count: string | number }
+interface TotalRow { total: string | number }
+interface CountValueRow { count: string | number; value: string | number }
+interface SourceCountRow { source: string; count: string | number }
+interface SourceFunnelRow { source: string; total: string | number; won: string | number; wonValue: string | number }
+interface DocumentTemplateRow {
+  id: number;
+  companyId: number;
+  name: string;
+  category: string;
+  body?: string | null;
+  createdAt: string;
+}
+interface FunnelStageRow { stage: string; count: number; value: number; conversionFromPrev?: string | null }
 
 // P02-S3-CRIT — `marketing:*` permissions are seeded for the
 // `general_manager` and `crm_manager` roles in companyBootstrap.ts:195
@@ -56,7 +91,7 @@ const router = Router();
 router.get("/campaigns", authorize({ feature: "marketing", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM marketing_campaigns WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
+    const rows = await rawQuery<MarketingCampaignRow>(`SELECT * FROM marketing_campaigns WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "marketing"); }
 });
@@ -96,7 +131,7 @@ router.post("/campaigns", authorize({ feature: "marketing", action: "create" }),
       after: { name, channel, status: status || "draft", budget: Number(budget ?? 0) },
     }).catch((e) => logger.error(e, "marketing background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "marketing.campaign.created", entity: "marketing_campaigns", entityId: r.insertId, details: JSON.stringify({ name, channel, status: status || "draft" }) }).catch((e) => logger.error(e, "marketing background task failed"));
-    const [row] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    const [row] = await rawQuery<MarketingCampaignRow>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
     res.status(201).json(row || { id: r.insertId, name, status: status || "draft", budget: Number(budget ?? 0) });
   } catch (err) { handleRouteError(err, res, "Create campaign error:"); }
 });
@@ -105,7 +140,7 @@ router.get("/campaigns/:id", authorize({ feature: "marketing", action: "view" })
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<MarketingCampaignRow>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("الحملة غير موجودة");
     res.json(row);
   } catch (err) { handleRouteError(err, res, "marketing"); }
@@ -116,11 +151,11 @@ router.patch("/campaigns/:id", authorize({ feature: "marketing", action: "update
     const parsed = zodParse(updateCampaignSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(`SELECT id FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<{ id: number }>(`SELECT id FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("الحملة غير موجودة");
     const b = parsed;
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
     if (b.description !== undefined) { params.push(b.description); sets.push(`description=$${params.length}`); }
     if (b.type !== undefined) { params.push(b.type); sets.push(`type=$${params.length}`); }
@@ -137,7 +172,7 @@ router.patch("/campaigns/:id", authorize({ feature: "marketing", action: "update
     if (!affectedRows) throw new NotFoundError("الحملة غير موجودة");
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "marketing.campaign.updated", entity: "marketing_campaigns", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "marketing background task failed"));
     createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "marketing_campaigns", entityId: id, after: b }).catch((e) => logger.error(e, "marketing background task failed"));
-    const [row] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<MarketingCampaignRow>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "marketing"); }
 });
@@ -146,7 +181,7 @@ router.delete("/campaigns/:id", authorize({ feature: "marketing", action: "delet
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(`SELECT id FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<{ id: number }>(`SELECT id FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("الحملة غير موجودة");
     const { affectedRows } = await rawExecute(`UPDATE marketing_campaigns SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!affectedRows) throw new NotFoundError("الحملة غير موجودة");
@@ -160,18 +195,18 @@ router.get("/stats", authorize({ feature: "marketing", action: "list" }), async 
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [total] = await rawQuery(`SELECT COUNT(*) as count FROM marketing_campaigns WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [active] = await rawQuery(`SELECT COUNT(*) as count FROM marketing_campaigns WHERE status='active' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [budget] = await rawQuery(`SELECT COALESCE(SUM(budget),0) as total FROM marketing_campaigns WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [spent] = await rawQuery(`SELECT COALESCE(SUM(spent),0) as total FROM marketing_campaigns WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [revenue] = await rawQuery<any>(`SELECT COALESCE(SUM(revenue),0) as total FROM marketing_campaigns WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]).catch((e) => { logger.error(e, "marketing query failed"); return [{ total: 0 }]; });
+    const [total] = await rawQuery<CountRow>(`SELECT COUNT(*) as count FROM marketing_campaigns WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [active] = await rawQuery<CountRow>(`SELECT COUNT(*) as count FROM marketing_campaigns WHERE status='active' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [budget] = await rawQuery<TotalRow>(`SELECT COALESCE(SUM(budget),0) as total FROM marketing_campaigns WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [spent] = await rawQuery<TotalRow>(`SELECT COALESCE(SUM(spent),0) as total FROM marketing_campaigns WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [revenue] = await rawQuery<TotalRow>(`SELECT COALESCE(SUM(revenue),0) as total FROM marketing_campaigns WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]).catch((e) => { logger.error(e, "marketing query failed"); return [{ total: 0 }] as TotalRow[]; });
     const totalSpent = Number(spent.total);
     const totalRevenue = Number(revenue?.total || 0);
     const roas = totalSpent > 0 ? (totalRevenue / totalSpent).toFixed(2) : null;
-    const sourceCounts = await rawQuery<any>(
+    const sourceCounts = await rawQuery<SourceCountRow>(
       `SELECT source, COUNT(*) AS count FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND source IS NOT NULL GROUP BY source ORDER BY count DESC`,
       [cid]
-    ).catch((e) => { logger.error(e, "marketing query failed"); return []; });
+    ).catch((e) => { logger.error(e, "marketing query failed"); return [] as SourceCountRow[]; });
     res.json({
       totalCampaigns: Number(total.count),
       activeCampaigns: Number(active.count),
@@ -188,15 +223,15 @@ router.get("/campaigns/:id/roas", authorize({ feature: "marketing", action: "lis
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [campaign] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [campaign] = await rawQuery<MarketingCampaignRow>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!campaign) throw new NotFoundError("الحملة غير موجودة");
     const spent = Number(campaign.spent || 0);
     const revenue = Number(campaign.revenue || 0);
     const roas = spent > 0 ? revenue / spent : null;
-    const leads = await rawQuery<any>(
+    const leads = await rawQuery<CountRow>(
       `SELECT COUNT(*) AS count FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND source=$2`,
       [scope.companyId, campaign.name]
-    ).catch((e) => { logger.error(e, "marketing query failed"); return [{ count: 0 }]; });
+    ).catch((e) => { logger.error(e, "marketing query failed"); return [{ count: 0 }] as CountRow[]; });
     res.json({
       campaignId: id,
       campaignName: campaign.name,
@@ -213,16 +248,21 @@ router.get("/funnel", authorize({ feature: "marketing", action: "list" }), async
     const scope = req.scope!;
     const cid = scope.companyId;
     const STAGES = ['lead', 'qualified', 'proposal', 'negotiation', 'closed_won', 'closed_lost'];
-    const stageData: any[] = [];
-    for (const stage of STAGES) {
-      const [row] = await rawQuery<any>(`SELECT COUNT(*) AS count, COALESCE(SUM(value),0) AS value FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage=$2`, [cid, stage]);
-      stageData.push({ stage, count: Number(row?.count ?? 0), value: Number(row?.value ?? 0) });
-    }
-    const sourceFunnel = await rawQuery<any>(
+    const stageRows = await rawQuery<CountValueRow & { stage: string }>(
+      `SELECT stage, COUNT(*) AS count, COALESCE(SUM(value),0) AS value FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage = ANY($2::text[]) GROUP BY stage`,
+      [cid, STAGES]
+    );
+    const stageMap = new Map(stageRows.map(r => [r.stage, { count: Number(r.count ?? 0), value: Number(r.value ?? 0) }]));
+    const stageData: FunnelStageRow[] = STAGES.map(stage => ({
+      stage,
+      count: stageMap.get(stage)?.count ?? 0,
+      value: stageMap.get(stage)?.value ?? 0,
+    }));
+    const sourceFunnel = await rawQuery<SourceFunnelRow>(
       `SELECT source, COUNT(*) AS total, COUNT(*) FILTER (WHERE stage='closed_won') AS won, COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) AS "wonValue"
        FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND source IS NOT NULL GROUP BY source ORDER BY total DESC`,
       [cid]
-    ).catch((e) => { logger.error(e, "marketing query failed"); return []; });
+    ).catch((e) => { logger.error(e, "marketing query failed"); return [] as SourceFunnelRow[]; });
     const conversionRates = stageData.map((s, i) => {
       const prev = i > 0 ? stageData[i - 1] : null;
       return {
@@ -244,7 +284,7 @@ router.patch("/campaigns/:id/revenue", authorize({ feature: "marketing", action:
     if (!affectedRows) throw new NotFoundError("الحملة غير موجودة");
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "marketing.campaign.revenue_updated", entity: "marketing_campaigns", entityId: id, details: JSON.stringify({ revenue: revenue || 0 }) }).catch((e) => logger.error(e, "marketing background task failed"));
     createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "marketing_campaigns", entityId: id, after: { revenue: revenue || 0 } }).catch((e) => logger.error(e, "marketing background task failed"));
-    const [row] = await rawQuery<any>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<MarketingCampaignRow>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     res.json(row);
   } catch (err) { handleRouteError(err, res, "marketing"); }
 });
@@ -252,7 +292,7 @@ router.patch("/campaigns/:id/revenue", authorize({ feature: "marketing", action:
 router.get("/templates", authorize({ feature: "marketing", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(
+    const rows = await rawQuery<DocumentTemplateRow>(
       `SELECT * FROM document_templates WHERE "companyId" = $1 AND category = 'marketing' AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`,
       [scope.companyId]
     );

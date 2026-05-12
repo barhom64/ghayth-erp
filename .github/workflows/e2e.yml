@@ -1,0 +1,169 @@
+# E2E (Playwright) workflow
+#
+# Runs the Playwright spec files under e2e/tests/ against a freshly-booted
+# stack:
+#   1. postgres:16 service (matches db/schema.sql)
+#   2. api-server built and started on port 8080
+#   3. ghayth-erp frontend built and served on port 5173
+#
+# The guard.yml workflow already covers unit / golden-path / typecheck.
+# This workflow is the UI-level regression net — it catches things like
+# "the dashboard now throws on first paint" that HTTP tests miss.
+#
+# Designed to be opt-in for now via workflow_dispatch + the e2e label, so
+# it doesn't block every PR while the Playwright suite is still small.
+# Promote to `on: pull_request` once the suite stabilises.
+
+name: e2e
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  playwright:
+    # Run on PRs only when the `e2e` label is present, plus all pushes to
+    # main and manual dispatches. The label gate keeps default PR latency
+    # low — flip to `if: true` to make every PR run E2E.
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || github.event_name == 'push'
+      || contains(github.event.pull_request.labels.*.name, 'e2e')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: ghayth_erp
+          POSTGRES_USER: ghayth_erp
+          POSTGRES_PASSWORD: ghayth_erp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ghayth_erp -d ghayth_erp"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgres://ghayth_erp:ghayth_erp@localhost:5432/ghayth_erp
+      JWT_SECRET: ci-test-secret-not-for-prod-use-64-chars-of-padding-padding-pad
+      FIELD_ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000000
+      SECRETS_ENCRYPTION_KEY: 1111111111111111111111111111111111111111111111111111111111111111
+      NODE_ENV: development
+      CORS_ORIGINS: http://localhost:5173
+      SEED_DEMO_DATA: 'true'
+      # Frontend build needs these at config-eval time.
+      BASE_PATH: /
+      # E2E config picks these up.
+      E2E_BASE_URL: http://localhost:5173
+      E2E_API_URL: http://localhost:8080
+      E2E_USER_EMAIL: owner@local.test
+      E2E_USER_PASSWORD: Test1234!
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Load DB schema
+        run: |
+          psql "$DATABASE_URL" -f db/schema.sql
+        env:
+          PGPASSWORD: ghayth_erp
+
+      - name: Build api-server
+        run: pnpm --filter @workspace/api-server build
+
+      - name: Build frontend
+        run: |
+          PORT=5173 BASE_PATH=/ pnpm --filter @workspace/ghayth-erp build
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @workspace/e2e exec playwright install --with-deps chromium
+
+      - name: Start api-server
+        run: |
+          # The api-server bundle writes its log to stdout; redirect to file
+          # so the workflow log stays focused on test output.
+          PORT=8080 node artifacts/api-server/dist/index.mjs > api-server.log 2>&1 &
+          echo $! > api-server.pid
+          # Wait for healthz to respond before continuing.
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/api/healthz >/dev/null 2>&1; then
+              echo "api-server up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "api-server failed to start in 60s" >&2
+          cat api-server.log >&2
+          exit 1
+
+      - name: Start frontend
+        run: |
+          # Vite preview serves the dist/public bundle on the same port as
+          # the dev server, matching what the Playwright config expects.
+          PORT=5173 BASE_PATH=/ pnpm --filter @workspace/ghayth-erp serve > frontend.log 2>&1 &
+          echo $! > frontend.pid
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:5173 >/dev/null 2>&1; then
+              echo "frontend up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "frontend failed to start in 60s" >&2
+          cat frontend.log >&2
+          exit 1
+
+      - name: Run Playwright tests
+        run: pnpm --filter @workspace/e2e test
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 14
+
+      - name: Upload server logs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-logs
+          path: |
+            api-server.log
+            frontend.log
+          retention-days: 7
+
+      - name: Tear down
+        if: always()
+        run: |
+          [ -f api-server.pid ] && kill "$(cat api-server.pid)" 2>/dev/null || true
+          [ -f frontend.pid ] && kill "$(cat frontend.pid)" 2>/dev/null || true

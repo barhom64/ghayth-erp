@@ -93,6 +93,7 @@ export default function LeavesCreate() {
         reason: form.reason,
         reliefOfficer: form.reliefOfficer || undefined,
         contactDuringLeave: form.contactDuringLeave || undefined,
+        documentUrl: attachments.length > 0 ? attachments[0].dataUrl : undefined,
       },
       {
         onSuccess: () => {

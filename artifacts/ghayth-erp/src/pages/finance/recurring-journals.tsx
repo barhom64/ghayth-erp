@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Plus, CalendarClock, Play, Pause, Zap, Trash2 } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
@@ -155,7 +156,8 @@ export default function RecurringJournalsPage() {
       header: "",
       render: (r) => (
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <Button
+          <GuardedButton
+            perm="finance:approve"
             variant="ghost"
             size="icon"
             title="تنفيذ الآن"
@@ -163,8 +165,9 @@ export default function RecurringJournalsPage() {
             onClick={() => runMut.mutate({ id: r.id })}
           >
             <Zap className="h-4 w-4 text-amber-600" />
-          </Button>
-          <Button
+          </GuardedButton>
+          <GuardedButton
+            perm="finance:update"
             variant="ghost"
             size="icon"
             title={r.active ? "إيقاف" : "تشغيل"}
@@ -172,8 +175,9 @@ export default function RecurringJournalsPage() {
             onClick={() => patchMut.mutate({ id: r.id, active: !r.active })}
           >
             {r.active ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-          </Button>
-          <Button
+          </GuardedButton>
+          <GuardedButton
+            perm="finance:delete"
             variant="ghost"
             size="icon"
             title="حذف"
@@ -181,7 +185,7 @@ export default function RecurringJournalsPage() {
             onClick={() => setDeleteTarget({ id: r.id, name: r.name })}
           >
             <Trash2 className="h-4 w-4" />
-          </Button>
+          </GuardedButton>
         </div>
       ),
     },
@@ -195,12 +199,12 @@ export default function RecurringJournalsPage() {
         breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "القيود الدورية" }]}
         loading={isLoading}
         actions={
-          <Button size="sm" asChild>
+          <GuardedButton perm="finance:create" size="sm" asChild>
             <Link href="/finance/recurring-journals/create">
               <Plus className="h-4 w-4 me-1" />
               قيد دوري جديد
             </Link>
-          </Button>
+          </GuardedButton>
         }
       >
         <div className="grid gap-3 grid-cols-2 md:grid-cols-3">

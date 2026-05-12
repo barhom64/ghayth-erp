@@ -241,12 +241,19 @@ export async function scanObligations(companyId?: number): Promise<{
     breachedCount = newlyBreached.rowCount ?? 0;
 
     for (const o of newlyBreached.rows) {
+      const daysLate = Math.max(
+        0,
+        Math.floor((Date.now() - new Date(o.dueAt).getTime()) / 86_400_000),
+      );
       await emitEvent({
         companyId: o.companyId,
         userId: 0,
         action: "system.obligation.breached",
         entity: o.entityType,
         entityId: o.entityId,
+        obligationId: o.id,
+        entityType: o.entityType,
+        daysLate,
         details: `التزام متأخر: ${o.title}`,
       });
       if (o.assignedTo) {
@@ -283,6 +290,7 @@ export async function scanObligations(companyId?: number): Promise<{
         action: "system.obligation.escalated",
         entity: o.entityType,
         entityId: o.entityId,
+        id: o.id,
         details: `تصعيد L1: ${o.title}`,
       });
     }
@@ -309,6 +317,7 @@ export async function scanObligations(companyId?: number): Promise<{
         action: "system.obligation.escalated",
         entity: o.entityType,
         entityId: o.entityId,
+        id: o.id,
         details: `تصعيد L2: ${o.title}`,
       });
     }
@@ -333,6 +342,7 @@ export async function scanObligations(companyId?: number): Promise<{
         action: "system.obligation.reminder",
         entity: o.entityType,
         entityId: o.entityId,
+        id: o.id,
         details: `تذكير قبل 24 ساعة: ${o.title}`,
       });
       if (o.assignedTo) {

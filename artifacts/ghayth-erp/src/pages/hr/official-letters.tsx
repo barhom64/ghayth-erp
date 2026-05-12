@@ -1,16 +1,14 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useLocation } from "wouter";
 import { formatDateAr } from "@/lib/formatters";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 // Phase A — HR official letters on unified primitives.
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { Plus, FileText, FileSignature, Send, Eye } from "lucide-react";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { PrintPreviewModal } from "@/components/print-layout";
@@ -22,6 +20,35 @@ import { ApprovalActions } from "@/components/approval-actions";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { LETTER_TYPES } from "@/lib/hr-type-maps";
+import {
+  FormShell,
+  FormTextField,
+  FormTextareaField,
+  FormSelectField,
+  FormGrid,
+} from "@/components/form-shell";
+
+// Old: subject was guarded only by `disabled={!form.subject}`. Schema
+// makes it required at validation time + trims whitespace.
+// employeeId stays a string so it can be cleanly omitted; the submit
+// handler turns it into a number (or null) before sending.
+const letterFormSchema = z.object({
+  employeeId: z.string(),
+  type: z.string().min(1, "النوع مطلوب"),
+  subject: z.string().trim().min(1, "الموضوع مطلوب"),
+  content: z.string().trim(),
+});
+type LetterForm = z.infer<typeof letterFormSchema>;
+const defaultLetterForm: LetterForm = {
+  employeeId: "",
+  type: "general",
+  subject: "",
+  content: "",
+};
+const LETTER_TYPE_OPTIONS = Object.entries(LETTER_TYPES).map(([value, label]) => ({
+  value,
+  label: String(label),
+}));
 
 export default function OfficialLettersPage() {
   const [, navigate] = useLocation();
@@ -29,11 +56,13 @@ export default function OfficialLettersPage() {
   const [previewLetter, setPreviewLetter] = useState<any>(null);
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["official-letters"], "/hr/official-letters");
   const items = data?.data || [];
-  const [form, setForm] = useState({ employeeId: "", type: "general", subject: "", content: "" });
-  // HR-U4 — successMessage + onSuccess بدل buildErrorToast اليدوي.
-  const createMut = useApiMutation("/hr/official-letters", "POST", [["official-letters"]], {
-    successMessage: "تم إنشاء الخطاب",
-  });
+  // HR-U4 — successMessage بدل buildErrorToast اليدوي.
+  const createMut = useApiMutation<unknown, Record<string, unknown>>(
+    "/hr/official-letters",
+    "POST",
+    [["official-letters"]],
+    { successMessage: "تم إنشاء الخطاب" },
+  );
   const { user } = useAuth();
   const branch = useBranchLetterhead(user?.branchId);
   const { roleLevel } = useAppContext();
@@ -88,17 +117,6 @@ export default function OfficialLettersPage() {
     },
   ];
 
-  const handleSubmit = () => {
-    createMut.mutate(
-      { ...form, employeeId: Number(form.employeeId) || null },
-      {
-        onSuccess: () => {
-          setShowForm(false);
-          setForm({ employeeId: "", type: "general", subject: "", content: "" });
-        },
-      },
-    );
-  };
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -109,9 +127,9 @@ export default function OfficialLettersPage() {
       subtitle="إصدار ومتابعة الخطابات الرسمية للموظفين"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>
+        <GuardedButton perm="hr:create" size="sm" onClick={() => setShowForm(!showForm)}>
           <Plus className="h-4 w-4 me-1" />{showForm ? "إلغاء" : "خطاب جديد"}
-        </Button>
+        </GuardedButton>
       }
     >
       <KpiGrid items={[
@@ -138,22 +156,34 @@ export default function OfficialLettersPage() {
       {showForm && (
         <Card className="border-blue-200">
           <CardContent className="p-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label>النوع</Label>
-                <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
-                  <SelectTrigger className="mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(LETTER_TYPES).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div><Label>الموضوع</Label><Input className="mt-1" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} /></div>
-              <div className="md:col-span-2"><Label>المحتوى</Label><Textarea className="mt-1 h-24" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} /></div>
-              <div><Button onClick={handleSubmit} disabled={!form.subject || createMut.isPending} rateLimitAware>{createMut.isPending ? "جاري الحفظ..." : "حفظ"}</Button></div>
-            </div>
+            <FormShell
+              schema={letterFormSchema}
+              defaultValues={defaultLetterForm}
+              submitLabel="حفظ"
+              secondaryActions={
+                <Button type="button" size="sm" variant="ghost" onClick={() => setShowForm(false)}>
+                  إلغاء
+                </Button>
+              }
+              onSubmit={async (values, ctx) => {
+                await createMut.mutateAsync({
+                  ...values,
+                  // employeeId is a string in the form; coerce to number
+                  // (or null if blank) before sending to the API. The
+                  // old `Number(form.employeeId) || null` worked but
+                  // hid that "0" → null was unintentional.
+                  employeeId: values.employeeId ? Number(values.employeeId) : null,
+                });
+                ctx.reset();
+                setShowForm(false);
+              }}
+            >
+              <FormGrid cols={2}>
+                <FormSelectField name="type" label="النوع" options={LETTER_TYPE_OPTIONS} />
+                <FormTextField name="subject" label="الموضوع" required />
+                <FormTextareaField name="content" label="المحتوى" rows={6} className="md:col-span-2" />
+              </FormGrid>
+            </FormShell>
           </CardContent>
         </Card>
       )}

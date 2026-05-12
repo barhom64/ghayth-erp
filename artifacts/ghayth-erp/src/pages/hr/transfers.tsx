@@ -1,17 +1,15 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import {
   ArrowRightLeft, Plus, CheckCircle, XCircle, Clock,
   FileText, AlertTriangle,
 } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -21,7 +19,22 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { TRANSFER_STATUS } from "@/lib/hr-type-maps";
-import { DatePicker } from "@/components/ui/date-picker";
+import {
+  FormShell, FormTextField, FormSelectField, FormDateField, FormGrid,
+} from "@/components/form-shell";
+
+// employeeId + toBranchId required (was `if (!form.employeeId || !form.toBranchId)`
+// toast guard — now caught at schema validation before any network call).
+const transferSchema = z.object({
+  employeeId: z.string().min(1, "الموظف مطلوب"),
+  toBranchId: z.string().min(1, "الفرع المستقبل مطلوب"),
+  reason: z.string().trim(),
+  effectiveDate: z.string(),
+});
+type TransferForm = z.infer<typeof transferSchema>;
+const defaultTransferForm: TransferForm = {
+  employeeId: "", toBranchId: "", reason: "", effectiveDate: "",
+};
 
 const STATUS_OPTIONS = Object.entries(TRANSFER_STATUS).map(([value, { label }]) => ({ value, label }));
 const STATUS_MAP = TRANSFER_STATUS;
@@ -30,7 +43,6 @@ export default function TransfersPage() {
   const [, navigate] = useLocation();
   const [filters, setFilters] = useFilters();
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ employeeId: "", toBranchId: "", reason: "", effectiveDate: "" });
 
   const { data, isLoading, isError, refetch } = useApiQuery<any>(["transfers"], "/hr/transfers");
   const transfers = asList(data?.data || data);
@@ -44,18 +56,10 @@ export default function TransfersPage() {
     successMessage: "تم إرسال طلب النقل",
   });
 
-  const handleSubmit = () => {
-    if (!form.employeeId || !form.toBranchId) {
-      toast({ title: "الموظف والفرع مطلوبان", variant: "destructive" });
-      return;
-    }
-    createTransferMut.mutate(form, {
-      onSuccess: () => {
-        setShowForm(false);
-        setForm({ employeeId: "", toBranchId: "", reason: "", effectiveDate: "" });
-        refetch();
-      },
-    });
+  const handleSubmit = async (values: TransferForm) => {
+    await createTransferMut.mutateAsync(values);
+    setShowForm(false);
+    refetch();
   };
 
   const filtered = applyFilters(transfers, filters, {
@@ -200,10 +204,10 @@ export default function TransfersPage() {
       subtitle="إدارة طلبات نقل الموظفين بين الفروع والأقسام"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
-        <Button onClick={() => setShowForm(!showForm)} size="sm" className="gap-1.5">
+        <GuardedButton perm="hr:create" onClick={() => setShowForm(!showForm)} size="sm" className="gap-1.5">
           <Plus className="h-4 w-4" />
           طلب نقل جديد
-        </Button>
+        </GuardedButton>
       }
     >
       {/* KPI cards */}
@@ -219,45 +223,51 @@ export default function TransfersPage() {
         </div>
       )}
 
-      {/* Inline create form */}
+      {/* Inline create form — full-page card per CONTRIBUTING.md §3.4
+          (no modal for create/edit; FormShell + zod for validation). */}
       {showForm && (
         <Card className="border-2 border-primary/20">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">طلب نقل موظف</CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>الموظف <span className="text-red-500">*</span></Label>
-              <Select value={form.employeeId} onValueChange={(v) => setForm({ ...form, employeeId: v })}>
-                <SelectTrigger><SelectValue placeholder="اختر موظفاً" /></SelectTrigger>
-                <SelectContent>
-                  {employeeList.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>الفرع المستقبل <span className="text-red-500">*</span></Label>
-              <Select value={form.toBranchId} onValueChange={(v) => setForm({ ...form, toBranchId: v })}>
-                <SelectTrigger><SelectValue placeholder="اختر فرعاً" /></SelectTrigger>
-                <SelectContent>
-                  {branchList.map((b: any) => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>تاريخ التفعيل</Label>
-              <DatePicker value={form.effectiveDate} onChange={(v) => setForm({ ...form, effectiveDate: v })} />
-            </div>
-            <div>
-              <Label>سبب النقل</Label>
-              <Input value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} placeholder="السبب..." />
-            </div>
-            <div className="col-span-2 flex gap-2">
-              <Button onClick={handleSubmit} disabled={createTransferMut.isPending} rateLimitAware>
-                {createTransferMut.isPending ? "جاري الإرسال..." : "إرسال الطلب"}
-              </Button>
-              <Button variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>
-            </div>
+          <CardContent>
+            <FormShell
+              schema={transferSchema}
+              defaultValues={defaultTransferForm}
+              submitLabel="إرسال الطلب"
+              secondaryActions={
+                <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
+                  إلغاء
+                </Button>
+              }
+              onSubmit={async (values, ctx) => {
+                await handleSubmit(values);
+                ctx.reset();
+              }}
+            >
+              <FormGrid cols={2}>
+                <FormSelectField
+                  name="employeeId"
+                  label="الموظف"
+                  required
+                  options={[
+                    { value: "", label: "اختر موظفاً" },
+                    ...employeeList.map((e: any) => ({ value: String(e.id), label: e.name })),
+                  ]}
+                />
+                <FormSelectField
+                  name="toBranchId"
+                  label="الفرع المستقبل"
+                  required
+                  options={[
+                    { value: "", label: "اختر فرعاً" },
+                    ...branchList.map((b: any) => ({ value: String(b.id), label: b.name })),
+                  ]}
+                />
+                <FormDateField name="effectiveDate" label="تاريخ التفعيل" />
+                <FormTextField name="reason" label="سبب النقل" placeholder="السبب..." />
+              </FormGrid>
+            </FormShell>
           </CardContent>
         </Card>
       )}

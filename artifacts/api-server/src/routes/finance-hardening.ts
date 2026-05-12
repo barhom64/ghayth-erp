@@ -11,7 +11,6 @@ import { z } from "zod";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import {
   createAuditLog,
@@ -1065,37 +1064,37 @@ financeHardeningRouter.get("/intercompany/consolidation", authorize({ feature: "
     const scope = req.scope!;
     const companies = scope.allowedCompanies ?? [scope.companyId];
 
-    const [balanceSheet] = await rawQuery<any>(
-      `SELECT
-         COALESCE(SUM(CASE WHEN coa.type='asset' THEN jl.debit - jl.credit ELSE 0 END),0) AS "totalAssets",
-         COALESCE(SUM(CASE WHEN coa.type='liability' THEN jl.credit - jl.debit ELSE 0 END),0) AS "totalLiabilities",
-         COALESCE(SUM(CASE WHEN coa.type='equity' THEN jl.credit - jl.debit ELSE 0 END),0) AS "totalEquity"
-       FROM journal_lines jl
-       JOIN journal_entries je ON je.id=jl."journalId"
-       JOIN chart_of_accounts coa ON coa.code=jl."accountCode" AND coa."companyId"=je."companyId"
-       WHERE je."companyId" = ANY($1) AND je."deletedAt" IS NULL AND je.status = 'posted' AND je.type != 'intercompany'`,
-      [companies]
-    );
-
-    const intercompanyTotal = await rawQuery<any>(
-      `SELECT SUM(amount) AS total FROM intercompany_transactions
-       WHERE ("fromCompanyId" = ANY($1) OR "toCompanyId" = ANY($1))
-         AND status='posted' AND "deletedAt" IS NULL`,
-      [companies]
-    );
-
-    const byCompany = await rawQuery<any>(
-      `SELECT je."companyId", c.name AS "companyName",
-              COALESCE(SUM(CASE WHEN coa.type='revenue' THEN jl.credit ELSE 0 END),0) AS revenue,
-              COALESCE(SUM(CASE WHEN coa.type='expense' THEN jl.debit ELSE 0 END),0) AS expenses
-       FROM journal_lines jl
-       JOIN journal_entries je ON je.id=jl."journalId"
-       JOIN chart_of_accounts coa ON coa.code=jl."accountCode" AND coa."companyId"=je."companyId"
-       JOIN companies c ON c.id=je."companyId"
-       WHERE je."companyId" = ANY($1) AND je."deletedAt" IS NULL AND je.status = 'posted'
-       GROUP BY je."companyId", c.name`,
-      [companies]
-    );
+    const [[balanceSheet], intercompanyTotal, byCompany] = await Promise.all([
+      rawQuery<any>(
+        `SELECT
+           COALESCE(SUM(CASE WHEN coa.type='asset' THEN jl.debit - jl.credit ELSE 0 END),0) AS "totalAssets",
+           COALESCE(SUM(CASE WHEN coa.type='liability' THEN jl.credit - jl.debit ELSE 0 END),0) AS "totalLiabilities",
+           COALESCE(SUM(CASE WHEN coa.type='equity' THEN jl.credit - jl.debit ELSE 0 END),0) AS "totalEquity"
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id=jl."journalId"
+         JOIN chart_of_accounts coa ON coa.code=jl."accountCode" AND coa."companyId"=je."companyId"
+         WHERE je."companyId" = ANY($1) AND je."deletedAt" IS NULL AND je.status = 'posted' AND je.type != 'intercompany'`,
+        [companies]
+      ),
+      rawQuery<any>(
+        `SELECT SUM(amount) AS total FROM intercompany_transactions
+         WHERE ("fromCompanyId" = ANY($1) OR "toCompanyId" = ANY($1))
+           AND status='posted' AND "deletedAt" IS NULL`,
+        [companies]
+      ),
+      rawQuery<any>(
+        `SELECT je."companyId", c.name AS "companyName",
+                COALESCE(SUM(CASE WHEN coa.type='revenue' THEN jl.credit ELSE 0 END),0) AS revenue,
+                COALESCE(SUM(CASE WHEN coa.type='expense' THEN jl.debit ELSE 0 END),0) AS expenses
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id=jl."journalId"
+         JOIN chart_of_accounts coa ON coa.code=jl."accountCode" AND coa."companyId"=je."companyId"
+         JOIN companies c ON c.id=je."companyId"
+         WHERE je."companyId" = ANY($1) AND je."deletedAt" IS NULL AND je.status = 'posted'
+         GROUP BY je."companyId", c.name`,
+        [companies]
+      ),
+    ]);
 
     res.json({
       consolidatedBalance: balanceSheet,
@@ -1227,63 +1226,61 @@ financeHardeningRouter.get("/projects/:id/costs", authorize({ feature: "finance.
 financeHardeningRouter.get("/cash-flow-forecast", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const inflow30 = await rawQuery<any>(
-      `SELECT i.ref, i.total - i."paidAmount" AS expected, i."dueDate", c.name AS "clientName"
-       FROM invoices i
-       LEFT JOIN clients c ON c.id=i."clientId" AND c."deletedAt" IS NULL
-       WHERE i."companyId"=$1 AND i."deletedAt" IS NULL
-         AND i.status IN ('sent','partial','overdue')
-         AND i."dueDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
-       ORDER BY i."dueDate"`,
-      [scope.companyId]
-    );
-
-    const inflow60 = await rawQuery<any>(
-      `SELECT i.ref, i.total - i."paidAmount" AS expected, i."dueDate", c.name AS "clientName"
-       FROM invoices i
-       LEFT JOIN clients c ON c.id=i."clientId" AND c."deletedAt" IS NULL
-       WHERE i."companyId"=$1 AND i."deletedAt" IS NULL
-         AND i.status IN ('sent','partial','overdue')
-         AND i."dueDate" BETWEEN CURRENT_DATE + INTERVAL '31 days' AND CURRENT_DATE + INTERVAL '60 days'
-       ORDER BY i."dueDate"`,
-      [scope.companyId]
-    );
-
-    const inflow90 = await rawQuery<any>(
-      `SELECT i.ref, i.total - i."paidAmount" AS expected, i."dueDate", c.name AS "clientName"
-       FROM invoices i
-       LEFT JOIN clients c ON c.id=i."clientId" AND c."deletedAt" IS NULL
-       WHERE i."companyId"=$1 AND i."deletedAt" IS NULL
-         AND i.status IN ('sent','partial','overdue')
-         AND i."dueDate" BETWEEN CURRENT_DATE + INTERVAL '61 days' AND CURRENT_DATE + INTERVAL '90 days'
-       ORDER BY i."dueDate"`,
-      [scope.companyId]
-    );
-
-    const outflow30 = await rawQuery<any>(
-      `SELECT po.ref, po."totalAmount" AS expected, po."expectedDelivery" AS "dueDate", s.name AS "supplierName", 'purchase_order' AS type
-       FROM purchase_orders po
-       LEFT JOIN suppliers s ON s.id=po."supplierId"
-       WHERE po."companyId"=$1 AND po."deletedAt" IS NULL AND po.status IN ('approved','pending')
-         AND po."expectedDelivery" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
-       UNION ALL
-       SELECT 'PAYROLL' AS ref, COALESCE(SUM(ea.salary),0) AS expected,
-              (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month - 1 day')::date AS "dueDate",
-              'رواتب الموظفين' AS "supplierName", 'payroll' AS type
-       FROM employee_assignments ea
-       JOIN employees em ON em.id=ea."employeeId"
-       WHERE ea."companyId"=$1 AND ea.status='active' AND ea.salary IS NOT NULL
-       GROUP BY 1,3,4,5`,
-      [scope.companyId]
-    );
-
-    const [cashBalance] = await rawQuery<any>(
-      `SELECT COALESCE(SUM(jl.debit) - SUM(jl.credit), 0) AS balance
-       FROM journal_lines jl
-       JOIN journal_entries je ON je.id=jl."journalId"
-       WHERE je."companyId"=$1 AND je."deletedAt" IS NULL AND je.status = 'posted' AND jl."accountCode" LIKE '11%'`,
-      [scope.companyId]
-    );
+    const [inflow30, inflow60, inflow90, outflow30, [cashBalance]] = await Promise.all([
+      rawQuery<any>(
+        `SELECT i.ref, i.total - i."paidAmount" AS expected, i."dueDate", c.name AS "clientName"
+         FROM invoices i
+         LEFT JOIN clients c ON c.id=i."clientId" AND c."deletedAt" IS NULL
+         WHERE i."companyId"=$1 AND i."deletedAt" IS NULL
+           AND i.status IN ('sent','partial','overdue')
+           AND i."dueDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
+         ORDER BY i."dueDate"`,
+        [scope.companyId]
+      ),
+      rawQuery<any>(
+        `SELECT i.ref, i.total - i."paidAmount" AS expected, i."dueDate", c.name AS "clientName"
+         FROM invoices i
+         LEFT JOIN clients c ON c.id=i."clientId" AND c."deletedAt" IS NULL
+         WHERE i."companyId"=$1 AND i."deletedAt" IS NULL
+           AND i.status IN ('sent','partial','overdue')
+           AND i."dueDate" BETWEEN CURRENT_DATE + INTERVAL '31 days' AND CURRENT_DATE + INTERVAL '60 days'
+         ORDER BY i."dueDate"`,
+        [scope.companyId]
+      ),
+      rawQuery<any>(
+        `SELECT i.ref, i.total - i."paidAmount" AS expected, i."dueDate", c.name AS "clientName"
+         FROM invoices i
+         LEFT JOIN clients c ON c.id=i."clientId" AND c."deletedAt" IS NULL
+         WHERE i."companyId"=$1 AND i."deletedAt" IS NULL
+           AND i.status IN ('sent','partial','overdue')
+           AND i."dueDate" BETWEEN CURRENT_DATE + INTERVAL '61 days' AND CURRENT_DATE + INTERVAL '90 days'
+         ORDER BY i."dueDate"`,
+        [scope.companyId]
+      ),
+      rawQuery<any>(
+        `SELECT po.ref, po."totalAmount" AS expected, po."expectedDelivery" AS "dueDate", s.name AS "supplierName", 'purchase_order' AS type
+         FROM purchase_orders po
+         LEFT JOIN suppliers s ON s.id=po."supplierId"
+         WHERE po."companyId"=$1 AND po."deletedAt" IS NULL AND po.status IN ('approved','pending')
+           AND po."expectedDelivery" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
+         UNION ALL
+         SELECT 'PAYROLL' AS ref, COALESCE(SUM(ea.salary),0) AS expected,
+                (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month - 1 day')::date AS "dueDate",
+                'رواتب الموظفين' AS "supplierName", 'payroll' AS type
+         FROM employee_assignments ea
+         JOIN employees em ON em.id=ea."employeeId"
+         WHERE ea."companyId"=$1 AND ea.status='active' AND ea.salary IS NOT NULL
+         GROUP BY 1,3,4,5`,
+        [scope.companyId]
+      ),
+      rawQuery<any>(
+        `SELECT COALESCE(SUM(jl.debit) - SUM(jl.credit), 0) AS balance
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id=jl."journalId"
+         WHERE je."companyId"=$1 AND je."deletedAt" IS NULL AND je.status = 'posted' AND jl."accountCode" LIKE '11%'`,
+        [scope.companyId]
+      ),
+    ]);
 
     const currentBalance = Number(cashBalance?.balance ?? 0);
     const totalInflow30 = inflow30.reduce((s: number, r: any) => s + Number(r.expected), 0);

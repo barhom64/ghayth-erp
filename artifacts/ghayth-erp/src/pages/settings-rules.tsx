@@ -1,14 +1,19 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useToast } from "@/hooks/use-toast";
+import {
+  FormShell,
+  FormTextField,
+  FormSelectField,
+  FormGrid,
+} from "@/components/form-shell";
 import {
   Zap, Plus, Power, PowerOff, Trash2, History, Shield,
   AlertTriangle, CheckCircle, XCircle, Clock, Settings2,
@@ -161,13 +166,13 @@ function RuleCard({ rule, onToggle, onDelete }: { rule: BusinessRule; onToggle: 
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setExpanded(!expanded)}>
               {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
             </Button>
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onToggle}>
+            <GuardedButton perm="settings:create" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onToggle}>
               {rule.isActive ? <PowerOff className="h-3.5 w-3.5 text-orange-500" /> : <Power className="h-3.5 w-3.5 text-green-500" />}
-            </Button>
+            </GuardedButton>
             {rule.companyId && (
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onDelete}>
+              <GuardedButton perm="settings:create" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onDelete}>
                 <Trash2 className="h-3.5 w-3.5 text-red-500" />
-              </Button>
+              </GuardedButton>
             )}
           </div>
         </div>
@@ -185,61 +190,33 @@ function RuleCard({ rule, onToggle, onDelete }: { rule: BusinessRule; onToggle: 
   );
 }
 
-function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
-  const { toast } = useToast();
-  const [form, setForm] = useState({
-    name: "",
-    description: "",
-    triggerEvent: "attendance.checkin",
-    conditionField: "",
-    conditionOperator: ">=",
-    conditionValue: "",
-    actionType: "notification",
-    actionTarget: "manager",
-    module: "hr",
-    priority: 10,
-    notifTitle: "",
-    notifBody: "",
-    notifPriority: "high",
-  });
+const ruleSchema = z.object({
+  name: z.string().trim().min(1, "اسم القاعدة مطلوب"),
+  description: z.string().trim(),
+  triggerEvent: z.string().min(1, "نوع الحدث مطلوب"),
+  conditionField: z.string().trim(),
+  conditionOperator: z.string(),
+  conditionValue: z.string().trim(),
+  actionType: z.string().min(1, "نوع الإجراء مطلوب"),
+  actionTarget: z.string(),
+  module: z.string(),
+  priority: z.coerce.number().int().min(1).max(100),
+  notifTitle: z.string().trim(),
+  notifBody: z.string().trim(),
+  notifPriority: z.enum(["normal", "high", "urgent"]),
+});
+type RuleForm = z.infer<typeof ruleSchema>;
 
+function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
   const createMut = useApiMutation<any, Record<string, any>>(
     "/rules",
     "POST",
     [["business-rules"]],
     {
       successMessage: "تم إنشاء القاعدة بنجاح",
-      onSuccess: () => {
-        setForm({ name: "", description: "", triggerEvent: "attendance.checkin", conditionField: "", conditionOperator: ">=", conditionValue: "", actionType: "notification", actionTarget: "manager", module: "hr", priority: 10, notifTitle: "", notifBody: "", notifPriority: "high" });
-        onCreated();
-      },
+      onSuccess: () => onCreated(),
     }
   );
-  const saving = createMut.isPending;
-
-  const handleSubmit = () => {
-    if (!form.name || !form.triggerEvent || !form.actionType) {
-      toast({ title: "يرجى ملء الحقول المطلوبة", variant: "destructive" });
-      return;
-    }
-    createMut.mutate({
-      name: form.name,
-      description: form.description,
-      triggerEvent: form.triggerEvent,
-      conditionField: form.conditionField || null,
-      conditionOperator: form.conditionOperator,
-      conditionValue: form.conditionValue || null,
-      actionType: form.actionType,
-      actionTarget: form.actionTarget,
-      module: form.module,
-      priority: form.priority,
-      actionConfig: {
-        title: form.notifTitle || form.name,
-        body: form.notifBody,
-        priority: form.notifPriority,
-      },
-    });
-  };
 
   return (
     <Card>
@@ -248,95 +225,106 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
           <Plus className="h-4 w-4" /> إنشاء قاعدة جديدة
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label>اسم القاعدة *</Label>
-            <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="مثال: تأخر 3 مرات = إشعار المدير" />
-          </div>
-          <div>
-            <Label>الوصف</Label>
-            <Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="وصف مختصر للقاعدة" />
-          </div>
-        </div>
+      <CardContent>
+        <FormShell
+          schema={ruleSchema}
+          defaultValues={{
+            name: "",
+            description: "",
+            triggerEvent: "attendance.checkin",
+            conditionField: "",
+            conditionOperator: ">=",
+            conditionValue: "",
+            actionType: "notification",
+            actionTarget: "manager",
+            module: "hr",
+            priority: 10,
+            notifTitle: "",
+            notifBody: "",
+            notifPriority: "high" as const,
+          }}
+          submitLabel="إنشاء القاعدة"
+          onSubmit={async (values) => {
+            await createMut.mutateAsync({
+              name: values.name,
+              description: values.description,
+              triggerEvent: values.triggerEvent,
+              conditionField: values.conditionField || null,
+              conditionOperator: values.conditionOperator,
+              conditionValue: values.conditionValue || null,
+              actionType: values.actionType,
+              actionTarget: values.actionTarget,
+              module: values.module,
+              priority: values.priority,
+              actionConfig: {
+                title: values.notifTitle || values.name,
+                body: values.notifBody,
+                priority: values.notifPriority,
+              },
+            });
+          }}
+        >
+          <FormGrid cols={2}>
+            <FormTextField name="name" label="اسم القاعدة" required placeholder="مثال: تأخر 3 مرات = إشعار المدير" />
+            <FormTextField name="description" label="الوصف" placeholder="وصف مختصر للقاعدة" />
+          </FormGrid>
 
-        <div className="p-4 bg-blue-50 rounded-lg space-y-3">
-          <div className="text-sm font-semibold text-blue-800 flex items-center gap-2">
-            <Shield className="h-4 w-4" /> إذا حدث...
+          <div className="p-4 bg-blue-50 rounded-lg space-y-3 mt-4">
+            <div className="text-sm font-semibold text-blue-800 flex items-center gap-2">
+              <Shield className="h-4 w-4" /> إذا حدث...
+            </div>
+            <FormGrid cols={3}>
+              <FormSelectField
+                name="triggerEvent"
+                label="نوع الحدث"
+                required
+                options={TRIGGER_OPTIONS}
+              />
+              <FormTextField name="conditionField" label="اسم الحقل (اختياري)" placeholder="مثال: monthlyLateCount" />
+              <FormSelectField
+                name="conditionOperator"
+                label="المعيار"
+                options={OPERATOR_OPTIONS}
+              />
+              <FormTextField name="conditionValue" label="القيمة" placeholder="3" />
+            </FormGrid>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <Label className="text-xs">نوع الحدث *</Label>
-              <select className="w-full border rounded-md p-2 text-sm bg-white" value={form.triggerEvent} onChange={e => setForm({ ...form, triggerEvent: e.target.value })}>
-                {TRIGGER_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <Label className="text-xs">اسم الحقل (اختياري)</Label>
-              <Input className="text-sm" value={form.conditionField} onChange={e => setForm({ ...form, conditionField: e.target.value })} placeholder="مثال: monthlyLateCount" />
-            </div>
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <Label className="text-xs">المعيار</Label>
-                <select className="w-full border rounded-md p-2 text-sm bg-white" value={form.conditionOperator} onChange={e => setForm({ ...form, conditionOperator: e.target.value })}>
-                  {OPERATOR_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </div>
-              <div className="flex-1">
-                <Label className="text-xs">القيمة</Label>
-                <Input className="text-sm" value={form.conditionValue} onChange={e => setForm({ ...form, conditionValue: e.target.value })} placeholder="3" />
-              </div>
-            </div>
-          </div>
-        </div>
 
-        <div className="p-4 bg-green-50 rounded-lg space-y-3">
-          <div className="text-sm font-semibold text-green-800 flex items-center gap-2">
-            <Zap className="h-4 w-4" /> فعندها...
+          <div className="p-4 bg-green-50 rounded-lg space-y-3 mt-4">
+            <div className="text-sm font-semibold text-green-800 flex items-center gap-2">
+              <Zap className="h-4 w-4" /> فعندها...
+            </div>
+            <FormGrid cols={3}>
+              <FormSelectField
+                name="actionType"
+                label="نوع الإجراء"
+                required
+                options={ACTION_OPTIONS}
+              />
+              <FormSelectField
+                name="actionTarget"
+                label="الهدف"
+                options={TARGET_OPTIONS}
+              />
+              <FormSelectField
+                name="module"
+                label="المسار"
+                options={Object.entries(MODULE_LABELS).map(([value, label]) => ({ value, label }))}
+              />
+              <FormTextField name="notifTitle" label="عنوان الإشعار" placeholder="عنوان الرسالة" />
+              <FormTextField name="notifBody" label="نص الإشعار" placeholder="نص الرسالة (يدعم {field})" />
+              <FormSelectField
+                name="notifPriority"
+                label="أولوية الإشعار"
+                options={[
+                  { value: "normal", label: "عادية" },
+                  { value: "high", label: "عالية" },
+                  { value: "urgent", label: "عاجلة" },
+                ]}
+              />
+            </FormGrid>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <Label className="text-xs">نوع الإجراء *</Label>
-              <select className="w-full border rounded-md p-2 text-sm bg-white" value={form.actionType} onChange={e => setForm({ ...form, actionType: e.target.value })}>
-                {ACTION_OPTIONS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <Label className="text-xs">الهدف</Label>
-              <select className="w-full border rounded-md p-2 text-sm bg-white" value={form.actionTarget} onChange={e => setForm({ ...form, actionTarget: e.target.value })}>
-                {TARGET_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <Label className="text-xs">المسار</Label>
-              <select className="w-full border rounded-md p-2 text-sm bg-white" value={form.module} onChange={e => setForm({ ...form, module: e.target.value })}>
-                {Object.entries(MODULE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <Label className="text-xs">عنوان الإشعار</Label>
-              <Input className="text-sm" value={form.notifTitle} onChange={e => setForm({ ...form, notifTitle: e.target.value })} placeholder="عنوان الرسالة" />
-            </div>
-            <div>
-              <Label className="text-xs">نص الإشعار</Label>
-              <Input className="text-sm" value={form.notifBody} onChange={e => setForm({ ...form, notifBody: e.target.value })} placeholder="نص الرسالة (يدعم {field})" />
-            </div>
-            <div>
-              <Label className="text-xs">أولوية الإشعار</Label>
-              <select className="w-full border rounded-md p-2 text-sm bg-white" value={form.notifPriority} onChange={e => setForm({ ...form, notifPriority: e.target.value })}>
-                <option value="normal">عادية</option>
-                <option value="high">عالية</option>
-                <option value="urgent">عاجلة</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <Button onClick={handleSubmit} disabled={saving} className="w-full" rateLimitAware>
-          {saving ? "جاري الحفظ..." : "إنشاء القاعدة"}
-        </Button>
+        </FormShell>
       </CardContent>
     </Card>
   );
