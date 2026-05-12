@@ -27,13 +27,26 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/finance.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+العهد المالية (Cash Custody). المرجع: `docs/blueprints/finance-invoices.md` §"Custodies".
+
+| الحركة | الوحدة الهدف | مدخل API | مدخل DB | الحالة |
+|--------|--------------|----------|---------|--------|
+| طلب عهدة | finance | `finance-custodies.ts` POST `/custodies` | `custodies` (status='requested') | ✅ |
+| سير موافقة | governance/workflows | `business_rules.custody_approval_chain` | `approval_chains` | ✅ |
+| صرف العهدة → قيد محاسبي | finance/GL | DR Employee Custody / CR Cash | `gl_entries`, `gl_lines` | ✅ |
+| تسليم العهدة للموظف | hr/employees | `custodies.holderId` → `employees.id` | يدخل `custody_balances` | ✅ |
+| استخدام جزئي (purchase) | finance | POST `/custodies/:id/spend` | `custody_lines` (with receipt) | ✅ |
+| قيد المصروف من العهدة | finance/GL | DR Expense / CR Employee Custody | تخفّض رصيد العهدة | ✅ |
+| تسوية نهائية (settle) | finance | POST `/custodies/:id/settle` | `custodies.status='settled'` | ✅ |
+| استرجاع المتبقي (refund) | finance/GL | DR Cash / CR Employee Custody | `gl_entries` | ✅ |
+| Aging report (عهدة قديمة > 30 يوم) | finance/custodies | `/custodies/aging-report` | aggregation + escalation rules | ✅ |
+| إشعار للموظف عند aging | comms | event=`custody_aging_warning` | `notifications` | ⚠ |
+| Audit log | core | `auditMiddleware` (`/finance/custodies`) | `audit_logs` (entity=`custody`) | ✅ |
+
+تحقق يدوي:
+- [ ] هل عهدة لم تُسوَّ خلال 60 يوم تُخصم من راتب الموظف تلقائياً؟
+- [ ] هل المرفقات (إيصالات) إجبارية لكل استخدام جزئي؟
+- [ ] هل التقسيم بين عُهد متعددة لنفس الموظف ممكن أم واحدة فقط؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `custodies` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

@@ -8,25 +8,17 @@
 - الكومبوننت: `DisciplineMemoDetail`
 - subKey: `violations` | minRoleLevel: —
 - الكيان المستنبط: `:id`
-- سطور الملف: 491
+- سطور الملف: 496
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L204: "(بلا تسمية)" → `() => act("/justify", { justification, declined` 🔒
-- L246: "(بلا تسمية)"
-- L300: "(بلا تسمية)"
-- L319: "(بلا تسمية)" → `() => setShowCancelDialog(true)`
-- L342: "(بلا تسمية)" → `() => setShowAppeal(true)`
-- L354: "(بلا تسمية)" → `() => act("/appeal", { reason: appealReason` 🔒
-- L357: "(بلا تسمية)" → `() => setShowAppeal(false)`
-- L381: "(بلا تسمية)" → `() => act("/appeal-decision", { decision: "accepted", comment: ""` 🔒
-- L384: "(بلا تسمية)" → `() => act("/appeal-decision", { decision: "rejected", comment: ""` 🔒
-- L396: "(بلا تسمية)" → `() => act("/close", { note: "إقفال عادي"` 🔒
-- L400: "إصدار خطاب تأديبي"
-- L449: "خطاب تأديبي"
+- L347: "(بلا تسمية)" → `() => setShowAppeal(true)`
+- L362: "(بلا تسمية)" → `() => setShowAppeal(false)`
+- L405: "إصدار خطاب تأديبي"
+- L454: "خطاب تأديبي"
 
 ### القراءات (GET)
 _لا قراءات._

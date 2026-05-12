@@ -3,7 +3,7 @@
 ## 1. الميتاداتا
 - المسار: `/umrah/sub-agents`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/sub-agents.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:57`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:66`
 - المجموعة: `operations`
 - الكومبوننت: `UmrahSubAgents`
 - subKey: — | minRoleLevel: —

@@ -8,19 +8,15 @@
 - الكومبوننت: `Communications`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `communications`
-- سطور الملف: 648
+- سطور الملف: 650
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L139: "(بلا تسمية)" → `handleSubscribe` 🔒
-- L145: "إرسال تجريبي" → `handleTest` 🔒
-- L149: "إلغاء الاشتراك" → `handleUnsubscribe` 🔒
-- L236: "(بلا تسمية)" → `() => refetch()`
-- L407: "(بلا تسمية)" → `() => setShow(!show)`
-- L415: "(بلا تسمية)"
+- L237: "(بلا تسمية)" → `() => refetch()`
+- L408: "(بلا تسمية)" → `() => setShow(!show)`
 
 ### القراءات (GET)
 - GET `/communications/stats`
@@ -40,7 +36,7 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `communications` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L379 _(inline-data-array)_: `const options = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
 - Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS

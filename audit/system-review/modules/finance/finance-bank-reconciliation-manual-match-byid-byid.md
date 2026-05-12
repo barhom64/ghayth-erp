@@ -14,7 +14,7 @@
 ## 2. الأزرار والإجراءات
 | الزر / CTA | API | Method | Audit | Event | Lifecycle | Notify | Perm | Tenant | Tx |
 |------------|-----|--------|-------|-------|-----------|--------|------|--------|----|
-| _(write)_ | `/finance/bank-reconciliation/manual-match` | POST | — | — | — | — | ✅ | ✅ | — |
+| _(write)_ | `/finance/bank-reconciliation/manual-match` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
 - L80: "مسح المسودة" → `clearDraft`

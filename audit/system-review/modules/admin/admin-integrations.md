@@ -8,20 +8,14 @@
 - الكومبوننت: `AdminIntegrations`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `integrations`
-- سطور الملف: 310
+- سطور الملف: 311
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L113: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L125: "(بلا تسمية)" → `() => setShowForm(false)`
-- L192: "(بلا تسمية)" → `() => handleToggleStatus(intg.id, intg.status)`
-- L195: "(بلا تسمية)" → `() => handleTest(intg.id)`
-- L198: "(بلا تسمية)" → `() => handleDelete(intg.id)`
-- L208: "(بلا تسمية)" → `() => setShowForm(true)`
-- L269: "إعادة المحاولة للفاشلة" → `handleRetry`
+- L126: "(بلا تسمية)" → `() => setShowForm(false)`
 
 ### القراءات (GET)
 - GET `/admin/integrations`

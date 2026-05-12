@@ -3,20 +3,20 @@
 ## 1. الميتاداتا
 - المسار: `/umrah/penalties`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/penalties.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:46`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:55`
 - المجموعة: `operations`
 - الكومبوننت: `UmrahPenalties`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `penalties`
-- سطور الملف: 142
+- سطور الملف: 243
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L78: "(بلا تسمية)" → `(e) => handleWaive(e, p.id)`
-- L89: "تشغيل محرك الغرامات" → `runPenaltyEngine`
+- L109: "(بلا تسمية)" → `(e) => handleWaive(e, p.id)`
+- L146: "(بلا تسمية)" → `() => setBulkOpen(true)`
 
 ### القراءات (GET)
 - GET `/umrah/penalties`
@@ -36,7 +36,7 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `penalties` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L54 _(inline-data-array)_: `const kpiCards = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
 - Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
