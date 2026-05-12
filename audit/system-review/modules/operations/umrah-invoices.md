@@ -39,7 +39,7 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 - FKs: companies.id, clients.id
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L52 _(inline-data-array)_: `const kpiCards = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
 - Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS

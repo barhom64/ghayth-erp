@@ -3,7 +3,7 @@
 > الموجة: **2** | عدد الصفحات: **26** | أوراق منشأة: **26**
 
 ## KPIs
-- مشاكل إجمالية: **1** (🔴 1 / ⚠ 0 / ℹ 0)
+- مشاكل إجمالية: **0** (🔴 0 / ⚠ 0 / ℹ 0)
 
 ## الصفحات
 
@@ -28,7 +28,7 @@
 | [/fleet/insurance/:id](./fleet-insurance-byid.md) | `/fleet/insurance/:id` | `:id` | 306 | 0 | 0 | 0 |
 | [/fleet/alerts](./fleet-alerts.md) | `/fleet/alerts` | `alerts` | 125 | 1 | 0 | 0 |
 | [/fleet/alerts/create](./fleet-alerts-create.md) | `/fleet/alerts/create` | `create` | 97 | 1 | 3 | 0 |
-| [/fleet/reports](./fleet-reports.md) | `/fleet/reports` | `reports` | 81 | 1 | 0 | 1 |
+| [/fleet/reports](./fleet-reports.md) | `/fleet/reports` | `reports` | 81 | 1 | 0 | 0 |
 | [/fleet/preventive-plans](./fleet-preventive-plans.md) | `/fleet/preventive-plans` | `preventive-plans` | 287 | 1 | 2 | 0 |
 | [/fleet/traffic-violations](./fleet-traffic-violations.md) | `/fleet/traffic-violations` | `traffic-violations` | 288 | 3 | 1 | 0 |
 | [/fleet/traffic-violations/:id](./fleet-traffic-violations-byid.md) | `/fleet/traffic-violations/:id` | `:id` | 213 | 0 | 0 | 0 |

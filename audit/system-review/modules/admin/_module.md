@@ -3,7 +3,7 @@
 > الموجة: **5** | عدد الصفحات: **17** | أوراق منشأة: **17**
 
 ## KPIs
-- مشاكل إجمالية: **1** (🔴 1 / ⚠ 0 / ℹ 0)
+- مشاكل إجمالية: **0** (🔴 0 / ⚠ 0 / ℹ 0)
 
 ## الصفحات
 
@@ -15,7 +15,7 @@
 | [/admin/logs](./admin-logs.md) | `/admin/logs` | `logs` | 272 | 1 | 2 | 0 |
 | [/admin/integrations](./admin-integrations.md) | `/admin/integrations` | `integrations` | 310 | 2 | 7 | 0 |
 | [/admin/monitoring](./admin-monitoring.md) | `/admin/monitoring` | `monitoring` | 321 | 1 | 1 | 0 |
-| [/admin/violations-report](./admin-violations-report.md) | `/admin/violations-report` | `violations-report` | 346 | 0 | 1 | 1 |
+| [/admin/violations-report](./admin-violations-report.md) | `/admin/violations-report` | `violations-report` | 346 | 0 | 1 | 0 |
 | [/admin/system-governor](./admin-system-governor.md) | `/admin/system-governor` | `system-governor` | 105 | 1 | 1 | 0 |
 | [/admin/policy-engine](./admin-policy-engine.md) | `/admin/policy-engine` | `policy-engine` | 200 | 2 | 1 | 0 |
 | [/admin/domain-registry](./admin-domain-registry.md) | `/admin/domain-registry` | `domain-registry` | 157 | 1 | 1 | 0 |

@@ -3,7 +3,7 @@
 > الموجة: **1** | عدد الصفحات: **67** | أوراق منشأة: **67**
 
 ## KPIs
-- مشاكل إجمالية: **7** (🔴 7 / ⚠ 0 / ℹ 0)
+- مشاكل إجمالية: **0** (🔴 0 / ⚠ 0 / ℹ 0)
 
 ## الصفحات
 
@@ -15,15 +15,15 @@
 | [/finance/accounts/:id/edit](./finance-accounts-byid-edit.md) | `/finance/accounts/:id/edit` | `edit` | 104 | 1 | 3 | 0 |
 | [/finance/accounts/:id](./finance-accounts-byid.md) | `/finance/accounts/:id` | `:id` | 83 | 1 | 0 | 0 |
 | [/finance/vouchers](./finance-vouchers.md) | `/finance/vouchers` | `vouchers` | 273 | 0 | 0 | 0 |
-| [/finance/vouchers/create](./finance-vouchers-create.md) | `/finance/vouchers/create` | `create` | 475 | 1 | 3 | 1 |
+| [/finance/vouchers/create](./finance-vouchers-create.md) | `/finance/vouchers/create` | `create` | 475 | 1 | 3 | 0 |
 | [/finance/vouchers/:id](./finance-vouchers-byid.md) | `/finance/vouchers/:id` | `:id` | 372 | 0 | 0 | 0 |
 | [/finance/journal](./finance-journal.md) | `/finance/journal` | `journal` | 335 | 0 | 0 | 0 |
 | [/finance/journal/create](./finance-journal-create.md) | `/finance/journal/create` | `create` | 193 | 1 | 5 | 0 |
 | [/finance/invoices](./finance-invoices.md) | `/finance/invoices` | `invoices` | 278 | 0 | 4 | 0 |
-| [/finance/invoices/create](./finance-invoices-create.md) | `/finance/invoices/create` | `create` | 320 | 1 | 5 | 2 |
+| [/finance/invoices/create](./finance-invoices-create.md) | `/finance/invoices/create` | `create` | 320 | 1 | 5 | 0 |
 | [/finance/invoices/:id](./finance-invoices-byid.md) | `/finance/invoices/:id` | `:id` | 648 | 0 | 5 | 0 |
 | [/finance/expenses](./finance-expenses.md) | `/finance/expenses` | `expenses` | 362 | 0 | 1 | 0 |
-| [/finance/expenses/create](./finance-expenses-create.md) | `/finance/expenses/create` | `create` | 749 | 1 | 3 | 2 |
+| [/finance/expenses/create](./finance-expenses-create.md) | `/finance/expenses/create` | `create` | 749 | 1 | 3 | 0 |
 | [/finance/expenses/:id](./finance-expenses-byid.md) | `/finance/expenses/:id` | `:id` | 474 | 0 | 0 | 0 |
 | [/finance/budget](./finance-budget.md) | `/finance/budget` | `budget` | 152 | 0 | 1 | 0 |
 | [/finance/budget/create](./finance-budget-create.md) | `/finance/budget/create` | `create` | 97 | 1 | 3 | 0 |
@@ -50,8 +50,8 @@
 | [/finance/salary-advances](./finance-salary-advances.md) | `/finance/salary-advances` | `salary-advances` | 286 | 0 | 1 | 0 |
 | [/finance/salary-advances/:id](./finance-salary-advances-byid.md) | `/finance/salary-advances/:id` | `:id` | 276 | 0 | 0 | 0 |
 | [/finance/ledger/:code](./finance-ledger-byid.md) | `/finance/ledger/:code` | `:code` | 174 | 0 | 1 | 0 |
-| [/finance/ar-aging](./finance-ar-aging.md) | `/finance/ar-aging` | `ar-aging` | 174 | 0 | 1 | 1 |
-| [/finance/ap-aging](./finance-ap-aging.md) | `/finance/ap-aging` | `ap-aging` | 164 | 0 | 1 | 1 |
+| [/finance/ar-aging](./finance-ar-aging.md) | `/finance/ar-aging` | `ar-aging` | 174 | 0 | 1 | 0 |
+| [/finance/ap-aging](./finance-ap-aging.md) | `/finance/ap-aging` | `ap-aging` | 164 | 0 | 1 | 0 |
 | [/finance/bank-reconciliation](./finance-bank-reconciliation.md) | `/finance/bank-reconciliation` | `bank-reconciliation` | 288 | 4 | 1 | 0 |
 | [/finance/bank-reconciliation/manual-match/:batchId/:rowId](./finance-bank-reconciliation-manual-match-byid-byid.md) | `/finance/bank-reconciliation/manual-match/:batchId/:rowId` | `:rowId` | 191 | 1 | 4 | 0 |
 | [/finance/fixed-assets](./finance-fixed-assets.md) | `/finance/fixed-assets` | `fixed-assets` | 253 | 2 | 3 | 0 |

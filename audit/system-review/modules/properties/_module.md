@@ -3,7 +3,7 @@
 > الموجة: **2** | عدد الصفحات: **30** | أوراق منشأة: **30**
 
 ## KPIs
-- مشاكل إجمالية: **4** (🔴 1 / ⚠ 3 / ℹ 0)
+- مشاكل إجمالية: **0** (🔴 0 / ⚠ 0 / ℹ 0)
 
 ## الصفحات
 
@@ -13,11 +13,11 @@
 | [/properties/buildings/create](./properties-buildings-create.md) | `/properties/buildings/create` | `create` | 156 | 1 | 3 | 0 |
 | [/properties/buildings/:id](./properties-buildings-byid.md) | `/properties/buildings/:id` | `:id` | 205 | 0 | 2 | 0 |
 | [/properties/buildings](./properties-buildings.md) | `/properties/buildings` | `buildings` | 233 | 0 | 2 | 0 |
-| [/properties/tenants/create](./properties-tenants-create.md) | `/properties/tenants/create` | `create` | 220 | 1 | 2 | 1 |
+| [/properties/tenants/create](./properties-tenants-create.md) | `/properties/tenants/create` | `create` | 220 | 1 | 2 | 0 |
 | [/properties/tenants/:id](./properties-tenants-byid.md) | `/properties/tenants/:id` | `:id` | 328 | 0 | 1 | 0 |
 | [/properties/tenants](./properties-tenants.md) | `/properties/tenants` | `tenants` | 214 | 0 | 1 | 0 |
-| [/properties/owners/create](./properties-owners-create.md) | `/properties/owners/create` | `create` | 125 | 0 | 3 | 1 |
-| [/properties/owners/:id/edit](./properties-owners-byid-edit.md) | `/properties/owners/:id/edit` | `edit` | 193 | 0 | 1 | 1 |
+| [/properties/owners/create](./properties-owners-create.md) | `/properties/owners/create` | `create` | 125 | 0 | 3 | 0 |
+| [/properties/owners/:id/edit](./properties-owners-byid-edit.md) | `/properties/owners/:id/edit` | `edit` | 193 | 0 | 1 | 0 |
 | [/properties/owners/:id](./properties-owners-byid.md) | `/properties/owners/:id` | `:id` | 326 | 0 | 0 | 0 |
 | [/properties/owners](./properties-owners.md) | `/properties/owners` | `owners` | 182 | 0 | 2 | 0 |
 | [/properties/contracts/create](./properties-contracts-create.md) | `/properties/contracts/create` | `create` | 542 | 3 | 3 | 0 |
@@ -33,7 +33,7 @@
 | [/properties/create](./properties-create.md) | `/properties/create` | `create` | 298 | 3 | 3 | 0 |
 | [/properties/inspections](./properties-inspections.md) | `/properties/inspections` | `inspections` | 311 | 1 | 5 | 0 |
 | [/properties/deposits](./properties-deposits.md) | `/properties/deposits` | `deposits` | 292 | 1 | 5 | 0 |
-| [/properties/occupancy-report](./properties-occupancy-report.md) | `/properties/occupancy-report` | `occupancy-report` | 184 | 1 | 0 | 1 |
+| [/properties/occupancy-report](./properties-occupancy-report.md) | `/properties/occupancy-report` | `occupancy-report` | 184 | 1 | 0 | 0 |
 | [/guide/properties](./guide-properties.md) | `/guide/properties` | `properties` | 1430 | 0 | 1 | 0 |
 | [/properties/guide](./properties-guide.md) | `/properties/guide` | `guide` | 1430 | 0 | 1 | 0 |
 | [/properties/:id/status](./properties-byid-status.md) | `/properties/:id/status` | `status` | 196 | 0 | 3 | 0 |

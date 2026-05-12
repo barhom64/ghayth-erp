@@ -45,7 +45,7 @@ _لا قراءات._
 - FKs: employeeAssignments.id, companies.id, branches.id
 
 ## 5. البيانات الوهمية الثابتة
-- ⚠ L134 _(inline-data-array)_: `const kpis = [`
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
 
 ## 6. النتيجة (Verdict)
 - Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS

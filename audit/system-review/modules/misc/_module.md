@@ -3,7 +3,7 @@
 > الموجة: **4** | عدد الصفحات: **16** | أوراق منشأة: **16**
 
 ## KPIs
-- مشاكل إجمالية: **1** (🔴 1 / ⚠ 0 / ℹ 0)
+- مشاكل إجمالية: **0** (🔴 0 / ⚠ 0 / ℹ 0)
 
 ## الصفحات
 
@@ -24,4 +24,4 @@
 | [/exec-dashboard](./exec-dashboard.md) | `/exec-dashboard` | `exec-dashboard` | 263 | 1 | 0 | 0 |
 | [/manager-board](./manager-board.md) | `/manager-board` | `manager-board` | 491 | 0 | 7 | 0 |
 | [/notifications](./notifications.md) | `/notifications` | `notifications` | 128 | 1 | 1 | 0 |
-| [/activity-log](./activity-log.md) | `/activity-log` | `activity-log` | 515 | 2 | 8 | 1 |
+| [/activity-log](./activity-log.md) | `/activity-log` | `activity-log` | 515 | 2 | 8 | 0 |
