@@ -14342,7 +14342,7 @@ ALTER SEQUENCE public.umrah_seasons_id_seq OWNED BY public.umrah_seasons.id;
 
 
 --
--- Name: umrah_sub_agents; Type: TABLE; Schema: public; Owner: -
+-- Name: umrah_attachments; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.umrah_attachments (
