@@ -24,13 +24,26 @@ _لم تُلتقط أزرار._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/hr.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+ورديات العمل. المرجع: `docs/blueprints/hr-attendance.md` §"Shifts".
+
+| الحركة | الوحدة الهدف | مدخل API | مدخل DB | الحالة |
+|--------|--------------|----------|---------|--------|
+| إنشاء وردية (template) | hr | `hr.ts` POST `/shifts` | `hr_shifts` | ✅ |
+| تعريف أيام العمل + الساعات + استراحات | hr | `shifts.daysOfWeek`, `startTime`, `endTime`, `breakMinutes` | ✅ |
+| إسناد للموظف | hr | `employee_assignments.shiftId` → `hr_shifts` | ✅ |
+| تأثير على Check-in (تحديد late threshold) | hr/attendance | يقرأ shift عند checkIn → يحسب `lateMinutes` | ✅ |
+| تأثير على overtime detection | hr/overtime | overtime = checkOut > shift.endTime | ✅ |
+| تأثير على الإجازات (working days) | hr/leaves | حساب أيام الإجازة يستثني `daysOfWeek` غير العمل | ✅ |
+| دوريات (rotating shifts) | hr | `shift_rotations` per assignment | ⚠ تحقق |
+| تكامل مع `public_holidays` | hr/calendar | عطل رسمية تُستثنى تلقائياً | `public_holidays` | ✅ |
+| سير موافقة (لتغيير الوردية) | governance | إن مفعّل | `approval_chains` | ⚠ |
+| إشعار عند التغيير | comms | event=`shift_changed` | `notifications` | ⚠ |
+| Audit log | core | `auditMiddleware` (`/hr/shifts` لو مضاف) | `audit_logs` | ⚠ |
+
+تحقق يدوي:
+- [ ] هل تغيير الوردية يطبق فوراً أم في اليوم التالي؟
+- [ ] هل الموظف مع وردية ليلية يُعامل العطل الرسمية بشكل مختلف (overtime ×2)؟
+- [ ] هل overlap بين shifts ممكن (موظف بوردية رئيسية + وردية إضافية)؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `shifts` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
