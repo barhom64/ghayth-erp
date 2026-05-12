@@ -16,40 +16,6 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { pushToDLQ } from "../lib/eventBus.js";
 import { logger } from "../lib/logger.js";
 import { z } from "zod";
-import type { SupplierRow } from "../lib/dbTypes.js";
-
-// Extend SupplierRow with the columns that exist in schema but aren't in
-// the early Drizzle definition (rating, status, category etc).
-type VendorRow = SupplierRow & {
-  status?: string | null;
-  rating?: number | string | null;
-  totalSpent?: number | string | null;
-  onTimeRate?: number | string | null;
-};
-
-interface CountRow { count: string | number }
-interface VendorStatsRow {
-  totalOrders: number | string;
-  totalSpent: number | string;
-  onTimeOrders: number | string;
-  lateOrders: number | string;
-}
-interface PurchaseOrderJoinedRow {
-  id: number;
-  ref?: string | null;
-  orderDate?: string | null;
-  total: number | string;
-  status: string;
-  vendorName?: string | null;
-}
-interface VendorPaymentRow {
-  id: number;
-  vendorId: number;
-  amount: number | string;
-  paymentDate: string;
-  reference?: string | null;
-  status?: string | null;
-}
 
 // ── Zod schemas ──────────────────────────────────────────────────────────────
 const createVendorSchema = z.object({
@@ -88,7 +54,7 @@ vendorsRouter.get("/vendors", authorize({ feature: "finance.vendors", action: "l
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
     const { where, params } = buildScopedWhere(scope, filters, { softDeleteColumn: '"deletedAt"' });
-    const rows = await rawQuery<VendorRow>(
+    const rows = await rawQuery<any>(
       `SELECT * FROM suppliers WHERE ${where} ORDER BY name LIMIT 500`,
       params
     );
@@ -126,7 +92,7 @@ vendorsRouter.post("/vendors", authorize({ feature: "finance.vendors", action: "
       after: { name },
     }).catch((err) => logger.error(err, "[audit] vendor.created:"));
 
-    const [row] = await rawQuery<VendorRow>(`SELECT * FROM suppliers WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM suppliers WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row || { id: insertId, name, contactPerson, phone, email, taxNumber, category });
   } catch (err) {
     handleRouteError(err, res, "Create vendor error:");
@@ -139,7 +105,7 @@ vendorsRouter.patch("/vendors/:id", authorize({ feature: "finance.vendors", acti
     const vendorId = parseId(req.params.id, "id");
     const { name, contactPerson, phone, email, taxNumber, category } = zodParse(updateVendorSchema.safeParse(req.body ?? {}));
     const sets: string[] = [];
-    const params: unknown[] = [];
+    const params: any[] = [];
     let idx = 1;
     if (name) { sets.push(`name = $${idx++}`); params.push(name); }
     if (contactPerson !== undefined) { sets.push(`"contactPerson" = $${idx++}`); params.push(contactPerson); }
@@ -154,7 +120,7 @@ vendorsRouter.patch("/vendors/:id", authorize({ feature: "finance.vendors", acti
       });
     }
     params.push(vendorId, scope.companyId);
-    const [row] = await rawQuery<VendorRow>(
+    const [row] = await rawQuery<any>(
       `UPDATE suppliers SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
@@ -190,17 +156,17 @@ vendorsRouter.delete("/vendors/:id", authorize({ feature: "finance.vendors", act
 
     const vendorId = parseId(req.params.id, "id");
 
-    const [existing] = await rawQuery<{ id: number; name: string }>(
+    const [existing] = await rawQuery<any>(
       `SELECT id, name FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [vendorId, scope.companyId]
     );
     if (!existing) throw new NotFoundError("المورد غير موجود");
 
-    const [openOrders] = await rawQuery<{ cnt: string | number }>(
+    const [openOrders] = await rawQuery<any>(
       `SELECT COUNT(*) AS cnt FROM purchase_orders WHERE "supplierId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status NOT IN ('cancelled','received','completed')`,
       [vendorId, scope.companyId]
     );
-    const [openRequests] = await rawQuery<{ cnt: string | number }>(
+    const [openRequests] = await rawQuery<any>(
       `SELECT COUNT(*) AS cnt FROM purchase_requests WHERE "supplierId" = $1 AND "companyId" = $2 AND status NOT IN ('cancelled','rejected','completed')`,
       [vendorId, scope.companyId]
     );
@@ -219,7 +185,7 @@ vendorsRouter.delete("/vendors/:id", authorize({ feature: "finance.vendors", act
       );
     }
 
-    const [row] = await rawQuery<{ id: number }>(
+    const [row] = await rawQuery<any>(
       `UPDATE suppliers SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
       [vendorId, scope.companyId]
     );
@@ -257,13 +223,7 @@ vendorsRouter.get("/stats", authorize({ feature: "finance.vendors", action: "lis
     const monthStart = currentPeriod() + "-01";
     params.push(monthStart);
 
-    interface RevenueStatsRow {
-      totalRevenue: number | string;
-      pendingAmount: number | string;
-      overdueAmount: number | string;
-      paidThisMonth: number | string;
-    }
-    const [stats] = await rawQuery<RevenueStatsRow>(
+    const [stats] = await rawQuery<any>(
       `SELECT
          COALESCE(SUM("paidAmount"), 0) AS "totalRevenue",
          COALESCE(SUM(total - "paidAmount") FILTER (WHERE status IN ('sent','partial')), 0) AS "pendingAmount",
@@ -288,17 +248,7 @@ vendorsRouter.get("/stats", authorize({ feature: "finance.vendors", action: "lis
 vendorsRouter.get("/receivables", authorize({ feature: "finance.vendors", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    interface ReceivableRow {
-      id: number;
-      ref?: string | null;
-      total: number | string;
-      paidAmount: number | string;
-      dueDate?: string | null;
-      status: string;
-      remainingAmount: number | string;
-      clientName?: string | null;
-    }
-    const rows = await rawQuery<ReceivableRow>(
+    const rows = await rawQuery<any>(
       `SELECT i.id, i.ref, i.total, i."paidAmount", i."dueDate", i.status,
               (i.total - COALESCE(i."paidAmount", 0)) AS "remainingAmount",
               c.name AS "clientName"
@@ -319,8 +269,7 @@ vendorsRouter.get("/receivables/:id", authorize({ feature: "finance.vendors", ac
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    interface ReceivableDetailRow extends Record<string, unknown> { clientName?: string | null }
-    const [row] = await rawQuery<ReceivableDetailRow>(
+    const [row] = await rawQuery<any>(
       `SELECT i.*, c.name AS "clientName"
        FROM invoices i
        LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
@@ -335,14 +284,7 @@ vendorsRouter.get("/receivables/:id", authorize({ feature: "finance.vendors", ac
 vendorsRouter.get("/payments", authorize({ feature: "finance.vendors", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    interface PaymentRow {
-      id: number;
-      ref?: string | null;
-      description?: string | null;
-      createdAt: string;
-      amount: number | string;
-    }
-    const rows = await rawQuery<PaymentRow>(
+    const rows = await rawQuery<any>(
       `SELECT je.id, je.ref, je.description, je."createdAt",
               COALESCE(SUM(jl.credit), 0) AS amount
        FROM journal_entries je
@@ -363,18 +305,7 @@ vendorsRouter.get("/payments", authorize({ feature: "finance.vendors", action: "
 vendorsRouter.get("/commitments", authorize({ feature: "finance.vendors", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    interface CommitmentRow {
-      id: number;
-      ref?: string | null;
-      totalAmount: number | string;
-      amount: number | string;
-      status: string;
-      createdAt: string;
-      dueDate?: string | null;
-      supplierName?: string | null;
-      vendorName?: string | null;
-    }
-    const rows = await rawQuery<CommitmentRow>(
+    const rows = await rawQuery<any>(
       `SELECT po.id, po.ref, po."totalAmount", po."totalAmount" AS amount,
               po.status, po."createdAt", po."expectedDelivery" AS "dueDate",
               s.name AS "supplierName", s.name AS "vendorName"
@@ -394,8 +325,7 @@ vendorsRouter.get("/commitments/:id", authorize({ feature: "finance.vendors", ac
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    interface CommitmentDetailRow extends Record<string, unknown> { supplierName?: string | null }
-    const [row] = await rawQuery<CommitmentDetailRow>(
+    const [row] = await rawQuery<any>(
       `SELECT po.*, s.name AS "supplierName"
        FROM purchase_orders po
        LEFT JOIN suppliers s ON s.id = po."supplierId" AND s."deletedAt" IS NULL
@@ -411,8 +341,7 @@ vendorsRouter.get("/financial-requests/:id", authorize({ feature: "finance.vendo
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    interface FinancialRequestRow extends Record<string, unknown> { submittedByName?: string | null }
-    const [row] = await rawQuery<FinancialRequestRow>(
+    const [row] = await rawQuery<any>(
       `SELECT wr.*, e.name AS "submittedByName"
        FROM workflow_requests wr
        LEFT JOIN employee_assignments ea ON ea.id = wr."requestedBy"
@@ -428,16 +357,7 @@ vendorsRouter.get("/financial-requests/:id", authorize({ feature: "finance.vendo
 vendorsRouter.get("/financial-requests", authorize({ feature: "finance.vendors", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    interface FinancialRequestListRow {
-      id: number;
-      workflowType?: string | null;
-      entityType: string;
-      status: string;
-      notes?: string | null;
-      createdAt: string;
-      submittedByName?: string | null;
-    }
-    const rows = await rawQuery<FinancialRequestListRow>(
+    const rows = await rawQuery<any>(
       `SELECT wr.id, wr."workflowType", wr."entityType", wr.status, wr.notes, wr."createdAt",
               e.name AS "submittedByName"
        FROM workflow_requests wr
@@ -466,12 +386,7 @@ vendorsRouter.get("/vendors/:id", authorize({ feature: "finance.vendors", action
     // has no `total` column. This was broken in the original finance.ts
     // handler but was never exercised at runtime; fixed during Phase 7.1
     // migration after a fresh smoke test caught the column-not-found error.
-    type VendorDetailRow = VendorRow & {
-      totalPurchases: number | string;
-      activeOrders: number;
-      lastOrderAt?: string | null;
-    };
-    const [vendor] = await rawQuery<VendorDetailRow>(
+    const [vendor] = await rawQuery<any>(
       `SELECT s.*,
               COALESCE((SELECT SUM("totalAmount") FROM purchase_orders po WHERE po."supplierId" = s.id AND po."deletedAt" IS NULL), 0)::numeric AS "totalPurchases",
               COALESCE((SELECT COUNT(*) FROM purchase_orders po WHERE po."supplierId" = s.id AND po."deletedAt" IS NULL AND po.status IN ('pending','approved','sent')), 0)::int AS "activeOrders",
