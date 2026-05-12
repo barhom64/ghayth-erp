@@ -3,6 +3,7 @@ import { formatCurrency } from "@/lib/formatters";
 import { useApiQuery, asList } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Plus, Fuel, Droplets, DollarSign, CalendarDays } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useAppContext } from "@/contexts/app-context";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -36,7 +37,7 @@ export default function FuelPage() {
       loading={isLoading}
       actions={
         <Link href="/fleet/fuel/create">
-          <Button size="sm"><Plus className="h-4 w-4 me-1" />تسجيل تعبئة</Button>
+          <GuardedButton perm="fleet:create" size="sm"><Plus className="h-4 w-4 me-1" />تسجيل تعبئة</GuardedButton>
         </Link>
       }
     >

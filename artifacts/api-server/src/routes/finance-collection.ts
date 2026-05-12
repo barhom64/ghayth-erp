@@ -19,6 +19,48 @@ import { applyTransition } from "../lib/lifecycleEngine.js";
 export const collectionRouter = Router();
 collectionRouter.use(authMiddleware);
 
+interface OverdueInvoiceRow {
+  id: number;
+  ref: string;
+  total: string | number;
+  paidAmount: string | number;
+  dueDate: string;
+  status: string;
+  clientName: string | null;
+  clientPhone: string | null;
+  daysOverdue: number | string;
+  currentStage: number | null;
+  currentStageName: string | null;
+}
+
+interface InvoiceForCollectionRow {
+  id: number;
+  ref: string;
+  status: string;
+  dueDate: string;
+  daysOverdue: number;
+}
+
+interface CollectionStageRow {
+  stage: number;
+}
+
+interface CollectionHistoryRow {
+  id: number;
+  companyId: number;
+  invoiceId: number;
+  stage: number;
+  stageName: string;
+  notes: string | null;
+  performedBy: number | null;
+  performedByName: string | null;
+  createdAt: string;
+}
+
+interface InvoiceIdRow {
+  id: number;
+}
+
 const collectionActionSchema = z.object({
   stage: z.coerce.number(),
   notes: z.string().optional(),
@@ -38,7 +80,7 @@ collectionRouter.get("/collection", authorize({ feature: "finance.collection", a
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
     const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'i."companyId"', branchColumn: 'i."branchId"', enforceBranchScope: true });
-    const overdueInvoices = await rawQuery<any>(
+    const overdueInvoices = await rawQuery<OverdueInvoiceRow>(
       `SELECT i.id, i.ref, i.total, i."paidAmount", i."dueDate",
               i.status, c.name AS "clientName", c.phone AS "clientPhone",
               CURRENT_DATE - i."dueDate" AS "daysOverdue",
@@ -59,7 +101,7 @@ collectionRouter.get("/collection", authorize({ feature: "finance.collection", a
       params
     );
 
-    const enriched = overdueInvoices.map((inv: any) => {
+    const enriched = overdueInvoices.map((inv) => {
       const daysOverdue = Number(inv.daysOverdue ?? 0);
       const recommendedStage = COLLECTION_STAGES.reduce(
         (acc, s) => (daysOverdue >= s.daysOverdue ? s : acc),
@@ -87,7 +129,7 @@ collectionRouter.post("/collection/:invoiceId/action", authorize({ feature: "fin
     const invoiceId = parseId(req.params.invoiceId, "invoiceId");
     const { stage, notes } = zodParse(collectionActionSchema.safeParse(req.body ?? {}));
 
-    const [invoice] = await rawQuery<any>(
+    const [invoice] = await rawQuery<InvoiceForCollectionRow>(
       `SELECT id, ref, status, "dueDate",
               EXTRACT(DAY FROM NOW() - "dueDate"::timestamptz)::int AS "daysOverdue"
        FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -120,7 +162,7 @@ collectionRouter.post("/collection/:invoiceId/action", authorize({ feature: "fin
       );
     }
 
-    const [lastStageRecord] = await rawQuery<any>(
+    const [lastStageRecord] = await rawQuery<CollectionStageRow>(
       `SELECT stage FROM invoice_collection_stages WHERE "invoiceId" = $1 AND "companyId" = $2 ORDER BY id DESC LIMIT 1`,
       [invoiceId, scope.companyId]
     );
@@ -179,13 +221,13 @@ collectionRouter.get("/collection/:invoiceId/history", authorize({ feature: "fin
     const scope = req.scope!;
     const invoiceId = parseId(req.params.invoiceId, "invoiceId");
 
-    const [invoice] = await rawQuery<any>(
+    const [invoice] = await rawQuery<InvoiceIdRow>(
       `SELECT id FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [invoiceId, scope.companyId]
     );
     if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
 
-    const history = await rawQuery<any>(
+    const history = await rawQuery<CollectionHistoryRow>(
       `SELECT ics.*, e.name AS "performedByName"
        FROM invoice_collection_stages ics
        LEFT JOIN employee_assignments ea ON ea.id = ics."performedBy"

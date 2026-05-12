@@ -15,6 +15,7 @@ import { Edit, Phone, Mail, MapPin, Users, Wallet } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -206,6 +207,7 @@ export default function UmrahAgentDetail() {
 
       {id && <EntityComments entityType="umrah-agent" entityId={id} />}
       {id && <EntityTags entityType="umrah-agent" entityId={id} />}
+      {id && <UmrahAttachmentsPanel entityType="agent" entityId={id} />}
     </div>
   );
 

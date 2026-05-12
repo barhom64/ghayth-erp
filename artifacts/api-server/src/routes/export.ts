@@ -21,6 +21,8 @@ import {
   exportFleetTripsPdf,
 } from "../lib/pdfExport.js";
 
+import { authorize } from "../lib/rbac/authorize.js";
+
 export const exportRouter = Router();
 exportRouter.use(authMiddleware);
 
@@ -28,7 +30,7 @@ const financeGuard = requireModule("finance");
 const hrGuard = requireModule("hr");
 const fleetGuard = requireModule("fleet");
 
-exportRouter.get("/excel/trial-balance", financeGuard, async (req, res) => {
+exportRouter.get("/excel/trial-balance", financeGuard, authorize({ feature: "finance.reports", action: "export" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate } = req.query as Record<string, string | undefined>;
@@ -41,7 +43,7 @@ exportRouter.get("/excel/trial-balance", financeGuard, async (req, res) => {
   }
 });
 
-exportRouter.get("/excel/income-statement", financeGuard, async (req, res) => {
+exportRouter.get("/excel/income-statement", financeGuard, authorize({ feature: "finance.reports", action: "export" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate } = req.query as Record<string, string | undefined>;
@@ -54,7 +56,7 @@ exportRouter.get("/excel/income-statement", financeGuard, async (req, res) => {
   }
 });
 
-exportRouter.get("/excel/invoices", financeGuard, async (req, res) => {
+exportRouter.get("/excel/invoices", financeGuard, authorize({ feature: "finance.invoices", action: "export" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate } = req.query as Record<string, string | undefined>;
@@ -67,7 +69,7 @@ exportRouter.get("/excel/invoices", financeGuard, async (req, res) => {
   }
 });
 
-exportRouter.get("/excel/payroll", hrGuard, async (req, res) => {
+exportRouter.get("/excel/payroll", hrGuard, authorize({ feature: "hr.payroll", action: "export" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { period } = req.query as Record<string, string | undefined>;
@@ -80,7 +82,7 @@ exportRouter.get("/excel/payroll", hrGuard, async (req, res) => {
   }
 });
 
-exportRouter.get("/excel/attendance", hrGuard, async (req, res) => {
+exportRouter.get("/excel/attendance", hrGuard, authorize({ feature: "hr.attendance", action: "export" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate } = req.query as Record<string, string | undefined>;
@@ -93,7 +95,7 @@ exportRouter.get("/excel/attendance", hrGuard, async (req, res) => {
   }
 });
 
-exportRouter.get("/excel/fleet", fleetGuard, async (req, res) => {
+exportRouter.get("/excel/fleet", fleetGuard, authorize({ feature: "fleet", action: "export" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const buf = await exportFleetExcel(scope.companyId);
@@ -105,7 +107,7 @@ exportRouter.get("/excel/fleet", fleetGuard, async (req, res) => {
   }
 });
 
-exportRouter.get("/pdf/invoice/:id", financeGuard, async (req, res) => {
+exportRouter.get("/pdf/invoice/:id", financeGuard, authorize({ feature: "finance.invoices", action: "export" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -118,7 +120,7 @@ exportRouter.get("/pdf/invoice/:id", financeGuard, async (req, res) => {
   }
 });
 
-exportRouter.get("/pdf/purchase-order/:id", financeGuard, async (req, res) => {
+exportRouter.get("/pdf/purchase-order/:id", financeGuard, authorize({ feature: "finance.purchase", action: "export" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -131,7 +133,7 @@ exportRouter.get("/pdf/purchase-order/:id", financeGuard, async (req, res) => {
   }
 });
 
-exportRouter.get("/pdf/voucher/:id", financeGuard, async (req, res) => {
+exportRouter.get("/pdf/voucher/:id", financeGuard, authorize({ feature: "finance.reports", action: "export" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -144,7 +146,7 @@ exportRouter.get("/pdf/voucher/:id", financeGuard, async (req, res) => {
   }
 });
 
-exportRouter.get("/pdf/payroll/:id", hrGuard, async (req, res) => {
+exportRouter.get("/pdf/payroll/:id", hrGuard, authorize({ feature: "hr.payroll", action: "export" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -157,7 +159,7 @@ exportRouter.get("/pdf/payroll/:id", hrGuard, async (req, res) => {
   }
 });
 
-exportRouter.get("/pdf/trial-balance", financeGuard, async (req, res) => {
+exportRouter.get("/pdf/trial-balance", financeGuard, authorize({ feature: "finance.reports", action: "export" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate } = req.query as Record<string, string | undefined>;
@@ -170,7 +172,7 @@ exportRouter.get("/pdf/trial-balance", financeGuard, async (req, res) => {
   }
 });
 
-exportRouter.get("/pdf/fleet-trips", fleetGuard, async (req, res) => {
+exportRouter.get("/pdf/fleet-trips", fleetGuard, authorize({ feature: "fleet", action: "export" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { startDate, endDate } = req.query as Record<string, string | undefined>;

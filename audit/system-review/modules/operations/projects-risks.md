@@ -1,0 +1,45 @@
+# /projects/risks — `artifacts/ghayth-erp/src/pages/projects/risks.tsx`
+
+## 1. الميتاداتا
+- المسار: `/projects/risks`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/projects/risks.tsx`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/miscRoutes.tsx:93`
+- المجموعة: `operations`
+- الكومبوننت: `ProjectRisks`
+- subKey: — | minRoleLevel: —
+- الكيان المستنبط: `risks`
+- سطور الملف: 288
+- مصدر موجود: ✅
+
+## 2. الأزرار والإجراءات
+_لا توجد طلبات كتابة من هذه الصفحة._
+
+### تفاصيل الأزرار المرئية
+- L229: "(بلا تسمية)" → `() => setShowForm(false)`
+
+### القراءات (GET)
+- GET `/projects?limit=100`
+
+
+
+## 3. الحركات ذات الصلة (Cross-Module Transactions)
+- [ ] **TBD** — راجع `docs/blueprints/operations.md` (إن وُجد) وعدّد:
+  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
+  - تأثير الأرصدة (balances, balances_history)
+  - الإشعارات (notifications)
+  - سير الموافقات (approval_chains)
+  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
+- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+## 4. النمذجة
+_لم يتم العثور على جدول Drizzle بالاسم المستنبط `risks` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
+
+## 5. البيانات الوهمية الثابتة
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+
+## 6. النتيجة (Verdict)
+- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
+- ملاحظة: `landed=/dashboard expected=/projects/risks`
+- لقطة: `audit/screenshots/projects_risks.png`
+- landedUrl: `http://localhost/dashboard`
+- توصية: **يحتاج إصلاح**

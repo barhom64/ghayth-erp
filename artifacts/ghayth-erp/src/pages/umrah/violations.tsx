@@ -15,6 +15,7 @@ import { PageShell } from "@/components/page-shell";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Eye, Plus, Pencil, Trash2, AlertTriangle, Clock, HelpCircle, UserX } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -256,13 +257,13 @@ export default function UmrahViolations() {
               <Eye className="h-3.5 w-3.5" />
             </Link>
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => openEdit(v)}>
+          <GuardedButton perm="umrah:create" size="sm" variant="ghost" onClick={() => openEdit(v)}>
             <Pencil className="h-3.5 w-3.5" />
-          </Button>
+          </GuardedButton>
           {(v.status === "open" || v.status === "detected") && (
-            <Button size="sm" variant="ghost" className="text-red-600" onClick={() => setDeleteId(v.id)}>
+            <GuardedButton perm="umrah:create" size="sm" variant="ghost" className="text-red-600" onClick={() => setDeleteId(v.id)}>
               <Trash2 className="h-3.5 w-3.5" />
-            </Button>
+            </GuardedButton>
           )}
         </div>
       ),
@@ -277,10 +278,12 @@ export default function UmrahViolations() {
       subtitle="رصد المخالفات: تأخر المغادرة، الهروب، وأخرى"
       breadcrumbs={[{ label: "العمرة" }, { label: "المخالفات" }]}
       actions={
-        <Button onClick={openCreate} className="gap-2">
-          <Plus className="h-4 w-4" />
-          مخالفة جديدة
-        </Button>
+        <GuardedButton perm="umrah:create" asChild className="gap-2">
+          <Link href="/umrah/violations/create">
+            <Plus className="h-4 w-4" />
+            مخالفة جديدة
+          </Link>
+        </GuardedButton>
       }
     >
       <UmrahTabsNav />
@@ -491,9 +494,9 @@ export default function UmrahViolations() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditing(null)}>إلغاء</Button>
-            <Button onClick={handleSave} disabled={isSaving || !editing?.type} rateLimitAware>
+            <GuardedButton perm="umrah:create" onClick={handleSave} disabled={isSaving || !editing?.type} rateLimitAware>
               {isSaving ? "جاري الحفظ..." : editing?.id ? "حفظ التعديلات" : "إنشاء المخالفة"}
-            </Button>
+            </GuardedButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -507,9 +510,9 @@ export default function UmrahViolations() {
           <p className="text-sm text-muted-foreground">هل أنت متأكد من حذف هذه المخالفة؟ لا يمكن التراجع عن هذا الإجراء.</p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteId(null)}>إلغاء</Button>
-            <Button variant="destructive" onClick={() => deleteMut.mutate({})} disabled={deleteMut.isPending}>
+            <GuardedButton perm="umrah:create" variant="destructive" onClick={() => deleteMut.mutate({})} disabled={deleteMut.isPending}>
               {deleteMut.isPending ? "جاري الحذف..." : "حذف"}
-            </Button>
+            </GuardedButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>

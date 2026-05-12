@@ -58,7 +58,7 @@ describe("Projects state machine", () => {
   });
 
   it("validates project status transitions", () => {
-    expect(PROJ_ROUTE).toContain("PROJECT_TRANSITIONS[existing.status]");
+    expect(PROJ_ROUTE).toContain("PROJECT_TRANSITIONS[existing.status");
   });
 });
 
@@ -78,7 +78,7 @@ describe("Task state machine", () => {
   });
 
   it("validates task status transitions", () => {
-    expect(PROJ_ROUTE).toContain("TASK_TRANSITIONS[existingTask.status");
+    expect(PROJ_ROUTE).toMatch(/TASK_TRANSITIONS\[\(?existingTask\.status/);
   });
 });
 
@@ -95,7 +95,7 @@ describe("Milestone state machine", () => {
   });
 
   it("validates milestone status transitions", () => {
-    expect(PROJ_ROUTE).toContain("MILESTONE_TRANSITIONS[existing.status");
+    expect(PROJ_ROUTE).toMatch(/MILESTONE_TRANSITIONS\[\(?existing\.status/);
   });
 });
 
