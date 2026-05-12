@@ -412,7 +412,7 @@ accountsRouter.get("/ledger/:accountCode", authorize({ feature: "finance.account
   try {
     const scope = req.scope!;
     const { accountCode } = req.params;
-    const { startDate, endDate } = req.query as any;
+    const { startDate, endDate } = req.query as Record<string, string | undefined>;
 
     let dateFilter = "";
     const params: any[] = [scope.companyId, accountCode];

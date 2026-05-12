@@ -313,7 +313,7 @@ router.get("/timeline/:refTable/:refId", authorize({ feature: "admin", action: "
 router.get("/", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { status, requestType } = req.query as any;
+    const { status, requestType } = req.query as Record<string, string | undefined>;
 
     const { where: scopeWhere, params, nextParamIndex } = buildScopedWhere(
       scope,

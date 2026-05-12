@@ -1303,7 +1303,7 @@ router.put("/auto-detection/settings", authorize({ feature: "hr.discipline", act
     if (!HR_ROLES.includes(scope.role)) {
       throw new ForbiddenError("غير مصرح بتعديل إعدادات الرصد التلقائي");
     }
-    const body: Partial<AutoDetectionSettings> = zodParse(autoDetectionSettingsSchema.safeParse(req.body)) as any;
+    const body: Partial<AutoDetectionSettings> = zodParse(autoDetectionSettingsSchema.safeParse(req.body));
     await saveAutoDetectionSettings(scope.companyId, body);
 
     await createAuditLog({
@@ -1360,7 +1360,7 @@ router.post("/auto-detection/run", authorize({ feature: "hr.discipline", action:
 router.get("/auto-detection/log", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { limit, offset, fromDate, toDate } = req.query as any;
+    const { limit, offset, fromDate, toDate } = req.query as Record<string, string | undefined>;
     const result = await getDetectionLog(scope.companyId, {
       limit: Math.min(limit ? Number(limit) : 50, 500),
       offset: offset ? Number(offset) : 0,

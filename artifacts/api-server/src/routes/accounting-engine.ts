@@ -287,7 +287,7 @@ router.get("/accounting-mappings/:operationType/validate", authorize({ feature: 
 router.get("/journal-templates", authorize({ feature: "finance.accounting_engine", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { operationType } = req.query as any;
+    const { operationType } = req.query as Record<string, string | undefined>;
     const conditions = [`jt."companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (operationType) {
@@ -463,7 +463,7 @@ router.delete("/journal-templates/:id", authorize({ feature: "finance.accounting
 router.get("/subsidiary-accounts", authorize({ feature: "finance.accounting_engine", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { entityType, entityId } = req.query as any;
+    const { entityType, entityId } = req.query as Record<string, string | undefined>;
     const conditions = [`sa."companyId" = $1`];
     const params: unknown[] = [scope.companyId];
 

@@ -361,7 +361,7 @@ protectedRouter.get("/dashboard", withPortalScope(async (req, res) => {
 protectedRouter.get("/invoices", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
-    const { status, page = "1", limit: lim = "20" } = req.query as any;
+    const { status, page = "1", limit: lim = "20" } = req.query as Record<string, string | undefined>;
     const pageNum = Math.max(Number(page) || 1, 1);
     const perPage = Math.min(Number(lim) || 20, 500);
     const offset = (pageNum - 1) * perPage;
@@ -421,7 +421,7 @@ protectedRouter.get("/invoices/:id", withPortalScope(async (req, res) => {
 protectedRouter.get("/tickets", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
-    const { status, page = "1", limit: lim = "20" } = req.query as any;
+    const { status, page = "1", limit: lim = "20" } = req.query as Record<string, string | undefined>;
     const pageNum = Math.max(Number(page) || 1, 1);
     const perPage = Math.min(Number(lim) || 20, 500);
     const offset = (pageNum - 1) * perPage;
@@ -696,7 +696,7 @@ protectedRouter.post("/tickets/:id/csat", withPortalScope(async (req, res) => {
 protectedRouter.get("/kb", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
-    const { q, category } = req.query as any;
+    const { q, category } = req.query as Record<string, string | undefined>;
     const conditions = [`("companyId"=$1 OR "companyId" IS NULL)`, `status='published'`, `"deletedAt" IS NULL`];
     const params: unknown[] = [scope.companyId];
     if (category) { params.push(category); conditions.push(`category=$${params.length}`); }

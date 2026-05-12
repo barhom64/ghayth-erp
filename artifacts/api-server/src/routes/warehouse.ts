@@ -267,7 +267,7 @@ async function postInventoryMovementGl(params: {
 router.get("/products", authorize({ feature: "warehouse.inventory", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { search, status, page = "1", limit: lim = "50" } = req.query as any;
+    const { search, status, page = "1", limit: lim = "50" } = req.query as Record<string, string | undefined>;
     const pageNum = Math.max(Number(page) || 1, 1);
     const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
@@ -547,7 +547,7 @@ router.delete("/products/:id", authorize({ feature: "warehouse.inventory", actio
 router.get("/movements", authorize({ feature: "warehouse.transfers", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { productId, search, status } = req.query as any;
+    const { productId, search, status } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'm."companyId"', branchColumn: 'm."branchId"', enforceBranchScope: true });
     let where = baseWhere;
@@ -930,7 +930,7 @@ router.post("/transfers", authorize({ feature: "warehouse.transfers", action: "c
 router.get("/categories", authorize({ feature: "warehouse.inventory", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { page = "1", limit: lim = "50", search, status } = req.query as any;
+    const { page = "1", limit: lim = "50", search, status } = req.query as Record<string, string | undefined>;
     const pageNum = Math.max(Number(page) || 1, 1);
     const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
@@ -1005,7 +1005,7 @@ router.post("/categories", authorize({ feature: "warehouse.inventory", action: "
 router.get("/suppliers", authorize({ feature: "warehouse.inventory", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { page = "1", limit: lim = "50", search, status } = req.query as any;
+    const { page = "1", limit: lim = "50", search, status } = req.query as Record<string, string | undefined>;
     const pageNum = Math.max(Number(page) || 1, 1);
     const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
@@ -1243,7 +1243,7 @@ router.get("/stats", authorize({ feature: "warehouse.inventory", action: "list" 
 router.get("/inventory-counts", authorize({ feature: "warehouse.inventory", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { status } = req.query as any;
+    const { status } = req.query as Record<string, string | undefined>;
     const conditions = [`ic."companyId"=$1`];
     const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`ic.status=$${params.length}`); }

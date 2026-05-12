@@ -51,7 +51,7 @@ router.post("/cron-jobs/:id/trigger", authorize({ feature: "admin", action: "upd
 router.get("/cron-logs", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { jobId } = req.query as any;
+    const { jobId } = req.query as Record<string, string | undefined>;
     const conditions: string[] = [`"companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (jobId) { params.push(Number(jobId) || 0); conditions.push(`"jobId" = $${params.length}`); }
@@ -77,7 +77,7 @@ router.get("/notification-stats", authorize({ feature: "admin", action: "list" }
 router.get("/event-logs", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { action, limit: lim, offset: off } = req.query as any;
+    const { action, limit: lim, offset: off } = req.query as Record<string, string | undefined>;
     const pageLimit = Math.min(Number(lim) || 50, 200);
     const pageOffset = Number(off) || 0;
     const conditions = [`"companyId" = $1`];
@@ -124,7 +124,7 @@ router.post("/proactive-rules/:id/toggle", authorize({ feature: "admin", action:
 router.get("/automation-logs", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { type, page: pg, limit: lim } = req.query as any;
+    const { type, page: pg, limit: lim } = req.query as Record<string, string | undefined>;
     const page = Number(pg) || 1;
     const limit = Math.min(Number(lim) || 50, 200);
     const offset = (page - 1) * limit;

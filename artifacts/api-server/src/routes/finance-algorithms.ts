@@ -528,7 +528,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/manual-match", authorize({ fe
 financeAlgorithmsRouter.get("/journal-lines/search", authorize({ feature: "finance.algorithms", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { accountCode: acc, search, amount, pageSize = "20" } = req.query as any;
+    const { accountCode: acc, search, amount, pageSize = "20" } = req.query as Record<string, string | undefined>;
 
     let conditions = [`je."companyId"=$1`, `je."deletedAt" IS NULL`];
     const params: unknown[] = [scope.companyId];
@@ -1193,7 +1193,7 @@ financeAlgorithmsRouter.get("/fx/rates", authorize({ feature: "finance.algorithm
   try {
     const scope = req.scope!;
     await ensureFxTables();
-    const { from, to, type } = req.query as any;
+    const { from, to, type } = req.query as Record<string, string | undefined>;
     const params: unknown[] = [scope.companyId];
     let where = `"companyId"=$1 AND "deletedAt" IS NULL`;
     if (from) { params.push(from); where += ` AND "fromCurrency"=$${params.length}`; }

@@ -800,7 +800,7 @@ zatcaRouter.get("/zatca/submissions", authorize({ feature: "finance.zatca", acti
   try {
     const scope = req.scope!;
 
-    const { page = "1", limit: lim = "20", status = "" } = req.query as any;
+    const { page = "1", limit: lim = "20", status = "" } = req.query as Record<string, string | undefined>;
     const safeLim = Math.min(Number(lim) || 50, 500);
     const offset = (Math.max(Number(page) || 1, 1) - 1) * safeLim;
 

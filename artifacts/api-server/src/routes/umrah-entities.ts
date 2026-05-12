@@ -240,7 +240,7 @@ router.post("/sub-agents", authorize({ feature: "umrah", action: "create" }), as
 router.get("/sub-agents/unlinked", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { seasonId } = req.query as any;
+    const { seasonId } = req.query as Record<string, string | undefined>;
     let where = `sa."companyId" = $1 AND sa."deletedAt" IS NULL AND sa."clientId" IS NULL`;
     const params: unknown[] = [scope.companyId];
     if (seasonId && Number(seasonId)) {
@@ -519,7 +519,7 @@ router.delete("/pricing/:id", authorize({ feature: "umrah", action: "delete" }),
 router.get("/groups", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { seasonId } = req.query as any;
+    const { seasonId } = req.query as Record<string, string | undefined>;
     let where = `g."companyId" = $1 AND g."deletedAt" IS NULL`;
     const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND g."seasonId" = $${params.length}`; }
@@ -827,7 +827,7 @@ router.post("/groups/merge", authorize({ feature: "umrah", action: "update" }), 
 router.get("/nusk-invoices", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { seasonId, groupId } = req.query as any;
+    const { seasonId, groupId } = req.query as Record<string, string | undefined>;
     let where = `ni."companyId" = $1 AND ni."deletedAt" IS NULL`;
     const params: unknown[] = [scope.companyId];
     if (groupId) { params.push(groupId); where += ` AND ni."groupId" = $${params.length}`; }
@@ -1181,7 +1181,7 @@ router.post("/commission-plans/:id/calculate", authorize({ feature: "umrah", act
 router.get("/commission-calculations", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { planId, year, month } = req.query as any;
+    const { planId, year, month } = req.query as Record<string, string | undefined>;
     let where = `cc."companyId" = $1 AND cc."deletedAt" IS NULL`;
     const params: unknown[] = [scope.companyId];
     if (planId) { params.push(planId); where += ` AND cc."planId" = $${params.length}`; }
@@ -1206,7 +1206,7 @@ router.get("/commission-calculations", authorize({ feature: "umrah", action: "li
 router.get("/import/batches", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { seasonId } = req.query as any;
+    const { seasonId } = req.query as Record<string, string | undefined>;
     let where = `b."companyId" = $1 AND b."deletedAt" IS NULL`;
     const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND b."seasonId" = $${params.length}`; }
@@ -1242,7 +1242,7 @@ router.get("/import/batches/:id/changes", authorize({ feature: "umrah", action: 
 router.get("/invoices", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { seasonId, subAgentId, status } = req.query as any;
+    const { seasonId, subAgentId, status } = req.query as Record<string, string | undefined>;
     let where = `si."companyId" = $1 AND si."deletedAt" IS NULL`;
     const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND si."seasonId" = $${params.length}`; }
@@ -1313,7 +1313,7 @@ router.patch("/invoices/:id", authorize({ feature: "umrah", action: "update" }),
 router.get("/payments", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { subAgentId } = req.query as any;
+    const { subAgentId } = req.query as Record<string, string | undefined>;
     let where = `p."companyId" = $1 AND p."deletedAt" IS NULL`;
     const params: unknown[] = [scope.companyId];
     if (subAgentId) { params.push(subAgentId); where += ` AND p."subAgentId" = $${params.length}`; }
@@ -1361,7 +1361,7 @@ router.post("/payments", authorize({ feature: "umrah", action: "create" }), asyn
 router.get("/statements/:subAgentId", authorize({ feature: "umrah", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { type, from, to } = req.query as any;
+    const { type, from, to } = req.query as Record<string, string | undefined>;
     const stmtType = type === "summary" ? "summary" : "detailed";
     const result = await generateStatement(
       { companyId: scope.companyId, userId: scope.userId },
@@ -1379,7 +1379,7 @@ router.get("/statements/:subAgentId", authorize({ feature: "umrah", action: "vie
 router.get("/statements/:subAgentId/pdf", authorize({ feature: "umrah", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { from, to } = req.query as any;
+    const { from, to } = req.query as Record<string, string | undefined>;
     const subAgentId = parseId(req.params.subAgentId, "subAgentId");
     const data = await generateStatement(
       { companyId: scope.companyId, userId: scope.userId },

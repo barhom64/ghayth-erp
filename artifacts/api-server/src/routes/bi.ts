@@ -156,7 +156,7 @@ router.get("/operations/sla-delays", authorize({ feature: "bi", action: "list" }
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const { from, to, departmentId } = req.query as any;
+    const { from, to, departmentId } = req.query as Record<string, string | undefined>;
     const conditions = [`t."companyId" = $1`, `t."deletedAt" IS NULL`];
     const params: unknown[] = [cid];
     if (from) { params.push(from); conditions.push(`t."scheduledDate" >= $${params.length}::date`); }
@@ -189,7 +189,7 @@ router.get("/operations/rejection-rate", authorize({ feature: "bi", action: "lis
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const { from, to } = req.query as any;
+    const { from, to } = req.query as Record<string, string | undefined>;
     const conditions = [`"companyId" = $1`, `"deletedAt" IS NULL`];
     const params: unknown[] = [cid];
     if (from) { params.push(from); conditions.push(`"createdAt" >= $${params.length}::date`); }
@@ -215,7 +215,7 @@ router.get("/operations/bottleneck", authorize({ feature: "bi", action: "list" }
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const { from, to, departmentId } = req.query as any;
+    const { from, to, departmentId } = req.query as Record<string, string | undefined>;
     const conditions = [`t."companyId" = $1`, `t."deletedAt" IS NULL`];
     const params: unknown[] = [cid];
     if (from) { params.push(from); conditions.push(`t."createdAt" >= $${params.length}::date`); }
@@ -273,7 +273,7 @@ router.get("/operations/employee-productivity", authorize({ feature: "bi", actio
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const { from, to, departmentId } = req.query as any;
+    const { from, to, departmentId } = req.query as Record<string, string | undefined>;
     const conditions = [`t."companyId" = $1`, `t."deletedAt" IS NULL`];
     const params: unknown[] = [cid];
     if (from) { params.push(from); conditions.push(`t."completedAt" >= $${params.length}::date`); }
@@ -322,7 +322,7 @@ router.get("/operations/approval-timeliness", authorize({ feature: "bi", action:
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const { from, to, departmentId } = req.query as any;
+    const { from, to, departmentId } = req.query as Record<string, string | undefined>;
     const conditions = [`lr."companyId" = $1`, `lr."deletedAt" IS NULL`];
     const params: unknown[] = [cid];
     if (from) { params.push(from); conditions.push(`lr."createdAt" >= $${params.length}::date`); }
@@ -355,7 +355,7 @@ router.get("/operations/avg-completion-time", authorize({ feature: "bi", action:
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const { from, to, departmentId } = req.query as any;
+    const { from, to, departmentId } = req.query as Record<string, string | undefined>;
     const conditions = [`t."companyId" = $1`, `t."deletedAt" IS NULL`, `t.status = 'completed'`, `t."completedAt" IS NOT NULL`];
     const params: unknown[] = [cid];
     if (from) { params.push(from); conditions.push(`t."completedAt" >= $${params.length}::date`); }
@@ -386,7 +386,7 @@ router.get("/operations/trend", authorize({ feature: "bi", action: "list" }), as
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const { from, to, departmentId } = req.query as any;
+    const { from, to, departmentId } = req.query as Record<string, string | undefined>;
     const conditions = [`t."companyId" = $1`, `t."deletedAt" IS NULL`, `t."scheduledDate" >= CURRENT_DATE - INTERVAL '12 weeks'`];
     const params: unknown[] = [cid];
     if (from) { params.push(from); conditions.push(`t."scheduledDate" >= $${params.length}::date`); }
@@ -847,7 +847,7 @@ router.get("/reports/branch-performance", authorize({ feature: "bi", action: "li
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const { from, to } = req.query as any;
+    const { from, to } = req.query as Record<string, string | undefined>;
     const dateFrom = from || toDateISO(new Date(currentYear(), new Date().getMonth(), 1));
     const dateTo = to || todayISO();
 
@@ -936,7 +936,7 @@ router.get("/reports/vendor-performance", authorize({ feature: "bi", action: "li
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const { from, to } = req.query as any;
+    const { from, to } = req.query as Record<string, string | undefined>;
     const dateFrom = from || toDateISO(new Date(currentYear(), 0, 1));
     const dateTo = to || todayISO();
 
@@ -1154,7 +1154,7 @@ router.get("/reports/training-roi", authorize({ feature: "bi", action: "list" })
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const { from, to } = req.query as any;
+    const { from, to } = req.query as Record<string, string | undefined>;
     const dateFrom = from || toDateISO(new Date(currentYear(), 0, 1));
     const dateTo = to || todayISO();
 
@@ -1210,7 +1210,7 @@ router.get("/ai-insights", authorize({ feature: "bi", action: "list" }), async (
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const { priority, limit: limitParam } = req.query as any;
+    const { priority, limit: limitParam } = req.query as Record<string, string | undefined>;
     const pageSize = Math.min(Number(limitParam) || 50, 100);
 
     const conditions = [`sa."companyId" = $1`, `sa."isDismissed" = false`];

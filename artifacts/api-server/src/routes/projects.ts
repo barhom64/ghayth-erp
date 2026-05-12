@@ -315,7 +315,7 @@ router.post("/impact-preview", authorize({ feature: "projects.list", action: "li
 router.get("/", authorize({ feature: "projects.list", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { status } = req.query as any;
+    const { status } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'p."companyId"', disableBranchScope: true });
     let where = baseWhere;

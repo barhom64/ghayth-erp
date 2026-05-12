@@ -730,7 +730,7 @@ router.get("/integration-logs", authorize({ feature: "admin", action: "list" }),
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const { channel, status, integrationId, limit: lim, offset: off } = req.query as any;
+    const { channel, status, integrationId, limit: lim, offset: off } = req.query as Record<string, string | undefined>;
     const pageLimit = Math.min(Number(lim) || 50, 200);
     const pageOffset = Number(off) || 0;
     const conditions = [`"companyId"=$1`];
@@ -915,7 +915,7 @@ router.get("/violations-report", authorize({ feature: "admin", action: "list" })
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const { type, priority, status, department, from, to, limit: lim, offset: off } = req.query as any;
+    const { type, priority, status, department, from, to, limit: lim, offset: off } = req.query as Record<string, string | undefined>;
     const pageLimit = Math.min(Number(lim) || 50, 200);
     const pageOffset = Number(off) || 0;
 
@@ -1034,7 +1034,7 @@ router.get("/security-log", authorize({ feature: "admin", action: "list" }), asy
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const { userId, reason, from, to, page = "1", limit: lim = "50" } = req.query as any;
+    const { userId, reason, from, to, page = "1", limit: lim = "50" } = req.query as Record<string, string | undefined>;
     const pageNum = Math.max(Number(page) || 1, 1);
     const pageSize = Math.min(Math.max(Number(lim) || 50, 1), 200);
     const offset = (pageNum - 1) * pageSize;
@@ -1099,7 +1099,7 @@ router.get("/role-permissions", authorize({ feature: "admin", action: "list" }),
   try {
     await assertAdmin(req);
     const scope = req.scope!;
-    const { role } = req.query as any;
+    const { role } = req.query as Record<string, string | undefined>;
     const conditions = [`("companyId" IS NULL OR "companyId" = $1)`];
     const params: unknown[] = [scope.companyId];
     if (role) { params.push(role); conditions.push(`"role" = $${params.length}`); }

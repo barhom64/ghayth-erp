@@ -102,7 +102,7 @@ router.get("/", authorize({ feature: "admin", action: "update" }), async (req, r
 router.get("/logs", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { ruleId, limit: lim = "50", page = "1" } = req.query as any;
+    const { ruleId, limit: lim = "50", page = "1" } = req.query as Record<string, string | undefined>;
     const pageNum = Math.max(Number(page) || 1, 1);
     const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;

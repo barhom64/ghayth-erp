@@ -82,7 +82,7 @@ const router = Router();
 router.get("/alerts", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { severity, isRead } = req.query as any;
+    const { severity, isRead } = req.query as Record<string, string | undefined>;
     const conditions = [`"companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (severity) { params.push(severity); conditions.push(`severity = $${params.length}`); }
@@ -135,7 +135,7 @@ router.patch("/alerts/:id/read", authorize({ feature: "admin", action: "update" 
 router.get("/kpis", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { employeeId, metricName } = req.query as any;
+    const { employeeId, metricName } = req.query as Record<string, string | undefined>;
     const conditions = [`"companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (employeeId) { params.push(Number(employeeId) || 0); conditions.push(`"employeeId" = $${params.length}`); }

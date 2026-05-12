@@ -166,7 +166,7 @@ router.post("/verify", authorize({ feature: "documents", action: "create" }), as
 router.get("/logs", authorize({ feature: "documents", action: "create" }), async (req, res: Response) => {
   try {
     const scope = (req as any).scope!;
-    const { entityType, entityId } = req.query as any;
+    const { entityType, entityId } = req.query as Record<string, string | undefined>;
     const conditions = [`dsl."companyId"=$1`];
     const params: unknown[] = [scope.companyId];
     if (entityType) { params.push(entityType); conditions.push(`dsl."entityType"=$${params.length}`); }

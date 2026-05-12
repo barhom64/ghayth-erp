@@ -250,7 +250,7 @@ invoicesRouter.post("/invoices/impact-preview", authorize({ feature: "finance.in
 invoicesRouter.get("/invoices", authorize({ feature: "finance.invoices", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { status = "", page = "1", limit: lim = "20" } = req.query as any;
+    const { status = "", page = "1", limit: lim = "20" } = req.query as Record<string, string | undefined>;
     const safeLim = Math.min(Number(lim) || 50, 500);
     const offset = (Math.max(Number(page) || 1, 1) - 1) * safeLim;
 
@@ -1050,7 +1050,7 @@ invoicesRouter.patch("/invoices/:id/return", authorize({ feature: "finance.invoi
 invoicesRouter.get("/tax/summary", authorize({ feature: "finance.zatca", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { period } = req.query as any;
+    const { period } = req.query as Record<string, string | undefined>;
     const targetPeriod = period ?? currentPeriod();
     const [outputVat] = await rawQuery<Record<string, unknown>>(`SELECT COALESCE(SUM("vatAmount"), 0) AS total FROM invoices WHERE "companyId" = $1 AND to_char("createdAt", 'YYYY-MM') = $2 AND "deletedAt" IS NULL`, [scope.companyId, targetPeriod]);
     const [inputVat] = await rawQuery<Record<string, unknown>>(`SELECT COALESCE(SUM(jl.debit), 0) AS total FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."deletedAt" IS NULL AND je.status = 'posted' WHERE je."companyId" = $1 AND jl."accountCode" = '1400' AND to_char(je."createdAt", 'YYYY-MM') = $2`, [scope.companyId, targetPeriod]);
@@ -1740,7 +1740,7 @@ invoicesRouter.post("/customer-advances/:id/apply", authorize({ feature: "financ
 invoicesRouter.get("/customer-advances", authorize({ feature: "finance.invoices", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { clientId, status } = req.query as any;
+    const { clientId, status } = req.query as Record<string, string | undefined>;
     const params: any[] = [scope.companyId];
     let where = `"companyId" = $1`;
     if (clientId) { params.push(Number(clientId)); where += ` AND "clientId" = $${params.length}`; }
@@ -1996,7 +1996,7 @@ invoicesRouter.get("/dunning/history", authorize({ feature: "finance.collection"
   try {
     const scope = req.scope!;
     await ensureDunningTables();
-    const { invoiceId, clientId, stage } = req.query as any;
+    const { invoiceId, clientId, stage } = req.query as Record<string, string | undefined>;
     const params: any[] = [scope.companyId];
     let where = `dl."companyId"=$1`;
     if (invoiceId) { params.push(Number(invoiceId)); where += ` AND dl."invoiceId"=$${params.length}`; }

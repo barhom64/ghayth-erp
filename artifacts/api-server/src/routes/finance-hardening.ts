@@ -377,7 +377,7 @@ financeHardeningRouter.post("/journal-manual", authorize({ feature: "finance.har
 financeHardeningRouter.get("/journal-manual", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { status } = req.query as any;
+    const { status } = req.query as Record<string, string | undefined>;
     const conditions = [`je."companyId"=$1`, `je."isManual"=TRUE`, `je."deletedAt" IS NULL`];
     const params: any[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`je."approvalStatus"=$${params.length}`); }
@@ -1310,7 +1310,7 @@ financeHardeningRouter.get("/cash-flow-forecast", authorize({ feature: "finance.
 financeHardeningRouter.get("/cost-center-report", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { startDate, endDate, costCenter } = req.query as any;
+    const { startDate, endDate, costCenter } = req.query as Record<string, string | undefined>;
     const conditions = [`je."companyId"=$1`, `je."deletedAt" IS NULL`, `je.status = 'posted'`, `je."costCenter" IS NOT NULL`];
     const params: any[] = [scope.companyId];
     if (startDate) { params.push(startDate); conditions.push(`je."createdAt"::date >= $${params.length}`); }

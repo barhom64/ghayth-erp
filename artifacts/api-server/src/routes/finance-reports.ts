@@ -36,7 +36,7 @@ reportsRouter.get("/reports/entities/:entityType", authorize({ feature: "finance
 reportsRouter.get("/reports/trial-balance", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { startDate, endDate } = req.query as any;
+    const { startDate, endDate } = req.query as Record<string, string | undefined>;
     let dateFilter = "";
     const params: unknown[] = [scope.companyId];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
@@ -80,7 +80,7 @@ reportsRouter.get("/reports/trial-balance", authorize({ feature: "finance.report
 reportsRouter.get("/reports/income-statement", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { startDate, endDate } = req.query as any;
+    const { startDate, endDate } = req.query as Record<string, string | undefined>;
     let dateFilter = "";
     const params: unknown[] = [scope.companyId];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
@@ -98,7 +98,7 @@ reportsRouter.get("/reports/income-statement", authorize({ feature: "finance.rep
 reportsRouter.get("/reports/balance-sheet", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { asOfDate } = req.query as any;
+    const { asOfDate } = req.query as Record<string, string | undefined>;
     let dateFilter = "";
     const params: unknown[] = [scope.companyId];
     if (asOfDate) { params.push(asOfDate); dateFilter = ` AND je."createdAt" <= $${params.length}`; }
@@ -143,7 +143,7 @@ reportsRouter.get("/reports/balance-sheet", authorize({ feature: "finance.report
 reportsRouter.get("/reports/cash-flow", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { startDate, endDate } = req.query as any;
+    const { startDate, endDate } = req.query as Record<string, string | undefined>;
     const from = startDate || toDateISO(new Date(currentYear(), 0, 1));
     const to = endDate || todayISO();
 
@@ -303,7 +303,7 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", authorize({ featur
   try {
     const scope = req.scope!;
     const { entityType } = req.params;
-    const { startDate, endDate } = req.query as any;
+    const { startDate, endDate } = req.query as Record<string, string | undefined>;
     const id = parseId(req.params.entityId, "entityId");
 
     function buildDateFilter(fixedCount: number, sd: string | undefined, ed: string | undefined) {
@@ -423,7 +423,7 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
   try {
     const scope = req.scope!;
     const clientId = parseId(req.params.clientId, "clientId");
-    const { startDate, endDate } = req.query as any;
+    const { startDate, endDate } = req.query as Record<string, string | undefined>;
     const asOf = endDate || todayISO();
     const from = startDate || "1900-01-01";
 
@@ -542,7 +542,7 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
   try {
     const scope = req.scope!;
     const supplierId = parseId(req.params.supplierId, "supplierId");
-    const { startDate, endDate } = req.query as any;
+    const { startDate, endDate } = req.query as Record<string, string | undefined>;
     const asOf = endDate || todayISO();
     const from = startDate || "1900-01-01";
 
@@ -646,7 +646,7 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
 reportsRouter.get("/reports/entity-statement", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { entityType, entityId, startDate, endDate } = req.query as any;
+    const { entityType, entityId, startDate, endDate } = req.query as Record<string, string | undefined>;
 
     let rows: any[] = [];
     let entityName = "";
@@ -721,7 +721,7 @@ reportsRouter.get("/reports/entity-statement", authorize({ feature: "finance.rep
 reportsRouter.get("/reports/custody-advances", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { startDate, endDate, branchId } = req.query as any;
+    const { startDate, endDate, branchId } = req.query as Record<string, string | undefined>;
 
     let dateFilter = "";
     const params: unknown[] = [scope.companyId];
@@ -780,7 +780,7 @@ reportsRouter.get("/reports/custody-advances", authorize({ feature: "finance.rep
 reportsRouter.get("/reports/expenses-analysis", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { startDate, endDate, branchId, departmentId, projectId, costCenterId, groupBy = "account" } = req.query as any;
+    const { startDate, endDate, branchId, departmentId, projectId, costCenterId, groupBy = "account" } = req.query as Record<string, string | undefined>;
 
     let dateFilter = "";
     const params: unknown[] = [scope.companyId];
@@ -826,7 +826,7 @@ reportsRouter.get("/reports/expenses-analysis", authorize({ feature: "finance.re
 reportsRouter.get("/reports/revenue-analysis", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { startDate, endDate, branchId } = req.query as any;
+    const { startDate, endDate, branchId } = req.query as Record<string, string | undefined>;
 
     let dateFilter = "";
     const params: unknown[] = [scope.companyId];
@@ -871,7 +871,7 @@ reportsRouter.get("/reports/revenue-analysis", authorize({ feature: "finance.rep
 reportsRouter.get("/reports/budget-variance", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { period, branchId } = req.query as any;
+    const { period, branchId } = req.query as Record<string, string | undefined>;
 
     const targetPeriod = period || currentPeriod();
     const params: unknown[] = [scope.companyId, targetPeriod];
@@ -905,7 +905,7 @@ reportsRouter.get("/reports/budget-variance", authorize({ feature: "finance.repo
 reportsRouter.get("/reports/cash-bank-statement", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { startDate, endDate, accountCode = "1100", branchId } = req.query as any;
+    const { startDate, endDate, accountCode = "1100", branchId } = req.query as Record<string, string | undefined>;
 
     let dateFilter = "";
     const params: unknown[] = [scope.companyId, accountCode];

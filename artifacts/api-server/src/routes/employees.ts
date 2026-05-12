@@ -193,7 +193,7 @@ const router = Router();
 router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { search = "", status, page = "1", limit: lim = "20" } = req.query as any;
+    const { search = "", status, page = "1", limit: lim = "20" } = req.query as Record<string, string | undefined>;
     const offset = (Math.max(Number(page) || 1, 1) - 1) * (Number(lim) || 20);
 
     const filters = parseScopeFilters(req);
@@ -702,7 +702,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
 router.get("/onboarding-tasks", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { employeeId, status } = req.query as any;
+    const { employeeId, status } = req.query as Record<string, string | undefined>;
     const conditions = [`ot."companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (employeeId) { params.push(Number(employeeId)); conditions.push(`ot."employeeId" = $${params.length}`); }

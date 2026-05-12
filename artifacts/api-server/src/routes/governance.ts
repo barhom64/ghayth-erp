@@ -168,7 +168,7 @@ const router = Router();
 router.get("/policies", authorize({ feature: "governance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { status, module: mod } = req.query as any;
+    const { status, module: mod } = req.query as Record<string, string | undefined>;
     const conditions = [`("companyId"=$1 OR "companyId" IS NULL)`, `"deletedAt" IS NULL`];
     const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`status=$${params.length}`); }
@@ -518,7 +518,7 @@ router.get("/audits", authorize({ feature: "governance", action: "list" }), asyn
 router.post("/audits", authorize({ feature: "governance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { title, scope: auditScope, status, auditorName, startDate, endDate, findings } = zodParse(createAuditSchema.safeParse(req.body)) as any;
+    const { title, scope: auditScope, status, auditorName, startDate, endDate, findings } = zodParse(createAuditSchema.safeParse(req.body));
     const r = await rawExecute(
       `INSERT INTO governance_audits (title, scope, status, "auditorName", "startDate", "endDate", findings, "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [title, auditScope, status || "planned", auditorName, startDate, endDate, findings, scope.companyId]

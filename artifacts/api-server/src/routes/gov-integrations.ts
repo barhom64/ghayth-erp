@@ -406,7 +406,7 @@ router.get("/expiring/registration", authorize({ feature: "admin", action: "upda
 router.get("/links", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { entityType, entityId } = req.query as any;
+    const { entityType, entityId } = req.query as Record<string, string | undefined>;
     const conditions = [`gl."companyId" = $1`];
     const params: unknown[] = [scope.companyId];
 

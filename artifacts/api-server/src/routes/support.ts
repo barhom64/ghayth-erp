@@ -180,7 +180,7 @@ function detectPriority(text: string): string {
 router.get("/tickets", authorize({ feature: "support.tickets", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { status, priority } = req.query as any;
+    const { status, priority } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 't."companyId"', disableBranchScope: true });
     let where = baseWhere;
@@ -417,7 +417,7 @@ router.get("/tickets/:id", authorize({ feature: "support.tickets", action: "view
 router.post("/tickets/:id/replies", authorize({ feature: "support.tickets", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = zodParse(createReplySchema.safeParse(req.body)) as any;
+    const b = zodParse(createReplySchema.safeParse(req.body));
     const ticketId = parseId(req.params.id, "id");
 
     const [ticket] = await rawQuery<Pick<SupportTicketRow, "id" | "ref" | "title" | "firstResponseAt" | "slaDeadline" | "priority">>(`SELECT id, ref, title, "firstResponseAt", "slaDeadline", priority FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [ticketId, scope.companyId]);
@@ -765,7 +765,7 @@ router.post("/tickets/:id/csat", authorize({ feature: "support.tickets", action:
   try {
     const scope = req.scope!;
     const ticketId = parseId(req.params.id, "id");
-    const b = zodParse(createCSATSchema.safeParse(req.body)) as any;
+    const b = zodParse(createCSATSchema.safeParse(req.body));
     const { score, comment } = b;
     const [ticket] = await rawQuery<Pick<SupportTicketRow, "id" | "assigneeId" | "status">>(`SELECT id, "assigneeId", status FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [ticketId, scope.companyId]);
     if (!ticket) throw new NotFoundError("التذكرة غير موجودة");
@@ -817,7 +817,7 @@ router.get("/csat", authorize({ feature: "support.tickets", action: "list" }), a
 router.get("/kb", authorize({ feature: "support.tickets", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { q, category } = req.query as any;
+    const { q, category } = req.query as Record<string, string | undefined>;
     const conditions = [`("companyId"=$1 OR "companyId" IS NULL)`, `status='published'`, `"deletedAt" IS NULL`];
     const params: unknown[] = [scope.companyId];
     if (category) { params.push(category); conditions.push(`category=$${params.length}`); }
@@ -841,7 +841,7 @@ router.get("/kb/:id", authorize({ feature: "support.tickets", action: "view" }),
 router.post("/kb", authorize({ feature: "support.tickets", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const b = zodParse(createKbSchema.safeParse(req.body)) as any;
+    const b = zodParse(createKbSchema.safeParse(req.body));
     const { title, content, category, tags } = b;
     const { insertId } = await rawExecute(
       `INSERT INTO kb_articles (title, content, category, tags, status, views, helpful, "notHelpful", "companyId", "createdBy") VALUES ($1,$2,$3,$4,'published',0,0,0,$5,$6)`,

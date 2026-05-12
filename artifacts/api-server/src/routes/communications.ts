@@ -423,7 +423,7 @@ router.post("/pbx/status", async (req, res): Promise<void> => {
 router.get("/log", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { channel, direction, limit: lim, offset: off } = req.query as any;
+    const { channel, direction, limit: lim, offset: off } = req.query as Record<string, string | undefined>;
     const pageLimit = Math.min(Number(lim) || 50, 200);
     const pageOffset = Number(off) || 0;
     const conditions = [`"companyId" = $1`, `"deletedAt" IS NULL`];
@@ -479,7 +479,7 @@ router.post("/send", authorize({ feature: "communications", action: "create" }),
 router.get("/whatsapp", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { status, limit: lim, offset: off } = req.query as any;
+    const { status, limit: lim, offset: off } = req.query as Record<string, string | undefined>;
     const pageLimit = Math.min(Number(lim) || 50, 200);
     const pageOffset = Number(off) || 0;
     const conditions = [`"companyId" = $1`];
@@ -496,7 +496,7 @@ router.get("/whatsapp", authorize({ feature: "communications", action: "list" })
 router.get("/sms", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { status, limit: lim, offset: off } = req.query as any;
+    const { status, limit: lim, offset: off } = req.query as Record<string, string | undefined>;
     const pageLimit = Math.min(Number(lim) || 50, 200);
     const pageOffset = Number(off) || 0;
     const conditions = [`"companyId" = $1`];
@@ -513,7 +513,7 @@ router.get("/sms", authorize({ feature: "communications", action: "list" }), asy
 router.get("/pbx", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { limit: lim, offset: off } = req.query as any;
+    const { limit: lim, offset: off } = req.query as Record<string, string | undefined>;
     const pageLimit = Math.min(Number(lim) || 50, 200);
     const pageOffset = Number(off) || 0;
     const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM pbx_calls WHERE "companyId"=$1`, [scope.companyId]);

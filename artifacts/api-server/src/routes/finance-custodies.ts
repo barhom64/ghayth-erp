@@ -175,7 +175,7 @@ const approveCustodySchema = z.object({
 custodiesRouter.get("/custodies", authorize({ feature: "finance.custodies", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { status: filterStatus, employeeId, page = "1", limit: lim = "50", dateFrom, dateTo } = req.query as any;
+    const { status: filterStatus, employeeId, page = "1", limit: lim = "50", dateFrom, dateTo } = req.query as Record<string, string | undefined>;
 
     const queryParams: any[] = [scope.companyId];
     let dateFilter = "";

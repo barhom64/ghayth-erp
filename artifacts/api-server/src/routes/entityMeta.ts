@@ -180,7 +180,7 @@ router.get("/tags-filter/:entityType", authorize({ feature: "projects", action: 
   try {
     const scope = req.scope!;
     const { entityType } = req.params;
-    const { tag } = req.query as any;
+    const { tag } = req.query as Record<string, string | undefined>;
     if (!tag) {
       throw new ValidationError("الوسم مطلوب للفلترة");
     }
