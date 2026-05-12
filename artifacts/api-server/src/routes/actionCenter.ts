@@ -37,6 +37,11 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
       pendingExitRequests, pendingTransfers, pendingExcuses, pendingViolations,
       pendingPurchaseOrders, pendingTrainings, pendingMaintenance,
       pendingJournals, pendingInventory, pendingWorkflows,
+      // ── Umrah operational alerts (no extra role gate — already inside
+      // ACTION_CENTER_ROLES at the top of the handler; safe() means a
+      // failing umrah query never blocks the rest of the dashboard).
+      umrahUnlinkedSubAgents, umrahOverstayWithoutPenalty,
+      umrahOverdueInvoices, umrahReconAmountDiffs,
     ] = await Promise.all([
       ifRole(LEAVE_APPROVAL_ROLES, () => rawQuery<any>(
         `SELECT lr.id, e.name AS "employeeName", lt.name AS "leaveType",
@@ -247,7 +252,84 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
          ORDER BY wi."createdAt" DESC LIMIT 30`,
         [scope.activeAssignmentId, cc]
       ), "pendingWorkflows"),
+      // 1. Sub-agents on file but never linked to a client record — blocks
+      //    invoice + statement flows for that sub-agent. Surfaced here so
+      //    ops can finish the linkage before the next import cycle.
+      safe(rawQuery<any>(
+        `SELECT sa.id, sa."nuskCode", sa.name, sa."paymentTerms", sa.country, sa."createdAt"
+           FROM umrah_sub_agents sa
+          WHERE sa."companyId" = ANY($1::int[])
+            AND sa."clientId" IS NULL
+            AND sa."deletedAt" IS NULL
+          ORDER BY sa."createdAt" DESC
+          LIMIT 20`,
+        [cc]
+      ), "umrahUnlinkedSubAgents"),
+      // 2. Pilgrims with overstayDays > 0 who don't have a penalty row yet
+      //    — typically means cron C27 didn't run or was rate-limited.
+      safe(rawQuery<any>(
+        `SELECT p.id, p."nuskNumber", p."fullName", p.nationality,
+                p."overstayDays", g.name AS "groupName"
+           FROM umrah_pilgrims p
+      LEFT JOIN umrah_groups g ON g.id = p."groupId"
+          WHERE p."companyId" = ANY($1::int[])
+            AND COALESCE(p."overstayDays", 0) > 0
+            AND p."deletedAt" IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM umrah_penalties pen
+               WHERE pen."pilgrimId" = p.id
+                 AND pen."companyId" = p."companyId"
+                 AND pen.type = 'overstay'
+                 AND pen.status IN ('pending','invoiced')
+            )
+          ORDER BY p."overstayDays" DESC
+          LIMIT 20`,
+        [cc]
+      ), "umrahOverstayWithoutPenalty"),
+      // 3. Postpaid umrah sales invoices that have aged past their due date
+      //    without being marked paid — top operational AR follow-up item.
+      safe(rawQuery<any>(
+        `SELECT si.id, si.ref, si.total, si."paidAmount", si.status,
+                si."invoiceDate", si."dueDate",
+                sa.name AS "subAgentName"
+           FROM umrah_sales_invoices si
+      LEFT JOIN umrah_sub_agents sa ON sa.id = si."subAgentId"
+          WHERE si."companyId" = ANY($1::int[])
+            AND si."deletedAt" IS NULL
+            AND si.status NOT IN ('paid','cancelled')
+            AND si."dueDate" IS NOT NULL
+            AND si."dueDate" < $2::date
+          ORDER BY si."dueDate" ASC
+          LIMIT 20`,
+        [cc, today]
+      ), "umrahOverdueInvoices"),
+      // 4. NUSK file ↔ posted-GL amount diffs (subset of the reconciliation
+      //    report, kept lean for the dashboard).
+      safe(rawQuery<any>(
+        `SELECT ni.id, ni."nuskInvoiceNumber", ni."totalAmount" AS "fileTotal",
+                ni."nuskStatus",
+                COALESCE(je_ap.total, 0) AS "postedAp",
+                (ni."totalAmount" - COALESCE(je_ap.total, 0))::numeric(12,2) AS "diff"
+           FROM umrah_nusk_invoices ni
+      LEFT JOIN LATERAL (
+             SELECT SUM(jl.debit) AS total FROM journal_entries je
+               JOIN journal_lines jl ON jl."journalId" = je.id
+              WHERE je.id = ni."purchaseInvoiceId" AND je."deletedAt" IS NULL
+                AND jl."accountCode" LIKE '5%'
+           ) je_ap ON true
+          WHERE ni."companyId" = ANY($1::int[])
+            AND ni."deletedAt" IS NULL
+            AND ni."nuskStatus" != 'cancelled'
+            AND ABS(ni."totalAmount" - COALESCE(je_ap.total, 0)) > 0.01
+          ORDER BY ABS(ni."totalAmount" - COALESCE(je_ap.total, 0)) DESC
+          LIMIT 20`,
+        [cc]
+      ), "umrahReconAmountDiffs"),
     ]);
+
+    const umrahPendingCount =
+      umrahUnlinkedSubAgents.length + umrahOverstayWithoutPenalty.length +
+      umrahOverdueInvoices.length + umrahReconAmountDiffs.length;
 
     const totalPending =
       pendingLeaves.length + pendingAdvances.length + pendingCustodies.length +
@@ -255,7 +337,8 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
       pendingLoans.length + pendingOvertime.length + pendingExitRequests.length +
       pendingTransfers.length + pendingExcuses.length + pendingViolations.length +
       pendingPurchaseOrders.length + pendingTrainings.length + pendingMaintenance.length +
-      pendingJournals.length + pendingInventory.length + pendingWorkflows.length;
+      pendingJournals.length + pendingInventory.length + pendingWorkflows.length +
+      umrahPendingCount;
 
     res.json({
       summary: {
@@ -264,12 +347,15 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
         escalationsCount: escalations.length,
         criticalAlertsCount: criticalAlerts.length,
         workflowPendingCount: pendingWorkflows.length,
+        umrahPendingCount,
       },
       pendingLeaves, pendingAdvances, pendingCustodies, pendingLetters,
       pendingPurchases, pendingExpenses, pendingLoans, pendingOvertime,
       pendingExitRequests, pendingTransfers, pendingExcuses, pendingViolations,
       pendingPurchaseOrders, pendingTrainings, pendingMaintenance,
       pendingJournals, pendingInventory, pendingWorkflows,
+      umrahUnlinkedSubAgents, umrahOverstayWithoutPenalty,
+      umrahOverdueInvoices, umrahReconAmountDiffs,
       slaBreached, escalations, todayTasks, criticalAlerts,
       role: scope.role,
     });

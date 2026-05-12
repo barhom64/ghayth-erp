@@ -1,10 +1,11 @@
 import { useState } from "react";
+import { z } from "zod";
+import { useFormContext } from "react-hook-form";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { KeyRound, CheckCircle, Shield, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -12,6 +13,27 @@ import { useToast } from "@/hooks/use-toast";
 import { roleKeyColors } from "@/contexts/app-context";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { MODULE_LABELS } from "@/lib/module-labels";
+import {
+  FormShell,
+  FormTextField,
+  FormNumberField,
+  FormGrid,
+} from "@/components/form-shell";
+
+// The `modules` field is a string[] of MODULE_LABELS keys. Schema
+// enforces the closed-set; the picker lives below as a small
+// FormContext-aware subcomponent (FormShell ships text/number/select
+// only — multi-select isn't a primitive, so we drive it via
+// useFormContext + watch/setValue).
+const newRoleSchema = z.object({
+  roleKey: z.string()
+    .min(1, "مفتاح الدور مطلوب")
+    .regex(/^[a-z_]+$/, "مفتاح الدور يجب أن يحتوي على حروف إنجليزية صغيرة وشرطات سفلية فقط"),
+  label: z.string().trim().min(1, "اسم الدور مطلوب"),
+  level: z.coerce.number().int().min(1).max(100),
+  modules: z.array(z.string()),
+});
+type NewRoleForm = z.infer<typeof newRoleSchema>;
 
 const ALL_MODULES = Object.keys(MODULE_LABELS);
 
@@ -75,7 +97,6 @@ export default function AdminRolesPage() {
   const [permsLoading, setPermsLoading] = useState(false);
   const [permSaving, setPermSaving] = useState<string | null>(null);
 
-  const [newRole, setNewRole] = useState({ roleKey: "", label: "", level: "10", modules: [] as string[] });
   const [creatingRole, setCreatingRole] = useState(false);
 
   const rolePermColumns: DataTableColumn<any>[] = [
@@ -108,34 +129,20 @@ export default function AdminRolesPage() {
   if (isLoading) return <DataTable columns={rolePermColumns} data={[]} isLoading={true} searchPlaceholder={null} noToolbar />;
   if (isError) return <DataTable columns={rolePermColumns} data={[]} isError={true} searchPlaceholder={null} noToolbar />;
 
-  const toggleNewRoleModule = (mod: string) => {
-    setNewRole(prev => ({
-      ...prev,
-      modules: prev.modules.includes(mod) ? prev.modules.filter(m => m !== mod) : [...prev.modules, mod],
-    }));
-  };
-
-  const createNewRole = async () => {
-    if (!newRole.roleKey || !newRole.label) {
-      toast({ variant: "destructive", title: "مفتاح الدور والاسم مطلوبان" }); return;
-    }
-    if (!/^[a-z_]+$/.test(newRole.roleKey)) {
-      toast({ variant: "destructive", title: "مفتاح الدور يجب أن يحتوي على حروف إنجليزية صغيرة وشرطات سفلية فقط" }); return;
-    }
+  const createNewRole = async (values: NewRoleForm) => {
     setCreatingRole(true);
     try {
       await apiFetch("/admin/roles", {
         method: "POST",
         body: JSON.stringify({
-          roleKey: newRole.roleKey,
-          label: newRole.label,
-          level: Number(newRole.level) || 10,
-          modules: newRole.modules,
+          roleKey: values.roleKey,
+          label: values.label,
+          level: values.level,
+          modules: values.modules,
           permissions: [],
         }),
       });
-      toast({ title: `تم إنشاء الدور "${newRole.label}" بنجاح` });
-      setNewRole({ roleKey: "", label: "", level: "10", modules: [] });
+      toast({ title: `تم إنشاء الدور "${values.label}" بنجاح` });
       refetchPredefined();
       setActiveTab("modules");
     } catch (e: any) {
@@ -325,68 +332,79 @@ export default function AdminRolesPage() {
 
       {activeTab === "create" && (
         <Card>
-          <CardContent className="p-6 space-y-5">
-            <h3 className="font-semibold text-base flex items-center gap-2">
+          <CardContent className="p-6">
+            <h3 className="font-semibold text-base flex items-center gap-2 mb-4">
               <Plus className="h-4 w-4 text-purple-600" />
               إنشاء دور جديد مخصص
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <Label>مفتاح الدور (بالإنجليزية) <span className="text-red-500">*</span></Label>
-                <Input
-                  className="mt-1" dir="ltr"
+            <FormShell
+              schema={newRoleSchema}
+              defaultValues={{ roleKey: "", label: "", level: 10, modules: [] }}
+              submitLabel={creatingRole ? "جاري الإنشاء..." : "إنشاء الدور"}
+              onSubmit={async (values, ctx) => {
+                await createNewRole(values);
+                ctx.reset();
+              }}
+            >
+              <FormGrid cols={3}>
+                <FormTextField
+                  name="roleKey"
+                  label="مفتاح الدور (بالإنجليزية)"
+                  required
                   placeholder="custom_manager"
-                  value={newRole.roleKey}
-                  onChange={(e) => setNewRole({ ...newRole, roleKey: e.target.value.toLowerCase().replace(/[^a-z_]/g, "") })}
                 />
-                <p className="text-[10px] text-gray-400 mt-0.5">أحرف إنجليزية صغيرة وشرطة سفلية فقط</p>
-              </div>
-              <div>
-                <Label>اسم الدور بالعربية <span className="text-red-500">*</span></Label>
-                <Input
-                  className="mt-1"
+                <FormTextField
+                  name="label"
+                  label="اسم الدور بالعربية"
+                  required
                   placeholder="مدير مخصص"
-                  value={newRole.label}
-                  onChange={(e) => setNewRole({ ...newRole, label: e.target.value })}
                 />
-              </div>
-              <div>
-                <Label>مستوى الصلاحية (1–100)</Label>
-                <Input
-                  className="mt-1" type="number" min={1} max={100} dir="ltr"
-                  value={newRole.level}
-                  onChange={(e) => setNewRole({ ...newRole, level: e.target.value })}
-                />
-                <p className="text-[10px] text-gray-400 mt-0.5">100=مالك، 90=مدير عام، 70=مدير قسم، 10=موظف</p>
-              </div>
-            </div>
-            <div>
-              <Label className="block mb-2">الوحدات المسموحة</Label>
-              <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
-                {ALL_MODULES.map(mod => (
-                  <button key={mod} onClick={() => toggleNewRoleModule(mod)}
-                    className={cn("flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs transition-all text-start",
-                      newRole.modules.includes(mod)
-                        ? "bg-purple-50 border-purple-400 text-purple-700 font-medium"
-                        : "bg-white border-gray-200 text-gray-500 hover:border-gray-400")}>
-                    {newRole.modules.includes(mod) && <CheckCircle className="h-3 w-3 flex-shrink-0" />}
-                    {MODULE_LABELS[mod] || mod}
-                  </button>
-                ))}
-              </div>
-              <p className="text-xs text-gray-400 mt-2">الوحدات المختارة: {newRole.modules.length}</p>
-            </div>
-            <div className="flex gap-2">
-              <Button onClick={createNewRole} disabled={creatingRole || !newRole.roleKey || !newRole.label}>
-                {creatingRole ? "جاري الإنشاء..." : "إنشاء الدور"}
-              </Button>
-              <Button variant="outline" onClick={() => setNewRole({ roleKey: "", label: "", level: "10", modules: [] })}>
-                مسح
-              </Button>
-            </div>
+                <FormNumberField name="level" label="مستوى الصلاحية (1–100)" />
+              </FormGrid>
+              <ModulesPicker />
+            </FormShell>
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+// Multi-select chips driven by react-hook-form state (via FormShell's
+// internal FormProvider). Lives outside the schema's primitive types
+// so the picker can render its existing button-grid UI verbatim.
+function ModulesPicker() {
+  const { watch, setValue } = useFormContext<NewRoleForm>();
+  const modules = watch("modules");
+  const toggle = (mod: string) => {
+    setValue(
+      "modules",
+      modules.includes(mod) ? modules.filter((m) => m !== mod) : [...modules, mod],
+      { shouldDirty: true, shouldValidate: true },
+    );
+  };
+  return (
+    <div className="mt-4">
+      <Label className="block mb-2">الوحدات المسموحة</Label>
+      <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+        {ALL_MODULES.map((mod) => (
+          <button
+            type="button"
+            key={mod}
+            onClick={() => toggle(mod)}
+            className={cn(
+              "flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs transition-all text-start",
+              modules.includes(mod)
+                ? "bg-purple-50 border-purple-400 text-purple-700 font-medium"
+                : "bg-white border-gray-200 text-gray-500 hover:border-gray-400",
+            )}
+          >
+            {modules.includes(mod) && <CheckCircle className="h-3 w-3 flex-shrink-0" />}
+            {MODULE_LABELS[mod] || mod}
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-gray-400 mt-2">الوحدات المختارة: {modules.length}</p>
     </div>
   );
 }
