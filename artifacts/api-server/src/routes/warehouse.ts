@@ -1168,7 +1168,7 @@ router.patch("/suppliers/:id", authorize({ feature: "warehouse.inventory", actio
     const b = zodParse(patchSupplierSchema.safeParse(req.body));
     const fields: string[] = [];
     const params: unknown[] = [];
-    const addField = (col: string, val: any) => { if (val !== undefined) { params.push(val); fields.push(`"${col}" = $${params.length}`); } };
+    const addField = (col: string, val: unknown) => { if (val !== undefined) { params.push(val); fields.push(`"${col}" = $${params.length}`); } };
     addField("name", b.name);
     addField("contactPerson", b.contactPerson);
     addField("phone", b.phone);

@@ -230,7 +230,7 @@ accountsRouter.patch("/accounts/:id", authorize({ feature: "finance.accounts", a
     const b = zodParse(updateAccountSchema.safeParse(req.body ?? {}));
     const fields: string[] = [];
     const params: unknown[] = [];
-    const addField = (col: string, val: any) => { if (val !== undefined) { params.push(val); fields.push(`"${col}" = $${params.length}`); } };
+    const addField = (col: string, val: unknown) => { if (val !== undefined) { params.push(val); fields.push(`"${col}" = $${params.length}`); } };
     addField("name", b.name);
     addField("type", b.type);
     addField("parentCode", b.parentCode);

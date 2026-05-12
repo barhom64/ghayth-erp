@@ -503,7 +503,7 @@ const DEPOSIT_TRANSITIONS: Record<string, readonly string[]> = {
 router.get("/units", authorize({ feature: "properties.units", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { status, search, buildingId } = req.query as any;
+    const { status, search, buildingId } = req.query as Record<string, string | undefined>;
     const conditions = [`u."companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`u.status = $${params.length}`); }
@@ -984,7 +984,7 @@ router.post("/contracts/impact-preview", authorize({ feature: "properties.contra
 router.get("/contracts", authorize({ feature: "properties.contracts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { status } = req.query as any;
+    const { status } = req.query as Record<string, string | undefined>;
     const conditions = [`c."companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`c.status = $${params.length}`); }
@@ -1295,7 +1295,7 @@ router.patch("/contracts/:id", authorize({ feature: "properties.contracts", acti
     const params: unknown[] = [];
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};
-    const addField = (col: string, val: any) => {
+    const addField = (col: string, val: unknown) => {
       if (val === undefined) return;
       if (val === existing[col]) return;
       params.push(val);
@@ -1632,7 +1632,7 @@ router.post("/contracts/:id/terminate", authorize({ feature: "properties.contrac
 router.get("/tenants/list", authorize({ feature: "properties.tenants", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { search } = req.query as any;
+    const { search } = req.query as Record<string, string | undefined>;
 
     const tConditions = [`t."companyId" = $1`];
     const tParams: any[] = [scope.companyId];
@@ -1729,7 +1729,7 @@ router.patch("/tenants/:id", authorize({ feature: "properties.tenants", action: 
     const params: unknown[] = [];
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};
-    const addField = (col: string, val: any) => {
+    const addField = (col: string, val: unknown) => {
       if (val === undefined) return;
       if (val === existing[col]) return;
       params.push(val);
@@ -1842,7 +1842,7 @@ router.delete("/tenants/:id", authorize({ feature: "properties.tenants", action:
 router.get("/payments", authorize({ feature: "properties.payments", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { status, contractId } = req.query as any;
+    const { status, contractId } = req.query as Record<string, string | undefined>;
     const conditions = [`c."companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`rp.status = $${params.length}`); }
@@ -2109,7 +2109,7 @@ router.post("/late-rent/escalate", authorize({ feature: "properties.payments", a
 router.get("/maintenance-requests", authorize({ feature: "properties.maintenance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { status } = req.query as any;
+    const { status } = req.query as Record<string, string | undefined>;
     const conditions = [`mr."companyId" = $1`, `mr."deletedAt" IS NULL`];
     const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`mr.status = $${params.length}`); }
@@ -2561,7 +2561,7 @@ router.get("/technicians", authorize({ feature: "properties.maintenance", action
 router.get("/tenants", authorize({ feature: "properties.tenants", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { search } = req.query as any;
+    const { search } = req.query as Record<string, string | undefined>;
     const params: unknown[] = [scope.companyId];
     let whereClause = `"companyId"=$1`;
     if (search) { params.push(`%${search}%`); whereClause += ` AND (name ILIKE $${params.length} OR phone ILIKE $${params.length} OR "nationalId" ILIKE $${params.length})`; }
@@ -2690,7 +2690,7 @@ router.get("/tenants/:id", authorize({ feature: "properties.tenants", action: "v
 router.get("/buildings", authorize({ feature: "properties.buildings", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { search } = req.query as any;
+    const { search } = req.query as Record<string, string | undefined>;
     const conditions = [`b."companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (search) { params.push(`%${search}%`); conditions.push(`(b.name ILIKE $${params.length} OR b.address ILIKE $${params.length} OR b.city ILIKE $${params.length})`); }
@@ -2938,7 +2938,7 @@ router.delete("/buildings/:id", authorize({ feature: "properties.buildings", act
 router.get("/maintenance", authorize({ feature: "properties.maintenance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { status } = req.query as any;
+    const { status } = req.query as Record<string, string | undefined>;
     const conditions = [`mr."companyId" = $1`, `mr."deletedAt" IS NULL`];
     const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`mr.status = $${params.length}`); }
@@ -3268,7 +3268,7 @@ router.get("/operations-dashboard", authorize({ feature: "properties.units", act
 router.get("/owners", authorize({ feature: "properties.owners", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { search } = req.query as any;
+    const { search } = req.query as Record<string, string | undefined>;
     const conditions = [`"companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (search) { params.push(`%${search}%`); conditions.push(`(name ILIKE $${params.length} OR "nationalId" ILIKE $${params.length} OR "crNumber" ILIKE $${params.length} OR phone ILIKE $${params.length})`); }
@@ -3365,7 +3365,7 @@ router.patch("/owners/:id", authorize({ feature: "properties.owners", action: "u
     const b = zodParse(updateOwnerSchema.safeParse(req.body)) as any;
     const fields: string[] = [];
     const params: unknown[] = [];
-    const addField = (col: string, val: any) => { if (val !== undefined) { params.push(val); fields.push(`"${col}" = $${params.length}`); } };
+    const addField = (col: string, val: unknown) => { if (val !== undefined) { params.push(val); fields.push(`"${col}" = $${params.length}`); } };
     addField("ownerType", b.ownerType);
     addField("name", b.name);
     addField("nationalId", b.nationalId);
@@ -3544,7 +3544,7 @@ router.post("/contracts/:id/schedule/:installmentId/pay", authorize({ feature: "
 router.get("/inspections", authorize({ feature: "properties.maintenance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { unitId, status } = req.query as any;
+    const { unitId, status } = req.query as Record<string, string | undefined>;
     const conditions = [`i."companyId"=$1`];
     const params: unknown[] = [scope.companyId];
     if (unitId) { params.push(Number(unitId)); conditions.push(`i."unitId"=$${params.length}`); }
@@ -3712,7 +3712,7 @@ router.patch("/inspections/:id", authorize({ feature: "properties.maintenance", 
 router.get("/deposits", authorize({ feature: "properties.payments", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { status, contractId } = req.query as any;
+    const { status, contractId } = req.query as Record<string, string | undefined>;
     const conditions = [`sd."companyId"=$1`];
     const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`sd.status=$${params.length}`); }
@@ -3873,7 +3873,7 @@ router.patch("/deposits/:id/refund", authorize({ feature: "properties.payments",
 router.get("/occupancy-report", authorize({ feature: "properties.units", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { buildingId } = req.query as any;
+    const { buildingId } = req.query as Record<string, string | undefined>;
 
     const conditions = [`u."companyId"=$1`, `u."deletedAt" IS NULL`];
     const params: unknown[] = [scope.companyId];

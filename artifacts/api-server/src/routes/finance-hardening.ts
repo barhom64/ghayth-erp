@@ -721,7 +721,7 @@ financeHardeningRouter.patch("/bank-guarantees/:id", authorize({ feature: "finan
     const b = zodParse(updateBankGuaranteeSchema.safeParse(req.body ?? {}));
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: unknown[] = [];
-    const f = (col: string, val: any) => { if (val !== undefined) { params.push(val); sets.push(`"${col}"=$${params.length}`); } };
+    const f = (col: string, val: unknown) => { if (val !== undefined) { params.push(val); sets.push(`"${col}"=$${params.length}`); } };
     f("bank", b.bank); f("beneficiary", b.beneficiary); f("amount", b.amount);
     f("expiryDate", b.expiryDate); f("status", b.status); f("notes", b.notes);
     f("attachmentUrl", b.attachmentUrl); f("guaranteeType", b.guaranteeType);

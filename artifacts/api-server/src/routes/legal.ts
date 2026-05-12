@@ -164,7 +164,7 @@ const CASE_STATUSES = ["open", "in_progress", "judgment", "execution", "closed"]
 router.get("/contracts", authorize({ feature: "legal.contracts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { status } = req.query as any;
+    const { status } = req.query as Record<string, string | undefined>;
     const conditions = [`"companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`status = $${params.length}`); }
@@ -555,7 +555,7 @@ router.post("/contracts/:id/terminate", authorize({ feature: "legal.contracts", 
 router.get("/cases", authorize({ feature: "legal.cases", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { status } = req.query as any;
+    const { status } = req.query as Record<string, string | undefined>;
     const conditions = [`"companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`status = $${params.length}`); }

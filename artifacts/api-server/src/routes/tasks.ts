@@ -392,7 +392,7 @@ router.patch("/:id", authorize({ feature: "tasks", action: "update", resource: {
     const params: unknown[] = [];
     let idx = 1;
 
-    const addField = (col: string, val: any) => {
+    const addField = (col: string, val: unknown) => {
       if (val !== undefined) { sets.push(`"${col}" = $${idx}`); params.push(val); idx++; }
     };
 

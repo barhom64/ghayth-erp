@@ -75,7 +75,7 @@ export interface AccessResult {
   /** Field-mode map for `applyFieldPolicy(response)` to consume. */
   fieldPolicy?: Record<string, "visible" | "masked" | "hidden" | "readonly">;
   /** SQL filter the handler can splice into a list query. */
-  scopeFilter?: { sql: string; params: any[] } | null;
+  scopeFilter?: { sql: string; params: unknown[] } | null;
   /** Effective approval limit (for approve actions). */
   approvalLimit?: { max: number | null; currency: string; requiresDualControl: boolean } | null;
   /** Diagnostics — populated even on denial so the admin can fix it. */
@@ -330,7 +330,7 @@ function evaluateScopeForRecord(grant: RoleGrantRow, ctx: ScopeContext, record?:
   }
 }
 
-function buildScopeFilter(grant: RoleGrantRow, ctx: ScopeContext, columns: ScopeColumnMap): { sql: string; params: any[] } | null {
+function buildScopeFilter(grant: RoleGrantRow, ctx: ScopeContext, columns: ScopeColumnMap): { sql: string; params: unknown[] } | null {
   const { scope } = ctx;
   const c = columns;
   switch (grant.scope as Scope) {
