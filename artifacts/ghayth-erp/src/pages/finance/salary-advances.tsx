@@ -5,6 +5,7 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import {
   FormShell, FormTextField, FormNumberField, FormSelectField, FormGrid,
 } from "@/components/form-shell";
@@ -138,7 +139,7 @@ export default function SalaryAdvancesPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "سلف الرواتب" }]}
       loading={isLoading}
       actions={
-        <Button size="sm" onClick={() => setShowForm((v) => !v)}>
+        <GuardedButton perm="finance:create" size="sm" onClick={() => setShowForm((v) => !v)}>
           {showForm ? (
             <>
               <X className="h-4 w-4 me-1" />
@@ -150,7 +151,7 @@ export default function SalaryAdvancesPage() {
               سلفة جديدة
             </>
           )}
-        </Button>
+        </GuardedButton>
       }
     >
       <KpiGrid items={[

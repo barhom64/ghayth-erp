@@ -15,6 +15,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { PrintPreviewModal } from "@/components/print-layout";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
 import { useAuth } from "@/lib/auth";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { useToast } from "@/hooks/use-toast";
 
 const typeLabels: Record<string, string> = {
@@ -240,9 +241,9 @@ export default function DocumentsTemplates() {
             <Button variant="outline" onClick={handleLivePreview} disabled={!form.htmlContent}>
               <Eye className="h-4 w-4 me-1" />معاينة
             </Button>
-            <Button onClick={handleSave} rateLimitAware>
+            <GuardedButton perm="documents:create" onClick={handleSave} rateLimitAware>
               <Save className="h-4 w-4 me-1" />حفظ
-            </Button>
+            </GuardedButton>
           </div>
         </div>
 
@@ -353,9 +354,9 @@ export default function DocumentsTemplates() {
                     <Input size={1} placeholder="المفتاح" value={newVarKey} onChange={(e) => setNewVarKey(e.target.value)} className="text-xs" dir="ltr" />
                     <Input size={1} placeholder="التسمية" value={newVarLabel} onChange={(e) => setNewVarLabel(e.target.value)} className="text-xs" />
                   </div>
-                  <Button variant="outline" size="sm" className="w-full" onClick={addVariable} disabled={!newVarKey || !newVarLabel}>
+                  <GuardedButton perm="documents:create" variant="outline" size="sm" className="w-full" onClick={addVariable} disabled={!newVarKey || !newVarLabel}>
                     <Plus className="h-3 w-3 me-1" />إضافة متغير
-                  </Button>
+                  </GuardedButton>
                 </div>
               </CardContent>
             </Card>
@@ -414,9 +415,9 @@ export default function DocumentsTemplates() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">مركز القوالب</h1>
-        <Button className="gap-2" onClick={() => openEditor()}>
+        <GuardedButton perm="documents:create" className="gap-2" onClick={() => openEditor()}>
           <Plus className="h-4 w-4" /> إضافة قالب
-        </Button>
+        </GuardedButton>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
@@ -476,13 +477,13 @@ export default function DocumentsTemplates() {
                   <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handlePreview(t)} title="معاينة">
                     <Eye className="h-3.5 w-3.5" />
                   </Button>
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEditor(t)} title="تعديل">
+                  <GuardedButton perm="documents:create" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEditor(t)} title="تعديل">
                     <Edit className="h-3.5 w-3.5" />
-                  </Button>
+                  </GuardedButton>
                   {!t.isDefault && (
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-400 hover:text-red-600" onClick={() => handleDelete(t.id)} title="حذف">
+                    <GuardedButton perm="documents:create" variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-400 hover:text-red-600" onClick={() => handleDelete(t.id)} title="حذف">
                       <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    </GuardedButton>
                   )}
                 </div>
               </div>

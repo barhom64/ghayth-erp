@@ -7,6 +7,7 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { PageShell } from "@/components/page-shell";
 import { Banknote, CheckCircle } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
 
@@ -61,9 +62,9 @@ export default function PropertiesPayments() {
       breadcrumbs={[{ href: "/properties", label: "إدارة الأملاك" }]}
       actions={canManage && (
         <Link href="/properties/payments/new/pay">
-          <Button className="gap-2">
+          <GuardedButton perm="property:create" className="gap-2">
             <Banknote className="h-4 w-4" /> تسجيل دفعة
-          </Button>
+          </GuardedButton>
         </Link>
       )}
     >

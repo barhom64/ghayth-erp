@@ -13,6 +13,89 @@ import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 
 const router = Router();
 
+interface UserLoginRow {
+  id: number;
+  passwordHash: string;
+  isActive: boolean;
+  employeeId: number;
+  failedLoginAttempts: number;
+  lockedUntil: string | null;
+}
+
+interface FailedAttemptsRow {
+  failedLoginAttempts: number;
+}
+
+interface AssignmentLoginRow {
+  id: number;
+  companyId: number;
+  branchId: number | null;
+  role: string;
+  status: string;
+  jobTitleId: number | null;
+  jobTitle: string | null;
+  companyName: string | null;
+  branchName: string | null;
+}
+
+interface UserRoleRow {
+  id: number;
+  roleKey: string;
+  label: string;
+  modules: unknown;
+  level: number;
+  source: "legacy" | "v2";
+}
+
+interface RefreshTokenRow {
+  id: number;
+  token: string;
+  userId: number;
+  expiresAt: string;
+  revokedAt: string | null;
+  userAgent: string | null;
+  ipAddress: string | null;
+  createdAt: string;
+  isActive: boolean;
+  employeeId: number;
+  lockedUntil: string | null;
+}
+
+interface AssignmentRefreshRow {
+  id: number;
+  role: string;
+}
+
+interface EmployeeMeRow {
+  id: number;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  empNumber: string | null;
+  photoUrl: string | null;
+  status: string;
+  jobTitle: string | null;
+  jobTitleId: number | null;
+  role: string;
+  salary: number | string | null;
+  companyId: number;
+  branchId: number | null;
+  companyName: string | null;
+  branchName: string | null;
+}
+
+interface UserPasswordRow {
+  id: number;
+  passwordHash: string;
+}
+
+interface AssignmentSwitchRow {
+  id: number;
+  companyId: number;
+  branchId: number | null;
+  role: string;
+}
+
 const isProduction = process.env.NODE_ENV === "production";
 
 function setAccessTokenCookie(res: ExpressResponse, token: string) {
@@ -145,7 +228,7 @@ router.post("/login", loginLimiter, async (req, res) => {
     }
     const { email, password } = parsed.data;
 
-    const [user] = await rawQuery<any>(
+    const [user] = await rawQuery<UserLoginRow>(
       `SELECT u.id, u."passwordHash", u."isActive", u."employeeId",
               u."failedLoginAttempts", u."lockedUntil"
        FROM users u WHERE u.email = $1`,
@@ -168,7 +251,7 @@ router.post("/login", loginLimiter, async (req, res) => {
     const valid = await verifyPassword(password, user.passwordHash);
     if (!valid) {
       // Atomic increment to prevent race conditions (C10)
-      const [updated] = await rawQuery<any>(
+      const [updated] = await rawQuery<FailedAttemptsRow>(
         `UPDATE users SET "failedLoginAttempts" = "failedLoginAttempts" + 1 WHERE id = $1 RETURNING "failedLoginAttempts"`,
         [user.id]
       );
@@ -210,7 +293,7 @@ router.post("/login", loginLimiter, async (req, res) => {
       logger.error({ err: resetErr, userId: user.id }, "Failed to reset login state after successful auth");
     }
 
-    const assignments = await rawQuery<any>(
+    const assignments = await rawQuery<AssignmentLoginRow>(
       `SELECT ea.id, ea."companyId", ea."branchId", ea.role, ea.status,
               ea."jobTitleId", COALESCE(jt.name, ea."jobTitle") AS "jobTitle",
               c.name AS "companyName", b.name AS "branchName"
@@ -232,7 +315,7 @@ router.post("/login", loginLimiter, async (req, res) => {
     // frontend role-switcher shows every role an admin has been granted
     // (migration 141 auto-assigns all v2 roles to owners/GMs for testing).
     // V2 ids are negated to keep React keys unique against legacy ids.
-    const userRoles = await rawQuery<any>(
+    const userRoles = await rawQuery<UserRoleRow>(
       `SELECT id, "roleKey", label, modules, level, source FROM (
          SELECT id, "roleKey", label, modules, level, 1 AS source_order, 'legacy' AS source
            FROM user_roles WHERE "userId" = $1
@@ -283,7 +366,7 @@ router.post("/login", loginLimiter, async (req, res) => {
     setRefreshTokenCookie(res, refreshToken);
     setCsrfCookie(res);
 
-    emitEvent({ companyId: primary.companyId, branchId: primary.branchId, userId: user.id, action: "auth.login.success", entity: "users", entityId: user.id, ip: ipAddress || "unknown", details: JSON.stringify({ email, assignmentId: primary.id }) }).catch((e) => logger.error(e, "auth background task failed"));
+    emitEvent({ companyId: primary.companyId, branchId: primary.branchId ?? undefined, userId: user.id, action: "auth.login.success", entity: "users", entityId: user.id, ip: ipAddress || "unknown", details: JSON.stringify({ email, assignmentId: primary.id }) }).catch((e) => logger.error(e, "auth background task failed"));
     res.json({ assignments, userRoles });
   } catch (err) {
     handleRouteError(err, res, "Login error:");
@@ -297,7 +380,7 @@ router.post("/refresh", refreshLimiter, async (req, res) => {
       throw new ValidationError("رمز التحديث مطلوب");
     }
 
-    const [rt] = await rawQuery<any>(
+    const [rt] = await rawQuery<RefreshTokenRow>(
       `SELECT rt.*, u."isActive", u."employeeId", u."lockedUntil"
        FROM refresh_tokens rt
        JOIN users u ON u.id = rt."userId"
@@ -325,7 +408,7 @@ router.post("/refresh", refreshLimiter, async (req, res) => {
       throw new ForbiddenError("الحساب مقفل مؤقتاً");
     }
 
-    const [primaryAssignment] = await rawQuery<any>(
+    const [primaryAssignment] = await rawQuery<AssignmentRefreshRow>(
       `SELECT ea.id, ea.role FROM employee_assignments ea
        WHERE ea."employeeId" = $1 AND ea.status = 'active'
        ORDER BY ea."isPrimary" DESC NULLS LAST LIMIT 1`,
@@ -398,9 +481,9 @@ router.post("/switch-assignment", authMiddleware, authedUserLimiter, async (req,
     if (!scope.allowedAssignments.includes(Number(assignmentId))) {
       throw new ForbiddenError("غير مسموح بالتبديل إلى هذا التعيين");
     }
-    const [assignment] = await rawQuery<any>(
-      `SELECT ea.id, ea."companyId", ea."branchId", ea.role FROM employee_assignments ea WHERE ea.id = $1 AND ea.status = 'active'`,
-      [assignmentId]
+    const [assignment] = await rawQuery<AssignmentSwitchRow>(
+      `SELECT ea.id, ea."companyId", ea."branchId", ea.role FROM employee_assignments ea WHERE ea.id = $1 AND ea."companyId" = ANY($2::int[]) AND ea.status = 'active'`,
+      [assignmentId, scope.allowedCompanies]
     );
     if (!assignment) {
       throw new NotFoundError("التعيين غير موجود أو غير نشط");
@@ -436,7 +519,7 @@ router.get("/me", authMiddleware, authedUserLimiter, async (req, res) => {
   try {
     const scope = req.scope!;
 
-    const [employee] = await rawQuery<any>(
+    const [employee] = await rawQuery<EmployeeMeRow>(
       `SELECT e.id, e.name, e.phone, e.email, e."empNumber",
               e."photoUrl", e.status,
               COALESCE(jt.name, ea."jobTitle") AS "jobTitle",
@@ -457,7 +540,7 @@ router.get("/me", authMiddleware, authedUserLimiter, async (req, res) => {
     }
 
     // Union legacy `user_roles` with v2 `rbac_user_roles`. See /login for rationale.
-    const userRoles = await rawQuery<any>(
+    const userRoles = await rawQuery<UserRoleRow>(
       `SELECT id, "roleKey", label, modules, level, source FROM (
          SELECT id, "roleKey", label, modules, level, 1 AS source_order, 'legacy' AS source
            FROM user_roles WHERE "userId" = $1
@@ -502,7 +585,7 @@ router.post("/change-password", authMiddleware, changePasswordLimiter, async (re
       throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     }
     const { currentPassword, newPassword } = parsed.data;
-    const [user] = await rawQuery<any>(`SELECT id, "passwordHash" FROM users WHERE id=$1`, [scope.userId]);
+    const [user] = await rawQuery<UserPasswordRow>(`SELECT id, "passwordHash" FROM users WHERE id=$1`, [scope.userId]);
     if (!user) { throw new NotFoundError("المستخدم غير موجود"); }
     const valid = await verifyPassword(currentPassword, user.passwordHash);
     if (!valid) { throw new ForbiddenError("كلمة المرور الحالية غير صحيحة"); }

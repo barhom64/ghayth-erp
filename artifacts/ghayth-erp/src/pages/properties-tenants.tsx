@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 export default function PropertiesTenants() {
   const [, navigate] = useLocation();
@@ -132,7 +133,7 @@ export default function PropertiesTenants() {
       breadcrumbs={[{ href: "/properties", label: "إدارة الأملاك" }]}
       actions={
         <Link href="/properties/tenants/create">
-          <Button className="gap-2"><Plus className="h-4 w-4" /> مستأجر جديد</Button>
+          <GuardedButton perm="property:create" className="gap-2"><Plus className="h-4 w-4" /> مستأجر جديد</GuardedButton>
         </Link>
       }
     >

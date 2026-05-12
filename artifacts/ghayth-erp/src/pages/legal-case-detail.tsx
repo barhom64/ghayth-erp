@@ -7,6 +7,7 @@ import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -277,7 +278,8 @@ export default function LegalCaseDetail() {
   const actions = (
     <div className="flex items-center gap-2 flex-wrap">
       {allowedTransitions.map((t: string) => (
-        <Button
+        <GuardedButton
+          perm="legal:create"
           key={t}
           size="sm"
           variant="outline"
@@ -289,7 +291,7 @@ export default function LegalCaseDetail() {
           })}
         >
           {resolveStatus(t, "legal_case")?.label || t}
-        </Button>
+        </GuardedButton>
       ))}
     </div>
   );
@@ -373,9 +375,9 @@ export default function LegalCaseDetail() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-sm">الجلسات</h3>
-            <Button size="sm" onClick={() => setShowAddSession(!showAddSession)}>
+            <GuardedButton perm="legal:create" size="sm" onClick={() => setShowAddSession(!showAddSession)}>
               {showAddSession ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />جلسة جديدة</>}
-            </Button>
+            </GuardedButton>
           </div>
           {showAddSession && <AddSessionForm caseId={Number(id)} onSuccess={handleSessionAdded} />}
           {sessions.length === 0 ? (

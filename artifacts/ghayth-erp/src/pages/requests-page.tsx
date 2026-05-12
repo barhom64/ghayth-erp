@@ -57,6 +57,7 @@ import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/e
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 const iconMap: Record<string, any> = {
   Calendar, DollarSign, FileSignature, KeyRound, Wrench,
@@ -425,9 +426,9 @@ function RequestsList() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h3 className="text-lg font-semibold">جميع الطلبات</h3>
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>
+        <GuardedButton perm="requests:create" size="sm" onClick={() => setShowForm(!showForm)}>
           {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />طلب جديد</>}
-        </Button>
+        </GuardedButton>
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -560,7 +561,7 @@ function TypesTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">أنواع الطلبات</h3>
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>{showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة نوع</>}</Button>
+        <GuardedButton perm="requests:create" size="sm" onClick={() => setShowForm(!showForm)}>{showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة نوع</>}</GuardedButton>
       </div>
       {showForm && (
         <Card><CardContent className="p-4">
@@ -620,7 +621,7 @@ function WorkflowsTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">سير العمل</h3>
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>{showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة</>}</Button>
+        <GuardedButton perm="requests:create" size="sm" onClick={() => setShowForm(!showForm)}>{showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة</>}</GuardedButton>
       </div>
       {showForm && (
         <Card><CardContent className="p-4">

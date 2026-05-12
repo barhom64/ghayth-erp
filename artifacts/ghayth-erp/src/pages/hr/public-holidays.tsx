@@ -4,6 +4,7 @@ import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2, Edit2, X } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
@@ -120,9 +121,9 @@ export default function PublicHolidaysPage() {
               ))}
             </SelectContent>
           </Select>
-          <Button onClick={() => { setShowForm(!showForm); setEditingId(null); setFormInitial(defaultHolidayForm); }} size="sm">
+          <GuardedButton perm="hr:create" onClick={() => { setShowForm(!showForm); setEditingId(null); setFormInitial(defaultHolidayForm); }} size="sm">
             <Plus className="w-4 h-4 me-1" /> إضافة عطلة
-          </Button>
+          </GuardedButton>
         </>
       }
     >
