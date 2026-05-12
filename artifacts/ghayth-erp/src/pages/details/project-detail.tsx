@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useRoute, Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation, apiFetch, getErrorMessage } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
@@ -8,6 +9,40 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  FormShell,
+  FormTextField,
+  FormNumberField,
+  FormSelectField,
+  FormDateField,
+  FormGrid,
+} from "@/components/form-shell";
+
+// Schemas for the three create sub-forms below. The edit-project
+// form (name / status / budget) is intentionally left on useState
+// for now — it has its own server-state hydration via startEdit()
+// and is a separate migration concern.
+const phaseSchema = z.object({
+  name: z.string().trim().min(1, "اسم المرحلة مطلوب"),
+  startDate: z.string(),
+  endDate: z.string(),
+});
+type PhaseForm = z.infer<typeof phaseSchema>;
+
+const taskSchema = z.object({
+  title: z.string().trim().min(1, "عنوان المهمة مطلوب"),
+  priority: z.enum(["low", "medium", "high"]),
+  dueDate: z.string(),
+});
+type TaskForm = z.infer<typeof taskSchema>;
+
+const costSchema = z.object({
+  description: z.string().trim().min(1, "الوصف مطلوب"),
+  amount: z.coerce.number().positive("المبلغ يجب أن يكون موجبًا"),
+  category: z.enum(["labor", "materials", "equipment", "subcontractor", "overhead", "other"]),
+  costDate: z.string(),
+});
+type CostForm = z.infer<typeof costSchema>;
 import {
   ArrowRight, FolderKanban, Calendar, DollarSign, ListTodo,
   CheckCircle2, Pencil, Trash2, X, Check, AlertTriangle,
@@ -60,11 +95,8 @@ export default function ProjectDetail() {
   const [deleting, setDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState<ProjectTabKey>("overview");
   const [showPhaseForm, setShowPhaseForm] = useState(false);
-  const [phaseForm, setPhaseForm] = useState({ name: "", startDate: "", endDate: "" });
   const [showTaskForm, setShowTaskForm] = useState(false);
-  const [taskForm, setTaskForm] = useState({ title: "", priority: "medium", dueDate: "" });
   const [showCostForm, setShowCostForm] = useState(false);
-  const [costForm, setCostForm] = useState({ description: "", amount: "", category: "labor", costDate: "" });
   const [closingProject, setClosingProject] = useState(false);
   const { hideTabs: registryHideTabs } = useRegistryTabs("project", id ?? 0);
 
@@ -82,18 +114,18 @@ export default function ProjectDetail() {
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const is404 = isError && (error?.message?.includes("غير موجود") || error?.message?.includes("404"));
 
-  const addPhaseMut = useApiMutation<any, any>(
+  const addPhaseMut = useApiMutation<any, { name: string; startDate?: string; endDate?: string }>(
     () => `/projects/${id}/phases`,
     "POST",
     [["project-detail", id || ""]],
-    { successMessage: "تم إضافة المرحلة", onSuccess: () => { setShowPhaseForm(false); setPhaseForm({ name: "", startDate: "", endDate: "" }); } }
+    { successMessage: "تم إضافة المرحلة", onSuccess: () => setShowPhaseForm(false) }
   );
 
-  const addTaskMut = useApiMutation<any, any>(
+  const addTaskMut = useApiMutation<any, { title: string; priority: string; dueDate?: string }>(
     () => `/projects/${id}/tasks`,
     "POST",
     [["project-detail", id || ""]],
-    { successMessage: "تم إضافة المهمة", onSuccess: () => { setShowTaskForm(false); setTaskForm({ title: "", priority: "medium", dueDate: "" }); } }
+    { successMessage: "تم إضافة المهمة", onSuccess: () => setShowTaskForm(false) }
   );
 
   const statusTone = (s: string) =>
@@ -163,15 +195,19 @@ export default function ProjectDetail() {
     }
   };
 
-  const addCost = async () => {
+  const addCost = async (values: CostForm) => {
     try {
       await apiFetch(`/projects/${id}/costs`, {
         method: "POST",
-        body: JSON.stringify({ description: costForm.description, amount: Number(costForm.amount), category: costForm.category, costDate: costForm.costDate || undefined }),
+        body: JSON.stringify({
+          description: values.description,
+          amount: values.amount,
+          category: values.category,
+          costDate: values.costDate || undefined,
+        }),
       });
       toast({ title: "تم إضافة التكلفة" });
       setShowCostForm(false);
-      setCostForm({ description: "", amount: "", category: "labor", costDate: "" });
       refetchCosts();
       qc.invalidateQueries({ queryKey: ["project-detail", id] });
     } catch (err) {
@@ -326,18 +362,30 @@ export default function ProjectDetail() {
               </CardHeader>
               <CardContent className="space-y-3">
                 {showPhaseForm && (
-                  <div className="p-3 rounded-lg border-2 border-primary/20 space-y-2">
-                    <Input placeholder="اسم المرحلة *" value={phaseForm.name} onChange={(e) => setPhaseForm(f => ({ ...f, name: e.target.value }))} />
-                    <div className="grid grid-cols-2 gap-2">
-                      <DatePicker value={phaseForm.startDate} onChange={(v) => setPhaseForm(f => ({ ...f, startDate: v }))} />
-                      <DatePicker value={phaseForm.endDate} onChange={(v) => setPhaseForm(f => ({ ...f, endDate: v }))} />
-                    </div>
-                    <div className="flex gap-2 justify-end">
-                      <Button size="sm" disabled={addPhaseMut.isPending || !phaseForm.name} onClick={() => addPhaseMut.mutate({ name: phaseForm.name, startDate: phaseForm.startDate || undefined, endDate: phaseForm.endDate || undefined })}>
-                        {addPhaseMut.isPending ? "..." : "حفظ"}
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => setShowPhaseForm(false)}>إلغاء</Button>
-                    </div>
+                  <div className="p-3 rounded-lg border-2 border-primary/20">
+                    <FormShell
+                      schema={phaseSchema}
+                      defaultValues={{ name: "", startDate: "", endDate: "" }}
+                      submitLabel="حفظ"
+                      secondaryActions={
+                        <Button type="button" variant="outline" size="sm" onClick={() => setShowPhaseForm(false)}>
+                          إلغاء
+                        </Button>
+                      }
+                      onSubmit={async (values) => {
+                        await addPhaseMut.mutateAsync({
+                          name: values.name,
+                          startDate: values.startDate || undefined,
+                          endDate: values.endDate || undefined,
+                        });
+                      }}
+                    >
+                      <FormTextField name="name" label="اسم المرحلة" required placeholder="اسم المرحلة" />
+                      <FormGrid cols={2}>
+                        <FormDateField name="startDate" label="تاريخ البداية" />
+                        <FormDateField name="endDate" label="تاريخ النهاية" />
+                      </FormGrid>
+                    </FormShell>
                   </div>
                 )}
                 {phases.length === 0 && !showPhaseForm && <p className="text-center text-gray-400 py-4">لا توجد مراحل</p>}
@@ -433,25 +481,38 @@ export default function ProjectDetail() {
           </CardHeader>
           <CardContent className="p-0">
             {showTaskForm && (
-              <div className="p-4 m-4 rounded-lg border-2 border-primary/20 space-y-2">
-                <Input placeholder="عنوان المهمة *" value={taskForm.title} onChange={(e) => setTaskForm(f => ({ ...f, title: e.target.value }))} />
-                <div className="grid grid-cols-2 gap-2">
-                  <Select value={taskForm.priority} onValueChange={(v) => setTaskForm(f => ({ ...f, priority: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">منخفضة</SelectItem>
-                      <SelectItem value="medium">متوسطة</SelectItem>
-                      <SelectItem value="high">عالية</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <DatePicker value={taskForm.dueDate} onChange={(v) => setTaskForm(f => ({ ...f, dueDate: v }))} />
-                </div>
-                <div className="flex gap-2 justify-end">
-                  <Button size="sm" disabled={addTaskMut.isPending || !taskForm.title} onClick={() => addTaskMut.mutate({ title: taskForm.title, priority: taskForm.priority, dueDate: taskForm.dueDate || undefined })}>
-                    {addTaskMut.isPending ? "..." : "حفظ"}
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => setShowTaskForm(false)}>إلغاء</Button>
-                </div>
+              <div className="p-4 m-4 rounded-lg border-2 border-primary/20">
+                <FormShell
+                  schema={taskSchema}
+                  defaultValues={{ title: "", priority: "medium" as const, dueDate: "" }}
+                  submitLabel="حفظ"
+                  secondaryActions={
+                    <Button type="button" variant="outline" size="sm" onClick={() => setShowTaskForm(false)}>
+                      إلغاء
+                    </Button>
+                  }
+                  onSubmit={async (values) => {
+                    await addTaskMut.mutateAsync({
+                      title: values.title,
+                      priority: values.priority,
+                      dueDate: values.dueDate || undefined,
+                    });
+                  }}
+                >
+                  <FormTextField name="title" label="عنوان المهمة" required placeholder="عنوان المهمة" />
+                  <FormGrid cols={2}>
+                    <FormSelectField
+                      name="priority"
+                      label="الأولوية"
+                      options={[
+                        { value: "low", label: "منخفضة" },
+                        { value: "medium", label: "متوسطة" },
+                        { value: "high", label: "عالية" },
+                      ]}
+                    />
+                    <FormDateField name="dueDate" label="تاريخ الاستحقاق" />
+                  </FormGrid>
+                </FormShell>
               </div>
             )}
             {tasks.length === 0 && !showTaskForm ? (
@@ -531,27 +592,38 @@ export default function ProjectDetail() {
             </CardHeader>
             <CardContent>
               {showCostForm && (
-                <div className="p-3 rounded-lg border-2 border-primary/20 space-y-2 mb-4">
-                  <Input placeholder="وصف التكلفة *" value={costForm.description} onChange={(e) => setCostForm(f => ({ ...f, description: e.target.value }))} />
-                  <div className="grid grid-cols-3 gap-2">
-                    <Input type="number" placeholder="المبلغ *" value={costForm.amount} onChange={(e) => setCostForm(f => ({ ...f, amount: e.target.value }))} dir="ltr" />
-                    <Select value={costForm.category} onValueChange={(v) => setCostForm(f => ({ ...f, category: v }))}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="labor">عمالة</SelectItem>
-                        <SelectItem value="materials">مواد</SelectItem>
-                        <SelectItem value="equipment">معدات</SelectItem>
-                        <SelectItem value="subcontractor">مقاولات</SelectItem>
-                        <SelectItem value="overhead">نفقات عامة</SelectItem>
-                        <SelectItem value="other">أخرى</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <DatePicker value={costForm.costDate} onChange={(v) => setCostForm(f => ({ ...f, costDate: v }))} />
-                  </div>
-                  <div className="flex gap-2 justify-end">
-                    <Button size="sm" disabled={!costForm.description || !costForm.amount} onClick={addCost}>حفظ</Button>
-                    <Button size="sm" variant="outline" onClick={() => setShowCostForm(false)}>إلغاء</Button>
-                  </div>
+                <div className="p-3 rounded-lg border-2 border-primary/20 mb-4">
+                  <FormShell
+                    schema={costSchema}
+                    defaultValues={{ description: "", amount: 0, category: "labor" as const, costDate: "" }}
+                    submitLabel="حفظ"
+                    secondaryActions={
+                      <Button type="button" variant="outline" size="sm" onClick={() => setShowCostForm(false)}>
+                        إلغاء
+                      </Button>
+                    }
+                    onSubmit={async (values) => {
+                      await addCost(values);
+                    }}
+                  >
+                    <FormTextField name="description" label="وصف التكلفة" required placeholder="وصف التكلفة" />
+                    <FormGrid cols={3}>
+                      <FormNumberField name="amount" label="المبلغ" required />
+                      <FormSelectField
+                        name="category"
+                        label="التصنيف"
+                        options={[
+                          { value: "labor", label: "عمالة" },
+                          { value: "materials", label: "مواد" },
+                          { value: "equipment", label: "معدات" },
+                          { value: "subcontractor", label: "مقاولات" },
+                          { value: "overhead", label: "نفقات عامة" },
+                          { value: "other", label: "أخرى" },
+                        ]}
+                      />
+                      <FormDateField name="costDate" label="تاريخ التكلفة" />
+                    </FormGrid>
+                  </FormShell>
                 </div>
               )}
               {costs.length === 0 && !showCostForm ? (
