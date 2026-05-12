@@ -973,39 +973,41 @@ router.get("/dashboard", authorize({ feature: "umrah", action: "list" }), async 
     let seasonFilterP = "";
     const params: any[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); seasonFilter = ` AND "seasonId"=$${params.length}`; seasonFilterP = ` AND p."seasonId"=$${params.length}`; }
-    const stats = await rawQuery(`
-      SELECT
-        COUNT(*) as total,
-        COUNT(*) FILTER (WHERE status='pending') as pending,
-        COUNT(*) FILTER (WHERE status='arrived') as arrived,
-        COUNT(*) FILTER (WHERE status='active') as active,
-        COUNT(*) FILTER (WHERE status='overstayed') as overstayed,
-        COUNT(*) FILTER (WHERE status='departed') as departed,
-        COUNT(*) FILTER (WHERE status='violated') as violated,
-        COUNT(*) FILTER (WHERE status='cancelled') as cancelled,
-        COUNT(*) FILTER (WHERE "agentId" IS NULL) as unassigned
-      FROM umrah_pilgrims WHERE "companyId"=$1 AND "deletedAt" IS NULL${seasonFilter}
-    `, params);
-    const penaltyStats = await rawQuery(`
-      SELECT
-        COUNT(*) as total,
-        COALESCE(SUM(amount),0) as "totalAmount",
-        COUNT(*) FILTER (WHERE status='pending') as pending
-      FROM umrah_penalties WHERE "companyId"=$1${seasonFilter}
-    `, params);
-    const agentStats = await rawQuery(`
-      SELECT a.id, a.name, COUNT(p.id) as "pilgrimCount",
-        COUNT(p.id) FILTER (WHERE p.status='overstayed') as "overstayedCount"
-      FROM umrah_agents a
-      LEFT JOIN umrah_pilgrims p ON p."agentId"=a.id AND p."companyId"=$1 AND p."deletedAt" IS NULL${seasonFilterP}
-      WHERE a."companyId"=$1 AND a.status='active' AND a."deletedAt" IS NULL
-      GROUP BY a.id, a.name ORDER BY "pilgrimCount" DESC LIMIT 10
-    `, params);
-    const recentArrivals = await rawQuery(`
-      SELECT id,"fullName","passportNumber",nationality,"actualArrival",status
-      FROM umrah_pilgrims WHERE "companyId"=$1 AND "deletedAt" IS NULL${seasonFilter} AND "actualArrival" IS NOT NULL
-      ORDER BY "actualArrival" DESC LIMIT 10
-    `, params);
+    const [stats, penaltyStats, agentStats, recentArrivals] = await Promise.all([
+      rawQuery(`
+        SELECT
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE status='pending') as pending,
+          COUNT(*) FILTER (WHERE status='arrived') as arrived,
+          COUNT(*) FILTER (WHERE status='active') as active,
+          COUNT(*) FILTER (WHERE status='overstayed') as overstayed,
+          COUNT(*) FILTER (WHERE status='departed') as departed,
+          COUNT(*) FILTER (WHERE status='violated') as violated,
+          COUNT(*) FILTER (WHERE status='cancelled') as cancelled,
+          COUNT(*) FILTER (WHERE "agentId" IS NULL) as unassigned
+        FROM umrah_pilgrims WHERE "companyId"=$1 AND "deletedAt" IS NULL${seasonFilter}
+      `, params),
+      rawQuery(`
+        SELECT
+          COUNT(*) as total,
+          COALESCE(SUM(amount),0) as "totalAmount",
+          COUNT(*) FILTER (WHERE status='pending') as pending
+        FROM umrah_penalties WHERE "companyId"=$1${seasonFilter}
+      `, params),
+      rawQuery(`
+        SELECT a.id, a.name, COUNT(p.id) as "pilgrimCount",
+          COUNT(p.id) FILTER (WHERE p.status='overstayed') as "overstayedCount"
+        FROM umrah_agents a
+        LEFT JOIN umrah_pilgrims p ON p."agentId"=a.id AND p."companyId"=$1 AND p."deletedAt" IS NULL${seasonFilterP}
+        WHERE a."companyId"=$1 AND a.status='active' AND a."deletedAt" IS NULL
+        GROUP BY a.id, a.name ORDER BY "pilgrimCount" DESC LIMIT 10
+      `, params),
+      rawQuery(`
+        SELECT id,"fullName","passportNumber",nationality,"actualArrival",status
+        FROM umrah_pilgrims WHERE "companyId"=$1 AND "deletedAt" IS NULL${seasonFilter} AND "actualArrival" IS NOT NULL
+        ORDER BY "actualArrival" DESC LIMIT 10
+      `, params),
+    ]);
     res.json({
       pilgrims: stats[0],
       penalties: penaltyStats[0],
@@ -1020,18 +1022,20 @@ router.post("/run-daily-status", authorize({ feature: "umrah", action: "create" 
     const scope = req.scope!;
     const today = todayISO();
 
-    const pendingToArrived = await rawQuery<any>(
-      `SELECT id FROM umrah_pilgrims WHERE "companyId"=$1 AND status='pending' AND "arrivalDate" <= $2 AND ("departureDate" IS NULL OR "departureDate" >= $2) AND "deletedAt" IS NULL`,
-      [scope.companyId, today]
-    );
-    const toOverstayed = await rawQuery<any>(
-      `SELECT id, status FROM umrah_pilgrims WHERE "companyId"=$1 AND status IN ('arrived','active') AND "departureDate" < $2 AND "actualDeparture" IS NULL AND "deletedAt" IS NULL`,
-      [scope.companyId, today]
-    );
-    const toDeparted = await rawQuery<any>(
-      `SELECT id, status FROM umrah_pilgrims WHERE "companyId"=$1 AND status IN ('arrived','active') AND "actualDeparture" IS NOT NULL AND "actualDeparture" <= $2 AND "deletedAt" IS NULL`,
-      [scope.companyId, today]
-    );
+    const [pendingToArrived, toOverstayed, toDeparted] = await Promise.all([
+      rawQuery<any>(
+        `SELECT id FROM umrah_pilgrims WHERE "companyId"=$1 AND status='pending' AND "arrivalDate" <= $2 AND ("departureDate" IS NULL OR "departureDate" >= $2) AND "deletedAt" IS NULL`,
+        [scope.companyId, today]
+      ),
+      rawQuery<any>(
+        `SELECT id, status FROM umrah_pilgrims WHERE "companyId"=$1 AND status IN ('arrived','active') AND "departureDate" < $2 AND "actualDeparture" IS NULL AND "deletedAt" IS NULL`,
+        [scope.companyId, today]
+      ),
+      rawQuery<any>(
+        `SELECT id, status FROM umrah_pilgrims WHERE "companyId"=$1 AND status IN ('arrived','active') AND "actualDeparture" IS NOT NULL AND "actualDeparture" <= $2 AND "deletedAt" IS NULL`,
+        [scope.companyId, today]
+      ),
+    ]);
 
     let arrivedUpdated = 0, overstayedUpdated = 0, departedUpdated = 0;
 

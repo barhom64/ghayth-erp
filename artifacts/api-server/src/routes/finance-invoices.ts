@@ -2022,14 +2022,23 @@ invoicesRouter.get("/tax/declarations", authorize({ feature: "finance.zatca", ac
   try {
     const scope = req.scope!;
     const thisYear = currentYear();
-    const declarations = [];
-    for (let m = 1; m <= 12; m++) {
-      const period = `${thisYear}-${String(m).padStart(2, "0")}`;
-      const [stats] = await rawQuery<any>(`SELECT COALESCE(SUM("vatAmount"), 0) AS "outputVat", COUNT(*) AS "invoiceCount" FROM invoices WHERE "companyId" = $1 AND to_char("createdAt", 'YYYY-MM') = $2 AND "deletedAt" IS NULL`, [scope.companyId, period]);
-      if (Number(stats?.invoiceCount ?? 0) > 0) {
-        declarations.push({ period, outputVat: Number(stats.outputVat), inputVat: 0, netVat: Number(stats.outputVat), invoiceCount: Number(stats.invoiceCount), status: m < new Date().getMonth() + 1 ? "submitted" : "pending" });
-      }
-    }
+    const vatRows = await rawQuery<any>(
+      `SELECT to_char("createdAt", 'YYYY-MM') AS period,
+              COALESCE(SUM("vatAmount"), 0) AS "outputVat",
+              COUNT(*) AS "invoiceCount"
+       FROM invoices
+       WHERE "companyId" = $1 AND "deletedAt" IS NULL
+         AND "createdAt" >= make_date($2, 1, 1) AND "createdAt" < make_date($2 + 1, 1, 1)
+       GROUP BY to_char("createdAt", 'YYYY-MM')`,
+      [scope.companyId, thisYear]
+    );
+    const currentMonth = new Date().getMonth() + 1;
+    const declarations = vatRows
+      .filter((r: any) => Number(r.invoiceCount ?? 0) > 0)
+      .map((r: any) => {
+        const m = Number(r.period.split("-")[1]);
+        return { period: r.period, outputVat: Number(r.outputVat), inputVat: 0, netVat: Number(r.outputVat), invoiceCount: Number(r.invoiceCount), status: m < currentMonth ? "submitted" : "pending" };
+      });
     res.json({ data: declarations });
   } catch (err) {
     handleRouteError(err, res, "Finance route error:");
