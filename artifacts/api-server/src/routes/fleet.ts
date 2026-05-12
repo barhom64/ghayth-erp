@@ -2495,13 +2495,15 @@ router.get("/stats", authorize({ feature: "fleet.vehicles", action: "list" }), a
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [vehicles] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='available') as available, COUNT(*) FILTER (WHERE status='in_use') as "inUse", COUNT(*) FILTER (WHERE status='maintenance') as "inMaintenance" FROM fleet_vehicles WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [trips] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='completed') as completed FROM fleet_trips WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [fuel] = await rawQuery<any>(`SELECT COALESCE(SUM("totalCost"),0) as "totalFuelCost" FROM fleet_fuel_logs WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [insurance] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_insurance WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [maintenance] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_maintenance WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [drivers] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_drivers WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [alerts] = await rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_maintenance WHERE "companyId"=$1 AND status='in_progress' AND "deletedAt" IS NULL`, [cid]);
+    const [[vehicles], [trips], [fuel], [insurance], [maintenance], [drivers], [alerts]] = await Promise.all([
+      rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='available') as available, COUNT(*) FILTER (WHERE status='in_use') as "inUse", COUNT(*) FILTER (WHERE status='maintenance') as "inMaintenance" FROM fleet_vehicles WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='completed') as completed FROM fleet_trips WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COALESCE(SUM("totalCost"),0) as "totalFuelCost" FROM fleet_fuel_logs WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_insurance WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_maintenance WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_drivers WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as total FROM fleet_maintenance WHERE "companyId"=$1 AND status='in_progress' AND "deletedAt" IS NULL`, [cid]),
+    ]);
     res.json({
       totalVehicles: Number(vehicles.total), availableVehicles: Number(vehicles.available),
       inUseVehicles: Number(vehicles.inUse), inMaintenanceVehicles: Number(vehicles.inMaintenance),
