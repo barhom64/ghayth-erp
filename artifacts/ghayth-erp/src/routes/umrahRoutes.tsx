@@ -31,6 +31,9 @@ const UmrahViolationDetail = lazy(() => import("@/pages/details/umrah-violation-
 // Daily run-sheet — surfaces GET /umrah/reports/daily-runsheet from PR #305.
 const UmrahDailyRunsheet = lazy(() => import("@/pages/umrah/daily-runsheet"));
 
+// Reconciliation report — surfaces GET /umrah/reports/reconciliation from PR #312.
+const UmrahReconciliation = lazy(() => import("@/pages/umrah/reconciliation"));
+
 export const umrahRoutes: { path: string; component: any; module?: ModuleType }[] = [
   { path: "/umrah", component: UmrahDashboard, module: "operations" },
   { path: "/umrah/pilgrims", component: UmrahPilgrims, module: "operations" },
@@ -60,4 +63,5 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/violations/:id", component: UmrahViolationDetail, module: "operations" },
   { path: "/umrah/import", component: UmrahImportWizard, module: "operations" },
   { path: "/umrah/daily-runsheet", component: UmrahDailyRunsheet, module: "operations" },
+  { path: "/umrah/reconciliation", component: UmrahReconciliation, module: "operations" },
 ];
