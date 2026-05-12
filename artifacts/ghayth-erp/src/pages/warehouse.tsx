@@ -10,6 +10,7 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { useApiQuery, asList } from "@/lib/api";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Package, ArrowLeftRight, Layers, Truck, Plus, AlertTriangle, DollarSign, Activity } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
@@ -27,16 +28,16 @@ export default function Warehouse() {
       actions={
         <div className="flex items-center gap-2">
           <Link href="/warehouse/movements/create">
-            <Button variant="outline" size="sm" className="gap-1.5">
+            <GuardedButton perm="warehouse:create" variant="outline" size="sm" className="gap-1.5">
               <ArrowLeftRight className="h-4 w-4" />
               حركة جديدة
-            </Button>
+            </GuardedButton>
           </Link>
           <Link href="/warehouse/create">
-            <Button size="sm" className="gap-1.5">
+            <GuardedButton perm="warehouse:create" size="sm" className="gap-1.5">
               <Plus className="h-4 w-4" />
               منتج جديد
-            </Button>
+            </GuardedButton>
           </Link>
         </div>
       }

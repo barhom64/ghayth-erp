@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Users, Split, Merge, ChevronRight } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
@@ -183,10 +184,10 @@ export default function UmrahGroups() {
           <p className="text-sm text-muted-foreground">إدارة مجموعات العمرة — تقسيم ودمج</p>
         </div>
         {selectedIds.length >= 1 && (
-          <Button onClick={() => setMergeOpen(true)} className="gap-2" rateLimitAware>
+          <GuardedButton perm="umrah:approve" onClick={() => setMergeOpen(true)} className="gap-2" rateLimitAware>
             <Merge className="h-4 w-4" />
             دمج المحدد ({selectedIds.length})
-          </Button>
+          </GuardedButton>
         )}
       </header>
 
@@ -262,12 +263,12 @@ export default function UmrahGroups() {
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => { e.preventDefault(); handleSplitSubmit(); }}
+            <GuardedButton perm="umrah:approve"
+              onClick={(e: React.MouseEvent) => { e.preventDefault(); handleSplitSubmit(); }}
               disabled={splitMutation.isPending || splitPilgrimIds.length === 0}
             >
               {splitMutation.isPending ? "جاري التقسيم…" : "تأكيد التقسيم"}
-            </AlertDialogAction>
+            </GuardedButton>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -297,12 +298,12 @@ export default function UmrahGroups() {
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => { e.preventDefault(); handleMergeSubmit(); }}
+            <GuardedButton perm="umrah:approve"
+              onClick={(e: React.MouseEvent) => { e.preventDefault(); handleMergeSubmit(); }}
               disabled={mergeMutation.isPending || !mergeTarget}
             >
               {mergeMutation.isPending ? "جاري الدمج…" : "تأكيد الدمج"}
-            </AlertDialogAction>
+            </GuardedButton>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
