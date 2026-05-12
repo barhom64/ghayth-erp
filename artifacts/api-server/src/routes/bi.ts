@@ -1365,7 +1365,7 @@ router.get("/reports/umrah-season-summary", authorize({ feature: "bi", action: "
     const scope = req.scope!;
     const cid = scope.companyId;
 
-    const seasons = await rawQuery<any>(
+    const seasons = await rawQuery<Record<string, unknown>>(
       `SELECT id, title, "hijriYear", "startDate", "endDate", status, "isCurrent"
          FROM umrah_seasons
         WHERE "companyId" = $1 AND "deletedAt" IS NULL
@@ -1381,7 +1381,7 @@ router.get("/reports/umrah-season-summary", authorize({ feature: "bi", action: "
     }
 
     const [pilgrimStats, salesStats, penaltyStats, groupStats] = await Promise.all([
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT "seasonId",
                 COUNT(*)::int                                                  AS total,
                 COUNT(*) FILTER (WHERE status IN ('arrived','active'))::int    AS active,
@@ -1393,7 +1393,7 @@ router.get("/reports/umrah-season-summary", authorize({ feature: "bi", action: "
           GROUP BY "seasonId"`,
         [cid, seasonIds]
       ).catch((e) => { logger.error(e, "bi umrah pilgrims query failed"); return []; }),
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT "seasonId",
                 COALESCE(SUM(total), 0)::numeric(12,2)        AS "invoiced",
                 COALESCE(SUM("paidAmount"), 0)::numeric(12,2) AS "paid",
@@ -1404,7 +1404,7 @@ router.get("/reports/umrah-season-summary", authorize({ feature: "bi", action: "
           GROUP BY "seasonId"`,
         [cid, seasonIds]
       ).catch((e) => { logger.error(e, "bi umrah invoices query failed"); return []; }),
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT "seasonId",
                 COUNT(*)::int                                                   AS total,
                 COUNT(*) FILTER (WHERE status IN ('pending','invoiced'))::int   AS open,
@@ -1414,7 +1414,7 @@ router.get("/reports/umrah-season-summary", authorize({ feature: "bi", action: "
           GROUP BY "seasonId"`,
         [cid, seasonIds]
       ).catch((e) => { logger.error(e, "bi umrah penalties query failed"); return []; }),
-      rawQuery<any>(
+      rawQuery<Record<string, unknown>>(
         `SELECT "seasonId",
                 COUNT(*)::int                                                AS total,
                 COUNT(*) FILTER (WHERE "salesInvoiceId" IS NOT NULL)::int    AS invoiced

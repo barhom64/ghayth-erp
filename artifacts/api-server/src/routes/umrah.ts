@@ -397,7 +397,7 @@ router.patch("/seasons/:id", authorize({ feature: "umrah", action: "update" }), 
         throw new ValidationError(`لا يمكن إغلاق الموسم — يوجد ${unpaid[0].c} فاتورة غير مسددة`, { meta: { blockers: [{ type: "unpaid_invoices", count: Number(unpaid[0].c) }] } });
       }
     }
-    const params: any[] = [];
+    const params: unknown[] = [];
     const sets: string[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
     if (b.startDate !== undefined) { params.push(b.startDate); sets.push(`"startDate"=$${params.length}`); }
@@ -478,7 +478,7 @@ router.patch("/agents/:id", authorize({ feature: "umrah", action: "update" }), a
         }
       }
     }
-    const params: any[] = [];
+    const params: unknown[] = [];
     const sets: string[] = [];
     for (const key of ["name","contactPerson","phone","email","country","profitMargin","contractRef","currency","status","notes"] as const) {
       if (b[key] !== undefined) { params.push(b[key]); sets.push(`"${key}"=$${params.length}`); }
@@ -561,7 +561,7 @@ router.patch("/packages/:id", authorize({ feature: "umrah", action: "update" }),
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(patchPackageSchema.safeParse(req.body));
-    const params: any[] = [];
+    const params: unknown[] = [];
     const sets: string[] = [];
     for (const key of ["name","seasonId","costPrice","sellPrice","includesTransport","includesHotel","includesMeals","includesZiyarat","duration","description"] as const) {
       if (b[key] !== undefined) { params.push(b[key]); sets.push(`"${key}"=$${params.length}`); }
@@ -605,7 +605,7 @@ router.get("/pilgrims", authorize({ feature: "umrah", action: "list" }), async (
     const scope = req.scope!;
     const { seasonId, status, agentId, search, page = "1", limit = "20" } = req.query as Record<string, string | undefined>;
     let where = `p."companyId"=$1 AND p."deletedAt" IS NULL`;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND p."seasonId"=$${params.length}`; }
     if (status) { params.push(status); where += ` AND p.status=$${params.length}`; }
     if (agentId) { params.push(agentId); where += ` AND p."agentId"=$${params.length}`; }
@@ -761,7 +761,7 @@ router.patch("/pilgrims/:id", authorize({ feature: "umrah", action: "update" }),
       });
       res.json(decryptPilgrimRow(row));
     } else {
-      const params: any[] = [];
+      const params: unknown[] = [];
       const sets: string[] = [];
       for (const key of fieldKeys) {
         if (b[key] !== undefined) {
@@ -920,7 +920,7 @@ async function doImport(scope: any, body: { seasonId: number; rows: any[]; fileT
       const ppHash = blindIndex(String(r.passportNumber));
       if (existingMap.has(ppHash)) {
         const existingId = existingMap.get(ppHash)!;
-        const sets: string[] = []; const params: any[] = [];
+        const sets: string[] = []; const params: unknown[] = [];
         const encryptedFields = new Set(["fullName", "visaNumber"]);
         for (const key of ["fullName","visaNumber","nationality","gender","phone","arrivalDate","departureDate","agentId","hotelName","roomNumber"]) {
           if (r[key] !== undefined && r[key] !== null && r[key] !== "") {
@@ -976,7 +976,7 @@ router.get("/dashboard", authorize({ feature: "umrah", action: "list" }), async 
     const { seasonId } = req.query as Record<string, string | undefined>;
     let seasonFilter = "";
     let seasonFilterP = "";
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); seasonFilter = ` AND "seasonId"=$${params.length}`; seasonFilterP = ` AND p."seasonId"=$${params.length}`; }
     const [stats, penaltyStats, agentStats, recentArrivals] = await Promise.all([
       rawQuery(`
@@ -1141,7 +1141,7 @@ router.get("/penalties", authorize({ feature: "umrah", action: "list" }), async 
     const scope = req.scope!;
     const { seasonId, status } = req.query as Record<string, string | undefined>;
     let where = `pen."companyId"=$1`;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND pen."seasonId"=$${params.length}`; }
     if (status) { params.push(status); where += ` AND pen.status=$${params.length}`; }
     const rows = await rawQuery(
@@ -1405,7 +1405,7 @@ router.get("/agent-invoices", authorize({ feature: "umrah", action: "list" }), a
     const scope = req.scope!;
     const { agentId, seasonId } = req.query as Record<string, string | undefined>;
     let where = `i."companyId"=$1`;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (agentId) { params.push(agentId); where += ` AND i."agentId"=$${params.length}`; }
     if (seasonId) { params.push(seasonId); where += ` AND i."seasonId"=$${params.length}`; }
     const rows = await rawQuery(
@@ -1586,7 +1586,7 @@ router.patch("/transport/:id", authorize({ feature: "umrah", action: "update" })
       });
       res.json(row);
     } else {
-      const params: any[] = [];
+      const params: unknown[] = [];
       const sets: string[] = [];
       for (const key of ["seasonId","tripDate","fromLocation","toLocation","vehicleId","driverId","capacity","pilgrimCount","cost","notes"] as const) {
         if (b[key] !== undefined) { params.push(b[key]); sets.push(`"${key}"=$${params.length}`); }
@@ -1656,7 +1656,7 @@ router.get("/unassigned", authorize({ feature: "umrah", action: "list" }), async
     const scope = req.scope!;
     const { seasonId } = req.query as Record<string, string | undefined>;
     let where = `"companyId"=$1 AND "agentId" IS NULL AND "deletedAt" IS NULL`;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND "seasonId"=$${params.length}`; }
     const rows = await rawQuery(`SELECT * FROM umrah_pilgrims WHERE ${where} ORDER BY "createdAt" DESC LIMIT 1000`, params);
     res.json({ data: rows.map(decryptPilgrimRow) });
@@ -1743,7 +1743,7 @@ router.patch("/violations/:id", authorize({ feature: "umrah", action: "update" }
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(patchViolationSchema.safeParse(req.body));
-    const params: any[] = [id, scope.companyId, scope.userId];
+    const params: unknown[] = [id, scope.companyId, scope.userId];
     const sets: string[] = ['"updatedAt"=NOW()', `"updatedBy"=$${params.length}`];
     for (const key of ["type","referenceType","referenceNumber","mutamerId","agentId","subAgentId","description","penaltyAmount","status","linkedInvoiceId"] as const) {
       if (b[key] !== undefined) {

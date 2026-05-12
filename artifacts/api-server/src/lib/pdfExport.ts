@@ -454,7 +454,7 @@ export async function exportPayrollSlipPdf(companyId: number, payrollId: number)
 
 export async function exportTrialBalancePdf(companyId: number, startDate?: string, endDate?: string): Promise<Buffer> {
   let dateFilter = "";
-  const params: any[] = [companyId];
+  const params: unknown[] = [companyId];
   if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
   if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
 
@@ -510,7 +510,7 @@ export async function exportTrialBalancePdf(companyId: number, startDate?: strin
 
 export async function exportFleetTripsPdf(companyId: number, startDate?: string, endDate?: string): Promise<Buffer> {
   let dateFilter = "";
-  const params: any[] = [companyId];
+  const params: unknown[] = [companyId];
   if (startDate) { params.push(startDate); dateFilter += ` AND t."startTime" >= $${params.length}`; }
   if (endDate) { params.push(endDate); dateFilter += ` AND t."startTime" <= $${params.length}`; }
 

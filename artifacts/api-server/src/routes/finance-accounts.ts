@@ -229,7 +229,7 @@ accountsRouter.patch("/accounts/:id", authorize({ feature: "finance.accounts", a
     const id = parseId(req.params.id, "id");
     const b = zodParse(updateAccountSchema.safeParse(req.body ?? {}));
     const fields: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     const addField = (col: string, val: any) => { if (val !== undefined) { params.push(val); fields.push(`"${col}" = $${params.length}`); } };
     addField("name", b.name);
     addField("type", b.type);
@@ -415,7 +415,7 @@ accountsRouter.get("/ledger/:accountCode", authorize({ feature: "finance.account
     const { startDate, endDate } = req.query as Record<string, string | undefined>;
 
     let dateFilter = "";
-    const params: any[] = [scope.companyId, accountCode];
+    const params: unknown[] = [scope.companyId, accountCode];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
     if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
 
