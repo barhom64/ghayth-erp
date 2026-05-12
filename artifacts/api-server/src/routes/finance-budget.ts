@@ -668,18 +668,23 @@ budgetRouter.get("/fiscal-periods", authorize({ feature: "finance.budget", actio
     const thisYear = currentYear();
     const currentMonth = new Date().getMonth() + 1;
 
+    const monthRows = await rawQuery<{ period: string; entries: string | number; totalDebit: string | number }>(
+      `SELECT to_char(je."createdAt", 'YYYY-MM') AS period,
+              COUNT(*) AS entries,
+              COALESCE(SUM(jl.debit), 0) AS "totalDebit"
+       FROM journal_entries je
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted'
+         AND je."createdAt" >= make_date($2, 1, 1) AND je."createdAt" < make_date($2 + 1, 1, 1)
+       GROUP BY to_char(je."createdAt", 'YYYY-MM')`,
+      [scope.companyId, thisYear]
+    );
+    const monthMap = new Map(monthRows.map(r => [r.period, r]));
+
     const periods = [];
     for (let m = 1; m <= 12; m++) {
       const period = `${thisYear}-${String(m).padStart(2, "0")}`;
-      const [stats] = await rawQuery<{ entries: string | number; totalDebit: string | number }>(
-        `SELECT COUNT(*) AS entries,
-                COALESCE(SUM(jl.debit), 0) AS "totalDebit"
-         FROM journal_entries je
-         LEFT JOIN journal_lines jl ON jl."journalId" = je.id
-         WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' AND to_char(je."createdAt", 'YYYY-MM') = $2`,
-        [scope.companyId, period]
-      );
-
+      const stats = monthMap.get(period);
       periods.push({
         period,
         name: new Date(thisYear, m - 1).toLocaleDateString("ar-SA", { month: "long", year: "numeric" }),

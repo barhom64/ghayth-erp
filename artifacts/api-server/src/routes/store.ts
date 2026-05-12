@@ -72,6 +72,78 @@ const updateStoreOrderSchema = z.object({
 
 const router = Router();
 
+interface StoreProductRow {
+  id: number;
+  companyId: number;
+  name: string;
+  description: string | null;
+  sku: string | null;
+  price: number | string;
+  costPrice: number | string;
+  quantity: number;
+  category: string | null;
+  status: string;
+  imageUrl: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+  deletedAt: string | null;
+}
+
+interface StoreProductWithReservedRow extends StoreProductRow {
+  reservedQuantity: number | string;
+}
+
+interface StoreOrderRow {
+  id: number;
+  companyId: number;
+  branchId: number | null;
+  orderNumber: string;
+  customerName: string;
+  customerPhone: string | null;
+  status: string;
+  totalAmount: number | string;
+  items: unknown;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+  deletedAt: string | null;
+}
+
+interface StoreOrderWithBranchRow extends StoreOrderRow {
+  branchName: string | null;
+  branchNameEn: string | null;
+  branchLogoUrl: string | null;
+  branchAddress: string | null;
+  branchPhone: string | null;
+  branchEmail: string | null;
+  branchWebsite: string | null;
+  branchTaxNumber: string | null;
+  branchCrNumber: string | null;
+  branchFooterText: string | null;
+  branchCity: string | null;
+}
+
+interface StoreOrderItemRow {
+  id: number;
+  orderId: number;
+  productId: number | null;
+  productName: string | null;
+  quantity: number;
+  unitPrice: number | string;
+  total: number | string;
+  notes: string | null;
+  productNameFromCatalog?: string | null;
+}
+
+interface StoreOrderGlItemRow {
+  productId: number | null;
+  quantity: number;
+  unitPrice: number | string;
+  costPrice: number | string | null;
+}
+
+interface StoreCountRow { total: string | number }
+
 router.get("/products", authorize({ feature: "store", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -80,7 +152,7 @@ router.get("/products", authorize({ feature: "store", action: "list" }), async (
     const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
 
-    const [countRow] = await rawQuery<any>(
+    const [countRow] = await rawQuery<StoreCountRow>(
       `SELECT COUNT(*) AS total FROM store_products WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
       [scope.companyId]
     );
@@ -100,7 +172,7 @@ router.post("/products", authorize({ feature: "store", action: "create" }), asyn
       `INSERT INTO store_products (name, description, sku, price, "costPrice", quantity, category, status, "imageUrl", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [name, description, sku, price || 0, costPrice || 0, quantity || 0, category, status || "active", imageUrl, scope.companyId]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM store_products WHERE id = $1 AND "companyId" = $2`, [r.insertId, scope.companyId]);
+    const [row] = await rawQuery<StoreProductRow>(`SELECT * FROM store_products WHERE id = $1 AND "companyId" = $2`, [r.insertId, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "store_products", entityId: r.insertId, after: { name, sku, price, category, status: status || "active" } }).catch((e) => logger.error(e, "store background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.product.created", entity: "store_products", entityId: r.insertId, details: JSON.stringify({ name, sku }) }).catch((e) => logger.error(e, "store background task failed"));
     res.status(201).json(row || { id: r.insertId });
@@ -111,7 +183,7 @@ router.get("/products/:id", authorize({ feature: "store", action: "view" }), asy
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(`SELECT sp.*,
+    const [row] = await rawQuery<StoreProductWithReservedRow>(`SELECT sp.*,
       COALESCE((SELECT SUM(soi.quantity) FROM store_order_items soi
         JOIN store_orders so ON so.id = soi."orderId"
         WHERE soi."productId" = sp.id AND so.status IN ('pending','processing')), 0) AS "reservedQuantity"
@@ -125,7 +197,7 @@ router.patch("/products/:id", authorize({ feature: "store", action: "update" }),
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(`SELECT id FROM store_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<{ id: number }>(`SELECT id FROM store_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المنتج غير موجود");
     const b = zodParse(updateStoreProductSchema.safeParse(req.body)) as any;
     const sets: string[] = [];
@@ -143,7 +215,7 @@ router.patch("/products/:id", authorize({ feature: "store", action: "update" }),
     params.push(id); params.push(scope.companyId);
     const { affectedRows } = await rawExecute(`UPDATE store_products SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     if (!affectedRows) throw new NotFoundError("السجل غير موجود");
-    const [row] = await rawQuery<any>(`SELECT * FROM store_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<StoreProductRow>(`SELECT * FROM store_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "store_products", entityId: id, after: b }).catch((e) => logger.error(e, "store background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.product.updated", entity: "store_products", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "store background task failed"));
     res.json(row);
@@ -154,7 +226,7 @@ router.delete("/products/:id", authorize({ feature: "store", action: "delete" })
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(`SELECT * FROM store_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<StoreProductRow>(`SELECT * FROM store_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المنتج غير موجود");
     const { affectedRows } = await rawExecute(`UPDATE store_products SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!affectedRows) throw new NotFoundError("السجل غير موجود");
@@ -229,7 +301,7 @@ router.post("/orders", authorize({ feature: "store", action: "create" }), async 
       }
       return newId;
     });
-    const [order] = await rawQuery<any>(`SELECT * FROM store_orders WHERE id = $1 AND "companyId" = $2`, [orderId, scope.companyId]);
+    const [order] = await rawQuery<StoreOrderRow>(`SELECT * FROM store_orders WHERE id = $1 AND "companyId" = $2`, [orderId, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "store_orders", entityId: orderId, after: { orderNumber: effectiveOrderNumber, customerName, status: status || "pending", totalAmount } }).catch((e) => logger.error(e, "store background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "store.order.created", entity: "store_orders", entityId: orderId, details: JSON.stringify({ customerName, totalAmount }) }).catch((e) => logger.error(e, "store background task failed"));
     res.status(201).json(order || { id: orderId });
@@ -240,7 +312,7 @@ router.get("/orders/:id", authorize({ feature: "store", action: "view" }), async
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<StoreOrderWithBranchRow & { items: unknown }>(
       `SELECT o.*,
               b.name AS "branchName", b."nameEn" AS "branchNameEn", b."logoUrl" AS "branchLogoUrl",
               b.address AS "branchAddress", b.phone AS "branchPhone", b.email AS "branchEmail",
@@ -252,9 +324,9 @@ router.get("/orders/:id", authorize({ feature: "store", action: "view" }), async
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("الطلب غير موجود");
-    const orderItems = await rawQuery<any>(`SELECT oi.*, sp.name AS "productNameFromCatalog" FROM store_order_items oi LEFT JOIN store_products sp ON sp.id = oi."productId" WHERE oi."orderId" = $1 ORDER BY oi.id LIMIT 500`, [row.id]);
-    let parsedItems: any[] = [];
-    try { parsedItems = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []); } catch (e) { logger.warn(e, "store order items JSON parse fallback"); }
+    const orderItems = await rawQuery<StoreOrderItemRow>(`SELECT oi.*, sp.name AS "productNameFromCatalog" FROM store_order_items oi LEFT JOIN store_products sp ON sp.id = oi."productId" WHERE oi."orderId" = $1 ORDER BY oi.id LIMIT 500`, [row.id]);
+    let parsedItems: unknown[] = [];
+    try { parsedItems = typeof row.items === 'string' ? JSON.parse(row.items) : (Array.isArray(row.items) ? row.items : []); } catch (e) { logger.warn(e, "store order items JSON parse fallback"); }
     row.items = orderItems.length > 0 ? orderItems : parsedItems;
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Get store order"); }
@@ -350,10 +422,12 @@ router.get("/stats", authorize({ feature: "store", action: "list" }), async (req
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [products] = await rawQuery(`SELECT COUNT(*) as count FROM store_products WHERE status='active' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [orders] = await rawQuery(`SELECT COUNT(*) as count FROM store_orders WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [pendingOrders] = await rawQuery(`SELECT COUNT(*) as count FROM store_orders WHERE status='pending' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [revenue] = await rawQuery(`SELECT COALESCE(SUM("totalAmount"),0) as total FROM store_orders WHERE status='completed' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [[products], [orders], [pendingOrders], [revenue]] = await Promise.all([
+      rawQuery(`SELECT COUNT(*) as count FROM store_products WHERE status='active' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery(`SELECT COUNT(*) as count FROM store_orders WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery(`SELECT COUNT(*) as count FROM store_orders WHERE status='pending' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery(`SELECT COALESCE(SUM("totalAmount"),0) as total FROM store_orders WHERE status='completed' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+    ]);
     res.json({
       activeProducts: Number(products.count),
       totalOrders: Number(orders.count),
@@ -367,7 +441,7 @@ async function postStoreOrderGl(scope: any, order: any) {
   const totalAmount = Number(order.totalAmount || 0);
   if (totalAmount <= 0) return;
 
-  const orderItems = await rawQuery<any>(
+  const orderItems = await rawQuery<StoreOrderGlItemRow>(
     `SELECT oi."productId", oi.quantity, oi."unitPrice", sp."costPrice"
      FROM store_order_items oi
      LEFT JOIN store_products sp ON sp.id = oi."productId"

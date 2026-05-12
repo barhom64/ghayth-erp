@@ -1046,7 +1046,7 @@ router.get("/pipeline", authorize({ feature: "crm.leads", action: "list" }), asy
   } catch (err) { handleRouteError(err, res, "CRM pipeline error:"); }
 });
 
-router.post("/followup-check", authorize({ feature: "crm", action: "create" }), async (req, res) => {
+router.post("/followup-check", authorize({ feature: "crm.clients", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(followupCheckSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -1123,34 +1123,40 @@ router.post("/followup-check", authorize({ feature: "crm", action: "create" }), 
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.get("/analytics", authorize({ feature: "crm", action: "list" }), async (req, res) => {
+router.get("/analytics", authorize({ feature: "crm.clients", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
 
     interface ConversionRow { stage: string; count: number; conversionFromPrev: string | null }
+    const stageCounts = await rawQuery<{ stage: string; count: string }>(
+      `SELECT stage, COUNT(*) as count FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage = ANY($2::text[]) GROUP BY stage`,
+      [cid, STAGE_ORDER]
+    );
+    const countMap = new Map(stageCounts.map(r => [r.stage, Number(r.count)]));
     const conversionRates: ConversionRow[] = [];
     let prevCount: number | null = null;
     for (const stage of STAGE_ORDER) {
-      const [row] = await rawQuery<CountRow>(`SELECT COUNT(*) as count FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage=$2`, [cid, stage]);
-      const count = Number(row?.count ?? 0);
+      const count = countMap.get(stage) ?? 0;
       const rate = prevCount !== null && prevCount > 0 ? ((count / prevCount) * 100).toFixed(1) : null;
       conversionRates.push({ stage, count, conversionFromPrev: rate });
       if (!['closed_won', 'closed_lost'].includes(stage)) prevCount = count;
     }
 
-    const [avgDeal] = await rawQuery<{ avgDays: number | string | null }>(
-      `SELECT AVG(EXTRACT(EPOCH FROM ("updatedAt"::timestamp - "createdAt"::timestamp))/86400) AS "avgDays" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage='closed_won'`,
-      [cid]
-    );
-    const [revenue] = await rawQuery<{ wonRevenue: number | string; forecast: number | string }>(
-      `SELECT COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) AS "wonRevenue", COALESCE(SUM(value) FILTER (WHERE status='open'),0) AS "forecast" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
-      [cid]
-    );
-    const [lostAnalysis] = await rawQuery<{ lostCount: number | string; lostValue: number | string }>(
-      `SELECT COUNT(*) as "lostCount", COALESCE(SUM(value),0) as "lostValue" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage='closed_lost'`,
-      [cid]
-    );
+    const [[avgDeal], [revenue], [lostAnalysis]] = await Promise.all([
+      rawQuery<{ avgDays: number | string | null }>(
+        `SELECT AVG(EXTRACT(EPOCH FROM ("updatedAt"::timestamp - "createdAt"::timestamp))/86400) AS "avgDays" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage='closed_won'`,
+        [cid]
+      ),
+      rawQuery<{ wonRevenue: number | string; forecast: number | string }>(
+        `SELECT COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) AS "wonRevenue", COALESCE(SUM(value) FILTER (WHERE status='open'),0) AS "forecast" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
+        [cid]
+      ),
+      rawQuery<{ lostCount: number | string; lostValue: number | string }>(
+        `SELECT COUNT(*) as "lostCount", COALESCE(SUM(value),0) as "lostValue" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage='closed_lost'`,
+        [cid]
+      ),
+    ]);
 
     res.json({
       conversionRates,
@@ -1163,7 +1169,7 @@ router.get("/analytics", authorize({ feature: "crm", action: "list" }), async (r
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.get("/stats", authorize({ feature: "crm", action: "list" }), async (req, res) => {
+router.get("/stats", authorize({ feature: "crm.clients", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -1173,11 +1179,13 @@ router.get("/stats", authorize({ feature: "crm", action: "list" }), async (req, 
       wonValue: string | number;
       pipelineValue: string | number;
     }
-    const [opp] = await rawQuery<OpportunityStatsRow>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) as "wonValue", COALESCE(SUM(value) FILTER (WHERE status='open'),0) as "pipelineValue" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [overdue] = await rawQuery<CountRow>(
-      `SELECT COUNT(*) as count FROM crm_activities ca JOIN crm_opportunities co ON co.id=ca."opportunityId" WHERE co."companyId"=$1 AND co."deletedAt" IS NULL AND ca."completedAt" IS NULL AND ca."scheduledAt" < NOW()`,
-      [cid]
-    );
+    const [[opp], [overdue]] = await Promise.all([
+      rawQuery<OpportunityStatsRow>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) as "wonValue", COALESCE(SUM(value) FILTER (WHERE status='open'),0) as "pipelineValue" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<CountRow>(
+        `SELECT COUNT(*) as count FROM crm_activities ca JOIN crm_opportunities co ON co.id=ca."opportunityId" WHERE co."companyId"=$1 AND co."deletedAt" IS NULL AND ca."completedAt" IS NULL AND ca."scheduledAt" < NOW()`,
+        [cid]
+      ),
+    ]);
     res.json({
       totalOpportunities: Number(opp.total), openOpportunities: Number(opp.open),
       wonValue: Number(opp.wonValue), pipelineValue: Number(opp.pipelineValue),

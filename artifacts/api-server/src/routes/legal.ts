@@ -982,15 +982,17 @@ router.post("/cases/:caseId/sessions", authorize({ feature: "legal.cases", actio
   } catch (err) { handleRouteError(err, res, "Create session error:"); }
 });
 
-router.get("/stats", authorize({ feature: "legal", action: "list" }), async (req, res) => {
+router.get("/stats", authorize({ feature: "legal.cases", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [contracts] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='active') as active FROM legal_contracts WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [cases] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COUNT(*) FILTER (WHERE status='in_progress') as "inProgress" FROM legal_cases WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [expiring] = await rawQuery<any>(`SELECT COUNT(*) as count FROM legal_contracts WHERE "companyId"=$1 AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days' AND status='active' AND "deletedAt" IS NULL`, [cid]);
-    const [sessions] = await rawQuery<any>(`SELECT COUNT(*) as upcoming FROM legal_sessions ls JOIN legal_cases lc ON lc.id=ls."caseId" WHERE lc."companyId"=$1 AND lc."deletedAt" IS NULL AND ls."deletedAt" IS NULL AND ls."sessionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'`, [cid]);
-    const [contingent] = await rawQuery<any>(`SELECT COALESCE(SUM("financialRisk"),0) as total FROM legal_cases WHERE "companyId"=$1 AND status NOT IN ('closed') AND "deletedAt" IS NULL`, [cid]).catch((e) => { logger.error(e, "legal query failed"); return [{ total: 0 }]; });
+    const [[contracts], [cases], [expiring], [sessions], [contingent]] = await Promise.all([
+      rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='active') as active FROM legal_contracts WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COUNT(*) FILTER (WHERE status='in_progress') as "inProgress" FROM legal_cases WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as count FROM legal_contracts WHERE "companyId"=$1 AND "endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days' AND status='active' AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as upcoming FROM legal_sessions ls JOIN legal_cases lc ON lc.id=ls."caseId" WHERE lc."companyId"=$1 AND lc."deletedAt" IS NULL AND ls."deletedAt" IS NULL AND ls."sessionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'`, [cid]),
+      rawQuery<any>(`SELECT COALESCE(SUM("financialRisk"),0) as total FROM legal_cases WHERE "companyId"=$1 AND status NOT IN ('closed') AND "deletedAt" IS NULL`, [cid]).catch((e) => { logger.error(e, "legal query failed"); return [{ total: 0 }]; }),
+    ]);
     res.json({
       totalContracts: Number(contracts.total), activeContracts: Number(contracts.active),
       totalCases: Number(cases.total), openCases: Number(cases.open), inProgressCases: Number(cases.inProgress),
@@ -1340,7 +1342,7 @@ router.get("/sessions/:id", authorize({ feature: "legal.cases", action: "view" }
   } catch (err) { handleRouteError(err, res, "Legal session detail error:"); }
 });
 
-router.get("/judgments/:id", authorize({ feature: "legal", action: "view" }), async (req, res) => {
+router.get("/judgments/:id", authorize({ feature: "legal.cases", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1356,7 +1358,7 @@ router.get("/judgments/:id", authorize({ feature: "legal", action: "view" }), as
   } catch (err) { handleRouteError(err, res, "Legal judgment detail error:"); }
 });
 
-router.get("/correspondence/:id", authorize({ feature: "legal", action: "view" }), async (req, res) => {
+router.get("/correspondence/:id", authorize({ feature: "legal.cases", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1393,7 +1395,7 @@ router.get("/sessions/upcoming", authorize({ feature: "legal.cases", action: "li
   } catch (err) { handleRouteError(err, res, "Upcoming sessions error:"); }
 });
 
-router.get("/judgments/financial-report", authorize({ feature: "legal", action: "list" }), async (req, res) => {
+router.get("/judgments/financial-report", authorize({ feature: "legal.cases", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -1423,7 +1425,7 @@ router.get("/judgments/financial-report", authorize({ feature: "legal", action: 
   } catch (err) { handleRouteError(err, res, "Judgments financial report error:"); }
 });
 
-router.get("/financial-report", authorize({ feature: "legal", action: "list" }), async (req, res) => {
+router.get("/financial-report", authorize({ feature: "legal.cases", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cases = await rawQuery<any>(

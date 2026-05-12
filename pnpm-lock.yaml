@@ -704,10 +704,20 @@ importers:
         version: 19.2.14
 
   scripts:
+    dependencies:
+      '@types/pg':
+        specifier: ^8.18.0
+        version: 8.18.0
+      pg:
+        specifier: ^8.20.0
+        version: 8.20.0
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
         version: 25.3.5
+      regexparam:
+        specifier: ^3.0.0
+        version: 3.0.0
       tsx:
         specifier: 'catalog:'
         version: 4.21.0

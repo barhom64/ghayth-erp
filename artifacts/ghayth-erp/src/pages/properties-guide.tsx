@@ -426,9 +426,9 @@ function TenantsMockScreen() {
           ))}
         </div>
         {[
-          { name: "أحمد محمد السعيد", phone: "0551234567", id: "1234567890", contracts: "2 نشط", unit: "A-101", paid: "42,000 ر.س" },
-          { name: "سارة عبدالله الغامدي", phone: "0557654321", id: "0987654321", contracts: "1 نشط", unit: "B-201", paid: "96,000 ر.س" },
-          { name: "خالد إبراهيم العمري", phone: "0501112233", id: "2345678901", contracts: "1 نشط", unit: "C-305", paid: "28,000 ر.س" },
+          { name: "المستأجر ١ (مثال)", phone: "05X-XXX-XX01", id: "XXXXXXXX01", contracts: "2 نشط", unit: "A-101", paid: "42,000 ر.س" },
+          { name: "المستأجر ٢ (مثال)", phone: "05X-XXX-XX02", id: "XXXXXXXX02", contracts: "1 نشط", unit: "B-201", paid: "96,000 ر.س" },
+          { name: "المستأجر ٣ (مثال)", phone: "05X-XXX-XX03", id: "XXXXXXXX03", contracts: "1 نشط", unit: "C-305", paid: "28,000 ر.س" },
         ].map((t, i) => (
           <div key={i} className="grid border-b hover:bg-gray-50" style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 2fr 1fr" }}>
             <div className="px-2 py-2 flex items-center gap-1.5">
@@ -472,9 +472,9 @@ function OwnersMockScreen() {
           ))}
         </div>
         {[
-          { name: "عبدالرحمن الحربي", type: "فرد", phone: "0501234567", buildings: 2, units: 20, contracts: 18 },
-          { name: "شركة العقارية المتحدة", type: "شركة", phone: "0112345678", buildings: 1, units: 15, contracts: 11 },
-          { name: "فاطمة القحطاني", type: "فرد", phone: "0559876543", buildings: 1, units: 13, contracts: 13 },
+          { name: "المالك ١ (مثال)", type: "فرد", phone: "05X-XXX-XX10", buildings: 2, units: 20, contracts: 18 },
+          { name: "شركة عقارية (مثال)", type: "شركة", phone: "01X-XXX-XX11", buildings: 1, units: 15, contracts: 11 },
+          { name: "المالك ٣ (مثال)", type: "فرد", phone: "05X-XXX-XX12", buildings: 1, units: 13, contracts: 13 },
         ].map((o, i) => (
           <div key={i} className="grid border-b hover:bg-gray-50" style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr 1fr" }}>
             <div className="px-2 py-2 flex items-center gap-1.5">
@@ -520,9 +520,9 @@ function ContractsMockScreen() {
           ))}
         </div>
         {[
-          { ejar: "EJR-2024-001", unit: "A-101", tenant: "أحمد السعيد", from: "2024/01/01", to: "2024/12/31", rent: "3,500", freq: "شهري", status: "ساري", sColor: "bg-emerald-100 text-emerald-700" },
-          { ejar: "EJR-2024-002", unit: "B-201", tenant: "سارة الغامدي", from: "2024/03/01", to: "2025/02/28", rent: "8,000", freq: "ربع سنوي", status: "ساري", sColor: "bg-emerald-100 text-emerald-700" },
-          { ejar: "EJR-2023-045", unit: "C-305", tenant: "خالد العمري", from: "2023/06/01", to: "2024/05/31", rent: "2,800", freq: "شهري", status: "منتهي", sColor: "bg-gray-100 text-gray-600" },
+          { ejar: "EJR-2024-001", unit: "A-101", tenant: "المستأجر ١ (مثال)", from: "2024/01/01", to: "2024/12/31", rent: "3,500", freq: "شهري", status: "ساري", sColor: "bg-emerald-100 text-emerald-700" },
+          { ejar: "EJR-2024-002", unit: "B-201", tenant: "المستأجر ٢ (مثال)", from: "2024/03/01", to: "2025/02/28", rent: "8,000", freq: "ربع سنوي", status: "ساري", sColor: "bg-emerald-100 text-emerald-700" },
+          { ejar: "EJR-2023-045", unit: "C-305", tenant: "المستأجر ٣ (مثال)", from: "2023/06/01", to: "2024/05/31", rent: "2,800", freq: "شهري", status: "منتهي", sColor: "bg-gray-100 text-gray-600" },
         ].map((c, i) => (
           <div key={i} className={cn("grid border-b hover:bg-gray-50 cursor-pointer", i === 1 ? "bg-blue-50/40" : "")} style={{ gridTemplateColumns: "1fr 1fr 2fr 1fr 1fr 1fr 1fr 1fr 1fr" }}>
             {[c.ejar, c.unit, c.tenant, c.from, c.to, c.rent + " ر.س", c.freq].map((v, j) => (
@@ -570,9 +570,9 @@ function PaymentsMockScreen() {
           ))}
         </div>
         {[
-          { tenant: "أحمد السعيد", unit: "A-101", due: "2024/12/01", amount: "3,500", paid: "3,500", status: "مدفوع", sColor: "bg-emerald-100 text-emerald-700", action: null },
-          { tenant: "سارة الغامدي", unit: "B-201", due: "2024/12/01", amount: "8,000", paid: "0", status: "معلق", sColor: "bg-gray-100 text-gray-500", action: "تسجيل" },
-          { tenant: "خالد العمري", unit: "C-305", due: "2024/11/01", amount: "2,800", paid: "0", status: "متأخر", sColor: "bg-red-100 text-red-700", action: "تسجيل" },
+          { tenant: "المستأجر ١ (مثال)", unit: "A-101", due: "2024/12/01", amount: "3,500", paid: "3,500", status: "مدفوع", sColor: "bg-emerald-100 text-emerald-700", action: null },
+          { tenant: "المستأجر ٢ (مثال)", unit: "B-201", due: "2024/12/01", amount: "8,000", paid: "0", status: "معلق", sColor: "bg-gray-100 text-gray-500", action: "تسجيل" },
+          { tenant: "المستأجر ٣ (مثال)", unit: "C-305", due: "2024/11/01", amount: "2,800", paid: "0", status: "متأخر", sColor: "bg-red-100 text-red-700", action: "تسجيل" },
         ].map((p, i) => (
           <div key={i} className={cn("grid border-b", p.status === "متأخر" ? "bg-rose-50" : "hover:bg-gray-50")} style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr 1fr" }}>
             <div className="px-2 py-2 text-[9px] font-medium">{p.tenant}</div>
@@ -719,9 +719,9 @@ function DepositsMockScreen() {
       </div>
       <div className="space-y-2">
         {[
-          { tenant: "أحمد السعيد", unit: "A-101", bld: "برج النخيل", amount: "8,500", received: "2024/01/10", status: "محتجزة", sColor: "bg-blue-100 text-blue-700", refund: null },
-          { tenant: "خالد العمري", unit: "C-305", bld: "المركز التجاري", amount: "12,000", received: "2023/06/01", status: "مستردة", sColor: "bg-green-100 text-green-700", refund: "12,000" },
-          { tenant: "سارة الغامدي", unit: "B-201", bld: "مجمع الواحة", amount: "6,000", received: "2024/03/15", status: "محتجزة", sColor: "bg-blue-100 text-blue-700", refund: null },
+          { tenant: "المستأجر ١ (مثال)", unit: "A-101", bld: "برج النخيل", amount: "8,500", received: "2024/01/10", status: "محتجزة", sColor: "bg-blue-100 text-blue-700", refund: null },
+          { tenant: "المستأجر ٣ (مثال)", unit: "C-305", bld: "المركز التجاري", amount: "12,000", received: "2023/06/01", status: "مستردة", sColor: "bg-green-100 text-green-700", refund: "12,000" },
+          { tenant: "المستأجر ٢ (مثال)", unit: "B-201", bld: "مجمع الواحة", amount: "6,000", received: "2024/03/15", status: "محتجزة", sColor: "bg-blue-100 text-blue-700", refund: null },
         ].map((d, i) => (
           <div key={i} className="bg-white border rounded-lg p-3 flex items-center justify-between hover:shadow-sm">
             <div>
@@ -824,7 +824,7 @@ function OccupancyMockScreen() {
           ))}
         </div>
         {[
-          { unit: "A-101", bld: "برج النخيل", status: "مؤجرة", sColor: "bg-green-100 text-green-600", tenant: "أحمد السعيد", rent: "3,500 ر.س", end: "2024/12/31" },
+          { unit: "A-101", bld: "برج النخيل", status: "مؤجرة", sColor: "bg-green-100 text-green-600", tenant: "المستأجر ١ (مثال)", rent: "3,500 ر.س", end: "2024/12/31" },
           { unit: "A-102", bld: "برج النخيل", status: "متاحة", sColor: "bg-blue-100 text-blue-600", tenant: "—", rent: "2,800 ر.س", end: "—" },
         ].map((u, i) => (
           <div key={i} className="grid border-b hover:bg-gray-50" style={{ gridTemplateColumns: "1fr 1fr 1fr 2fr 1fr 1fr" }}>

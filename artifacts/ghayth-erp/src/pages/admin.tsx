@@ -22,7 +22,7 @@ export default function AdminPage() {
 
   return (
     <PageShell title="لوحة الإدارة" breadcrumbs={[{ label: "الإدارة" }]}>
-      <div className="grid grid-cols-3 md:grid-cols-7 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4">
         {[
           { label: "المستخدمين", icon: Users, color: "text-blue-600 bg-blue-50" },
           { label: "إسناد الأدوار", icon: UserCog, color: "text-orange-600 bg-orange-50" },
@@ -45,7 +45,7 @@ export default function AdminPage() {
 
       <div className="mt-6 mb-4">
         <h3 className="text-sm font-semibold text-gray-600 mb-3">محركات النظام والحوكمة</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
           {[
             { label: "حاكم النظام", icon: Shield, color: "text-emerald-600 bg-emerald-50", path: "/admin/system-governor" },
             { label: "محرك السياسات", icon: Cog, color: "text-blue-600 bg-blue-50", path: "/admin/policy-engine" },
@@ -73,18 +73,18 @@ export default function AdminPage() {
       </div>
 
       <Tabs defaultValue="rbac-v2" dir="rtl">
-        <TabsList className="grid w-full grid-cols-11">
-          <TabsTrigger value="rbac-v2">الصلاحيات الطبقية</TabsTrigger>
-          <TabsTrigger value="rbac-users">إسناد v2</TabsTrigger>
-          <TabsTrigger value="rbac-sod">قواعد SoD</TabsTrigger>
-          <TabsTrigger value="rbac-jit">طلبات مؤقتة</TabsTrigger>
-          <TabsTrigger value="users">المستخدمين</TabsTrigger>
-          <TabsTrigger value="assign">إسناد قديم</TabsTrigger>
-          <TabsTrigger value="roles">الأدوار</TabsTrigger>
-          <TabsTrigger value="logs">السجلات</TabsTrigger>
-          <TabsTrigger value="permissions">صلاحيات قديمة</TabsTrigger>
-          <TabsTrigger value="security">سجل الأمن</TabsTrigger>
-          <TabsTrigger value="audit">سجل المراجعة</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-6 lg:grid-cols-11 h-auto">
+          <TabsTrigger value="rbac-v2" className="text-xs sm:text-sm">الصلاحيات الطبقية</TabsTrigger>
+          <TabsTrigger value="rbac-users" className="text-xs sm:text-sm">إسناد v2</TabsTrigger>
+          <TabsTrigger value="rbac-sod" className="text-xs sm:text-sm">قواعد SoD</TabsTrigger>
+          <TabsTrigger value="rbac-jit" className="text-xs sm:text-sm">طلبات مؤقتة</TabsTrigger>
+          <TabsTrigger value="users" className="text-xs sm:text-sm">المستخدمين</TabsTrigger>
+          <TabsTrigger value="assign" className="text-xs sm:text-sm">إسناد قديم</TabsTrigger>
+          <TabsTrigger value="roles" className="text-xs sm:text-sm">الأدوار</TabsTrigger>
+          <TabsTrigger value="logs" className="text-xs sm:text-sm">السجلات</TabsTrigger>
+          <TabsTrigger value="permissions" className="text-xs sm:text-sm">صلاحيات قديمة</TabsTrigger>
+          <TabsTrigger value="security" className="text-xs sm:text-sm">سجل الأمن</TabsTrigger>
+          <TabsTrigger value="audit" className="text-xs sm:text-sm">سجل المراجعة</TabsTrigger>
         </TabsList>
         <TabsContent value="rbac-v2"><RbacV2Tab /></TabsContent>
         <TabsContent value="rbac-users"><UserRoleAssignmentTab /></TabsContent>

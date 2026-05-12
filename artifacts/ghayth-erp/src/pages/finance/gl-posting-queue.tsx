@@ -25,6 +25,7 @@ import { useState } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Send,
@@ -238,7 +239,8 @@ export default function GLPostingQueuePage() {
       key: "actions" as keyof MudadPendingRow,
       header: "",
       render: (r) => (
-        <Button
+        <GuardedButton
+          perm="finance:approve"
           size="sm"
           variant="outline"
           disabled={postMudad.isPending}
@@ -246,7 +248,7 @@ export default function GLPostingQueuePage() {
         >
           <Send className="h-3.5 w-3.5 ml-1" />
           نشر للقيد
-        </Button>
+        </GuardedButton>
       ),
     },
   ];
@@ -294,7 +296,8 @@ export default function GLPostingQueuePage() {
       key: "actions" as keyof LotPendingRow,
       header: "",
       render: (r) => (
-        <Button
+        <GuardedButton
+          perm="finance:approve"
           size="sm"
           variant="outline"
           disabled={postLot.isPending}
@@ -302,7 +305,7 @@ export default function GLPostingQueuePage() {
         >
           <Send className="h-3.5 w-3.5 ml-1" />
           نشر للقيد
-        </Button>
+        </GuardedButton>
       ),
     },
   ];
@@ -345,7 +348,8 @@ export default function GLPostingQueuePage() {
       key: "actions" as keyof FxRevaluationPendingRow,
       header: "",
       render: (r) => (
-        <Button
+        <GuardedButton
+          perm="finance:approve"
           size="sm"
           variant="outline"
           disabled={postFx.isPending}
@@ -353,7 +357,7 @@ export default function GLPostingQueuePage() {
         >
           <Send className="h-3.5 w-3.5 ml-1" />
           نشر للقيد
-        </Button>
+        </GuardedButton>
       ),
     },
   ];
@@ -395,7 +399,8 @@ export default function GLPostingQueuePage() {
       key: "actions" as keyof CycleCountPendingRow,
       header: "",
       render: (r) => (
-        <Button
+        <GuardedButton
+          perm="finance:approve"
           size="sm"
           variant="outline"
           disabled={postCycle.isPending}
@@ -403,7 +408,7 @@ export default function GLPostingQueuePage() {
         >
           <Send className="h-3.5 w-3.5 ml-1" />
           نشر للقيد
-        </Button>
+        </GuardedButton>
       ),
     },
   ];

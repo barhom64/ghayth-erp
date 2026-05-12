@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 export function AIInsightsTab() {
   const [dismissingId, setDismissingId] = useState<number | null>(null);
@@ -95,14 +96,15 @@ export function AIInsightsTab() {
                       )}
                     </div>
                   </div>
-                  <Button
+                  <GuardedButton
+                    perm="bi:create"
                     size="sm" variant="ghost"
                     onClick={() => handleDismiss(alert.id)}
                     disabled={dismissingId === alert.id}
                     className="shrink-0"
                   >
                     <X className="h-4 w-4" />
-                  </Button>
+                  </GuardedButton>
                 </div>
               </CardContent>
             </Card>

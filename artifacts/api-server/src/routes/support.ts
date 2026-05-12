@@ -709,7 +709,7 @@ router.delete("/tickets/:id", authorize({ feature: "support.tickets", action: "d
   } catch (err) { handleRouteError(err, res, "Delete ticket error:"); }
 });
 
-router.get("/replies", authorize({ feature: "support", action: "list" }), async (req, res) => {
+router.get("/replies", authorize({ feature: "support.tickets", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
@@ -740,14 +740,16 @@ router.get("/replies", authorize({ feature: "support", action: "list" }), async 
   } catch (err) { handleRouteError(err, res, "Support replies error:"); }
 });
 
-router.get("/stats", authorize({ feature: "support", action: "list" }), async (req, res) => {
+router.get("/stats", authorize({ feature: "support.tickets", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [tickets] = await rawQuery<AggCountsRow>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COUNT(*) FILTER (WHERE status='resolved') as resolved, COUNT(*) FILTER (WHERE status IN ('open','in_progress','field_visit') AND "slaDeadline" < NOW()) as "slaBreach" FROM support_tickets WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [avgRes] = await rawQuery<AvgHoursRow>(`SELECT AVG(EXTRACT(EPOCH FROM ("resolvedAt"::timestamp - "createdAt"::timestamp))/3600) AS "avgHours" FROM support_tickets WHERE "companyId"=$1 AND status='resolved' AND "resolvedAt" IS NOT NULL AND "deletedAt" IS NULL`, [cid]);
-    const [firstResponse] = await rawQuery<AvgHoursRow>(`SELECT AVG(EXTRACT(EPOCH FROM ("firstResponseAt"::timestamp - "createdAt"::timestamp))/3600) AS "avgHours" FROM support_tickets WHERE "companyId"=$1 AND "firstResponseAt" IS NOT NULL AND "deletedAt" IS NULL`, [cid]);
-    const [csat] = await rawQuery<AvgTotalRow>(`SELECT AVG(score) AS avg, COUNT(*) AS total FROM ticket_csat_ratings WHERE "companyId"=$1`, [cid]).catch((e) => { logger.error(e, "support query failed"); return [{ avg: null, total: 0 }] as AvgTotalRow[]; });
+    const [[tickets], [avgRes], [firstResponse], [csat]] = await Promise.all([
+      rawQuery<AggCountsRow>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COUNT(*) FILTER (WHERE status='resolved') as resolved, COUNT(*) FILTER (WHERE status IN ('open','in_progress','field_visit') AND "slaDeadline" < NOW()) as "slaBreach" FROM support_tickets WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<AvgHoursRow>(`SELECT AVG(EXTRACT(EPOCH FROM ("resolvedAt"::timestamp - "createdAt"::timestamp))/3600) AS "avgHours" FROM support_tickets WHERE "companyId"=$1 AND status='resolved' AND "resolvedAt" IS NOT NULL AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<AvgHoursRow>(`SELECT AVG(EXTRACT(EPOCH FROM ("firstResponseAt"::timestamp - "createdAt"::timestamp))/3600) AS "avgHours" FROM support_tickets WHERE "companyId"=$1 AND "firstResponseAt" IS NOT NULL AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<AvgTotalRow>(`SELECT AVG(score) AS avg, COUNT(*) AS total FROM ticket_csat_ratings WHERE "companyId"=$1`, [cid]).catch((e) => { logger.error(e, "support query failed"); return [{ avg: null, total: 0 }] as AvgTotalRow[]; }),
+    ]);
     res.json({
       totalTickets: Number(tickets.total), openTickets: Number(tickets.open),
       resolvedTickets: Number(tickets.resolved), slaBreach: Number(tickets.slaBreach),

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -11,6 +12,16 @@ import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Archive, TrendingUp, TrendingDown, Calculator, CheckCircle } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface YearEndPreview {
   dryRun?: boolean;
@@ -35,6 +46,11 @@ export default function YearEndClosePage() {
   const [force, setForce] = useState(false);
   const [preview, setPreview] = useState<YearEndPreview | null>(null);
   const [closed, setClosed] = useState(false);
+  // Year-end close is the most destructive operation in the system —
+  // moves every P&L balance to retained earnings and locks the year.
+  // Replaces a native confirm() with a proper AlertDialog so RTL +
+  // dark mode + clear messaging all work.
+  const [confirmingClose, setConfirmingClose] = useState(false);
 
   const previewMut = useApiMutation<YearEndPreview, { retainedEarningsAccountCode: string; force: boolean }>(
     () => `/finance/fiscal-periods/${year}/year-end-close?dryRun=true`,
@@ -122,21 +138,20 @@ export default function YearEndClosePage() {
               <Calculator className="h-4 w-4 me-1" />
               {previewMut.isPending ? "جاري الحساب..." : "معاينة"}
             </Button>
-            <Button
+            <GuardedButton
+              perm="finance:approve"
               onClick={() => {
                 if (!preview) {
                   toast({ variant: "destructive", title: "قم بالمعاينة أولاً" });
                   return;
                 }
-                if (confirm(`تأكيد إقفال السنة المالية ${year}؟ لا يمكن التراجع عن هذه العملية.`)) {
-                  confirmMut.mutate({ retainedEarningsAccountCode, force });
-                }
+                setConfirmingClose(true);
               }}
               disabled={!preview || confirmMut.isPending || closed}
             >
               <CheckCircle className="h-4 w-4 me-1" />
               {confirmMut.isPending ? "جاري الإقفال..." : closed ? "تم الإقفال" : "تأكيد الإقفال"}
-            </Button>
+            </GuardedButton>
           </div>
         </CardContent>
       </Card>
@@ -233,6 +248,32 @@ export default function YearEndClosePage() {
   ];
 
   return (
+    <>
+      <AlertDialog
+        open={confirmingClose}
+        onOpenChange={(v) => { if (!v) setConfirmingClose(false); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد إقفال السنة المالية {year}</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيتم نقل أرصدة الإيرادات والمصروفات إلى الأرباح المحتجزة وقفل السنة.
+              <strong className="block mt-2">لا يمكن التراجع عن هذه العملية.</strong>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmingClose(false)}>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmingClose(false);
+                confirmMut.mutate({ retainedEarningsAccountCode, force });
+              }}
+            >
+              تأكيد الإقفال
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     <EntityDetailPage
       title="إقفال السنة المالية"
       subtitle="ترحيل الإيرادات والمصروفات إلى الأرباح المحتجزة وإقفال السنة"
@@ -242,5 +283,6 @@ export default function YearEndClosePage() {
       tabs={tabs}
       defaultTab="wizard"
     />
+    </>
   );
 }

@@ -49,5 +49,9 @@ Thumbs.db
 .local/
 attached_assets/
 
-# Local sandbox .env
+# Local sandbox .env — root and any nested .env files. The committed
+# template `.env.example` is whitelisted so deployers still see it.
+.env
+.env.*
+!.env.example
 artifacts/api-server/.env

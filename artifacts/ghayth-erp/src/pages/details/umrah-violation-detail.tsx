@@ -6,6 +6,7 @@ import {
   InlineEditCard,
 } from "@/components/shared/detail-edit-delete-actions";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertTriangle } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
@@ -13,6 +14,7 @@ import { formatDateAr } from "@/lib/formatters";
 export default function UmrahViolationDetail() {
   const [, params] = useRoute("/umrah/violations/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("violation", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["umrah-violation", String(id)],
@@ -67,6 +69,8 @@ export default function UmrahViolationDetail() {
       backLabel="العودة"
       entityType="violation"
       entityId={id ?? 0}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       overview={overview}
       isLoading={isLoading}
       error={error}
