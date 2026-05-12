@@ -5249,7 +5249,10 @@ CREATE TABLE public.employee_commission_calculations (
     "updatedBy" integer,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    "planVersion" integer,
+    "planSnapshot" jsonb,
+    "tiersSnapshot" jsonb
 );
 
 
@@ -5305,7 +5308,8 @@ CREATE TABLE public.employee_commission_plans (
     "updatedBy" integer,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    version integer DEFAULT 1 NOT NULL
 );
 
 
