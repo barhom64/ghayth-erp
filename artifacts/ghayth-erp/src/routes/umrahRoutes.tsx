@@ -39,6 +39,10 @@ const UmrahReconciliation = lazy(() => import("@/pages/umrah/reconciliation"));
 // endpoints from PR #312.
 const UmrahGroups = lazy(() => import("@/pages/umrah/groups"));
 
+// Standalone cross-entity attachments index. Editing is still per-entity
+// via the embedded UmrahAttachmentsPanel; this page is read-only.
+const UmrahAttachments = lazy(() => import("@/pages/umrah/attachments"));
+
 export const umrahRoutes: { path: string; component: any; module?: ModuleType }[] = [
   { path: "/umrah", component: UmrahDashboard, module: "operations" },
   { path: "/umrah/pilgrims", component: UmrahPilgrims, module: "operations" },
@@ -71,4 +75,5 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/daily-runsheet", component: UmrahDailyRunsheet, module: "operations" },
   { path: "/umrah/reconciliation", component: UmrahReconciliation, module: "operations" },
   { path: "/umrah/groups", component: UmrahGroups, module: "operations" },
+  { path: "/umrah/attachments", component: UmrahAttachments, module: "operations" },
 ];
