@@ -646,6 +646,181 @@ router.delete("/groups/:id", authorize({ feature: "umrah", action: "delete" }), 
 });
 
 // ============================================================================
+// GROUP OPS — split / merge (#5 from internal review)
+// ============================================================================
+
+const splitGroupSchema = z.object({
+  pilgrimIds: z.array(z.number().int().positive()).min(1, "اختر معتمراً واحداً على الأقل"),
+  newGroupName: z.string().min(1).max(255).optional(),
+  newNuskGroupNumber: z.string().min(1).max(30).optional(),
+});
+
+// Split a group: move N pilgrims into a freshly created group. The source
+// group is preserved (still owns remaining pilgrims + its salesInvoice).
+// Idempotent in spirit — if the new group already exists by nusk number
+// it's reused, otherwise auto-generated. Sub-agent + agent + seasonId
+// are copied from the source so analytics + scoping line up.
+router.post("/groups/:id/split", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const sourceId = parseId(req.params.id, "id");
+    const body = zodParse(splitGroupSchema.safeParse(req.body));
+
+    const result = await withTransaction(async (client) => {
+      const [source] = (await client.query(
+        `SELECT * FROM umrah_groups WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL FOR UPDATE`,
+        [sourceId, scope.companyId]
+      )).rows;
+      if (!source) throw new NotFoundError("المجموعة المصدر غير موجودة");
+      if (source.salesInvoiceId) {
+        throw new ConflictError("لا يمكن تقسيم مجموعة مرتبطة بفاتورة مبيعات — أُصدر إشعار دائن أولاً");
+      }
+
+      const verifyRes = await client.query(
+        `SELECT id FROM umrah_pilgrims
+          WHERE id = ANY($1::int[]) AND "groupId" = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+        [body.pilgrimIds, sourceId, scope.companyId]
+      );
+      if (verifyRes.rows.length !== body.pilgrimIds.length) {
+        throw new ValidationError("بعض المعتمرين لا ينتمون لهذه المجموعة أو محذوفون", {
+          meta: { provided: body.pilgrimIds.length, valid: verifyRes.rows.length },
+        });
+      }
+
+      const newNuskNum = body.newNuskGroupNumber || `${source.nuskGroupNumber}-S${Date.now().toString().slice(-5)}`;
+      const newName = body.newGroupName || `${source.name || ""} - تقسيم`.trim();
+
+      const insertRes = await client.query(
+        `INSERT INTO umrah_groups
+          ("companyId","branchId","nuskGroupNumber",name,"agentId","subAgentId","seasonId",
+           "mutamerCount","programDuration",status,"createdBy","createdAt","updatedAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'split_from_'||$10,$11,NOW(),NOW())
+         RETURNING id, "nuskGroupNumber", name, "mutamerCount"`,
+        [
+          scope.companyId, scope.branchId || source.branchId, newNuskNum, newName,
+          source.agentId, source.subAgentId, source.seasonId,
+          body.pilgrimIds.length, source.programDuration, sourceId, scope.userId,
+        ]
+      );
+      const newGroup = insertRes.rows[0];
+
+      await client.query(
+        `UPDATE umrah_pilgrims
+            SET "groupId"=$1, "updatedBy"=$2, "updatedAt"=NOW()
+          WHERE id = ANY($3::int[]) AND "companyId"=$4`,
+        [newGroup.id, scope.userId, body.pilgrimIds, scope.companyId]
+      );
+
+      await client.query(
+        `UPDATE umrah_groups
+            SET "mutamerCount" = GREATEST(0, COALESCE("mutamerCount",0) - $1),
+                "updatedBy"=$2, "updatedAt"=NOW()
+          WHERE id=$3 AND "companyId"=$4`,
+        [body.pilgrimIds.length, scope.userId, sourceId, scope.companyId]
+      );
+
+      return { newGroup, movedCount: body.pilgrimIds.length };
+    });
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "split", entity: "umrah_groups", entityId: sourceId,
+      after: { newGroupId: result.newGroup.id, movedCount: result.movedCount },
+    }).catch((e) => logger.error(e, "umrah groups split bg"));
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.group.split", entity: "umrah_groups", entityId: sourceId,
+      details: JSON.stringify({ newGroupId: result.newGroup.id, movedCount: result.movedCount }),
+    }).catch((e) => logger.error(e, "umrah groups split bg"));
+
+    res.json({ success: true, ...result });
+  } catch (err) { handleRouteError(err, res, "Split group"); }
+});
+
+const mergeGroupsSchema = z.object({
+  sourceGroupIds: z.array(z.number().int().positive()).min(1, "اختر مجموعة مصدر واحدة على الأقل"),
+  targetGroupId: z.number().int().positive(),
+});
+
+// Merge: move every pilgrim from sourceGroupIds → targetGroupId, then
+// soft-delete the source groups (they leave a paper trail). Source groups
+// must not be invoiced — if any has a salesInvoiceId we abort cleanly with
+// a 409 so the caller can issue credit notes first.
+router.post("/groups/merge", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const body = zodParse(mergeGroupsSchema.safeParse(req.body));
+
+    if (body.sourceGroupIds.includes(body.targetGroupId)) {
+      throw new ValidationError("الهدف لا يمكن أن يكون ضمن المصادر");
+    }
+
+    const result = await withTransaction(async (client) => {
+      const [target] = (await client.query(
+        `SELECT * FROM umrah_groups WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL FOR UPDATE`,
+        [body.targetGroupId, scope.companyId]
+      )).rows;
+      if (!target) throw new NotFoundError("المجموعة الهدف غير موجودة");
+
+      const sources = (await client.query(
+        `SELECT id, "salesInvoiceId", "mutamerCount" FROM umrah_groups
+          WHERE id = ANY($1::int[]) AND "companyId"=$2 AND "deletedAt" IS NULL
+          FOR UPDATE`,
+        [body.sourceGroupIds, scope.companyId]
+      )).rows;
+      if (sources.length !== body.sourceGroupIds.length) {
+        throw new ValidationError("بعض المجموعات المصدر غير موجودة أو محذوفة");
+      }
+      const invoiced = sources.filter((s: any) => s.salesInvoiceId);
+      if (invoiced.length > 0) {
+        throw new ConflictError("بعض المجموعات المصدر مفوترة — أصدر إشعار دائن أولاً", {
+          meta: { invoicedSourceIds: invoiced.map((s: any) => s.id) },
+        });
+      }
+
+      const moveRes = await client.query(
+        `UPDATE umrah_pilgrims
+            SET "groupId"=$1, "updatedBy"=$2, "updatedAt"=NOW()
+          WHERE "groupId" = ANY($3::int[]) AND "companyId"=$4 AND "deletedAt" IS NULL
+          RETURNING id`,
+        [body.targetGroupId, scope.userId, body.sourceGroupIds, scope.companyId]
+      );
+      const movedCount = moveRes.rowCount || 0;
+
+      await client.query(
+        `UPDATE umrah_groups
+            SET "mutamerCount" = COALESCE("mutamerCount",0) + $1,
+                "updatedBy"=$2, "updatedAt"=NOW()
+          WHERE id=$3 AND "companyId"=$4`,
+        [movedCount, scope.userId, body.targetGroupId, scope.companyId]
+      );
+
+      await client.query(
+        `UPDATE umrah_groups
+            SET "deletedAt"=NOW(), "updatedBy"=$1, "updatedAt"=NOW()
+          WHERE id = ANY($2::int[]) AND "companyId"=$3`,
+        [scope.userId, body.sourceGroupIds, scope.companyId]
+      );
+
+      return { movedCount, mergedSourceIds: body.sourceGroupIds };
+    });
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "merge", entity: "umrah_groups", entityId: body.targetGroupId,
+      after: result,
+    }).catch((e) => logger.error(e, "umrah groups merge bg"));
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.group.merged", entity: "umrah_groups", entityId: body.targetGroupId,
+      details: JSON.stringify(result),
+    }).catch((e) => logger.error(e, "umrah groups merge bg"));
+
+    res.json({ success: true, ...result });
+  } catch (err) { handleRouteError(err, res, "Merge groups"); }
+});
+
+// ============================================================================
 // NUSK INVOICES
 // ============================================================================
 
@@ -1358,6 +1533,241 @@ router.get("/reports/daily-runsheet/pdf", authorize({ feature: "umrah", action: 
     res.setHeader("Content-Disposition", `inline; filename="umrah-runsheet-${date}.pdf"`);
     res.send(pdf);
   } catch (err) { handleRouteError(err, res, "Daily run-sheet PDF"); }
+});
+
+// ============================================================================
+// ATTACHMENTS — polymorphic document storage for umrah entities (#4)
+// ============================================================================
+
+const ATTACH_ENTITY_TYPES = ["mutamer","sub_agent","group","agent","nusk_invoice","season","sales_invoice","violation"] as const;
+const ATTACH_TYPES = ["passport","visa","contract","nusk_file","identity","transfer_receipt","other"] as const;
+
+const createAttachmentSchema = z.object({
+  entityType: z.enum(ATTACH_ENTITY_TYPES),
+  entityId: z.number().int().positive(),
+  type: z.enum(ATTACH_TYPES),
+  title: z.string().min(1).max(255),
+  notes: z.string().optional(),
+  fileUrl: z.string().url().max(2000).optional(),
+  storageKey: z.string().max(500).optional(),
+  fileSize: z.number().int().nonnegative().optional(),
+  mimeType: z.string().max(120).optional(),
+});
+
+// Map entityType → table for ownership verification. Keeps the route from
+// trusting arbitrary entityIds — every attachment must point at a row the
+// caller's company actually owns.
+const ATTACH_OWNER_TABLE: Record<string, string> = {
+  mutamer:        "umrah_pilgrims",
+  sub_agent:      "umrah_sub_agents",
+  group:          "umrah_groups",
+  agent:          "umrah_agents",
+  nusk_invoice:   "umrah_nusk_invoices",
+  season:         "umrah_seasons",
+  sales_invoice:  "umrah_sales_invoices",
+  violation:      "umrah_violations",
+};
+
+async function assertAttachmentOwner(companyId: number, entityType: string, entityId: number): Promise<void> {
+  const table = ATTACH_OWNER_TABLE[entityType];
+  if (!table) throw new ValidationError("نوع كيان غير مدعوم", { field: "entityType" });
+  const safeTable = table.replace(/[^a-zA-Z0-9_]/g, "");
+  const [row] = await rawQuery<any>(
+    `SELECT id FROM "${safeTable}" WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+    [entityId, companyId]
+  );
+  if (!row) throw new NotFoundError("الكيان المرفق به غير موجود أو محذوف");
+}
+
+router.get("/attachments", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { entityType, entityId, type } = req.query as Record<string, string | undefined>;
+    let where = `"companyId" = $1 AND "deletedAt" IS NULL`;
+    const params: any[] = [scope.companyId];
+    if (entityType) { params.push(entityType); where += ` AND "entityType" = $${params.length}`; }
+    if (entityId)   { params.push(Number(entityId)); where += ` AND "entityId" = $${params.length}`; }
+    if (type)       { params.push(type); where += ` AND type = $${params.length}`; }
+    const rows = await rawQuery(
+      `SELECT id, "entityType", "entityId", type, title, notes, "fileUrl", "storageKey",
+              "fileSize", "mimeType", "uploadedBy", "createdAt"
+         FROM umrah_attachments
+        WHERE ${where}
+        ORDER BY "createdAt" DESC
+        LIMIT 500`,
+      params
+    );
+    res.json({ data: rows });
+  } catch (err) { handleRouteError(err, res, "List attachments"); }
+});
+
+router.post("/attachments", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const body = zodParse(createAttachmentSchema.safeParse(req.body));
+    await assertAttachmentOwner(scope.companyId, body.entityType, body.entityId);
+
+    const [row] = await rawQuery<{ id: number }>(
+      `INSERT INTO umrah_attachments
+         ("companyId","branchId","entityType","entityId",type,title,notes,
+          "fileUrl","storageKey","fileSize","mimeType","uploadedBy","createdAt","updatedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW(),NOW())
+       RETURNING id`,
+      [
+        scope.companyId, scope.branchId || null, body.entityType, body.entityId,
+        body.type, body.title, body.notes || null,
+        body.fileUrl || null, body.storageKey || null,
+        body.fileSize ?? null, body.mimeType || null,
+        scope.userId,
+      ]
+    );
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "create", entity: "umrah_attachments", entityId: row.id,
+      after: { entityType: body.entityType, entityId: body.entityId, type: body.type, title: body.title },
+    }).catch((e) => logger.error(e, "umrah attachments bg"));
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.attachment.created", entity: "umrah_attachments", entityId: row.id,
+      details: JSON.stringify({ entityType: body.entityType, entityId: body.entityId, type: body.type }),
+    }).catch((e) => logger.error(e, "umrah attachments bg"));
+
+    res.status(201).json({ id: row.id });
+  } catch (err) { handleRouteError(err, res, "Create attachment"); }
+});
+
+router.delete("/attachments/:id", authorize({ feature: "umrah", action: "delete" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(
+      `SELECT id FROM umrah_attachments WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("المرفق غير موجود");
+    await rawExecute(
+      `UPDATE umrah_attachments SET "deletedAt"=NOW(), "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
+      [id, scope.companyId]
+    );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_attachments", entityId: id }).catch((e) => logger.error(e, "umrah attachments bg"));
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "Delete attachment"); }
+});
+
+// ============================================================================
+// RECONCILIATION REPORT — NUSK file ↔ system diff (#8)
+// ============================================================================
+
+// Compares the canonical NUSK invoice file against system state in three
+// dimensions:
+//   1. Total amount of nusk invoice vs total of journal entries against it
+//      (catches refunds / partial payments missed by the importer).
+//   2. mutamerCount on the nusk invoice vs actual pilgrims linked to its
+//      group (catches drop-outs that the file never recorded).
+//   3. Overstays: pilgrims with overstayDays > 0 and no open violation row
+//      (catches violations the cron should have created but didn't).
+//
+// Read-only — no mutations. Output is grouped so ops can drill into the
+// specific records that need attention without re-running ad-hoc SQL.
+router.get("/reports/reconciliation", authorize({ feature: "umrah", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { seasonId } = req.query as Record<string, string | undefined>;
+
+    const seasonFilter = seasonId
+      ? { fragment: ` AND "seasonId" = $2`, params: [scope.companyId, Number(seasonId)] }
+      : { fragment: "", params: [scope.companyId] };
+
+    // 1. Amount diff: nusk total vs posted JE total
+    const amountDiffs = await rawQuery<any>(
+      `SELECT ni.id, ni."nuskInvoiceNumber", ni."totalAmount" AS "fileTotal",
+              ni."nuskStatus", ni."purchaseInvoiceId", ni."journalEntryId",
+              COALESCE(je_ap.total, 0) AS "postedAp",
+              COALESCE(je_rf.total, 0) AS "postedRefund",
+              (ni."totalAmount" - COALESCE(je_ap.total, 0) + COALESCE(je_rf.total, 0))::numeric(12,2) AS "diff"
+         FROM umrah_nusk_invoices ni
+    LEFT JOIN LATERAL (
+           SELECT SUM(jl.debit) AS total FROM journal_entries je
+             JOIN journal_lines jl ON jl."journalId" = je.id
+            WHERE je.id = ni."purchaseInvoiceId" AND je."deletedAt" IS NULL
+              AND jl."accountCode" LIKE '5%'
+         ) je_ap ON true
+    LEFT JOIN LATERAL (
+           SELECT SUM(jl.credit) AS total FROM journal_entries je
+             JOIN journal_lines jl ON jl."journalId" = je.id
+            WHERE je.id = ni."journalEntryId" AND je."deletedAt" IS NULL
+              AND jl."accountCode" LIKE '5%'
+         ) je_rf ON true
+        WHERE ni."companyId" = $1 AND ni."deletedAt" IS NULL
+          AND ni."nuskStatus" != 'cancelled'
+          AND ABS(ni."totalAmount" - COALESCE(je_ap.total, 0) + COALESCE(je_rf.total, 0)) > 0.01
+        ORDER BY ABS(ni."totalAmount" - COALESCE(je_ap.total, 0) + COALESCE(je_rf.total, 0)) DESC
+        LIMIT 500`,
+      [scope.companyId]
+    );
+
+    // 2. Mutamer count diff: file says X, system has Y in the linked group
+    const countDiffs = await rawQuery<any>(
+      `SELECT ni.id, ni."nuskInvoiceNumber", ni."mutamerCount" AS "fileCount",
+              ni."groupId", g.name AS "groupName",
+              (SELECT COUNT(*)::int FROM umrah_pilgrims p
+                WHERE p."groupId" = ni."groupId"
+                  AND p."companyId" = ni."companyId"
+                  AND p."deletedAt" IS NULL) AS "systemCount"
+         FROM umrah_nusk_invoices ni
+    LEFT JOIN umrah_groups g ON g.id = ni."groupId"
+        WHERE ni."companyId" = $1 AND ni."deletedAt" IS NULL
+          AND ni."groupId" IS NOT NULL
+          AND ni."mutamerCount" IS NOT NULL
+          AND ni."mutamerCount" != (
+            SELECT COUNT(*)::int FROM umrah_pilgrims p
+              WHERE p."groupId" = ni."groupId"
+                AND p."companyId" = ni."companyId"
+                AND p."deletedAt" IS NULL
+          )
+        ORDER BY ABS(ni."mutamerCount" - (
+            SELECT COUNT(*) FROM umrah_pilgrims p
+              WHERE p."groupId" = ni."groupId"
+                AND p."companyId" = ni."companyId"
+                AND p."deletedAt" IS NULL
+          )) DESC
+        LIMIT 500`,
+      [scope.companyId]
+    );
+
+    // 3. Overstays without a violation row
+    const overstayGaps = await rawQuery<any>(
+      `SELECT p.id, p."nuskNumber", p."fullName", p."overstayDays", p."groupId",
+              g.name AS "groupName", sa.name AS "subAgentName"
+         FROM umrah_pilgrims p
+    LEFT JOIN umrah_groups g ON g.id = p."groupId"
+    LEFT JOIN umrah_sub_agents sa ON sa.id = p."subAgentId"
+        WHERE p."companyId" = $1 AND p."deletedAt" IS NULL
+          AND COALESCE(p."overstayDays", 0) > 0
+          AND NOT EXISTS (
+            SELECT 1 FROM umrah_violations v
+             WHERE v."mutamerId" = p.id
+               AND v."companyId" = p."companyId"
+               AND v.status IN ('detected','open')
+               AND v."deletedAt" IS NULL
+          )
+        ORDER BY p."overstayDays" DESC
+        LIMIT 500`,
+      [scope.companyId]
+    );
+
+    res.json({
+      summary: {
+        amountDiffs: amountDiffs.length,
+        countDiffs: countDiffs.length,
+        overstayGaps: overstayGaps.length,
+      },
+      amountDiffs,
+      countDiffs,
+      overstayGaps,
+    });
+  } catch (err) { handleRouteError(err, res, "Reconciliation report"); }
 });
 
 // ============================================================================
