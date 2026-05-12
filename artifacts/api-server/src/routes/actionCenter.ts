@@ -28,7 +28,7 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
       roles.includes(scope.role) ? safe(p(), label) : Promise.resolve([]);
 
     const cc = scope.allowedCompanies;
-    const { where: tw, params: tp, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 't."companyId"', branchColumn: 't."branchId"' });
+    const { where: tw, params: tp, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 't."companyId"', branchColumn: 't."branchId"', enforceBranchScope: true });
 
     const [
       pendingLeaves, pendingAdvances, pendingCustodies, pendingLetters,
