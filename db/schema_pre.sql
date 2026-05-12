@@ -14116,6 +14116,8 @@ CREATE TABLE public.umrah_pilgrims (
     "mofaNumber_hash" character varying(16),
     "borderNumber_hash" character varying(16),
     "visaExpiry" date,
+    "entryDate" date,
+    "exitDate" date,
     CONSTRAINT umrah_pilgrims_status_check CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'arrived'::character varying, 'active'::character varying, 'overstayed'::character varying, 'overstay_penalized'::character varying, 'departed'::character varying, 'violated'::character varying, 'absconded'::character varying, 'deceased'::character varying, 'visa_rejected'::character varying, 'visa_printed'::character varying, 'cancelled'::character varying])::text[])))
 );
 
