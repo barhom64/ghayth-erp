@@ -3,7 +3,7 @@
 ## 1. الميتاداتا
 - المسار: `/umrah/pilgrims`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/pilgrims.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:44`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:48`
 - المجموعة: `operations`
 - الكومبوننت: `UmrahPilgrims`
 - subKey: — | minRoleLevel: —

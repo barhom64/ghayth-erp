@@ -3,7 +3,7 @@
 ## 1. الميتاداتا
 - المسار: `/umrah/commission-plans/:id/edit`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/commission-plan-editor.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:66`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:70`
 - المجموعة: `operations`
 - الكومبوننت: `UmrahCommissionPlanEditor`
 - subKey: — | minRoleLevel: —

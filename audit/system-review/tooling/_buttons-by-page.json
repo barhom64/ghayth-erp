@@ -12532,5 +12532,17 @@
       "lib/api",
       "lib/formatters"
     ]
+  },
+  "/umrah/attachments": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/attachments.tsx",
+    "module": "operations",
+    "apiCalls": [],
+    "buttonCount": 0,
+    "buttons": [],
+    "lineCount": 185,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters"
+    ]
   }
 }

@@ -1,21 +1,21 @@
-# /umrah/groups — `artifacts/ghayth-erp/src/pages/umrah/groups.tsx`
+# /umrah/attachments — `artifacts/ghayth-erp/src/pages/umrah/attachments.tsx`
 
 ## 1. الميتاداتا
-- المسار: `/umrah/groups`
-- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/groups.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:77`
+- المسار: `/umrah/attachments`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/attachments.tsx`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:78`
 - المجموعة: `operations`
-- الكومبوننت: `UmrahGroups`
+- الكومبوننت: `UmrahAttachments`
 - subKey: — | minRoleLevel: —
-- الكيان المستنبط: `groups`
-- سطور الملف: 313
+- الكيان المستنبط: `attachments`
+- سطور الملف: 185
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L160: "(بلا تسمية)"
+_لم تُلتقط أزرار._
 
 ### القراءات (GET)
 _لا قراءات._
@@ -32,7 +32,7 @@ _لا قراءات._
 - يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
 
 ## 4. النمذجة
-_لم يتم العثور على جدول Drizzle بالاسم المستنبط `groups` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
+_لم يتم العثور على جدول Drizzle بالاسم المستنبط `attachments` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
 
 ## 5. البيانات الوهمية الثابتة
 ✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.

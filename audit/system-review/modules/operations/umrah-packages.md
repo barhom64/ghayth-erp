@@ -3,7 +3,7 @@
 ## 1. الميتاداتا
 - المسار: `/umrah/packages`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/packages.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:55`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:59`
 - المجموعة: `operations`
 - الكومبوننت: `UmrahPackages`
 - subKey: — | minRoleLevel: —

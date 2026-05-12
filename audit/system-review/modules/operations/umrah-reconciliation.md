@@ -3,7 +3,7 @@
 ## 1. الميتاداتا
 - المسار: `/umrah/reconciliation`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/reconciliation.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:72`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:76`
 - المجموعة: `operations`
 - الكومبوننت: `UmrahReconciliation`
 - subKey: — | minRoleLevel: —

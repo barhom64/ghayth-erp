@@ -3,7 +3,7 @@
 ## 1. الميتاداتا
 - المسار: `/umrah/penalties/:id`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/details/umrah-penalty-detail.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:52`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:56`
 - المجموعة: `operations`
 - الكومبوننت: `UmrahPenaltyDetail`
 - subKey: — | minRoleLevel: —

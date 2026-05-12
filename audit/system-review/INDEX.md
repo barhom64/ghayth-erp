@@ -6,8 +6,8 @@
 
 ## الإحصاءات
 
-- **إجمالي المسارات المسجّلة:** 381
-- **مسارات بأوراق منشأة:** 381
+- **إجمالي المسارات المسجّلة:** 382
+- **مسارات بأوراق منشأة:** 382
 - **إجمالي المشاكل الآلية:** 0
   - 🔴 high: 0
   - ⚠ medium: 0
@@ -38,7 +38,7 @@
 | 5 | [`admin`](./modules/admin/_module.md) | 17 | 17 | 0 | 0 | 0 |
 | 5 | [`settings`](./modules/settings/_module.md) | 6 | 6 | 0 | 0 | 0 |
 | — | [`marketing`](./modules/marketing/_module.md) | 2 | 2 | 0 | 0 | 0 |
-| — | [`operations`](./modules/operations/_module.md) | 41 | 41 | 0 | 0 | 0 |
+| — | [`operations`](./modules/operations/_module.md) | 42 | 42 | 0 | 0 | 0 |
 | — | [`root`](./modules/root/_module.md) | 3 | 3 | 0 | 0 | 0 |
 
 ## النتائج الموحّدة

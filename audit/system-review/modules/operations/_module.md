@@ -1,6 +1,6 @@
 # وحدة `operations` — نظرة عامة
 
-> الموجة: **—** | عدد الصفحات: **41** | أوراق منشأة: **41**
+> الموجة: **—** | عدد الصفحات: **42** | أوراق منشأة: **42**
 
 ## KPIs
 - مشاكل إجمالية: **0** (🔴 0 / ⚠ 0 / ℹ 0)
@@ -50,3 +50,4 @@
 | [/umrah/daily-runsheet](./umrah-daily-runsheet.md) | `/umrah/daily-runsheet` | `daily-runsheet` | 176 | 1 | 2 | 0 |
 | [/umrah/reconciliation](./umrah-reconciliation.md) | `/umrah/reconciliation` | `reconciliation` | 186 | 1 | 0 | 0 |
 | [/umrah/groups](./umrah-groups.md) | `/umrah/groups` | `groups` | 313 | 0 | 1 | 0 |
+| [/umrah/attachments](./umrah-attachments.md) | `/umrah/attachments` | `attachments` | 185 | 0 | 0 | 0 |

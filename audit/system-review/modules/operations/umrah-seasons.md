@@ -3,7 +3,7 @@
 ## 1. الميتاداتا
 - المسار: `/umrah/seasons`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/seasons.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:49`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:53`
 - المجموعة: `operations`
 - الكومبوننت: `UmrahSeasons`
 - subKey: — | minRoleLevel: —
