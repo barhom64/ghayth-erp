@@ -481,7 +481,7 @@ router.post("/tickets/:id/field-visit", authorize({ feature: "support.tickets", 
       distanceKm = haversineKm(b.officeLat, b.officeLon, b.clientLat, b.clientLon);
     }
 
-    const row = await applyTransition<any>({
+    const row = await applyTransition<Record<string, unknown>>({
       entity: "support_tickets",
       id: ticketId,
       scope,
@@ -592,7 +592,7 @@ router.patch("/tickets/:id", authorize({ feature: "support.tickets", action: "up
     if (b.priority !== undefined) setExtras.priority = b.priority;
     if (statusChanging && b.status === "resolved") setExtras.resolvedAt = { raw: "NOW()" };
 
-    const row = await applyTransition<any>({
+    const row = await applyTransition<Record<string, unknown>>({
       entity: "support_tickets",
       id: ticketId,
       scope,

@@ -353,9 +353,9 @@ function isFullAccess(scope: any) {
  * caller lacks scope — handleRouteError will translate that into a 404.
  * Never returns null anymore; all callers can rely on the returned row.
  */
-async function assertProjectAccess(projectId: number, scope: any): Promise<any> {
+async function assertProjectAccess(projectId: number, scope: NonNullable<import("express").Request["scope"]>): Promise<Record<string, unknown>> {
   let where = `id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`;
-  const params: any[] = [projectId, scope.companyId];
+  const params: unknown[] = [projectId, scope.companyId];
 
   if (!isFullAccess(scope)) {
     if (scope.role === "projects_manager" && scope.employeeId) {
@@ -847,7 +847,7 @@ router.patch("/:id/phases/:phaseId/complete", authorize({ feature: "projects.tas
         projectsEngine.requestInvoiceCreation(
           { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
           {
-            clientId: project.clientId,
+            clientId: project.clientId as number,
             ref,
             description: `فاتورة إنجاز مرحلة: ${phase?.name || ''} - مشروع: ${project.name}`,
             subtotal: milestoneAmount,
@@ -1868,7 +1868,7 @@ router.post("/:id/costs", authorize({ feature: "projects.list", action: "create"
           const { projectsEngine } = await import("../lib/engines/index.js");
           const glResult = await projectsEngine.postProjectCostGL(
             { companyId: scope.companyId, branchId: scope.branchId, createdBy: (scope as any).activeAssignmentId ?? scope.userId },
-            { id: insertId, projectId, projectName: project.name, amount, description: b.description, sourceType: b.sourceType || b.category }
+            { id: insertId, projectId, projectName: project.name as string, amount, description: b.description, sourceType: b.sourceType || b.category }
           );
           journalEntryId = glResult.journalId;
         }
@@ -1937,7 +1937,7 @@ router.post("/:id/close", authorize({ feature: "projects.list", action: "update"
           const { projectsEngine } = await import("../lib/engines/index.js");
           const glResult = await projectsEngine.postProjectClosureGL(
             { companyId: scope.companyId, branchId: scope.branchId, createdBy: (scope as any).activeAssignmentId ?? scope.userId },
-            { projectId, projectName: project.name, totalWip }
+            { projectId, projectName: project.name as string, totalWip }
           );
           journalEntryId = glResult.journalId;
         }

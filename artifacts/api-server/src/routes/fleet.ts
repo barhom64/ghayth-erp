@@ -1342,7 +1342,7 @@ router.get("/maintenance", authorize({ feature: "fleet.maintenance", action: "li
   } catch (err) { handleRouteError(err, res, "Fleet maintenance error:"); }
 });
 
-router.get("/maintenance/:id", authorize({ feature: "fleet.maintenance", action: "view" }), async (req, res): Promise<any> => {
+router.get("/maintenance/:id", authorize({ feature: "fleet.maintenance", action: "view" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2711,7 +2711,7 @@ router.get("/traffic-violations", authorize({ feature: "fleet.vehicles", action:
   } catch (err) { handleRouteError(err, res, "Traffic violations error:"); }
 });
 
-router.get("/traffic-violations/:id", authorize({ feature: "fleet.vehicles", action: "view" }), async (req, res): Promise<any> => {
+router.get("/traffic-violations/:id", authorize({ feature: "fleet.vehicles", action: "view" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

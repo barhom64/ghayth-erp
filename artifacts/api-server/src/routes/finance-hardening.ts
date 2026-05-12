@@ -224,7 +224,7 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/close", authorize({ feature:
     // status='closed' + audit trail + event_logs + eventBus emission
     // atomically. Any attempt to close an already-closed period is rejected
     // by the engine's fromStates check, not by a hand-written guard.
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "financial_periods",
       id: periodId,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
@@ -269,7 +269,7 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", authorize({ feature
     );
     if (!period) throw new NotFoundError("الفترة غير موجودة");
 
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "financial_periods",
       id: periodId,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
@@ -454,7 +454,7 @@ financeHardeningRouter.patch("/journal-manual/:id/submit", authorize({ feature: 
     );
     if (!je) throw new NotFoundError("القيد غير موجود");
 
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "journal_entries",
       id: journalId,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
@@ -512,7 +512,7 @@ financeHardeningRouter.patch("/journal-manual/:id/review", authorize({ feature: 
     }
 
     const newStatus = approved ? "approved" : "rejected";
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "journal_entries",
       id: journalId,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
@@ -563,7 +563,7 @@ financeHardeningRouter.patch("/journal-manual/:id/approve", authorize({ feature:
     }
 
     const newStatus = approved ? "approved" : "rejected";
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "journal_entries",
       id: journalId,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
@@ -610,7 +610,7 @@ financeHardeningRouter.patch("/journal-manual/:id/post", authorize({ feature: "f
     // engine drives the approvalStatus transition (gate check + row update),
     // and setExtras carries the mirror write to status and the posting
     // metadata columns. This keeps one atomic UPDATE for the whole flip.
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "journal_entries",
       id: journalId,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
@@ -852,7 +852,7 @@ financeHardeningRouter.post("/bank-guarantees/:id/cancel", authorize({ feature: 
     // notes here and pass it as a plain parameter so the value is
     // parameterised rather than interpolated into raw SQL.
     const combinedNotes = `${existing.notes ?? ""}${existing.notes ? " | " : ""}إلغاء: ${reason}`;
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "bank_guarantees",
       id: guaranteeId,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
@@ -897,7 +897,7 @@ financeHardeningRouter.post("/bank-guarantees/:id/release", authorize({ feature:
     // parameterised value (no raw SQL interpolation).
     const releaseNote = notes ?? "تم التحرير";
     const combinedNotes = `${existing.notes ?? ""}${existing.notes ? " | " : ""}تحرير: ${releaseNote}`;
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "bank_guarantees",
       id: guaranteeId,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },

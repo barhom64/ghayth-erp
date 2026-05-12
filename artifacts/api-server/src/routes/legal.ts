@@ -776,7 +776,7 @@ router.post("/cases/:id/close", authorize({ feature: "legal.cases", action: "cre
     const id = parseId(req.params.id, "id");
     const b = zodParse(closeCaseSchema.safeParse(req.body ?? {}));
 
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "legal_cases",
       id,
       scope,

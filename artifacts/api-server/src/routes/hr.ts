@@ -2307,7 +2307,7 @@ router.get("/payroll", authorize({ feature: "hr.payroll.runs", action: "view" })
   }
 });
 
-router.get("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "view" }), async (req, res): Promise<any> => {
+router.get("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "view" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -5091,7 +5091,7 @@ router.get("/evaluation-cycles", authorize({ feature: "hr.performance", action: 
 });
 
 // POST /hr/evaluation-cycles — start a new evaluation cycle (HR only)
-router.post("/evaluation-cycles", authorize({ feature: "hr.performance", action: "create" }), async (req, res): Promise<any> => {
+router.post("/evaluation-cycles", authorize({ feature: "hr.performance", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     if (!isHR(scope)) {
@@ -5175,7 +5175,7 @@ router.post("/evaluation-cycles", authorize({ feature: "hr.performance", action:
 });
 
 // GET /hr/evaluation-cycles/:id — get cycle details (access-controlled)
-router.get("/evaluation-cycles/:id", authorize({ feature: "hr.performance", action: "view" }), async (req, res): Promise<any> => {
+router.get("/evaluation-cycles/:id", authorize({ feature: "hr.performance", action: "view" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cycleId = parseId(req.params.id, "id");
@@ -5275,7 +5275,7 @@ router.get("/evaluation-cycles/:id", authorize({ feature: "hr.performance", acti
 });
 
 // GET /hr/evaluation-cycles/:id/system-report — get auto-generated report
-router.get("/evaluation-cycles/:id/system-report", authorize({ feature: "hr.performance", action: "list" }), async (req, res): Promise<any> => {
+router.get("/evaluation-cycles/:id/system-report", authorize({ feature: "hr.performance", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cycleId = parseId(req.params.id, "id");
@@ -5344,7 +5344,7 @@ router.get("/evaluation-cycles/:id/system-report", authorize({ feature: "hr.perf
 
 // POST /hr/evaluation-cycles/:id/peer-evaluation — submit manager/peer review
 // Evaluator identity is derived from the authenticated session (scope.employeeId), NOT the request body
-router.post("/evaluation-cycles/:id/peer-evaluation", authorize({ feature: "hr.performance", action: "create" }), async (req, res): Promise<any> => {
+router.post("/evaluation-cycles/:id/peer-evaluation", authorize({ feature: "hr.performance", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cycleId = parseId(req.params.id, "id");
@@ -5432,7 +5432,7 @@ router.post("/evaluation-cycles/:id/peer-evaluation", authorize({ feature: "hr.p
 });
 
 // POST /hr/evaluation-cycles/:id/upward-review — anonymous upward review (employee rates manager)
-router.post("/evaluation-cycles/:id/upward-review", authorize({ feature: "hr.performance", action: "create" }), async (req, res): Promise<any> => {
+router.post("/evaluation-cycles/:id/upward-review", authorize({ feature: "hr.performance", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cycleId = parseId(req.params.id, "id");
@@ -5531,7 +5531,7 @@ router.post("/evaluation-cycles/:id/upward-review", authorize({ feature: "hr.per
 });
 
 // GET /hr/evaluation-cycles/:id/summary — get 360 summary
-router.get("/evaluation-cycles/:id/summary", authorize({ feature: "hr.performance", action: "list" }), async (req, res): Promise<any> => {
+router.get("/evaluation-cycles/:id/summary", authorize({ feature: "hr.performance", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const cycleId = parseId(req.params.id, "id");
@@ -5612,7 +5612,7 @@ router.get("/evaluation-cycles/:id/summary", authorize({ feature: "hr.performanc
 });
 
 // GET /hr/employees/:id/evaluation-history — performance trend over time
-router.get("/employees/:id/evaluation-history", authorize({ feature: "hr.employees", action: "list" }), async (req, res): Promise<any> => {
+router.get("/employees/:id/evaluation-history", authorize({ feature: "hr.employees", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const employeeId = parseId(req.params.id, "id");
@@ -5668,7 +5668,7 @@ router.get("/employees/:id/evaluation-history", authorize({ feature: "hr.employe
 });
 
 // GET /hr/upward-reviews/manager/:managerId — aggregated upward reviews for a manager (HR only)
-router.get("/upward-reviews/manager/:managerId", authorize({ feature: "hr.performance", action: "view" }), async (req, res): Promise<any> => {
+router.get("/upward-reviews/manager/:managerId", authorize({ feature: "hr.performance", action: "view" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const managerId = parseId(req.params.managerId, "managerId");
@@ -5694,12 +5694,13 @@ router.get("/upward-reviews/manager/:managerId", authorize({ feature: "hr.perfor
 
     if (count < 3) {
       // Do NOT expose count below threshold — prevents inference in small cohorts
-      return res.json({
+      res.json({
         managerId,
         locked: true,
         message: "يتطلب عدد كافٍ من التقييمات لعرض النتائج",
         avgScore: null,
       });
+      return;
     }
 
     res.json({

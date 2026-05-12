@@ -590,7 +590,7 @@ journalRouter.patch("/expenses/:id/approve", authorize({ feature: "finance.journ
     // cannot be flipped again without going through a separate re-open
     // flow. The onApply hook writes the approval_actions trail in the
     // same transaction.
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "journal_entries",
       id: expenseId,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
@@ -919,7 +919,7 @@ journalRouter.patch("/salary-advances/:id/approve", authorize({ feature: "financ
     // with the standard `status` column. fromStates allows decisions only
     // when the advance is still pending — approved or rejected advances
     // cannot be re-decided without going through a fresh approval chain.
-    const updated = await applyTransition<any>({
+    const updated = await applyTransition<Record<string, unknown>>({
       entity: "journal_entries",
       id: advanceId,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
