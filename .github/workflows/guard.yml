@@ -88,10 +88,13 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        # `--ignore-scripts` skips the root preinstall whose `sh -c` subshell
+        # doesn't always see $npm_config_user_agent under pnpm v10+, and the
+        # postinstall (`install-hooks.sh`) which is meaningless inside the
+        # Actions container anyway. Guard only needs dependencies on disk, not
+        # lifecycle hooks fired.
+        run: pnpm install --frozen-lockfile --ignore-scripts
         env:
-          # The root postinstall would try to set git hooks; harmless
-          # inside Actions but we skip it explicitly to keep the log clean.
           HUSKY: '0'
 
       - name: Install postgres client
