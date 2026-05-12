@@ -481,11 +481,11 @@ router.patch("/:id/status", authorize({ feature: "documents", action: "update" }
       throw new ForbiddenError("ليس لديك صلاحية اعتماد المستندات");
     }
 
-    const [beforeDoc] = await rawQuery<DocumentRow>(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [docId, scope.companyId]);
+    const [beforeDoc] = await rawQuery<DocumentRow>(`SELECT * FROM documents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [docId, scope.companyId]);
     if (!beforeDoc) throw new NotFoundError("المستند غير موجود");
 
     const result = await rawExecute(
-      `UPDATE documents SET status=$1, "updatedAt"=NOW() WHERE id=$2 AND ("companyId"=$3 OR "companyId" IS NULL) AND status != $1 AND "deletedAt" IS NULL`,
+      `UPDATE documents SET status=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND status != $1 AND "deletedAt" IS NULL`,
       [status, docId, scope.companyId]
     );
     if (result.affectedRows === 0 && beforeDoc.status === status) throw new ConflictError("المستند في هذه الحالة مسبقاً");
