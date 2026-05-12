@@ -1227,9 +1227,11 @@ router.get("/stats", authorize({ feature: "warehouse.inventory", action: "list" 
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [products] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE "currentStock" <= "minStock") as "lowStock" FROM warehouse_products WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]);
-    const [value] = await rawQuery<any>(`SELECT COALESCE(SUM("currentStock" * "costPrice"),0) as "totalValue" FROM warehouse_products WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]);
-    const [movements] = await rawQuery<any>(`SELECT COUNT(*) as "todayMovements" FROM warehouse_movements WHERE "companyId"=$1 AND "createdAt"::date = CURRENT_DATE`, [cid]);
+    const [[products], [value], [movements]] = await Promise.all([
+      rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE "currentStock" <= "minStock") as "lowStock" FROM warehouse_products WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COALESCE(SUM("currentStock" * "costPrice"),0) as "totalValue" FROM warehouse_products WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as "todayMovements" FROM warehouse_movements WHERE "companyId"=$1 AND "createdAt"::date = CURRENT_DATE`, [cid]),
+    ]);
     res.json({ totalProducts: Number(products.total), lowStock: Number(products.lowStock), totalValue: Number(value.totalValue), todayMovements: Number(movements.todayMovements) });
   } catch (err) { handleRouteError(err, res, "Warehouse stats error:"); }
 });

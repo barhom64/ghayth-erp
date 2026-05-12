@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building, Plus, X, Pencil, Trash2 } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from "@/contexts/app-context";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -170,9 +171,9 @@ export function BranchesTab() {
           <Building className="h-5 w-5" />
           إدارة الفروع
         </h3>
-        <Button size="sm" onClick={() => { if (showForm) resetForm(); else setShowForm(true); }}>
+        <GuardedButton perm="admin:create" size="sm" onClick={() => { if (showForm) resetForm(); else setShowForm(true); }}>
           {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />فرع جديد</>}
-        </Button>
+        </GuardedButton>
       </div>
 
       {showForm && (

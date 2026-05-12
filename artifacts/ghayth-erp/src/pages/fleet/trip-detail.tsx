@@ -5,6 +5,7 @@ import { toast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { DetailPageLayout, type ExtraTab } from "@/components/shared/detail-page-layout";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -215,7 +216,8 @@ export default function TripDetailPage() {
 
   const actions = (
     <div className="flex items-center gap-2">
-      <Button
+      <GuardedButton
+        perm="fleet:create"
         size="sm"
         onClick={handleComplete}
         disabled={trip?.status === "completed" || trip?.status === "cancelled"}
@@ -223,8 +225,9 @@ export default function TripDetailPage() {
       >
         <CheckCircle2 className="h-4 w-4" />
         إكمال
-      </Button>
-      <Button
+      </GuardedButton>
+      <GuardedButton
+        perm="fleet:create"
         size="sm"
         variant="outline"
         onClick={handleCancel}
@@ -233,7 +236,7 @@ export default function TripDetailPage() {
       >
         <XCircle className="h-4 w-4" />
         إلغاء
-      </Button>
+      </GuardedButton>
     </div>
   );
 

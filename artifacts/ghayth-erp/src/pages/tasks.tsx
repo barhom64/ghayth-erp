@@ -20,6 +20,7 @@ import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/entity-tags";
 import { BulkActionsBar, useBulkSelection } from "@/components/shared/bulk-actions";
 import { ProjectsTabsNav } from "@/components/shared/projects-tabs-nav";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 const statusOptions = [
   { value: "pending", label: "معلق", color: "bg-amber-100 text-amber-700" },
@@ -260,7 +261,7 @@ export default function Tasks() {
       title="إدارة المهام"
       actions={
         <Link href="/tasks/create">
-          <Button className="gap-2"><Plus className="h-4 w-4" /> مهمة جديدة</Button>
+          <GuardedButton perm="tasks:create" className="gap-2"><Plus className="h-4 w-4" /> مهمة جديدة</GuardedButton>
         </Link>
       }
     >

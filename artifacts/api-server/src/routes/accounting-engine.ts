@@ -305,15 +305,25 @@ router.get("/journal-templates", authorize({ feature: "finance.accounting_engine
       params
     );
 
-    for (const t of templates) {
-      t.lines = await rawQuery<any>(
+    if (templates.length > 0) {
+      const templateIds = templates.map((t: any) => t.id);
+      const allLines = await rawQuery<any>(
         `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
          FROM journal_entry_template_lines tl
          LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId" AND ca."companyId" = $2
-         WHERE tl."templateId" = $1
-         ORDER BY tl."sortOrder", tl.id LIMIT 500`,
-        [t.id, scope.companyId]
+         WHERE tl."templateId" = ANY($1::int[])
+         ORDER BY tl."templateId", tl."sortOrder", tl.id`,
+        [templateIds, scope.companyId]
       );
+      const linesByTemplate = new Map<number, any[]>();
+      for (const line of allLines) {
+        const arr = linesByTemplate.get(line.templateId) ?? [];
+        arr.push(line);
+        linesByTemplate.set(line.templateId, arr);
+      }
+      for (const t of templates) {
+        t.lines = linesByTemplate.get(t.id) ?? [];
+      }
     }
 
     res.json({ data: templates, total: templates.length });

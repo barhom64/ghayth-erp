@@ -64,7 +64,7 @@ describe("Property unit state machine", () => {
   });
 
   it("validates unit status transitions", () => {
-    expect(PROP_ROUTE).toContain("UNIT_TRANSITIONS[existing.status]");
+    expect(PROP_ROUTE).toMatch(/UNIT_TRANSITIONS\[existing\.status/);
   });
 });
 

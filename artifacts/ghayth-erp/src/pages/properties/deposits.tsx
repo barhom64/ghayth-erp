@@ -3,6 +3,7 @@ import { useApiQuery, asList, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { Plus, RotateCcw } from "lucide-react";
 import { apiFetch } from "@/lib/api";
@@ -106,9 +107,9 @@ export default function DepositsPage() {
       subtitle="إدارة ودائع ضمان المستأجرين"
       breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "ودائع الضمان" }]}
       actions={
-        <Button onClick={() => setShowForm(!showForm)} size="sm">
+        <GuardedButton perm="properties:create" onClick={() => setShowForm(!showForm)} size="sm">
           <Plus className="w-4 h-4 me-1" /> تسجيل وديعة
-        </Button>
+        </GuardedButton>
       }
     >
       <PropertyTabsNav />
@@ -199,9 +200,9 @@ export default function DepositsPage() {
                   )}
                 </div>
                 {d.status === "held" && (
-                  <Button size="sm" variant="outline" onClick={() => setRefundTarget({ id: d.id, originalAmount: Number(d.amount) })}>
+                  <GuardedButton perm="properties:create" size="sm" variant="outline" onClick={() => setRefundTarget({ id: d.id, originalAmount: Number(d.amount) })}>
                     <RotateCcw className="w-3.5 h-3.5 me-1" /> استرداد
-                  </Button>
+                  </GuardedButton>
                 )}
               </div>
             </CardContent>

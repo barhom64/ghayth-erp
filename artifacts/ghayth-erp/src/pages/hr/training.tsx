@@ -3,6 +3,7 @@ import { formatDateAr } from "@/lib/formatters";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 // Phase A — HR training on unified primitives.
 import { PageShell } from "@/components/page-shell";
@@ -114,7 +115,7 @@ export default function TrainingPage() {
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
         <Link href="/hr/training/create">
-          <Button size="sm"><Plus className="h-4 w-4 me-1" />إضافة برنامج</Button>
+          <GuardedButton perm="hr:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة برنامج</GuardedButton>
         </Link>
       }
     >
