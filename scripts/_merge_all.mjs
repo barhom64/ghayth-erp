@@ -136,34 +136,59 @@ async function processPR(p, state) {
   }
 }
 
+async function runOnce() {
+  const state = loadState();
+  // Process every actually-open PR, oldest first (safest: gives older PRs a chance to land before newer rebases churn the tree)
+  const open = await listOpenPRs();
+  const ordered = [...open].sort((a, b) => a.number - b.number);
+  log(`found ${open.length} open PRs: ${ordered.map(p => p.number).join(',') || '(none)'}`);
+
+  if (open.length === 0) return { merged: 0, failed: 0 };
+
+  let merged = 0, failed = 0;
+  for (const p of ordered) {
+    if (state.done.includes(p.number) || state.failed.includes(p.number)) continue;
+    try {
+      const beforeDone = state.done.length, beforeFailed = state.failed.length;
+      await processPR(p, state);
+      if (state.done.length > beforeDone) merged++;
+      if (state.failed.length > beforeFailed) failed++;
+    } catch (e) {
+      log(`#${p.number} ERROR: ${e.message}`);
+      state.failed.push(p.number); saveState(state);
+      failed++;
+    }
+  }
+  return { merged, failed };
+}
+
 async function main() {
   fs.writeFileSync('/tmp/_merge_all.log', '');
-  log('starting merge orchestrator');
+  const watch = process.argv.includes('--watch');
+  const intervalMs = 120 * 1000; // poll every 2 minutes in watch mode
+  log(`starting merge orchestrator${watch ? ' (watch mode, interval=120s)' : ''}`);
   const state = loadState();
   log(`resumed state: done=[${state.done}] failed=[${state.failed}] skipped=[${state.skipped}]`);
 
-  // Hand-picked safe-first ordering. Big risky ones LAST.
-  const order = [310, 324, 330, 325, 323, 320, 326, 327, 328, 329, 338, 322, 313, 331];
-
-  // Re-fetch open PRs to ensure we only touch ones still open
-  const open = await listOpenPRs();
-  const openMap = new Map(open.map(p => [p.number, p]));
-  log(`found ${open.length} open PRs: ${open.map(p => p.number).join(',')}`);
-
-  for (const num of order) {
-    const p = openMap.get(num);
-    if (!p) { log(`#${num} not in open list — skipping`); continue; }
-    try { await processPR(p, state); }
-    catch (e) {
-      log(`#${num} ERROR: ${e.message}`);
-      state.failed.push(num); saveState(state);
+  do {
+    try {
+      const { merged, failed } = await runOnce();
+      log(`pass complete: +${merged} merged, +${failed} failed this pass`);
+    } catch (e) {
+      log(`pass ERROR: ${e.message}`);
     }
-  }
+    if (watch) {
+      // Reset transient failed list each pass so flaky PRs get retried
+      const s = loadState(); s.failed = []; saveState(s);
+      await sleep(intervalMs);
+    }
+  } while (watch);
 
+  const final = loadState();
   log('\n=========== FINAL ===========');
-  log(`✓ merged: ${state.done.join(',') || '(none)'}`);
-  log(`✗ failed: ${state.failed.join(',') || '(none)'}`);
-  log(`⊘ skipped: ${state.skipped.join(',') || '(none)'}`);
+  log(`✓ merged: ${final.done.join(',') || '(none)'}`);
+  log(`✗ failed: ${final.failed.join(',') || '(none)'}`);
+  log(`⊘ skipped: ${final.skipped.join(',') || '(none)'}`);
   log('done.');
 }
 
