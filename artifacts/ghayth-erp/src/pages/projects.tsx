@@ -18,6 +18,7 @@ import {
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { ProjectsTabsNav } from "@/components/shared/projects-tabs-nav";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
@@ -201,7 +202,7 @@ function OverviewTab() {
         <CardHeader className="pb-2"><CardTitle className="text-base">إجراءات سريعة</CardTitle></CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-2">
-            <Link href="/projects/create"><Button size="sm" className="gap-1"><Plus className="h-3 w-3" /> مشروع جديد</Button></Link>
+            <Link href="/projects/create"><GuardedButton perm="projects:create" size="sm" className="gap-1"><Plus className="h-3 w-3" /> مشروع جديد</GuardedButton></Link>
             <Link href="/projects/gantt"><Button variant="outline" size="sm" className="gap-1"><BarChart2 className="h-3 w-3" /> مخطط غانت</Button></Link>
             <Link href="/projects/risks"><Button variant="outline" size="sm" className="gap-1"><ShieldAlert className="h-3 w-3" /> إدارة المخاطر</Button></Link>
             <Link href="/finance/project-costing"><Button variant="outline" size="sm" className="gap-1"><DollarSign className="h-3 w-3" /> تكاليف المشاريع</Button></Link>
@@ -379,7 +380,7 @@ export default function Projects() {
       actions={
         canManage ? (
           <Link href="/projects/create">
-            <Button className="gap-2"><Plus className="h-4 w-4" /> مشروع جديد</Button>
+            <GuardedButton perm="projects:create" className="gap-2"><Plus className="h-4 w-4" /> مشروع جديد</GuardedButton>
           </Link>
         ) : null
       }

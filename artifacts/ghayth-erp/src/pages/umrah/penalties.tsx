@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation, apiFetch } from "@/lib/api";
 import { formatCurrency } from "@/lib/formatters";
@@ -5,7 +6,20 @@ import { Card, CardContent } from "@/components/ui/card";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, DollarSign, Clock, Zap, XCircle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { AlertTriangle, DollarSign, Clock, Zap, XCircle, MinusCircle } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { AdvancedFilters, useFilters } from "@/components/shared/advanced-filters";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -24,6 +38,23 @@ export default function UmrahPenalties() {
     "PATCH",
     [["umrah-penalties"]],
     { successMessage: "تم إعفاء الغرامة بنجاح" }
+  );
+
+  // Bulk waive — wired to POST /umrah/penalties/waive-bulk (PR #312).
+  // Returns { successCount, successIds, totalWaivedAmount, skipped[], errors[] }
+  // so the UI can surface a non-atomic summary instead of a binary toast.
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkReason, setBulkReason] = useState("");
+  const bulkWaiveMutation = useApiMutation<
+    { successCount: number; successIds: number[]; totalWaivedAmount: number; skipped: { id: number; reason: string }[]; errors: { id: number; error: string }[] },
+    { penaltyIds: number[]; reason: string }
+  >(
+    () => "/umrah/penalties/waive-bulk",
+    "POST",
+    [["umrah-penalties"]],
+    // Custom success toast since we render counts from the response.
+    { successMessage: false } as any,
   );
 
   const runPenaltyEngine = async () => {
@@ -82,13 +113,50 @@ export default function UmrahPenalties() {
     },
   ];
 
+  const handleBulkSubmit = () => {
+    if (!bulkReason.trim()) {
+      toast({ variant: "destructive", title: "سبب الإعفاء مطلوب" });
+      return;
+    }
+    bulkWaiveMutation.mutate(
+      { penaltyIds: selectedIds, reason: bulkReason.trim() },
+      {
+        onSuccess: (res) => {
+          const parts = [
+            `أُعفيت ${res.successCount} غرامة`,
+            res.totalWaivedAmount > 0 ? `بمبلغ ${formatCurrency(res.totalWaivedAmount)} ر.س` : null,
+            res.skipped.length > 0 ? `تخطّي ${res.skipped.length}` : null,
+            res.errors.length > 0 ? `أخطاء ${res.errors.length}` : null,
+          ].filter(Boolean);
+          toast({ title: parts.join(" • ") });
+          setBulkOpen(false);
+          setBulkReason("");
+          setSelectedIds([]);
+        },
+      },
+    );
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">الغرامات</h1>
-        <Button variant="outline" onClick={runPenaltyEngine} className="gap-2">
-          <Zap className="h-4 w-4" />تشغيل محرك الغرامات
-        </Button>
+        <div className="flex items-center gap-2">
+          {selectedIds.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setBulkOpen(true)}
+              className="gap-2 text-orange-600 border-orange-300"
+              rateLimitAware
+            >
+              <MinusCircle className="h-4 w-4" />
+              إعفاء جماعي ({selectedIds.length})
+            </Button>
+          )}
+          <GuardedButton perm="umrah:approve" variant="outline" onClick={runPenaltyEngine} className="gap-2" rateLimitAware>
+            <Zap className="h-4 w-4" />تشغيل محرك الغرامات
+          </GuardedButton>
+        </div>
       </div>
 
       <div className="grid gap-4 grid-cols-3">
@@ -134,8 +202,41 @@ export default function UmrahPenalties() {
         emptyIcon={<AlertTriangle className="h-6 w-6 text-slate-400" />}
         noToolbar
         pageSize={pageSize}
+        selectable
+        onSelectionChange={setSelectedIds}
         onRowClick={(row) => navigate(`/umrah/penalties/${row.id}`)}
       />
+
+      <AlertDialog open={bulkOpen} onOpenChange={setBulkOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>إعفاء جماعي للغرامات</AlertDialogTitle>
+            <AlertDialogDescription>
+              ستُعفى {selectedIds.length} غرامة. الصفوف بحالة "مدفوع" أو "معفاة" تُتخطى تلقائياً.
+              قيد عكسي مالي يُرحَّل لكل صف ناجح عبر `postPenaltyWaiverGL` المركزي.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="bulk-waive-reason">سبب الإعفاء <span className="text-red-600">*</span></Label>
+            <Input
+              id="bulk-waive-reason"
+              value={bulkReason}
+              onChange={(e) => setBulkReason(e.target.value)}
+              placeholder="مثال: قرار إداري"
+              autoFocus
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <GuardedButton perm="umrah:approve"
+              onClick={(e: React.MouseEvent) => { e.preventDefault(); handleBulkSubmit(); }}
+              disabled={bulkWaiveMutation.isPending}
+            >
+              {bulkWaiveMutation.isPending ? "جارٍ الإعفاء..." : "تأكيد الإعفاء"}
+            </GuardedButton>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

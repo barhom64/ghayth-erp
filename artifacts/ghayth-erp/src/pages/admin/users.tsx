@@ -3,6 +3,7 @@ import { z } from "zod";
 import { useApiQuery, apiFetch, isRateLimitedError } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -157,18 +158,18 @@ export default function AdminUsersPage() {
       header: "إجراءات",
       render: (r: any) => (
         <div className="flex gap-1">
-          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" title={r.isActive ? "تعليق الحساب" : "تفعيل الحساب"} onClick={() => toggleActive(r)}>
+          <GuardedButton perm="admin:delete" variant="ghost" size="sm" className="h-7 text-xs gap-1" title={r.isActive ? "تعليق الحساب" : "تفعيل الحساب"} onClick={() => toggleActive(r)}>
             {r.isActive ? <ToggleRight className="h-4 w-4 text-green-500" /> : <ToggleLeft className="h-4 w-4 text-gray-400" />}
-          </Button>
+          </GuardedButton>
           <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-blue-600" title="تعديل" onClick={() => startEditUser(r)}>
             <Edit2 className="h-3.5 w-3.5" />
           </Button>
           <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-orange-600" title="إعادة تعيين كلمة المرور" onClick={() => { setResetUserId(r.id); setResetPassword(""); setCreatedUser(null); setShowForm(false); setEditUser(null); setDeleteConfirmId(null); }}>
             <KeySquare className="h-3.5 w-3.5" />
           </Button>
-          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-red-600" title="حذف المستخدم" onClick={() => { setDeleteConfirmId(r.id); setEditUser(null); setResetUserId(null); setShowForm(false); }}>
+          <GuardedButton perm="admin:delete" variant="ghost" size="sm" className="h-7 text-xs gap-1 text-red-600" title="حذف المستخدم" onClick={() => { setDeleteConfirmId(r.id); setEditUser(null); setResetUserId(null); setShowForm(false); }}>
             <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          </GuardedButton>
         </div>
       ),
     },
@@ -400,7 +401,7 @@ export default function AdminUsersPage() {
             </h4>
             <p className="text-sm text-red-700">سيتم تعطيل هذا المستخدم وإلغاء صلاحياته في شركتك. يمكن إعادة تفعيله لاحقاً.</p>
             <div className="flex gap-2">
-              <Button size="sm" variant="destructive" onClick={() => deleteUser(deleteConfirmId)}>تعطيل</Button>
+              <GuardedButton perm="admin:delete" size="sm" variant="destructive" onClick={() => deleteUser(deleteConfirmId)}>تعطيل</GuardedButton>
               <Button size="sm" variant="outline" onClick={() => setDeleteConfirmId(null)}>إلغاء</Button>
             </div>
           </CardContent>

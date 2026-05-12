@@ -482,8 +482,8 @@ router.post("/switch-assignment", authMiddleware, authedUserLimiter, async (req,
       throw new ForbiddenError("غير مسموح بالتبديل إلى هذا التعيين");
     }
     const [assignment] = await rawQuery<AssignmentSwitchRow>(
-      `SELECT ea.id, ea."companyId", ea."branchId", ea.role FROM employee_assignments ea WHERE ea.id = $1 AND ea.status = 'active'`,
-      [assignmentId]
+      `SELECT ea.id, ea."companyId", ea."branchId", ea.role FROM employee_assignments ea WHERE ea.id = $1 AND ea."companyId" = ANY($2::int[]) AND ea.status = 'active'`,
+      [assignmentId, scope.allowedCompanies]
     );
     if (!assignment) {
       throw new NotFoundError("التعيين غير موجود أو غير نشط");

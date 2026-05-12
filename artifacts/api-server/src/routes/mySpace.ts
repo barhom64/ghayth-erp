@@ -4,12 +4,13 @@ import { rawQuery } from "../lib/rawdb.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 import { todayISO, currentPeriod, currentYear, toDateISO } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
+import { authorize } from "../lib/rbac/authorize.js";
 
 const router = Router();
 
 const safe = <T>(p: Promise<T>, fallback: T): Promise<T> => p.catch(() => fallback);
 
-router.get("/", async (req, res) => {
+router.get("/", authorize({ feature: "my_space", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const today = todayISO();
@@ -473,7 +474,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.get("/attendance", async (req, res) => {
+router.get("/attendance", authorize({ feature: "my_space", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { month } = req.query as Record<string, string>;
@@ -525,7 +526,7 @@ router.get("/attendance", async (req, res) => {
   }
 });
 
-router.get("/payslip", async (req, res) => {
+router.get("/payslip", authorize({ feature: "my_space.payslip", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { period } = req.query as Record<string, string>;
@@ -562,7 +563,7 @@ router.get("/payslip", async (req, res) => {
   }
 });
 
-router.get("/performance", async (req, res) => {
+router.get("/performance", authorize({ feature: "my_space", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -579,7 +580,7 @@ router.get("/performance", async (req, res) => {
   }
 });
 
-router.get("/documents", async (req, res) => {
+router.get("/documents", authorize({ feature: "my_space", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<any>(
@@ -595,7 +596,7 @@ router.get("/documents", async (req, res) => {
   }
 });
 
-router.get("/requests", async (req, res) => {
+router.get("/requests", authorize({ feature: "my_space", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status, type, limit = "50" } = req.query as Record<string, string>;

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Plus, CheckCircle, DollarSign } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
@@ -155,9 +156,9 @@ export default function TrafficViolationsPage() {
       header: "إجراءات",
       align: "center",
       render: (v) => v.status !== "paid" ? (
-        <Button size="sm" variant="outline" onClick={() => handlePay(v.id)}>
+        <GuardedButton perm="fleet:approve" size="sm" variant="outline" onClick={() => handlePay(v.id)}>
           <DollarSign className="w-3.5 h-3.5 me-1" /> دفع
-        </Button>
+        </GuardedButton>
       ) : (
         <CheckCircle className="w-4 h-4 text-green-500 mx-auto" />
       ),
@@ -170,9 +171,9 @@ export default function TrafficViolationsPage() {
       subtitle="تتبع وإدارة مخالفات مركبات الأسطول"
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "المخالفات المرورية" }]}
       actions={
-        <Button onClick={() => setShowForm(!showForm)} size="sm">
+        <GuardedButton perm="fleet:create" onClick={() => setShowForm(!showForm)} size="sm">
           <Plus className="w-4 h-4 me-1" /> تسجيل مخالفة
-        </Button>
+        </GuardedButton>
       }
     >
       <div className="grid grid-cols-3 gap-4">
