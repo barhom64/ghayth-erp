@@ -181,7 +181,7 @@ router.get("/", authorize({ feature: "crm.clients", action: "list" }), async (re
   }
 });
 
-router.post("/", authorize({ feature: "crm.clients", action: "create" }), async (req, res) => {
+router.post("/", authorize({ feature: "crm", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const parsed = zodParse(createClientSchema.safeParse(req.body));
@@ -370,7 +370,7 @@ router.get("/:id", authorize({ feature: "crm.clients", action: "view", resource:
   }
 });
 
-router.patch("/:id", authorize({ feature: "crm.clients", action: "update" }), async (req, res) => {
+router.patch("/:id", authorize({ feature: "crm", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -406,7 +406,7 @@ router.patch("/:id", authorize({ feature: "crm.clients", action: "update" }), as
   }
 });
 
-router.post("/auto-create", authorize({ feature: "crm.clients", action: "create" }), async (req, res) => {
+router.post("/auto-create", authorize({ feature: "crm", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(autoCreateClientSchema.safeParse(req.body ?? {}));
@@ -492,7 +492,7 @@ router.delete("/:id", authorize({ feature: "crm.clients", action: "delete", reso
   }
 });
 
-router.get("/:id/portal-account", authorize({ feature: "crm.clients", action: "list" }), async (req, res) => {
+router.get("/:id/portal-account", authorize({ feature: "crm", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -513,7 +513,7 @@ router.get("/:id/portal-account", authorize({ feature: "crm.clients", action: "l
   }
 });
 
-router.post("/:id/portal-account", authorize({ feature: "crm.clients", action: "create" }), async (req, res) => {
+router.post("/:id/portal-account", authorize({ feature: "crm", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -569,7 +569,7 @@ router.post("/:id/portal-account", authorize({ feature: "crm.clients", action: "
   }
 });
 
-router.patch("/:id/portal-account", authorize({ feature: "crm.clients", action: "update" }), async (req, res) => {
+router.patch("/:id/portal-account", authorize({ feature: "crm", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
