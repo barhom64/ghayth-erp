@@ -8,30 +8,6 @@ import { logger } from "../lib/logger.js";
 export const calendarRouter = Router();
 calendarRouter.use(authMiddleware);
 
-interface MilestoneRow { id: number; title: string; date: string; status: string; projectName: string | null; projectId: number; }
-interface ObligationCalRow { id: number; title: string; date: string; status: string; entityType: string; entityId: number; obligationType: string; }
-interface ContractExpiryRow { id: number; date: string; type: string; tenantName: string | null; unitId: number | null; }
-interface TaskCalRow { id: number; title: string; date: string; status: string; priority: string; projectName: string | null; }
-interface TrainingRow { id: number; name: string; date: string; status: string; provider: string | null; }
-interface EmployeeDocRow { id: number; type: string; name: string; date: string; employeeId: number; employeeName: string; }
-interface VehicleExpiryRow { id: number; plateNumber: string | null; make: string | null; model: string | null; regExp: string | null; inspExp: string | null; svcExp: string | null; }
-interface PropertyInsuranceRow { id: number; unitNumber: string | null; date: string; }
-interface LeaveCalRow { id: number; date: string; endDate: string; status: string; days: number; employeeId: number; employeeName: string; leaveTypeName: string | null; }
-interface InterviewRow { id: number; date: string; candidateName: string; status: string; jobTitle: string | null; postingId: number | null; }
-interface UmrahSeasonRow { id: number; title: string; date: string; kind: "start" | "end"; }
-interface UmrahGroupRow { id: number; name: string | null; nuskGroupNumber: string; date: string; mutamerCount: number | null; }
-
-interface CalendarEvent {
-  id: string;
-  date: string;
-  title: string;
-  category: string;
-  status: string;
-  priority?: string;
-  context?: string;
-  link: string;
-}
-
 async function safe<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
   try { return await fn(); } catch (e) { logger.error(e, "calendar query failed"); return fallback; }
 }
@@ -55,11 +31,8 @@ calendarRouter.get("/upcoming", authorize({ feature: "projects", action: "list" 
       propertyInsurance,
       leaves,
       interviews,
-      umrahSeasonStarts,
-      umrahSeasonEnds,
-      umrahGroupArrivals,
     ] = await Promise.all([
-      safe(() => rawQuery<MilestoneRow>(
+      safe(() => rawQuery<any>(
         `SELECT pm.id, pm.title, pm."dueDate" as "date", pm.status, p.name as "projectName", p.id as "projectId"
          FROM project_milestones pm
          JOIN projects p ON p.id = pm."projectId"
@@ -68,7 +41,7 @@ calendarRouter.get("/upcoming", authorize({ feature: "projects", action: "list" 
          ORDER BY pm."dueDate" LIMIT 50`,
         [cid, now, cutoff]
       ), []),
-      safe(() => rawQuery<ObligationCalRow>(
+      safe(() => rawQuery<any>(
         `SELECT id, title, "dueAt" as "date", status, "entityType", "entityId", "obligationType"
          FROM obligations
          WHERE "companyId" = $1 AND status IN ('pending','breached','escalated_l1','escalated_l2')
@@ -76,7 +49,7 @@ calendarRouter.get("/upcoming", authorize({ feature: "projects", action: "list" 
          ORDER BY "dueAt" LIMIT 50`,
         [cid, now, cutoff]
       ), []),
-      safe(() => rawQuery<ContractExpiryRow>(
+      safe(() => rawQuery<any>(
         `SELECT rc.id, rc."endDate" as "date", 'contract_expiry' as type,
                 t.name as "tenantName", rc."unitId"
          FROM rental_contracts rc
@@ -86,7 +59,7 @@ calendarRouter.get("/upcoming", authorize({ feature: "projects", action: "list" 
          ORDER BY rc."endDate" LIMIT 30`,
         [cid, now, cutoff]
       ), []),
-      safe(() => rawQuery<TaskCalRow>(
+      safe(() => rawQuery<any>(
         `SELECT t.id, t.title, t."scheduledDate" as "date", t.status, t.priority,
                 p.name as "projectName"
          FROM tasks t
@@ -96,7 +69,7 @@ calendarRouter.get("/upcoming", authorize({ feature: "projects", action: "list" 
          ORDER BY t."scheduledDate" LIMIT 50`,
         [cid, now, cutoff]
       ), []),
-      safe(() => rawQuery<TrainingRow>(
+      safe(() => rawQuery<any>(
         `SELECT id, name, "startDate" as "date", status, provider
          FROM training_programs
          WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status IN ('planned','ongoing')
@@ -104,7 +77,7 @@ calendarRouter.get("/upcoming", authorize({ feature: "projects", action: "list" 
          ORDER BY "startDate" LIMIT 30`,
         [cid, now.slice(0, 10), cutoff.slice(0, 10)]
       ), []),
-      safe(() => rawQuery<EmployeeDocRow>(
+      safe(() => rawQuery<any>(
         `SELECT ed.id, ed.type, ed.name, ed."expiryDate" as "date", ed."employeeId",
                 e."name" as "employeeName"
          FROM employee_documents ed
@@ -113,7 +86,7 @@ calendarRouter.get("/upcoming", authorize({ feature: "projects", action: "list" 
          ORDER BY ed."expiryDate" LIMIT 30`,
         [cid, now.slice(0, 10), cutoff.slice(0, 10)]
       ), []),
-      safe(() => rawQuery<VehicleExpiryRow>(
+      safe(() => rawQuery<any>(
         `SELECT id, "plateNumber", make, model,
                 "registrationExpiry" as "regExp",
                 "nextInspectionDate" as "inspExp",
@@ -128,14 +101,14 @@ calendarRouter.get("/upcoming", authorize({ feature: "projects", action: "list" 
          LIMIT 50`,
         [cid, now.slice(0, 10), cutoff.slice(0, 10)]
       ), []),
-      safe(() => rawQuery<PropertyInsuranceRow>(
+      safe(() => rawQuery<any>(
         `SELECT id, "unitNumber", "insuranceExpiry" as "date"
          FROM property_units
          WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "insuranceExpiry" BETWEEN $2 AND $3
          ORDER BY "insuranceExpiry" LIMIT 30`,
         [cid, now.slice(0, 10), cutoff.slice(0, 10)]
       ), []),
-      safe(() => rawQuery<LeaveCalRow>(
+      safe(() => rawQuery<any>(
         `SELECT lr.id, lr."startDate" as "date", lr."endDate", lr.status, lr.days,
                 lr."employeeId", e."name" as "employeeName",
                 lt.name as "leaveTypeName"
@@ -148,7 +121,7 @@ calendarRouter.get("/upcoming", authorize({ feature: "projects", action: "list" 
          ORDER BY lr."startDate" LIMIT 50`,
         [cid, now.slice(0, 10), cutoff.slice(0, 10)]
       ), []),
-      safe(() => rawQuery<InterviewRow>(
+      safe(() => rawQuery<any>(
         `SELECT a.id, a."interviewDate" as "date", a."applicantName" as "candidateName",
                 a.status, jp.title as "jobTitle", a."postingId"
          FROM job_applications a
@@ -160,71 +133,35 @@ calendarRouter.get("/upcoming", authorize({ feature: "projects", action: "list" 
          ORDER BY a."interviewDate" LIMIT 30`,
         [cid, now, cutoff]
       ), []),
-      // Umrah season open events (startDate inside the window).
-      safe(() => rawQuery<UmrahSeasonRow>(
-        `SELECT id, title, "startDate"::text AS "date", 'start'::text AS kind
-           FROM umrah_seasons
-          WHERE "companyId" = $1
-            AND "deletedAt" IS NULL
-            AND "startDate" BETWEEN $2::date AND $3::date
-          ORDER BY "startDate" LIMIT 20`,
-        [cid, now.slice(0, 10), cutoff.slice(0, 10)]
-      ), []),
-      // Umrah season close events (endDate inside the window).
-      safe(() => rawQuery<UmrahSeasonRow>(
-        `SELECT id, title, "endDate"::text AS "date", 'end'::text AS kind
-           FROM umrah_seasons
-          WHERE "companyId" = $1
-            AND "deletedAt" IS NULL
-            AND "endDate" BETWEEN $2::date AND $3::date
-          ORDER BY "endDate" LIMIT 20`,
-        [cid, now.slice(0, 10), cutoff.slice(0, 10)]
-      ), []),
-      // Umrah group arrivals — the earliest entryDate inside each group
-      // that falls in the window. Captures "this group lands on X".
-      safe(() => rawQuery<UmrahGroupRow>(
-        `SELECT g.id, g.name, g."nuskGroupNumber", g."mutamerCount",
-                MIN(p."entryDate")::text AS "date"
-           FROM umrah_groups g
-           JOIN umrah_pilgrims p ON p."groupId" = g.id AND p."companyId" = g."companyId"
-          WHERE g."companyId" = $1
-            AND g."deletedAt" IS NULL
-            AND p."deletedAt" IS NULL
-            AND p."entryDate" IS NOT NULL
-          GROUP BY g.id, g.name, g."nuskGroupNumber", g."mutamerCount"
-         HAVING MIN(p."entryDate") BETWEEN $2::date AND $3::date
-          ORDER BY MIN(p."entryDate") LIMIT 50`,
-        [cid, now.slice(0, 10), cutoff.slice(0, 10)]
-      ), []),
     ]);
 
-    const events: CalendarEvent[] = [];
+    const events: any[] = [];
 
-    milestones.forEach((m) => events.push({
+    milestones.forEach((m: any) => events.push({
       id: `milestone-${m.id}`, date: m.date, title: m.title,
       category: "milestone", status: m.status,
-      context: m.projectName ?? undefined, link: `/projects/${m.projectId}`,
+      context: m.projectName, link: `/projects/${m.projectId}`,
     }));
 
-    obligations.forEach((o) => events.push({
+    obligations.forEach((o: any) => events.push({
       id: `obligation-${o.id}`, date: o.date, title: o.title,
       category: "obligation", status: o.status,
       context: `${o.entityType} #${o.entityId}`, link: "/obligations",
     }));
 
-    contractExpirations.forEach((c) => events.push({
+    contractExpirations.forEach((c: any) => events.push({
       id: `contract-${c.id}`, date: c.date, title: `انتهاء عقد ${c.tenantName || ""}`.trim(),
       category: "contract_expiry", status: "expiring",
       context: `وحدة #${c.unitId}`, link: `/properties/contracts/${c.id}`,
     }));
 
-    tasks.forEach((t) => events.push({
+    tasks.forEach((t: any) => events.push({
       id: `task-${t.id}`, date: t.date, title: t.title,
       category: "task", status: t.status, priority: t.priority,
       context: t.projectName || "", link: "/tasks",
     }));
 
-    trainings.forEach((tr) => events.push({
+    trainings.forEach((tr: any) => events.push({
       id: `training-${tr.id}`, date: tr.date, title: `بدء تدريب: ${tr.name}`,
       category: "training", status: tr.status,
       context: tr.provider || "", link: `/hr/training/${tr.id}`,
@@ -235,15 +172,15 @@ calendarRouter.get("/upcoming", authorize({ feature: "projects", action: "list" 
       work_permit: "تصريح عمل", license: "رخصة", contract: "عقد",
       health_certificate: "شهادة صحية", other: "وثيقة",
     };
-    empDocs.forEach((d) => events.push({
+    empDocs.forEach((d: any) => events.push({
       id: `empdoc-${d.id}`, date: d.date,
       title: `انتهاء ${docTypeLabel[d.type] || d.type}: ${d.employeeName}`,
       category: "document_expiry", status: "expiring",
       context: d.name, link: `/hr/employees/${d.employeeId}`,
     }));
 
-    const vehicleEvents: CalendarEvent[] = [];
-    vehicleExpiries.forEach((v) => {
+    const vehicleEvents: any[] = [];
+    vehicleExpiries.forEach((v: any) => {
       const label = `${v.make || ""} ${v.model || ""} (${v.plateNumber || v.id})`.trim();
       if (v.regExp && v.regExp >= now.slice(0, 10) && v.regExp <= cutoff.slice(0, 10)) {
         vehicleEvents.push({
@@ -272,7 +209,7 @@ calendarRouter.get("/upcoming", authorize({ feature: "projects", action: "list" 
     });
     events.push(...vehicleEvents);
 
-    propertyInsurance.forEach((pu) => events.push({
+    propertyInsurance.forEach((pu: any) => events.push({
       id: `propins-${pu.id}`, date: pu.date,
       title: `انتهاء تأمين وحدة ${pu.unitNumber || pu.id}`,
       category: "insurance_expiry", status: "expiring",
@@ -280,7 +217,7 @@ calendarRouter.get("/upcoming", authorize({ feature: "projects", action: "list" 
       link: `/properties/units/${pu.id}`,
     }));
 
-    leaves.forEach((lv) => events.push({
+    leaves.forEach((lv: any) => events.push({
       id: `leave-${lv.id}`, date: lv.date,
       title: `إجازة: ${lv.employeeName}`,
       category: "leave", status: lv.status,
@@ -288,34 +225,12 @@ calendarRouter.get("/upcoming", authorize({ feature: "projects", action: "list" 
       link: `/hr/leaves`,
     }));
 
-    interviews.forEach((iv) => events.push({
+    interviews.forEach((iv: any) => events.push({
       id: `interview-${iv.id}`, date: iv.date,
       title: `مقابلة: ${iv.candidateName}`,
       category: "interview", status: iv.status,
       context: iv.jobTitle || "",
       link: iv.postingId ? `/hr/recruitment/${iv.postingId}` : "/hr/recruitment",
-    }));
-
-    umrahSeasonStarts.forEach((s) => events.push({
-      id: `umrah-season-start-${s.id}`, date: s.date,
-      title: `فتح موسم: ${s.title}`,
-      category: "umrah_season", status: "opens",
-      context: "بداية الموسم", link: `/umrah/seasons/${s.id}`,
-    }));
-
-    umrahSeasonEnds.forEach((s) => events.push({
-      id: `umrah-season-end-${s.id}`, date: s.date,
-      title: `إغلاق موسم: ${s.title}`,
-      category: "umrah_season", status: "closes",
-      context: "نهاية الموسم", link: `/umrah/seasons/${s.id}`,
-    }));
-
-    umrahGroupArrivals.forEach((g) => events.push({
-      id: `umrah-group-${g.id}`, date: g.date,
-      title: `وصول مجموعة: ${g.name || g.nuskGroupNumber}`,
-      category: "umrah_group_arrival", status: "scheduled",
-      context: g.mutamerCount ? `${g.mutamerCount} معتمر` : "",
-      link: `/umrah/groups`,
     }));
 
     events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -332,8 +247,6 @@ calendarRouter.get("/upcoming", authorize({ feature: "projects", action: "list" 
       insuranceExpiries: propertyInsurance.length,
       leaves: leaves.length,
       interviews: interviews.length,
-      umrahSeasons: umrahSeasonStarts.length + umrahSeasonEnds.length,
-      umrahGroupArrivals: umrahGroupArrivals.length,
     };
 
     res.json({ events, summary });
