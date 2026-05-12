@@ -7,7 +7,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   FormShell,
@@ -43,6 +42,16 @@ const costSchema = z.object({
   costDate: z.string(),
 });
 type CostForm = z.infer<typeof costSchema>;
+
+// Edit-project form. Mounts with defaults seeded from the loaded
+// project row; the FormShell key={project.id} resets state if the
+// operator navigates between projects without unmounting the page.
+const editProjectSchema = z.object({
+  name: z.string().trim().min(1, "اسم المشروع مطلوب"),
+  status: z.string().min(1),
+  budget: z.coerce.number().nonnegative(),
+});
+type EditProjectForm = z.infer<typeof editProjectSchema>;
 import {
   ArrowRight, FolderKanban, Calendar, DollarSign, ListTodo,
   CheckCircle2, Pencil, Trash2, X, Check, AlertTriangle,
@@ -111,7 +120,6 @@ export default function ProjectDetail() {
   const openRisks = risks.filter((r: any) => r.status === "open" || r.status === "realized");
   const criticalRisks = openRisks.filter((r: any) => r.riskLevel === "critical" || r.riskLevel === "high");
   const upcomingMilestones = milestones.filter((m: any) => m.status !== "completed" && m.status !== "cancelled");
-  const [editForm, setEditForm] = useState<Record<string, string>>({});
   const is404 = isError && (error?.message?.includes("غير موجود") || error?.message?.includes("404"));
 
   const addPhaseMut = useApiMutation<any, { name: string; startDate?: string; endDate?: string }>(
@@ -145,16 +153,13 @@ export default function ProjectDetail() {
   const costsVariance = costsResp?.variance ?? 0;
   const letters: any[] = lettersResp?.data || lettersResp || [];
 
-  const startEdit = () => {
-    setEditForm({ name: project.name || "", status: project.status || "planning", budget: String(budget) });
-    setEditing(true);
-  };
+  const startEdit = () => setEditing(true);
 
-  const saveEdit = async () => {
+  const saveEdit = async (values: EditProjectForm) => {
     try {
       await apiFetch(`/projects/${id}`, {
         method: "PATCH",
-        body: JSON.stringify({ name: editForm.name, status: editForm.status, budget: Number(editForm.budget) }),
+        body: JSON.stringify({ name: values.name, status: values.status, budget: values.budget }),
       });
       toast({ title: "تم تحديث المشروع" });
       setEditing(false);
@@ -277,29 +282,34 @@ export default function ProjectDetail() {
         <Card>
           <CardHeader><CardTitle className="text-base">تعديل المشروع</CardTitle></CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="text-sm font-medium">اسم المشروع</label>
-                <Input value={editForm.name} onChange={e => setEditForm(f => ({...f, name: e.target.value}))} className="mt-1" />
-              </div>
-              <div>
-                <label className="text-sm font-medium">الحالة</label>
-                <Select value={editForm.status} onValueChange={(v) => setEditForm(f => ({...f, status: v}))}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(statusLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm font-medium">{`الميزانية (${getCurrencySymbol()})`}</label>
-                <Input type="number" value={editForm.budget} onChange={e => setEditForm(f => ({...f, budget: e.target.value}))} className="mt-1" dir="ltr" />
-              </div>
-            </div>
-            <div className="flex gap-2 mt-4 justify-end">
-              <Button onClick={saveEdit}><Check className="h-4 w-4 me-1" />حفظ</Button>
-              <Button variant="outline" onClick={() => setEditing(false)}><X className="h-4 w-4 me-1" />إلغاء</Button>
-            </div>
+            <FormShell
+              key={project.id}
+              schema={editProjectSchema}
+              defaultValues={{
+                name: project.name || "",
+                status: project.status || "planning",
+                budget: budget,
+              }}
+              submitLabel="حفظ"
+              secondaryActions={
+                <Button type="button" variant="outline" onClick={() => setEditing(false)}>
+                  <X className="h-4 w-4 me-1" />إلغاء
+                </Button>
+              }
+              onSubmit={async (values) => {
+                await saveEdit(values);
+              }}
+            >
+              <FormGrid cols={3}>
+                <FormTextField name="name" label="اسم المشروع" required />
+                <FormSelectField
+                  name="status"
+                  label="الحالة"
+                  options={Object.entries(statusLabels).map(([value, label]) => ({ value, label }))}
+                />
+                <FormNumberField name="budget" label={`الميزانية (${getCurrencySymbol()})`} />
+              </FormGrid>
+            </FormShell>
           </CardContent>
         </Card>
       )}

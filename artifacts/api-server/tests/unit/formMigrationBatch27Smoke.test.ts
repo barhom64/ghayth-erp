@@ -62,10 +62,10 @@ describe("details/project-detail — phase + task + cost sub-forms on FormShell 
     expect(SRC).not.toMatch(/setCostForm\(/);
   });
 
-  it("Input/Select imports PRESERVED — used by editForm + the row-action priority dropdown", () => {
-    // The edit-project form (name/status/budget) and the in-row task-
-    // status Select still need these. Documented; future batch.
-    expect(SRC).toContain('from "@/components/ui/input"');
+  it("Select import PRESERVED — used by the in-row task-status dropdown", () => {
+    // The Input import was dropped in batch 28 (edit-project form
+    // migration); Select stays because the per-row task-status
+    // dropdown inside DataTable still uses it.
     expect(SRC).toContain('from "@/components/ui/select"');
   });
 });
