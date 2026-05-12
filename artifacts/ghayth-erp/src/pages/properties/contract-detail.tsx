@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { DetailPageLayout, type ExtraTab } from "@/components/shared/detail-page-layout";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -233,14 +234,14 @@ export default function ContractDetailPage() {
 
   const actions = (
     <div className="flex items-center gap-2">
-      <Button size="sm" onClick={handleRenew} className="gap-1" rateLimitAware>
+      <GuardedButton perm="properties:create" size="sm" onClick={handleRenew} className="gap-1" rateLimitAware>
         <RotateCcw className="h-4 w-4" />
         تجديد
-      </Button>
-      <Button size="sm" variant="outline" onClick={handleTerminate} className="gap-1" rateLimitAware>
+      </GuardedButton>
+      <GuardedButton perm="properties:create" size="sm" variant="outline" onClick={handleTerminate} className="gap-1" rateLimitAware>
         <XCircle className="h-4 w-4" />
         إنهاء
-      </Button>
+      </GuardedButton>
     </div>
   );
 

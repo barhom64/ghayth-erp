@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Link, useLocation } from "wouter";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   pending: { label: "معلق", color: "text-yellow-600 bg-yellow-50" },
@@ -77,10 +78,10 @@ export default function MyLoans() {
       subtitle="متابعة السلف والقروض الخاصة بك"
       actions={
         <Link href="/hr/loans/create">
-          <Button size="sm" className="gap-1.5">
+          <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
             <Wallet size={14} />
             طلب سلفة جديدة
-          </Button>
+          </GuardedButton>
         </Link>
       }
     >

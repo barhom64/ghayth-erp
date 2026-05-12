@@ -43,7 +43,10 @@ export function liveApply({ finding, proposal, branchPrefix }) {
     return { mode: "live", success: false, reason: "typecheck-failed" };
   }
 
-  // Hand off to _pr_push by writing its state file
+  // Hand off to _pr_push by writing the canonical state file AND running the
+  // pusher synchronously, so each finding gets its own end-to-end PR attempt
+  // with no race against parallel passes / the standalone PR Push workflow.
+  // (Lockfile prevents two self-heal runs from clobbering one state file.)
   const branch = `${branchPrefix}${finding.collector}-${finding.key}-${Date.now().toString(36)}`;
   const pushState = {
     branch,
@@ -52,10 +55,32 @@ export function liveApply({ finding, proposal, branchPrefix }) {
     files: proposal.files.map((f) => f.path),
   };
   const stateFile = process.env.PR_PUSH_STATE || "/tmp/_pr_push_state.json";
-  fs.writeFileSync(stateFile, JSON.stringify(pushState, null, 2));
+  const lockFile = `${stateFile}.lock`;
 
-  appendFixLog({ action: "pr-push-state-written", errorKey: finding.key, branch, stateFile });
-  return { mode: "live", success: true, branch, stateFile };
+  // Cheap mutex — fail closed if another writer is mid-push.
+  try {
+    fs.writeFileSync(lockFile, String(process.pid), { flag: "wx" });
+  } catch (e) {
+    appendFixLog({ action: "live-failed-locked", errorKey: finding.key, lockFile });
+    return { mode: "live", success: false, reason: "pr-push-locked" };
+  }
+
+  try {
+    fs.writeFileSync(stateFile, JSON.stringify(pushState, null, 2));
+    appendFixLog({ action: "pr-push-state-written", errorKey: finding.key, branch, stateFile });
+    // Synchronously invoke the pusher so we get a definitive result before the
+    // next finding overwrites the state file.
+    const r = spawnSync("node", ["scripts/_pr_push.mjs"], {
+      cwd: REPO_ROOT, encoding: "utf8", timeout: 30 * 60_000, stdio: "inherit",
+    });
+    if (r.status !== 0) {
+      appendFixLog({ action: "live-failed-pr-push-failed", errorKey: finding.key, branch, exit: r.status });
+      return { mode: "live", success: false, reason: "pr-push-failed" };
+    }
+    return { mode: "live", success: true, branch, stateFile };
+  } finally {
+    try { fs.unlinkSync(lockFile); } catch {}
+  }
 }
 
 function buildPrBody({ finding, proposal }) {

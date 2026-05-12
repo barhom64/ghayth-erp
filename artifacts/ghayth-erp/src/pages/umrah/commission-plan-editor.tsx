@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { z } from "zod";
 import { Link, useLocation, useRoute } from "wouter";
 import { useApiQuery, useApiMutation, apiFetch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,6 +18,23 @@ import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatNumber } from "@/lib/formatters";
 import { ArrowRight, Plus, Save, Trash2, Play, Calculator, AlertCircle } from "lucide-react";
+import {
+  FormShell,
+  FormNumberField,
+  FormGrid,
+} from "@/components/form-shell";
+
+// Simulator schema. The bigger `plan` editor (with tiers,
+// excludedMonths, conditions, etc.) is intentionally left on
+// useState — it's a multi-section form whose deepest layer
+// (TiersEditor) deserves its own batch.
+const simSchema = z.object({
+  totalMutamers: z.coerce.number().int().nonnegative(),
+  avgProfitPerVisa: z.coerce.number().nonnegative(),
+  salesPercent: z.coerce.number().min(0).max(100),
+  avgSalePrice: z.coerce.number().nonnegative(),
+});
+type SimForm = z.infer<typeof simSchema>;
 
 type CommissionType = "percentage" | "fixed" | "tiered" | "mixed";
 type ConditionType = "profit_avg" | "sales_percent" | "both_or" | "none";
@@ -114,22 +132,22 @@ export default function UmrahCommissionPlanEditor() {
     },
   );
 
-  // Simulator state
-  const [sim, setSim] = useState({ totalMutamers: 0, avgProfitPerVisa: 0, salesPercent: 0, avgSalePrice: 0 });
+  // Simulator state — only `simResult` and `simBusy` stay as
+  // useState. The four input fields are managed by FormShell below
+  // via the SimulatorPanel subcomponent.
   const [simResult, setSimResult] = useState<any>(null);
   const [simBusy, setSimBusy] = useState(false);
 
-  const runSim = async () => {
+  const runSim = async (values: SimForm) => {
     if (!plan.id) {
       toast({ variant: "destructive", title: "يرجى حفظ الخطة أولاً قبل التشغيل التجريبي" });
       return;
     }
     setSimBusy(true);
     try {
-    
       const res: any = await apiFetch(`/umrah/commission-plans/${plan.id}/simulate`, {
         method: "POST",
-        body: JSON.stringify(sim),
+        body: JSON.stringify(values),
       });
       setSimResult(res?.data ?? res);
     } catch (err: any) {
@@ -532,50 +550,27 @@ export default function UmrahCommissionPlanEditor() {
                     <span className="text-amber-800">يرجى حفظ الخطة أولاً قبل التشغيل التجريبي.</span>
                   </div>
                 )}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div>
-                    <Label>عدد المعتمرين</Label>
-                    <Input
-                      type="number"
-                      value={sim.totalMutamers}
-                      onChange={(e) => setSim({ ...sim, totalMutamers: Number(e.target.value) })}
-                    />
-                  </div>
-                  <div>
-                    <Label>متوسط الربح / تأشيرة</Label>
-                    <Input
-                      type="number"
-                      value={sim.avgProfitPerVisa}
-                      onChange={(e) => setSim({ ...sim, avgProfitPerVisa: Number(e.target.value) })}
-                    />
-                  </div>
-                  <div>
-                    <Label>نسبة المبيعات (%)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={sim.salesPercent}
-                      onChange={(e) => setSim({ ...sim, salesPercent: Number(e.target.value) })}
-                    />
-                  </div>
-                  <div>
-                    <Label>متوسط سعر البيع</Label>
-                    <Input
-                      type="number"
-                      value={sim.avgSalePrice}
-                      onChange={(e) => setSim({ ...sim, avgSalePrice: Number(e.target.value) })}
-                    />
-                  </div>
-                </div>
-                <GuardedButton
-                  perm="umrah:write"
-                  disabled={!plan.id || simBusy}
-                  onClick={runSim}
-                  className="gap-2"
+                <FormShell
+                  schema={simSchema}
+                  defaultValues={{
+                    totalMutamers: 0,
+                    avgProfitPerVisa: 0,
+                    salesPercent: 0,
+                    avgSalePrice: 0,
+                  }}
+                  submitLabel={simBusy ? "جاري التشغيل..." : "تشغيل المحاكاة"}
+                  onSubmit={async (values) => {
+                    await runSim(values);
+                  }}
                 >
-                  <Play className="h-4 w-4" />
-                  {simBusy ? "جاري التشغيل..." : "تشغيل المحاكاة"}
-                </GuardedButton>
+                  {/* FormGrid only supports cols 1-3; use 2 + flow for 4 fields. */}
+                  <FormGrid cols={2}>
+                    <FormNumberField name="totalMutamers" label="عدد المعتمرين" />
+                    <FormNumberField name="avgProfitPerVisa" label="متوسط الربح / تأشيرة" />
+                    <FormNumberField name="salesPercent" label="نسبة المبيعات (%)" />
+                    <FormNumberField name="avgSalePrice" label="متوسط سعر البيع" />
+                  </FormGrid>
+                </FormShell>
 
                 {simResult && (
                   <div className="rounded border bg-muted/20 p-4 space-y-3">

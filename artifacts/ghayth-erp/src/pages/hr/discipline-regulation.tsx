@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -173,10 +174,10 @@ export default function DisciplineRegulationPage() {
       ]}
       loading={isLoading}
       actions={
-        <Button variant="outline" onClick={reseedDefaults} disabled={reseeding}>
+        <GuardedButton perm="hr:create" variant="outline" onClick={reseedDefaults} disabled={reseeding}>
           <RefreshCw className={`w-4 h-4 me-2 ${reseeding ? "animate-spin" : ""}`} />
           استنساخ اللائحة الافتراضية
-        </Button>
+        </GuardedButton>
       }
     >
       <Tabs defaultValue="work_time" dir="rtl">
@@ -274,9 +275,9 @@ export default function DisciplineRegulationPage() {
             <Button variant="outline" onClick={() => setEditing(null)} disabled={saving}>
               إلغاء
             </Button>
-            <Button onClick={saveEdit} disabled={saving}>
+            <GuardedButton perm="hr:create" onClick={saveEdit} disabled={saving}>
               {saving ? "جاري الحفظ..." : "حفظ"}
-            </Button>
+            </GuardedButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>
