@@ -1,13 +1,10 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { UnifiedDateInput } from "@/components/ui/unified-date-input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertTriangle, Plus, CheckCircle, DollarSign } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
@@ -16,6 +13,24 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import {
+  FormShell, FormTextField, FormNumberField, FormSelectField, FormDateField, FormGrid,
+} from "@/components/form-shell";
+
+// driverId stays a string so the "—" no-driver option works cleanly.
+// vehicleId required (was missing — handleSave had `if (!form.vehicleId)`
+// toast). fineAmount coerced to a non-negative number.
+const violationSchema = z.object({
+  vehicleId: z.string().min(1, "اختر المركبة"),
+  driverId: z.string(),
+  violationType: z.enum(["speeding", "red_light", "no_seatbelt", "wrong_parking", "phone", "other"]),
+  violationDate: z.string(),
+  fineAmount: z.coerce.number().min(0, "المبلغ يجب أن يكون 0 أو أكثر"),
+  location: z.string().trim(),
+  violationNumber: z.string().trim(),
+  notes: z.string().trim(),
+});
+type ViolationForm = z.infer<typeof violationSchema>;
 
 const VIOLATION_TYPES: Record<string, string> = {
   speeding: "تجاوز السرعة",
@@ -35,7 +50,6 @@ export default function TrafficViolationsPage() {
   const [, navigate] = useLocation();
   const [showForm, setShowForm] = useState(false);
   const [filters, setFilters] = useFilters();
-  const [form, setForm] = useState({ vehicleId: "", driverId: "", violationType: "speeding", violationDate: new Date().toISOString().split("T")[0], fineAmount: "", location: "", violationNumber: "", notes: "" });
 
   const { data, isLoading, isError, refetch } = useApiQuery<any>(["traffic-violations"], "/fleet/traffic-violations");
   const violations = asList(data?.data || data);
@@ -51,13 +65,19 @@ export default function TrafficViolationsPage() {
   const pendingFines = violations.filter((v: any) => v.status !== "paid").reduce((s: number, v: any) => s + Number(v.fineAmount || 0), 0);
   const paidFines = violations.filter((v: any) => v.status === "paid").reduce((s: number, v: any) => s + Number(v.fineAmount || 0), 0);
 
-  const handleSave = async () => {
-    if (!form.vehicleId || !form.violationType) { toast({ title: "المركبة ونوع المخالفة مطلوبان", variant: "destructive" }); return; }
+  const handleSave = async (values: ViolationForm) => {
     try {
-      await apiFetch("/fleet/traffic-violations", { method: "POST", body: JSON.stringify({ ...form, vehicleId: Number(form.vehicleId), driverId: form.driverId && form.driverId !== "none" ? Number(form.driverId) : null, fineAmount: Number(form.fineAmount || 0) }) });
+      await apiFetch("/fleet/traffic-violations", {
+        method: "POST",
+        body: JSON.stringify({
+          ...values,
+          vehicleId: Number(values.vehicleId),
+          // "none" sentinel becomes null on the server side.
+          driverId: values.driverId && values.driverId !== "none" ? Number(values.driverId) : null,
+        }),
+      });
       toast({ title: "تم تسجيل المخالفة" });
       setShowForm(false);
-      setForm({ vehicleId: "", driverId: "", violationType: "speeding", violationDate: new Date().toISOString().split("T")[0], fineAmount: "", location: "", violationNumber: "", notes: "" });
       refetch();
     } catch (e: any) { toast({ title: e.message || "خطأ", variant: "destructive" }); }
   };
@@ -174,57 +194,61 @@ export default function TrafficViolationsPage() {
       {showForm && (
         <Card className="border-2 border-primary/20">
           <CardHeader className="pb-2"><CardTitle className="text-base">تسجيل مخالفة جديدة</CardTitle></CardHeader>
-          <CardContent className="grid grid-cols-3 gap-4">
-            <div>
-              <Label>المركبة *</Label>
-              <Select value={form.vehicleId} onValueChange={(v) => setForm({ ...form, vehicleId: v })}>
-                <SelectTrigger><SelectValue placeholder="اختر مركبة" /></SelectTrigger>
-                <SelectContent>{vehicleList.map((v: any) => <SelectItem key={v.id} value={String(v.id)}>{v.plateNumber}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>السائق</Label>
-              <Select value={form.driverId} onValueChange={(v) => setForm({ ...form, driverId: v })}>
-                <SelectTrigger><SelectValue placeholder="اختر سائقاً" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">—</SelectItem>
-                  {driverList.map((d: any) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>نوع المخالفة *</Label>
-              <Select value={form.violationType} onValueChange={(v) => setForm({ ...form, violationType: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{Object.entries(VIOLATION_TYPES).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>تاريخ المخالفة</Label>
-              <UnifiedDateInput value={form.violationDate} onChange={(v) => setForm({ ...form, violationDate: v })} showDualCalendar showPresets />
-            </div>
-            <div>
-              <Label>مبلغ الغرامة (ر.س)</Label>
-              <Input type="number" value={form.fineAmount} onChange={(e) => setForm({ ...form, fineAmount: e.target.value })} placeholder="0" />
-            </div>
-            <div>
-              <Label>رقم المخالفة</Label>
-              <Input value={form.violationNumber} onChange={(e) => setForm({ ...form, violationNumber: e.target.value })} placeholder="رقم المخالفة الرسمي" />
-            </div>
-            <div>
-              <Label>الموقع</Label>
-              <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="موقع المخالفة" />
-            </div>
-            <div>
-              <Label>ملاحظات</Label>
-              <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-            </div>
-            <div className="flex items-end">
-              <Button onClick={handleSave} className="w-full" rateLimitAware>حفظ</Button>
-            </div>
-            <div className="col-span-3">
-              <Button variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>
-            </div>
+          <CardContent>
+            <FormShell
+              schema={violationSchema}
+              defaultValues={{
+                vehicleId: "",
+                driverId: "none",
+                violationType: "speeding" as const,
+                violationDate: new Date().toISOString().split("T")[0],
+                fineAmount: 0,
+                location: "",
+                violationNumber: "",
+                notes: "",
+              }}
+              submitLabel="حفظ"
+              secondaryActions={
+                <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
+                  إلغاء
+                </Button>
+              }
+              onSubmit={async (values, ctx) => {
+                await handleSave(values);
+                ctx.reset();
+              }}
+            >
+              <FormGrid cols={3}>
+                <FormSelectField
+                  name="vehicleId"
+                  label="المركبة"
+                  required
+                  options={[
+                    { value: "", label: "اختر مركبة" },
+                    ...vehicleList.map((v: any) => ({ value: String(v.id), label: v.plateNumber })),
+                  ]}
+                />
+                <FormSelectField
+                  name="driverId"
+                  label="السائق"
+                  options={[
+                    { value: "none", label: "—" },
+                    ...driverList.map((d: any) => ({ value: String(d.id), label: d.name })),
+                  ]}
+                />
+                <FormSelectField
+                  name="violationType"
+                  label="نوع المخالفة"
+                  required
+                  options={Object.entries(VIOLATION_TYPES).map(([value, label]) => ({ value, label }))}
+                />
+                <FormDateField name="violationDate" label="تاريخ المخالفة" />
+                <FormNumberField name="fineAmount" label="مبلغ الغرامة (ر.س)" placeholder="0" />
+                <FormTextField name="violationNumber" label="رقم المخالفة" placeholder="رقم المخالفة الرسمي" />
+                <FormTextField name="location" label="الموقع" placeholder="موقع المخالفة" />
+                <FormTextField name="notes" label="ملاحظات" />
+              </FormGrid>
+            </FormShell>
           </CardContent>
         </Card>
       )}
