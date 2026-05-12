@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Save, User, Calendar, AlertTriangle } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_OPTIONS = [
@@ -121,6 +122,10 @@ export default function PilgrimDetail() {
           <CardHeader><CardTitle className="text-base">ملاحظات</CardTitle></CardHeader>
           <CardContent><p className="text-sm">{data.notes}</p></CardContent>
         </Card>
+      )}
+
+      {data?.id && (
+        <UmrahAttachmentsPanel entityType="mutamer" entityId={data.id} />
       )}
     </div>
   );
