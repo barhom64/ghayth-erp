@@ -12,6 +12,7 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { PageShell } from "@/components/page-shell";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Calendar } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 export default function UmrahSeasons() {
   const [, navigate] = useLocation();
@@ -62,7 +63,7 @@ export default function UmrahSeasons() {
       subtitle="إدارة مواسم العمرة"
       breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "مواسم العمرة" }]}
       loading={isLoading}
-      actions={<Button onClick={() => setShowForm(!showForm)} className="gap-2"><Plus className="h-4 w-4" />موسم جديد</Button>}
+      actions={<GuardedButton perm="umrah:create" onClick={() => setShowForm(!showForm)} className="gap-2"><Plus className="h-4 w-4" />موسم جديد</GuardedButton>}
     >
       <div className="flex gap-3 text-sm text-muted-foreground">
         <span><span className="font-bold text-foreground">{items.length}</span> إجمالي المواسم</span>

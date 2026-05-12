@@ -529,8 +529,10 @@ router.get("/:id", authorize({ feature: "projects.list", action: "view", resourc
 
     const [project] = await rawQuery<any>(`SELECT p.*, cl.name AS "clientName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" AND cl."deletedAt" IS NULL WHERE ${detailWhere}`, detailParams);
     if (!project) throw new NotFoundError("المشروع غير موجود");
-    const phases = await rawQuery<any>(`SELECT * FROM project_phases WHERE "projectId"=$1 ORDER BY "orderIndex" LIMIT 500`, [project.id]);
-    const tasks = await rawQuery<any>(`SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" AND e."deletedAt" IS NULL WHERE pt."projectId"=$1 AND pt."deletedAt" IS NULL ORDER BY pt."dueDate" LIMIT 500`, [project.id]);
+    const [phases, tasks] = await Promise.all([
+      rawQuery<any>(`SELECT * FROM project_phases WHERE "projectId"=$1 ORDER BY "orderIndex" LIMIT 500`, [project.id]),
+      rawQuery<any>(`SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" AND e."deletedAt" IS NULL WHERE pt."projectId"=$1 AND pt."deletedAt" IS NULL ORDER BY pt."dueDate" LIMIT 500`, [project.id]),
+    ]);
 
     let taskDeps: any[] = [];
     if (tasks.length > 0) {
@@ -1214,9 +1216,11 @@ router.get("/stats/summary", authorize({ feature: "projects.list", action: "list
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const [projects] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='active') as active, COUNT(*) FILTER (WHERE status='completed') as completed FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [budget] = await rawQuery<any>(`SELECT COALESCE(SUM(budget),0) as "totalBudget", COALESCE(SUM("spentAmount"),0) as "totalSpent" FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
-    const [slipping] = await rawQuery<any>(`SELECT COUNT(*) as count FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL AND status='active' AND "endDate" < CURRENT_DATE`, [cid]);
+    const [[projects], [budget], [slipping]] = await Promise.all([
+      rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='active') as active, COUNT(*) FILTER (WHERE status='completed') as completed FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COALESCE(SUM(budget),0) as "totalBudget", COALESCE(SUM("spentAmount"),0) as "totalSpent" FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      rawQuery<any>(`SELECT COUNT(*) as count FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL AND status='active' AND "endDate" < CURRENT_DATE`, [cid]),
+    ]);
     res.json({
       totalProjects: Number(projects.total), activeProjects: Number(projects.active),
       completedProjects: Number(projects.completed), totalBudget: Number(budget.totalBudget),
@@ -1230,76 +1234,80 @@ router.get("/stats/overview", authorize({ feature: "projects.list", action: "lis
     const scope = req.scope!;
     const cid = scope.companyId;
 
-    const [counts] = await rawQuery<any>(
-      `SELECT
-         COUNT(*) as total,
-         COUNT(*) FILTER (WHERE status IN ('active','in_progress')) as active,
-         COUNT(*) FILTER (WHERE status='completed') as completed,
-         COUNT(*) FILTER (WHERE status='planning') as planning,
-         COUNT(*) FILTER (WHERE status='on_hold') as on_hold,
-         COUNT(*) FILTER (WHERE status='cancelled') as cancelled,
-         COUNT(*) FILTER (WHERE status IN ('active','in_progress') AND "endDate" < CURRENT_DATE) as slipping
-       FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
-      [cid]
-    );
-
-    const [budget] = await rawQuery<any>(
-      `SELECT COALESCE(SUM(budget),0) as "totalBudget",
-              COALESCE(SUM("spentAmount"),0) as "totalSpent"
-       FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
-      [cid]
-    );
-
-    const [taskCounts] = await rawQuery<any>(
-      `SELECT COUNT(*) as total,
-              COUNT(*) FILTER (WHERE pt.status='done') as done,
-              COUNT(*) FILTER (WHERE pt.status='in_progress') as in_progress,
-              COUNT(*) FILTER (WHERE pt.status='blocked') as blocked,
-              COUNT(*) FILTER (WHERE pt.status NOT IN ('done','cancelled') AND pt."dueDate" < CURRENT_DATE) as overdue
-       FROM project_tasks pt
-       JOIN projects p ON pt."projectId"=p.id
-       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL`,
-      [cid]
-    );
-
-    const slippingProjects = await rawQuery<any>(
-      `SELECT id, name, status, "endDate", progress, budget, "spentAmount",
-              (SELECT name FROM employees WHERE id=p."managerId" AND "deletedAt" IS NULL) as "managerName"
-       FROM projects p
-       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
-         AND p.status IN ('active','in_progress') AND p."endDate" < CURRENT_DATE
-       ORDER BY p."endDate" LIMIT 10`,
-      [cid]
-    );
-
-    const recentProjects = await rawQuery<any>(
-      `SELECT id, name, status, progress, budget, "spentAmount", "endDate",
-              (SELECT name FROM employees WHERE id=p."managerId" AND "deletedAt" IS NULL) as "managerName"
-       FROM projects p
-       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL AND p.status IN ('active','in_progress')
-       ORDER BY p."updatedAt" DESC LIMIT 8`,
-      [cid]
-    );
-
-    const upcomingMilestones = await rawQuery<any>(
-      `SELECT pm.id, pm.title, pm."targetDate", pm.status, p.name as "projectName", p.id as "projectId"
-       FROM project_milestones pm
-       JOIN projects p ON pm."projectId"=p.id
-       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
-         AND pm.status IN ('pending','in_progress')
-         AND pm."targetDate" >= CURRENT_DATE
-       ORDER BY pm."targetDate" LIMIT 8`,
-      [cid]
-    );
-
-    const openRisks = await rawQuery<any>(
-      `SELECT pr.id, pr.title, pr."riskLevel", pr."riskScore", pr.status, p.name as "projectName", p.id as "projectId"
-       FROM project_risks pr
-       JOIN projects p ON pr."projectId"=p.id
-       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL AND pr.status IN ('open','realized')
-       ORDER BY pr."riskScore" DESC LIMIT 8`,
-      [cid]
-    );
+    const [
+      [counts],
+      [budget],
+      [taskCounts],
+      slippingProjects,
+      recentProjects,
+      upcomingMilestones,
+      openRisks,
+    ] = await Promise.all([
+      rawQuery<any>(
+        `SELECT
+           COUNT(*) as total,
+           COUNT(*) FILTER (WHERE status IN ('active','in_progress')) as active,
+           COUNT(*) FILTER (WHERE status='completed') as completed,
+           COUNT(*) FILTER (WHERE status='planning') as planning,
+           COUNT(*) FILTER (WHERE status='on_hold') as on_hold,
+           COUNT(*) FILTER (WHERE status='cancelled') as cancelled,
+           COUNT(*) FILTER (WHERE status IN ('active','in_progress') AND "endDate" < CURRENT_DATE) as slipping
+         FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
+        [cid]
+      ),
+      rawQuery<any>(
+        `SELECT COALESCE(SUM(budget),0) as "totalBudget",
+                COALESCE(SUM("spentAmount"),0) as "totalSpent"
+         FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
+        [cid]
+      ),
+      rawQuery<any>(
+        `SELECT COUNT(*) as total,
+                COUNT(*) FILTER (WHERE pt.status='done') as done,
+                COUNT(*) FILTER (WHERE pt.status='in_progress') as in_progress,
+                COUNT(*) FILTER (WHERE pt.status='blocked') as blocked,
+                COUNT(*) FILTER (WHERE pt.status NOT IN ('done','cancelled') AND pt."dueDate" < CURRENT_DATE) as overdue
+         FROM project_tasks pt
+         JOIN projects p ON pt."projectId"=p.id
+         WHERE p."companyId"=$1 AND p."deletedAt" IS NULL`,
+        [cid]
+      ),
+      rawQuery<any>(
+        `SELECT id, name, status, "endDate", progress, budget, "spentAmount",
+                (SELECT name FROM employees WHERE id=p."managerId" AND "deletedAt" IS NULL) as "managerName"
+         FROM projects p
+         WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
+           AND p.status IN ('active','in_progress') AND p."endDate" < CURRENT_DATE
+         ORDER BY p."endDate" LIMIT 10`,
+        [cid]
+      ),
+      rawQuery<any>(
+        `SELECT id, name, status, progress, budget, "spentAmount", "endDate",
+                (SELECT name FROM employees WHERE id=p."managerId" AND "deletedAt" IS NULL) as "managerName"
+         FROM projects p
+         WHERE p."companyId"=$1 AND p."deletedAt" IS NULL AND p.status IN ('active','in_progress')
+         ORDER BY p."updatedAt" DESC LIMIT 8`,
+        [cid]
+      ),
+      rawQuery<any>(
+        `SELECT pm.id, pm.title, pm."targetDate", pm.status, p.name as "projectName", p.id as "projectId"
+         FROM project_milestones pm
+         JOIN projects p ON pm."projectId"=p.id
+         WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
+           AND pm.status IN ('pending','in_progress')
+           AND pm."targetDate" >= CURRENT_DATE
+         ORDER BY pm."targetDate" LIMIT 8`,
+        [cid]
+      ),
+      rawQuery<any>(
+        `SELECT pr.id, pr.title, pr."riskLevel", pr."riskScore", pr.status, p.name as "projectName", p.id as "projectId"
+         FROM project_risks pr
+         JOIN projects p ON pr."projectId"=p.id
+         WHERE p."companyId"=$1 AND p."deletedAt" IS NULL AND pr.status IN ('open','realized')
+         ORDER BY pr."riskScore" DESC LIMIT 8`,
+        [cid]
+      ),
+    ]);
 
     res.json({
       counts: {
@@ -1328,36 +1336,36 @@ router.get("/manager/:employeeId/workload", authorize({ feature: "projects.list"
     const employeeId = parseId(req.params.employeeId, "employeeId");
     if (!employeeId) throw new ValidationError("معرّف الموظف مطلوب");
 
-    const [counts] = await rawQuery<any>(
-      `SELECT
-         COUNT(*) FILTER (WHERE status IN ('active','in_progress')) as active,
-         COUNT(*) FILTER (WHERE status='on_hold') as on_hold,
-         COUNT(*) FILTER (WHERE status IN ('active','in_progress') AND "endDate" < CURRENT_DATE) as slipping,
-         COALESCE(SUM(budget) FILTER (WHERE status IN ('active','in_progress')),0) as "activeBudget",
-         COALESCE(SUM("spentAmount") FILTER (WHERE status IN ('active','in_progress')),0) as "activeSpent"
-       FROM projects
-       WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "managerId"=$2`,
-      [scope.companyId, employeeId]
-    );
-
-    const [taskCounts] = await rawQuery<any>(
-      `SELECT COUNT(*) as total,
-              COUNT(*) FILTER (WHERE pt.status NOT IN ('done','cancelled')) as open,
-              COUNT(*) FILTER (WHERE pt.status NOT IN ('done','cancelled') AND pt."dueDate" < CURRENT_DATE) as overdue
-       FROM project_tasks pt
-       JOIN projects p ON pt."projectId"=p.id
-       WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
-         AND (p."managerId"=$2 OR pt."assigneeId"=$2)`,
-      [scope.companyId, employeeId]
-    );
-
-    const recent = await rawQuery<any>(
-      `SELECT id, name, status, progress, "endDate"
-       FROM projects
-       WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "managerId"=$2 AND status IN ('active','in_progress','planning')
-       ORDER BY "updatedAt" DESC LIMIT 5`,
-      [scope.companyId, employeeId]
-    );
+    const [[counts], [taskCounts], recent] = await Promise.all([
+      rawQuery<any>(
+        `SELECT
+           COUNT(*) FILTER (WHERE status IN ('active','in_progress')) as active,
+           COUNT(*) FILTER (WHERE status='on_hold') as on_hold,
+           COUNT(*) FILTER (WHERE status IN ('active','in_progress') AND "endDate" < CURRENT_DATE) as slipping,
+           COALESCE(SUM(budget) FILTER (WHERE status IN ('active','in_progress')),0) as "activeBudget",
+           COALESCE(SUM("spentAmount") FILTER (WHERE status IN ('active','in_progress')),0) as "activeSpent"
+         FROM projects
+         WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "managerId"=$2`,
+        [scope.companyId, employeeId]
+      ),
+      rawQuery<any>(
+        `SELECT COUNT(*) as total,
+                COUNT(*) FILTER (WHERE pt.status NOT IN ('done','cancelled')) as open,
+                COUNT(*) FILTER (WHERE pt.status NOT IN ('done','cancelled') AND pt."dueDate" < CURRENT_DATE) as overdue
+         FROM project_tasks pt
+         JOIN projects p ON pt."projectId"=p.id
+         WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
+           AND (p."managerId"=$2 OR pt."assigneeId"=$2)`,
+        [scope.companyId, employeeId]
+      ),
+      rawQuery<any>(
+        `SELECT id, name, status, progress, "endDate"
+         FROM projects
+         WHERE "companyId"=$1 AND "deletedAt" IS NULL AND "managerId"=$2 AND status IN ('active','in_progress','planning')
+         ORDER BY "updatedAt" DESC LIMIT 5`,
+        [scope.companyId, employeeId]
+      ),
+    ]);
 
     res.json({
       projects: {
@@ -1774,18 +1782,20 @@ router.get("/:id/costs", authorize({ feature: "projects.list", action: "list" })
     const scope = req.scope!;
     const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
-    const rows = await rawQuery<any>(
-      `SELECT pc.*, e.name AS "enteredByName"
-       FROM project_costs pc
-       LEFT JOIN employees e ON e.id=pc."enteredBy" AND e."deletedAt" IS NULL
-       WHERE pc."projectId"=$1 AND pc."companyId"=$2
-       ORDER BY pc."costDate" DESC LIMIT 500`,
-      [projectId, scope.companyId]
-    );
-    const [totals] = await rawQuery<any>(
-      `SELECT COALESCE(SUM(amount),0) AS "totalActual" FROM project_costs WHERE "projectId"=$1 AND "companyId"=$2`,
-      [projectId, scope.companyId]
-    );
+    const [rows, [totals]] = await Promise.all([
+      rawQuery<any>(
+        `SELECT pc.*, e.name AS "enteredByName"
+         FROM project_costs pc
+         LEFT JOIN employees e ON e.id=pc."enteredBy" AND e."deletedAt" IS NULL
+         WHERE pc."projectId"=$1 AND pc."companyId"=$2
+         ORDER BY pc."costDate" DESC LIMIT 500`,
+        [projectId, scope.companyId]
+      ),
+      rawQuery<any>(
+        `SELECT COALESCE(SUM(amount),0) AS "totalActual" FROM project_costs WHERE "projectId"=$1 AND "companyId"=$2`,
+        [projectId, scope.companyId]
+      ),
+    ]);
     res.json({
       data: rows, total: rows.length,
       totalActual: Number(totals?.totalActual || 0),
@@ -2055,18 +2065,20 @@ router.get("/:id/gantt", authorize({ feature: "projects.list", action: "list" })
     const projectId = parseId(req.params.id, "id");
     const project = await assertProjectAccess(projectId, scope);
 
-    const phases = await rawQuery<any>(
-      `SELECT * FROM project_phases WHERE "projectId"=$1 ORDER BY "orderIndex" LIMIT 500`,
-      [projectId]
-    );
-    const tasks = await rawQuery<any>(
-      `SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" AND e."deletedAt" IS NULL WHERE pt."projectId"=$1 ORDER BY pt."startDate","phaseId" LIMIT 500`,
-      [projectId]
-    );
-    const milestones = await rawQuery<any>(
-      `SELECT * FROM project_milestones WHERE "projectId"=$1 AND "companyId"=$2 ORDER BY "targetDate"`,
-      [projectId, scope.companyId]
-    );
+    const [phases, tasks, milestones] = await Promise.all([
+      rawQuery<any>(
+        `SELECT * FROM project_phases WHERE "projectId"=$1 ORDER BY "orderIndex" LIMIT 500`,
+        [projectId]
+      ),
+      rawQuery<any>(
+        `SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" AND e."deletedAt" IS NULL WHERE pt."projectId"=$1 ORDER BY pt."startDate","phaseId" LIMIT 500`,
+        [projectId]
+      ),
+      rawQuery<any>(
+        `SELECT * FROM project_milestones WHERE "projectId"=$1 AND "companyId"=$2 ORDER BY "targetDate"`,
+        [projectId, scope.companyId]
+      ),
+    ]);
     const dependencies = tasks.length > 0
       ? await rawQuery<any>(
           `SELECT * FROM project_task_dependencies WHERE "taskId" IN (${tasks.map((_: any, i: number) => `$${i+1}`).join(',')})`,

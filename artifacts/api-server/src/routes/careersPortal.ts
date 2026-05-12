@@ -16,6 +16,24 @@ import { logger } from "../lib/logger.js";
 const router = Router();
 const SECRET: string = process.env.JWT_SECRET ?? (() => { throw new Error("JWT_SECRET is required for careers portal"); })();
 
+interface ApplicantAccountSummary {
+  id: number;
+  name: string;
+  email: string;
+  phone: string | null;
+  createdAt: string;
+}
+
+interface ApplicationDetailRow {
+  id: number;
+  status: string;
+  coverLetter: string | null;
+  createdAt: string;
+  jobTitle: string;
+  department: string | null;
+  location: string | null;
+}
+
 const careersRegisterSchema = z.object({
   name: z.string().min(1, "الاسم مطلوب"),
   email: z.string().email("البريد الإلكتروني غير صالح"),
@@ -111,7 +129,7 @@ router.post("/auth/register", portalLimiter, async (req: Request, res: Response)
     }).catch((e) => logger.error(e, "careersPortal background task failed"));
     emitEvent({ companyId: 0, branchId: 0, userId: result.insertId, action: "careers.account.registered", entity: "applicant_accounts", entityId: result.insertId, details: JSON.stringify({ name: name.trim(), email: email.trim().toLowerCase() }) }).catch((e) => logger.error(e, "careersPortal background task failed"));
 
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<ApplicantAccountSummary>(
       `SELECT id, name, email, phone, "createdAt" FROM applicant_accounts WHERE id = $1`,
       [result.insertId]
     );
@@ -337,7 +355,7 @@ router.post("/apply", careersAuth, async (req: Request, res: Response) => {
     }).catch((e) => logger.error(e, "careersPortal background task failed"));
     emitEvent({ companyId: 0, branchId: 0, userId: applicantId, action: "careers.application.submitted", entity: "job_applications", entityId: result.insertId, details: JSON.stringify({ postingId, applicantId }) }).catch((e) => logger.error(e, "careersPortal background task failed"));
 
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<ApplicationDetailRow>(
       `SELECT ja.id, ja.status, ja."coverLetter", ja."createdAt",
               jp.title AS "jobTitle", jp.department, jp.location
        FROM job_applications ja

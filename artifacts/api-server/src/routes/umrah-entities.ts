@@ -20,7 +20,7 @@ import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
-import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { emitEvent, createAuditLog, initiateApprovalChain } from "../lib/businessHelpers.js";
 import {
   generateSalesInvoice,
   registerPayment,
@@ -237,6 +237,26 @@ router.post("/sub-agents", authorize({ feature: "umrah", action: "create" }), as
   } catch (err) { handleRouteError(err, res, "Create sub-agent"); }
 });
 
+// Single-row sub-agent fetch. Used by the detail page UI to render
+// the full row (same joined columns the list returns) plus the
+// statement / pricing / attachments panels.
+router.get("/sub-agents/:id", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<any>(
+      `SELECT sa.*, a.name AS "agentName", c.name AS "clientName"
+         FROM umrah_sub_agents sa
+         LEFT JOIN umrah_agents a ON sa."agentId" = a.id
+         LEFT JOIN clients c ON sa."clientId" = c.id AND c."deletedAt" IS NULL
+        WHERE sa.id = $1 AND sa."companyId" = $2 AND sa."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("الوكيل الفرعي غير موجود");
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Get sub-agent"); }
+});
+
 router.get("/sub-agents/unlinked", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -325,7 +345,7 @@ router.put("/sub-agents/:id/link", authorize({ feature: "umrah", action: "create
       finalClientId = newClient.id;
     } else {
       if (!clientId) throw new ValidationError("معرف العميل مطلوب");
-      const [existingClient] = await rawQuery<any>(
+      const [existingClient] = await rawQuery<{ id: number }>(
         `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
         [clientId, scope.companyId]
       );
@@ -361,7 +381,7 @@ router.post("/sub-agents/link-by-nusk", authorize({ feature: "umrah", action: "c
     const scope = req.scope!;
     const parsed = zodParse(linkByNuskSchema.safeParse(req.body));
     const { nuskCode, clientId } = parsed;
-    const [existingClient] = await rawQuery<any>(
+    const [existingClient] = await rawQuery<{ id: number }>(
       `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [clientId, scope.companyId]
     );
@@ -383,7 +403,7 @@ router.post("/sub-agents/:id/link-client", authorize({ feature: "umrah", action:
     const id = parseId(req.params.id, "id");
     const parsed = zodParse(linkClientSchema.safeParse(req.body));
     const { clientId } = parsed;
-    const [existingClient] = await rawQuery<any>(
+    const [existingClient] = await rawQuery<{ id: number }>(
       `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [clientId, scope.companyId]
     );
@@ -630,7 +650,7 @@ router.delete("/groups/:id", authorize({ feature: "umrah", action: "delete" }), 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<{ id: number; salesInvoiceId: number | null }>(
       `SELECT id, "salesInvoiceId" FROM umrah_groups WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -932,7 +952,7 @@ router.patch("/nusk-invoices/:id", authorize({ feature: "umrah", action: "update
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(updateNuskInvoiceSchema.safeParse(req.body));
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<{ id: number; nuskStatus: string }>(
       `SELECT * FROM umrah_nusk_invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -964,7 +984,7 @@ router.delete("/nusk-invoices/:id", authorize({ feature: "umrah", action: "delet
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<{ id: number; nuskStatus: string }>(
       `SELECT id, "nuskStatus" FROM umrah_nusk_invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -1024,23 +1044,25 @@ router.get("/commission-plans/:id", authorize({ feature: "umrah", action: "view"
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [plan] = await rawQuery(
-      `SELECT cp.*, s.title AS "seasonTitle"
-       FROM employee_commission_plans cp
-       LEFT JOIN umrah_seasons s ON cp."seasonId" = s.id AND s."deletedAt" IS NULL
-       WHERE cp.id = $1 AND cp."companyId" = $2 AND cp."deletedAt" IS NULL`,
-      [id, scope.companyId]
-    );
+    const [[plan], tiers, calculations] = await Promise.all([
+      rawQuery(
+        `SELECT cp.*, s.title AS "seasonTitle"
+         FROM employee_commission_plans cp
+         LEFT JOIN umrah_seasons s ON cp."seasonId" = s.id AND s."deletedAt" IS NULL
+         WHERE cp.id = $1 AND cp."companyId" = $2 AND cp."deletedAt" IS NULL`,
+        [id, scope.companyId]
+      ),
+      rawQuery(
+        `SELECT * FROM employee_commission_tiers WHERE "planId" = $1 ORDER BY "tierOrder"`,
+        [id]
+      ),
+      rawQuery(
+        `SELECT * FROM employee_commission_calculations
+         WHERE "planId" = $1 AND "deletedAt" IS NULL ORDER BY year DESC, month DESC LIMIT 12`,
+        [id]
+      ),
+    ]);
     if (!plan) { throw new NotFoundError("الخطة غير موجودة"); }
-    const tiers = await rawQuery(
-      `SELECT * FROM employee_commission_tiers WHERE "planId" = $1 ORDER BY "tierOrder"`,
-      [id]
-    );
-    const calculations = await rawQuery(
-      `SELECT * FROM employee_commission_calculations
-       WHERE "planId" = $1 AND "deletedAt" IS NULL ORDER BY year DESC, month DESC LIMIT 12`,
-      [id]
-    );
     res.json({ ...plan, tiers, calculations });
   } catch (err) { handleRouteError(err, res, "Get commission plan"); }
 });
@@ -1085,9 +1107,27 @@ router.post("/commission-plans", authorize({ feature: "umrah", action: "create" 
       return plan;
     });
 
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "employee_commission_plans", entityId: result.id, after: { planName: b.planName } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.commission_plan.created", entity: "employee_commission_plans", entityId: result.id, details: JSON.stringify({ planName: b.planName }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    res.status(201).json(result);
+    // Governance hook: route through approval chain when company has
+    // a configured chain for `umrah_commission_plan` matching the base
+    // salary. If no chain matches, requiresApproval comes back false
+    // and the plan is treated as auto-approved (existing behaviour).
+    let approval: { requiresApproval: boolean; chainId: number | null; approvalRequestId: number | null; currentStep: number; totalSteps: number } | null = null;
+    try {
+      approval = await initiateApprovalChain({
+        companyId: scope.companyId,
+        branchId: scope.branchId || 0,
+        chainType: "umrah_commission_plan" as any,
+        refType: "employee_commission_plan",
+        refId: result.id,
+        amount: Number(b.baseSalary || 0),
+      });
+    } catch (e) {
+      logger.error(e, "umrah commission plan approval chain init failed (non-blocking)");
+    }
+
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "employee_commission_plans", entityId: result.id, after: { planName: b.planName, approvalRequired: approval?.requiresApproval ?? false } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.commission_plan.created", entity: "employee_commission_plans", entityId: result.id, details: JSON.stringify({ planName: b.planName, approvalChainId: approval?.chainId ?? null }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    res.status(201).json({ ...result, approval });
   } catch (err) { handleRouteError(err, res, "Create commission plan"); }
 });
 
@@ -1436,7 +1476,7 @@ router.post("/letters/:id/dispatch", authorize({ feature: "umrah", action: "upda
     if (!Number.isFinite(id) || id <= 0) {
       throw new ValidationError("معرّف الخطاب غير صالح");
     }
-    const [letter] = await rawQuery<any>(
+    const [letter] = await rawQuery<{ id: number; status: string; sentAt: string | null; type: string }>(
       `SELECT id, status, "sentAt", type FROM official_letters
         WHERE id=$1 AND "companyId"=$2
           AND (type LIKE 'umrah_%' OR type = 'umrah')`,
@@ -1506,9 +1546,9 @@ async function fetchDailyRunsheet(companyId: number, date: string) {
      WHERE p."companyId" = $1 AND p."deletedAt" IS NULL`;
 
   const [arrivals, departures, overstays] = await Promise.all([
-    rawQuery<any>(`${baseSelect} AND p."entryDate" = $2 ORDER BY g.name NULLS LAST, p."fullName"`, [companyId, date]),
-    rawQuery<any>(`${baseSelect} AND p."exitDate" = $2 ORDER BY g.name NULLS LAST, p."fullName"`, [companyId, date]),
-    rawQuery<any>(`${baseSelect} AND p.status IN ('overstayed','violated') AND p."overstayDays" > 0 ORDER BY p."overstayDays" DESC, p."fullName"`, [companyId]),
+    rawQuery<Record<string, unknown>>(`${baseSelect} AND p."entryDate" = $2 ORDER BY g.name NULLS LAST, p."fullName"`, [companyId, date]),
+    rawQuery<Record<string, unknown>>(`${baseSelect} AND p."exitDate" = $2 ORDER BY g.name NULLS LAST, p."fullName"`, [companyId, date]),
+    rawQuery<Record<string, unknown>>(`${baseSelect} AND p.status IN ('overstayed','violated') AND p."overstayDays" > 0 ORDER BY p."overstayDays" DESC, p."fullName"`, [companyId]),
   ]);
 
   return { arrivals, departures, overstays };
@@ -1572,7 +1612,7 @@ async function assertAttachmentOwner(companyId: number, entityType: string, enti
   const table = ATTACH_OWNER_TABLE[entityType];
   if (!table) throw new ValidationError("نوع كيان غير مدعوم", { field: "entityType" });
   const safeTable = table.replace(/[^a-zA-Z0-9_]/g, "");
-  const [row] = await rawQuery<any>(
+  const [row] = await rawQuery<Record<string, unknown>>(
     `SELECT id FROM "${safeTable}" WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
     [entityId, companyId]
   );
@@ -1641,7 +1681,7 @@ router.delete("/attachments/:id", authorize({ feature: "umrah", action: "delete"
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM umrah_attachments WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -1680,7 +1720,7 @@ router.get("/reports/reconciliation", authorize({ feature: "umrah", action: "vie
       : { fragment: "", params: [scope.companyId] };
 
     // 1. Amount diff: nusk total vs posted JE total
-    const amountDiffs = await rawQuery<any>(
+    const amountDiffs = await rawQuery<Record<string, unknown>>(
       `SELECT ni.id, ni."nuskInvoiceNumber", ni."totalAmount" AS "fileTotal",
               ni."nuskStatus", ni."purchaseInvoiceId", ni."journalEntryId",
               COALESCE(je_ap.total, 0) AS "postedAp",
@@ -1708,7 +1748,7 @@ router.get("/reports/reconciliation", authorize({ feature: "umrah", action: "vie
     );
 
     // 2. Mutamer count diff: file says X, system has Y in the linked group
-    const countDiffs = await rawQuery<any>(
+    const countDiffs = await rawQuery<Record<string, unknown>>(
       `SELECT ni.id, ni."nuskInvoiceNumber", ni."mutamerCount" AS "fileCount",
               ni."groupId", g.name AS "groupName",
               (SELECT COUNT(*)::int FROM umrah_pilgrims p
@@ -1737,7 +1777,7 @@ router.get("/reports/reconciliation", authorize({ feature: "umrah", action: "vie
     );
 
     // 3. Overstays without a violation row
-    const overstayGaps = await rawQuery<any>(
+    const overstayGaps = await rawQuery<Record<string, unknown>>(
       `SELECT p.id, p."nuskNumber", p."fullName", p."overstayDays", p."groupId",
               g.name AS "groupName", sa.name AS "subAgentName"
          FROM umrah_pilgrims p

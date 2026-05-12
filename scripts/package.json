@@ -7,11 +7,18 @@
     "hello": "tsx ./src/hello.ts",
     "lint:patterns": "node ./src/lint-patterns.mjs",
     "audit:runtime": "ALL=1 node ./src/runtime-audit.cjs",
+    "self-heal:once": "node ./_self_heal_loop.mjs --once",
+    "self-heal:watch": "node ./_self_heal_loop.mjs --watch",
+    "self-heal:watch-live": "node ./_self_heal_loop.mjs --watch --live",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "regexparam": "^3.0.0",
     "tsx": "catalog:"
+  },
+  "dependencies": {
+    "@types/pg": "^8.18.0",
+    "pg": "^8.20.0"
   }
 }
