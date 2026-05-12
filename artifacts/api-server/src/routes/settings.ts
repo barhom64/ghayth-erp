@@ -106,56 +106,6 @@ const approvalConfigSchema = z.object({
 
 const channelsSchema = z.record(z.string().min(1), z.string().nullable());
 
-interface SettingKvRow {
-  key: string;
-  value: string;
-}
-
-interface BranchRow {
-  id: number;
-  companyId: number;
-  name: string;
-  nameEn: string | null;
-  city: string | null;
-  phone: string | null;
-  logoUrl: string | null;
-  address: string | null;
-  taxNumber: string | null;
-  crNumber: string | null;
-  email: string | null;
-  website: string | null;
-  footerText: string | null;
-  createdAt: string;
-  updatedAt: string | null;
-}
-
-interface DepartmentRow {
-  id: number;
-  name: string;
-  nameEn: string | null;
-  companyId: number;
-  managerId: number | null;
-  createdAt: string;
-  updatedAt: string | null;
-}
-
-interface CountRow {
-  cnt: string | number;
-}
-
-interface ApprovalChainRow {
-  id: number;
-  companyId: number;
-  chainType: string;
-  name: string;
-  minAmount: number | string | null;
-  maxAmount: number | string | null;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string | null;
-  deletedAt: string | null;
-}
-
 const publicRouter = Router();
 
 publicRouter.get("/display", async (_req, res) => {
@@ -275,21 +225,21 @@ router.get("/general", authorize({ feature: "settings", action: "view" }), async
 router.get("/resolved", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const systemRows = await rawQuery<SettingKvRow>(
+    const systemRows = await rawQuery<any>(
       `SELECT key, value FROM system_settings WHERE "companyId" IS NULL AND "branchId" IS NULL`
     );
-    const companyRows = await rawQuery<SettingKvRow>(
+    const companyRows = await rawQuery<any>(
       `SELECT key, value FROM system_settings WHERE "companyId" = $1 AND "branchId" IS NULL`,
       [scope.companyId]
     );
-    const branchRows: SettingKvRow[] = scope.branchId ? await rawQuery<SettingKvRow>(
+    const branchRows = scope.branchId ? await rawQuery<any>(
       `SELECT key, value FROM system_settings WHERE "companyId" = $1 AND "branchId" = $2`,
       [scope.companyId, scope.branchId]
     ) : [];
 
-    const systemMap = new Map(systemRows.map((r) => [r.key, r.value]));
-    const companyMap = new Map(companyRows.map((r) => [r.key, r.value]));
-    const branchMap = new Map(branchRows.map((r) => [r.key, r.value]));
+    const systemMap = new Map(systemRows.map((r: any) => [r.key, r.value]));
+    const companyMap = new Map(companyRows.map((r: any) => [r.key, r.value]));
+    const branchMap = new Map(branchRows.map((r: any) => [r.key, r.value]));
 
     const allKeys = new Set([...systemMap.keys(), ...companyMap.keys(), ...branchMap.keys()]);
     const resolved: { key: string; value: any; source: "system" | "company" | "branch" }[] = [];
@@ -411,7 +361,7 @@ router.post("/branches", authorize({ feature: "settings", action: "update" }), a
       after: { name, nameEn, city, phone, companyId: targetCompanyId },
     }).catch((e) => logger.error(e, "settings background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: r.insertId, details: JSON.stringify({ key: "branch" }) }).catch((e) => logger.error(e, "settings background task failed"));
-    const [row] = await rawQuery<BranchRow>(`SELECT * FROM branches WHERE id=$1 AND "companyId"=$2`, [r.insertId, targetCompanyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM branches WHERE id=$1 AND "companyId"=$2`, [r.insertId, targetCompanyId]);
     res.status(201).json(row || { id: r.insertId });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -457,11 +407,11 @@ router.delete("/branches/:id", authorize({ feature: "settings", action: "update"
     const branchId = parseId(req.params.id, "id");
     const scope = req.scope!;
 
-    const [activeEmployees] = await rawQuery<CountRow>(
+    const [activeEmployees] = await rawQuery<any>(
       `SELECT COUNT(*) AS cnt FROM employee_assignments WHERE "branchId" = $1 AND status = 'active' AND "companyId" = $2`,
       [branchId, scope.companyId]
     );
-    const [openOrders] = await rawQuery<CountRow>(
+    const [openOrders] = await rawQuery<any>(
       `SELECT COUNT(*) AS cnt FROM purchase_orders WHERE "branchId" = $1 AND status NOT IN ('cancelled','received','completed') AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [branchId, scope.companyId]
     );
@@ -502,7 +452,7 @@ router.post("/departments", authorize({ feature: "settings", action: "update" })
       after: { name, nameEn, manager },
     }).catch((e) => logger.error(e, "settings background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: r.insertId, details: JSON.stringify({ key: "department" }) }).catch((e) => logger.error(e, "settings background task failed"));
-    const [row] = await rawQuery<DepartmentRow>(`SELECT * FROM departments WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM departments WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
     res.status(201).json(row || { id: r.insertId });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -529,7 +479,7 @@ router.delete("/departments/:id", authorize({ feature: "settings", action: "upda
   try {
     const id = parseId(req.params.id, "id");
     const scope = req.scope!;
-    const [empCheck] = await rawQuery<CountRow>(
+    const [empCheck] = await rawQuery<any>(
       `SELECT COUNT(*) AS cnt FROM employee_assignments WHERE "departmentId" = $1 AND status = 'active' AND "companyId" = $2`,
       [id, scope.companyId]
     );
@@ -772,7 +722,7 @@ router.post("/approval-config", authorize({ feature: "settings", action: "update
       after: { chainType, name, minAmount, maxAmount, isActive },
     }).catch((e) => logger.error(e, "settings background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.created", entity: "settings", entityId: r.insertId, details: JSON.stringify({ key: "approval_config" }) }).catch((e) => logger.error(e, "settings background task failed"));
-    const [row] = await rawQuery<ApprovalChainRow>(`SELECT * FROM approval_chains WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM approval_chains WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
     res.status(201).json(row || { id: r.insertId });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
@@ -796,8 +746,8 @@ router.delete("/approval-config/:id", authorize({ feature: "settings", action: "
 
 const SETTINGS_SECRET_KEYS = new Set(["sms_auth_token", "whatsapp_access_token", "whatsapp_verify_token"]);
 
-function maskSecretSettings<T extends { key: string; value: unknown }>(rows: T[]): T[] {
-  return rows.map((r) => SETTINGS_SECRET_KEYS.has(r.key) && r.value ? { ...r, value: "__configured__" } : r);
+function maskSecretSettings(rows: any[]): any[] {
+  return rows.map((r: any) => SETTINGS_SECRET_KEYS.has(r.key) && r.value ? { ...r, value: "__configured__" } : r);
 }
 
 const CHANNEL_SETTING_KEYS = [
