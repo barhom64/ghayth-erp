@@ -1,5 +1,14 @@
 import { useState, useEffect } from "react";
+import { z } from "zod";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import {
+  FormShell,
+  FormTextField,
+  FormEmailField,
+  FormPhoneField,
+  FormSelectField,
+  FormGrid,
+} from "@/components/form-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,47 +37,35 @@ import { SystemControlsTab } from "./settings/system-controls-tab";
 import { RolePermissionsTab } from "./settings/role-permissions-tab";
 import { ApprovalWorkflowsTab } from "./settings/approval-workflows-tab";
 
+// GeneralSettings — 11-field edit form. The server stores values as
+// {key, value} rows; mapping happens in the hydration block below.
+// The FormShell key={hash} trick remounts the form when the server
+// returns new data, so we drop the useEffect → setForm hydration
+// round-trip that previously fired after every refetch.
+const generalSettingsSchema = z.object({
+  companyName: z.string().trim(),
+  companyNameEn: z.string().trim(),
+  taxNumber: z.string().trim(),
+  crNumber: z.string().trim(),
+  phone: z.string().trim(),
+  email: z.string().trim().refine(
+    (v) => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
+    "صيغة البريد الإلكتروني غير صحيحة",
+  ),
+  address: z.string().trim(),
+  currency: z.enum(["SAR", "USD", "AED"]),
+  language: z.string(),
+  timezone: z.enum(["Asia/Riyadh", "Asia/Dubai"]),
+  calendarMode: z.enum(["hijri", "gregorian", "both"]),
+});
+type GeneralSettingsForm = z.infer<typeof generalSettingsSchema>;
+
 function GeneralSettings() {
   const { data: settingsData, isLoading, isError, error, refetch } = useApiQuery<{ data: { key: string; value: string }[] }>(["settings-general"], "/settings/general");
   const { reload: reloadGlobalSettings } = useSettings();
   const { toast } = useToast();
-  const [form, setForm] = useState({
-    companyName: "",
-    companyNameEn: "",
-    taxNumber: "",
-    crNumber: "",
-    phone: "",
-    email: "",
-    address: "",
-    currency: "SAR",
-    language: "ar",
-    timezone: "Asia/Riyadh",
-    calendarMode: "hijri",
-  });
 
-  useEffect(() => {
-    if (settingsData?.data) {
-      const map: Record<string, string> = {};
-      for (const r of settingsData.data) {
-        map[r.key] = r.value;
-      }
-      setForm((prev) => ({
-        companyName: map.companyName || prev.companyName,
-        companyNameEn: map.companyNameEn || prev.companyNameEn,
-        taxNumber: map.taxNumber || prev.taxNumber,
-        crNumber: map.crNumber || prev.crNumber,
-        phone: map.phone || prev.phone,
-        email: map.email || prev.email,
-        address: map.address || prev.address,
-        currency: map.currency || prev.currency,
-        language: map.language || prev.language,
-        timezone: map.timezone || prev.timezone,
-        calendarMode: map.calendarMode || prev.calendarMode,
-      }));
-    }
-  }, [settingsData]);
-
-  const saveMut = useApiMutation<any, typeof form>(
+  const saveMut = useApiMutation<any, GeneralSettingsForm>(
     "/settings/general",
     "PUT",
     [["settings-general"]],
@@ -80,31 +77,83 @@ function GeneralSettings() {
       },
     }
   );
-  const saving = saveMut.isPending;
-
-  const handleSave = () => {
-    saveMut.mutate(form);
-  };
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => refetch()} error={error} />;
 
+  // Reduce the {key,value}[] response to a flat record keyed by field
+  // name. Defaults guard against the row being missing entirely.
+  const map: Record<string, string> = {};
+  for (const r of settingsData?.data || []) map[r.key] = r.value;
+  const defaults: GeneralSettingsForm = {
+    companyName: map.companyName || "",
+    companyNameEn: map.companyNameEn || "",
+    taxNumber: map.taxNumber || "",
+    crNumber: map.crNumber || "",
+    phone: map.phone || "",
+    email: map.email || "",
+    address: map.address || "",
+    currency: (map.currency as GeneralSettingsForm["currency"]) || "SAR",
+    language: map.language || "ar",
+    timezone: (map.timezone as GeneralSettingsForm["timezone"]) || "Asia/Riyadh",
+    calendarMode: (map.calendarMode as GeneralSettingsForm["calendarMode"]) || "hijri",
+  };
+  // Use a key tied to the data hash so the form remounts (and re-
+  // seeds its defaults) whenever the server returns fresh values.
+  const remountKey = JSON.stringify(defaults);
+
   return (
     <div className="space-y-4">
       <h1 className="text-3xl font-bold tracking-tight">الإعدادات العامة</h1>
-      <Card><CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div><Label>اسم الشركة (عربي)</Label><Input value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} /></div>
-        <div><Label>اسم الشركة (إنجليزي)</Label><Input value={form.companyNameEn} onChange={(e) => setForm({ ...form, companyNameEn: e.target.value })} /></div>
-        <div><Label>الرقم الضريبي</Label><Input value={form.taxNumber} onChange={(e) => setForm({ ...form, taxNumber: e.target.value })} /></div>
-        <div><Label>رقم السجل التجاري</Label><Input value={form.crNumber} onChange={(e) => setForm({ ...form, crNumber: e.target.value })} /></div>
-        <div><Label>الهاتف</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
-        <div><Label>البريد الإلكتروني</Label><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-        <div className="md:col-span-2"><Label>العنوان</Label><Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></div>
-        <div><Label>العملة</Label><select className="w-full border rounded-md p-2" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}><option value="SAR">ريال سعودي</option><option value="USD">دولار أمريكي</option><option value="AED">درهم إماراتي</option></select></div>
-        <div><Label>المنطقة الزمنية</Label><select className="w-full border rounded-md p-2" value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })}><option value="Asia/Riyadh">الرياض (توقيت غرينتش+3)</option><option value="Asia/Dubai">دبي (توقيت غرينتش+4)</option></select></div>
-        <div><Label>التقويم الافتراضي</Label><select className="w-full border rounded-md p-2" value={form.calendarMode} onChange={(e) => setForm({ ...form, calendarMode: e.target.value })}><option value="hijri">هجري</option><option value="gregorian">ميلادي</option><option value="both">كلاهما (هجري وميلادي)</option></select></div>
-        <div className="md:col-span-2 pt-2"><Button onClick={handleSave} disabled={saving} rateLimitAware><Save className="h-4 w-4 me-1" />{saving ? "جاري الحفظ..." : "حفظ الإعدادات"}</Button></div>
-      </CardContent></Card>
+      <Card>
+        <CardContent className="p-6">
+          <FormShell
+            key={remountKey}
+            schema={generalSettingsSchema}
+            defaultValues={defaults}
+            submitLabel={saveMut.isPending ? "جاري الحفظ..." : "حفظ الإعدادات"}
+            onSubmit={async (values) => {
+              await saveMut.mutateAsync(values);
+            }}
+          >
+            <FormGrid cols={2}>
+              <FormTextField name="companyName" label="اسم الشركة (عربي)" />
+              <FormTextField name="companyNameEn" label="اسم الشركة (إنجليزي)" />
+              <FormTextField name="taxNumber" label="الرقم الضريبي" />
+              <FormTextField name="crNumber" label="رقم السجل التجاري" />
+              <FormPhoneField name="phone" label="الهاتف" />
+              <FormEmailField name="email" label="البريد الإلكتروني" />
+              <FormTextField name="address" label="العنوان" className="md:col-span-2" />
+              <FormSelectField
+                name="currency"
+                label="العملة"
+                options={[
+                  { value: "SAR", label: "ريال سعودي" },
+                  { value: "USD", label: "دولار أمريكي" },
+                  { value: "AED", label: "درهم إماراتي" },
+                ]}
+              />
+              <FormSelectField
+                name="timezone"
+                label="المنطقة الزمنية"
+                options={[
+                  { value: "Asia/Riyadh", label: "الرياض (توقيت غرينتش+3)" },
+                  { value: "Asia/Dubai", label: "دبي (توقيت غرينتش+4)" },
+                ]}
+              />
+              <FormSelectField
+                name="calendarMode"
+                label="التقويم الافتراضي"
+                options={[
+                  { value: "hijri", label: "هجري" },
+                  { value: "gregorian", label: "ميلادي" },
+                  { value: "both", label: "كلاهما (هجري وميلادي)" },
+                ]}
+              />
+            </FormGrid>
+          </FormShell>
+        </CardContent>
+      </Card>
     </div>
   );
 }
