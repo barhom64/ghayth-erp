@@ -442,7 +442,7 @@ router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.che
     }
 
     // ── Step 1b: Verify active contract exists ──
-    const [activeContract] = await rawQuery<any>(
+    const [activeContract] = await rawQuery<Record<string, unknown>>(
       `SELECT id, "endDate", status FROM employee_contracts
        WHERE "assignmentId" = $1 AND status = 'active'
          AND "deletedAt" IS NULL
@@ -460,7 +460,7 @@ router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.che
     // ── Step 1: GPS + timestamp received ──
 
     // ── Step 2: Prevent duplicate check-in (pre-check for user-friendly error) ──
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<Record<string, unknown>>(
       `SELECT id, "checkOut" FROM attendance
        WHERE "assignmentId" = $1 AND date = $2 AND "deletedAt" IS NULL`,
       [scope.activeAssignmentId, today]
@@ -484,7 +484,7 @@ router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.che
     }
 
     // ── Step 3: Fetch assignment, shift, and branch ──
-    const [assignment] = await rawQuery<any>(
+    const [assignment] = await rawQuery<Record<string, unknown>>(
       `SELECT ea."branchId", ea.salary, ea."employeeId", ea."departmentId",
               b.lat AS "branchLat", b.lon AS "branchLon"
        FROM employee_assignments ea
@@ -494,7 +494,7 @@ router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.che
     );
 
     // ── Step 4: Check if today is a work day ──
-    const [shiftAssignment] = await rawQuery<any>(
+    const [shiftAssignment] = await rawQuery<Record<string, unknown>>(
       `SELECT s.id, s."startTime", s."endTime", s.days, s."shiftType", s."remoteAllowed", s."flexStartEarliest", s."flexStartLatest"
        FROM employee_shift_assignments esa
        JOIN shifts s ON s.id = esa."shiftId"
@@ -505,7 +505,7 @@ router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.che
     );
     let shift = shiftAssignment;
     if (!shift) {
-      const [defaultShift] = await rawQuery<any>(
+      const [defaultShift] = await rawQuery<Record<string, unknown>>(
         `SELECT id, "startTime", "endTime", days, "shiftType", "remoteAllowed", "flexStartEarliest", "flexStartLatest" FROM shifts
          WHERE "companyId" = $1 AND status = 'active' AND "deletedAt" IS NULL
          ORDER BY "isDefault" DESC LIMIT 1`,
@@ -527,14 +527,14 @@ router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.che
     const isWorkDay = shiftDays.includes(dayOfWeek);
 
     // ── Step 4b: Check if today is a public holiday (no late penalty on holidays) ──
-    const [publicHoliday] = await rawQuery<any>(
+    const [publicHoliday] = await rawQuery<Record<string, unknown>>(
       `SELECT id, name FROM public_holidays
        WHERE "companyId"=$1 AND $2::date BETWEEN "startDate"::date AND "endDate"::date`,
       [scope.companyId, today]
     );
 
     // ── Step 5: Check if employee is on approved leave ──
-    const [activeLeave] = await rawQuery<any>(
+    const [activeLeave] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM hr_leave_requests
        WHERE "employeeId" = $1 AND status = 'approved'
          AND "startDate" <= $2 AND "endDate" >= $2 AND "deletedAt" IS NULL`,
@@ -553,15 +553,15 @@ router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.che
     const isRemoteShift = shift?.remoteAllowed === true || shift?.shiftType === 'remote' || workType === 'remote';
     let distanceMeters: number | null = null;
     let isOutOfRange = false;
-    const [policy] = await rawQuery<any>(
+    const [policy] = await rawQuery<Record<string, unknown>>(
       `SELECT "gpsRadiusMeters","lateThresholdMinutes",
               "penaltyLevel1","penaltyLevel2","penaltyLevel3","penaltyLevel4","penaltyLevel5",
               "penaltyLevel1Label","penaltyLevel2Label","penaltyLevel3Label","penaltyLevel4Label","penaltyLevel5Label"
        FROM attendance_policies WHERE "companyId" = $1`,
       [scope.companyId]
     );
-    const gpsRadius = policy?.gpsRadiusMeters ?? 500;
-    const lateThreshold = policy?.lateThresholdMinutes ?? 15;
+    const gpsRadius = Number(policy?.gpsRadiusMeters ?? 500);
+    const lateThreshold = Number(policy?.lateThresholdMinutes ?? 15);
 
     if (!isRemoteShift && lat !== undefined && lat !== null && lon !== undefined && lon !== null && assignment?.branchLat && assignment?.branchLon) {
       distanceMeters = Math.round(
@@ -681,19 +681,19 @@ router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.che
 
         if (count >= 10) {
           pLevel = 5; pDeduction = Number(policy?.penaltyLevel5 ?? 500);
-          pLabel = policy?.penaltyLevel5Label ?? "خصم ثلاثة أيام + إنذار نهائي";
+          pLabel = (policy?.penaltyLevel5Label as string | undefined) ?? "خصم ثلاثة أيام + إنذار نهائي";
         } else if (count >= 7) {
           pLevel = 4; pDeduction = Number(policy?.penaltyLevel4 ?? 200);
-          pLabel = policy?.penaltyLevel4Label ?? "خصم يومين";
+          pLabel = (policy?.penaltyLevel4Label as string | undefined) ?? "خصم يومين";
         } else if (count >= 5) {
           pLevel = 3; pDeduction = Number(policy?.penaltyLevel3 ?? 100);
-          pLabel = policy?.penaltyLevel3Label ?? "خصم يوم";
+          pLabel = (policy?.penaltyLevel3Label as string | undefined) ?? "خصم يوم";
         } else if (count >= 3) {
           pLevel = 2; pDeduction = Number(policy?.penaltyLevel2 ?? 50);
-          pLabel = policy?.penaltyLevel2Label ?? "إنذار كتابي";
+          pLabel = (policy?.penaltyLevel2Label as string | undefined) ?? "إنذار كتابي";
         } else {
           pLevel = 1; pDeduction = Number(policy?.penaltyLevel1 ?? 0);
-          pLabel = policy?.penaltyLevel1Label ?? "إنذار شفهي";
+          pLabel = (policy?.penaltyLevel1Label as string | undefined) ?? "إنذار شفهي";
         }
 
         if (pDeduction > 0) {
@@ -726,9 +726,9 @@ router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.che
     if (exceedsThreshold && violationId) {
       ensureInquiryMemoForViolation({
         companyId: scope.companyId,
-        branchId: assignment?.branchId ?? scope.branchId,
+        branchId: (assignment?.branchId as number | null | undefined) ?? scope.branchId,
         assignmentId: scope.activeAssignmentId,
-        employeeId: scope.employeeId ?? assignment?.employeeId ?? 0,
+        employeeId: scope.employeeId ?? (assignment?.employeeId as number | undefined) ?? 0,
         violationId,
         incidentType: "late",
         incidentDate: today,
@@ -805,7 +805,7 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
       });
     }
 
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<Record<string, unknown>>(
       `SELECT id, "checkIn", "checkOut" FROM attendance
        WHERE "assignmentId" = $1 AND date = $2 AND "deletedAt" IS NULL`,
       [scope.activeAssignmentId, today]
@@ -829,7 +829,7 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
     // NOTE: The actual UPDATE below uses an atomic "checkOut" IS NULL guard to prevent race conditions.
 
     // ── Fetch assignment for salary ──
-    const [assignment] = await rawQuery<any>(
+    const [assignment] = await rawQuery<Record<string, unknown>>(
       `SELECT ea.salary, ea."branchId", ea."employeeId", b.lat AS "branchLat", b.lon AS "branchLon"
        FROM employee_assignments ea
        LEFT JOIN branches b ON b.id = ea."branchId"
@@ -839,7 +839,7 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
 
     // ── Fetch shift for end time ──
     let shift: any = null;
-    const [shiftAssignment] = await rawQuery<any>(
+    const [shiftAssignment] = await rawQuery<Record<string, unknown>>(
       `SELECT s."endTime", s."startTime"
        FROM employee_shift_assignments esa
        JOIN shifts s ON s.id = esa."shiftId"
@@ -851,7 +851,7 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
     if (shiftAssignment) {
       shift = shiftAssignment;
     } else {
-      const [defaultShift] = await rawQuery<any>(
+      const [defaultShift] = await rawQuery<Record<string, unknown>>(
         `SELECT "endTime", "startTime" FROM shifts
          WHERE "companyId" = $1 AND status = 'active' AND "deletedAt" IS NULL
          ORDER BY "isDefault" DESC LIMIT 1`,
@@ -861,11 +861,11 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
     }
 
     // ── GPS validation on check-out ──
-    const [policy] = await rawQuery<any>(
+    const [policy] = await rawQuery<Record<string, unknown>>(
       `SELECT "gpsRadiusMeters" FROM attendance_policies WHERE "companyId" = $1`,
       [scope.companyId]
     );
-    const gpsRadius = policy?.gpsRadiusMeters ?? 500;
+    const gpsRadius = Number(policy?.gpsRadiusMeters ?? 500);
     let checkOutDistanceMeters: number | null = null;
     let isCheckOutOutOfRange = false;
     if (lat !== undefined && lat !== null && lon !== undefined && lon !== null && assignment?.branchLat && assignment?.branchLon) {
@@ -876,7 +876,7 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
     }
 
     // ── Calculate worked time ──
-    const checkInTime = new Date(existing.checkIn);
+    const checkInTime = new Date(existing.checkIn as string);
     const workedMs = now.getTime() - checkInTime.getTime();
     const workedHours = roundTo2(workedMs / 3600000);
 
@@ -901,7 +901,7 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
     let excusedEarlyLeave = false;
     let approvedExcuseId: number | null = null;
     if (earlyDepartureMinutes > 0) {
-      const [approvedExcuse] = await rawQuery<any>(
+      const [approvedExcuse] = await rawQuery<Record<string, unknown>>(
         `SELECT id, "estimatedMinutes" FROM hr_excuse_requests
          WHERE "assignmentId" = $1 AND "excuseDate" = $2 AND status = 'approved' AND "excuseType" IN ('early_leave', 'personal')
          LIMIT 1`,
@@ -909,7 +909,7 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
       ).catch((e) => { logger.error(e, "hr query failed"); return [null]; });
       if (approvedExcuse) {
         excusedEarlyLeave = true;
-        approvedExcuseId = approvedExcuse.id;
+        approvedExcuseId = approvedExcuse.id as number;
       }
     }
 
@@ -990,9 +990,9 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
     if (earlyDepartureMinutes > 0 && !excusedEarlyLeave && txResult.earlyViolationId) {
       ensureInquiryMemoForViolation({
         companyId: scope.companyId,
-        branchId: assignment?.branchId ?? scope.branchId,
+        branchId: (assignment?.branchId as number | null | undefined) ?? scope.branchId,
         assignmentId: scope.activeAssignmentId,
-        employeeId: scope.employeeId ?? assignment?.employeeId ?? 0,
+        employeeId: scope.employeeId ?? (assignment?.employeeId as number | undefined) ?? 0,
         violationId: txResult.earlyViolationId,
         incidentType: "early_leave",
         incidentDate: today,
@@ -1007,7 +1007,7 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
         companyId: scope.companyId, assignmentId: scope.activeAssignmentId,
         type: "early_departure_warning", title: "تنبيه خروج مبكر",
         body: `تم تسجيل خروجك المبكر بمقدار ${earlyDepartureMinutes} دقيقة اليوم.`,
-        priority: "high", refType: "attendance", refId: existing.id,
+        priority: "high", refType: "attendance", refId: existing.id as number,
       }).catch((e) => logger.error(e, "hr background task failed"));
 
       // ── Notify manager ──
@@ -1017,7 +1017,7 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
             companyId: scope.companyId, assignmentId: managerAssignmentId,
             type: "early_departure", title: "خروج مبكر لموظف",
             body: `غادر الموظف مبكراً بمقدار ${earlyDepartureMinutes} دقيقة اليوم ${today}`,
-            priority: "high", refType: "attendance", refId: existing.id,
+            priority: "high", refType: "attendance", refId: existing.id as number,
           }).catch((e) => logger.error(e, "hr background task failed"));
         }
       }).catch((e) => logger.error(e, "hr background task failed"));
@@ -1025,13 +1025,13 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
 
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
-      action: "attendance.checkout", entity: "attendance", entityId: existing.id,
+      action: "attendance.checkout", entity: "attendance", entityId: existing.id as number,
       details: JSON.stringify({ workedHours, overtimeMinutes, earlyDepartureMinutes, isCheckOutOutOfRange, checkOutDistanceMeters }),
     }).catch((e) => logger.error(e, "hr background task failed"));
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "attendance", entityId: existing.id,
+      action: "update", entity: "attendance", entityId: existing.id as number,
       after: { workedHours, overtimeMinutes, earlyDepartureMinutes, isCheckOutOutOfRange, checkOutDistanceMeters },
     }).catch((e) => logger.error(e, "hr background task failed"));
 
@@ -1051,7 +1051,7 @@ router.get("/attendance", authorize({ feature: "hr.attendance", action: "list" }
     const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'a."companyId"', branchColumn: 'a."branchId"', enforceBranchScope: true });
     params.push(monthStr);
 
-    const records = await rawQuery<any>(
+    const records = await rawQuery<Record<string, unknown>>(
       `SELECT a.id, a.date, a."checkIn", a."checkOut",
               a."lateMinutes", a.status, e.name AS "employeeName",
               a."checkInLat", a."checkInLon", a."checkOutLat", a."checkOutLon",
@@ -1088,7 +1088,7 @@ router.get("/attendance/today-summary", authorize({ feature: "hr.attendance", ac
   try {
     const scope = req.scope!;
     const today = todayISO();
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT ea.id AS "assignmentId", e.id AS "employeeId", e.name,
               a.status, a."checkIn", a."checkOut", COALESCE(a."lateMinutes", 0) AS "lateMinutes"
        FROM employee_assignments ea
@@ -1111,7 +1111,7 @@ router.get("/attendance/:id", authorize({ feature: "hr.attendance", action: "vie
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT a.*, e.name AS "employeeName", e."empNumber",
               CASE WHEN a."checkIn" IS NOT NULL AND a."checkOut" IS NOT NULL
                 THEN ROUND(EXTRACT(EPOCH FROM (a."checkOut" - a."checkIn")) / 3600.0, 2)
@@ -1135,7 +1135,7 @@ router.get("/attendance/:id", authorize({ feature: "hr.attendance", action: "vie
 router.get("/leave-types", authorize({ feature: "hr.leaves", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const types = await rawQuery<any>(
+    const types = await rawQuery<Record<string, unknown>>(
       `SELECT id, name, "annualDays" AS "maxDays", true AS "requiresApproval", "isPaid"
        FROM hr_leave_types WHERE "companyId" = $1 ORDER BY name`,
       [scope.companyId]
@@ -1152,7 +1152,7 @@ router.get("/leave-balance", authorize({ feature: "hr.leaves", action: "list" })
     const { employeeId: qEmployeeId } = req.query as { employeeId?: string };
     const targetEmployeeId = qEmployeeId ? Number(qEmployeeId) : scope.employeeId;
     const year = currentYear();
-    const balancesFromTable = await rawQuery<any>(
+    const balancesFromTable = await rawQuery<Record<string, unknown>>(
       `SELECT lb.*, lt.name
        FROM hr_leave_balances lb
        JOIN hr_leave_types lt ON lt.id = lb."leaveTypeId"
@@ -1170,7 +1170,7 @@ router.get("/leave-balance", authorize({ feature: "hr.leaves", action: "list" })
       return;
     }
 
-    const balances = await rawQuery<any>(
+    const balances = await rawQuery<Record<string, unknown>>(
       `SELECT lt.id AS "leaveTypeId", lt.name, lt."annualDays",
               COALESCE(SUM(lr.days) FILTER (
                 WHERE lr.status = 'approved' AND EXTRACT(YEAR FROM lr."startDate") = $3
@@ -1223,7 +1223,7 @@ router.get("/leave-requests", authorize({ feature: "hr.leaves", action: "list" }
     params.push(offset);
     const offsetIdx = paramIdx++;
 
-    const requests = await rawQuery<any>(
+    const requests = await rawQuery<Record<string, unknown>>(
       `SELECT lr.id, lr.status, lr."startDate", lr."endDate", lr.days,
               lr.reason, lr."createdAt", lr."rejectedReason", lr."approvedBy", lr."approvedAt",
               e.name AS "employeeName", lt.name AS "leaveTypeName"
@@ -1237,7 +1237,7 @@ router.get("/leave-requests", authorize({ feature: "hr.leaves", action: "list" }
     );
 
     const countParams = params.slice(0, params.length - 2);
-    const [countRow] = await rawQuery<any>(
+    const [countRow] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS total FROM hr_leave_requests lr WHERE ${finalWhere}`,
       countParams
     );
@@ -1255,7 +1255,7 @@ router.get("/leaves/:id", authorize({ feature: "hr.leaves", action: "view", reso
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [item] = await rawQuery<any>(
+    const [item] = await rawQuery<Record<string, unknown>>(
       `SELECT lr.id, lr.status, lr."startDate", lr."endDate", lr.days AS duration,
               lr.reason, lr."createdAt", lr."rejectedReason",
               lr."approvedBy", lr."approvedAt",
@@ -1327,7 +1327,7 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
     let { leaveTypeId, leaveType: leaveTypeName, startDate, endDate, reason, documentUrl } = parsed as any;
 
     if (!leaveTypeId && leaveTypeName) {
-      const [found] = await rawQuery<any>(
+      const [found] = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM hr_leave_types WHERE LOWER(name)=LOWER($1) AND "companyId"=$2`,
         [leaveTypeName, scope.companyId]
       );
@@ -1347,7 +1347,7 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
     const year = start.getFullYear();
 
     // Exclude public holidays that fall within the leave range from the day count
-    const holidayOverlap = await rawQuery<any>(
+    const holidayOverlap = await rawQuery<Record<string, unknown>>(
       `SELECT SUM(LEAST("endDate"::date, $2::date) - GREATEST("startDate"::date, $1::date) + 1) AS "holidayDays"
        FROM public_holidays
        WHERE "companyId"=$3
@@ -1358,7 +1358,7 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
     const days = Math.max(1, rawDays - holidayDays);
 
     // ── Validation 1: Fetch leave type with extended rules ──
-    const [leaveType] = await rawQuery<any>(
+    const [leaveType] = await rawQuery<Record<string, unknown>>(
       `SELECT id, name, "annualDays", "isPaid", "genderRestriction", "minServiceMonths", "oncePerCareer", "requiresDocument", "maxDeptAbsentPct"
        FROM hr_leave_types WHERE id = $1 AND "companyId" = $2`,
       [leaveTypeId, scope.companyId]
@@ -1371,7 +1371,7 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
     }
 
     // ── Validation 2: Check balance (accounting for reserved days) ──
-    const [balance] = await rawQuery<any>(
+    const [balance] = await rawQuery<Record<string, unknown>>(
       `SELECT entitled, used, reserved,
               GREATEST(0, entitled - used - reserved) AS remaining
        FROM hr_leave_balances
@@ -1397,7 +1397,7 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
         );
       }
     } else {
-      const [usedRow] = await rawQuery<any>(
+      const [usedRow] = await rawQuery<Record<string, unknown>>(
         `SELECT COALESCE(SUM(days), 0) AS used FROM hr_leave_requests
          WHERE "employeeId" = $1 AND "leaveTypeId" = $2 AND status IN ('approved','pending')
            AND EXTRACT(YEAR FROM "startDate") = $3 AND "deletedAt" IS NULL`,
@@ -1424,7 +1424,7 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
     }
 
     // ── Validation 3: No overlapping requests ──
-    const [overlap] = await rawQuery<any>(
+    const [overlap] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM hr_leave_requests
        WHERE "employeeId" = $1 AND status IN ('pending','approved')
          AND "startDate" <= $2 AND "endDate" >= $3 AND "deletedAt" IS NULL`,
@@ -1452,7 +1452,7 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
 
     // ── Validation 5: Gender restriction ──
     if (leaveType.genderRestriction) {
-      const [emp] = await rawQuery<any>(
+      const [emp] = await rawQuery<Record<string, unknown>>(
         `SELECT gender FROM employees WHERE id = $1`, [scope.employeeId]
       );
       if (emp?.gender && emp.gender !== leaveType.genderRestriction) {
@@ -1471,16 +1471,17 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
     }
 
     // ── Validation 6: Minimum service months ──
-    if (leaveType.minServiceMonths && leaveType.minServiceMonths > 0) {
-      const [ass] = await rawQuery<any>(
+    const minServiceMonths = Number(leaveType.minServiceMonths || 0);
+    if (minServiceMonths > 0) {
+      const [ass] = await rawQuery<Record<string, unknown>>(
         `SELECT "hireDate" FROM employee_assignments WHERE id = $1`, [scope.activeAssignmentId]
       );
       if (ass?.hireDate) {
-        const hireDate = new Date(ass.hireDate);
+        const hireDate = new Date(ass.hireDate as string);
         const monthsOfService = (currentYear() - hireDate.getFullYear()) * 12 + (new Date().getMonth() - hireDate.getMonth());
-        if (monthsOfService < leaveType.minServiceMonths) {
+        if (monthsOfService < minServiceMonths) {
           throw new ConflictError(
-            `يشترط مدة خدمة لا تقل عن ${leaveType.minServiceMonths} شهر. مدة خدمتك: ${monthsOfService} شهر`,
+            `يشترط مدة خدمة لا تقل عن ${minServiceMonths} شهر. مدة خدمتك: ${monthsOfService} شهر`,
             {
               field: "leaveTypeId",
               fix: "انتظر حتى تكتمل مدة الخدمة المطلوبة أو اختر نوع إجازة آخر.",
@@ -1496,7 +1497,7 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
 
     // ── Validation 7: Once-per-career check (e.g., Hajj) ──
     if (leaveType.oncePerCareer) {
-      const [prevHajj] = await rawQuery<any>(
+      const [prevHajj] = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM hr_leave_requests
          WHERE "employeeId" = $1 AND "leaveTypeId" = $2 AND status = 'approved' AND "deletedAt" IS NULL`,
         [scope.employeeId, leaveTypeId]
@@ -1515,15 +1516,15 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
 
     // ── Validation 8: Department absent percentage limit ──
     const maxDeptPct = Number(leaveType.maxDeptAbsentPct ?? 25);
-    const [assignment] = await rawQuery<any>(
+    const [assignment] = await rawQuery<Record<string, unknown>>(
       `SELECT "departmentId" FROM employee_assignments WHERE id = $1`, [scope.activeAssignmentId]
     );
     if (assignment?.departmentId) {
-      const [deptTotal] = await rawQuery<any>(
+      const [deptTotal] = await rawQuery<Record<string, unknown>>(
         `SELECT COUNT(*) AS cnt FROM employee_assignments WHERE "companyId" = $1 AND "departmentId" = $2 AND status = 'active'`,
         [scope.companyId, assignment.departmentId]
       );
-      const [deptAbsent] = await rawQuery<any>(
+      const [deptAbsent] = await rawQuery<Record<string, unknown>>(
         `SELECT COUNT(DISTINCT lr."employeeId") AS cnt FROM hr_leave_requests lr
          JOIN employee_assignments ea ON ea."employeeId" = lr."employeeId" AND ea."departmentId" = $1
          WHERE lr.status = 'approved' AND lr."startDate" <= $2 AND lr."endDate" >= $3
@@ -1554,7 +1555,7 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
     // Prefer direct manager (managerId on assignment = employees.id) over branch-level manager lookup
     let managerAssignmentId: number | null = null;
     try {
-      const [directManagerRow] = await rawQuery<any>(
+      const [directManagerRow] = await rawQuery<Record<string, unknown>>(
         `SELECT ea2.id AS "managerAssignmentId"
          FROM employee_assignments ea
          JOIN employee_assignments ea2 ON ea2."employeeId" = ea."managerId" AND ea2.status = 'active' AND ea2."companyId" = $2
@@ -1562,7 +1563,7 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
          LIMIT 1`,
         [scope.activeAssignmentId, scope.companyId]
       );
-      managerAssignmentId = directManagerRow?.managerAssignmentId ?? null;
+      managerAssignmentId = (directManagerRow?.managerAssignmentId as number | null | undefined) ?? null;
     } catch (_e) { logger.error(_e, "manager assignment lookup failed"); }
     if (!managerAssignmentId) {
       managerAssignmentId = await getManagerAssignmentId(scope.companyId, scope.branchId);
@@ -1570,7 +1571,7 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
     // Company-level fallback: if no branch-level approver, pick any HR/GM/owner
     // in the company so the leave request is never stranded with a NULL assignee.
     if (!managerAssignmentId) {
-      const [companyFallback] = await rawQuery<any>(
+      const [companyFallback] = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM employee_assignments
          WHERE "companyId" = $1 AND status = 'active'
            AND role IN ('hr_manager','general_manager','owner')
@@ -1578,7 +1579,7 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
          LIMIT 1`,
         [scope.companyId]
       );
-      managerAssignmentId = companyFallback?.id ?? null;
+      managerAssignmentId = (companyFallback?.id as number | null | undefined) ?? null;
     }
     if (!managerAssignmentId) {
       throw new ConflictError(
@@ -1591,9 +1592,9 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
     }
 
     // Read approval chain from DB (fall back to default manager→HR if none configured)
-    let chainSteps: any[] = [];
+    let chainSteps: Record<string, unknown>[] = [];
     try {
-      chainSteps = await rawQuery<any>(
+      chainSteps = await rawQuery<Record<string, unknown>>(
         `SELECT acs."stepOrder", acs."requiredRole", acs."timeoutHours", acs."autoApproveOnTimeout"
          FROM approval_chains ac
          JOIN approval_chain_steps acs ON acs."chainId" = ac.id
@@ -1612,7 +1613,7 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
 
     const firstStep = chainSteps[0];
     const stage1ExpiresAt = new Date();
-    stage1ExpiresAt.setHours(stage1ExpiresAt.getHours() + (firstStep.timeoutHours ?? 24));
+    stage1ExpiresAt.setHours(stage1ExpiresAt.getHours() + Number(firstStep.timeoutHours ?? 24));
 
     let insertId!: number;
     await withTransaction(async (client) => {
@@ -1654,7 +1655,7 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
 
       // Find the appropriate assignee for the first step — never store NULL.
       let firstAssignee: number = managerAssignmentId!;
-      if (!BRANCH_GM_ROLES.includes(firstStep.requiredRole)) {
+      if (!BRANCH_GM_ROLES.includes(firstStep.requiredRole as string)) {
         const roleRes = await client.query(
           `SELECT id FROM employee_assignments
            WHERE "companyId" = $1 AND role = $2 AND status = 'active'
@@ -1699,7 +1700,7 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
       data: { leaveTypeId, days, startDate, endDate, reason },
     }).catch((e) => logger.error(e, "hr background task failed"));
 
-    const [request] = await rawQuery<any>(
+    const [request] = await rawQuery<Record<string, unknown>>(
       `SELECT lr.*, lt.name AS "leaveTypeName"
        FROM hr_leave_requests lr JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
        WHERE lr.id = $1`,
@@ -1741,7 +1742,7 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", ac
       );
     }
 
-    const [request] = await rawQuery<any>(
+    const [request] = await rawQuery<Record<string, unknown>>(
       `SELECT lr.*, lt.name AS "leaveTypeName"
        FROM hr_leave_requests lr
        JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
@@ -1758,7 +1759,7 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", ac
     }
 
     // Find the current pending stage for this request
-    const [currentStage] = await rawQuery<any>(
+    const [currentStage] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM leave_approval_stages
        WHERE "leaveRequestId" = $1 AND status = 'pending'
        ORDER BY stage ASC LIMIT 1`,
@@ -1807,10 +1808,10 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", ac
       }
     }
 
-    const year = new Date(request.startDate).getFullYear();
+    const year = new Date(request.startDate as string).getFullYear();
 
     if (!approved) {
-      const [reqAssignment] = await rawQuery<any>(
+      const [reqAssignment] = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
         [request.employeeId, scope.companyId]
       );
@@ -1830,7 +1831,7 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", ac
         },
         after: { status: "rejected", reason },
         notifications: reqAssignment ? [{
-          assignmentId: reqAssignment.id,
+          assignmentId: reqAssignment.id as number,
           type: "leave_rejected", title: "تم رفض طلب الإجازة",
           body: `تم رفض طلب الإجازة. السبب: ${reason ?? "لم يحدد"}`,
           priority: "high", refType: "leave_request", refId: id,
@@ -1866,7 +1867,7 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", ac
         throw new ValidationError("يجب ذكر سبب الإرجاع", { field: "reason" });
       }
 
-      const [reqAssignment] = await rawQuery<any>(
+      const [reqAssignment] = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
         [request.employeeId, scope.companyId]
       );
@@ -1882,7 +1883,7 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", ac
         setExtras: { rejectedReason: reason },
         after: { status: "returned", reason },
         notifications: reqAssignment ? [{
-          assignmentId: reqAssignment.id,
+          assignmentId: reqAssignment.id as number,
           type: "leave_returned", title: "تم إرجاع طلب الإجازة",
           body: `تم إرجاع طلب الإجازة للمراجعة. السبب: ${reason}`,
           priority: "medium", refType: "leave_request", refId: id,
@@ -1915,9 +1916,9 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", ac
     const currentStageNum = currentStage?.stage ?? 1;
 
     // Read approval chain to determine next step (read-only, before transaction)
-    let chainSteps: any[] = [];
+    let chainSteps: Record<string, unknown>[] = [];
     try {
-      chainSteps = await rawQuery<any>(
+      chainSteps = await rawQuery<Record<string, unknown>>(
         `SELECT acs."stepOrder", acs."requiredRole", acs."timeoutHours", acs."autoApproveOnTimeout"
          FROM approval_chains ac
          JOIN approval_chain_steps acs ON acs."chainId" = ac.id
@@ -1940,7 +1941,7 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", ac
     // Find the appropriate assignee for next step (read-only)
     let nextAssignee: any = null;
     if (nextStep) {
-      [nextAssignee] = await rawQuery<any>(
+      [nextAssignee] = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM employee_assignments
          WHERE "companyId" = $1 AND role IN ($2, 'owner') AND status = 'active'
          ORDER BY CASE role WHEN $2 THEN 1 ELSE 2 END LIMIT 1`,
@@ -1961,7 +1962,7 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", ac
 
       if (nextStep && nextAssignee && nextAssignee.id !== scope.activeAssignmentId) {
         const nextExpiresAt = new Date();
-        nextExpiresAt.setHours(nextExpiresAt.getHours() + (nextStep.timeoutHours ?? 48));
+        nextExpiresAt.setHours(nextExpiresAt.getHours() + Number(nextStep.timeoutHours ?? 48));
         await client.query(
           `INSERT INTO leave_approval_stages ("leaveRequestId",stage,"requiredRole","assignedTo","expiresAt")
            VALUES ($1,$2,$3,$4,$5)`,
@@ -1994,15 +1995,15 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", ac
 
     // Final approval (stage 2 HR or owner approving directly)
     // Pre-fetch assignments needed for balance + attendance + tasks + notifications
-    const allAssignments = await rawQuery<any>(
+    const allAssignments = await rawQuery<Record<string, unknown>>(
       `SELECT ea.id, ea."companyId", ea."branchId"
        FROM employee_assignments ea
        WHERE ea."employeeId" = $1 AND ea.status = 'active'`,
       [request.employeeId]
     );
 
-    const leaveStart = new Date(request.startDate);
-    const leaveEnd = new Date(request.endDate);
+    const leaveStart = new Date(request.startDate as string);
+    const leaveEnd = new Date(request.endDate as string);
 
     await applyTransition({
       entity: "hr_leave_requests",
@@ -2079,15 +2080,15 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", ac
     // Post-commit: notifications + task reassignment + obligation (non-transactional)
     for (const asn of allAssignments) {
       createNotification({
-        companyId: asn.companyId, assignmentId: asn.id,
+        companyId: asn.companyId as number, assignmentId: asn.id as number,
         type: "leave_approved", title: "تمت الموافقة على طلب الإجازة",
         body: `تمت الموافقة على إجازة ${request.leaveTypeName} من ${request.startDate} إلى ${request.endDate}`,
         priority: "high", refType: "leave_request", refId: id,
       }).catch((e) => logger.error(e, "hr background task failed"));
     }
     for (const asn of allAssignments) {
-      const aId = asn.id;
-      rawQuery<any>(
+      const aId = asn.id as number;
+      rawQuery<Record<string, unknown>>(
         `SELECT ea.id FROM employee_assignments ea
          WHERE ea."companyId" = $1 AND ea."branchId" = $2
            AND ea.role IN ('branch_manager','hr_manager','general_manager','owner') AND ea.status = 'active' AND ea.id != $3
@@ -2098,12 +2099,12 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", ac
           const { projectsEngine } = await import("../lib/engines/index.js");
           await projectsEngine.reassignTasks({
             fromEmployeeQuery: { table: "employee_assignments", idColumn: "id", id: aId },
-            toEmployeeQuery: { table: "employee_assignments", idColumn: "id", id: managerAId.id },
-            startDate: request.startDate,
-            endDate: request.endDate,
+            toEmployeeQuery: { table: "employee_assignments", idColumn: "id", id: managerAId.id as number },
+            startDate: request.startDate as string,
+            endDate: request.endDate as string,
           });
           createNotification({
-            companyId: asn.companyId, assignmentId: managerAId.id,
+            companyId: asn.companyId as number, assignmentId: managerAId.id as number,
             type: "leave_approved", title: "موظف في إجازة معتمدة",
             body: `تمت الموافقة على إجازة موظف من ${request.startDate} إلى ${request.endDate}. تم إعادة توزيع المهام.`,
             priority: "normal", refType: "leave_request", refId: id,
@@ -2123,7 +2124,7 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", ac
         obligationType: "follow_up",
         title: `عودة للعمل — ${request.employeeName || `موظف #${request.employeeId}`} (${request.leaveTypeName || ""})`,
         dueAt: returnDate.toISOString(),
-        assignedTo: request.employeeAssignmentId ?? null,
+        assignedTo: (request.employeeAssignmentId as number | null | undefined) ?? null,
         metadata: { employeeId: request.employeeId, leaveStart: request.startDate, leaveEnd: request.endDate, days: request.days },
         dedupeKey: `leave-${id}-return`,
         escalationSteps: [
@@ -2145,13 +2146,13 @@ router.get("/leave-requests/:id/stages", authorize({ feature: "hr.leaves", actio
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
 
-    const [leaveReq] = await rawQuery<any>(
+    const [leaveReq] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM hr_leave_requests WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
     if (!leaveReq) throw new NotFoundError("الطلب غير موجود");
 
-    const stages = await rawQuery<any>(
+    const stages = await rawQuery<Record<string, unknown>>(
       `SELECT las.*, e.name AS "decidedByName"
        FROM leave_approval_stages las
        LEFT JOIN employee_assignments ea ON ea.id = las."decidedBy" AND ea."companyId" = $2
@@ -2162,9 +2163,9 @@ router.get("/leave-requests/:id/stages", authorize({ feature: "hr.leaves", actio
     );
 
     // Also get the configured chain steps for context
-    let chainSteps: any[] = [];
+    let chainSteps: Record<string, unknown>[] = [];
     try {
-      chainSteps = await rawQuery<any>(
+      chainSteps = await rawQuery<Record<string, unknown>>(
         `SELECT acs."stepOrder", acs."requiredRole", acs."timeoutHours", acs."autoApproveOnTimeout"
          FROM approval_chains ac
          JOIN approval_chain_steps acs ON acs."chainId" = ac.id
@@ -2197,7 +2198,7 @@ router.patch("/leave-requests/:id/escalate", authorize({ feature: "hr.leaves", a
       throw new ForbiddenError("غير مصرح: التصعيد متاح فقط للمدير أو HR أو المالك");
     }
 
-    const [request] = await rawQuery<any>(
+    const [request] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM hr_leave_requests WHERE id = $1 AND "companyId" = $2 AND status = 'pending' AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -2206,7 +2207,7 @@ router.patch("/leave-requests/:id/escalate", authorize({ feature: "hr.leaves", a
     }
 
     // Escalation is only valid when the current pending stage has exceeded its 48h window
-    const [currentPendingStage] = await rawQuery<any>(
+    const [currentPendingStage] = await rawQuery<Record<string, unknown>>(
       `SELECT id, stage, "requiredRole", "expiresAt"
        FROM leave_approval_stages
        WHERE "leaveRequestId" = $1 AND status = 'pending'
@@ -2218,7 +2219,7 @@ router.patch("/leave-requests/:id/escalate", authorize({ feature: "hr.leaves", a
       throw new ConflictError("لا توجد مراحل موافقة معلقة لهذا الطلب");
     }
 
-    const expiresAt = new Date(currentPendingStage.expiresAt);
+    const expiresAt = new Date(currentPendingStage.expiresAt as string);
     if (expiresAt > new Date()) {
       const msRemaining = expiresAt.getTime() - Date.now();
       const hoursRemaining = Math.ceil(msRemaining / 3600000);
@@ -2233,7 +2234,7 @@ router.patch("/leave-requests/:id/escalate", authorize({ feature: "hr.leaves", a
       );
     }
 
-    const [hrAssignment] = await rawQuery<any>(
+    const [hrAssignment] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM employee_assignments
        WHERE "companyId" = $1 AND role IN ('hr_manager','general_manager','owner') AND status = 'active'
        ORDER BY CASE role WHEN 'hr_manager' THEN 1 WHEN 'general_manager' THEN 2 ELSE 3 END LIMIT 1`,
@@ -2256,7 +2257,7 @@ router.patch("/leave-requests/:id/escalate", authorize({ feature: "hr.leaves", a
       });
 
       createNotification({
-        companyId: scope.companyId, assignmentId: hrAssignment.id,
+        companyId: scope.companyId, assignmentId: hrAssignment.id as number,
         type: "leave_escalated", title: "تصعيد طلب إجازة",
         body: `تم تصعيد طلب إجازة (${id}) لعدم البت فيه خلال المهلة المحددة`,
         priority: "urgent", refType: "leave_request", refId: id,
@@ -2285,7 +2286,7 @@ router.patch("/leave-requests/:id/escalate", authorize({ feature: "hr.leaves", a
 router.get("/payroll", authorize({ feature: "hr.payroll.runs", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const runs = await rawQuery<any>(
+    const runs = await rawQuery<Record<string, unknown>>(
       `SELECT pr.id, pr.period, pr.status, pr."totalNet",
               pr."createdAt", e.name AS "runByName",
               COUNT(pl.id) AS "employeeCount"
@@ -2312,7 +2313,7 @@ router.get("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "view
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     if (req.path.endsWith("/lines")) return; // let next handler handle it
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT pr.*, e.name AS "runByName",
               (SELECT COUNT(*) FROM payroll_lines pl WHERE pl."runId" = pr.id AND pl."deletedAt" IS NULL)::int AS "employeeCount"
        FROM payroll_runs pr
@@ -2323,7 +2324,7 @@ router.get("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "view
     );
     if (!row) throw new NotFoundError("مسير الرواتب غير موجود");
     const canSeeSalary = PAYROLL_ROLES.includes(scope.role);
-    const lines = await rawQuery<any>(
+    const lines = await rawQuery<Record<string, unknown>>(
       `SELECT pl.*, e.name AS "employeeName"
        FROM payroll_lines pl
        LEFT JOIN employee_assignments ea ON ea.id = pl."assignmentId" AND ea."companyId" = $2
@@ -2355,13 +2356,13 @@ router.get("/payroll/:id/lines", authorize({ feature: "hr.payroll.runs", action:
     const { id } = req.params;
 
     // Verify this payroll run belongs to the requesting company (prevent IDOR)
-    const [run] = await rawQuery<any>(
+    const [run] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM payroll_runs WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(id), scope.companyId]
     );
     if (!run) throw new NotFoundError("سجل الرواتب غير موجود");
 
-    const lines = await rawQuery<any>(
+    const lines = await rawQuery<Record<string, unknown>>(
       `SELECT pl.*, e.name AS "employeeName", e."empNumber"
        FROM payroll_lines pl
        JOIN employee_assignments ea ON ea.id = pl."assignmentId" AND ea."companyId" = $2
@@ -2414,7 +2415,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     }
 
     // Prevent duplicate runs
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM payroll_runs WHERE "companyId" = $1 AND period = $2 AND "deletedAt" IS NULL`,
       [scope.companyId, targetPeriod]
     );
@@ -2423,11 +2424,11 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     }
 
     // ── Payroll pre-check: attendance completeness ──
-    const [activeCount] = await rawQuery<any>(
+    const [activeCount] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS cnt FROM employee_assignments WHERE "companyId" = $1 AND status = 'active'`,
       [scope.companyId]
     );
-    const [attendanceCount] = await rawQuery<any>(
+    const [attendanceCount] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(DISTINCT a."assignmentId") AS cnt FROM attendance a
        WHERE a."companyId" = $1 AND TO_CHAR(a.date, 'YYYY-MM') = $2`,
       [scope.companyId, targetPeriod]
@@ -2445,7 +2446,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     }
 
     // ── Payroll pre-check: no unresolved violations ──
-    const unresolvedViolations = await rawQuery<any>(
+    const unresolvedViolations = await rawQuery<Record<string, unknown>>(
       `SELECT ev.id, e.name AS "employeeName", ev.type, ev.description
        FROM employee_violations ev
        JOIN employee_assignments ea ON ea.id = ev."assignmentId"
@@ -2464,7 +2465,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
       );
     }
 
-    const salaryComponents = await rawQuery<any>(
+    const salaryComponents = await rawQuery<Record<string, unknown>>(
       `SELECT id, name, type, "calculationType", value, "isTaxable", "isGosi", "isActive"
        FROM salary_components WHERE "companyId" = $1 AND "isActive" = true ORDER BY "order"`,
       [scope.companyId]
@@ -2493,7 +2494,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
 
     const earningComponents = salaryComponents.filter((c: any) => c.type === 'earning' && !c.isGosi);
 
-    const assignments = await rawQuery<any>(
+    const assignments = await rawQuery<Record<string, unknown>>(
       `SELECT ea.id AS "assignmentId", ea."employeeId", ea.salary, ea."branchId"
        FROM employee_assignments ea
        WHERE ea."companyId" = $1 AND ea.status = 'active'`,
@@ -2501,7 +2502,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     );
 
     // Late + early-departure deductions per assignment
-    const lateDeductionRows = await rawQuery<any>(
+    const lateDeductionRows = await rawQuery<Record<string, unknown>>(
       `SELECT "assignmentId", COALESCE(SUM(amount), 0) AS total
        FROM attendance_deductions
        WHERE "companyId" = $1 AND period = $2 AND status = 'pending_payroll' AND type IN ('late', 'early_departure')
@@ -2512,7 +2513,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     for (const d of lateDeductionRows) lateMap.set(Number(d.assignmentId), Number(d.total));
 
     // Penalty deductions per assignment (type = 'penalty')
-    const penaltyDeductionRows = await rawQuery<any>(
+    const penaltyDeductionRows = await rawQuery<Record<string, unknown>>(
       `SELECT "assignmentId", COALESCE(SUM(amount), 0) AS total
        FROM attendance_deductions
        WHERE "companyId" = $1 AND period = $2 AND status = 'pending_payroll' AND type = 'penalty'
@@ -2523,7 +2524,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     for (const d of penaltyDeductionRows) penaltyMap.set(Number(d.assignmentId), Number(d.total));
 
     // Violation deductions per assignment (from attendance_deductions type='violation' only, not employee_violations to avoid double-counting with late/penalty)
-    const violationRows = await rawQuery<any>(
+    const violationRows = await rawQuery<Record<string, unknown>>(
       `SELECT "assignmentId", COALESCE(SUM(amount), 0) AS total
        FROM attendance_deductions
        WHERE "companyId" = $1 AND period = $2 AND status = 'pending_payroll' AND type = 'violation'
@@ -2534,7 +2535,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     for (const d of violationRows) violationMap.set(Number(d.assignmentId), Number(d.total));
 
     // Absence days per assignment
-    const absenceRows = await rawQuery<any>(
+    const absenceRows = await rawQuery<Record<string, unknown>>(
       `SELECT a."assignmentId", COUNT(*) AS "absentDays"
        FROM attendance a
        WHERE a."companyId" = $1 AND TO_CHAR(a.date, 'YYYY-MM') = $2 AND a.status = 'absent' AND a."deletedAt" IS NULL
@@ -2545,7 +2546,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     for (const row of absenceRows) absenceMap.set(Number(row.assignmentId), Number(row.absentDays ?? 0));
 
     // Loan installments per assignment (legacy loan_accounts)
-    const loanRows = await rawQuery<any>(
+    const loanRows = await rawQuery<Record<string, unknown>>(
       `SELECT la."assignmentId", COALESCE(SUM(la."monthlyInstallment"), 0) AS "installment"
        FROM loan_accounts la
        WHERE la."companyId" = $1 AND la.status = 'active' AND la."remainingAmount" > 0
@@ -2556,7 +2557,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     for (const row of loanRows) loanMap.set(Number(row.assignmentId), Number(row.installment ?? 0));
 
     // HR loan installments per assignment (hr_employee_loans module)
-    const hrLoanRows = await rawQuery<any>(
+    const hrLoanRows = await rawQuery<Record<string, unknown>>(
       `SELECT li."assignmentId", COALESCE(SUM(li.amount), 0) AS "installment"
        FROM hr_loan_installments li
        WHERE li."companyId" = $1 AND li.period = $2 AND li.status = 'pending'
@@ -2569,7 +2570,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     }
 
     // Overtime per assignment (from attendance records)
-    const overtimeRows = await rawQuery<any>(
+    const overtimeRows = await rawQuery<Record<string, unknown>>(
       `SELECT a."assignmentId", COALESCE(SUM(a."overtimeMinutes"), 0) AS "totalOvertimeMinutes"
        FROM attendance a
        WHERE a."companyId" = $1 AND TO_CHAR(a.date, 'YYYY-MM') = $2 AND a."overtimeMinutes" > 0 AND a."deletedAt" IS NULL
@@ -2580,7 +2581,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     for (const row of overtimeRows) overtimeMap.set(Number(row.assignmentId), Number(row.totalOvertimeMinutes ?? 0));
 
     // Approved overtime requests (HR module — with correct multipliers)
-    const hrOtRows = await rawQuery<any>(
+    const hrOtRows = await rawQuery<Record<string, unknown>>(
       `SELECT "assignmentId", COALESCE(SUM("totalAmount"), 0) AS "otAmount"
        FROM hr_overtime_requests
        WHERE "companyId" = $1 AND TO_CHAR("overtimeDate", 'YYYY-MM') = $2 AND status = 'approved' AND "deletedAt" IS NULL
@@ -2611,7 +2612,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
 
       if (earningComponents.length > 0) {
         for (const comp of earningComponents) {
-          const compName = (comp.name || "").trim();
+          const compName = String(comp.name || "").trim();
           const calcType = comp.calculationType;
           const compValue = Number(comp.value);
           let amount = 0;
@@ -2654,7 +2655,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
       totalNet += net;
 
       lines.push({
-        employeeId: asn.employeeId, assignmentId: aId,
+        employeeId: asn.employeeId as number, assignmentId: aId,
         basic, housingAllowance, transportAllowance, gross,
         gosiEmployee, gosiEmployer, lateDeduction, absenceDeduction,
         violationDeduction, loanDeduction, overtime, overtimeHours, net,
@@ -2817,7 +2818,7 @@ router.patch("/payroll/:id/approve", authorize({ feature: "hr.payroll.runs", act
       throw new ForbiddenError("ليس لديك الصلاحية للموافقة على مسير الرواتب");
     }
     const id = parseId(req.params.id, "id");
-    const [run] = await rawQuery<any>(
+    const [run] = await rawQuery<Record<string, unknown>>(
       `SELECT id, status, "runBy" FROM payroll_runs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -2845,7 +2846,7 @@ router.patch("/payroll/:id/approve", authorize({ feature: "hr.payroll.runs", act
 router.get("/violations", authorize({ feature: "hr.violations", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT ev.*, e.name AS "employeeName"
        FROM employee_violations ev
        JOIN employee_assignments ea ON ea.id = ev."assignmentId"
@@ -2861,7 +2862,7 @@ router.get("/violations/:id", authorize({ feature: "hr.violations", action: "vie
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [item] = await rawQuery<any>(
+    const [item] = await rawQuery<Record<string, unknown>>(
       `SELECT ev.*, e.name AS "employeeName", e."empNumber",
               ea."jobTitle", ea.salary, b.name AS "branchName"
        FROM employee_violations ev
@@ -2874,7 +2875,7 @@ router.get("/violations/:id", authorize({ feature: "hr.violations", action: "vie
     if (!item) throw new NotFoundError("المخالفة غير موجودة");
 
     // جلب محضر التحقيق المرتبط إن وجد
-    const memos = await rawQuery<any>(
+    const memos = await rawQuery<Record<string, unknown>>(
       `SELECT m.id, m."memoNumber", m.status, m."appliedPenaltyLabel" AS "penaltyLabel",
               m."appliedDeductionAmount" AS "baseDeductionAmount", m."appliedExtraDeduction", m."createdAt"
        FROM hr_inquiry_memos m
@@ -2899,7 +2900,7 @@ router.post("/violations", authorize({ feature: "hr.violations", action: "create
     // FK pre-check: assignment must exist inside the caller's company scope.
     // Without this, a bad assignmentId would fail as a deep 23503 whose
     // detail string doesn't always carry the field name.
-    const [asn] = await rawQuery<any>(
+    const [asn] = await rawQuery<Record<string, unknown>>(
       `SELECT ea.id, ea."employeeId", ea."branchId", e.name AS "employeeName"
          FROM employee_assignments ea
          JOIN employees e ON e.id = ea."employeeId"
@@ -2937,9 +2938,9 @@ router.post("/violations", authorize({ feature: "hr.violations", action: "create
     const incidentType = knownIncidentTypes.has(String(type)) ? (type as any) : "custom";
     ensureInquiryMemoForViolation({
       companyId: scope.companyId,
-      branchId: asn.branchId ?? scope.branchId ?? null,
+      branchId: (asn.branchId as number | null | undefined) ?? scope.branchId ?? null,
       assignmentId: Number(assignmentId),
-      employeeId: asn.employeeId,
+      employeeId: asn.employeeId as number,
       violationId: insertId,
       incidentType,
       incidentDate,
@@ -2960,7 +2961,7 @@ router.post("/violations", authorize({ feature: "hr.violations", action: "create
       refType: "employee_violations",
       refId: insertId,
     }).catch((e) => logger.error(e, "hr background task failed"));
-    const managerAsn = await getManagerAssignmentId(scope.companyId, asn.branchId ?? scope.branchId ?? null).catch((e) => { logger.error(e, "hr manager lookup failed"); return null; });
+    const managerAsn = await getManagerAssignmentId(scope.companyId, Number(asn.branchId ?? scope.branchId ?? 0)).catch((e) => { logger.error(e, "hr manager lookup failed"); return null; });
     if (managerAsn && managerAsn !== Number(assignmentId)) {
       createNotification({
         companyId: scope.companyId,
@@ -2992,7 +2993,7 @@ router.post("/violations", authorize({ feature: "hr.violations", action: "create
 
     await createAuditLog({
       companyId: scope.companyId,
-      branchId: asn.branchId ?? scope.branchId ?? null,
+      branchId: (asn.branchId as number | null | undefined) ?? scope.branchId ?? null,
       userId: scope.userId,
       action: "create",
       entity: "employee_violations",
@@ -3010,7 +3011,7 @@ router.post("/violations", authorize({ feature: "hr.violations", action: "create
       },
     });
 
-    const [row] = await rawQuery<any>(`SELECT v.*, e.name AS "employeeName" FROM employee_violations v JOIN employee_assignments ea ON ea.id=v."assignmentId" JOIN employees e ON e.id=ea."employeeId" WHERE v.id=$1 AND v."companyId"=$2 AND v."deletedAt" IS NULL`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT v.*, e.name AS "employeeName" FROM employee_violations v JOIN employee_assignments ea ON ea.id=v."assignmentId" JOIN employees e ON e.id=ea."employeeId" WHERE v.id=$1 AND v."companyId"=$2 AND v."deletedAt" IS NULL`, [insertId, scope.companyId]);
     res.status(201).json(row || { id: insertId, assignmentId: Number(assignmentId), employeeId: asn.employeeId, type, severity: effectiveSeverity, deduction: effectiveDeduction, period });
   } catch (err) { handleRouteError(err, res, "Create violation error:"); }
 });
@@ -3018,7 +3019,7 @@ router.post("/violations", authorize({ feature: "hr.violations", action: "create
 router.get("/shifts", authorize({ feature: "hr.attendance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(`SELECT * FROM shifts WHERE "companyId" = $1 AND "deletedAt" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
+    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM shifts WHERE "companyId" = $1 AND "deletedAt" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { logger.error(err, "Get shifts error:"); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
 });
@@ -3073,7 +3074,7 @@ router.post("/shifts", authorize({ feature: "hr.attendance", action: "create" })
       action: "create", entity: "shifts", entityId: insertId,
       after: { name, startTime: startTime ?? null, endTime: endTime ?? null, days: days ?? "0,1,2,3,4", shiftType: effectiveShiftType, isDefault: !!isDefault },
     }).catch((e) => logger.error(e, "hr background task failed"));
-    const [row] = await rawQuery<any>(`SELECT * FROM shifts WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM shifts WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "shift.created", entity: "hr_shifts", entityId: insertId, details: JSON.stringify({ name, shiftType: effectiveShiftType }) }).catch((e) => logger.error(e, "hr background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create shift error:"); }
@@ -3082,7 +3083,7 @@ router.post("/shifts", authorize({ feature: "hr.attendance", action: "create" })
 router.get("/performance", authorize({ feature: "hr.performance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT pr.*, e.name AS "employeeName", e."empNumber"
        FROM performance_reviews pr
        JOIN employees e ON e.id = pr."employeeId"
@@ -3097,7 +3098,7 @@ router.get("/performance/:id", authorize({ feature: "hr.performance", action: "v
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT pr.*, pr."overallScore" AS "overallRating", pr.period AS "reviewPeriod",
               e.name AS "employeeName", e."empNumber",
               rv.name AS "reviewerName"
@@ -3184,7 +3185,7 @@ router.post("/performance", authorize({ feature: "hr.performance", action: "crea
     });
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "performance.created", entity: "hr_performance", entityId: insertId, details: JSON.stringify({ employeeId: resolvedEmployeeId, period }) }).catch((e) => logger.error(e, "hr background task failed"));
 
-    const [row] = await rawQuery<any>(`SELECT * FROM performance_reviews WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM performance_reviews WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row || { id: insertId, employeeId: resolvedEmployeeId, period, overallScore: Number(overallScore ?? 0), status: effectiveStatus });
   } catch (err) { handleRouteError(err, res, "Create performance error:"); }
 });
@@ -3193,19 +3194,19 @@ router.get("/attendance-stats", authorize({ feature: "hr.attendance", action: "l
   try {
     const scope = req.scope!;
     const month = (req.query.month as string) ?? currentPeriod();
-    const [present] = await rawQuery<any>(
+    const [present] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND status='present' AND "deletedAt" IS NULL`,
       [scope.companyId, month]
     );
-    const [absent] = await rawQuery<any>(
+    const [absent] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND status='absent' AND "deletedAt" IS NULL`,
       [scope.companyId, month]
     );
-    const [late] = await rawQuery<any>(
+    const [late] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS count FROM attendance WHERE "companyId"=$1 AND TO_CHAR(date,'YYYY-MM')=$2 AND "lateMinutes">0 AND "deletedAt" IS NULL`,
       [scope.companyId, month]
     );
-    const [totalEmp] = await rawQuery<any>(
+    const [totalEmp] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS count FROM employee_assignments WHERE "companyId"=$1 AND status='active'`,
       [scope.companyId]
     );
@@ -3222,16 +3223,16 @@ router.get("/attendance-stats", authorize({ feature: "hr.attendance", action: "l
 router.get("/leave-stats", authorize({ feature: "hr.leaves", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [pending] = await rawQuery<any>(
+    const [pending] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='pending' AND "deletedAt" IS NULL`, [scope.companyId]
     );
-    const [approved] = await rawQuery<any>(
+    const [approved] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='approved' AND "deletedAt" IS NULL`, [scope.companyId]
     );
-    const [rejected] = await rawQuery<any>(
+    const [rejected] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='rejected' AND "deletedAt" IS NULL`, [scope.companyId]
     );
-    const [total] = await rawQuery<any>(
+    const [total] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]
     );
     res.json({
@@ -3246,7 +3247,7 @@ router.get("/leave-stats", authorize({ feature: "hr.leaves", action: "list" }), 
 router.get("/salary-components", authorize({ feature: "hr.payroll.runs", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM salary_components WHERE "companyId"=$1 ORDER BY name LIMIT 500`, [scope.companyId]
     );
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
@@ -3271,7 +3272,7 @@ router.post("/salary-components", authorize({ feature: "hr.payroll.runs", action
       after: { name, type: type ?? "earning", calculationType: calculationType ?? "fixed", value: Number(value ?? 0), taxable: taxable ?? true },
     });
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "salary_component.created", entity: "hr_salary_components", entityId: insertId, details: JSON.stringify({ name, type: type ?? "earning", calculationType: calculationType ?? "fixed" }) }).catch((e) => logger.error(e, "hr background task failed"));
-    const [row] = await rawQuery<any>(`SELECT * FROM salary_components WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM salary_components WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row || { id: insertId, name, type: type ?? "earning", calculationType: calculationType ?? "fixed", value: Number(value ?? 0), taxable: taxable ?? true, status: "active" });
   } catch (err) { handleRouteError(err, res, "Create salary component error:"); }
 });
@@ -3279,7 +3280,7 @@ router.post("/salary-components", authorize({ feature: "hr.payroll.runs", action
 router.get("/approval-chains", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT las.*, lr.id AS "requestId", lr.status AS "requestStatus",
               lr."startDate", lr."endDate", lr.days,
               e.name AS "employeeName", lt.name AS "leaveTypeName"
@@ -3302,7 +3303,7 @@ router.get("/approval-chains", authorize({ feature: "hr.employees", action: "lis
 router.get("/approval-chain-definitions", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const chains = await rawQuery<any>(
+    const chains = await rawQuery<Record<string, unknown>>(
       `SELECT ac.*, 
               json_agg(json_build_object('id', acs.id, 'stepOrder', acs."stepOrder", 'requiredRole', acs."requiredRole", 'timeoutHours', acs."timeoutHours", 'autoApproveOnTimeout', acs."autoApproveOnTimeout") ORDER BY acs."stepOrder") AS steps
        FROM approval_chains ac
@@ -3351,7 +3352,7 @@ router.post("/approval-chain-definitions", authorize({ feature: "hr.employees", 
     }).catch((e) => logger.error(e, "hr background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "approval_chain.created", entity: "hr_approval_chain_definitions", entityId: chainId, details: JSON.stringify({ name, chainType }) }).catch((e) => logger.error(e, "hr background task failed"));
 
-    const [row] = await rawQuery<any>(`SELECT * FROM approval_chains WHERE id=$1 AND "companyId"=$2`, [chainId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM approval_chains WHERE id=$1 AND "companyId"=$2`, [chainId, scope.companyId]);
     res.status(201).json({ ...row, stepsCreated: steps?.length ?? 0 });
   } catch (err) { handleRouteError(err, res, "Create approval chain error:"); }
 });
@@ -3363,7 +3364,7 @@ router.delete("/approval-chain-definitions/:id", authorize({ feature: "hr.employ
       throw new ForbiddenError("غير مصرح: يتطلب صلاحية مالك أو HR أو مدير عام");
     }
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(`SELECT * FROM approval_chains WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    const [existing] = await rawQuery<Record<string, unknown>>(`SELECT * FROM approval_chains WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     const { affectedRows } = await rawExecute(`UPDATE approval_chains SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!affectedRows) throw new NotFoundError("سلسلة الموافقة غير موجودة");
     createAuditLog({
@@ -3382,7 +3383,7 @@ router.get("/approval-requests", authorize({ feature: "hr.organization", action:
   try {
     const scope = req.scope!;
     const statusFilter = (req.query.status as string) ?? "pending";
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT ar.*, e.name AS "assignedToName"
        FROM approval_requests ar
        LEFT JOIN employee_assignments ea ON ea.id = ar."assignedTo"
@@ -3405,7 +3406,7 @@ router.patch("/approval-requests/:id/decide", authorize({ feature: "hr.organizat
       throw new ForbiddenError("غير مصرح بالموافقة أو الرفض");
     }
 
-    const [request] = await rawQuery<any>(
+    const [request] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM approval_requests WHERE id = $1 AND "companyId" = $2 AND status = 'pending'`,
       [id, scope.companyId]
     );
@@ -3434,15 +3435,17 @@ router.patch("/approval-requests/:id/decide", authorize({ feature: "hr.organizat
       custody: { table: "custodies", col: '"createdByAssignmentId"' },
       official_letter: { table: "official_letters", col: '"createdByAssignmentId"' },
     };
-    const refMap = refCreatorMap[request.refType];
+    const refType = request.refType as string;
+    const refId = request.refId as number;
+    const refMap = refCreatorMap[refType];
     let requesterId: number | undefined;
     if (refMap) {
       try {
-        const [refRow] = await rawQuery<any>(
+        const [refRow] = await rawQuery<Record<string, unknown>>(
           `SELECT ${refMap.col} AS "requesterId" FROM ${refMap.table} WHERE id = $1 LIMIT 1`,
-          [request.refId]
+          [refId]
         );
-        requesterId = refRow?.requesterId ?? undefined;
+        requesterId = (refRow?.requesterId as number | undefined) ?? undefined;
       } catch (e) {
         logger.warn(e, "hr approval requester lookup (column may not exist for entity type)");
       }
@@ -3453,7 +3456,7 @@ router.patch("/approval-requests/:id/decide", authorize({ feature: "hr.organizat
 
     const result = await processApprovalStep({
       companyId: scope.companyId, branchId: scope.branchId,
-      refType: request.refType, refId: request.refId,
+      refType, refId,
       approved: !!approved, decidedBy: scope.activeAssignmentId,
       reason, requesterId,
     });
@@ -3463,34 +3466,34 @@ router.patch("/approval-requests/:id/decide", authorize({ feature: "hr.organizat
         purchase_order: { table: "purchase_orders", column: "status" },
         official_letter: { table: "official_letters", column: "status" },
       };
-      const target = entityUpdateMap[request.refType];
+      const target = entityUpdateMap[refType];
       if (target) {
         await rawExecute(
           `UPDATE ${target.table} SET ${target.column} = 'approved' WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status IN ('pending','pending_approval','draft')`,
-          [request.refId, scope.companyId]
+          [refId, scope.companyId]
         );
       }
       const journalRefTypes = ["expense", "salary_advance", "custody"];
-      if (journalRefTypes.includes(request.refType)) {
+      if (journalRefTypes.includes(refType)) {
         const { financialEngine } = await import("../lib/engines/index.js");
-        await financialEngine.updateJournalStatus(request.refId, "posted");
+        await financialEngine.updateJournalStatus(refId, "posted");
       }
     } else if (result.status === "rejected") {
       const entityUpdateMap: Record<string, { table: string; column: string }> = {
         purchase_order: { table: "purchase_orders", column: "status" },
         official_letter: { table: "official_letters", column: "status" },
       };
-      const target = entityUpdateMap[request.refType];
+      const target = entityUpdateMap[refType];
       if (target) {
         await rawExecute(
           `UPDATE ${target.table} SET ${target.column} = 'rejected' WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status IN ('pending','pending_approval','draft')`,
-          [request.refId, scope.companyId]
+          [refId, scope.companyId]
         );
       }
       const journalRefTypes = ["expense", "salary_advance", "custody"];
-      if (journalRefTypes.includes(request.refType)) {
+      if (journalRefTypes.includes(refType)) {
         const { financialEngine } = await import("../lib/engines/index.js");
-        await financialEngine.updateJournalStatus(request.refId, "rejected");
+        await financialEngine.updateJournalStatus(refId, "rejected");
       }
 
       // Cancel any queued email/WhatsApp dispatches for a rejected official
@@ -3530,7 +3533,7 @@ router.patch("/approval-requests/:id/decide", authorize({ feature: "hr.organizat
 router.get("/attendance-policy", authorize({ feature: "hr.attendance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [policy] = await rawQuery<any>(
+    const [policy] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM attendance_policies WHERE "companyId" = $1`,
       [scope.companyId]
     );
@@ -3584,7 +3587,7 @@ router.get("/payroll-summary", authorize({ feature: "hr.payroll.runs", action: "
     const { period } = req.query as { period?: string };
     const targetPeriod = period ?? currentPeriod();
 
-    const lines = await rawQuery<any>(
+    const lines = await rawQuery<Record<string, unknown>>(
       `SELECT pl.*, e.name AS "employeeName", e."empNumber", ea."jobTitle", ea."branchId", b.name AS "branchName"
        FROM payroll_lines pl
        JOIN employee_assignments ea ON ea.id = pl."assignmentId"
@@ -3598,7 +3601,7 @@ router.get("/payroll-summary", authorize({ feature: "hr.payroll.runs", action: "
 
     const empMap = new Map<number, any>();
     for (const l of lines) {
-      const empId = l.employeeId ?? 0;
+      const empId = Number(l.employeeId ?? 0);
       if (!empMap.has(empId)) {
         empMap.set(empId, {
           employeeId: empId, employeeName: l.employeeName, empNumber: l.empNumber,
@@ -3638,13 +3641,13 @@ router.get("/violations-stats", authorize({ feature: "hr.violations", action: "l
   try {
     const scope = req.scope!;
     const currentMonth = currentPeriod();
-    const [total] = await rawQuery<any>(
+    const [total] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS count FROM employee_violations WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]
     );
-    const [thisMonthRow] = await rawQuery<any>(
+    const [thisMonthRow] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS count FROM employee_violations WHERE "companyId"=$1 AND "deletedAt" IS NULL AND period = $2`, [scope.companyId, currentMonth]
     );
-    const [totalDeductions] = await rawQuery<any>(
+    const [totalDeductions] = await rawQuery<Record<string, unknown>>(
       `SELECT COALESCE(SUM(deduction),0) AS total FROM employee_violations WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]
     );
     res.json({
@@ -3677,11 +3680,11 @@ router.patch("/violations/:id", authorize({ feature: "hr.violations", action: "u
     if (sets.length === 0) {
       throw new ValidationError("لا توجد بيانات");
     }
-    const [beforeRow] = await rawQuery<any>(`SELECT * FROM employee_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [beforeRow] = await rawQuery<Record<string, unknown>>(`SELECT * FROM employee_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     params.push(id); params.push(scope.companyId);
     const { affectedRows } = await rawExecute(`UPDATE employee_violations SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     if (!affectedRows) throw new NotFoundError("المخالفة غير موجودة");
-    const [updated] = await rawQuery<any>(`SELECT * FROM employee_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [updated] = await rawQuery<Record<string, unknown>>(`SELECT * FROM employee_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "employee_violations", entityId: id,
@@ -3701,7 +3704,7 @@ async function violationApprovalAction(req: any, res: any, newStatus: "approved"
     }
     const id = parseId(req.params.id, "id");
     const { notes } = zodParse(violationApprovalSchema.safeParse(req.body ?? {}));
-    const [violation] = await rawQuery<any>(
+    const [violation] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM employee_violations WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -3755,14 +3758,14 @@ router.patch("/shifts/:id", authorize({ feature: "hr.attendance", action: "updat
     if (sets.length === 0) {
       throw new ValidationError("لا توجد بيانات");
     }
-    const [beforeRow] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [beforeRow] = await rawQuery<Record<string, unknown>>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     params.push(id); params.push(scope.companyId);
     await withTransaction(async (client) => {
       if (b.isDefault) await client.query(`UPDATE shifts SET "isDefault"=false WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]);
       const result = await client.query(`UPDATE shifts SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
       if (!result.rowCount) throw new NotFoundError("السجل غير موجود");
     });
-    const [row] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "shifts", entityId: id,
@@ -3778,7 +3781,7 @@ router.delete("/shifts/:id", authorize({ feature: "hr.attendance", action: "dele
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [beforeRow] = await rawQuery<any>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [beforeRow] = await rawQuery<Record<string, unknown>>(`SELECT * FROM shifts WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     const { affectedRows } = await rawExecute(`UPDATE shifts SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!affectedRows) throw new NotFoundError("السجل غير موجود");
     createAuditLog({
@@ -3794,7 +3797,7 @@ router.delete("/shifts/:id", authorize({ feature: "hr.attendance", action: "dele
 router.get("/shift-assignments", authorize({ feature: "hr.attendance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT esa.*, s.name AS "shiftName", s."startTime", s."endTime",
               e.name AS "employeeName", e."empNumber"
        FROM employee_shift_assignments esa
@@ -3853,7 +3856,7 @@ router.post("/shift-assignments", authorize({ feature: "hr.attendance", action: 
       after: { assignmentId: Number(assignmentId), shiftId: Number(shiftId), startDate, endDate: endDate ?? null },
     }).catch((e) => logger.error(e, "hr background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "shift.assignment.created", entity: "hr_shift_assignments", entityId: insertId, details: JSON.stringify({ assignmentId: Number(assignmentId), shiftId: Number(shiftId) }) }).catch((e) => logger.error(e, "hr background task failed"));
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT esa.*, s.name AS "shiftName"
          FROM employee_shift_assignments esa
          JOIN employee_assignments ea ON ea.id = esa."assignmentId" AND ea."companyId" = $2
@@ -3868,7 +3871,7 @@ router.post("/shift-assignments", authorize({ feature: "hr.attendance", action: 
 router.get("/official-letters", authorize({ feature: "hr.organization", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT ol.*, e.name AS "employeeName",
               b.name AS "branchName"
        FROM official_letters ol
@@ -3901,7 +3904,7 @@ router.post("/official-letters", authorize({ feature: "hr.organization", action:
       });
     }
 
-    const [seqRow] = await rawQuery<any>(`SELECT nextval('letter_number_seq') AS seq`).catch((e) => { logger.error(e, "letter sequence query failed"); return [{ seq: Date.now() % 1000000 }]; });
+    const [seqRow] = await rawQuery<{ seq: string | number }>(`SELECT nextval('letter_number_seq') AS seq`).catch((e) => { logger.error(e, "letter sequence query failed"); return [{ seq: Date.now() % 1000000 }]; });
     const letterRef = generateRef("LTR", seqRow.seq);
 
     let insertId!: number;
@@ -3965,7 +3968,7 @@ router.post("/official-letters", authorize({ feature: "hr.organization", action:
       after: { employeeId, type: type ?? "general", subject },
     }).catch((e) => logger.error(e, "hr background task failed"));
 
-    const [row] = await rawQuery<any>(`SELECT * FROM official_letters WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM official_letters WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json({ ...row, approval: approvalResult });
   } catch (err) { handleRouteError(err, res, "Create official letter error:"); }
 });
@@ -3974,7 +3977,7 @@ router.get("/monthly-attendance", authorize({ feature: "hr.attendance", action: 
   try {
     const scope = req.scope!;
     const month = (req.query.month as string) ?? currentPeriod();
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT ema.*, e.name AS "employeeName", e."empNumber"
        FROM employee_monthly_attendance ema
        JOIN employee_assignments ea ON ea.id = ema."assignmentId"
@@ -4008,7 +4011,7 @@ router.patch("/leave-requests/:id", authorize({ feature: "hr.leaves", action: "u
       throw new ValidationError("لا توجد بيانات للتحديث");
     }
     params.push(id, scope.companyId);
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `UPDATE hr_leave_requests SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
@@ -4041,7 +4044,7 @@ router.post("/leave-requests/:id/cancel", authorize({ feature: "hr.leaves", acti
       });
     }
 
-    const [request] = await rawQuery<any>(
+    const [request] = await rawQuery<Record<string, unknown>>(
       `SELECT lr.*, lt.name AS "leaveTypeName"
        FROM hr_leave_requests lr
        LEFT JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
@@ -4057,7 +4060,7 @@ router.post("/leave-requests/:id/cancel", authorize({ feature: "hr.leaves", acti
         { fix: "اطلب من مدير الموارد البشرية تنفيذ الإلغاء." },
       );
     }
-    if (!["approved", "pending"].includes(request.status)) {
+    if (!["approved", "pending"].includes(request.status as string)) {
       throw new ConflictError(
         `لا يمكن إلغاء إجازة بحالة ${request.status}`,
         {
@@ -4081,7 +4084,7 @@ router.post("/leave-requests/:id/cancel", authorize({ feature: "hr.leaves", acti
         rejectedReason: b.reason ? `${(request as any).rejectedReason || ""} | إلغاء: ${b.reason}`.trim() : null,
       },
       onApply: async (_row, client) => {
-        const year = new Date(request.startDate).getFullYear();
+        const year = new Date(request.startDate as string).getFullYear();
         if (prevStatus === "approved") {
           await client.query(
             `UPDATE hr_leave_balances SET used = GREATEST(used - $1, 0)
@@ -4123,7 +4126,7 @@ router.delete("/leave-requests/:id", authorize({ feature: "hr.leaves", action: "
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [leaveReq] = await rawQuery<any>(
+    const [leaveReq] = await rawQuery<Record<string, unknown>>(
       `SELECT lr.id, lr."employeeId", lr."leaveTypeId", lr.days, lr."startDate", lr.status
        FROM hr_leave_requests lr WHERE lr.id = $1 AND lr."companyId" = $2 AND lr."deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -4147,7 +4150,7 @@ router.delete("/leave-requests/:id", authorize({ feature: "hr.leaves", action: "
       );
     }
 
-    const year = new Date(leaveReq.startDate).getFullYear();
+    const year = new Date(leaveReq.startDate as string).getFullYear();
     let deleted = false;
     await withTransaction(async (client: any) => {
       const { rows } = await client.query(
@@ -4193,17 +4196,17 @@ router.patch("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "up
     }
     const { status } = zodParse(payrollPatchSchema.safeParse(req.body ?? {}));
 
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<Record<string, unknown>>(
       `SELECT id, status, period, "totalNet" FROM payroll_runs WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("دورة الرواتب غير موجودة");
 
     if (status === "posted" && existing.status !== "posted") {
-      const period = existing.period;
+      const period = existing.period as string;
       const totalNet = Number(existing.totalNet ?? 0);
 
-      const lines = await rawQuery<any>(
+      const lines = await rawQuery<Record<string, unknown>>(
         `SELECT pl."employeeId", pl.gosi AS "gosiEmployee", pl."gosiEmployer", pl.basic, pl."grossSalary", pl."netSalary"
          FROM payroll_lines pl WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL`,
         [id]
@@ -4215,7 +4218,7 @@ router.patch("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "up
       const totalGosiPayable = totalGosiEmployee + totalGosiEmployer;
       const totalBankPayout = Math.max(0, totalNet);
 
-      const [updatedRun] = await rawQuery<any>(
+      const [updatedRun] = await rawQuery<Record<string, unknown>>(
         `UPDATE payroll_runs SET status = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL AND status = $4 RETURNING *`,
         [status, id, scope.companyId, existing.status]
       );
@@ -4285,7 +4288,7 @@ router.patch("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "up
         details: `ترحيل رواتب ${period}: صافي ${totalBankPayout.toFixed(2)} / GOSI ${totalGosiPayable.toFixed(2)}`,
       }).catch((e) => logger.error(e, "hr background task failed"));
 
-      const [row] = await rawQuery<any>(
+      const [row] = await rawQuery<Record<string, unknown>>(
         `SELECT * FROM payroll_runs WHERE id = $1 AND "companyId" = $2`,
         [id, scope.companyId]
       );
@@ -4299,7 +4302,7 @@ router.patch("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "up
       return;
     }
 
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `UPDATE payroll_runs SET status = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL AND status = $4 RETURNING *`,
       [status, id, scope.companyId, existing.status]
     );
@@ -4322,7 +4325,7 @@ router.delete("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "d
       throw new ForbiddenError("غير مصرح: حذف الرواتب مقصور على HR أو المالك");
     }
     const id = parseId(req.params.id, "id");
-    const [exists] = await rawQuery<any>(
+    const [exists] = await rawQuery<Record<string, unknown>>(
       `SELECT id, status, period, "totalNet" FROM payroll_runs WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]
     );
     if (!exists) throw new NotFoundError("دورة الرواتب غير موجودة");
@@ -4417,8 +4420,8 @@ router.patch("/performance/:id", authorize({ feature: "hr.performance", action: 
     }
     sets.push(`"updatedAt" = NOW()`);
     params.push(id, scope.companyId);
-    const [beforeRow] = await rawQuery<any>(`SELECT * FROM performance_reviews WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    const [row] = await rawQuery<any>(
+    const [beforeRow] = await rawQuery<Record<string, unknown>>(`SELECT * FROM performance_reviews WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(
       `UPDATE performance_reviews SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx++} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
@@ -4441,8 +4444,8 @@ router.delete("/performance/:id", authorize({ feature: "hr.performance", action:
       throw new ForbiddenError("غير مصرح: حذف التقييمات مقصور على HR أو المالك");
     }
     const id = parseId(req.params.id, "id");
-    const [beforeRow] = await rawQuery<any>(`SELECT * FROM performance_reviews WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
-    const [row] = await rawQuery<any>(
+    const [beforeRow] = await rawQuery<Record<string, unknown>>(`SELECT * FROM performance_reviews WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(
       `UPDATE performance_reviews SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
       [id, scope.companyId]
     );
@@ -4465,8 +4468,8 @@ router.delete("/violations/:id", authorize({ feature: "hr.violations", action: "
       throw new ForbiddenError("غير مصرح: حذف المخالفات مقصور على HR أو المالك");
     }
     const id = parseId(req.params.id, "id");
-    const [beforeRow] = await rawQuery<any>(`SELECT * FROM employee_violations WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    const [row] = await rawQuery<any>(
+    const [beforeRow] = await rawQuery<Record<string, unknown>>(`SELECT * FROM employee_violations WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(
       `UPDATE employee_violations SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
       [id, scope.companyId]
     );
@@ -4486,7 +4489,7 @@ router.get("/official-letters/:id", authorize({ feature: "hr.organization", acti
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [letter] = await rawQuery<any>(
+    const [letter] = await rawQuery<Record<string, unknown>>(
       `SELECT ol.*, e.name AS "employeeName", e."empNumber",
               e."nationalId", e."passportNumber", e."iqamaNumber",
               ea."jobTitle", ea."hireDate",
@@ -4528,9 +4531,9 @@ router.patch("/official-letters/:id", authorize({ feature: "hr.organization", ac
       throw new ValidationError("لا توجد بيانات");
     }
     const letterId = parseId(req.params.id, "id");
-    const [beforeRow] = await rawQuery<any>(`SELECT * FROM official_letters WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [letterId, scope.companyId]);
+    const [beforeRow] = await rawQuery<Record<string, unknown>>(`SELECT * FROM official_letters WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [letterId, scope.companyId]);
     params.push(letterId, scope.companyId);
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `UPDATE official_letters SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
@@ -4553,8 +4556,8 @@ router.delete("/official-letters/:id", authorize({ feature: "hr.organization", a
       throw new ForbiddenError("غير مصرح: حذف الخطابات مقصور على HR أو المالك");
     }
     const id = parseId(req.params.id, "id");
-    const [beforeRow] = await rawQuery<any>(`SELECT * FROM official_letters WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
-    const [row] = await rawQuery<any>(
+    const [beforeRow] = await rawQuery<Record<string, unknown>>(`SELECT * FROM official_letters WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(
       `UPDATE official_letters SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
       [id, scope.companyId]
     );
@@ -4578,7 +4581,7 @@ router.patch("/official-letters/:id/approve", authorize({ feature: "hr.organizat
     const { id } = req.params;
     const { approved, notes } = zodParse(letterApprovalSchema.safeParse(req.body ?? {}));
 
-    const [letter] = await rawQuery<any>(
+    const [letter] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM official_letters WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [Number(id), scope.companyId]
     );
@@ -4621,7 +4624,7 @@ router.patch("/official-letters/:id/approve", authorize({ feature: "hr.organizat
       // can see the reason and take action. Prefer the creator assignment
       // (the HR officer who filed it), fall back to the employee's own
       // assignment when the letter was filed by the employee themselves.
-      const [targetAssignment] = await rawQuery<any>(
+      const [targetAssignment] = await rawQuery<Record<string, unknown>>(
         `SELECT COALESCE(
                   ol."createdByAssignmentId",
                   (SELECT ea.id FROM employee_assignments ea
@@ -4695,22 +4698,22 @@ router.patch("/official-letters/:id/approve", authorize({ feature: "hr.organizat
 router.get("/stats", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [empCount] = await rawQuery<any>(
+    const [empCount] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(DISTINCT ea."employeeId") AS count FROM employee_assignments ea WHERE ea."companyId" = $1`,
       [scope.companyId]
     );
-    const [leaveCount] = await rawQuery<any>(
+    const [leaveCount] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS total,
               COUNT(*) FILTER(WHERE status='pending') AS pending,
               COUNT(*) FILTER(WHERE status='approved') AS approved
        FROM hr_leave_requests WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [scope.companyId]
     );
-    const [violationCount] = await rawQuery<any>(
+    const [violationCount] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS total FROM employee_violations WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [scope.companyId]
     );
-    const [payrollCount] = await rawQuery<any>(
+    const [payrollCount] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS total FROM payroll_runs WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [scope.companyId]
     );
@@ -4729,7 +4732,7 @@ router.get("/deductions", authorize({ feature: "hr.payroll.runs", action: "list"
   try {
     const scope = req.scope!;
     const month = (req.query.month as string) ?? currentPeriod();
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT ad.*, e.name AS "employeeName"
        FROM attendance_deductions ad
        JOIN employee_assignments ea ON ea.id = ad."assignmentId"
@@ -4745,7 +4748,7 @@ router.get("/deductions", authorize({ feature: "hr.payroll.runs", action: "list"
 router.get("/onboarding-steps", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT value FROM settings WHERE key = 'hr.onboarding_steps' AND scope = 'company' AND "scopeId" = $1 LIMIT 1`,
       [scope.companyId]
     );
@@ -4792,13 +4795,13 @@ router.post("/impact-preview/leave", authorize({ feature: "hr.employees", action
   try {
     const scope = req.scope!;
     const { employeeId, leaveTypeId, startDate, endDate, days } = zodParse(impactPreviewLeaveSchema.safeParse(req.body ?? {}));
-    const [assignment] = await rawQuery<any>(
+    const [assignment] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
       [employeeId, scope.companyId]
     );
     if (!assignment) throw new NotFoundError("الموظف غير موجود");
     const daysCount = days ?? Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1);
-    const impact = await computeLeaveImpact(scope.companyId, employeeId, assignment.id, leaveTypeId, startDate, endDate, daysCount);
+    const impact = await computeLeaveImpact(scope.companyId, employeeId, assignment.id as number, leaveTypeId, startDate, endDate, daysCount);
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "hr.leave.impact_preview", entity: "hr_leave_requests", entityId: Number(employeeId) }).catch((e) => logger.error(e, "hr background task failed"));
     createAuditLog({
@@ -4815,12 +4818,12 @@ router.post("/impact-preview/termination", authorize({ feature: "hr.employees", 
   try {
     const scope = req.scope!;
     const { employeeId } = zodParse(impactPreviewTerminationSchema.safeParse(req.body ?? {}));
-    const [assignment] = await rawQuery<any>(
+    const [assignment] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
       [employeeId, scope.companyId]
     );
     if (!assignment) throw new NotFoundError("الموظف غير موجود");
-    const impact = await computeTerminationImpact(scope.companyId, employeeId, assignment.id);
+    const impact = await computeTerminationImpact(scope.companyId, employeeId, assignment.id as number);
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "hr.termination.impact_preview", entity: "employees", entityId: Number(employeeId) }).catch((e) => logger.error(e, "hr background task failed"));
     createAuditLog({
@@ -4837,12 +4840,12 @@ router.post("/impact-preview/violation", authorize({ feature: "hr.employees", ac
   try {
     const scope = req.scope!;
     const { employeeId, deduction, severity } = zodParse(impactPreviewViolationSchema.safeParse(req.body ?? {}));
-    const [assignment] = await rawQuery<any>(
+    const [assignment] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
       [employeeId, scope.companyId]
     );
     if (!assignment) throw new NotFoundError("الموظف غير موجود");
-    const impact = await computeViolationImpact(scope.companyId, employeeId, assignment.id, deduction, severity);
+    const impact = await computeViolationImpact(scope.companyId, employeeId, assignment.id as number, deduction, severity);
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "hr.violation.impact_preview", entity: "employee_violations", entityId: Number(employeeId) }).catch((e) => logger.error(e, "hr background task failed"));
     createAuditLog({
@@ -4863,7 +4866,7 @@ router.get("/employee-status/:employeeId", authorize({ feature: "hr.employees", 
   try {
     const scope = req.scope!;
     const { employeeId } = req.params;
-    const [assignment] = await rawQuery<any>(
+    const [assignment] = await rawQuery<Record<string, unknown>>(
       `SELECT ea.id FROM employee_assignments ea
        WHERE ea."employeeId" = $1 AND ea."companyId" = $2 AND ea.status = 'active' LIMIT 1`,
       [Number(employeeId), scope.companyId]
@@ -4871,7 +4874,7 @@ router.get("/employee-status/:employeeId", authorize({ feature: "hr.employees", 
     if (!assignment) throw new NotFoundError("الموظف غير موجود");
 
     const { computeEmployeeOperationalStatus } = await import("../lib/impactPreview.js");
-    const status = await computeEmployeeOperationalStatus(scope.companyId, Number(employeeId), assignment.id);
+    const status = await computeEmployeeOperationalStatus(scope.companyId, Number(employeeId), assignment.id as number);
     res.json(status);
   } catch (err) { handleRouteError(err, res, "خطأ في حساب حالة الموظف"); }
 });
@@ -4879,7 +4882,7 @@ router.get("/employee-status/:employeeId", authorize({ feature: "hr.employees", 
 router.get("/employees-status", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const employees = await rawQuery<any>(
+    const employees = await rawQuery<Record<string, unknown>>(
       `SELECT e.id AS "employeeId", ea.id AS "assignmentId"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 AND ea.status = 'active'
@@ -4931,7 +4934,7 @@ async function computeSystemEvaluation(companyId: number, employeeId: number): P
   const kpiMetrics = await calculateEmployeeKPIs(companyId, employeeId, today);
 
   // Attendance score: based on 30-day attendance records
-  const [attRow] = await rawQuery<any>(
+  const [attRow] = await rawQuery<Record<string, unknown>>(
     `SELECT
        COUNT(*) FILTER (WHERE status='present') AS present,
        COUNT(*) FILTER (WHERE status='absent') AS absent,
@@ -4961,7 +4964,7 @@ async function computeSystemEvaluation(companyId: number, employeeId: number): P
   const clientSatScore = Math.round((clientSat / 5) * 100);
 
   // Document quality score: count of documents with description in last 90 days
-  const [docRow] = await rawQuery<any>(
+  const [docRow] = await rawQuery<Record<string, unknown>>(
     `SELECT COUNT(*) AS total,
             COUNT(*) FILTER (WHERE notes IS NOT NULL AND notes != '') AS documented
      FROM employee_documents
@@ -5004,13 +5007,13 @@ async function computeSystemEvaluation(companyId: number, employeeId: number): P
 
 // Helper: recompute and save evaluation summary
 async function recomputeSummary(cycleId: number, companyId: number, employeeId: number): Promise<void> {
-  const [sysEval] = await rawQuery<any>(
+  const [sysEval] = await rawQuery<Record<string, unknown>>(
     `SELECT "overallScore" FROM system_evaluations WHERE "cycleId" = $1`, [cycleId]
   );
-  const peerRows = await rawQuery<any>(
+  const peerRows = await rawQuery<Record<string, unknown>>(
     `SELECT "overallScore", "evaluatorRole" FROM peer_evaluations WHERE "cycleId" = $1`, [cycleId]
   );
-  const upwardRows = await rawQuery<any>(
+  const upwardRows = await rawQuery<Record<string, unknown>>(
     `SELECT "overallScore" FROM anonymous_upward_reviews WHERE "cycleId" = $1`, [cycleId]
   );
 
@@ -5062,7 +5065,7 @@ router.get("/evaluation-cycles", authorize({ feature: "hr.performance", action: 
 
     if (isHR(scope)) {
       // HR sees all cycles for the company (optionally filtered by employeeId)
-      rows = await rawQuery<any>(
+      rows = await rawQuery<Record<string, unknown>>(
         `SELECT ec.*, e.name AS "employeeName", e."empNumber",
                 es."finalScore", es."systemScore", es."peerScore", es."managerScore",
                 CASE WHEN es."upwardReviewCount" >= 3 THEN es."upwardAvgScore" ELSE NULL END AS "upwardAvgScore"
@@ -5075,7 +5078,7 @@ router.get("/evaluation-cycles", authorize({ feature: "hr.performance", action: 
       );
     } else if (BRANCH_GM_ROLES.includes(scope.role)) {
       // Managers see cycles for employees they manage (same branch)
-      rows = await rawQuery<any>(
+      rows = await rawQuery<Record<string, unknown>>(
         `SELECT ec.*, e.name AS "employeeName", e."empNumber",
                 es."finalScore", es."systemScore", es."peerScore", es."managerScore",
                 CASE WHEN es."upwardReviewCount" >= 3 THEN es."upwardAvgScore" ELSE NULL END AS "upwardAvgScore"
@@ -5089,7 +5092,7 @@ router.get("/evaluation-cycles", authorize({ feature: "hr.performance", action: 
       );
     } else {
       // Employees see their own cycles + cycles where they are participants
-      rows = await rawQuery<any>(
+      rows = await rawQuery<Record<string, unknown>>(
         `SELECT ec.*, e.name AS "employeeName", e."empNumber",
                 es."finalScore", es."systemScore", es."peerScore", es."managerScore",
                 CASE WHEN es."upwardReviewCount" >= 3 THEN es."upwardAvgScore" ELSE NULL END AS "upwardAvgScore"
@@ -5120,7 +5123,7 @@ router.post("/evaluation-cycles", authorize({ feature: "hr.performance", action:
     const { employeeId, period, notes, participants = [] } = zodParse(evaluationCycleSchema.safeParse(req.body)) as any;
 
     // Validate subject employee belongs to this company (multi-tenant integrity)
-    const [subjectAssign] = await rawQuery<any>(
+    const [subjectAssign] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 LIMIT 1`,
       [employeeId, scope.companyId]
     );
@@ -5139,7 +5142,7 @@ router.post("/evaluation-cycles", authorize({ feature: "hr.performance", action:
     if (candidateParticipants.length > 0) {
       const evalIds = candidateParticipants.map(p => p.evaluatorId);
       const idPlaceholders = evalIds.map((_, i) => `$${i + 2}`).join(",");
-      const validAssignments = await rawQuery<any>(
+      const validAssignments = await rawQuery<Record<string, unknown>>(
         `SELECT DISTINCT "employeeId" FROM employee_assignments WHERE "companyId"=$1 AND "employeeId" IN (${idPlaceholders})`,
         [scope.companyId, ...evalIds]
       );
@@ -5199,7 +5202,7 @@ router.get("/evaluation-cycles/:id", authorize({ feature: "hr.performance", acti
     const scope = req.scope!;
     const cycleId = parseId(req.params.id, "id");
 
-    const [cycle] = await rawQuery<any>(
+    const [cycle] = await rawQuery<Record<string, unknown>>(
       `SELECT ec.*, e.name AS "employeeName", e."empNumber", ea."jobTitle"
        FROM evaluation_cycles ec
        JOIN employees e ON e.id = ec."employeeId"
@@ -5217,7 +5220,7 @@ router.get("/evaluation-cycles/:id", authorize({ feature: "hr.performance", acti
       // HR: unrestricted within company — already filtered by companyId above
     } else if (BRANCH_GM_ROLES.includes(scope.role)) {
       // Manager must share at least one branch with the employee being evaluated (any active assignment)
-      const [sharedBranch] = await rawQuery<any>(
+      const [sharedBranch] = await rawQuery<Record<string, unknown>>(
         `SELECT 1 FROM employee_assignments ea_mgr
          JOIN employee_assignments ea_sub ON ea_sub."branchId" = ea_mgr."branchId"
          WHERE ea_mgr."employeeId"=$1 AND ea_mgr."companyId"=$2 AND ea_mgr.status='active'
@@ -5226,7 +5229,7 @@ router.get("/evaluation-cycles/:id", authorize({ feature: "hr.performance", acti
         [scope.employeeId, scope.companyId, cycle.employeeId]
       );
       const isOwnCycle = cycle.employeeId === scope.employeeId;
-      const [isParticipant] = await rawQuery<any>(
+      const [isParticipant] = await rawQuery<Record<string, unknown>>(
         `SELECT 1 FROM evaluation_participants WHERE "cycleId"=$1 AND "evaluatorId"=$2`,
         [cycleId, scope.employeeId]
       );
@@ -5236,18 +5239,18 @@ router.get("/evaluation-cycles/:id", authorize({ feature: "hr.performance", acti
     } else {
       // Regular employee: own cycle or assigned participant
       const isOwn = cycle.employeeId === scope.employeeId;
-      const [isParticipant] = await rawQuery<any>(
+      const [isParticipant] = await rawQuery<Record<string, unknown>>(
         `SELECT 1 FROM evaluation_participants WHERE "cycleId"=$1 AND "evaluatorId"=$2`,
         [cycleId, scope.employeeId]
       );
       if (!isOwn && !isParticipant) throw new ForbiddenError("لا تملك صلاحية لعرض هذه الدورة");
     }
 
-    const [sysEval] = await rawQuery<any>(
+    const [sysEval] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM system_evaluations WHERE "cycleId" = $1`, [cycleId]
     );
 
-    const peerEvals = await rawQuery<any>(
+    const peerEvals = await rawQuery<Record<string, unknown>>(
       `SELECT pe.*, e.name AS "evaluatorName", ea."jobTitle" AS "evaluatorTitle"
        FROM peer_evaluations pe
        JOIN employees e ON e.id = pe."evaluatorId"
@@ -5256,7 +5259,7 @@ router.get("/evaluation-cycles/:id", authorize({ feature: "hr.performance", acti
       [cycleId, scope.companyId]
     );
 
-    const participants = await rawQuery<any>(
+    const participants = await rawQuery<Record<string, unknown>>(
       `SELECT ep.*, e.name AS "evaluatorName"
        FROM evaluation_participants ep
        JOIN employees e ON e.id = ep."evaluatorId"
@@ -5264,12 +5267,12 @@ router.get("/evaluation-cycles/:id", authorize({ feature: "hr.performance", acti
       [cycleId]
     );
 
-    const [summary] = await rawQuery<any>(
+    const [summary] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM evaluation_summaries WHERE "cycleId" = $1`, [cycleId]
     );
 
     // Upward reviews: only count, no names, no individual rows
-    const [upwardCount] = await rawQuery<any>(
+    const [upwardCount] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS count, AVG("overallScore") AS avg FROM anonymous_upward_reviews WHERE "cycleId" = $1`,
       [cycleId]
     );
@@ -5299,7 +5302,7 @@ router.get("/evaluation-cycles/:id/system-report", authorize({ feature: "hr.perf
     const scope = req.scope!;
     const cycleId = parseId(req.params.id, "id");
 
-    const [cycle] = await rawQuery<any>(
+    const [cycle] = await rawQuery<Record<string, unknown>>(
       `SELECT ec."employeeId", ec."companyId"
        FROM evaluation_cycles ec
        WHERE ec.id = $1 AND ec."companyId" = $2`,
@@ -5311,7 +5314,7 @@ router.get("/evaluation-cycles/:id/system-report", authorize({ feature: "hr.perf
     if (isHR(scope)) {
       // unrestricted
     } else if (BRANCH_GM_ROLES.includes(scope.role)) {
-      const [sharedBranch] = await rawQuery<any>(
+      const [sharedBranch] = await rawQuery<Record<string, unknown>>(
         `SELECT 1 FROM employee_assignments ea_mgr
          JOIN employee_assignments ea_sub ON ea_sub."branchId" = ea_mgr."branchId"
          WHERE ea_mgr."employeeId"=$1 AND ea_mgr."companyId"=$2 AND ea_mgr.status='active'
@@ -5319,7 +5322,7 @@ router.get("/evaluation-cycles/:id/system-report", authorize({ feature: "hr.perf
          LIMIT 1`,
         [scope.employeeId, scope.companyId, cycle.employeeId]
       );
-      const [isParticipantRow] = await rawQuery<any>(
+      const [isParticipantRow] = await rawQuery<Record<string, unknown>>(
         `SELECT 1 FROM evaluation_participants WHERE "cycleId"=$1 AND "evaluatorId"=$2`,
         [cycleId, scope.employeeId]
       );
@@ -5328,7 +5331,7 @@ router.get("/evaluation-cycles/:id/system-report", authorize({ feature: "hr.perf
       }
     } else {
       const isOwn = cycle.employeeId === scope.employeeId;
-      const [isParticipantRow] = await rawQuery<any>(
+      const [isParticipantRow] = await rawQuery<Record<string, unknown>>(
         `SELECT 1 FROM evaluation_participants WHERE "cycleId"=$1 AND "evaluatorId"=$2`,
         [cycleId, scope.employeeId]
       );
@@ -5337,13 +5340,13 @@ router.get("/evaluation-cycles/:id/system-report", authorize({ feature: "hr.perf
       }
     }
 
-    let [sysEval] = await rawQuery<any>(
+    let [sysEval] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM system_evaluations WHERE "cycleId" = $1`, [cycleId]
     );
 
     if (!sysEval) {
       // Recompute if not yet generated
-      const evalData = await computeSystemEvaluation(cycle.companyId, cycle.employeeId);
+      const evalData = await computeSystemEvaluation(cycle.companyId as number, cycle.employeeId as number);
       await rawExecute(
         `INSERT INTO system_evaluations ("cycleId","companyId","employeeId","attendanceScore","taskCompletionScore","onTimeScore","clientSatScore","docQualityScore","overallScore",metrics)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
@@ -5374,7 +5377,7 @@ router.post("/evaluation-cycles/:id/peer-evaluation", authorize({ feature: "hr.p
     if (!evaluatorId) throw new ForbiddenError("لا يمكن تحديد هوية المقيِّم");
     if (!overallScore) throw new ValidationError("overallScore مطلوب", { field: "overallScore" });
 
-    const [cycle] = await rawQuery<any>(
+    const [cycle] = await rawQuery<Record<string, unknown>>(
       `SELECT "employeeId","companyId" FROM evaluation_cycles WHERE id = $1 AND "companyId" = $2`,
       [cycleId, scope.companyId]
     );
@@ -5386,18 +5389,18 @@ router.post("/evaluation-cycles/:id/peer-evaluation", authorize({ feature: "hr.p
     //           (3) manager — ONLY if same branch as the subject employee
     //           (4) all others — must be a participant
     let evaluatorRole = "peer";
-    const [participant] = await rawQuery<any>(
+    const [participant] = await rawQuery<Record<string, unknown>>(
       `SELECT "evaluatorRole" FROM evaluation_participants WHERE "cycleId"=$1 AND "evaluatorId"=$2`,
       [cycleId, evaluatorId]
     );
     if (participant) {
-      evaluatorRole = participant.evaluatorRole;
+      evaluatorRole = participant.evaluatorRole as string;
     } else if (isHR(scope)) {
       // HR can submit evaluations for any cycle without being a pre-assigned participant
       evaluatorRole = "peer";
     } else if (BRANCH_GM_ROLES.includes(scope.role)) {
       // Manager must share at least one branch with the subject employee (any active assignment, not just primary)
-      const [sharedBranch] = await rawQuery<any>(
+      const [sharedBranch] = await rawQuery<Record<string, unknown>>(
         `SELECT 1 FROM employee_assignments ea_mgr
          JOIN employee_assignments ea_sub ON ea_sub."branchId" = ea_mgr."branchId"
          WHERE ea_mgr."employeeId"=$1 AND ea_mgr."companyId"=$2 AND ea_mgr.status='active'
@@ -5432,7 +5435,7 @@ router.post("/evaluation-cycles/:id/peer-evaluation", authorize({ feature: "hr.p
       );
     });
 
-    await recomputeSummary(cycleId, scope.companyId, cycle.employeeId);
+    await recomputeSummary(cycleId, scope.companyId, cycle.employeeId as number);
 
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
@@ -5445,7 +5448,7 @@ router.post("/evaluation-cycles/:id/peer-evaluation", authorize({ feature: "hr.p
       after: { cycleId, evaluatorId, evaluatorRole, overallScore },
     }).catch((e) => logger.error(e, "hr background task failed"));
 
-    const [row] = await rawQuery<any>(`SELECT * FROM peer_evaluations WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM peer_evaluations WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row || { id: insertId, cycleId, evaluatorId, evaluatorRole, overallScore });
   } catch (err) { handleRouteError(err, res, "خطأ في إرسال التقييم"); }
 });
@@ -5463,7 +5466,7 @@ router.post("/evaluation-cycles/:id/upward-review", authorize({ feature: "hr.per
       });
     }
 
-    const [cycle] = await rawQuery<any>(
+    const [cycle] = await rawQuery<Record<string, unknown>>(
       `SELECT id,"companyId","employeeId" FROM evaluation_cycles WHERE id = $1 AND "companyId" = $2`,
       [cycleId, scope.companyId]
     );
@@ -5471,7 +5474,7 @@ router.post("/evaluation-cycles/:id/upward-review", authorize({ feature: "hr.per
 
     // Validate that the managerId is a legitimate participant in this cycle with role=manager
     // This prevents rating arbitrary employees as "manager" within a cycle
-    const [managerIsParticipant] = await rawQuery<any>(
+    const [managerIsParticipant] = await rawQuery<Record<string, unknown>>(
       `SELECT 1 FROM evaluation_participants WHERE "cycleId"=$1 AND "evaluatorId"=$2 AND "evaluatorRole"='manager'`,
       [cycleId, managerId]
     );
@@ -5492,7 +5495,7 @@ router.post("/evaluation-cycles/:id/upward-review", authorize({ feature: "hr.per
     // Managers with evaluatorRole='manager' and HR users are explicitly excluded to
     // preserve objectivity of the "employee rates manager" model.
     const isSubject = cycle.employeeId === scope.employeeId;
-    const [isEligibleParticipant] = await rawQuery<any>(
+    const [isEligibleParticipant] = await rawQuery<Record<string, unknown>>(
       `SELECT 1 FROM evaluation_participants WHERE "cycleId"=$1 AND "evaluatorId"=$2 AND "evaluatorRole"='peer'`,
       [cycleId, scope.employeeId]
     );
@@ -5518,7 +5521,7 @@ router.post("/evaluation-cycles/:id/upward-review", authorize({ feature: "hr.per
 
     // Store submission token in the DB to detect duplicates
     // First check if this token already exists
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM anonymous_upward_reviews WHERE "cycleId"=$1 AND "managerId"=$2 AND "submissionToken"=$3`,
       [cycleId, managerId, submissionToken]
     );
@@ -5532,7 +5535,7 @@ router.post("/evaluation-cycles/:id/upward-review", authorize({ feature: "hr.per
     );
 
     // Recompute summary (upward score only shows when >=3 reviews)
-    await recomputeSummary(cycleId, scope.companyId, cycle.employeeId);
+    await recomputeSummary(cycleId, scope.companyId, cycle.employeeId as number);
 
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
@@ -5555,7 +5558,7 @@ router.get("/evaluation-cycles/:id/summary", authorize({ feature: "hr.performanc
     const scope = req.scope!;
     const cycleId = parseId(req.params.id, "id");
 
-    const [cycle] = await rawQuery<any>(
+    const [cycle] = await rawQuery<Record<string, unknown>>(
       `SELECT ec.*, e.name AS "employeeName", ea."jobTitle"
        FROM evaluation_cycles ec
        JOIN employees e ON e.id = ec."employeeId"
@@ -5569,7 +5572,7 @@ router.get("/evaluation-cycles/:id/summary", authorize({ feature: "hr.performanc
     if (isHR(scope)) {
       // unrestricted
     } else if (BRANCH_GM_ROLES.includes(scope.role)) {
-      const [sharedBranch] = await rawQuery<any>(
+      const [sharedBranch] = await rawQuery<Record<string, unknown>>(
         `SELECT 1 FROM employee_assignments ea_mgr
          JOIN employee_assignments ea_sub ON ea_sub."branchId" = ea_mgr."branchId"
          WHERE ea_mgr."employeeId"=$1 AND ea_mgr."companyId"=$2 AND ea_mgr.status='active'
@@ -5577,7 +5580,7 @@ router.get("/evaluation-cycles/:id/summary", authorize({ feature: "hr.performanc
          LIMIT 1`,
         [scope.employeeId, scope.companyId, cycle.employeeId]
       );
-      const [isParticipantRow] = await rawQuery<any>(
+      const [isParticipantRow] = await rawQuery<Record<string, unknown>>(
         `SELECT 1 FROM evaluation_participants WHERE "cycleId"=$1 AND "evaluatorId"=$2`,
         [cycleId, scope.employeeId]
       );
@@ -5588,28 +5591,28 @@ router.get("/evaluation-cycles/:id/summary", authorize({ feature: "hr.performanc
       throw new ForbiddenError("لا تملك صلاحية لعرض هذا الملخص");
     }
 
-    const [sysEval] = await rawQuery<any>(
+    const [sysEval] = await rawQuery<Record<string, unknown>>(
       `SELECT "attendanceScore","taskCompletionScore","onTimeScore","clientSatScore","docQualityScore","overallScore",metrics
        FROM system_evaluations WHERE "cycleId" = $1`, [cycleId]
     );
 
-    const peerEvals = await rawQuery<any>(
+    const peerEvals = await rawQuery<Record<string, unknown>>(
       `SELECT "evaluatorRole","overallScore",scores,comments FROM peer_evaluations WHERE "cycleId" = $1`, [cycleId]
     );
 
-    const [upwardRow] = await rawQuery<any>(
+    const [upwardRow] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS count, ROUND(AVG("overallScore")) AS avg
        FROM anonymous_upward_reviews WHERE "cycleId" = $1`, [cycleId]
     );
 
-    let [summary] = await rawQuery<any>(
+    let [summary] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM evaluation_summaries WHERE "cycleId" = $1 AND "companyId" = $2`,
       [cycleId, scope.companyId]
     );
 
     if (!summary) {
-      await recomputeSummary(cycleId, scope.companyId, cycle.employeeId);
-      [summary] = await rawQuery<any>(
+      await recomputeSummary(cycleId, scope.companyId, cycle.employeeId as number);
+      [summary] = await rawQuery<Record<string, unknown>>(
         `SELECT * FROM evaluation_summaries WHERE "cycleId" = $1 AND "companyId" = $2`,
         [cycleId, scope.companyId]
       );
@@ -5637,7 +5640,7 @@ router.get("/employees/:id/evaluation-history", authorize({ feature: "hr.employe
     const employeeId = parseId(req.params.id, "id");
 
     // Validate employee belongs to this company via assignment (prevents cross-tenant PII leakage)
-    const [empAssign] = await rawQuery<any>(
+    const [empAssign] = await rawQuery<Record<string, unknown>>(
       `SELECT ea."branchId", ea."jobTitle", e.name, e."empNumber"
        FROM employee_assignments ea
        JOIN employees e ON e.id = ea."employeeId"
@@ -5653,7 +5656,7 @@ router.get("/employees/:id/evaluation-history", authorize({ feature: "hr.employe
     if (isHR(scope)) {
       // unrestricted
     } else if (BRANCH_GM_ROLES.includes(scope.role)) {
-      const [sharedBranch] = await rawQuery<any>(
+      const [sharedBranch] = await rawQuery<Record<string, unknown>>(
         `SELECT 1 FROM employee_assignments ea_mgr
          JOIN employee_assignments ea_sub ON ea_sub."branchId" = ea_mgr."branchId"
          WHERE ea_mgr."employeeId"=$1 AND ea_mgr."companyId"=$2 AND ea_mgr.status='active'
@@ -5669,7 +5672,7 @@ router.get("/employees/:id/evaluation-history", authorize({ feature: "hr.employe
       throw new ForbiddenError("لا تملك صلاحية لعرض تاريخ تقييمات هذا الموظف");
     }
 
-    const cycles = await rawQuery<any>(
+    const cycles = await rawQuery<Record<string, unknown>>(
       `SELECT ec.id, ec.period, ec."startDate", ec.status,
               es."finalScore", es."systemScore", es."managerScore", es."peerScore", es."upwardAvgScore"
        FROM evaluation_cycles ec
@@ -5697,7 +5700,7 @@ router.get("/upward-reviews/manager/:managerId", authorize({ feature: "hr.perfor
       throw new ForbiddenError("لا تملك صلاحية لعرض التقييمات العكسية لمدير آخر");
     }
 
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS count,
               ROUND(AVG("overallScore")) AS "avgScore",
               ROUND(AVG((scores->>'leadership')::numeric)) AS "leadershipAvg",
@@ -5737,7 +5740,7 @@ router.get("/upward-reviews/manager/:managerId", authorize({ feature: "hr.perfor
 router.get("/delegations", authorize({ feature: "hr.organization", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT d.id, d."delegatorId", d."delegateId", d.scope, d.reason, d.status, d."startDate", d."endDate", d."createdAt",
               e1.name AS "delegatorName", e2.name AS "delegateName"
        FROM delegations d
@@ -5803,7 +5806,7 @@ router.post("/delegations", authorize({ feature: "hr.organization", action: "app
       after: { delegatorId: emp.id, delegateId: Number(delegateId), scope: delegationScope || "عام", reason, startDate: startDate || null, endDate: endDate || null },
     }).catch((e) => logger.error(e, "hr background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "delegation.created", entity: "hr_delegations", entityId: r.insertId, details: JSON.stringify({ delegateId: Number(delegateId), scope: delegationScope || "عام" }) }).catch((e) => logger.error(e, "hr background task failed"));
-    const [row] = await rawQuery<any>(`SELECT * FROM delegations WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM delegations WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
     res.status(201).json(row || { success: true, id: r.insertId, delegateId: Number(delegateId), startDate: startDate || null, endDate: endDate || null });
   } catch (err) { handleRouteError(err, res, "خطأ في إنشاء التفويض"); }
 });
@@ -5819,7 +5822,7 @@ router.get("/public-holidays", authorize({ feature: "hr.organization", action: "
     const conditions = [`"companyId" = $1`, `"deletedAt" IS NULL`];
     const params: any[] = [scope.companyId];
     if (year) { params.push(Number(year)); conditions.push(`year = $${params.length}`); }
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM public_holidays WHERE ${conditions.join(" AND ")} ORDER BY "startDate" LIMIT 500`,
       params
     );
@@ -5842,7 +5845,7 @@ router.post("/public-holidays", authorize({ feature: "hr.organization", action: 
       [scope.companyId, b.name, b.startDate, b.endDate || b.startDate, year,
        b.type || 'national', b.description || null, b.isRecurring || false]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM public_holidays WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM public_holidays WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "public_holidays", entityId: insertId,
@@ -5871,8 +5874,8 @@ router.patch("/public-holidays/:id", authorize({ feature: "hr.organization", act
     if (b.isRecurring !== undefined) { params.push(b.isRecurring); sets.push(`"isRecurring"=$${params.length}`); }
     if (sets.length === 1) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
-    const [beforeRow] = await rawQuery<any>(`SELECT * FROM public_holidays WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    const rows = await rawQuery<any>(
+    const [beforeRow] = await rawQuery<Record<string, unknown>>(`SELECT * FROM public_holidays WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const rows = await rawQuery<Record<string, unknown>>(
       `UPDATE public_holidays SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
@@ -5894,7 +5897,7 @@ router.get("/public-holidays/check", authorize({ feature: "hr.organization", act
     const scope = req.scope!;
     const { date } = req.query as any;
     if (!date) throw new ValidationError("التاريخ مطلوب", { field: "date" });
-    const [holiday] = await rawQuery<any>(
+    const [holiday] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM public_holidays WHERE "companyId"=$1 AND $2::date BETWEEN "startDate"::date AND "endDate"::date`,
       [scope.companyId, date]
     );
@@ -5909,7 +5912,7 @@ router.delete("/public-holidays/:id", authorize({ feature: "hr.organization", ac
       throw new ForbiddenError("غير مصرح");
     }
     const id = parseId(req.params.id, "id");
-    const [beforeRow] = await rawQuery<any>(`SELECT * FROM public_holidays WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [beforeRow] = await rawQuery<Record<string, unknown>>(`SELECT * FROM public_holidays WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     const { affectedRows } = await rawExecute(`UPDATE public_holidays SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!affectedRows) throw new NotFoundError("السجل غير موجود");
     createAuditLog({
@@ -5933,7 +5936,7 @@ router.get("/transfers", authorize({ feature: "hr.exit", action: "list" }), asyn
     const conditions = [`t."companyId"=$1`];
     const params: any[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`t.status=$${params.length}`); }
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT t.*, e.name AS "employeeName", e."empNumber",
               b1.name AS "fromBranchName", b2.name AS "toBranchName",
               d1.name AS "fromDeptName", d2.name AS "toDeptName"
@@ -5955,7 +5958,7 @@ router.get("/transfers/:id", authorize({ feature: "hr.exit", action: "view" }), 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT t.*, t."effectiveDate" AS "transferDate",
               e.name AS "employeeName", e."empNumber",
               b1.name AS "fromBranchName", b1.name AS "fromBranch",
@@ -5986,7 +5989,7 @@ router.post("/transfers", authorize({ feature: "hr.exit", action: "create" }), a
   try {
     const scope = req.scope!;
     const b = zodParse(transferSchema.safeParse(req.body)) as any;
-    const [assignment] = await rawQuery<any>(
+    const [assignment] = await rawQuery<Record<string, unknown>>(
       `SELECT ea.id, ea."branchId", ea."departmentId", ea.salary, ea."jobTitle"
        FROM employee_assignments ea
        WHERE ea."employeeId"=$1 AND ea."companyId"=$2 AND ea.status='active' LIMIT 1`,
@@ -6029,16 +6032,16 @@ router.post("/transfers", authorize({ feature: "hr.exit", action: "create" }), a
        scope.employeeId, b.reason || null, b.effectiveDate || null, b.notes || null]
     );
 
-    const [row] = await rawQuery<any>(`SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     // Notify HR
-    const hrAssign = await rawQuery<any>(
+    const hrAssign = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM employee_assignments WHERE "companyId"=$1 AND role IN ('hr_manager','general_manager','owner') AND status='active' ORDER BY CASE role WHEN 'hr_manager' THEN 1 ELSE 2 END LIMIT 1`,
       [scope.companyId]
     );
     if (hrAssign[0]) {
       createNotification({
-        companyId: scope.companyId, assignmentId: hrAssign[0].id,
+        companyId: scope.companyId, assignmentId: hrAssign[0].id as number,
         type: "transfer_request", title: "طلب نقل موظف جديد",
         body: `طلب نقل موظف بين الفروع — يحتاج مراجعة HR`,
         priority: "normal", refType: "employee_transfer", refId: insertId,
@@ -6083,7 +6086,7 @@ router.patch("/transfers/:id/approve", authorize({ feature: "hr.exit", action: "
     }
     const id = parseId(req.params.id, "id");
     const { approved, notes } = zodParse(transferApprovalSchema.safeParse(req.body ?? {}));
-    const [transfer] = await rawQuery<any>(
+    const [transfer] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
     );
@@ -6102,7 +6105,7 @@ router.patch("/transfers/:id/approve", authorize({ feature: "hr.exit", action: "
     }
 
     if (approved) {
-      const [receivingMgr] = await rawQuery<any>(
+      const [receivingMgr] = await rawQuery<Record<string, unknown>>(
         `SELECT ea.id FROM employee_assignments ea
          WHERE ea."companyId"=$1 AND ea."branchId"=$2
            AND ea.role IN ('branch_manager','general_manager','owner') AND ea.status='active'
@@ -6119,14 +6122,14 @@ router.patch("/transfers/:id/approve", authorize({ feature: "hr.exit", action: "
         reason: notes || undefined,
         setExtras: { approvedBy: scope.employeeId, approvedAt: { raw: "NOW()" }, notes: notes || null },
         notifications: receivingMgr ? [{
-          assignmentId: receivingMgr.id,
+          assignmentId: receivingMgr.id as number,
           type: "transfer_receiving_approval", title: "طلب استقبال موظف منقول",
           body: `يحتاج استلام موظف منقول إلى فرعك — يرجى المراجعة والتأكيد`,
           priority: "high", refType: "employee_transfer", refId: id,
         }] : [],
       });
     } else {
-      const [empAssign] = await rawQuery<any>(
+      const [empAssign] = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
         [transfer.employeeId, scope.companyId]
       );
@@ -6140,7 +6143,7 @@ router.patch("/transfers/:id/approve", authorize({ feature: "hr.exit", action: "
         reason: notes || undefined,
         setExtras: { approvedBy: scope.employeeId, approvedAt: { raw: "NOW()" }, notes: notes || null },
         notifications: empAssign ? [{
-          assignmentId: empAssign.id,
+          assignmentId: empAssign.id as number,
           type: "transfer_decision", title: "تم رفض طلب النقل",
           body: notes || "تم رفض طلب النقل من قبل مدير الموارد البشرية",
           priority: "high", refType: "employee_transfer", refId: id,
@@ -6148,7 +6151,7 @@ router.patch("/transfers/:id/approve", authorize({ feature: "hr.exit", action: "
       });
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -6177,7 +6180,7 @@ router.patch("/transfers/:id/receive", authorize({ feature: "hr.exit", action: "
     }
     const id = parseId(req.params.id, "id");
     const { confirmed, notes } = zodParse(transferConfirmSchema.safeParse(req.body ?? {}));
-    const [transfer] = await rawQuery<any>(
+    const [transfer] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`,
       [id, scope.companyId]
     );
@@ -6197,7 +6200,7 @@ router.patch("/transfers/:id/receive", authorize({ feature: "hr.exit", action: "
 
     // Authorization: general_manager/owner can confirm any transfer; branch_manager must be in the destination branch
     if (scope.role === "branch_manager") {
-      const [myAssignment] = await rawQuery<any>(
+      const [myAssignment] = await rawQuery<Record<string, unknown>>(
         `SELECT "branchId" FROM employee_assignments WHERE id=$1 AND "companyId"=$2`,
         [scope.activeAssignmentId, scope.companyId]
       );
@@ -6220,7 +6223,7 @@ router.patch("/transfers/:id/receive", authorize({ feature: "hr.exit", action: "
       const newJobTitle = transfer.toJobTitle;
       const newSalary = transfer.toSalary;
       // Notify employee of final approval
-      const [empAssign] = await rawQuery<any>(
+      const [empAssign] = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
         [transfer.employeeId, scope.companyId]
       );
@@ -6241,7 +6244,7 @@ router.patch("/transfers/:id/receive", authorize({ feature: "hr.exit", action: "
         },
         after: { branchId: newBranchId, departmentId: newDeptId, jobTitle: newJobTitle, salary: newSalary },
         notifications: empAssign ? [{
-          assignmentId: empAssign.id,
+          assignmentId: empAssign.id as number,
           type: "transfer_decision", title: "تم اعتماد نقلك وتفعيله",
           body: notes || "تمت الموافقة على نقلك وتم تحديث بياناتك",
           priority: "high", refType: "employee_transfer", refId: id,
@@ -6251,7 +6254,7 @@ router.patch("/transfers/:id/receive", authorize({ feature: "hr.exit", action: "
       // Notify employee — previously silent if receiver declined, which
       // left the employee without feedback. Also notify the original HR
       // manager so they know the receiving branch declined.
-      const [empAssign] = await rawQuery<any>(
+      const [empAssign] = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
         [transfer.employeeId, scope.companyId]
       );
@@ -6265,7 +6268,7 @@ router.patch("/transfers/:id/receive", authorize({ feature: "hr.exit", action: "
         reason: notes || undefined,
         setExtras: { receivedBy: scope.employeeId, receivedAt: { raw: "NOW()" } },
         notifications: empAssign ? [{
-          assignmentId: empAssign.id,
+          assignmentId: empAssign.id as number,
           type: "transfer_decision", title: "رفض الفرع المستقبل طلب نقلك",
           body: notes || "رفض مدير الفرع المستقبل استقبالك. راجع الموارد البشرية.",
           priority: "high", refType: "employee_transfer", refId: id,
@@ -6273,7 +6276,7 @@ router.patch("/transfers/:id/receive", authorize({ feature: "hr.exit", action: "
       });
     }
 
-    const [row] = await rawQuery<any>(`SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -6299,7 +6302,7 @@ router.get("/idp", authorize({ feature: "hr.exit", action: "list" }), async (req
     else if (scope.role === "employee" && scope.employeeId) {
       params.push(scope.employeeId); conditions.push(`idp."employeeId"=$${params.length}`);
     }
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT idp.*, e.name AS "employeeName", e."empNumber"
        FROM employee_development_plans idp
        JOIN employees e ON e.id=idp."employeeId"
@@ -6325,7 +6328,7 @@ router.post("/idp", authorize({ feature: "hr.exit", action: "create" }), async (
       [scope.companyId, b.employeeId, scope.employeeId, b.title || 'خطة التطوير الفردي',
        goals, skills, trainingIds, b.targetDate || null, b.notes || null, b.reviewDate || null]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM employee_development_plans WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM employee_development_plans WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "employee_development_plans", entityId: insertId,
@@ -6352,8 +6355,8 @@ router.patch("/idp/:id", authorize({ feature: "hr.exit", action: "update" }), as
     if (b.progress !== undefined) { params.push(b.progress); sets.push(`progress=$${params.length}`); }
     if (sets.length === 1) { res.json({ message: "لا توجد تغييرات" }); return; }
     params.push(id); params.push(scope.companyId);
-    const [beforeRow] = await rawQuery<any>(`SELECT * FROM employee_development_plans WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
-    const rows = await rawQuery<any>(
+    const [beforeRow] = await rawQuery<Record<string, unknown>>(`SELECT * FROM employee_development_plans WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const rows = await rawQuery<Record<string, unknown>>(
       `UPDATE employee_development_plans SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
@@ -6373,7 +6376,7 @@ router.delete("/idp/:id", authorize({ feature: "hr.exit", action: "delete" }), a
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [beforeRow] = await rawQuery<any>(`SELECT * FROM employee_development_plans WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [beforeRow] = await rawQuery<Record<string, unknown>>(`SELECT * FROM employee_development_plans WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     const { affectedRows } = await rawExecute(`UPDATE employee_development_plans SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!affectedRows) throw new NotFoundError("السجل غير موجود");
     createAuditLog({
@@ -6396,7 +6399,7 @@ router.get("/gratuity/:employeeId", authorize({ feature: "hr.exit", action: "vie
     const employeeId = parseId(req.params.employeeId, "employeeId");
     const { terminationType, terminationDate } = req.query as any;
 
-    const [assignment] = await rawQuery<any>(
+    const [assignment] = await rawQuery<Record<string, unknown>>(
       `SELECT ea.salary, ea."hireDate" AS "startDate", ea."jobTitle",
               ec."startDate" AS "contractStart", ec."endDate" AS "contractEnd",
               e.name AS "employeeName"
@@ -6408,7 +6411,7 @@ router.get("/gratuity/:employeeId", authorize({ feature: "hr.exit", action: "vie
     );
     if (!assignment) throw new NotFoundError("الموظف غير موجود");
 
-    const startDate = new Date(assignment.contractStart || assignment.startDate);
+    const startDate = new Date((assignment.contractStart || assignment.startDate) as string);
     const endDate = terminationDate ? new Date(terminationDate) : new Date();
     const yearsOfService = (endDate.getTime() - startDate.getTime()) / (365.25 * 24 * 3600 * 1000);
     const monthlySalary = Number(assignment.salary) || 0;
@@ -6483,7 +6486,7 @@ router.post("/accruals/monthly", authorize({ feature: "hr.payroll", action: "upd
     }
 
     const ref = `HR-ACCRUAL-${targetPeriod}`;
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM journal_entries WHERE "companyId"=$1 AND ref=$2 AND "deletedAt" IS NULL LIMIT 1`,
       [scope.companyId, ref]
     );
@@ -6493,7 +6496,7 @@ router.post("/accruals/monthly", authorize({ feature: "hr.payroll", action: "upd
       });
     }
 
-    const employees = await rawQuery<any>(
+    const employees = await rawQuery<Record<string, unknown>>(
       `SELECT ea."employeeId", ea.salary, ea."hireDate",
               COALESCE(ec."startDate", ea."hireDate") AS "contractStart"
        FROM employee_assignments ea
@@ -6521,7 +6524,7 @@ router.post("/accruals/monthly", authorize({ feature: "hr.payroll", action: "upd
       const monthlyLeaveDays = DEFAULT_ANNUAL_LEAVE_DAYS / 12;
       const leaveAccrual = roundTo2(dailyRate * monthlyLeaveDays);
 
-      const startDate = new Date(emp.contractStart || emp.startDate);
+      const startDate = new Date((emp.contractStart || emp.startDate) as string);
       const yearsOfService = (periodEnd.getTime() - startDate.getTime()) / (365.25 * 24 * 3600 * 1000);
       let monthlyEosAccrual = 0;
       if (yearsOfService < 1) {
@@ -6605,12 +6608,12 @@ router.get("/accruals/preview", authorize({ feature: "hr.payroll", action: "list
     }
 
     const ref = `HR-ACCRUAL-${period}`;
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM journal_entries WHERE "companyId"=$1 AND ref=$2 AND "deletedAt" IS NULL LIMIT 1`,
       [scope.companyId, ref]
     );
 
-    const employees = await rawQuery<any>(
+    const employees = await rawQuery<Record<string, unknown>>(
       `SELECT ea."employeeId", e.name AS "employeeName", ea.salary, ea."hireDate" AS "startDate",
               COALESCE(ec."startDate", ea."hireDate") AS "contractStart"
        FROM employee_assignments ea
@@ -6631,7 +6634,7 @@ router.get("/accruals/preview", authorize({ feature: "hr.payroll", action: "list
       const dailyRate = salary / 30;
       const monthlyLeaveDays = DEFAULT_ANNUAL_LEAVE_DAYS / 12;
       const leaveAccrual = roundTo2(dailyRate * monthlyLeaveDays);
-      const startDate = new Date(emp.contractStart || emp.startDate);
+      const startDate = new Date((emp.contractStart || emp.startDate) as string);
       const yearsOfService = (periodEnd.getTime() - startDate.getTime()) / (365.25 * 24 * 3600 * 1000);
       const monthlyEosAccrual = roundTo2(
         (yearsOfService > 5 ? salary / 12 : salary / 24));
@@ -6672,13 +6675,13 @@ router.get("/turnover-report", authorize({ feature: "hr.employees", action: "lis
     const { year } = req.query as any;
     const targetYear = year ? Number(year) : currentYear();
 
-    const [totalActive] = await rawQuery<any>(
+    const [totalActive] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(DISTINCT "employeeId") AS count FROM employee_assignments
        WHERE "companyId"=$1 AND status='active'`,
       [scope.companyId]
     );
 
-    const terminated = await rawQuery<any>(
+    const terminated = await rawQuery<Record<string, unknown>>(
       `SELECT ec."terminationReason" AS "terminationType", ec."terminatedAt" AS "terminationDate",
               e.name AS "employeeName", ea."departmentId", ea."branchId",
               d.name AS "deptName", b.name AS "branchName",
@@ -6729,7 +6732,7 @@ router.get("/turnover-report", authorize({ feature: "hr.employees", action: "lis
     });
 
     // Estimated cost per departure = 3 months average salary (recruitment + onboarding)
-    const [avgSalary] = await rawQuery<any>(
+    const [avgSalary] = await rawQuery<Record<string, unknown>>(
       `SELECT COALESCE(AVG(salary), 0) AS avg FROM employee_assignments WHERE "companyId"=$1 AND status='active'`,
       [scope.companyId]
     );
@@ -6761,7 +6764,7 @@ router.get("/expiring-documents", authorize({ feature: "hr.employees", action: "
     const scope = req.scope!;
     const days = Number(req.query.days) || 90;
 
-    const workPermits = await rawQuery<any>(
+    const workPermits = await rawQuery<Record<string, unknown>>(
       `SELECT e.id AS "employeeId", e.name AS "employeeName", e."workPermitExpiry" AS "expiryDate",
               'work_permit' AS "docType", 'تصريح العمل' AS "docLabel",
               (e."workPermitExpiry"::date - CURRENT_DATE) AS "daysLeft"
@@ -6773,7 +6776,7 @@ router.get("/expiring-documents", authorize({ feature: "hr.employees", action: "
       [scope.companyId, days]
     );
 
-    const iqamas = await rawQuery<any>(
+    const iqamas = await rawQuery<Record<string, unknown>>(
       `SELECT e.id AS "employeeId", e.name AS "employeeName", e."iqamaExpiry" AS "expiryDate",
               'iqama' AS "docType", 'الإقامة' AS "docLabel",
               (e."iqamaExpiry"::date - CURRENT_DATE) AS "daysLeft"
@@ -6785,7 +6788,7 @@ router.get("/expiring-documents", authorize({ feature: "hr.employees", action: "
       [scope.companyId, days]
     );
 
-    const passports = await rawQuery<any>(
+    const passports = await rawQuery<Record<string, unknown>>(
       `SELECT e.id AS "employeeId", e.name AS "employeeName", e."passportExpiry" AS "expiryDate",
               'passport' AS "docType", 'جواز السفر' AS "docLabel",
               (e."passportExpiry"::date - CURRENT_DATE) AS "daysLeft"
@@ -6797,7 +6800,7 @@ router.get("/expiring-documents", authorize({ feature: "hr.employees", action: "
       [scope.companyId, days]
     );
 
-    const contracts = await rawQuery<any>(
+    const contracts = await rawQuery<Record<string, unknown>>(
       `SELECT ec."employeeId", e.name AS "employeeName", ec."endDate" AS "expiryDate",
               'contract' AS "docType", 'العقد' AS "docLabel",
               (ec."endDate"::date - CURRENT_DATE) AS "daysLeft"
@@ -6811,7 +6814,7 @@ router.get("/expiring-documents", authorize({ feature: "hr.employees", action: "
     );
 
     // Driver licenses
-    const driverLicenses = await rawQuery<any>(
+    const driverLicenses = await rawQuery<Record<string, unknown>>(
       `SELECT fd.id AS "entityId", fd.name AS "entityName", fd."licenseExpiry" AS "expiryDate",
               'driving_license' AS "docType", 'رخصة القيادة' AS "docLabel",
               (fd."licenseExpiry"::date - CURRENT_DATE) AS "daysLeft",
@@ -6825,7 +6828,7 @@ router.get("/expiring-documents", authorize({ feature: "hr.employees", action: "
     );
 
     // Vehicle registration expiry
-    const vehicleRegistrations = await rawQuery<any>(
+    const vehicleRegistrations = await rawQuery<Record<string, unknown>>(
       `SELECT fv.id AS "entityId", CONCAT(fv.make,' ',fv.model,' - ',fv."plateNumber") AS "entityName",
               fv."registrationExpiry" AS "expiryDate",
               'vehicle_registration' AS "docType", 'رخصة السير' AS "docLabel",
@@ -6839,7 +6842,7 @@ router.get("/expiring-documents", authorize({ feature: "hr.employees", action: "
     );
 
     // Vehicle insurance expiry
-    const vehicleInsurance = await rawQuery<any>(
+    const vehicleInsurance = await rawQuery<Record<string, unknown>>(
       `SELECT fv.id AS "entityId", CONCAT(fv.make,' ',fv.model,' - ',fv."plateNumber") AS "entityName",
               fv."insuranceExpiry" AS "expiryDate",
               'vehicle_insurance' AS "docType", 'تأمين المركبة' AS "docLabel",
@@ -6853,7 +6856,7 @@ router.get("/expiring-documents", authorize({ feature: "hr.employees", action: "
     );
 
     // Vehicle inspection expiry
-    const vehicleInspections = await rawQuery<any>(
+    const vehicleInspections = await rawQuery<Record<string, unknown>>(
       `SELECT fv.id AS "entityId", CONCAT(fv.make,' ',fv.model,' - ',fv."plateNumber") AS "entityName",
               fv."nextInspectionDate" AS "expiryDate",
               'vehicle_inspection' AS "docType", 'الفحص الدوري' AS "docLabel",
@@ -6867,7 +6870,7 @@ router.get("/expiring-documents", authorize({ feature: "hr.employees", action: "
     );
 
     // Employee documents (iqama, work permit, driving license, etc.) from employee_documents table
-    const employeeDocs = await rawQuery<any>(
+    const employeeDocs = await rawQuery<Record<string, unknown>>(
       `SELECT ed."employeeId" AS "entityId", e.name AS "entityName", ed."expiryDate",
               ed.type AS "docType", ed.name AS "docLabel",
               (ed."expiryDate"::date - CURRENT_DATE) AS "daysLeft",
@@ -6881,7 +6884,7 @@ router.get("/expiring-documents", authorize({ feature: "hr.employees", action: "
     ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
 
     // Company documents (commercial registration, chamber of commerce, etc.)
-    const companyDocs = await rawQuery<any>(
+    const companyDocs = await rawQuery<Record<string, unknown>>(
       `SELECT cd.id AS "entityId", cd.title AS "entityName", cd."expiryDate",
               cd.type AS "docType", cd.title AS "docLabel",
               (cd."expiryDate"::date - CURRENT_DATE) AS "daysLeft",
@@ -6922,11 +6925,11 @@ router.get("/company-documents", authorize({ feature: "hr.organization", action:
     const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
 
-    const [countRow] = await rawQuery<any>(
+    const [countRow] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS total FROM company_documents WHERE "companyId"=$1 AND status != 'deleted'`,
       [scope.companyId]
     ).catch((e) => { logger.error(e, "hr query failed"); return [{ total: 0 }] as any[]; });
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM company_documents WHERE "companyId"=$1 AND status != 'deleted' ORDER BY "expiryDate" ASC NULLS LAST LIMIT $2 OFFSET $3`,
       [scope.companyId, perPage, offset]
     ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
@@ -6953,7 +6956,7 @@ router.post("/company-documents", authorize({ feature: "hr.organization", action
       after: { documentType: b.documentType, documentNumber: b.documentNumber, expiryDate: b.expiryDate },
     }).catch((e) => logger.error(e, "hr background task failed"));
 
-    const [row] = await rawQuery<any>(`SELECT * FROM company_documents WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM company_documents WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row || { id: insertId, message: "تم إضافة وثيقة المنشأة" });
   } catch (err) { handleRouteError(err, res, "Company documents error:"); }
 });
@@ -6982,7 +6985,7 @@ router.get("/employee-documents", authorize({ feature: "hr.employees", action: "
     const where = `WHERE ${conditions.join(" AND ")}`;
 
     const countParams = [...params];
-    const [countRow] = await rawQuery<any>(
+    const [countRow] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS total FROM employee_documents ed ${where}`,
       countParams
     ).catch((e) => { logger.error(e, "hr query failed"); return [{ total: 0 }] as any[]; });
@@ -6992,7 +6995,7 @@ router.get("/employee-documents", authorize({ feature: "hr.employees", action: "
     params.push(offset);
     const offsetParam = paramIdx++;
 
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT ed.*, e.name AS "employeeName"
        FROM employee_documents ed
        JOIN employees e ON e.id=ed."employeeId"
@@ -7025,7 +7028,7 @@ router.post("/employee-documents", authorize({ feature: "hr.employees", action: 
       after: { employeeId: Number(b.employeeId), documentType: b.documentType, documentNumber: b.documentNumber, expiryDate: b.expiryDate },
     }).catch((e) => logger.error(e, "hr background task failed"));
 
-    const [row] = await rawQuery<any>(`SELECT * FROM employee_documents WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM employee_documents WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row || { id: insertId, message: "تم إضافة وثيقة الموظف" });
   } catch (err) { handleRouteError(err, res, "Employee documents error:"); }
 });
@@ -7045,7 +7048,7 @@ router.get("/excuse-requests", authorize({ feature: "hr.attendance", action: "li
       params.push(status);
       where += ` AND e.status = $${params.length}`;
     }
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<Record<string, unknown>>(
       `SELECT e.*, emp.name AS "employeeName", emp."empNumber"
        FROM hr_excuse_requests e
        JOIN employee_assignments ea ON ea.id = e."assignmentId"
@@ -7063,7 +7066,7 @@ router.get("/excuse-requests/:id", authorize({ feature: "hr.attendance", action:
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT e.*, e."excuseDate" AS date, e."estimatedMinutes" AS duration,
               emp.name AS "employeeName", emp."empNumber"
        FROM hr_excuse_requests e
@@ -7083,14 +7086,14 @@ router.post("/excuse-requests", authorize({ feature: "hr.attendance", action: "c
     const { assignmentId, excuseDate, excuseType, startTime, endTime, estimatedMinutes, reason } = zodParse(excuseRequestSchema.safeParse(req.body));
 
     const effectiveAssignmentId = assignmentId || scope.activeAssignmentId;
-    const [assignment] = await rawQuery<any>(
+    const [assignment] = await rawQuery<Record<string, unknown>>(
       `SELECT ea.id, ea."employeeId", ea."companyId", ea."branchId"
        FROM employee_assignments ea WHERE ea.id = $1 AND ea."companyId" = $2 AND ea.status = 'active'`,
       [effectiveAssignmentId, scope.companyId]
     );
     if (!assignment) throw new ValidationError("التعيين غير موجود أو غير نشط", { field: "assignmentId" });
 
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM hr_excuse_requests
        WHERE "assignmentId" = $1 AND "excuseDate" = $2 AND status != 'rejected'`,
       [effectiveAssignmentId, excuseDate]
@@ -7106,13 +7109,13 @@ router.post("/excuse-requests", authorize({ feature: "hr.attendance", action: "c
     );
 
     createAuditLog({
-      companyId: scope.companyId, branchId: assignment.branchId, userId: scope.userId,
+      companyId: scope.companyId, branchId: assignment.branchId as number | undefined, userId: scope.userId,
       action: "create", entity: "hr_excuse_requests", entityId: insertId,
       after: { excuseDate, excuseType, estimatedMinutes },
     }).catch((e) => logger.error(e, "hr background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: assignment.branchId, userId: scope.userId, action: "excuse.created", entity: "hr_excuse_requests", entityId: insertId, details: JSON.stringify({ excuseDate, excuseType }) }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: assignment.branchId as number | undefined, userId: scope.userId, action: "excuse.created", entity: "hr_excuse_requests", entityId: insertId, details: JSON.stringify({ excuseDate, excuseType }) }).catch((e) => logger.error(e, "hr background task failed"));
 
-    const [row] = await rawQuery<any>(`SELECT * FROM hr_excuse_requests WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM hr_excuse_requests WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row || { id: insertId, message: "تم تقديم طلب الاستئذان بنجاح" });
   } catch (err) { handleRouteError(err, res, "Create excuse request error:"); }
 });
@@ -7128,7 +7131,7 @@ router.patch("/excuse-requests/:id/approve", authorize({ feature: "hr.attendance
       throw new ValidationError("يجب ذكر سبب الرفض", { field: "rejectionReason" });
     }
 
-    const [excuse] = await rawQuery<any>(
+    const [excuse] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM hr_excuse_requests WHERE id = $1 AND "companyId" = $2`,
       [excuseId, scope.companyId]
     );
@@ -7149,7 +7152,7 @@ router.patch("/excuse-requests/:id/approve", authorize({ feature: "hr.attendance
       },
       after: { status: newStatus },
       notifications: [{
-        assignmentId: excuse.assignmentId,
+        assignmentId: excuse.assignmentId as number,
         type: `excuse_${newStatus}`,
         title: approved ? "تمت الموافقة على الاستئذان" : "تم رفض طلب الاستئذان",
         body: approved ? `تمت الموافقة على استئذانك بتاريخ ${excuse.excuseDate}` : `تم رفض استئذانك: ${rejectionReason}`,
