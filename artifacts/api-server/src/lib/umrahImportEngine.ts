@@ -574,40 +574,19 @@ export async function confirmVouchersImport(
           await logChange(client, batchId, "nusk_invoice", res.rows[0].id, "created");
 
           const nuskId = res.rows[0].id;
-          const totalAmt = Number(row.totalAmount ?? 0);
-          const nuskStatus = String(row.nuskStatus || "pending").toLowerCase();
-          if (totalAmt > 0 && nuskStatus === "paid") {
-            try {
-              const expCode = await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "debit", "5201");
-              const apCode = await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "credit", "2101");
-              const jeId = await createGuardedJournalEntry({
-                companyId: scope.companyId,
-                branchId: scope.branchId || 0,
-                createdBy: scope.userId,
-                ref: `NUSK-JE-${row.nuskInvoiceNumber}`,
-                description: `قيد فاتورة نسك ${row.nuskInvoiceNumber}`,
-                type: "purchase",
-                sourceType: "umrah_nusk_invoices",
-                sourceId: nuskId,
-                lines: [
-                  { accountCode: expCode, debit: totalAmt, credit: 0, description: "تكلفة خدمات نسك" },
-                  { accountCode: apCode, debit: 0, credit: totalAmt, description: "مستحقات نسك" },
-                ],
-              }, { table: "umrah_nusk_invoices", id: nuskId });
-              if (jeId) {
-                await client.query(
-                  `UPDATE umrah_nusk_invoices SET "purchaseInvoiceId"=$1 WHERE id=$2 AND "companyId"=$3`,
-                  [jeId, nuskId, scope.companyId]
-                );
-              }
-            } catch (jeErr) {
-              logger.error(jeErr, `[UmrahImport] Journal entry failed for NUSK ${row.nuskInvoiceNumber}:`);
-            }
-          }
+          await postNuskJournalEntries(client, scope, {
+            nuskId,
+            nuskInvoiceNumber: String(row.nuskInvoiceNumber),
+            totalAmount: Number(row.totalAmount ?? 0),
+            refundAmount: Number(row.refundAmount ?? 0),
+            nuskStatus: String(row.nuskStatus || "pending").toLowerCase(),
+            existingApJeId: null,
+            existingRefundJeId: null,
+          });
 
           newCount++;
         } else {
-          const FIELDS = ["totalAmount", "netCost", "nuskStatus", "mutamerCount"];
+          const FIELDS = ["totalAmount", "netCost", "nuskStatus", "mutamerCount", "refundAmount"];
           const changes: string[] = [];
           const vals: any[] = [];
           let hasFinancial = false;
@@ -619,8 +598,8 @@ export async function confirmVouchersImport(
               vals.push(newVal);
               changes.push(`"${f}"=$${vals.length}`);
               await logChange(client, batchId, "nusk_invoice", ex.id, "updated", f, oldVal, newVal,
-                f === "totalAmount" || f === "netCost");
-              if (f === "totalAmount" || f === "netCost") hasFinancial = true;
+                f === "totalAmount" || f === "netCost" || f === "refundAmount");
+              if (f === "totalAmount" || f === "netCost" || f === "refundAmount") hasFinancial = true;
             }
           }
 
@@ -642,6 +621,19 @@ export async function confirmVouchersImport(
           } else {
             skippedCount++;
           }
+
+          // Always re-evaluate journal entries — backfills legacy rows missing AP,
+          // and posts the refund reversal the first time status transitions to 'refunded'.
+          // postNuskJournalEntries is idempotent via sourceKey + existing-id guards.
+          await postNuskJournalEntries(client, scope, {
+            nuskId: ex.id,
+            nuskInvoiceNumber: String(row.nuskInvoiceNumber),
+            totalAmount: Number(row.totalAmount ?? ex.totalAmount ?? 0),
+            refundAmount: Number(row.refundAmount ?? ex.refundAmount ?? 0),
+            nuskStatus: String(row.nuskStatus ?? ex.nuskStatus ?? "pending").toLowerCase(),
+            existingApJeId: ex.purchaseInvoiceId ?? null,
+            existingRefundJeId: ex.journalEntryId ?? null,
+          });
         }
         await client.query("RELEASE SAVEPOINT sp_row");
       } catch (err: any) {
@@ -672,6 +664,98 @@ export async function confirmVouchersImport(
 
     return { batchId, newCount, updatedCount, skippedCount, errorCount, financialImpactCount };
   });
+}
+
+// ---------------------------------------------------------------------------
+// Helper: post NUSK invoice journal entries (AP on receipt + refund reversal)
+// ---------------------------------------------------------------------------
+//
+// Accounting rules:
+//   * AP (DR cost / CR nusk payables) posts on receipt for ANY status that
+//     represents a real obligation — i.e. anything except 'cancelled'. The
+//     prior behaviour gated this on status='paid' which left pending/issued
+//     invoices unbooked and silently understated AP on the trial balance.
+//   * Refund reversal (DR nusk payables / CR cost) posts when status is
+//     'refunded' AND refundAmount > 0. It cancels the original obligation
+//     up to the refund amount.
+//
+// Idempotency: caller passes the row's existingApJeId / existingRefundJeId;
+//   we skip posting when they are already set. createGuardedJournalEntry
+//   itself also dedupes via sourceKey, so a re-run is always safe.
+async function postNuskJournalEntries(
+  client: pg.PoolClient,
+  scope: ImportScope,
+  params: {
+    nuskId: number;
+    nuskInvoiceNumber: string;
+    totalAmount: number;
+    refundAmount: number;
+    nuskStatus: string;
+    existingApJeId: number | null;
+    existingRefundJeId: number | null;
+  },
+): Promise<void> {
+  const { nuskId, nuskInvoiceNumber, totalAmount, refundAmount, nuskStatus, existingApJeId, existingRefundJeId } = params;
+
+  if (totalAmount > 0 && nuskStatus !== "cancelled" && !existingApJeId) {
+    try {
+      const expCode = await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "debit", "5201");
+      const apCode = await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "credit", "2101");
+      const apJeId = await createGuardedJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId || 0,
+        createdBy: scope.userId,
+        ref: `NUSK-JE-${nuskInvoiceNumber}`,
+        description: `قيد فاتورة نسك ${nuskInvoiceNumber}`,
+        type: "purchase",
+        sourceType: "umrah_nusk_invoices",
+        sourceId: nuskId,
+        sourceKey: `umrah_nusk_ap_${nuskId}`,
+        lines: [
+          { accountCode: expCode, debit: totalAmount, credit: 0, description: "تكلفة خدمات نسك" },
+          { accountCode: apCode, debit: 0, credit: totalAmount, description: "مستحقات نسك" },
+        ],
+      }, { table: "umrah_nusk_invoices", id: nuskId });
+      if (apJeId) {
+        await client.query(
+          `UPDATE umrah_nusk_invoices SET "purchaseInvoiceId"=$1 WHERE id=$2 AND "companyId"=$3`,
+          [apJeId, nuskId, scope.companyId]
+        );
+      }
+    } catch (jeErr) {
+      logger.error(jeErr, `[UmrahImport] AP journal entry failed for NUSK ${nuskInvoiceNumber}`);
+    }
+  }
+
+  if (nuskStatus === "refunded" && refundAmount > 0 && !existingRefundJeId) {
+    try {
+      const expCode = await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "debit", "5201");
+      const apCode = await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "credit", "2101");
+      const refundJeId = await createGuardedJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId || 0,
+        createdBy: scope.userId,
+        ref: `NUSK-RFD-${nuskInvoiceNumber}`,
+        description: `قيد إرجاع فاتورة نسك ${nuskInvoiceNumber}`,
+        type: "purchase",
+        sourceType: "umrah_nusk_invoices",
+        sourceId: nuskId,
+        sourceKey: `umrah_nusk_refund_${nuskId}`,
+        lines: [
+          { accountCode: apCode, debit: refundAmount, credit: 0, description: "عكس مستحقات نسك — إرجاع" },
+          { accountCode: expCode, debit: 0, credit: refundAmount, description: "عكس تكلفة خدمات نسك — إرجاع" },
+        ],
+      }, { table: "umrah_nusk_invoices", id: nuskId });
+      if (refundJeId) {
+        await client.query(
+          `UPDATE umrah_nusk_invoices SET "journalEntryId"=$1 WHERE id=$2 AND "companyId"=$3`,
+          [refundJeId, nuskId, scope.companyId]
+        );
+      }
+    } catch (jeErr) {
+      logger.error(jeErr, `[UmrahImport] Refund reversal journal entry failed for NUSK ${nuskInvoiceNumber}`);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
