@@ -115,18 +115,35 @@ export async function runMigrations(): Promise<void> {
       const filePath = resolve(migrationsDir, file);
       const sql = readFileSync(filePath, "utf-8");
 
-      logger.info({ file }, "Applying migration");
-      await client.query("BEGIN");
+      // CREATE INDEX CONCURRENTLY cannot run inside a transaction block,
+      // so migrations that use it must run unwrapped. We treat the entire
+      // file as txn-less in that case — the index statements are themselves
+      // idempotent via IF NOT EXISTS, and the migration is recorded in
+      // schema_migrations in a separate INSERT below.
+      const isConcurrentMigration = /\bCREATE\s+INDEX\s+CONCURRENTLY\b/i.test(sql);
+
+      logger.info({ file, isConcurrentMigration }, "Applying migration");
       try {
-        await client.query(sql);
-        await client.query(
-          `INSERT INTO schema_migrations (filename) VALUES ($1)`,
-          [file]
-        );
-        await client.query("COMMIT");
+        if (isConcurrentMigration) {
+          await client.query(sql);
+          await client.query(
+            `INSERT INTO schema_migrations (filename) VALUES ($1)`,
+            [file]
+          );
+        } else {
+          await client.query("BEGIN");
+          await client.query(sql);
+          await client.query(
+            `INSERT INTO schema_migrations (filename) VALUES ($1)`,
+            [file]
+          );
+          await client.query("COMMIT");
+        }
         logger.info({ file }, "Migration applied");
       } catch (err) {
-        await client.query("ROLLBACK");
+        if (!isConcurrentMigration) {
+          try { await client.query("ROLLBACK"); } catch { /* connection may be wedged */ }
+        }
         logger.error(err as Error, `Migration failed: ${file}`);
         if (isDev) {
           if (!firstError) firstError = err;

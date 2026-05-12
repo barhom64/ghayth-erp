@@ -1,18 +1,38 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageStatusBadge } from "@/components/page-status-badge";
-import { formatCurrency , todayLocal } from "@/lib/formatters";
+import { formatCurrency, todayLocal } from "@/lib/formatters";
 import { Plus } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
 import { PageShell } from "@/components/page-shell";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { UnifiedDateInput } from "@/components/ui/unified-date-input";
+import {
+  FormShell, FormNumberField, FormTextareaField, FormDateField, FormSelectField, FormGrid,
+} from "@/components/form-shell";
+
+// projectId stays a string until the submit handler casts to number.
+// amount uses z.coerce.number().positive() — was tracked as string
+// and Number()-coerced; schema now blocks 0 / negative submissions.
+const costSchema = z.object({
+  projectId: z.string().min(1, "اختر المشروع"),
+  amount: z.coerce.number().positive("المبلغ يجب أن يكون أكبر من 0"),
+  description: z.string().trim(),
+  date: z.string(),
+  category: z.enum(["direct", "indirect", "overhead", "labor", "materials"]),
+});
+type CostForm = z.infer<typeof costSchema>;
+const CATEGORY_OPTIONS = [
+  { value: "direct", label: "تكلفة مباشرة" },
+  { value: "indirect", label: "تكلفة غير مباشرة" },
+  { value: "overhead", label: "تكاليف عامة" },
+  { value: "labor", label: "تكاليف عمالة" },
+  { value: "materials", label: "مواد" },
+];
 
 type Project = {
   id: number;
@@ -32,25 +52,20 @@ export default function ProjectCostingPage() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const [showAddCost, setShowAddCost] = useState(false);
-  const [costForm, setCostForm] = useState({ projectId: "", amount: "", description: "", date: todayLocal(), category: "direct" });
-
   const addCostMutation = useApiMutation<any, any>(
     (body) => `/finance/projects/${body.projectId}/costs`,
     "POST",
     [["projects-finance"]],
-    {
-      successMessage: "تم تسجيل التكلفة بنجاح",
-      onSuccess: () => {
-        setShowAddCost(false);
-        setCostForm({ projectId: "", amount: "", description: "", date: todayLocal(), category: "direct" });
-      },
-    },
+    { successMessage: "تم تسجيل التكلفة بنجاح" },
   );
 
-  function handleAddCost(e: React.FormEvent) {
-    e.preventDefault();
-    addCostMutation.mutate({ ...costForm, projectId: Number(costForm.projectId), amount: Number(costForm.amount) });
-  }
+  const handleAddCost = async (values: CostForm) => {
+    await addCostMutation.mutateAsync({
+      ...values,
+      projectId: Number(values.projectId),
+    });
+    setShowAddCost(false);
+  };
 
   const { data, isLoading, isError } = useApiQuery<any>(
     ["projects-finance"],
@@ -74,10 +89,10 @@ export default function ProjectCostingPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "تكاليف المشاريع" }]}
       loading={isLoading}
       actions={
-        <Button onClick={() => setShowAddCost(true)} disabled={list.length === 0}>
+        <GuardedButton perm="finance:create" onClick={() => setShowAddCost(true)} disabled={list.length === 0}>
           <Plus className="h-4 w-4 ml-2" />
           تسجيل تكلفة
-        </Button>
+        </GuardedButton>
       }
     >
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -156,49 +171,44 @@ export default function ProjectCostingPage() {
             <div className="p-6 border-b">
               <h3 className="text-lg font-bold">تسجيل تكلفة جديدة</h3>
             </div>
-            <form onSubmit={handleAddCost} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">المشروع *</label>
-                <Select value={costForm.projectId || "_none"} onValueChange={(v) => setCostForm(f => ({ ...f, projectId: v === "_none" ? "" : v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_none">-- اختر المشروع --</SelectItem>
-                    {list.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">المبلغ *</label>
-                <Input type="number" min="0.01" step="0.01" value={costForm.amount} onChange={e => setCostForm(f => ({ ...f, amount: e.target.value }))} placeholder="0.00" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">التصنيف</label>
-                <Select value={costForm.category} onValueChange={(v) => setCostForm(f => ({ ...f, category: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="direct">تكلفة مباشرة</SelectItem>
-                    <SelectItem value="indirect">تكلفة غير مباشرة</SelectItem>
-                    <SelectItem value="overhead">تكاليف عامة</SelectItem>
-                    <SelectItem value="labor">تكاليف عمالة</SelectItem>
-                    <SelectItem value="materials">مواد</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">التاريخ</label>
-                <UnifiedDateInput value={costForm.date} onChange={(iso) => setCostForm(f => ({ ...f, date: iso }))} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">البيان</label>
-                <Textarea rows={2} value={costForm.description} onChange={e => setCostForm(f => ({ ...f, description: e.target.value }))} placeholder="وصف التكلفة" />
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <Button type="button" variant="outline" onClick={() => setShowAddCost(false)}>إلغاء</Button>
-                <Button type="submit" disabled={addCostMutation.isPending} rateLimitAware>
-                  {addCostMutation.isPending ? "جاري التسجيل..." : "تسجيل التكلفة"}
-                </Button>
-              </div>
-            </form>
+            <div className="p-6">
+              <FormShell
+                schema={costSchema}
+                defaultValues={{
+                  projectId: "",
+                  amount: 0,
+                  description: "",
+                  date: todayLocal(),
+                  category: "direct" as const,
+                }}
+                submitLabel="تسجيل التكلفة"
+                secondaryActions={
+                  <Button type="button" variant="outline" onClick={() => setShowAddCost(false)}>
+                    إلغاء
+                  </Button>
+                }
+                onSubmit={async (values, ctx) => {
+                  await handleAddCost(values);
+                  ctx.reset();
+                }}
+              >
+                <FormGrid cols={1}>
+                  <FormSelectField
+                    name="projectId"
+                    label="المشروع"
+                    required
+                    options={[
+                      { value: "", label: "-- اختر المشروع --" },
+                      ...list.map(p => ({ value: String(p.id), label: p.name })),
+                    ]}
+                  />
+                  <FormNumberField name="amount" label="المبلغ" required placeholder="0.00" />
+                  <FormSelectField name="category" label="التصنيف" options={CATEGORY_OPTIONS} />
+                  <FormDateField name="date" label="التاريخ" />
+                  <FormTextareaField name="description" label="البيان" rows={2} />
+                </FormGrid>
+              </FormShell>
+            </div>
           </div>
         </div>
       )}

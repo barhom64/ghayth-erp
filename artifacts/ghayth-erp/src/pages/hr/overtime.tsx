@@ -2,6 +2,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { Link, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { PageShell } from "@/components/page-shell";
 import {
@@ -197,7 +198,8 @@ export default function OvertimePage() {
         if (v.status !== "pending") return null;
         return (
           <div className="flex items-center gap-1">
-            <Button
+            <GuardedButton
+              perm="hr:approve"
               size="sm"
               variant="ghost"
               className="h-7 px-2 text-green-700 hover:bg-green-50"
@@ -206,8 +208,9 @@ export default function OvertimePage() {
             >
               <CheckCircle className="h-3.5 w-3.5 ml-1" />
               اعتماد
-            </Button>
-            <Button
+            </GuardedButton>
+            <GuardedButton
+              perm="hr:approve"
               size="sm"
               variant="ghost"
               className="h-7 px-2 text-red-700 hover:bg-red-50"
@@ -216,7 +219,7 @@ export default function OvertimePage() {
             >
               <XCircle className="h-3.5 w-3.5 ml-1" />
               رفض
-            </Button>
+            </GuardedButton>
           </div>
         );
       },
@@ -233,10 +236,10 @@ export default function OvertimePage() {
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
         <Link href="/hr/overtime/create">
-          <Button size="sm" className="gap-1.5">
+          <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
             <Plus className="h-4 w-4" />
             طلب وقت إضافي
-          </Button>
+          </GuardedButton>
         </Link>
       }
     >

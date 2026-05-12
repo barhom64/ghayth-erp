@@ -115,11 +115,21 @@ async function tryRefreshToken(): Promise<boolean> {
   return refreshPromise;
 }
 
+function getCsrfToken(): string | undefined {
+  const match = document.cookie.match(/(?:^|;\s*)erp_csrf=([^;]+)/);
+  return match?.[1];
+}
+
 export async function apiFetch<T = any>(path: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
     ...(options?.headers as Record<string, string> || {}),
   };
   if (options?.body && typeof options.body === "string") headers["Content-Type"] = "application/json";
+  const method = (options?.method ?? "GET").toUpperCase();
+  if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
+    const csrf = getCsrfToken();
+    if (csrf) headers["x-csrf-token"] = csrf;
+  }
 
   let res: Response;
   try {

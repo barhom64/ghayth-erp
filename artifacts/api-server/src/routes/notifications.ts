@@ -34,6 +34,17 @@ interface NotificationListRow {
 // docs/CURSOR_PAGINATION.md and first rolled out on /admin/audit-logs.
 interface NotificationCursor { t: string; i: number }
 
+interface NotificationPreferenceRow {
+  id: number;
+  userId: number;
+  companyId: number;
+  channel: string;
+  category: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
 function encodeCursor(c: NotificationCursor): string {
   return Buffer.from(JSON.stringify(c), "utf8").toString("base64url");
 }
@@ -151,7 +162,7 @@ router.get("/unread-count", authorize({ feature: "notifications", action: "list"
 router.get("/preferences", authorize({ feature: "notifications", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<NotificationPreferenceRow>(
       `SELECT * FROM notification_preferences WHERE "userId" = $1 AND "companyId" = $2 ORDER BY category`,
       [scope.userId, scope.companyId]
     );
@@ -173,7 +184,7 @@ router.post("/preferences", authorize({ feature: "notifications", action: "updat
        RETURNING id`,
       [scope.userId, scope.companyId, channel || 'in_app', category || 'general', enabled !== false]
     );
-    const [row] = await rawQuery<any>(`SELECT * FROM notification_preferences WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<NotificationPreferenceRow>(`SELECT * FROM notification_preferences WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "upsert_notification_preference",

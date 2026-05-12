@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { DetailPageLayout, type ExtraTab } from "@/components/shared/detail-page-layout";
 import { formatDateAr } from "@/lib/formatters";
@@ -131,7 +132,8 @@ export default function JobDetailPage() {
   const actions = (
     <>
       {isClosed ? (
-        <Button
+        <GuardedButton
+          perm="hr:create"
           size="sm"
           variant="default"
           className="gap-1"
@@ -155,9 +157,10 @@ export default function JobDetailPage() {
         >
           <RotateCcw className="h-4 w-4" />
           إعادة فتح
-        </Button>
+        </GuardedButton>
       ) : (
-        <Button
+        <GuardedButton
+          perm="hr:create"
           size="sm"
           variant="outline"
           className="gap-1"
@@ -181,7 +184,7 @@ export default function JobDetailPage() {
         >
           <XCircle className="h-4 w-4" />
           إغلاق
-        </Button>
+        </GuardedButton>
       )}
     </>
   );

@@ -1,20 +1,16 @@
 import { useState } from "react";
-import { useApiQuery, asList } from "@/lib/api";
+import { useApiQuery, asList, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { formatCurrency , todayLocal } from "@/lib/formatters";
-import { Vault, Plus, RotateCcw, DollarSign } from "lucide-react";
+import { Plus, RotateCcw } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
 import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { z } from "zod";
 import {
   AlertDialog,
@@ -27,13 +23,22 @@ import {
   FormShell,
   FormNumberField,
   FormTextField,
+  FormSelectField,
+  FormDateField,
   FormGrid,
 } from "@/components/form-shell";
+
+const depositSchema = z.object({
+  contractId: z.string().min(1, "العقد مطلوب"),
+  amount: z.coerce.number().positive("المبلغ يجب أن يكون موجبًا"),
+  receivedDate: z.string().min(1, "تاريخ الاستلام مطلوب"),
+  notes: z.string().trim(),
+});
+type DepositForm = z.infer<typeof depositSchema>;
 
 export default function DepositsPage() {
   const [showForm, setShowForm] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
-  const [form, setForm] = useState({ contractId: "", amount: "", receivedDate: todayLocal(), notes: "" });
   // Refund dialog state. The pair of prompts that used to fire here
   // (refundAmount + refundReason) was replaced by RefundDepositDialog
   // — validation now lives in zod (refundAmount ≤ originalAmount,
@@ -54,15 +59,23 @@ export default function DepositsPage() {
   const totalHeld = deposits.filter((d: any) => d.status === "held").reduce((s: number, d: any) => s + Number(d.amount || 0), 0);
   const totalRefunded = deposits.filter((d: any) => d.status === "refunded").reduce((s: number, d: any) => s + Number(d.refundAmount || 0), 0);
 
-  const handleSave = async () => {
-    if (!form.contractId || !form.amount) { toast({ title: "العقد والمبلغ مطلوبان", variant: "destructive" }); return; }
-    try {
-      await apiFetch("/properties/deposits", { method: "POST", body: JSON.stringify({ ...form, contractId: Number(form.contractId), amount: Number(form.amount) }) });
-      toast({ title: "تم تسجيل وديعة الضمان" });
-      setShowForm(false);
-      setForm({ contractId: "", amount: "", receivedDate: todayLocal(), notes: "" });
-      refetch();
-    } catch (e: any) { toast({ title: e.message || "خطأ", variant: "destructive" }); }
+  const createMut = useApiMutation<unknown, { contractId: number; amount: number; receivedDate: string; notes: string }>(
+    "/properties/deposits",
+    "POST",
+    [["deposits"]],
+    {
+      successMessage: "تم تسجيل وديعة الضمان",
+      onSuccess: () => { setShowForm(false); refetch(); },
+    },
+  );
+
+  const handleSave = async (values: DepositForm) => {
+    await createMut.mutateAsync({
+      contractId: Number(values.contractId),
+      amount: values.amount,
+      receivedDate: values.receivedDate,
+      notes: values.notes,
+    });
   };
 
   const submitRefund = async (
@@ -94,9 +107,9 @@ export default function DepositsPage() {
       subtitle="إدارة ودائع ضمان المستأجرين"
       breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "ودائع الضمان" }]}
       actions={
-        <Button onClick={() => setShowForm(!showForm)} size="sm">
+        <GuardedButton perm="properties:create" onClick={() => setShowForm(!showForm)} size="sm">
           <Plus className="w-4 h-4 me-1" /> تسجيل وديعة
-        </Button>
+        </GuardedButton>
       }
     >
       <PropertyTabsNav />
@@ -119,32 +132,38 @@ export default function DepositsPage() {
       {showForm && (
         <Card className="border-2 border-primary/20">
           <CardHeader className="pb-2"><CardTitle className="text-base">تسجيل وديعة ضمان</CardTitle></CardHeader>
-          <CardContent className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>العقد *</Label>
-              <Select value={form.contractId} onValueChange={(v) => setForm({ ...form, contractId: v })}>
-                <SelectTrigger><SelectValue placeholder="اختر عقداً" /></SelectTrigger>
-                <SelectContent>
-                  {contractList.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.tenantName} — {c.unitNumber || `وحدة #${c.unitId}`}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>مبلغ الوديعة (ر.س) *</Label>
-              <Input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} placeholder="0" />
-            </div>
-            <div>
-              <Label>تاريخ الاستلام</Label>
-              <UnifiedDateInput value={form.receivedDate} onChange={(iso) => setForm({ ...form, receivedDate: iso })} />
-            </div>
-            <div>
-              <Label>ملاحظات</Label>
-              <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-            </div>
-            <div className="col-span-2 flex gap-2">
-              <Button onClick={handleSave} rateLimitAware>حفظ</Button>
-              <Button variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>
-            </div>
+          <CardContent>
+            <FormShell
+              schema={depositSchema}
+              defaultValues={{ contractId: "", amount: 0, receivedDate: todayLocal(), notes: "" }}
+              submitLabel="حفظ"
+              secondaryActions={
+                <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
+                  إلغاء
+                </Button>
+              }
+              onSubmit={async (values) => {
+                await handleSave(values);
+              }}
+            >
+              <FormGrid cols={2}>
+                <FormSelectField
+                  name="contractId"
+                  label="العقد"
+                  required
+                  options={[
+                    { value: "", label: "اختر عقداً" },
+                    ...contractList.map((c: any) => ({
+                      value: String(c.id),
+                      label: `${c.tenantName} — ${c.unitNumber || `وحدة #${c.unitId}`}`,
+                    })),
+                  ]}
+                />
+                <FormNumberField name="amount" label="مبلغ الوديعة (ر.س)" required />
+                <FormDateField name="receivedDate" label="تاريخ الاستلام" required />
+                <FormTextField name="notes" label="ملاحظات" />
+              </FormGrid>
+            </FormShell>
           </CardContent>
         </Card>
       )}
@@ -181,9 +200,9 @@ export default function DepositsPage() {
                   )}
                 </div>
                 {d.status === "held" && (
-                  <Button size="sm" variant="outline" onClick={() => setRefundTarget({ id: d.id, originalAmount: Number(d.amount) })}>
+                  <GuardedButton perm="properties:create" size="sm" variant="outline" onClick={() => setRefundTarget({ id: d.id, originalAmount: Number(d.amount) })}>
                     <RotateCcw className="w-3.5 h-3.5 me-1" /> استرداد
-                  </Button>
+                  </GuardedButton>
                 )}
               </div>
             </CardContent>

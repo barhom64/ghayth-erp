@@ -7,9 +7,11 @@ import { Button } from "@/components/ui/button";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Save, User, Calendar, AlertTriangle } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_OPTIONS = [
@@ -122,6 +124,10 @@ export default function PilgrimDetail() {
           <CardContent><p className="text-sm">{data.notes}</p></CardContent>
         </Card>
       )}
+
+      {data?.id && (
+        <UmrahAttachmentsPanel entityType="mutamer" entityId={data.id} />
+      )}
     </div>
   );
 
@@ -133,9 +139,9 @@ export default function PilgrimDetail() {
           {STATUS_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
         </SelectContent>
       </Select>
-      <Button onClick={updateStatus} disabled={!newStatus} className="gap-2" size="sm">
+      <GuardedButton perm="umrah:create" onClick={updateStatus} disabled={!newStatus} className="gap-2" size="sm">
         <Save className="h-4 w-4" />تحديث
-      </Button>
+      </GuardedButton>
     </div>
   );
 

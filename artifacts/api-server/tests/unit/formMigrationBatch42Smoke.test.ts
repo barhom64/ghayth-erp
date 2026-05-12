@@ -1,0 +1,76 @@
+import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+/**
+ * Batch 42 — umrah/commission-plan-editor simulator panel. 58 of
+ * ~280 forms now on FormShell + zod.
+ *
+ * Partial migration of the page: the 4-field commission simulator
+ * (totalMutamers / avgProfitPerVisa / salesPercent / avgSalePrice)
+ * is migrated. The bigger `plan` editor (tiers array, excludedMonths,
+ * conditions) stays on useState — multi-section form with its own
+ * TiersEditor that warrants a separate batch.
+ *
+ * Schema enforces non-negative integers for totalMutamers,
+ * non-negative numbers for the rest, and salesPercent ∈ [0, 100].
+ *
+ * §3.4 compliant (inline tab content, no modal).
+ */
+const ROOT = join(import.meta.dirname!, "../../../../artifacts/ghayth-erp/src/pages");
+const SRC = readFileSync(join(ROOT, "umrah/commission-plan-editor.tsx"), "utf8");
+function stripComments(src: string): string {
+  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+}
+
+describe("umrah/commission-plan-editor — simulator on FormShell + zod", () => {
+  it("imports the FormShell stack + zod", () => {
+    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(SRC).toContain("FormShell");
+    expect(SRC).toContain("FormNumberField");
+    expect(SRC).toContain("FormGrid");
+    expect(SRC).toContain('from "zod"');
+  });
+
+  it("simSchema validates the 4 simulator inputs", () => {
+    expect(SRC).toContain("simSchema = z.object(");
+    expect(SRC).toMatch(/^\s*totalMutamers:\s*z\.coerce\.number\(\)\.int\(\)\.nonnegative\(\)/m);
+    expect(SRC).toMatch(/^\s*avgProfitPerVisa:\s*z\.coerce\.number\(\)\.nonnegative\(\)/m);
+    expect(SRC).toMatch(/^\s*salesPercent:\s*z\.coerce\.number\(\)\.min\(0\)\.max\(100\)/m);
+    expect(SRC).toMatch(/^\s*avgSalePrice:\s*z\.coerce\.number\(\)\.nonnegative\(\)/m);
+  });
+
+  it("removes the simulator useState({totalMutamers, ...}) shape", () => {
+    expect(stripComments(SRC)).not.toMatch(/useState\(\{\s*totalMutamers:\s*0\s*,\s*avgProfitPerVisa/);
+  });
+
+  it("runSim takes a typed SimForm + POSTs to the simulate endpoint", () => {
+    expect(SRC).toContain("type SimForm = z.infer<typeof simSchema>");
+    expect(SRC).toContain("const runSim = async (values: SimForm)");
+    expect(SRC).toMatch(/apiFetch\(`\/umrah\/commission-plans\/\$\{plan\.id\}\/simulate`/);
+  });
+
+  it("simBusy + simResult preserved as parent useState (status flags, not form data)", () => {
+    expect(SRC).toMatch(/const \[simResult, setSimResult\] = useState<any>\(null\)/);
+    expect(SRC).toMatch(/const \[simBusy, setSimBusy\] = useState\(false\)/);
+  });
+
+  it("plan editor INTENTIONALLY preserved — multi-section, future batch", () => {
+    // The bigger plan form (with tiers/excludedMonths/conditions)
+    // still uses setPlan(). Documented above.
+    expect(SRC).toContain("setPlan(");
+    expect(SRC).toContain("const updateTier =");
+    expect(SRC).toContain("const addTier =");
+  });
+
+  it("FormShell renders the submit button — replaces the GuardedButton onClick={runSim}", () => {
+    expect(SRC).not.toMatch(/onClick=\{runSim\}/);
+    expect(SRC).toContain('submitLabel={simBusy ? "جاري التشغيل..." : "تشغيل المحاكاة"}');
+  });
+
+  it("stays inline tab content — §3.4 (no modal)", () => {
+    // Tab content is inline by definition; just verify no Dialog
+    // crept in.
+    expect(SRC).not.toMatch(/<Dialog\b/);
+  });
+});
