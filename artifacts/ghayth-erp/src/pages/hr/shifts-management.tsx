@@ -1,18 +1,33 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
-import { DatePicker } from "@/components/ui/date-picker";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarClock, Users, Plus, Sun, Moon, Clock } from "lucide-react";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import {
+  FormShell, FormSelectField, FormDateField, FormGrid,
+} from "@/components/form-shell";
+
+// All three IDs required — the original form tracked `assignmentId`
+// in state but had NO UI input for it, so every submit sent
+// `Number("") = 0` and the server FK-rejected. Migration adds the
+// employee/assignment picker that was always supposed to be there.
+const shiftAssignSchema = z.object({
+  assignmentId: z.string().min(1, "الموظف مطلوب"),
+  shiftId: z.string().min(1, "الوردية مطلوبة"),
+  startDate: z.string().min(1, "تاريخ البدء مطلوب"),
+});
+type ShiftAssignForm = z.infer<typeof shiftAssignSchema>;
+const defaultShiftAssignForm: ShiftAssignForm = {
+  assignmentId: "", shiftId: "", startDate: "",
+};
 
 export default function ShiftsManagementPage() {
   const { data: shiftsData, isLoading: shiftsLoading, isError: shiftsError } = useApiQuery<any>(["shifts"], "/hr/shifts");
@@ -20,11 +35,13 @@ export default function ShiftsManagementPage() {
   const { data: empData, isLoading: empLoading, isError: empError } = useApiQuery<any>(["employees"], "/employees?limit=200");
 
   const [showAssignForm, setShowAssignForm] = useState(false);
-  const [assignForm, setAssignForm] = useState({ assignmentId: "", shiftId: "", startDate: "" });
   // HR-U4 — successMessage + onSuccess بدل buildErrorToast اليدوي.
-  const assignMut = useApiMutation("/hr/shift-assignments", "POST", [["shift-assignments"]], {
-    successMessage: "تم تعيين الوردية",
-  });
+  const assignMut = useApiMutation<unknown, { assignmentId: number; shiftId: number; startDate: string }>(
+    "/hr/shift-assignments",
+    "POST",
+    [["shift-assignments"]],
+    { successMessage: "تم تعيين الوردية" },
+  );
 
   const isLoading = shiftsLoading || assignmentsLoading || empLoading;
   const isError = shiftsError || assignmentsError || empError;
@@ -36,20 +53,13 @@ export default function ShiftsManagementPage() {
   const assignments = assignmentsData?.data || [];
   const employees = empData?.data || [];
 
-  const handleAssign = () => {
-    assignMut.mutate(
-      {
-        assignmentId: Number(assignForm.assignmentId),
-        shiftId: Number(assignForm.shiftId),
-        startDate: assignForm.startDate,
-      },
-      {
-        onSuccess: () => {
-          setShowAssignForm(false);
-          setAssignForm({ assignmentId: "", shiftId: "", startDate: "" });
-        },
-      },
-    );
+  const handleAssign = async (values: ShiftAssignForm) => {
+    await assignMut.mutateAsync({
+      assignmentId: Number(values.assignmentId),
+      shiftId: Number(values.shiftId),
+      startDate: values.startDate,
+    });
+    setShowAssignForm(false);
   };
 
   return (
@@ -107,18 +117,51 @@ export default function ShiftsManagementPage() {
           {showAssignForm && (
             <Card className="mb-4 border-blue-200">
               <CardContent className="p-4">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div><Label>الوردية</Label>
-                    <Select value={assignForm.shiftId} onValueChange={(v) => setAssignForm({ ...assignForm, shiftId: v })}>
-                      <SelectTrigger className="mt-1"><SelectValue placeholder="اختر" /></SelectTrigger>
-                      <SelectContent>
-                        {shifts.map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.name} ({s.startTime}-{s.endTime})</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div><Label>من تاريخ</Label><div className="mt-1"><DatePicker value={assignForm.startDate} onChange={(v) => setAssignForm({ ...assignForm, startDate: v })} /></div></div>
-                  <div className="flex items-end"><Button onClick={handleAssign} disabled={!assignForm.shiftId || assignMut.isPending} rateLimitAware>تعيين</Button></div>
-                </div>
+                <FormShell
+                  schema={shiftAssignSchema}
+                  defaultValues={defaultShiftAssignForm}
+                  submitLabel="تعيين"
+                  secondaryActions={
+                    <Button type="button" variant="outline" onClick={() => setShowAssignForm(false)}>
+                      إلغاء
+                    </Button>
+                  }
+                  onSubmit={async (values, ctx) => {
+                    await handleAssign(values);
+                    ctx.reset();
+                  }}
+                >
+                  <FormGrid cols={3}>
+                    {/* New: employee/assignment picker that was missing from the
+                        original form — the submit used to send `Number("") = 0`
+                        as assignmentId and FK-fail at the server. */}
+                    <FormSelectField
+                      name="assignmentId"
+                      label="الموظف"
+                      required
+                      options={[
+                        { value: "", label: "اختر موظفاً" },
+                        ...employees.map((e: any) => ({
+                          value: String(e.activeAssignmentId ?? e.assignmentId ?? e.id),
+                          label: e.name,
+                        })),
+                      ]}
+                    />
+                    <FormSelectField
+                      name="shiftId"
+                      label="الوردية"
+                      required
+                      options={[
+                        { value: "", label: "اختر" },
+                        ...shifts.map((s: any) => ({
+                          value: String(s.id),
+                          label: `${s.name} (${s.startTime}-${s.endTime})`,
+                        })),
+                      ]}
+                    />
+                    <FormDateField name="startDate" label="من تاريخ" required />
+                  </FormGrid>
+                </FormShell>
               </CardContent>
             </Card>
           )}
