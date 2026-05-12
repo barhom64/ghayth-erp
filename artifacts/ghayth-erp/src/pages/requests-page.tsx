@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageShell } from "@/components/page-shell";
@@ -11,6 +12,34 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  FormShell, FormTextField, FormTextareaField, FormSelectField, FormGrid,
+} from "@/components/form-shell";
+
+const requestSchema = z.object({
+  title: z.string().trim().min(1, "العنوان مطلوب"),
+  description: z.string().trim(),
+  priority: z.enum(["low", "medium", "high", "critical"]),
+  requesterName: z.string().trim(),
+});
+type RequestForm = z.infer<typeof requestSchema>;
+const defaultRequestForm: RequestForm = {
+  title: "", description: "", priority: "medium", requesterName: "",
+};
+const PRIORITY_OPTIONS = [
+  { value: "low", label: "منخفض" },
+  { value: "medium", label: "متوسط" },
+  { value: "high", label: "عالي" },
+  { value: "critical", label: "حرج" },
+];
+
+const requestTypeSchema = z.object({
+  name: z.string().trim().min(1, "الاسم مطلوب"),
+  description: z.string().trim(),
+  category: z.string().trim(),
+});
+type RequestTypeForm = z.infer<typeof requestTypeSchema>;
+const defaultRequestType: RequestTypeForm = { name: "", description: "", category: "" };
 import {
   ClipboardCheck, ListTodo, GitBranch, Plus, X, Calendar, DollarSign,
   FileSignature, KeyRound, Wrench, ShoppingCart, Headphones, Scale,
@@ -192,7 +221,6 @@ function RequestsList() {
   const { data, refetch } = useApiQuery<any>(["requests"], "/requests");
   const createMut = useApiMutation<unknown, Record<string, any>>("/requests", "POST", [["requests"]]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ title: "", description: "", priority: "medium", requesterName: "" });
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("");
@@ -228,13 +256,12 @@ function RequestsList() {
     { key: "status", label: "الحالة", type: "select" as const, options: STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label })) },
   ];
 
-  const handleSubmit = async () => {
-    const payload: any = { ...form };
+  const handleSubmit = async (values: RequestForm) => {
+    const payload: any = { ...values };
     if (attachments.length > 0) {
       payload.attachments = attachments.map(a => ({ name: a.name, size: a.size, type: a.type, dataUrl: a.dataUrl }));
     }
     await createMut.mutateAsync(payload);
-    setForm({ title: "", description: "", priority: "medium", requesterName: "" });
     setAttachments([]);
     setShowForm(false);
     refetch();
@@ -462,17 +489,30 @@ function RequestsList() {
 
       {showForm && (
         <Card><CardContent className="p-4 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div><Label>العنوان</Label><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
-            <div><Label>مقدم الطلب</Label><Input value={form.requesterName} onChange={(e) => setForm({ ...form, requesterName: e.target.value })} /></div>
-            <div><Label>الأولوية</Label><Select value={form.priority} onValueChange={(v) => setForm({ ...form, priority: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="low">منخفض</SelectItem><SelectItem value="medium">متوسط</SelectItem><SelectItem value="high">عالي</SelectItem><SelectItem value="critical">حرج</SelectItem></SelectContent></Select></div>
-            <div><Label>الوصف</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
-          </div>
-          <FileDropZone files={attachments} onFilesChange={setAttachments} />
-          <Button onClick={handleSubmit} disabled={!form.title || createMut.isPending} rateLimitAware>
-            <Send className="h-4 w-4 me-1" />
-            إرسال الطلب
-          </Button>
+          <FormShell
+            schema={requestSchema}
+            defaultValues={defaultRequestForm}
+            submitLabel="إرسال الطلب"
+            secondaryActions={
+              <Button type="button" size="sm" variant="ghost" onClick={() => setShowForm(false)}>
+                إلغاء
+              </Button>
+            }
+            onSubmit={async (values, ctx) => {
+              await handleSubmit(values);
+              ctx.reset();
+            }}
+          >
+            <FormGrid cols={2}>
+              <FormTextField name="title" label="العنوان" required />
+              <FormTextField name="requesterName" label="مقدم الطلب" />
+              <FormSelectField name="priority" label="الأولوية" options={PRIORITY_OPTIONS} />
+              <FormTextField name="description" label="الوصف" />
+            </FormGrid>
+            <div className="mt-4">
+              <FileDropZone files={attachments} onFilesChange={setAttachments} />
+            </div>
+          </FormShell>
         </CardContent></Card>
       )}
 
@@ -512,9 +552,8 @@ function RequestsList() {
 
 function TypesTab() {
   const { data, refetch } = useApiQuery<any>(["req-types"], "/requests/types");
-  const createMut = useApiMutation<unknown, Record<string, string>>("/requests/types", "POST", [["req-types"]]);
+  const createMut = useApiMutation<unknown, RequestTypeForm>("/requests/types", "POST", [["req-types"]]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: "", description: "", category: "" });
   const items = data?.data || [];
 
   return (
@@ -524,11 +563,29 @@ function TypesTab() {
         <Button size="sm" onClick={() => setShowForm(!showForm)}>{showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة نوع</>}</Button>
       </div>
       {showForm && (
-        <Card><CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label>الاسم</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-          <div><Label>التصنيف</Label><Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} /></div>
-          <div className="md:col-span-2"><Label>الوصف</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
-          <div className="md:col-span-2"><Button onClick={async () => { await createMut.mutateAsync(form); setForm({ name: "", description: "", category: "" }); setShowForm(false); refetch(); }} disabled={!form.name}>حفظ</Button></div>
+        <Card><CardContent className="p-4">
+          <FormShell
+            schema={requestTypeSchema}
+            defaultValues={defaultRequestType}
+            submitLabel="حفظ"
+            secondaryActions={
+              <Button type="button" size="sm" variant="ghost" onClick={() => setShowForm(false)}>
+                إلغاء
+              </Button>
+            }
+            onSubmit={async (values, ctx) => {
+              await createMut.mutateAsync(values);
+              ctx.reset();
+              setShowForm(false);
+              refetch();
+            }}
+          >
+            <FormGrid cols={2}>
+              <FormTextField name="name" label="الاسم" required />
+              <FormTextField name="category" label="التصنيف" />
+              <FormTextField name="description" label="الوصف" className="md:col-span-2" />
+            </FormGrid>
+          </FormShell>
         </CardContent></Card>
       )}
       <DataTable
