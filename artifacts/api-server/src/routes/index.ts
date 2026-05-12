@@ -14,6 +14,7 @@ import hrRouter from "./hr.js";
 // no more /finance fallback router.
 import { invoicesRouter } from "./finance-invoices.js";
 import { journalRouter } from "./finance-journal.js";
+import { glHelpersRouter } from "./finance-gl-helpers.js";
 import { purchaseRouter } from "./finance-purchase.js";
 import { reportsRouter } from "./finance-reports.js";
 import { custodiesRouter } from "./finance-custodies.js";
@@ -65,6 +66,7 @@ import operationsCenterRouter from "./operationsCenter.js";
 import notificationEngineRouter from "./notification-engine.js";
 import { requireModule, requireMinLevel } from "../middlewares/roleGuard.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { csrfMiddleware } from "../middlewares/csrfMiddleware.js";
 import rateLimit from "express-rate-limit";
 import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
 import { makeRateLimitStore } from "../lib/rateLimitStore.js";
@@ -153,7 +155,7 @@ router.get("/settings/display", async (req, res) => {
       try {
         const jwt = await import("jsonwebtoken");
         const SECRET = process.env.JWT_SECRET;
-        const payload: any = jwt.default.verify(rawToken, SECRET!);
+        const payload: any = jwt.default.verify(rawToken, SECRET!, { algorithms: ["HS256"] });
         if (payload?.companyId && payload?.type !== "client_portal") companyId = payload.companyId;
       } catch (e) { logger.debug(e, "public-settings JWT decode (optional)"); }
     }
@@ -203,6 +205,7 @@ router.get("/_routes", (req, res, next): void => {
 });
 
 router.use(authMiddleware);
+router.use(csrfMiddleware);
 
 // Per-user catch-all limiter for ALL authenticated /api traffic. Replaces
 // the blanket per-IP globalLimiter that used to live in app.ts. Mounted
@@ -286,6 +289,7 @@ router.use("/hr/recruitment", requireModule("hr"), recruitmentRouter);
 router.use("/finance", financeUserLimiter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), invoicesRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), journalRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), glHelpersRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), purchaseRouter);
 router.use("/finance", requireModule("finance"), reportsRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), custodiesRouter);

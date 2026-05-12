@@ -11,6 +11,7 @@ import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Edit, Paperclip, Eye } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
@@ -54,6 +55,7 @@ export default function RequestDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/requests/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("request", id ?? 0);
   const { toast } = useToast();
   const [previewAttachment, setPreviewAttachment] = useState<PreviewableAttachment | null>(null);
 
@@ -297,6 +299,8 @@ export default function RequestDetail() {
         relatedEntities={relatedEntities}
         entityType="request"
         entityId={id ?? 0}
+        extraTabs={extraTabs}
+        hideTabs={hideTabs}
         overview={overview}
         isLoading={isLoading}
         error={error}

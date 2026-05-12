@@ -5,7 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import {
   User, Phone, Mail, Briefcase, Calendar, Building, CreditCard,
@@ -230,6 +232,7 @@ type TabKey = (typeof TABS)[number]["key"];
 export default function EmployeeDetail({ id: propId }: { id?: string }) {
   const [, params] = useRoute("/employees/:id");
   const id = propId || params?.id || "";
+  const { hideTabs: registryHideTabs } = useRegistryTabs("employee", id ?? "");
   const { data: employee, isLoading, isError, error, refetch } = useApiQuery<any>(["employee", id], `/employees/${id}`, !!id);
   const [showPrintMenu, setShowPrintMenu] = useState(false);
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
@@ -469,9 +472,9 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                 بيانات الإقامة والتأشيرة — الربط الحكومي (مقيم)
               </CardTitle>
               {!govEditing && (
-                <Button variant="ghost" size="sm" onClick={govStartEdit}>
+                <GuardedButton perm="hr:create" variant="ghost" size="sm" onClick={govStartEdit}>
                   <Pencil className="h-4 w-4 me-1" />تعديل
-                </Button>
+                </GuardedButton>
               )}
             </CardHeader>
             <CardContent>
@@ -530,9 +533,9 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                     </div>
                   </div>
                   <div className="flex gap-2 justify-end">
-                    <Button size="sm" onClick={govSaveEdit}>
+                    <GuardedButton perm="hr:create" size="sm" onClick={govSaveEdit}>
                       <Check className="h-4 w-4 me-1" />حفظ
-                    </Button>
+                    </GuardedButton>
                     <Button variant="outline" size="sm" onClick={() => setGovEditing(false)}>
                       <X className="h-4 w-4 me-1" />إلغاء
                     </Button>
@@ -844,7 +847,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
         isLoading={isLoading}
         error={isError ? (error || new Error("خطأ في تحميل بيانات الموظف")) : undefined}
         onRetry={refetch}
-        hideTabs={["tasks"]}
+        hideTabs={[...new Set(["tasks" as const, ...registryHideTabs])]}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             <OperationalStatusBar employeeId={id} />

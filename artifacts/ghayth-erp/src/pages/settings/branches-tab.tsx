@@ -1,13 +1,25 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { z } from "zod";
 import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building, Plus, X, Pencil, Trash2 } from "lucide-react";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from "@/contexts/app-context";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import { FormShell, FormTextField, FormSelectField, FormGrid } from "@/components/form-shell";
+
+const branchFormSchema = z.object({
+  name: z.string().trim().min(1, "اسم الفرع مطلوب"),
+  nameEn: z.string().trim(),
+  city: z.string().trim(),
+  phone: z.string().trim(),
+  companyId: z.string().min(1, "اختر شركة"),
+});
+type BranchForm = z.infer<typeof branchFormSchema>;
 
 export function BranchesTab() {
   const { refreshFilters } = useAppContext();
@@ -18,22 +30,37 @@ export function BranchesTab() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState<number | null>(null);
-  const [filterCompanyId, setFilterCompanyId] = useState<number | "">( "");
-  const [form, setForm] = useState({ name: "", nameEn: "", city: "", phone: "", companyId: "" });
+  const [filterCompanyId, setFilterCompanyId] = useState<number | "">("");
+  // Default companyId picks the first company; changes when companies
+  // load or when the user clicks "تعديل" on an existing branch.
+  const [formInitial, setFormInitial] = useState<BranchForm>({
+    name: "", nameEn: "", city: "", phone: "", companyId: "",
+  });
+  const [deletingBranch, setDeletingBranch] = useState<{ id: number; name: string } | null>(null);
   const items = asList(data);
   const filteredItems = filterCompanyId
     ? items.filter((b: any) => b.companyId === filterCompanyId)
     : items;
 
+  // Memoise the company options array so FormSelectField doesn't see a
+  // new array reference every render (causes spurious re-mounts).
+  const companyOptions = useMemo(
+    () => companies.map((c: any) => ({ value: String(c.id), label: c.name })),
+    [companies],
+  );
+
   const resetForm = () => {
-    setForm({ name: "", nameEn: "", city: "", phone: "", companyId: companies[0]?.id?.toString() || "" });
+    setFormInitial({
+      name: "", nameEn: "", city: "", phone: "",
+      companyId: companies[0]?.id?.toString() || "",
+    });
     setEditingId(null);
     setShowForm(false);
   };
 
   useEffect(() => {
-    if (companies.length > 0 && !form.companyId) {
-      setForm((f) => ({ ...f, companyId: companies[0]?.id?.toString() || "" }));
+    if (companies.length > 0 && !formInitial.companyId) {
+      setFormInitial((f) => ({ ...f, companyId: companies[0]?.id?.toString() || "" }));
     }
   }, [companies]);
 
@@ -73,7 +100,7 @@ export function BranchesTab() {
           <Button variant="ghost" size="sm" onClick={() => handleEdit(r)} title="تعديل"><Pencil className="h-4 w-4" /></Button>
           <Button
             variant="ghost" size="sm"
-            onClick={() => { if (confirm("هل أنت متأكد من حذف هذا الفرع؟ سيؤثر ذلك على جميع البيانات المرتبطة به.")) handleDelete(r.id); }}
+            onClick={() => setDeletingBranch({ id: r.id, name: r.name || "—" })}
             disabled={deleting === r.id}
             title="حذف"
             className="text-red-500 hover:text-red-700"
@@ -89,7 +116,7 @@ export function BranchesTab() {
   if (isError || companiesError) return <DataTable columns={branchColumns} data={[]} isError={true} searchPlaceholder={null} noToolbar />;
 
   const handleEdit = (item: any) => {
-    setForm({
+    setFormInitial({
       name: item.name || "",
       nameEn: item.nameEn || "",
       city: item.city || "",
@@ -100,22 +127,18 @@ export function BranchesTab() {
     setShowForm(true);
   };
 
-  const handleSave = async () => {
-    if (!form.name.trim()) {
-      toast({ title: "خطأ", description: "اسم الفرع مطلوب", variant: "destructive" });
-      return;
-    }
+  const handleSave = async (values: BranchForm) => {
     try {
       if (editingId) {
         await apiFetch(`/settings/branches/${editingId}`, {
           method: "PUT",
-          body: JSON.stringify(form),
+          body: JSON.stringify(values),
         });
         toast({ title: "تم التعديل", description: "تم تعديل الفرع بنجاح" });
       } else {
         await apiFetch("/settings/branches", {
           method: "POST",
-          body: JSON.stringify(form),
+          body: JSON.stringify(values),
         });
         toast({ title: "تمت الإضافة", description: "تمت إضافة الفرع بنجاح" });
       }
@@ -148,9 +171,9 @@ export function BranchesTab() {
           <Building className="h-5 w-5" />
           إدارة الفروع
         </h3>
-        <Button size="sm" onClick={() => { if (showForm) resetForm(); else setShowForm(true); }}>
+        <GuardedButton perm="admin:create" size="sm" onClick={() => { if (showForm) resetForm(); else setShowForm(true); }}>
           {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />فرع جديد</>}
-        </Button>
+        </GuardedButton>
       </div>
 
       {showForm && (
@@ -158,39 +181,29 @@ export function BranchesTab() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">{editingId ? "تعديل الفرع" : "إضافة فرع جديد"}</CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label>الشركة <span className="text-red-500">*</span></Label>
-              <select
-                className="w-full border rounded-md p-2"
-                value={form.companyId}
-                onChange={(e) => setForm({ ...form, companyId: e.target.value })}
-              >
-                <option value="">اختر شركة</option>
-                {companies.map((c: any) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <Label>اسم الفرع (عربي) <span className="text-red-500">*</span></Label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="مثال: الفرع الرئيسي - الرياض" />
-            </div>
-            <div>
-              <Label>اسم الفرع (إنجليزي)</Label>
-              <Input value={form.nameEn} onChange={(e) => setForm({ ...form, nameEn: e.target.value })} placeholder="الفرع الرئيسي — الرياض" />
-            </div>
-            <div>
-              <Label>المدينة</Label>
-              <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="الرياض" />
-            </div>
-            <div>
-              <Label>الهاتف</Label>
-              <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+966 11 xxx xxxx" />
-            </div>
-            <div className="md:col-span-2">
-              <Button onClick={handleSave} rateLimitAware>{editingId ? "تحديث الفرع" : "إضافة الفرع"}</Button>
-            </div>
+          <CardContent>
+            <FormShell
+              key={editingId ?? "new"}
+              schema={branchFormSchema}
+              defaultValues={formInitial}
+              submitLabel={editingId ? "تحديث الفرع" : "إضافة الفرع"}
+              secondaryActions={
+                <Button type="button" size="sm" variant="ghost" onClick={resetForm}>
+                  إلغاء
+                </Button>
+              }
+              onSubmit={async (values) => {
+                await handleSave(values);
+              }}
+            >
+              <FormGrid cols={2}>
+                <FormSelectField name="companyId" label="الشركة" required options={companyOptions} />
+                <FormTextField name="name" label="اسم الفرع (عربي)" required placeholder="مثال: الفرع الرئيسي - الرياض" />
+                <FormTextField name="nameEn" label="اسم الفرع (إنجليزي)" placeholder="الفرع الرئيسي — الرياض" />
+                <FormTextField name="city" label="المدينة" placeholder="الرياض" />
+                <FormTextField name="phone" label="الهاتف" placeholder="+966 11 xxx xxxx" />
+              </FormGrid>
+            </FormShell>
           </CardContent>
         </Card>
       )}
@@ -217,6 +230,20 @@ export function BranchesTab() {
         searchPlaceholder="بحث في الفروع..."
         emptyMessage="لا توجد فروع"
         pageSize={0}
+      />
+
+      <ConfirmDeleteDialog
+        open={deletingBranch !== null}
+        onOpenChange={(v) => { if (!v) setDeletingBranch(null); }}
+        entity={{
+          type: "branch",
+          id: deletingBranch?.id ?? 0,
+          name: deletingBranch?.name ?? "",
+        }}
+        deletePath={`/settings/branches/${deletingBranch?.id}`}
+        invalidateKeys={[["settings-branches"]]}
+        successMessage="تم الحذف"
+        onDeleted={() => { setDeletingBranch(null); refetch(); refreshFilters(); }}
       />
     </div>
   );

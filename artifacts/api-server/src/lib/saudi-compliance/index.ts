@@ -27,6 +27,24 @@ export { buildWpsFile, isSaudiIban } from "./wps/builder.js";
 export type { ParsedAckLine, ParsedAckFile } from "./wps/parser.js";
 export { parseAckFile } from "./wps/parser.js";
 
+// WPS run orchestrator (week 5)
+export type {
+  CreateWpsRunInput,
+  BuildAndPersistInput,
+  BuildAndPersistOutcome,
+  AckOutcome,
+  ApplyAckOutcome,
+} from "./wps/run.js";
+export {
+  assertWpsTransition,
+  deriveHeaderStatus,
+  createWpsRun,
+  buildAndPersist,
+  submitWpsRun,
+  applyAck,
+  IllegalWpsTransitionError,
+} from "./wps/run.js";
+
 export { classifyNitaqat } from "./nitaqat.js";
 
 export {
@@ -48,3 +66,53 @@ export {
   iqamaDailyAlertCron,
   formatAlertMessage,
 } from "./iqama-cron.js";
+
+// Mudad REST client (week 3)
+export type { MudadEnvironment } from "./mudad/endpoints.js";
+export {
+  mudadBaseUrl,
+  buildMudadUrl,
+  MUDAD_TOKEN_PATH,
+  MUDAD_SALARY_PATH,
+  MUDAD_LEAVE_UNPAID_PATH,
+  MUDAD_EXIT_REENTRY_PATH,
+  MUDAD_TERMINATION_PATH,
+  MUDAD_STATUS_PATH,
+} from "./mudad/endpoints.js";
+export type { MudadCredentials, CachedToken } from "./mudad/auth.js";
+export {
+  getMudadAccessToken,
+  requestMudadToken,
+  parseTokenResponse,
+  bearerHeader,
+  clearMudadTokenCache,
+} from "./mudad/auth.js";
+export type {
+  SalarySubmission,
+  LeaveUnpaidSubmission,
+  TerminationSubmission,
+  MudadResponse,
+  MudadClientCallOpts,
+} from "./mudad/client.js";
+export {
+  submitSalary,
+  submitLeaveUnpaid,
+  submitExitReentry,
+  submitTermination,
+  fetchStatus,
+  parseMudadResponse,
+  MudadTransportError,
+} from "./mudad/client.js";
+
+// Mudad salary settlement → journal entry wiring
+export type {
+  SalaryComponents,
+  SalaryJournalAccounts,
+  PostMudadSalaryOpts,
+  PostMudadSalaryOutcome,
+} from "./mudad/post-salary-journal.js";
+export {
+  computeGross,
+  buildSalaryEntryInput,
+  postMudadSalaryJournal,
+} from "./mudad/post-salary-journal.js";

@@ -1,19 +1,29 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calculator, DollarSign, Calendar, User } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 import { TERMINATION_TYPES } from "@/lib/hr-type-maps";
-import { DatePicker } from "@/components/ui/date-picker";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { formatCurrency , todayLocal } from "@/lib/formatters";
+import { formatCurrency, todayLocal } from "@/lib/formatters";
+import {
+  FormShell, FormSelectField, FormDateField, FormGrid,
+} from "@/components/form-shell";
+
+// Calculation form (no POST) — submit builds the query URL the
+// gratuity endpoint reads. employeeId required; the rest have safe
+// defaults. terminationType uses TERMINATION_TYPES keys verbatim
+// (server already validates the enum).
+const gratuitySchema = z.object({
+  employeeId: z.string().min(1, "الموظف مطلوب"),
+  terminationType: z.string().min(1),
+  terminationDate: z.string().min(1),
+});
+type GratuityForm = z.infer<typeof gratuitySchema>;
 
 export default function GratuityPage() {
-  const [form, setForm] = useState({ employeeId: "", terminationType: "end_of_service", terminationDate: todayLocal() });
   const [calcUrl, setCalcUrl] = useState<string>("");
 
   const { data: employees, isLoading: employeesLoading, isError: employeesError } = useApiQuery<any>(["employees-active"], "/employees?status=active&limit=200");
@@ -28,9 +38,8 @@ export default function GratuityPage() {
   if (employeesLoading) return <LoadingSpinner />;
   if (employeesError) return <ErrorState />;
 
-  const handleCalc = () => {
-    if (!form.employeeId) return;
-    setCalcUrl(`/hr/gratuity/${form.employeeId}?terminationType=${form.terminationType}&terminationDate=${form.terminationDate}`);
+  const handleCalc = (values: GratuityForm) => {
+    setCalcUrl(`/hr/gratuity/${values.employeeId}?terminationType=${values.terminationType}&terminationDate=${values.terminationDate}`);
   };
 
 
@@ -44,34 +53,38 @@ export default function GratuityPage() {
     >
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">بيانات الحساب</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-2 gap-4">
-          <div>
-            <Label>الموظف *</Label>
-            <Select value={form.employeeId} onValueChange={(v) => { setForm({ ...form, employeeId: v }); setCalcUrl(""); }}>
-              <SelectTrigger><SelectValue placeholder="اختر موظفاً" /></SelectTrigger>
-              <SelectContent>
-                {employeeList.map((e: any) => <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>نوع إنهاء الخدمة</Label>
-            <Select value={form.terminationType} onValueChange={(v) => setForm({ ...form, terminationType: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {Object.entries(TERMINATION_TYPES).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>تاريخ إنهاء الخدمة</Label>
-            <DatePicker value={form.terminationDate} onChange={(v) => setForm({ ...form, terminationDate: v })} />
-          </div>
-          <div className="flex items-end">
-            <Button onClick={handleCalc} className="w-full" disabled={!form.employeeId || isLoading}>
-              <Calculator className="w-4 h-4 me-1" /> {isLoading ? "جاري الحساب..." : "احسب المكافأة"}
-            </Button>
-          </div>
+        <CardContent>
+          <FormShell
+            schema={gratuitySchema}
+            defaultValues={{
+              employeeId: "",
+              terminationType: "end_of_service",
+              terminationDate: todayLocal(),
+            }}
+            submitLabel="احسب المكافأة"
+            onSubmit={(values) => {
+              handleCalc(values);
+            }}
+          >
+            <FormGrid cols={2}>
+              <FormSelectField
+                name="employeeId"
+                label="الموظف"
+                required
+                options={[
+                  { value: "", label: "اختر موظفاً" },
+                  ...employeeList.map((e: any) => ({ value: String(e.id), label: e.name })),
+                ]}
+              />
+              <FormSelectField
+                name="terminationType"
+                label="نوع إنهاء الخدمة"
+                required
+                options={Object.entries(TERMINATION_TYPES).map(([value, label]) => ({ value, label }))}
+              />
+              <FormDateField name="terminationDate" label="تاريخ إنهاء الخدمة" required />
+            </FormGrid>
+          </FormShell>
         </CardContent>
       </Card>
 

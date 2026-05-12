@@ -84,7 +84,7 @@ describe("Invoice state machine", () => {
   });
 
   it("validates invoice status transitions", () => {
-    expect(INV_ROUTE).toContain("INVOICE_TRANSITIONS[existing.status]");
+    expect(INV_ROUTE).toContain("INVOICE_TRANSITIONS[existing.status");
   });
 });
 

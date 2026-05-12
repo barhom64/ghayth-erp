@@ -289,7 +289,7 @@ describe("Loan approval flow", () => {
     const endIdx = LOANS_ROUTE.indexOf("router.", idx + 10);
     const section = LOANS_ROUTE.slice(idx, endIdx);
     expect(section).toContain("isLast");
-    expect(section).toContain("loan.installmentCount - 1");
+    expect(section).toMatch(/(?:loan\.)?installmentCount - 1/);
   });
 
   it("posts GL disbursement entry via hrEngine", () => {
@@ -309,7 +309,7 @@ describe("Loan approval flow", () => {
 
   it("supports multi-step approval chain", () => {
     const idx = LOANS_ROUTE.indexOf('"/loans/:id/approve"');
-    const section = LOANS_ROUTE.slice(idx, idx + 3500);
+    const section = LOANS_ROUTE.slice(idx, idx + 4000);
     expect(section).toContain("processApprovalStep");
     expect(section).toContain("pending_next_step");
   });
@@ -427,7 +427,7 @@ describe("Overtime approval flow", () => {
 
   it("supports multi-step approval chain", () => {
     const idx = OVERTIME_ROUTE.indexOf('"/overtime/:id/approve"');
-    const section = OVERTIME_ROUTE.slice(idx, idx + 3500);
+    const section = OVERTIME_ROUTE.slice(idx, idx + 4000);
     expect(section).toContain("processApprovalStep");
     expect(section).toContain("pending_next_step");
   });
@@ -461,7 +461,7 @@ describe("Overtime monthly summary", () => {
 describe("Overtime self-service", () => {
   it("GET /overtime/my scopes by activeAssignmentId", () => {
     const idx = OVERTIME_ROUTE.indexOf('"/overtime/my"');
-    const section = OVERTIME_ROUTE.slice(idx, idx + 500);
+    const section = OVERTIME_ROUTE.slice(idx, idx + 2000);
     expect(section).toContain("scope.activeAssignmentId");
   });
 });

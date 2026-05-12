@@ -9,10 +9,12 @@ import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Clock } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 export default function ShiftDetail() {
   const [, params] = useRoute("/hr/shifts/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("shift", id ?? 0);
 
   // Shifts have no GET /:id endpoint — fetch the list and find by id.
   const { data, isLoading, error, refetch } = useApiQuery<any>(
@@ -70,6 +72,8 @@ export default function ShiftDetail() {
       entityType="shift"
       entityId={id ?? 0}
       overview={overview}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       isLoading={isLoading}
       error={error}
       onRetry={refetch}

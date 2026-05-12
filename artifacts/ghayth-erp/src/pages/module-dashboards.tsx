@@ -87,9 +87,9 @@ function HrDashboard() {
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm">الإجازات</CardTitle></CardHeader>
           <CardContent className="space-y-2">
-            <MiniBar label="معلقة" value={data.leaves?.pending ?? 0} max={Math.max(data.leaves?.pending + data.leaves?.approved + data.leaves?.rejected, 1)} color="orange" />
-            <MiniBar label="معتمدة" value={data.leaves?.approved ?? 0} max={Math.max(data.leaves?.pending + data.leaves?.approved + data.leaves?.rejected, 1)} color="green" />
-            <MiniBar label="مرفوضة" value={data.leaves?.rejected ?? 0} max={Math.max(data.leaves?.pending + data.leaves?.approved + data.leaves?.rejected, 1)} color="red" />
+            <MiniBar label="معلقة" value={data.leaves?.pending ?? 0} max={Math.max((data.leaves?.pending ?? 0) + (data.leaves?.approved ?? 0) + (data.leaves?.rejected ?? 0), 1)} color="orange" />
+            <MiniBar label="معتمدة" value={data.leaves?.approved ?? 0} max={Math.max((data.leaves?.pending ?? 0) + (data.leaves?.approved ?? 0) + (data.leaves?.rejected ?? 0), 1)} color="green" />
+            <MiniBar label="مرفوضة" value={data.leaves?.rejected ?? 0} max={Math.max((data.leaves?.pending ?? 0) + (data.leaves?.approved ?? 0) + (data.leaves?.rejected ?? 0), 1)} color="red" />
           </CardContent>
         </Card>
         <Card>

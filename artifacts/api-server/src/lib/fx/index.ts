@@ -42,3 +42,29 @@ export type {
 export { computeRealizedFx, recordRealizedFx } from "./realized.js";
 export type { StalenessAlertOutcome } from "./staleness-alert.js";
 export { fxStalenessCheckCron, runStalenessCheck } from "./staleness-alert.js";
+
+// FX revaluation → journal entry wiring (week-3 follow-up)
+export type {
+  RevaluationLineForJournal,
+  ResolvedAccountSet,
+  RevaluationTotals,
+  PostRevaluationOpts,
+  PostRevaluationOutcome,
+} from "./post-revaluation-journal.js";
+export {
+  aggregateRevaluation,
+  buildRevaluationEntryInput,
+  postFxRevaluationJournal,
+  isAssetEntity,
+} from "./post-revaluation-journal.js";
+
+// Realised FX → journal entry wiring (sister helper to post-revaluation)
+export type {
+  RealizedAccounts,
+  PostRealizedFxOpts,
+  PostRealizedFxOutcome,
+} from "./post-realized-journal.js";
+export {
+  buildRealizedFxEntryInput,
+  postRealizedFxJournal,
+} from "./post-realized-journal.js";

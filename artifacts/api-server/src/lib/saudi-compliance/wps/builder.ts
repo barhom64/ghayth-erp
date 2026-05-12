@@ -24,6 +24,7 @@ import type {
   WpsPayrollEntry,
   WpsRunSummary,
 } from "../types.js";
+import { ADAPTERS } from "./formats/index.js";
 
 export interface BuildWpsFileInput {
   summary: WpsRunSummary;
@@ -49,23 +50,16 @@ export function buildWpsFile(input: BuildWpsFileInput): WpsBuildResult {
 
   validateEntries(input.entries);
 
-  switch (format) {
-    case "generic_pipe":
-      return buildGenericPipe(input);
-    case "ncb":
-    case "alrajhi":
-    case "riyad":
-    case "alinma":
-      // Per-bank adapters land in week 4 of the rollout. Until
-      // then, the generic format is what the route handler picks
-      // and the operator validates with the bank manually.
-      throw new Error(
-        `WPS build: per-bank format "${format}" not yet wired. ` +
-          `Use "generic_pipe" until artifacts/api-server/src/lib/saudi-compliance/wps/formats/ ships.`,
-      );
-    default:
-      throw new Error(`WPS build: unknown format "${format as string}"`);
+  if (format === "generic_pipe") {
+    return buildGenericPipe(input);
   }
+
+  // Per-bank adapters dispatch by tag (week-4 of the rollout).
+  const adapter = ADAPTERS[format];
+  if (!adapter) {
+    throw new Error(`WPS build: unknown format "${format as string}"`);
+  }
+  return adapter.build({ summary: input.summary, entries: input.entries });
 }
 
 // ─────────────────────────────────────────────────────────────────────

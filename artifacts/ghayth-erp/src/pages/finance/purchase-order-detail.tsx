@@ -12,10 +12,12 @@ import { ExportButton } from "@/components/shared/export-buttons";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 import { resolveStatus } from "@/components/page-status-badge";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 export default function PurchaseOrderDetailPage() {
   const [, params] = useRoute("/finance/purchase-orders/:id");
   const id = params?.id;
+  const { extraTabs, hideTabs } = useRegistryTabs("purchase_order", id || "");
   const { data: po, isLoading, isError } = useApiQuery<any>(["po-detail", id || ""], `/finance/purchase-orders/${id}`, !!id);
   const [showPreview, setShowPreview] = useState(false);
   const printContainerRef = useRef<HTMLDivElement>(null);
@@ -142,6 +144,8 @@ export default function PurchaseOrderDetailPage() {
         entityType="purchase-order"
         entityId={id || ""}
         overview={overview}
+        extraTabs={extraTabs}
+        hideTabs={hideTabs}
         actions={actions}
         isLoading={isLoading}
         error={isError ? true : undefined}

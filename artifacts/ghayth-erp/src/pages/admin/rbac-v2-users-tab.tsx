@@ -3,6 +3,7 @@ import { useApiQuery, apiFetch } from "@/lib/api";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -138,15 +139,15 @@ export function UserRoleAssignmentTab() {
               </p>
             </div>
           </div>
-          <Button size="sm" onClick={syncAllRoles}>
+          <GuardedButton perm="admin:create" size="sm" onClick={syncAllRoles}>
             <Sparkles className="h-4 w-4 me-1" />
             مزامنة كل الأدوار لي
-          </Button>
+          </GuardedButton>
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-12 gap-4">
-      <div className="col-span-5">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <div className="lg:col-span-5">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
@@ -189,7 +190,7 @@ export function UserRoleAssignmentTab() {
         </Card>
       </div>
 
-      <div className="col-span-7">
+      <div className="lg:col-span-7 overflow-x-auto">
         {!selectedUser ? (
           <Card>
             <CardContent className="p-12 text-center text-gray-400">
@@ -231,9 +232,9 @@ export function UserRoleAssignmentTab() {
                             </Badge>
                           )}
                         </div>
-                        <Button size="sm" variant="ghost" onClick={() => unassign(b.role_id)}>
+                        <GuardedButton perm="admin:create" size="sm" variant="ghost" onClick={() => unassign(b.role_id)}>
                           <X className="h-4 w-4" />
-                        </Button>
+                        </GuardedButton>
                       </div>
                     ))}
                   </div>
@@ -265,10 +266,10 @@ export function UserRoleAssignmentTab() {
                     placeholder="تاريخ انتهاء (اختياري)"
                   />
                 </div>
-                <Button onClick={assign} disabled={!pickRole} className="w-full mt-2" size="sm">
+                <GuardedButton perm="admin:create" onClick={assign} disabled={!pickRole} className="w-full mt-2" size="sm">
                   <UserPlus className="h-4 w-4 me-1" />
                   إسناد
-                </Button>
+                </GuardedButton>
               </div>
             </CardContent>
           </Card>

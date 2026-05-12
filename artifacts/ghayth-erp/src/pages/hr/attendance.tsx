@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Clock, Plus, CheckCircle, XCircle, AlertCircle, Users, ChevronDown, ChevronUp, AlertTriangle, DollarSign } from "lucide-react";
 import { ExportButton } from "@/components/shared/export-buttons";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatTimeAr, formatDateAr } from "@/lib/formatters";
@@ -45,7 +46,8 @@ function monthEndDate(month: string): string {
 
 function PenaltyChain({ record }: { record: any }) {
   const lateMin = record.lateMinutes || 0;
-  const penaltyLevel = record.penaltyLevel || 0;
+  const severityMap: Record<string, number> = { none: 0, verbal: 1, first_written: 2, second_written: 3, deduction: 4, suspension: 5 };
+  const penaltyLevel = severityMap[record.violationSeverity] ?? record.penaltyLevel ?? 0;
   const deduction = record.deductionAmount || 0;
   const overtimeMin = record.overtimeMinutes || 0;
 
@@ -241,10 +243,10 @@ export default function AttendancePage() {
             </Button>
           </Link>
           <Link href="/hr/attendance/create">
-            <Button variant="outline" size="sm" className="gap-1.5">
+            <GuardedButton perm="hr:create" variant="outline" size="sm" className="gap-1.5">
               <Plus className="h-4 w-4" />
               تسجيل حضور
-            </Button>
+            </GuardedButton>
           </Link>
           <ExportButton
             endpoint="/export/excel/attendance"
@@ -262,7 +264,7 @@ export default function AttendancePage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-44" />
         <Link href="/hr/attendance/create">
-          <Button size="sm"><Plus className="h-4 w-4 me-1" />تسجيل حضور</Button>
+          <GuardedButton perm="hr:create" size="sm"><Plus className="h-4 w-4 me-1" />تسجيل حضور</GuardedButton>
         </Link>
       </div>
 

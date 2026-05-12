@@ -13,6 +13,7 @@ import { EntityPrintButton, type PrintSection } from "@/components/shared/entity
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Paperclip, Eye, Inbox, SendHorizonal, Mail } from "lucide-react";
@@ -70,6 +71,7 @@ export default function CorrespondenceDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/correspondence/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("correspondence", id ?? 0);
   const [previewAttachment, setPreviewAttachment] = useState<PreviewableAttachment | null>(null);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
@@ -338,6 +340,8 @@ export default function CorrespondenceDetail() {
         isLoading={isLoading}
         error={error}
         onRetry={refetch}
+        extraTabs={extraTabs}
+        hideTabs={hideTabs}
         printable
         onPrint={() => { /* handled by EntityPrintButton below */ }}
         actions={

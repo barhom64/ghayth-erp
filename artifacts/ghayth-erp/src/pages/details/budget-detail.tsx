@@ -12,13 +12,13 @@ import { EntityPrintButton, type PrintSection } from "@/components/shared/entity
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
-import { EntityDocuments } from "@/components/shared/entity-documents";
-import { ApprovalTimeline } from "@/components/shared/approval-timeline";
+
 import { Edit, Wallet, TrendingUp, TrendingDown } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "مسودة",
@@ -46,6 +46,7 @@ export default function BudgetDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/finance/budget/:id");
   const id = params?.id ? Number(params.id) : null;
+  const { extraTabs, hideTabs } = useRegistryTabs("budget", id ?? 0);
   const { toast } = useToast();
 
   // Budget has no GET /:id endpoint — fetch the list and find by id.
@@ -287,18 +288,6 @@ export default function BudgetDetail() {
         )}
       </div>
 
-      {/* Documents */}
-      {id && (
-        <EntityDocuments entityType="budget" entityId={id} />
-      )}
-
-      {/* Approval Timeline */}
-      {id && (
-        <ApprovalTimeline entityType="budget" entityId={id} />
-      )}
-
-      {id && <EntityComments entityType="budget" entityId={id} />}
-      {id && <EntityTags entityType="budget" entityId={id} />}
     </div>
   );
 
@@ -316,6 +305,8 @@ export default function BudgetDetail() {
       relatedEntities={relatedEntities}
       entityType="budget"
       entityId={id ?? 0}
+      extraTabs={extraTabs}
+      hideTabs={hideTabs}
       overview={overview}
       isLoading={isLoading}
       error={error}

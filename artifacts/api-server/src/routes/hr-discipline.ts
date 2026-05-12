@@ -8,8 +8,7 @@ import { Router } from "express";
 import { HR_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import {
   handleRouteError,
   NotFoundError,
@@ -55,6 +54,153 @@ const router = Router();
 
 
 
+interface MemoRow {
+  id: number;
+  companyId: number;
+  branchId: number | null;
+  memoNumber: string;
+  assignmentId: number;
+  employeeId: number;
+  violationId: number | null;
+  regulationId: number | null;
+  incidentType: string;
+  incidentDate: string;
+  incidentDurationMinutes: number | null;
+  status: string;
+  source: string | null;
+  occurrenceCount: number | null;
+  appliedPenaltyLabel: string | null;
+  appliedDeductionAmount: number | string;
+  appliedExtraDeduction: number | string;
+  terminationDecided: boolean;
+  managerId: number | null;
+  gmId: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+  deletedAt: string | null;
+  employeeName: string;
+  empNumber: string | null;
+  regSection: string | null;
+  regArticle: string | null;
+  regTitle: string | null;
+  [k: string]: unknown;
+}
+
+interface RegulationRow {
+  id: number;
+  companyId: number;
+  section: string;
+  articleNumber: string;
+  title: string;
+  description: string | null;
+  penalty1: string | null;
+  penalty2: string | null;
+  penalty3: string | null;
+  penalty4: string | null;
+  extraDeduction: number | string | null;
+  severity: string | null;
+  isTermination: boolean;
+  legalReference: string | null;
+  effectiveFrom: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string | null;
+  deletedAt: string | null;
+}
+
+interface MemoListRow {
+  id: number;
+  memoNumber: string;
+  incidentType: string;
+  incidentDate: string;
+  incidentDurationMinutes: number | null;
+  status: string;
+  source: string | null;
+  occurrenceCount: number | null;
+  appliedPenaltyLabel: string | null;
+  appliedDeductionAmount: number | string;
+  appliedExtraDeduction: number | string;
+  terminationDecided: boolean;
+  createdAt: string;
+  employeeId: number;
+  employeeName: string;
+  empNumber: string | null;
+  regulationId: number | null;
+  regSection: string | null;
+  regArticle: string | null;
+  regTitle: string | null;
+}
+
+interface MemoEventRow {
+  id: number;
+  memoId: number;
+  companyId: number;
+  actorId: number | null;
+  actorRole: string;
+  action: string;
+  payload: unknown;
+  note: string | null;
+  createdAt: string;
+}
+
+interface AssignmentBriefRow {
+  id: number;
+  companyId: number;
+  branchId: number | null;
+  employeeId: number;
+  salary?: number | string | null;
+}
+
+interface DisciplineStatsRow {
+  pendingEmployee: string | number;
+  pendingManager?: string | number;
+  pendingGm?: string | number;
+  approved?: string | number;
+  rejected?: string | number;
+  draft?: string | number;
+  totalActive?: string | number;
+  pending?: string | number;
+  ytdCount?: string | number;
+  ytdDeductions?: string | number;
+  currentEscalation?: string | number;
+  terminations?: string | number;
+}
+
+interface DisciplineTotalsRow {
+  pendingEmployee: string | number;
+  pendingManager: string | number;
+  pendingGm: string | number;
+  approved: string | number;
+  rejected: string | number;
+}
+
+interface MemoRecentRow {
+  id: number;
+  memoNumber: string;
+  incidentType: string;
+  incidentDate: string;
+  status: string;
+  appliedPenaltyLabel: string | null;
+  appliedDeductionAmount: number | string;
+  appliedExtraDeduction: number | string;
+  occurrenceCount: number | null;
+  createdAt: string;
+}
+
+interface DetectionStatsRow {
+  totalRuns: string | number;
+  totalDetected: string | number;
+  totalViolations: string | number;
+  totalMemos: string | number;
+  totalErrors: string | number;
+  lastRunAt: string | null;
+}
+
+interface DetectionByTypeRow {
+  type: string | null;
+  count: string | number;
+}
+
 async function logMemoEvent(params: {
   memoId: number;
   companyId: number;
@@ -80,7 +226,7 @@ async function logMemoEvent(params: {
 }
 
 async function getMemo(companyId: number, memoId: number) {
-  const [row] = await rawQuery<any>(
+  const [row] = await rawQuery<MemoRow>(
     `SELECT m.*, e.name AS "employeeName", e."empNumber",
             r.section AS "regSection", r."articleNumber" AS "regArticle", r.title AS "regTitle"
        FROM hr_inquiry_memos m
@@ -107,7 +253,7 @@ router.get("/regulation", authorize({ feature: "hr.discipline", action: "list" }
       params.push(section);
       where += ` AND section = $${params.length}`;
     }
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<RegulationRow>(
       `SELECT id, section, "articleNumber", title, description,
               penalty1, penalty2, penalty3, penalty4, "extraDeduction",
               severity, "isTermination", "legalReference", "effectiveFrom",
@@ -118,7 +264,7 @@ router.get("/regulation", authorize({ feature: "hr.discipline", action: "list" }
       params
     );
     // Group by section for UI
-    const grouped: Record<string, any[]> = { work_time: [], work_organization: [], conduct: [] };
+    const grouped: Record<string, RegulationRow[]> = { work_time: [], work_organization: [], conduct: [] };
     for (const row of rows) {
       if (!grouped[row.section]) grouped[row.section] = [];
       grouped[row.section].push(row);
@@ -143,7 +289,7 @@ router.get("/regulation/:id", authorize({ feature: "hr.discipline", action: "vie
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<RegulationRow>(
       `SELECT * FROM hr_discipline_regulation
         WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -151,7 +297,7 @@ router.get("/regulation/:id", authorize({ feature: "hr.discipline", action: "vie
     if (!row) {
       throw new NotFoundError("المادة غير موجودة");
     }
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) {
     handleRouteError(err, res, "Get regulation article error:");
   }
@@ -301,7 +447,7 @@ router.post("/regulation", authorize({ feature: "hr.discipline", action: "create
       entityId: insertId,
       details: JSON.stringify({ section, articleNumber, title, severity: severity ?? "medium" }),
     }).catch((e) => logger.error(e, "hr-discipline background task failed"));
-    const [row] = await rawQuery<any>(`SELECT * FROM hr_discipline_regulation WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<RegulationRow>(`SELECT * FROM hr_discipline_regulation WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row || { id: insertId });
   } catch (err) {
     handleRouteError(err, res, "Create regulation article error:");
@@ -429,7 +575,7 @@ router.get("/memos", authorize({ feature: "hr.discipline", action: "list" }), as
     if (Number.isFinite(employeeId)) { params.push(employeeId); where += ` AND m."employeeId" = $${params.length}`; }
     const regulationIdFilter = req.query.regulationId ? Number(req.query.regulationId) : null;
     if (Number.isFinite(regulationIdFilter)) { params.push(regulationIdFilter); where += ` AND m."regulationId" = $${params.length}`; }
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<MemoListRow>(
       `SELECT m.id, m."memoNumber", m."incidentType", m."incidentDate",
               m."incidentDurationMinutes", m.status, m.source,
               m."occurrenceCount", m."appliedPenaltyLabel",
@@ -446,7 +592,7 @@ router.get("/memos", authorize({ feature: "hr.discipline", action: "list" }), as
         LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "List memos error:");
   }
@@ -459,12 +605,12 @@ router.get("/memos/:id", authorize({ feature: "hr.discipline", action: "view" })
     const id = parseId(req.params.id, "id");
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
-    const events = await rawQuery<any>(
+    const events = await rawQuery<MemoEventRow>(
       `SELECT * FROM hr_inquiry_memo_events
         WHERE "memoId" = $1 AND "companyId" = $2 ORDER BY "createdAt" ASC`,
       [id, scope.companyId]
     );
-    res.json({ memo, events });
+    res.json(maskFields(req, { memo, events }));
   } catch (err) {
     handleRouteError(err, res, "Get memo error:");
   }
@@ -492,7 +638,7 @@ router.post("/memos", authorize({ feature: "hr.discipline", action: "create" }),
     } = body;
 
     // جلب بيانات التعيين للتحقق من ملكية الشركة
-    const [assignment] = await rawQuery<any>(
+    const [assignment] = await rawQuery<AssignmentBriefRow>(
       `SELECT id, "companyId", "branchId", "employeeId"
          FROM employee_assignments WHERE id = $1`,
       [assignmentId]
@@ -578,7 +724,7 @@ router.post("/memos", authorize({ feature: "hr.discipline", action: "create" }),
       after: { memoNumber, incidentType, incidentDate, assignmentId, regulationId: resolvedRegulationId, source: "manual" },
     }).catch((e) => logger.error(e, "hr-discipline background task failed"));
 
-    const [row] = await rawQuery<any>(`SELECT * FROM hr_inquiry_memos WHERE id=$1 AND "companyId"=$2`, [memoId, scope.companyId]);
+    const [row] = await rawQuery<MemoRow>(`SELECT * FROM hr_inquiry_memos WHERE id=$1 AND "companyId"=$2`, [memoId, scope.companyId]);
     res.status(201).json({ ...row, penaltyPreview });
   } catch (err) {
     handleRouteError(err, res, "Create memo error:");
@@ -605,7 +751,7 @@ router.post("/memos/:id/justify", authorize({ feature: "hr.discipline", action: 
       throw new ValidationError("التبرير مطلوب أو يجب الإقرار برفض التبرير", { field: "justification" });
     }
 
-    const managerAssignmentId = await getManagerAssignmentId(scope.companyId, memo.branchId);
+    const managerAssignmentId = await getManagerAssignmentId(scope.companyId, memo.branchId ?? 0);
 
     await applyTransition({
       entity: "hr_inquiry_memos",
@@ -709,7 +855,7 @@ router.post("/memos/:id/gm-decision", authorize({ feature: "hr.discipline", acti
     if (!memo) throw new NotFoundError("المحضر غير موجود");
 
     // Pre-compute penalty details before the transition
-    const [assignment] = await rawQuery<any>(
+    const [assignment] = await rawQuery<AssignmentBriefRow>(
       `SELECT id, "companyId", "branchId", "employeeId", salary
          FROM employee_assignments WHERE id = $1 AND "companyId" = $2`,
       [memo.assignmentId, scope.companyId]
@@ -1038,7 +1184,7 @@ router.post("/penalty-preview", authorize({ feature: "hr.discipline", action: "l
     const scope = req.scope!;
     const body = zodParse(penaltyPreviewSchema.safeParse(req.body));
     const { assignmentId, incidentType, incidentDate, durationMinutes, absenceDays, disruptsOthers, regulationId } = body;
-    const [assignment] = await rawQuery<any>(
+    const [assignment] = await rawQuery<AssignmentBriefRow>(
       `SELECT id, "employeeId", "companyId" FROM employee_assignments WHERE id = $1`,
       [assignmentId]
     );
@@ -1083,7 +1229,7 @@ router.get("/employee/:employeeId/summary", authorize({ feature: "hr.discipline"
       throw new ValidationError("معرف الموظف غير صالح");
     }
     const yearStart = `${currentYear()}-01-01`;
-    const [stats] = await rawQuery<any>(
+    const [stats] = await rawQuery<DisciplineStatsRow>(
       `SELECT
          COUNT(*) FILTER (WHERE status NOT IN ('cancelled','rejected'))                    AS "totalActive",
          COUNT(*) FILTER (WHERE status IN ('pending_employee','pending_manager','pending_gm','draft')) AS pending,
@@ -1096,7 +1242,7 @@ router.get("/employee/:employeeId/summary", authorize({ feature: "hr.discipline"
        WHERE "companyId" = $1 AND "employeeId" = $3 AND "deletedAt" IS NULL`,
       [scope.companyId, yearStart, employeeId]
     );
-    const recent = await rawQuery<any>(
+    const recent = await rawQuery<MemoRecentRow>(
       `SELECT id, "memoNumber", "incidentType", "incidentDate", status,
               "appliedPenaltyLabel", "appliedDeductionAmount", "appliedExtraDeduction",
               "occurrenceCount", "createdAt"
@@ -1115,7 +1261,7 @@ router.get("/employee/:employeeId/summary", authorize({ feature: "hr.discipline"
 router.get("/stats", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const [totals] = await rawQuery<any>(
+    const [totals] = await rawQuery<DisciplineTotalsRow>(
       `SELECT
          COUNT(*) FILTER (WHERE status = 'pending_employee') AS "pendingEmployee",
          COUNT(*) FILTER (WHERE status = 'pending_manager')  AS "pendingManager",
@@ -1232,7 +1378,7 @@ router.get("/auto-detection/summary", authorize({ feature: "hr.discipline", acti
   try {
     const scope = req.scope!;
     // إحصائيات آخر 30 يوم
-    const stats = await rawQuery<any>(
+    const stats = await rawQuery<DetectionStatsRow>(
       `SELECT
          COUNT(*) AS "totalRuns",
          COUNT(*) AS "totalDetected",
@@ -1244,10 +1390,10 @@ router.get("/auto-detection/summary", authorize({ feature: "hr.discipline", acti
        WHERE "companyId" = $1
          AND "detectedAt" >= NOW() - INTERVAL '30 days'`,
       [scope.companyId]
-    ).catch((e) => { logger.error(e, "hr discipline query failed"); return [{}]; });
+    ).catch((e) => { logger.error(e, "hr discipline query failed"); return [] as DetectionStatsRow[]; });
 
     // تفصيل حسب النوع من آخر 30 يوم
-    const byType = await rawQuery<any>(
+    const byType = await rawQuery<DetectionByTypeRow>(
       `SELECT
          d.value->>'type' AS type,
          COUNT(*) AS count

@@ -1,11 +1,23 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { handleRouteError } from "../lib/errorHandler.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
+
+interface SearchHit { id: number; type: string; }
+interface EmployeeHit extends SearchHit { name: string; empNumber: string | null; email: string | null; phone: string | null; passportNumber: string | null; jobTitle: string | null; }
+interface ClientHit extends SearchHit { name: string; phone: string | null; email: string | null; classification: string | null; }
+interface InvoiceHit extends SearchHit { ref: string; status: string; total: number | string; clientName: string | null; }
+interface ProjectHit extends SearchHit { name: string; status: string; budget: number | string | null; }
+interface TicketHit extends SearchHit { ref: string; title: string; status: string; priority: string | null; }
+interface UnitHit extends SearchHit { name: string; status: string; monthlyRent: number | string | null; }
+interface VehicleHit extends SearchHit { name: string; plateNumber: string | null; status: string; year: number | null; }
+interface PilgrimHit extends SearchHit { name: string; passportNumber: string | null; nationality: string | null; status: string; }
+interface ContractHit extends SearchHit { name: string | null; tenantPhone: string | null; status: string; unitNumber: string | null; buildingName: string | null; }
+interface BuildingHit extends SearchHit { name: string; city: string | null; status: string; totalUnits: string | number; }
+interface TenantHit extends SearchHit { name: string; phone: string | null; email: string | null; nationalId: string | null; }
 
 router.get("/", authorize({ feature: "projects", action: "list" }), async (req, res) => {
   try {
@@ -25,7 +37,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
     const shouldSearch = (t: string) => entityType === "all" || entityType === t;
 
     const [employees, clients, invoices, projects, tickets, units, vehicles, pilgrims, contracts, buildings, tenants] = await Promise.all([
-      shouldSearch("employees") ? rawQuery<any>(
+      shouldSearch("employees") ? rawQuery<EmployeeHit>(
         `SELECT e.id, e.name, e."empNumber", e.email, e.phone, e."passportNumber", ea."jobTitle",
                 'employee' AS type
          FROM employees e
@@ -38,7 +50,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
         [scope.companyId, pattern]
       ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
 
-      shouldSearch("clients") ? rawQuery<any>(
+      shouldSearch("clients") ? rawQuery<ClientHit>(
         `SELECT id, name, phone, email, classification,
                 'client' AS type
          FROM clients
@@ -49,7 +61,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
         [scope.companyId, pattern]
       ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
 
-      shouldSearch("invoices") ? rawQuery<any>(
+      shouldSearch("invoices") ? rawQuery<InvoiceHit>(
         `SELECT i.id, i.ref, i.status, i.total, c.name AS "clientName",
                 'invoice' AS type
          FROM invoices i
@@ -60,7 +72,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
         [scope.companyId, pattern]
       ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
 
-      shouldSearch("projects") ? rawQuery<any>(
+      shouldSearch("projects") ? rawQuery<ProjectHit>(
         `SELECT id, name, status, budget,
                 'project' AS type
          FROM projects
@@ -71,7 +83,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
         [scope.companyId, pattern]
       ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
 
-      shouldSearch("tickets") ? rawQuery<any>(
+      shouldSearch("tickets") ? rawQuery<TicketHit>(
         `SELECT t.id, t.ref, t.title, t.status, t.priority,
                 'ticket' AS type
          FROM support_tickets t
@@ -82,7 +94,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
         [scope.companyId, pattern]
       ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
 
-      shouldSearch("units") ? rawQuery<any>(
+      shouldSearch("units") ? rawQuery<UnitHit>(
         `SELECT pu.id, pu."unitNumber" AS name, pu.status, pu.type, pu."monthlyRent",
                 'unit' AS type
          FROM property_units pu
@@ -93,7 +105,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
         [scope.companyId, pattern]
       ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
 
-      shouldSearch("vehicles") ? rawQuery<any>(
+      shouldSearch("vehicles") ? rawQuery<VehicleHit>(
         `SELECT v.id, CONCAT(v.make, ' ', v.model) AS name, v."plateNumber", v.status, v.year,
                 'vehicle' AS type
          FROM fleet_vehicles v
@@ -104,7 +116,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
         [scope.companyId, pattern]
       ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
 
-      shouldSearch("pilgrims") ? rawQuery<any>(
+      shouldSearch("pilgrims") ? rawQuery<PilgrimHit>(
         `SELECT p.id, p."fullName" AS name, p."passportNumber", p.nationality, p.status,
                 'pilgrim' AS type
          FROM umrah_pilgrims p
@@ -115,7 +127,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
         [scope.companyId, pattern]
       ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
 
-      shouldSearch("contracts") ? rawQuery<any>(
+      shouldSearch("contracts") ? rawQuery<ContractHit>(
         `SELECT rc.id, rc."tenantName" AS name, rc."tenantPhone", rc.status,
                 pu."unitNumber", pu."buildingName",
                 'contract' AS type
@@ -128,7 +140,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
         [scope.companyId, pattern]
       ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
 
-      shouldSearch("buildings") || shouldSearch("all") ? rawQuery<any>(
+      shouldSearch("buildings") || shouldSearch("all") ? rawQuery<BuildingHit>(
         `SELECT b.id, b.name, b.city, b.type, b.status,
                 COUNT(u.id) AS "totalUnits",
                 'building' AS type
@@ -142,7 +154,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
         [scope.companyId, pattern]
       ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
 
-      shouldSearch("tenants") || shouldSearch("all") ? rawQuery<any>(
+      shouldSearch("tenants") || shouldSearch("all") ? rawQuery<TenantHit>(
         `SELECT t.id, t.name, t.phone, t.email, t."nationalId",
                 'tenant' AS type
          FROM tenants t
@@ -156,17 +168,17 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
 
     res.json({
       results: [
-        ...employees.map((e: any) => ({ ...e, category: "موظفين", link: `/employees/${e.id}` })),
-        ...clients.map((c: any) => ({ ...c, category: "عملاء", link: `/clients/${c.id}` })),
-        ...invoices.map((i: any) => ({ ...i, category: "فواتير", link: `/finance/invoices/${i.id}` })),
-        ...projects.map((p: any) => ({ ...p, category: "مشاريع", link: `/projects/${p.id}` })),
-        ...tickets.map((t: any) => ({ ...t, category: "تذاكر دعم", link: `/support/${t.id}` })),
-        ...units.map((u: any) => ({ ...u, category: "وحدات عقارية", link: `/properties/${u.id}` })),
-        ...vehicles.map((v: any) => ({ ...v, category: "مركبات", link: `/fleet/${v.id}` })),
-        ...pilgrims.map((p: any) => ({ ...p, category: "معتمرين", link: `/umrah/pilgrims/${p.id}` })),
-        ...contracts.map((c: any) => ({ ...c, category: "عقود", link: `/properties/contracts?id=${c.id}` })),
-        ...buildings.map((b: any) => ({ ...b, category: "مباني عقارية", link: `/properties/buildings/${b.id}` })),
-        ...tenants.map((t: any) => ({ ...t, category: "مستأجرون", link: `/properties/tenants/${t.id}` })),
+        ...employees.map((e) => ({ ...e, category: "موظفين", link: `/employees/${e.id}` })),
+        ...clients.map((c) => ({ ...c, category: "عملاء", link: `/clients/${c.id}` })),
+        ...invoices.map((i) => ({ ...i, category: "فواتير", link: `/finance/invoices/${i.id}` })),
+        ...projects.map((p) => ({ ...p, category: "مشاريع", link: `/projects/${p.id}` })),
+        ...tickets.map((t) => ({ ...t, category: "تذاكر دعم", link: `/support/${t.id}` })),
+        ...units.map((u) => ({ ...u, category: "وحدات عقارية", link: `/properties/${u.id}` })),
+        ...vehicles.map((v) => ({ ...v, category: "مركبات", link: `/fleet/${v.id}` })),
+        ...pilgrims.map((p) => ({ ...p, category: "معتمرين", link: `/umrah/pilgrims/${p.id}` })),
+        ...contracts.map((c) => ({ ...c, category: "عقود", link: `/properties/contracts?id=${c.id}` })),
+        ...buildings.map((b) => ({ ...b, category: "مباني عقارية", link: `/properties/buildings/${b.id}` })),
+        ...tenants.map((t) => ({ ...t, category: "مستأجرون", link: `/properties/tenants/${t.id}` })),
       ],
     });
   } catch (err) {

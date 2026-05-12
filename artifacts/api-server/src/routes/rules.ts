@@ -4,7 +4,6 @@ import { handleRouteError, ValidationError, NotFoundError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { z } from "zod";
@@ -42,12 +41,53 @@ const patchRuleSchema = z.object({
 
 const toggleRuleSchema = z.object({}).optional();
 
+interface BusinessRuleRow {
+  id: number;
+  companyId: number | null;
+  name: string;
+  description: string | null;
+  triggerEvent: string;
+  conditionField: string | null;
+  conditionOperator: string | null;
+  conditionValue: string | null;
+  actionType: string;
+  actionTarget: string | null;
+  actionConfig: unknown;
+  module: string | null;
+  priority: number | null;
+  isActive: boolean;
+  createdBy: number | null;
+  createdAt: string;
+  updatedAt: string | null;
+  deletedAt: string | null;
+}
+
+interface BusinessRuleLogRow {
+  id: number;
+  companyId: number | null;
+  ruleId: number;
+  triggerEvent: string;
+  matched: boolean;
+  actionResult: unknown;
+  errorMessage: string | null;
+  executedAt: string;
+}
+
+interface RuleToggleRow {
+  id: number;
+  isActive: boolean;
+}
+
+interface CountRow {
+  total: string | number;
+}
+
 const router = Router();
 
 router.get("/", authorize({ feature: "admin", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rules = await rawQuery<any>(
+    const rules = await rawQuery<BusinessRuleRow>(
       `SELECT * FROM business_rules
        WHERE ("companyId" IS NULL OR "companyId" = $1) AND "deletedAt" IS NULL
        ORDER BY priority DESC, "createdAt" DESC`,
@@ -79,8 +119,8 @@ router.get("/logs", authorize({ feature: "admin", action: "update" }), async (re
     params.push(offset);
     const offsetIdx = params.length;
 
-    const logs = await rawQuery<any>(
-      `SELECT * FROM business_rule_logs 
+    const logs = await rawQuery<BusinessRuleLogRow>(
+      `SELECT * FROM business_rule_logs
        WHERE ${conditions.join(" AND ")}
        ORDER BY "executedAt" DESC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
@@ -88,7 +128,7 @@ router.get("/logs", authorize({ feature: "admin", action: "update" }), async (re
     );
 
     const countParams = params.slice(0, params.length - 2);
-    const [countRow] = await rawQuery<any>(
+    const [countRow] = await rawQuery<CountRow>(
       `SELECT COUNT(*) AS total FROM business_rule_logs WHERE ${conditions.join(" AND ")}`,
       countParams
     );
@@ -119,7 +159,7 @@ router.post("/", authorize({ feature: "admin", action: "update" }), async (req, 
       ]
     );
 
-    const [rule] = await rawQuery<any>(`SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
+    const [rule] = await rawQuery<BusinessRuleRow>(`SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "create_business_rule",
@@ -140,7 +180,7 @@ router.patch("/:id", authorize({ feature: "admin", action: "update" }), async (r
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
 
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<BusinessRuleRow>(
       `SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -169,7 +209,7 @@ router.patch("/:id", authorize({ feature: "admin", action: "update" }), async (r
     const { affectedRows } = await rawExecute(`UPDATE business_rules SET ${sets.join(",")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL`, params);
     if (!affectedRows) throw new NotFoundError("القاعدة غير موجودة");
 
-    const [rule] = await rawQuery<any>(`SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [rule] = await rawQuery<BusinessRuleRow>(`SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "update_business_rule",
@@ -188,7 +228,7 @@ router.delete("/:id", authorize({ feature: "admin", action: "update" }), async (
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<BusinessRuleRow>(
       `SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -216,7 +256,7 @@ router.patch("/:id/toggle", authorize({ feature: "admin", action: "update" }), a
     zodParse(toggleRuleSchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<RuleToggleRow>(
       `SELECT id, "isActive" FROM business_rules WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );

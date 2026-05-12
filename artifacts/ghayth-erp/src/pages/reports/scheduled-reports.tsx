@@ -1,19 +1,44 @@
 import { useState } from "react";
+import { z } from "zod";
+import { useFormContext } from "react-hook-form";
 import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, Clock, Mail, FileSpreadsheet, FileText, Calendar, Send, History } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useApiMutation as useDeleteMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import {
+  FormShell,
+  FormTextField,
+  FormSelectField,
+  FormGrid,
+} from "@/components/form-shell";
+
+const scheduleSchema = z.object({
+  reportType: z.string().min(1, "نوع التقرير مطلوب"),
+  title: z.string().trim().min(1, "العنوان مطلوب"),
+  frequency: z.enum(["daily", "weekly", "monthly"]),
+  // Comma-separated emails — schema-level validation replaces the
+  // imperative `emails.length === 0` toast plus per-email regex.
+  recipients: z.string().refine(
+    (v) => {
+      const emails = v.split(",").map((e) => e.trim()).filter(Boolean);
+      if (emails.length === 0) return false;
+      return emails.every((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+    },
+    "أدخل عنوان بريد إلكتروني واحد أو أكثر مفصولاً بفاصلة",
+  ),
+  isActive: z.boolean(),
+});
+type ScheduleForm = z.infer<typeof scheduleSchema>;
 
 const REPORT_TYPES = [
   { value: "trial-balance", label: "ميزان المراجعة", format: "جدول بيانات", icon: FileSpreadsheet },
@@ -37,37 +62,27 @@ export default function ScheduledReportsPage() {
 
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({
-    reportType: "trial-balance",
-    title: "",
-    frequency: "weekly",
-    recipients: "",
-    isActive: true,
-  });
 
-  const createMut = useApiMutation("/scheduled-reports", "POST", [["scheduled-reports"]]);
+  const createMut = useApiMutation<unknown, {
+    reportType: string;
+    title: string;
+    frequency: string;
+    recipients: string[];
+    isActive: boolean;
+  }>("/scheduled-reports", "POST", [["scheduled-reports"]]);
 
-  const handleSubmit = async () => {
-    if (!form.title || !form.recipients) {
-      toast({ variant: "destructive", title: "يرجى تعبئة جميع الحقول المطلوبة" });
-      return;
-    }
-    const emails = form.recipients.split(",").map((e) => e.trim()).filter(Boolean);
-    if (emails.length === 0) {
-      toast({ variant: "destructive", title: "يرجى إدخال عنوان بريد إلكتروني واحد على الأقل" });
-      return;
-    }
+  const handleSubmit = async (values: ScheduleForm) => {
+    const emails = values.recipients.split(",").map((e) => e.trim()).filter(Boolean);
     try {
       await createMut.mutateAsync({
-        reportType: form.reportType,
-        title: form.title,
-        frequency: form.frequency,
+        reportType: values.reportType,
+        title: values.title,
+        frequency: values.frequency,
         recipients: emails,
-        isActive: form.isActive,
+        isActive: values.isActive,
       });
       toast({ title: "تم إنشاء جدولة التقرير" });
       setShowForm(false);
-      setForm({ reportType: "trial-balance", title: "", frequency: "weekly", recipients: "", isActive: true });
     } catch (err) {
       toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
     }
@@ -86,64 +101,60 @@ export default function ScheduledReportsPage() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">جدولة إرسال التقارير تلقائياً بالبريد الإلكتروني</p>
         </div>
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>
+        <GuardedButton perm="reports:create" size="sm" onClick={() => setShowForm(!showForm)}>
           <Plus className="h-4 w-4 me-1" />
           {showForm ? "إلغاء" : "جدولة جديدة"}
-        </Button>
+        </GuardedButton>
       </div>
 
       {showForm && (
         <Card className="border-blue-200 bg-blue-50/30">
           <CardHeader><CardTitle className="text-base">إنشاء جدولة تقرير جديدة</CardTitle></CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label>عنوان التقرير *</Label>
-                <Input className="mt-1" placeholder="مثال: ميزان المراجعة الأسبوعي" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-              </div>
-              <div>
-                <Label>نوع التقرير *</Label>
-                <Select value={form.reportType} onValueChange={(v) => setForm({ ...form, reportType: v })}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {REPORT_TYPES.map((rt) => (
-                      <SelectItem key={rt.value} value={rt.value}>
-                        <div className="flex items-center gap-2">
-                          <rt.icon className="h-4 w-4" />
-                          {rt.label} — {rt.format}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>التكرار *</Label>
-                <Select value={form.frequency} onValueChange={(v) => setForm({ ...form, frequency: v })}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="daily">يومي (كل صباح)</SelectItem>
-                    <SelectItem value="weekly">أسبوعي (كل أحد)</SelectItem>
-                    <SelectItem value="monthly">شهري (أول الشهر)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>المستلمون (فصل بفاصلة) *</Label>
-                <Input className="mt-1" dir="ltr" placeholder="email1@example.com, email2@example.com" value={form.recipients} onChange={(e) => setForm({ ...form, recipients: e.target.value })} />
-              </div>
-              <div className="md:col-span-2 flex items-center gap-3">
-                <Switch checked={form.isActive} onCheckedChange={(v) => setForm({ ...form, isActive: v })} />
-                <Label>تفعيل التقرير المجدول</Label>
-              </div>
-              <div className="md:col-span-2 flex gap-2">
-                <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>
-                  <Send className="h-4 w-4 me-1" />
-                  {createMut.isPending ? "جاري الحفظ..." : "حفظ الجدولة"}
+            <FormShell
+              schema={scheduleSchema}
+              defaultValues={{
+                reportType: "trial-balance",
+                title: "",
+                frequency: "weekly" as const,
+                recipients: "",
+                isActive: true,
+              }}
+              submitLabel={createMut.isPending ? "جاري الحفظ..." : "حفظ الجدولة"}
+              secondaryActions={
+                <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
+                  إلغاء
                 </Button>
-                <Button variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>
-              </div>
-            </div>
+              }
+              onSubmit={async (values) => {
+                await handleSubmit(values);
+              }}
+            >
+              <FormGrid cols={2}>
+                <FormTextField name="title" label="عنوان التقرير" required placeholder="مثال: ميزان المراجعة الأسبوعي" />
+                <FormSelectField
+                  name="reportType"
+                  label="نوع التقرير"
+                  required
+                  options={REPORT_TYPES.map((rt) => ({
+                    value: rt.value,
+                    label: `${rt.label} — ${rt.format}`,
+                  }))}
+                />
+                <FormSelectField
+                  name="frequency"
+                  label="التكرار"
+                  required
+                  options={[
+                    { value: "daily", label: "يومي (كل صباح)" },
+                    { value: "weekly", label: "أسبوعي (كل أحد)" },
+                    { value: "monthly", label: "شهري (أول الشهر)" },
+                  ]}
+                />
+                <FormTextField name="recipients" label="المستلمون (فصل بفاصلة)" required placeholder="email1@example.com, email2@example.com" />
+              </FormGrid>
+              <ActiveSwitch />
+            </FormShell>
           </CardContent>
         </Card>
       )}
@@ -250,12 +261,29 @@ function ScheduledReportCard({ item }: { item: any }) {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Switch checked={item.isActive} onCheckedChange={handleToggle} />
-            <Button variant="ghost" size="sm" onClick={handleDelete} disabled={deleteMut.isPending}>
+            <GuardedButton perm="reports:create" variant="ghost" size="sm" onClick={handleDelete} disabled={deleteMut.isPending}>
               <Trash2 className="h-4 w-4 text-red-500" />
-            </Button>
+            </GuardedButton>
           </div>
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// Boolean Switch as a form field — FormShell's primitives are
+// text/number/select, so booleans go through useFormContext.
+// Same pattern as ModulesPicker in admin/roles.tsx (#356).
+function ActiveSwitch() {
+  const { watch, setValue } = useFormContext<ScheduleForm>();
+  const isActive = watch("isActive");
+  return (
+    <div className="flex items-center gap-3 mt-4">
+      <Switch
+        checked={isActive}
+        onCheckedChange={(v) => setValue("isActive", v, { shouldDirty: true })}
+      />
+      <Label>تفعيل التقرير المجدول</Label>
+    </div>
   );
 }

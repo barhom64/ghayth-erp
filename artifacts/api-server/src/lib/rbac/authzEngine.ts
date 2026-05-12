@@ -49,6 +49,12 @@ export interface AccessSpec {
   };
   /** Currency-bearing actions (approve) — engine validates against approval_limits. */
   amount?: { value: number; currency?: string };
+  /**
+   * Caller IP, extracted from the request by the authorize() middleware.
+   * Required for the `ipPrefixIn` ABAC condition. Without it, that
+   * condition silently passes (security gap).
+   */
+  ipAddress?: string | null;
 }
 
 export interface ResourceRecord {
@@ -136,30 +142,66 @@ async function loadEffectiveGrants(userId: number, companyId: number): Promise<{
   const cached = grantCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached;
 
+  // Role hierarchy walk: a user's grants include not only their directly
+  // assigned roles but every ancestor role in the parent_role_id chain.
+  // The recursive CTE walks up via rbac_roles.parent_role_id (set in
+  // PR #265). With this, granting "Senior Manager" to a role
+  // automatically gives every Senior-Manager-derived role the same
+  // grants — no need to duplicate.
   const grants = await rawQuery<RoleGrantRow>(
-    `SELECT g.role_id, g.feature_key, g.actions, g.scope, g.conditions
+    `WITH RECURSIVE user_role_tree AS (
+       SELECT r.id, r.parent_role_id
+         FROM rbac_roles r
+         JOIN rbac_user_roles ur ON ur.role_id = r.id
+        WHERE ur."userId" = $1 AND ur."companyId" = $2
+          AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+       UNION
+       SELECT pr.id, pr.parent_role_id
+         FROM rbac_roles pr
+         JOIN user_role_tree urt ON urt.parent_role_id = pr.id
+        WHERE pr.is_active = TRUE
+     )
+     SELECT g.role_id, g.feature_key, g.actions, g.scope, g.conditions
        FROM rbac_role_grants g
-       JOIN rbac_user_roles ur ON ur.role_id = g.role_id
-      WHERE ur."userId" = $1 AND ur."companyId" = $2
-        AND (ur.expires_at IS NULL OR ur.expires_at > NOW())`,
+       JOIN user_role_tree urt ON urt.id = g.role_id`,
     [userId, companyId]
   ).catch(() => [] as RoleGrantRow[]);
 
   const fields = await rawQuery<FieldPolicyRow>(
-    `SELECT fp.feature_key, fp.field_name, fp.mode
+    `WITH RECURSIVE user_role_tree AS (
+       SELECT r.id, r.parent_role_id
+         FROM rbac_roles r
+         JOIN rbac_user_roles ur ON ur.role_id = r.id
+        WHERE ur."userId" = $1 AND ur."companyId" = $2
+          AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+       UNION
+       SELECT pr.id, pr.parent_role_id
+         FROM rbac_roles pr
+         JOIN user_role_tree urt ON urt.parent_role_id = pr.id
+        WHERE pr.is_active = TRUE
+     )
+     SELECT fp.feature_key, fp.field_name, fp.mode
        FROM rbac_field_policies fp
-       JOIN rbac_user_roles ur ON ur.role_id = fp.role_id
-      WHERE ur."userId" = $1 AND ur."companyId" = $2
-        AND (ur.expires_at IS NULL OR ur.expires_at > NOW())`,
+       JOIN user_role_tree urt ON urt.id = fp.role_id`,
     [userId, companyId]
   ).catch(() => [] as FieldPolicyRow[]);
 
   const limits = await rawQuery<ApprovalLimitRow>(
-    `SELECT al.feature_key, al.action, al.currency, al.max_amount, al.requires_dual_control
+    `WITH RECURSIVE user_role_tree AS (
+       SELECT r.id, r.parent_role_id
+         FROM rbac_roles r
+         JOIN rbac_user_roles ur ON ur.role_id = r.id
+        WHERE ur."userId" = $1 AND ur."companyId" = $2
+          AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+       UNION
+       SELECT pr.id, pr.parent_role_id
+         FROM rbac_roles pr
+         JOIN user_role_tree urt ON urt.parent_role_id = pr.id
+        WHERE pr.is_active = TRUE
+     )
+     SELECT al.feature_key, al.action, al.currency, al.max_amount, al.requires_dual_control
        FROM rbac_approval_limits al
-       JOIN rbac_user_roles ur ON ur.role_id = al.role_id
-      WHERE ur."userId" = $1 AND ur."companyId" = $2
-        AND (ur.expires_at IS NULL OR ur.expires_at > NOW())`,
+       JOIN user_role_tree urt ON urt.id = al.role_id`,
     [userId, companyId]
   ).catch(() => [] as ApprovalLimitRow[]);
 
@@ -462,7 +504,13 @@ export async function checkAccess(scope: RequestScope, spec: AccessSpec, columns
       scope: { userId: scope.userId, companyId: scope.companyId, branchId: scope.branchId, employeeId: scope.employeeId },
       record: spec.resource?.record ?? null,
       userDepartmentId: ctx.departmentId,
-      ipAddress: null,
+      // Caller IP comes from the authorize() middleware; without it,
+      // the ipPrefixIn condition would silently pass.
+      ipAddress: spec.ipAddress ?? null,
+      // Emergency mode is read from the env var so an ops admin can
+      // freeze sensitive operations without needing a deploy. Migration
+      // could later move this to a system_settings row.
+      emergency: process.env.RBAC_EMERGENCY_MODE === "true",
     });
     if (condResult.passed) {
       chosenGrant = grant;
