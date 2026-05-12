@@ -3,6 +3,7 @@ import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { formatCurrency, formatDateAr as formatDate, todayLocal } from "@/lib/formatters";
@@ -115,15 +116,15 @@ export default function IntercompanyPage() {
       actions={
         <>
           <Link href="/finance/intercompany/consolidation/create">
-            <Button variant="outline">
+            <GuardedButton perm="finance:create" variant="outline">
               <Layers className="h-4 w-4 ml-2" />
               القوائم الموحدة
-            </Button>
+            </GuardedButton>
           </Link>
-          <Button onClick={() => setShowCreate(true)}>
+          <GuardedButton perm="finance:create" onClick={() => setShowCreate(true)}>
             <ArrowLeftRight className="h-4 w-4 ml-2" />
             معاملة جديدة
-          </Button>
+          </GuardedButton>
         </>
       }
     >

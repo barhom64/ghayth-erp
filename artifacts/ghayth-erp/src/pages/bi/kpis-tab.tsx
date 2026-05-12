@@ -8,6 +8,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { TrendingUp, Plus } from "lucide-react";
 import { formatNumber } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 export function KPIsTab() {
   const { data: kpisResp, isLoading, isError, error, refetch } = useApiQuery<any>(["bi-kpis"], "/bi/kpis");
@@ -49,7 +50,7 @@ export function KPIsTab() {
             resultCount={filtered.length}
           />
         </div>
-        {canWrite && <Link href="/bi/kpis/create"><Button className="gap-2"><Plus className="h-4 w-4" /> إضافة مؤشر</Button></Link>}
+        {canWrite && <Link href="/bi/kpis/create"><GuardedButton perm="bi:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة مؤشر</GuardedButton></Link>}
       </div>
       <Card>
         <CardHeader><CardTitle>مؤشرات الأداء</CardTitle></CardHeader>

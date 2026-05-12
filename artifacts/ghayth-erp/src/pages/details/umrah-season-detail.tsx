@@ -15,6 +15,7 @@ import { Edit, Calendar, Users, TrendingUp } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -187,6 +188,7 @@ export default function UmrahSeasonDetail() {
 
       {id && <EntityComments entityType="umrah-season" entityId={id} />}
       {id && <EntityTags entityType="umrah-season" entityId={id} />}
+      {id && <UmrahAttachmentsPanel entityType="season" entityId={id} />}
     </div>
   );
 

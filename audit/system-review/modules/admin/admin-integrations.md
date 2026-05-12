@@ -1,0 +1,52 @@
+# /admin/integrations — `artifacts/ghayth-erp/src/pages/admin-integrations.tsx`
+
+## 1. الميتاداتا
+- المسار: `/admin/integrations`
+- ملف الصفحة: `artifacts/ghayth-erp/src/pages/admin-integrations.tsx`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/adminRoutes.tsx:25`
+- المجموعة: `admin`
+- الكومبوننت: `AdminIntegrations`
+- subKey: — | minRoleLevel: —
+- الكيان المستنبط: `integrations`
+- سطور الملف: 310
+- مصدر موجود: ✅
+
+## 2. الأزرار والإجراءات
+_لا توجد طلبات كتابة من هذه الصفحة._
+
+### تفاصيل الأزرار المرئية
+- L113: "(بلا تسمية)" → `() => setShowForm(!showForm)`
+- L125: "(بلا تسمية)" → `() => setShowForm(false)`
+- L192: "(بلا تسمية)" → `() => handleToggleStatus(intg.id, intg.status)`
+- L195: "(بلا تسمية)" → `() => handleTest(intg.id)`
+- L198: "(بلا تسمية)" → `() => handleDelete(intg.id)`
+- L208: "(بلا تسمية)" → `() => setShowForm(true)`
+- L269: "إعادة المحاولة للفاشلة" → `handleRetry`
+
+### القراءات (GET)
+- GET `/admin/integrations`
+- GET `/admin/integration-logs`
+
+
+
+## 3. الحركات ذات الصلة (Cross-Module Transactions)
+- [ ] **TBD** — راجع `docs/blueprints/admin.md` (إن وُجد) وعدّد:
+  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
+  - تأثير الأرصدة (balances, balances_history)
+  - الإشعارات (notifications)
+  - سير الموافقات (approval_chains)
+  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
+- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+## 4. النمذجة
+_لم يتم العثور على جدول Drizzle بالاسم المستنبط `integrations` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
+
+## 5. البيانات الوهمية الثابتة
+✅ لا توجد بيانات وهمية ثابتة مكتشفة آلياً.
+
+## 6. النتيجة (Verdict)
+- Runtime audit: **⚠ PARTIAL** — render=PASS | fetch=PASS | CTA=SKIP | nav=FAIL | smoke=PASS
+- ملاحظة: `landed=/dashboard expected=/admin/integrations`
+- لقطة: `audit/screenshots/admin_integrations.png`
+- landedUrl: `http://localhost/dashboard`
+- توصية: **يحتاج إصلاح**

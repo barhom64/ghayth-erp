@@ -5,6 +5,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { Badge } from "@/components/ui/badge";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { UserCheck, UserX, Users, ToggleLeft, Pause, Play, Ban } from "lucide-react";
@@ -214,7 +215,8 @@ export default function EmployeeActivationPage() {
         return (
           <div className="flex items-center gap-1" onClick={(ev) => ev.stopPropagation()}>
             {!isActive && !isTerminated && (
-              <Button
+              <GuardedButton
+                perm="hr:create"
                 size="sm"
                 variant="outline"
                 className="h-7 gap-1 text-green-700 border-green-200 hover:bg-green-50"
@@ -222,10 +224,11 @@ export default function EmployeeActivationPage() {
               >
                 <Play className="h-3 w-3" />
                 تفعيل
-              </Button>
+              </GuardedButton>
             )}
             {isActive && (
-              <Button
+              <GuardedButton
+                perm="hr:create"
                 size="sm"
                 variant="outline"
                 className="h-7 gap-1 text-yellow-700 border-yellow-200 hover:bg-yellow-50"
@@ -233,10 +236,11 @@ export default function EmployeeActivationPage() {
               >
                 <Pause className="h-3 w-3" />
                 تعليق
-              </Button>
+              </GuardedButton>
             )}
             {!isTerminated && (
-              <Button
+              <GuardedButton
+                perm="hr:delete"
                 size="sm"
                 variant="outline"
                 className="h-7 gap-1 text-red-700 border-red-200 hover:bg-red-50"
@@ -244,7 +248,7 @@ export default function EmployeeActivationPage() {
               >
                 <Ban className="h-3 w-3" />
                 إنهاء
-              </Button>
+              </GuardedButton>
             )}
           </div>
         );
