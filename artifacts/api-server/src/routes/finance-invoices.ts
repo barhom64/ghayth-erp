@@ -2034,10 +2034,10 @@ invoicesRouter.get("/tax/declarations", authorize({ feature: "finance.zatca", ac
     );
     const currentMonth = new Date().getMonth() + 1;
     const declarations = vatRows
-      .filter((r: any) => Number(r.invoiceCount ?? 0) > 0)
-      .map((r: any) => {
-        const m = Number(r.period.split("-")[1]);
-        return { period: r.period, outputVat: Number(r.outputVat), inputVat: 0, netVat: Number(r.outputVat), invoiceCount: Number(r.invoiceCount), status: m < currentMonth ? "submitted" : "pending" };
+      .filter((r) => Number(r.invoiceCount ?? 0) > 0)
+      .map((r) => {
+        const m = Number((r.period as string).split("-")[1]);
+        return { period: r.period as string, outputVat: Number(r.outputVat), inputVat: 0, netVat: Number(r.outputVat), invoiceCount: Number(r.invoiceCount), status: m < currentMonth ? "submitted" : "pending" };
       });
     res.json({ data: declarations });
   } catch (err) {

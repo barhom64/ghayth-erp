@@ -472,8 +472,8 @@ export async function exportTrialBalancePdf(companyId: number, startDate?: strin
   );
 
   const typeMap: Record<string, string> = { asset: "Assets", liability: "Liabilities", equity: "Equity", revenue: "Revenue", expense: "Expense" };
-  const totalDebit = rows.reduce((s: number, r: any) => s + Number(r.totalDebit), 0);
-  const totalCredit = rows.reduce((s: number, r: any) => s + Number(r.totalCredit), 0);
+  const totalDebit = rows.reduce((s: number, r) => s + Number(r.totalDebit), 0);
+  const totalCredit = rows.reduce((s: number, r) => s + Number(r.totalCredit), 0);
 
   const doc = createDoc({ title: "Trial Balance" });
   const buf = docToBuffer(doc);
@@ -489,7 +489,7 @@ export async function exportTrialBalancePdf(companyId: number, startDate?: strin
     doc,
     ["Code", "Account Name", "Type", "Debit", "Credit", "Balance"],
     [
-      ...rows.map((r: any) => [r.code, r.name, typeMap[r.type] || r.type, Number(r.totalDebit).toFixed(2), Number(r.totalCredit).toFixed(2), Number(r.balance).toFixed(2)]),
+      ...rows.map((r) => [r.code as string, r.name as string, typeMap[r.type as string] || (r.type as string), Number(r.totalDebit).toFixed(2), Number(r.totalCredit).toFixed(2), Number(r.balance).toFixed(2)]),
       [null, "Total / الإجمالي", null, totalDebit.toFixed(2), totalCredit.toFixed(2), (totalDebit - totalCredit).toFixed(2)],
     ],
     [50, 165, 70, 75, 75, 75]
@@ -529,8 +529,8 @@ export async function exportFleetTripsPdf(companyId: number, startDate?: string,
     params
   );
 
-  const totalDistance = rows.reduce((s: number, r: any) => s + Number(r.distance), 0);
-  const totalCost = rows.reduce((s: number, r: any) => s + Number(r.cost), 0);
+  const totalDistance = rows.reduce((s: number, r) => s + Number(r.distance), 0);
+  const totalCost = rows.reduce((s: number, r) => s + Number(r.cost), 0);
 
   const doc = createDoc({ title: "Fleet Trip Report" });
   const buf = docToBuffer(doc);
@@ -546,15 +546,15 @@ export async function exportFleetTripsPdf(companyId: number, startDate?: string,
     doc,
     ["Trip #", "Vehicle", "Driver", "From", "To", "Distance (km)", "Cost (SAR)", "Status"],
     [
-      ...rows.map((r: any) => [
+      ...rows.map((r) => [
         String(r.id),
-        r.plateNumber || "-",
-        r.driverName || "-",
-        r.fromLocation || "-",
-        r.toLocation || "-",
+        (r.plateNumber as string | null) || "-",
+        (r.driverName as string | null) || "-",
+        (r.fromLocation as string | null) || "-",
+        (r.toLocation as string | null) || "-",
         Number(r.distance).toFixed(1),
         Number(r.cost).toFixed(2),
-        r.status,
+        r.status as string,
       ]),
       [null, null, "Total / الإجمالي", null, null, totalDistance.toFixed(1), totalCost.toFixed(2), null],
     ],

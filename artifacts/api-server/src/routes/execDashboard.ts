@@ -47,7 +47,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
          ORDER BY code`,
         [companyId]
       );
-      const total = rows.reduce((s: number, r: any) => s + Number(r.currentBalance ?? 0), 0);
+      const total = rows.reduce((s: number, r) => s + Number(r.currentBalance ?? 0), 0);
       return { total: roundTo2(total), accounts: rows };
     }, { total: 0, accounts: [] }),
 
@@ -150,7 +150,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
         [companyId, periodStart, periodEnd, period]
       );
       const withPct = rows
-        .map((r: any) => {
+        .map((r) => {
           const actual = Number(r.actual);
           const budget = Number(r.budget);
           return {
@@ -161,11 +161,11 @@ execDashboardRouter.get("/overview", async (req, res) => {
             pct: budget > 0 ? Math.round((actual / budget) * 10000) / 100 : 0,
           };
         })
-        .filter((r: any) => r.pct >= 80)
+        .filter((r) => r.pct >= 80)
         .sort((a: any, b: any) => b.pct - a.pct);
       return {
         count: withPct.length,
-        over100: withPct.filter((r: any) => r.pct > 100).length,
+        over100: withPct.filter((r) => r.pct > 100).length,
         top5: withPct.slice(0, 5),
       };
     }, { count: 0, over100: 0, top5: [] }),

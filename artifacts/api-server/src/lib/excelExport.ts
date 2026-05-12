@@ -66,7 +66,7 @@ export async function exportTrialBalanceExcel(companyId: number, startDate?: str
   const sheet: ExcelSheet = {
     name: "ميزان المراجعة",
     headers: ["الرمز", "اسم الحساب", "نوع الحساب", "المدين", "الدائن", "الرصيد"],
-    rows: rows.map((r: any) => [r.code, r.name, typeMap[r.type] || r.type, Number(r.totalDebit), Number(r.totalCredit), Number(r.balance)]),
+    rows: rows.map((r) => [r.code as string, r.name as string, typeMap[r.type as string] || (r.type as string), Number(r.totalDebit), Number(r.totalCredit), Number(r.balance)]),
     colWidths: [12, 35, 16, 15, 15, 15],
   };
 
@@ -94,7 +94,7 @@ export async function exportIncomeStatementExcel(companyId: number, startDate?: 
     name: "الإيرادات",
     headers: ["الرمز", "اسم الحساب", "المبلغ"],
     rows: [
-      ...revenues.map((r: any) => [r.code, r.name, Number(r.amount)]),
+      ...revenues.map((r) => [r.code as string, r.name as string, Number(r.amount)]),
       ["", "إجمالي الإيرادات", totalRevenue],
     ],
     colWidths: [12, 40, 18],
@@ -104,7 +104,7 @@ export async function exportIncomeStatementExcel(companyId: number, startDate?: 
     name: "المصروفات",
     headers: ["الرمز", "اسم الحساب", "المبلغ"],
     rows: [
-      ...expenses.map((r: any) => [r.code, r.name, Number(r.amount)]),
+      ...expenses.map((r) => [r.code as string, r.name as string, Number(r.amount)]),
       ["", "إجمالي المصروفات", totalExpenses],
       ["", "صافي الدخل", totalRevenue - totalExpenses],
     ],
@@ -167,11 +167,11 @@ export async function exportPayrollExcel(companyId: number, period?: string): Pr
     params
   );
 
-  const periods = [...new Set(records.map((r: any) => r.period as string))];
+  const periods = [...new Set(records.map((r) => r.period as string))];
   const sheets: ExcelSheet[] = [];
 
   for (const p of periods.slice(0, 12)) {
-    const periodRows = records.filter((r: any) => r.period === p);
+    const periodRows = records.filter((r) => r.period === p);
     const totalGross = periodRows.reduce((s: number, r: any) => s + Number(r.grossSalary || 0), 0);
     const totalNet = periodRows.reduce((s: number, r: any) => s + Number(r.netSalary || 0), 0);
 
@@ -179,8 +179,8 @@ export async function exportPayrollExcel(companyId: number, period?: string): Pr
       name: `رواتب ${p}`,
       headers: ["الموظف", "المسمى الوظيفي", "الراتب الأساسي", "بدل سكن", "بدل نقل", "أوفرتايم", "الراتب الإجمالي", "الاستقطاعات", "صافي الراتب", "الحالة"],
       rows: [
-        ...periodRows.map((r: any) => [
-          r.employeeName, r.position || "",
+        ...periodRows.map((r) => [
+          r.employeeName as string, (r.position as string | null) || "",
           Number(r.baseSalary || 0), Number(r.housingAllowance || 0), Number(r.transportAllowance || 0),
           Number(r.overtime || 0), Number(r.grossSalary || 0),
           Number(r.totalDeductions || 0), Number(r.netSalary || 0),
@@ -233,13 +233,13 @@ export async function exportAttendanceExcel(companyId: number, startDate?: strin
   const sheet: ExcelSheet = {
     name: "سجل الحضور",
     headers: ["الموظف", "المسمى الوظيفي", "التاريخ", "الحالة", "وقت الحضور", "وقت الانصراف", "ساعات العمل", "ملاحظات"],
-    rows: records.map((r: any) => [
-      r.employeeName, r.position || "",
-      r.date ? new Date(r.date).toLocaleDateString("ar-SA") : "",
-      statusMap[r.status] || r.status,
-      r.checkIn || "", r.checkOut || "",
+    rows: records.map((r) => [
+      r.employeeName as string, (r.position as string | null) || "",
+      r.date ? new Date(r.date as string | Date).toLocaleDateString("ar-SA") : "",
+      statusMap[r.status as string] || (r.status as string),
+      (r.checkIn as string | null) || "", (r.checkOut as string | null) || "",
       r.workHours ? Number(r.workHours).toFixed(1) : "",
-      r.notes || "",
+      (r.notes as string | null) || "",
     ]),
     colWidths: [25, 20, 14, 12, 12, 12, 12, 30],
   };

@@ -310,8 +310,8 @@ financeHardeningRouter.post("/journal-manual", authorize({ feature: "finance.har
 
     const { description, lines, costCenter, notes } = zodParse(createManualJournalSchema.safeParse(req.body ?? {}));
 
-    const totalDebit = lines.reduce((s: number, l: any) => s + Number(l.debit ?? 0), 0);
-    const totalCredit = lines.reduce((s: number, l: any) => s + Number(l.credit ?? 0), 0);
+    const totalDebit = lines.reduce((s: number, l) => s + Number(l.debit ?? 0), 0);
+    const totalCredit = lines.reduce((s: number, l) => s + Number(l.credit ?? 0), 0);
     if (Math.abs(totalDebit - totalCredit) > 0.01) {
       throw new ValidationError(
         `القيد غير متوازن: مدين ${totalDebit.toFixed(2)}، دائن ${totalCredit.toFixed(2)}`,
@@ -666,9 +666,9 @@ financeHardeningRouter.get("/bank-guarantees", authorize({ feature: "finance.har
 
     const summary = {
       total: rows.length,
-      totalAmount: rows.filter((r: any) => r.status === 'active').reduce((s: number, r: any) => s + Number(r.amount), 0),
-      expiring30: rows.filter((r: any) => ['expiring_7', 'expiring_14', 'expiring_30'].includes(r.alertStatus)).length,
-      expired: rows.filter((r: any) => r.alertStatus === 'expired').length,
+      totalAmount: rows.filter((r) => r.status === 'active').reduce((s: number, r) => s + Number(r.amount), 0),
+      expiring30: rows.filter((r) => ['expiring_7', 'expiring_14', 'expiring_30'].includes(r.alertStatus as string)).length,
+      expired: rows.filter((r) => r.alertStatus === 'expired').length,
     };
 
     res.json({ data: rows, summary });
@@ -1205,7 +1205,7 @@ financeHardeningRouter.get("/projects/:id/costs", authorize({ feature: "finance.
       [id, scope.companyId]
     );
 
-    const totalCost = costs.reduce((s: number, r: any) => s + Number(r.amount), 0);
+    const totalCost = costs.reduce((s: number, r) => s + Number(r.amount), 0);
     const budgetRemaining = Number(project.budget ?? 0) - totalCost;
     const usagePct = Number(project.budget) > 0 ? Math.round((totalCost / Number(project.budget)) * 100) : 0;
 
@@ -1283,10 +1283,10 @@ financeHardeningRouter.get("/cash-flow-forecast", authorize({ feature: "finance.
     ]);
 
     const currentBalance = Number(cashBalance?.balance ?? 0);
-    const totalInflow30 = inflow30.reduce((s: number, r: any) => s + Number(r.expected), 0);
-    const totalInflow60 = inflow60.reduce((s: number, r: any) => s + Number(r.expected), 0);
-    const totalInflow90 = inflow90.reduce((s: number, r: any) => s + Number(r.expected), 0);
-    const totalOutflow30 = outflow30.reduce((s: number, r: any) => s + Number(r.expected), 0);
+    const totalInflow30 = inflow30.reduce((s: number, r) => s + Number(r.expected), 0);
+    const totalInflow60 = inflow60.reduce((s: number, r) => s + Number(r.expected), 0);
+    const totalInflow90 = inflow90.reduce((s: number, r) => s + Number(r.expected), 0);
+    const totalOutflow30 = outflow30.reduce((s: number, r) => s + Number(r.expected), 0);
 
     res.json({
       currentBalance,

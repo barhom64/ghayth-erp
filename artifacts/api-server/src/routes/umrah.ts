@@ -838,19 +838,19 @@ router.post("/import/preview", authorize({ feature: "umrah", action: "create" })
   try {
     const scope = req.scope!;
     const { seasonId, rows: importRows, fileType } = zodParse(importPreviewSchema.safeParse(req.body));
-    const passportHashes = importRows.filter((r: any) => r.passportNumber).map((r: any) => blindIndex(String(r.passportNumber)));
+    const passportHashes = importRows.filter((r) => r.passportNumber).map((r) => blindIndex(String(r.passportNumber)));
     const existingRows = passportHashes.length > 0
       ? await rawQuery<Record<string, unknown>>(`SELECT "passportNumber_hash" FROM umrah_pilgrims WHERE "companyId"=$1 AND "seasonId"=$2 AND "passportNumber_hash" = ANY($3) AND "deletedAt" IS NULL`, [scope.companyId, seasonId, passportHashes])
       : [];
-    const existingSet = new Set(existingRows.map((r: any) => r.passportNumber_hash));
-    const newRows = importRows.filter((r: any) => r.passportNumber && !existingSet.has(blindIndex(String(r.passportNumber))));
-    const duplicateRows = importRows.filter((r: any) => r.passportNumber && existingSet.has(blindIndex(String(r.passportNumber))));
-    const errorRows = importRows.filter((r: any) => !r.passportNumber || !r.fullName);
-    const nuskCodes = [...new Set(importRows.map((r: any) => r.nuskCode).filter(Boolean))];
+    const existingSet = new Set(existingRows.map((r) => r.passportNumber_hash));
+    const newRows = importRows.filter((r) => r.passportNumber && !existingSet.has(blindIndex(String(r.passportNumber))));
+    const duplicateRows = importRows.filter((r) => r.passportNumber && existingSet.has(blindIndex(String(r.passportNumber))));
+    const errorRows = importRows.filter((r) => !r.passportNumber || !r.fullName);
+    const nuskCodes = [...new Set(importRows.map((r) => r.nuskCode).filter(Boolean))];
     const linkedAgents = nuskCodes.length > 0
       ? await rawQuery<Record<string, unknown>>(`SELECT "nuskCode", name FROM umrah_sub_agents WHERE "companyId"=$1 AND "nuskCode" = ANY($2)`, [scope.companyId, nuskCodes])
       : [];
-    const linkedSet = new Set(linkedAgents.map((a: any) => a.nuskCode));
+    const linkedSet = new Set(linkedAgents.map((a) => a.nuskCode));
     const unlinkedSubAgents = nuskCodes.filter((c) => !linkedSet.has(c)).map((c) => ({ nuskCode: c }));
     res.json({
       totalRows: importRows.length,
@@ -907,11 +907,11 @@ async function doImport(scope: any, body: { seasonId: number; rows: any[]; fileT
 
   for (let batchStart = 0; batchStart < importRows.length; batchStart += BATCH_SIZE) {
     const batch = importRows.slice(batchStart, batchStart + BATCH_SIZE);
-    const passportHashes = batch.filter((r: any) => r.passportNumber).map((r: any) => blindIndex(String(r.passportNumber)));
+    const passportHashes = batch.filter((r) => r.passportNumber).map((r) => blindIndex(String(r.passportNumber)));
     const existingRows = passportHashes.length > 0
       ? await rawQuery<Record<string, unknown>>(`SELECT id, "passportNumber_hash" FROM umrah_pilgrims WHERE "companyId"=$1 AND "seasonId"=$2 AND "passportNumber_hash" = ANY($3) AND "deletedAt" IS NULL`, [scope.companyId, seasonId, passportHashes])
       : [];
-    const existingMap = new Map<string, number>(existingRows.map((r: any) => [r.passportNumber_hash, r.id]));
+    const existingMap = new Map<string, number>(existingRows.map((r) => [r.passportNumber_hash as string, r.id as number]));
 
     for (let i = 0; i < batch.length; i++) {
       const globalRow = batchStart + i;

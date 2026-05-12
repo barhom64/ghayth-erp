@@ -224,11 +224,11 @@ export async function detectSeasonalPatterns(companyId: number): Promise<{ month
     [companyId]
   );
 
-  const avgOverall = rows.length > 0 ? rows.reduce((s: number, r: any) => s + r.avgRevenue, 0) / rows.length : 0;
-  return rows.map((r: any) => ({
+  const avgOverall = rows.length > 0 ? rows.reduce((s: number, r) => s + Number(r.avgRevenue), 0) / rows.length : 0;
+  return rows.map((r) => ({
     month: Number(r.month),
     monthName: monthNames[Number(r.month) - 1] ?? String(r.month),
-    avgRevenue: Math.round(r.avgRevenue),
-    trend: r.avgRevenue > avgOverall * 1.15 ? "peak" : r.avgRevenue < avgOverall * 0.85 ? "low" : "normal",
+    avgRevenue: Math.round(Number(r.avgRevenue)),
+    trend: Number(r.avgRevenue) > avgOverall * 1.15 ? "peak" : Number(r.avgRevenue) < avgOverall * 0.85 ? "low" : "normal",
   }));
 }

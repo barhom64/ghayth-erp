@@ -1415,9 +1415,9 @@ router.get("/auto-detection/summary", authorize({ feature: "hr.discipline", acti
 
     res.json({
       ...(stats[0] ?? {}),
-      byType: byType.map((r: any) => ({
+      byType: byType.map((r) => ({
         type: r.type,
-        label: typeLabels[r.type] ?? r.type,
+        label: typeLabels[r.type ?? ""] ?? r.type,
         count: Number(r.count),
       })),
     });

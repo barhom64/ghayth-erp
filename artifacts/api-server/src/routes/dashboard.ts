@@ -285,10 +285,10 @@ router.get("/charts/revenue", async (req, res) => {
     const expenseMap: Record<string, number> = {};
     for (const e of expenseRows) expenseMap[e.month_key] = Number(e.total);
 
-    const data = rows.map((r: any) => ({
-      month: monthNames[r.month_key?.split("-")[1]] || r.month_key,
+    const data = rows.map((r) => ({
+      month: monthNames[(r.month_key as string | undefined)?.split("-")[1] ?? ""] || (r.month_key as string),
       revenue: Number(r.revenue),
-      expenses: expenseMap[r.month_key] || 0,
+      expenses: expenseMap[r.month_key as string] || 0,
     }));
     res.json({ data });
   } catch (err) {
@@ -318,7 +318,7 @@ router.get("/charts/attendance", async (req, res) => {
       0: "الأحد", 1: "الاثنين", 2: "الثلاثاء", 3: "الأربعاء",
       4: "الخميس", 5: "الجمعة", 6: "السبت",
     };
-    const data = rows.map((r: any) => ({
+    const data = rows.map((r) => ({
       day: dayNames[Number(r.dow)] || `يوم ${r.dow}`,
       present: Number(r.present),
       absent: Number(r.absent),

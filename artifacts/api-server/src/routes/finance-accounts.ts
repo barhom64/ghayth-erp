@@ -435,13 +435,13 @@ accountsRouter.get("/ledger/:accountCode", authorize({ feature: "finance.account
     );
 
     let runningBalance = 0;
-    const movements = rows.map((r: any) => {
+    const movements = rows.map((r) => {
       runningBalance += Number(r.debit) - Number(r.credit);
       return { ...r, runningBalance };
     });
 
-    const totalDebit = rows.reduce((s: number, r: any) => s + Number(r.debit), 0);
-    const totalCredit = rows.reduce((s: number, r: any) => s + Number(r.credit), 0);
+    const totalDebit = rows.reduce((s: number, r) => s + Number(r.debit), 0);
+    const totalCredit = rows.reduce((s: number, r) => s + Number(r.credit), 0);
 
     res.json({
       account: { code: accountCode, name: accountRow?.name, type: accountRow?.type },

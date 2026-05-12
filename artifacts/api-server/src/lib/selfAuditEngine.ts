@@ -35,10 +35,10 @@ async function checkEmployeesWithoutActiveContract(companyId: number): Promise<A
        )`,
     [companyId]
   );
-  return rows.map((r: any) => ({
+  return rows.map((r) => ({
     type: "employee_no_contract",
     entityType: "employee",
-    entityId: r.id,
+    entityId: r.id as number,
     description: `الموظف "${r.name}" ليس لديه عقد ساري المفعول`,
     priority: "high" as const,
     department: "hr",
@@ -59,10 +59,10 @@ async function checkExpiredContractsNotRenewed(companyId: number): Promise<Audit
        )`,
     [companyId]
   );
-  return rows.map((r: any) => ({
+  return rows.map((r) => ({
     type: "expired_contract_not_renewed",
     entityType: "employee_contract",
-    entityId: r.id,
+    entityId: r.id as number,
     description: `عقد الموظف "${r.name}" انتهى في ${r.endDate} ولم يُجدَّد`,
     priority: "high" as const,
     department: "hr",
@@ -81,10 +81,10 @@ async function checkVehiclesWithoutInsurance(companyId: number): Promise<AuditVi
        )`,
     [companyId]
   );
-  return rows.map((r: any) => ({
+  return rows.map((r) => ({
     type: "vehicle_no_insurance",
     entityType: "fleet_vehicle",
-    entityId: r.id,
+    entityId: r.id as number,
     description: `المركبة "${r.plateNumber}" بدون تأمين ساري المفعول`,
     priority: "critical" as const,
     department: "fleet",
@@ -105,10 +105,10 @@ async function checkOverdueInvoicesNoCollection(companyId: number): Promise<Audi
        )`,
     [companyId]
   );
-  return rows.map((r: any) => ({
+  return rows.map((r) => ({
     type: "overdue_invoice_no_action",
     entityType: "invoice",
-    entityId: r.id,
+    entityId: r.id as number,
     description: `الفاتورة "${r.ref}" متأخرة ${r.daysOverdue} يوم بدون إجراء تحصيل`,
     priority: Number(r.daysOverdue) > 30 ? "critical" as const : "high" as const,
     department: "finance",
@@ -128,10 +128,10 @@ async function checkUnsettledCustody(companyId: number): Promise<AuditViolation[
        AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'`,
     [companyId]
   );
-  return rows.map((r: any) => ({
+  return rows.map((r) => ({
     type: "unsettled_custody",
     entityType: "custody",
-    entityId: r.id,
+    entityId: r.id as number,
     description: `عهدة "${r.description}" للموظف "${r.employeeName}" لم تُسوَّ منذ ${r.daysSince} يوم`,
     priority: "medium" as const,
     department: "finance",
@@ -147,10 +147,10 @@ async function checkStalledRequests(companyId: number): Promise<AuditViolation[]
        AND ar."createdAt" < NOW() - INTERVAL '7 days'`,
     [companyId]
   );
-  return rows.map((r: any) => ({
+  return rows.map((r) => ({
     type: "stalled_request",
     entityType: "approval_request",
-    entityId: r.id,
+    entityId: r.id as number,
     description: `طلب موافقة (${r.refType}) رقم ${r.refId} متوقف منذ ${r.daysPending} يوم`,
     priority: Number(r.daysPending) > 14 ? "high" as const : "medium" as const,
     department: "operations",
@@ -173,10 +173,10 @@ async function checkUpcomingHearingsNoAction(companyId: number): Promise<AuditVi
        )`,
     [companyId]
   );
-  return rows.map((r: any) => ({
+  return rows.map((r) => ({
     type: "hearing_no_preparation",
     entityType: "legal_case",
-    entityId: r.id,
+    entityId: r.id as number,
     description: `جلسة قانونية "${r.title}" بتاريخ ${r.nextHearingDate} بدون إجراء تحضيري مسبق`,
     priority: "high" as const,
     department: "legal",
@@ -197,10 +197,10 @@ async function checkEmployeesWithoutActiveAssignment(companyId: number): Promise
        )`,
     [companyId]
   );
-  return rows.map((r: any) => ({
+  return rows.map((r) => ({
     type: "employee_no_assignment",
     entityType: "employee",
-    entityId: r.id,
+    entityId: r.id as number,
     description: `الموظف "${r.name}" بدون تعيين نشط في أي فرع`,
     priority: "medium" as const,
     department: "hr",
@@ -219,10 +219,10 @@ async function checkIncompleteAttendance(companyId: number): Promise<AuditViolat
        AND a.status NOT IN ('on_leave','absent')`,
     [companyId]
   );
-  return rows.map((r: any) => ({
+  return rows.map((r) => ({
     type: "incomplete_attendance",
     entityType: "attendance",
-    entityId: r.id,
+    entityId: r.id as number,
     description: `الموظف "${r.name}" لديه تسجيل حضور بتاريخ ${r.date} بدون تسجيل انصراف`,
     priority: "low" as const,
     department: "hr",
@@ -240,10 +240,10 @@ async function checkNegativeLeaveBalance(companyId: number): Promise<AuditViolat
        AND (lb.entitled - lb.used) < 0`,
     [companyId]
   );
-  return rows.map((r: any) => ({
+  return rows.map((r) => ({
     type: "negative_leave_balance",
     entityType: "hr_leave_balance",
-    entityId: r.id,
+    entityId: r.id as number,
     description: `رصيد إجازات سالب: "${r.name}" — ${r.leaveType}: ${r.balance} يوم`,
     priority: "medium" as const,
     department: "hr",
