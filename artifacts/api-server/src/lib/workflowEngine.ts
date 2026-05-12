@@ -5,13 +5,13 @@ import { logger } from "./logger.js";
 import { OPS_CLOSE_ROLES } from "./rbacCatalog.js";
 
 async function handleLeaveApproval(refId: number, companyId: number, approvedBy?: number | null): Promise<void> {
-  const approveResult = await rawQuery<any>(
+  const approveResult = await rawQuery<Record<string, unknown>>(
     `UPDATE hr_leave_requests SET status = 'approved', "approvedBy" = $1, "approvedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status = 'pending' RETURNING id`,
     [approvedBy ?? null, refId, companyId]
   );
   if (approveResult.length === 0) return;
 
-  const [request] = await rawQuery<any>(
+  const [request] = await rawQuery<Record<string, unknown>>(
     `SELECT lr."employeeId", lr."leaveTypeId", lr.days, lr."startDate", lr."endDate",
             lt.name AS "leaveTypeName"
      FROM hr_leave_requests lr
@@ -23,7 +23,7 @@ async function handleLeaveApproval(refId: number, companyId: number, approvedBy?
 
   const year = new Date(request.startDate).getFullYear();
 
-  const allAssignments = await rawQuery<any>(
+  const allAssignments = await rawQuery<Record<string, unknown>>(
     `SELECT ea.id, ea."companyId", ea."branchId"
      FROM employee_assignments ea
      WHERE ea."employeeId" = $1 AND ea.status = 'active'`,
@@ -62,13 +62,13 @@ async function handleLeaveApproval(refId: number, companyId: number, approvedBy?
 }
 
 async function handleLeaveRejection(refId: number, companyId: number): Promise<void> {
-  const rejectResult = await rawQuery<any>(
+  const rejectResult = await rawQuery<Record<string, unknown>>(
     `UPDATE hr_leave_requests SET status = 'rejected', "approvedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND status = 'pending' RETURNING id`,
     [refId, companyId]
   );
   if (rejectResult.length === 0) return;
 
-  const [request] = await rawQuery<any>(
+  const [request] = await rawQuery<Record<string, unknown>>(
     `SELECT "employeeId", "companyId", "leaveTypeId", days, "startDate" FROM hr_leave_requests WHERE id = $1 AND "deletedAt" IS NULL`,
     [refId]
   );
@@ -243,7 +243,7 @@ async function validatePreApproval(
   if (data._requiresAttachments) {
     const hasCurrentAttachments = currentAttachments && currentAttachments.length > 0;
     if (!hasCurrentAttachments) {
-      const existingAttachments = await rawQuery<any>(
+      const existingAttachments = await rawQuery<Record<string, unknown>>(
         `SELECT COUNT(*) as count FROM workflow_step_actions WHERE "instanceId" = $1 AND attachments IS NOT NULL AND attachments != '[]'`,
         [instance.id]
       );
@@ -256,7 +256,7 @@ async function validatePreApproval(
 
   if (data._budgetAccountCode && data._budgetAmount) {
     const period = currentPeriod();
-    const [budget] = await rawQuery<any>(
+    const [budget] = await rawQuery<Record<string, unknown>>(
       `SELECT amount, used FROM budgets WHERE "companyId" = $1 AND "accountCode" = $2 AND period = $3 AND "deletedAt" IS NULL`,
       [companyId, data._budgetAccountCode, period]
     );
@@ -318,7 +318,7 @@ export async function submitWorkflow(params: SubmitParams) {
     title, submittedBy, submittedByName, data,
   } = params;
 
-  const [def] = await rawQuery<any>(
+  const [def] = await rawQuery<Record<string, unknown>>(
     `SELECT * FROM workflow_definitions WHERE "companyId" = $1 AND "requestType" = $2 AND "isActive" = true`,
     [companyId, requestType]
   );
@@ -326,14 +326,14 @@ export async function submitWorkflow(params: SubmitParams) {
   const definitionId = def?.id ?? null;
   const label = def?.requestTypeLabel ?? requestType;
 
-  const steps = def ? await rawQuery<any>(
+  const steps = def ? await rawQuery<Record<string, unknown>>(
     `SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder" ASC`,
     [def.id]
   ) : [];
 
   const firstStep = steps[0] ?? null;
 
-  const [sla] = await rawQuery<any>(
+  const [sla] = await rawQuery<Record<string, unknown>>(
     `SELECT * FROM sla_definitions WHERE "companyId" = $1 AND "requestType" = $2 AND "isActive" = true`,
     [companyId, requestType]
   );
@@ -346,7 +346,7 @@ export async function submitWorkflow(params: SubmitParams) {
     // First: try to resolve the submitter's direct manager via managerId on the assignment
     if (submittedBy) {
       try {
-        const [directMgrRow] = await rawQuery<any>(
+        const [directMgrRow] = await rawQuery<Record<string, unknown>>(
           `SELECT ea2.id AS "assignmentId"
            FROM employee_assignments ea
            JOIN employee_assignments ea2
@@ -373,7 +373,7 @@ export async function submitWorkflow(params: SubmitParams) {
     // to every inbox and no escalation job will route it.
     if (!currentAssignee) {
       try {
-        const [fallback] = await rawQuery<any>(
+        const [fallback] = await rawQuery<Record<string, unknown>>(
           `SELECT id FROM employee_assignments
            WHERE "companyId" = $1 AND status = 'active'
              AND role IN ('hr_manager','general_manager','owner')
@@ -442,7 +442,7 @@ export async function rejectWorkflow(params: ActionParams) {
 
 export async function referWorkflow(params: ActionParams) {
   if (!params.referredTo) throw new ValidationError("يجب تحديد الشخص المحال إليه");
-  const [targetAssignment] = await rawQuery<any>(
+  const [targetAssignment] = await rawQuery<Record<string, unknown>>(
     `SELECT id FROM employee_assignments WHERE id = $1 AND "companyId" = $2 AND status = 'active'`,
     [params.referredTo, params.companyId]
   );
@@ -465,7 +465,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
     overrideReason,
   } = params;
 
-  const [instance] = await rawQuery<any>(
+  const [instance] = await rawQuery<Record<string, unknown>>(
     `SELECT * FROM workflow_instances WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL FOR UPDATE`,
     [instanceId, companyId]
   );
@@ -490,7 +490,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
   const privilegedRoles = OPS_CLOSE_ROLES;
   let isOverride = false;
 
-  const [actorAssignment] = await rawQuery<any>(
+  const [actorAssignment] = await rawQuery<Record<string, unknown>>(
     `SELECT role FROM employee_assignments WHERE id = $1 AND status = 'active'`,
     [actionBy]
   );
@@ -537,7 +537,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
   }
 
   const steps = instance.definitionId
-    ? await rawQuery<any>(
+    ? await rawQuery<Record<string, unknown>>(
         `SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder" ASC`,
         [instance.definitionId]
       )
@@ -583,7 +583,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
         // HR/GM/owner so the request stays actionable somewhere.
         if (!newAssignee) {
           try {
-            const [fallback] = await rawQuery<any>(
+            const [fallback] = await rawQuery<Record<string, unknown>>(
               `SELECT id FROM employee_assignments
                WHERE "companyId" = $1 AND status = 'active'
                  AND role IN ('hr_manager','general_manager','owner')
@@ -595,7 +595,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
           } catch (e) { logger.warn(e, "workflow: failed to resolve fallback assignee for next step"); }
         }
 
-        const [sla] = await rawQuery<any>(
+        const [sla] = await rawQuery<Record<string, unknown>>(
           `SELECT * FROM sla_definitions WHERE "companyId" = $1 AND "requestType" = $2 AND "isActive" = true`,
           [companyId, instance.requestType]
         );
@@ -750,7 +750,7 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
     }
 
     case "escalate": {
-      const [sla] = await rawQuery<any>(
+      const [sla] = await rawQuery<Record<string, unknown>>(
         `SELECT "escalateTo" FROM sla_definitions WHERE "companyId" = $1 AND "requestType" = $2 AND "isActive" = true`,
         [companyId, instance.requestType]
       );
@@ -823,13 +823,13 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
 }
 
 export async function getTimeline(instanceId: number, companyId: number) {
-  const [instance] = await rawQuery<any>(
+  const [instance] = await rawQuery<Record<string, unknown>>(
     `SELECT * FROM workflow_instances WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
     [instanceId, companyId]
   );
   if (!instance) throw new NotFoundError("المعاملة غير موجودة");
 
-  const actions = await rawQuery<any>(
+  const actions = await rawQuery<Record<string, unknown>>(
     `SELECT wsa.*, u.email AS "actionByEmail"
      FROM workflow_step_actions wsa
      LEFT JOIN employee_assignments ea2 ON ea2.id = wsa."actionBy"
@@ -841,7 +841,7 @@ export async function getTimeline(instanceId: number, companyId: number) {
   );
 
   const steps = instance.definitionId
-    ? await rawQuery<any>(
+    ? await rawQuery<Record<string, unknown>>(
         `SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder" ASC`,
         [instance.definitionId]
       )
@@ -855,7 +855,7 @@ export async function getTimeline(instanceId: number, companyId: number) {
 }
 
 export async function getTimelineByRef(refTable: string, refId: number, companyId: number) {
-  const [instance] = await rawQuery<any>(
+  const [instance] = await rawQuery<Record<string, unknown>>(
     `SELECT * FROM workflow_instances WHERE "refTable" = $1 AND "refId" = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
     [refTable, refId, companyId]
   );
@@ -867,7 +867,7 @@ export async function checkSlaStatus(companyId: number) {
   const now = new Date();
   let warnings = 0, escalations = 0, autoApprovals = 0;
 
-  const pendingInstances = await rawQuery<any>(
+  const pendingInstances = await rawQuery<Record<string, unknown>>(
     `SELECT wi.*, sd."warningHours", sd."deadlineHours", sd."escalationHours",
             sd."autoApproveOnTimeout", sd."escalateTo"
      FROM workflow_instances wi
