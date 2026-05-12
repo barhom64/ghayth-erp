@@ -86,13 +86,13 @@ async function getTargetAssignmentId(
           project_manager: ["branch_manager", "general_manager", "owner"],
         };
         const roles = roleMap[target] || ["owner"];
-        const [asgn] = await rawQuery<any>(
+        const [asgn] = await rawQuery<Record<string, unknown>>(
           `SELECT id FROM employee_assignments
            WHERE "companyId" = $1 AND role = ANY($2) AND status = 'active'
            ORDER BY CASE WHEN role = $3 THEN 1 ELSE 2 END LIMIT 1`,
           [companyId, roles, roles[0]]
         );
-        return asgn?.id ?? null;
+        return (asgn?.id as number | null | undefined) ?? null;
       }
       default:
         return null;
@@ -173,7 +173,7 @@ async function executeAction(
         rule.actionTarget || "hr_manager"
       );
       if (assignmentId) {
-        const [emp] = await rawQuery<any>(
+        const [emp] = await rawQuery<Record<string, unknown>>(
           `SELECT "employeeId" FROM employee_assignments WHERE id = $1`,
           [assignmentId]
         );

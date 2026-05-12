@@ -102,7 +102,7 @@ export async function loadBalanceAssign(
   requiredSpecialty?: string
 ): Promise<{ employeeId: number; assignmentId: number; score: number } | null> {
   try {
-    const employees = await rawQuery<any>(
+    const employees = await rawQuery<Record<string, unknown>>(
       `SELECT ea.id AS "assignmentId", ea."employeeId", ea.role,
               e.name, e.lat, e.lon,
               3 AS rating,
@@ -139,7 +139,7 @@ export async function loadBalanceAssign(
     const emp = employees.find((e: any) => e.employeeId === selected.id);
     return {
       employeeId: selected.id,
-      assignmentId: emp?.assignmentId ?? 0,
+      assignmentId: (emp?.assignmentId as number | undefined) ?? 0,
       score: selected.workload,
     };
   } catch {

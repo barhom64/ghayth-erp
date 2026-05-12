@@ -403,7 +403,7 @@ export async function queryObligations(input: QueryObligationsInput): Promise<an
 
   const limit = Math.min(500, Math.max(1, input.limit ?? 100));
   params.push(limit);
-  return rawQuery<any>(
+  return rawQuery<Record<string, unknown>>(
     `SELECT * FROM obligations WHERE ${where} ORDER BY "dueAt" ASC LIMIT $${params.length}`,
     params
   );
@@ -422,7 +422,7 @@ export async function obligationSummary(companyId: number): Promise<{
   byType: Record<string, number>;
 }> {
   await ensureObligationsTable();
-  const [counts] = await rawQuery<any>(
+  const [counts] = await rawQuery<Record<string, unknown>>(
     `SELECT
       COUNT(*) FILTER (WHERE status='pending')::int AS pending,
       COUNT(*) FILTER (WHERE status='breached')::int AS breached,
@@ -433,7 +433,7 @@ export async function obligationSummary(companyId: number): Promise<{
      FROM obligations WHERE "companyId"=$1`,
     [companyId]
   );
-  const byTypeRows = await rawQuery<any>(
+  const byTypeRows = await rawQuery<Record<string, unknown>>(
     `SELECT "obligationType", COUNT(*)::int AS count
        FROM obligations
        WHERE "companyId"=$1 AND status IN ('pending','breached','escalated_l1','escalated_l2')
@@ -441,14 +441,14 @@ export async function obligationSummary(companyId: number): Promise<{
     [companyId]
   );
   const byType: Record<string, number> = {};
-  for (const r of byTypeRows) byType[r.obligationType] = r.count;
+  for (const r of byTypeRows) byType[r.obligationType as string] = Number(r.count);
   return {
-    pending: counts?.pending ?? 0,
-    breached: counts?.breached ?? 0,
-    escalatedL1: counts?.escalatedL1 ?? 0,
-    escalatedL2: counts?.escalatedL2 ?? 0,
-    dueIn24h: counts?.dueIn24h ?? 0,
-    dueIn7d: counts?.dueIn7d ?? 0,
+    pending: Number(counts?.pending ?? 0),
+    breached: Number(counts?.breached ?? 0),
+    escalatedL1: Number(counts?.escalatedL1 ?? 0),
+    escalatedL2: Number(counts?.escalatedL2 ?? 0),
+    dueIn24h: Number(counts?.dueIn24h ?? 0),
+    dueIn7d: Number(counts?.dueIn7d ?? 0),
     byType,
   };
 }
