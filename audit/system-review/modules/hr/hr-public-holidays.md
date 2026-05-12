@@ -8,15 +8,14 @@
 - الكومبوننت: `PublicHolidays`
 - subKey: `leaves` | minRoleLevel: —
 - الكيان المستنبط: `public-holidays`
-- سطور الملف: 226
+- سطور الملف: 227
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L123: "(بلا تسمية)" → `() => { setShowForm(!showForm); setEditingId(null); setFormInitial(defaultHolida`
-- L141: "(بلا تسمية)" → `() => { setShowForm(false); setEditingId(null);`
+- L142: "(بلا تسمية)" → `() => { setShowForm(false); setEditingId(null);`
 
 ### القراءات (GET)
 _لا قراءات._

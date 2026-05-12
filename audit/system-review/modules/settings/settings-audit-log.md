@@ -8,18 +8,16 @@
 - الكومبوننت: `Settings`
 - subKey: — | minRoleLevel: —
 - الكيان المستنبط: `audit-log`
-- سطور الملف: 352
+- سطور الملف: 402
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
 _لا توجد طلبات كتابة من هذه الصفحة._
 
 ### تفاصيل الأزرار المرئية
-- L106: "(بلا تسمية)" → `handleSave` 🔒
-- L186: "(بلا تسمية)" → `() => { if (showForm) resetForm(); else setShowForm(true);`
-- L193: "(بلا تسمية)" → `handleSave` 🔒
-- L205: "تعديل" → `() => handleEdit(item)` 🔒
-- L206: "حذف" → `() => setDeletingItem({ id: item.id, label: (fields[0] && item[fields[0].name]) ` 🔒
+- L243: "(بلا تسمية)" → `handleSave` 🔒
+- L255: "تعديل" → `() => handleEdit(item)` 🔒
+- L256: "حذف" → `() => setDeletingItem({ id: item.id, label: (fields[0] && item[fields[0].name]) ` 🔒
 
 ### القراءات (GET)
 - GET `/settings/resolved`

@@ -8,7 +8,7 @@
 - الكومبوننت: `Transfers`
 - subKey: `employees` | minRoleLevel: —
 - الكيان المستنبط: `transfers`
-- سطور الملف: 298
+- سطور الملف: 299
 - مصدر موجود: ✅
 
 ## 2. الأزرار والإجراءات
@@ -17,8 +17,7 @@
 | _(write)_ | `/hr/transfers` | POST | ✅ | ✅ | — | — | ✅ | ✅ | — |
 
 ### تفاصيل الأزرار المرئية
-- L206: "(بلا تسمية)" → `() => setShowForm(!showForm)`
-- L238: "(بلا تسمية)" → `() => setShowForm(false)`
+- L239: "(بلا تسمية)" → `() => setShowForm(false)`
 
 ### القراءات (GET)
 - GET `/hr/transfers`

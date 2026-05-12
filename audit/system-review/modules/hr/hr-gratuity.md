@@ -23,13 +23,26 @@ _لم تُلتقط أزرار._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/hr.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+مكافأة نهاية الخدمة (Gratuity / End of Service Benefit).
+
+| الحركة | الوحدة الهدف | مدخل API | مدخل DB | الحالة |
+|--------|--------------|----------|---------|--------|
+| حساب مكافأة فردية | hr/gratuity | GET `/hr/gratuity/calc/:employeeId` | محسوب لحظياً (لا يُخزن) | ✅ |
+| **القاعدة السعودية** | hr | نظام العمل: نصف شهر/سنة لأول 5، شهر/سنة بعدها | `lib/hr/gratuity-calc.ts` | ✅ موجود |
+| الراتب الأساس المعتمد للحساب | hr | آخر `basic + housing + transport` من `salary_components` | ✅ |
+| تأثير الاستقالة vs الإنهاء | hr/exit | اختلاف نسبة المكافأة (60% لو استقال قبل 5 سنوات) | logic في `gratuity-calc` | ✅ |
+| ربط بـ exit request | hr/exit | عند الاعتماد → يُحجز في مستحقات | راجع `hr-exit.md` | ✅ |
+| **قيد accrual شهري** | finance/GL | DR Gratuity Expense / CR Gratuity Liability (provision) | `gl_entries` (cron monthly) | ⚠ تحقق إن مفعّل |
+| إفراج المكافأة عند الصرف | finance/GL | DR Gratuity Liability / CR Cash | `gl_entries` | ✅ |
+| تقرير IFRS provision | finance/reports | aggregation للـ liability المتراكم | views | ⚠ |
+| إشعار سنوي للموظف بقيمة مكافأته المتوقعة | comms | اختياري | `notifications` | ⚠ |
+| Audit log | core | عند exit إجباري | `audit_logs` | ✅ (راجع hr-exit) |
+
+تحقق يدوي:
+- [ ] هل القاعدة المخصصة للشركة (سياسة أكرم من القانون) تُحترم؟
+- [ ] هل فترة التجربة (≥ 3 شهور) تُخصم من حساب المدة؟
+- [ ] هل الإجازة بدون راتب تُخصم من المدة المحسوبة؟
+- [ ] هل provision الشهري يُعاد حسابه عند رفع الراتب؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `gratuity` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
