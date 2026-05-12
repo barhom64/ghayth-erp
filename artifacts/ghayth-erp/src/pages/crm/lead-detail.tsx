@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { DetailPageLayout, type ExtraTab } from "@/components/shared/detail-page-layout";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -194,10 +195,10 @@ export default function LeadDetailPage() {
 
   const actions = (
     <div className="flex items-center gap-2">
-      <Button size="sm" onClick={handleConvert} className="gap-1">
+      <GuardedButton perm="crm:create" size="sm" onClick={handleConvert} className="gap-1">
         <CheckCircle2 className="h-4 w-4" />
         تحويل
-      </Button>
+      </GuardedButton>
       <Button size="sm" variant="outline" onClick={() => navigate("/crm/activities")} className="gap-1">
         <Phone className="h-4 w-4" />
         تسجيل اتصال

@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Building2, Home, Users2, FileText, Banknote, Wrench,
@@ -156,14 +157,14 @@ export default function PropertiesDashboard() {
   const actions = (
     <>
       <Link href="/properties/buildings/create">
-        <Button variant="outline" size="sm" className="gap-1">
+        <GuardedButton perm="properties:create" variant="outline" size="sm" className="gap-1">
           <Plus className="h-4 w-4" /> مبنى جديد
-        </Button>
+        </GuardedButton>
       </Link>
       <Link href="/properties/create">
-        <Button size="sm" className="gap-1">
+        <GuardedButton perm="properties:create" size="sm" className="gap-1">
           <Plus className="h-4 w-4" /> وحدة جديدة
-        </Button>
+        </GuardedButton>
       </Link>
     </>
   );

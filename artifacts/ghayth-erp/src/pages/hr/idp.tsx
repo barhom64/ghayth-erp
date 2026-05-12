@@ -1,31 +1,43 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Target, Plus, BookOpen, TrendingUp, CheckCircle } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
 
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { IDP_STATUS } from "@/lib/hr-type-maps";
-import { DatePicker } from "@/components/ui/date-picker";
+import {
+  FormShell, FormTextField, FormTextareaField, FormSelectField, FormDateField, FormGrid,
+} from "@/components/form-shell";
+
+const idpSchema = z.object({
+  employeeId: z.string().min(1, "الموظف مطلوب"),
+  title: z.string().trim(),
+  goals: z.string(),
+  skills: z.string(),
+  targetDate: z.string(),
+  notes: z.string().trim(),
+});
+type IdpForm = z.infer<typeof idpSchema>;
+const defaultIdpForm: IdpForm = {
+  employeeId: "", title: "", goals: "", skills: "", targetDate: "", notes: "",
+};
 
 const STATUS_OPTIONS = Object.entries(IDP_STATUS).map(([value, { label }]) => ({ value, label }));
 
 export default function IDPPage() {
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ employeeId: "", title: "", goals: "", skills: "", targetDate: "", notes: "" });
   const [filters, setFilters] = useFilters();
 
   const { data, refetch, isLoading, isError } = useApiQuery<any>(["idp"], "/hr/idp");
@@ -47,20 +59,18 @@ export default function IDPPage() {
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
-  const handleSave = () => {
-    if (!form.employeeId) { toast({ title: "الموظف مطلوب", variant: "destructive" }); return; }
+  const handleSave = async (values: IdpForm) => {
     const payload = {
-      ...form,
-      goals: form.goals ? form.goals.split("\n").filter(Boolean) : [],
-      skills: form.skills ? form.skills.split("\n").filter(Boolean) : [],
+      ...values,
+      // goals/skills are textareas (one item per line) — splitting
+      // happens in the submit handler, not in the schema, so the
+      // textarea keeps its raw multi-line value during editing.
+      goals: values.goals ? values.goals.split("\n").filter(Boolean) : [],
+      skills: values.skills ? values.skills.split("\n").filter(Boolean) : [],
     };
-    createIdpMut.mutate(payload, {
-      onSuccess: () => {
-        setShowForm(false);
-        setForm({ employeeId: "", title: "", goals: "", skills: "", targetDate: "", notes: "" });
-        refetch();
-      },
-    });
+    await createIdpMut.mutateAsync(payload);
+    setShowForm(false);
+    refetch();
   };
 
   const handleStatusUpdate = (id: number, status: string) => {
@@ -185,10 +195,10 @@ export default function IDPPage() {
       subtitle="تخطيط مسارات التطوير والنمو الوظيفي للموظفين"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
       actions={
-        <Button size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
+        <GuardedButton perm="hr:create" size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
           <Plus className="h-4 w-4" />
           خطة جديدة
-        </Button>
+        </GuardedButton>
       }
     >
       {/* KPI cards */}
@@ -221,51 +231,47 @@ export default function IDPPage() {
           <DialogHeader>
             <DialogTitle>خطة تطوير جديدة</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>الموظف *</Label>
-                <Select value={form.employeeId} onValueChange={(v) => setForm({ ...form, employeeId: v })}>
-                  <SelectTrigger><SelectValue placeholder="اختر موظفاً" /></SelectTrigger>
-                  <SelectContent>
-                    {employeeList.map((e: any) => (
-                      <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>عنوان الخطة</Label>
-                <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="خطة التطوير الفردي لـ..." />
-              </div>
-            </div>
-            <div>
-              <Label>الأهداف (سطر لكل هدف)</Label>
-              <Textarea value={form.goals} onChange={(e) => setForm({ ...form, goals: e.target.value })} placeholder={"هدف 1\nهدف 2\nهدف 3"} rows={3} />
-            </div>
-            <div>
-              <Label>المهارات المستهدفة (سطر لكل مهارة)</Label>
-              <Textarea value={form.skills} onChange={(e) => setForm({ ...form, skills: e.target.value })} placeholder={"مهارة 1\nمهارة 2"} rows={2} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>التاريخ المستهدف</Label>
-                <DatePicker value={form.targetDate} onChange={(v) => setForm({ ...form, targetDate: v })} />
-              </div>
-              <div>
-                <Label>ملاحظات</Label>
-                <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowForm(false)} disabled={createIdpMut.isPending}>
-              إلغاء
-            </Button>
-            <Button onClick={handleSave} disabled={createIdpMut.isPending} rateLimitAware>
-              {createIdpMut.isPending ? "جاري الحفظ..." : "حفظ الخطة"}
-            </Button>
-          </DialogFooter>
+          <FormShell
+            schema={idpSchema}
+            defaultValues={defaultIdpForm}
+            submitLabel="حفظ الخطة"
+            secondaryActions={
+              <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
+                إلغاء
+              </Button>
+            }
+            onSubmit={async (values, ctx) => {
+              await handleSave(values);
+              ctx.reset();
+            }}
+          >
+            <FormGrid cols={2}>
+              <FormSelectField
+                name="employeeId"
+                label="الموظف"
+                required
+                options={[
+                  { value: "", label: "اختر موظفاً" },
+                  ...employeeList.map((e: any) => ({ value: String(e.id), label: e.name })),
+                ]}
+              />
+              <FormTextField name="title" label="عنوان الخطة" placeholder="خطة التطوير الفردي لـ..." />
+              <FormTextareaField
+                name="goals"
+                label="الأهداف (سطر لكل هدف)"
+                rows={3}
+                className="col-span-2"
+              />
+              <FormTextareaField
+                name="skills"
+                label="المهارات المستهدفة (سطر لكل مهارة)"
+                rows={2}
+                className="col-span-2"
+              />
+              <FormDateField name="targetDate" label="التاريخ المستهدف" />
+              <FormTextField name="notes" label="ملاحظات" />
+            </FormGrid>
+          </FormShell>
         </DialogContent>
       </Dialog>
     </PageShell>
