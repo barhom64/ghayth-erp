@@ -223,13 +223,13 @@ export async function getJourneyProgress(
     params.push(entityType, entityId);
     where += ` AND "entityType"=$${params.length - 1} AND "entityId"=$${params.length}`;
   }
-  const [row] = await rawQuery<any>(
+  const [row] = await rawQuery<Record<string, unknown>>(
     `SELECT * FROM journey_instances WHERE ${where} ORDER BY id DESC LIMIT 1`,
     params
   );
   if (!row) return null;
   const steps: string[] = Array.isArray(row.completedSteps) ? row.completedSteps : [];
-  return { id: row.id, completedSteps: steps, totalSteps: row.totalSteps, status: row.status, progress: steps.length / row.totalSteps };
+  return { id: row.id as number, completedSteps: steps, totalSteps: row.totalSteps as number, status: row.status as string, progress: steps.length / Number(row.totalSteps) };
 }
 
 export async function listJourneys(
@@ -240,7 +240,7 @@ export async function listJourneys(
   const params: any[] = [companyId];
   let where = `"companyId"=$1`;
   if (status) { params.push(status); where += ` AND status=$${params.length}`; }
-  return rawQuery<any>(
+  return rawQuery<Record<string, unknown>>(
     `SELECT *, (jsonb_array_length("completedSteps")::float / NULLIF("totalSteps",0)) AS progress
      FROM journey_instances WHERE ${where} ORDER BY "updatedAt" DESC LIMIT 100`,
     params
