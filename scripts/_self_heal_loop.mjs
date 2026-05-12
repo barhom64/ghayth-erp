@@ -95,8 +95,8 @@ If you cannot produce a confident fix, return riskLevel:"high" and an empty file
 async function processFinding(finding, cfg) {
   log(`finding ${finding.key}: ${finding.id} in ${finding.file}${finding.table ? ` (table=${finding.table})` : ""}`);
 
-  if (isInCooldown(finding.key, cfg.cooldown.perErrorMinHours, cfg.cooldown.maxRetriesPerError)) {
-    log(`  ⊘ in cooldown — skipping`);
+  if (isInCooldown(finding.key, cfg.cooldown.perErrorMinHours, cfg.cooldown.maxRetriesPerError, cfg.mode)) {
+    log(`  ⊘ in cooldown (${cfg.mode}) — skipping`);
     return;
   }
 
