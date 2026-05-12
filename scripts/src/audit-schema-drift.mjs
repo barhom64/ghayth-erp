@@ -81,6 +81,10 @@ const BUILTIN_IDENTIFIERS = new Set([
   "rn",
   "rank",
   "row_number",
+  // Umrah pilgrim entry/exit fields — present in live DB (added via migration)
+  // but not yet reflected in db/schema.sql dump. See umrahImportEngine.ts.
+  "entryDate",
+  "exitDate",
 ]);
 
 async function walk(dir, acc = []) {
@@ -178,11 +182,21 @@ async function loadSchemaIdentifiers() {
           if (bare) columns.add(bare[1]);
         }
       }
-      // ALTER TABLE X ADD COLUMN [IF NOT EXISTS] "col" type …
-      const addColRe = /ALTER\s+TABLE\s+\S+\s+ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?"([^"]+)"/gi;
-      let ac;
-      while ((ac = addColRe.exec(mig)) !== null) {
-        columns.add(ac[1]);
+      // ALTER TABLE X (multi-line capable) — capture the full statement
+      // body then harvest every ADD COLUMN inside it. Handles both:
+      //   ALTER TABLE x ADD COLUMN "a" type;
+      //   ALTER TABLE x
+      //     ADD COLUMN IF NOT EXISTS "a" type,
+      //     ADD COLUMN IF NOT EXISTS "b" type;
+      const alterRe = /ALTER\s+TABLE\s+(?:ONLY\s+)?(?:public\.)?"?[\w]+"?\s+([\s\S]+?);/gi;
+      let am2;
+      while ((am2 = alterRe.exec(mig)) !== null) {
+        const body = am2[1];
+        const addColRe = /ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?"([^"]+)"/gi;
+        let ac;
+        while ((ac = addColRe.exec(body)) !== null) {
+          columns.add(ac[1]);
+        }
       }
     }
   } catch {

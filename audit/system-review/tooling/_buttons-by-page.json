@@ -11235,6 +11235,35 @@
       "lib/formatters"
     ]
   },
+  "/umrah/sub-agents/:id": {
+    "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-sub-agent-detail.tsx",
+    "module": "operations",
+    "apiCalls": [],
+    "buttonCount": 2,
+    "buttons": [
+      {
+        "line": 153,
+        "label": null,
+        "onClick": null,
+        "disabledHinted": false,
+        "wrappedByLink": false,
+        "isSubmit": false
+      },
+      {
+        "line": 167,
+        "label": "عرض تسعير الوكيل",
+        "onClick": null,
+        "disabledHinted": false,
+        "wrappedByLink": true,
+        "isSubmit": false
+      }
+    ],
+    "lineCount": 202,
+    "crossDomainImports": [
+      "lib/api",
+      "lib/formatters"
+    ]
+  },
   "/umrah/pricing": {
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/pricing.tsx",
     "module": "operations",

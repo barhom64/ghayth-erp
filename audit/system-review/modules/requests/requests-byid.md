@@ -23,13 +23,26 @@ _لم تُلتقط أزرار._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/requests.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+تفاصيل طلب واحد. يعرض كامل سلسلة الـ workflow + action history.
+
+| الحركة | الوحدة الهدف | مدخل API | مدخل DB | الحالة |
+|--------|--------------|----------|---------|--------|
+| عرض الطلب + workflow history | requests | GET `/requests/:id` + `approval-actions` | aggregate | ✅ |
+| إجراء (approve/reject/return/escalate) | governance | `approvalActions.ts` POST `/approval-actions/:requestId/:action` | `approval_actions_log` | ✅ |
+| تأثير على approval_chain_steps | governance | PATCH `chain_steps.status` | ✅ |
+| التحوّل لخطوة تالية أو إغلاق | governance | logic in `workflows.ts` | ✅ |
+| إنشاء الكيان النهائي (leave/loan/expense...) | متغيّر | عند الاعتماد | راجع `requests.md` | ✅ |
+| تعليق + مرفقات | requests | `request_comments`, `request_attachments` | ✅ |
+| تتبّع SLA (وقت لكل خطوة) | requests | aggregate per step duration | views | ✅ |
+| Audit log | core | `auditMiddleware` (`/approval-actions`) | `audit_logs` (entity=`approval_action`) | ✅ |
+| إشعارات لكل تحوّل | comms | event=`approval_required\|approved\|rejected\|escalated\|returned` | `notifications` (actionUrl=`/requests/:id`) | ✅ |
+| تكامل بريد إلكتروني (للموافقة من الخارج) | comms | اختياري — magic link | ⚠ |
+| تكامل WhatsApp/SMS | gov-integrations | اختياري | ⚠ |
+
+تحقق يدوي:
+- [ ] هل المراجع يستطيع تفويض (delegate) الموافقة لشخص آخر؟
+- [ ] هل توقيع الـ approval immutable بعد الاعتماد؟
+- [ ] هل لوحات admin تعرض الـ bottleneck steps (التي تأخذ وقت أكثر من الـ SLA)؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `:id` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

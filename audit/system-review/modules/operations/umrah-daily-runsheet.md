@@ -3,7 +3,7 @@
 ## 1. الميتاداتا
 - المسار: `/umrah/daily-runsheet`
 - ملف الصفحة: `artifacts/ghayth-erp/src/pages/umrah/daily-runsheet.tsx`
-- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:75`
+- مسجّلة في: `artifacts/ghayth-erp/src/routes/umrahRoutes.tsx:77`
 - المجموعة: `operations`
 - الكومبوننت: `UmrahDailyRunsheet`
 - subKey: — | minRoleLevel: —
