@@ -15,6 +15,7 @@ import { handleRouteError, ForbiddenError } from "../lib/errorHandler.js";
 import { obligationSummary } from "../lib/obligationsEngine.js";
 import { EXEC_ROLES } from "../lib/rbacCatalog.js";
 import { logger } from "../lib/logger.js";
+import { authorize } from "../lib/rbac/authorize.js";
 
 export const execDashboardRouter = Router();
 execDashboardRouter.use(authMiddleware);
@@ -30,7 +31,7 @@ async function safe<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
   try { return await fn(); } catch (e) { logger.error(e, "exec dashboard query failed"); return fallback; }
 }
 
-execDashboardRouter.get("/overview", async (req, res) => {
+execDashboardRouter.get("/overview", authorize({ feature: "dashboard.executive", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     requireExec(scope);
@@ -305,7 +306,7 @@ execDashboardRouter.get("/overview", async (req, res) => {
 });
 
 // Drill-down: top overdue invoices
-execDashboardRouter.get("/overdue-invoices", async (req, res) => {
+execDashboardRouter.get("/overdue-invoices", authorize({ feature: "dashboard.executive", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     requireExec(scope);
@@ -333,7 +334,7 @@ execDashboardRouter.get("/overdue-invoices", async (req, res) => {
 });
 
 // Drill-down: critical obligations
-execDashboardRouter.get("/critical-obligations", async (req, res) => {
+execDashboardRouter.get("/critical-obligations", authorize({ feature: "dashboard.executive", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     requireExec(scope);

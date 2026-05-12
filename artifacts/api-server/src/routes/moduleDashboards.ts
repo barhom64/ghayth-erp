@@ -178,7 +178,7 @@ router.get("/properties", authorize({ feature: "properties", action: "list" }), 
   }
 });
 
-router.get("/projects", async (req, res) => {
+router.get("/projects", authorize({ feature: "projects", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -207,7 +207,7 @@ router.get("/projects", async (req, res) => {
   }
 });
 
-router.get("/crm", async (req, res) => {
+router.get("/crm", authorize({ feature: "crm", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -233,7 +233,7 @@ router.get("/crm", async (req, res) => {
   }
 });
 
-router.get("/store", async (req, res) => {
+router.get("/store", authorize({ feature: "store", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -259,7 +259,7 @@ router.get("/store", async (req, res) => {
   }
 });
 
-router.get("/support", async (req, res) => {
+router.get("/support", authorize({ feature: "support", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -288,7 +288,7 @@ router.get("/support", async (req, res) => {
   }
 });
 
-router.get("/tasks", async (req, res) => {
+router.get("/tasks", authorize({ feature: "tasks", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
@@ -315,7 +315,7 @@ router.get("/tasks", async (req, res) => {
   }
 });
 
-router.get("/warehouse", async (req, res) => {
+router.get("/warehouse", authorize({ feature: "warehouse", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
