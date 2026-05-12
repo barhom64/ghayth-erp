@@ -325,7 +325,7 @@ router.put("/sub-agents/:id/link", authorize({ feature: "umrah", action: "create
       finalClientId = newClient.id;
     } else {
       if (!clientId) throw new ValidationError("معرف العميل مطلوب");
-      const [existingClient] = await rawQuery<any>(
+      const [existingClient] = await rawQuery<{ id: number }>(
         `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
         [clientId, scope.companyId]
       );
@@ -361,7 +361,7 @@ router.post("/sub-agents/link-by-nusk", authorize({ feature: "umrah", action: "c
     const scope = req.scope!;
     const parsed = zodParse(linkByNuskSchema.safeParse(req.body));
     const { nuskCode, clientId } = parsed;
-    const [existingClient] = await rawQuery<any>(
+    const [existingClient] = await rawQuery<{ id: number }>(
       `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [clientId, scope.companyId]
     );
@@ -383,7 +383,7 @@ router.post("/sub-agents/:id/link-client", authorize({ feature: "umrah", action:
     const id = parseId(req.params.id, "id");
     const parsed = zodParse(linkClientSchema.safeParse(req.body));
     const { clientId } = parsed;
-    const [existingClient] = await rawQuery<any>(
+    const [existingClient] = await rawQuery<{ id: number }>(
       `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [clientId, scope.companyId]
     );
@@ -630,7 +630,7 @@ router.delete("/groups/:id", authorize({ feature: "umrah", action: "delete" }), 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<{ id: number; salesInvoiceId: number | null }>(
       `SELECT id, "salesInvoiceId" FROM umrah_groups WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -932,7 +932,7 @@ router.patch("/nusk-invoices/:id", authorize({ feature: "umrah", action: "update
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(updateNuskInvoiceSchema.safeParse(req.body));
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<{ id: number; nuskStatus: string }>(
       `SELECT * FROM umrah_nusk_invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -964,7 +964,7 @@ router.delete("/nusk-invoices/:id", authorize({ feature: "umrah", action: "delet
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<any>(
+    const [existing] = await rawQuery<{ id: number; nuskStatus: string }>(
       `SELECT id, "nuskStatus" FROM umrah_nusk_invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -1438,7 +1438,7 @@ router.post("/letters/:id/dispatch", authorize({ feature: "umrah", action: "upda
     if (!Number.isFinite(id) || id <= 0) {
       throw new ValidationError("معرّف الخطاب غير صالح");
     }
-    const [letter] = await rawQuery<any>(
+    const [letter] = await rawQuery<{ id: number; status: string; sentAt: string | null; type: string }>(
       `SELECT id, status, "sentAt", type FROM official_letters
         WHERE id=$1 AND "companyId"=$2
           AND (type LIKE 'umrah_%' OR type = 'umrah')`,
@@ -1508,9 +1508,9 @@ async function fetchDailyRunsheet(companyId: number, date: string) {
      WHERE p."companyId" = $1 AND p."deletedAt" IS NULL`;
 
   const [arrivals, departures, overstays] = await Promise.all([
-    rawQuery<any>(`${baseSelect} AND p."entryDate" = $2 ORDER BY g.name NULLS LAST, p."fullName"`, [companyId, date]),
-    rawQuery<any>(`${baseSelect} AND p."exitDate" = $2 ORDER BY g.name NULLS LAST, p."fullName"`, [companyId, date]),
-    rawQuery<any>(`${baseSelect} AND p.status IN ('overstayed','violated') AND p."overstayDays" > 0 ORDER BY p."overstayDays" DESC, p."fullName"`, [companyId]),
+    rawQuery<Record<string, unknown>>(`${baseSelect} AND p."entryDate" = $2 ORDER BY g.name NULLS LAST, p."fullName"`, [companyId, date]),
+    rawQuery<Record<string, unknown>>(`${baseSelect} AND p."exitDate" = $2 ORDER BY g.name NULLS LAST, p."fullName"`, [companyId, date]),
+    rawQuery<Record<string, unknown>>(`${baseSelect} AND p.status IN ('overstayed','violated') AND p."overstayDays" > 0 ORDER BY p."overstayDays" DESC, p."fullName"`, [companyId]),
   ]);
 
   return { arrivals, departures, overstays };
@@ -1574,7 +1574,7 @@ async function assertAttachmentOwner(companyId: number, entityType: string, enti
   const table = ATTACH_OWNER_TABLE[entityType];
   if (!table) throw new ValidationError("نوع كيان غير مدعوم", { field: "entityType" });
   const safeTable = table.replace(/[^a-zA-Z0-9_]/g, "");
-  const [row] = await rawQuery<any>(
+  const [row] = await rawQuery<Record<string, unknown>>(
     `SELECT id FROM "${safeTable}" WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
     [entityId, companyId]
   );
@@ -1643,7 +1643,7 @@ router.delete("/attachments/:id", authorize({ feature: "umrah", action: "delete"
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM umrah_attachments WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -1682,7 +1682,7 @@ router.get("/reports/reconciliation", authorize({ feature: "umrah", action: "vie
       : { fragment: "", params: [scope.companyId] };
 
     // 1. Amount diff: nusk total vs posted JE total
-    const amountDiffs = await rawQuery<any>(
+    const amountDiffs = await rawQuery<Record<string, unknown>>(
       `SELECT ni.id, ni."nuskInvoiceNumber", ni."totalAmount" AS "fileTotal",
               ni."nuskStatus", ni."purchaseInvoiceId", ni."journalEntryId",
               COALESCE(je_ap.total, 0) AS "postedAp",
@@ -1710,7 +1710,7 @@ router.get("/reports/reconciliation", authorize({ feature: "umrah", action: "vie
     );
 
     // 2. Mutamer count diff: file says X, system has Y in the linked group
-    const countDiffs = await rawQuery<any>(
+    const countDiffs = await rawQuery<Record<string, unknown>>(
       `SELECT ni.id, ni."nuskInvoiceNumber", ni."mutamerCount" AS "fileCount",
               ni."groupId", g.name AS "groupName",
               (SELECT COUNT(*)::int FROM umrah_pilgrims p
@@ -1739,7 +1739,7 @@ router.get("/reports/reconciliation", authorize({ feature: "umrah", action: "vie
     );
 
     // 3. Overstays without a violation row
-    const overstayGaps = await rawQuery<any>(
+    const overstayGaps = await rawQuery<Record<string, unknown>>(
       `SELECT p.id, p."nuskNumber", p."fullName", p."overstayDays", p."groupId",
               g.name AS "groupName", sa.name AS "subAgentName"
          FROM umrah_pilgrims p

@@ -15,6 +15,61 @@ import { logger } from "../lib/logger.js";
 
 const router = Router();
 
+interface PortalAccountStatusRow {
+  id: number;
+  isActive: boolean;
+}
+
+interface PortalAccountLoginRow {
+  id: number;
+  clientId: number;
+  companyId: number;
+  passwordHash: string;
+  isActive: boolean;
+  mustChangePassword: boolean;
+  clientName: string;
+  clientEmail: string | null;
+  clientPhone: string | null;
+}
+
+interface TicketReplyPortalRow {
+  id: number;
+  message: string;
+  senderType: "client" | "staff";
+  senderName: string | null;
+  createdAt: string;
+}
+
+interface CsatRatingRow {
+  id: number;
+  ticketId: number;
+  companyId: number;
+  assigneeId: number | null;
+  score: number;
+  comment: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+interface KbArticleListRow {
+  id: number;
+  title: string;
+  category: string | null;
+  tags: unknown;
+  views: number | null;
+  helpful: number | null;
+  notHelpful: number | null;
+  createdAt: string;
+}
+
+interface KbArticleRow extends KbArticleListRow {
+  content: string | null;
+  status: string;
+  companyId: number | null;
+  deletedAt: string | null;
+  updatedAt: string | null;
+}
+
 const portalLoginSchema = z.object({
   email: z.string().email("البريد الإلكتروني غير صالح"),
   password: z.string().min(1, "كلمة المرور مطلوبة"),
@@ -94,7 +149,7 @@ async function portalAuthMiddleware(req: Request & { portalScope?: PortalScope }
       res.status(401).json({ error: "توكن غير صالح" });
       return;
     }
-    const [account] = await rawQuery<any>(
+    const [account] = await rawQuery<PortalAccountStatusRow>(
       `SELECT id, "isActive" FROM client_portal_accounts WHERE id = $1 AND "clientId" = $2 AND "companyId" = $3`,
       [payload.accountId, payload.clientId, payload.companyId]
     );
@@ -183,7 +238,7 @@ router.post("/auth/login", loginLimiter, async (req, res) => {
     const body = zodParse(portalLoginSchema.safeParse(req.body));
     const { email: rawEmail, password } = body;
     const email = rawEmail.trim().toLowerCase();
-    const [account] = await rawQuery<any>(
+    const [account] = await rawQuery<PortalAccountLoginRow>(
       `SELECT cpa.id, cpa."clientId", cpa."companyId", cpa."passwordHash", cpa."isActive", cpa."mustChangePassword",
               c.name AS "clientName", c.email AS "clientEmail", c.phone AS "clientPhone"
        FROM client_portal_accounts cpa
@@ -429,7 +484,7 @@ protectedRouter.get("/tickets/:id/replies", withPortalScope(async (req, res) => 
       [scope.clientId, scope.companyId, id]
     );
     if (!ticket) throw new NotFoundError("الطلب غير موجود");
-    const replies = await rawQuery<any>(
+    const replies = await rawQuery<TicketReplyPortalRow>(
       `SELECT tr.id, tr.message, CASE WHEN tr."authorId" IS NULL THEN 'client' ELSE 'staff' END AS "senderType", tr."authorName" AS "senderName", tr."createdAt"
        FROM ticket_replies tr
        WHERE tr."ticketId" = $1 AND ("isInternal" = FALSE OR "isInternal" IS NULL) AND tr."deletedAt" IS NULL
@@ -631,7 +686,7 @@ protectedRouter.post("/tickets/:id/csat", withPortalScope(async (req, res) => {
       action: "portal.csat.submitted", entity: "ticket_csat", entityId: id,
       details: JSON.stringify({ score, ticketId: id, clientId: scope.clientId }),
     }).catch((e) => logger.error(e, "clientPortal background task failed"));
-    const [row] = await rawQuery<any>(`SELECT * FROM ticket_csat_ratings WHERE "ticketId"=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    const [row] = await rawQuery<CsatRatingRow>(`SELECT * FROM ticket_csat_ratings WHERE "ticketId"=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.status(201).json(row || { ticketId: id, score, comment });
   } catch (err) {
     handleRouteError(err, res, "Portal CSAT error:");
@@ -646,7 +701,7 @@ protectedRouter.get("/kb", withPortalScope(async (req, res) => {
     const params: any[] = [scope.companyId];
     if (category) { params.push(category); conditions.push(`category=$${params.length}`); }
     if (q) { params.push(`%${q}%`); conditions.push(`(title ILIKE $${params.length} OR content ILIKE $${params.length})`); }
-    const rows = await rawQuery<any>(
+    const rows = await rawQuery<KbArticleListRow>(
       `SELECT id, title, category, tags, views, helpful, "notHelpful", "createdAt" FROM kb_articles WHERE ${conditions.join(' AND ')} ORDER BY views DESC LIMIT 50`,
       params
     );
@@ -660,7 +715,7 @@ protectedRouter.get("/kb/:id", withPortalScope(async (req, res) => {
   try {
     const scope = req.portalScope;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<KbArticleRow>(
       `SELECT * FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND status='published' AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
