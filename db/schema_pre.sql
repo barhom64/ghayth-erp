@@ -14317,6 +14317,12 @@ CREATE TABLE public.umrah_seasons (
     notes text,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
+    "hijriYear" integer,
+    "isCurrent" boolean DEFAULT false,
+    "branchId" integer,
+    "createdBy" integer,
+    "updatedBy" integer,
+    "deletedAt" timestamp with time zone,
     CONSTRAINT umrah_seasons_status_check CHECK (((status)::text = ANY ((ARRAY['open'::character varying, 'closed'::character varying, 'archived'::character varying])::text[])))
 );
 

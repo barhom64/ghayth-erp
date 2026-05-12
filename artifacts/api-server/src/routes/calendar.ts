@@ -18,6 +18,8 @@ interface VehicleExpiryRow { id: number; plateNumber: string | null; make: strin
 interface PropertyInsuranceRow { id: number; unitNumber: string | null; date: string; }
 interface LeaveCalRow { id: number; date: string; endDate: string; status: string; days: number; employeeId: number; employeeName: string; leaveTypeName: string | null; }
 interface InterviewRow { id: number; date: string; candidateName: string; status: string; jobTitle: string | null; postingId: number | null; }
+interface UmrahSeasonRow { id: number; title: string; date: string; kind: "start" | "end"; }
+interface UmrahGroupRow { id: number; name: string | null; nuskGroupNumber: string; date: string; mutamerCount: number | null; }
 
 interface CalendarEvent {
   id: string;
@@ -53,6 +55,9 @@ calendarRouter.get("/upcoming", authorize({ feature: "projects", action: "list" 
       propertyInsurance,
       leaves,
       interviews,
+      umrahSeasonStarts,
+      umrahSeasonEnds,
+      umrahGroupArrivals,
     ] = await Promise.all([
       safe(() => rawQuery<MilestoneRow>(
         `SELECT pm.id, pm.title, pm."dueDate" as "date", pm.status, p.name as "projectName", p.id as "projectId"
@@ -155,6 +160,42 @@ calendarRouter.get("/upcoming", authorize({ feature: "projects", action: "list" 
          ORDER BY a."interviewDate" LIMIT 30`,
         [cid, now, cutoff]
       ), []),
+      // Umrah season open events (startDate inside the window).
+      safe(() => rawQuery<UmrahSeasonRow>(
+        `SELECT id, title, "startDate"::text AS "date", 'start'::text AS kind
+           FROM umrah_seasons
+          WHERE "companyId" = $1
+            AND "deletedAt" IS NULL
+            AND "startDate" BETWEEN $2::date AND $3::date
+          ORDER BY "startDate" LIMIT 20`,
+        [cid, now.slice(0, 10), cutoff.slice(0, 10)]
+      ), []),
+      // Umrah season close events (endDate inside the window).
+      safe(() => rawQuery<UmrahSeasonRow>(
+        `SELECT id, title, "endDate"::text AS "date", 'end'::text AS kind
+           FROM umrah_seasons
+          WHERE "companyId" = $1
+            AND "deletedAt" IS NULL
+            AND "endDate" BETWEEN $2::date AND $3::date
+          ORDER BY "endDate" LIMIT 20`,
+        [cid, now.slice(0, 10), cutoff.slice(0, 10)]
+      ), []),
+      // Umrah group arrivals — the earliest entryDate inside each group
+      // that falls in the window. Captures "this group lands on X".
+      safe(() => rawQuery<UmrahGroupRow>(
+        `SELECT g.id, g.name, g."nuskGroupNumber", g."mutamerCount",
+                MIN(p."entryDate")::text AS "date"
+           FROM umrah_groups g
+           JOIN umrah_pilgrims p ON p."groupId" = g.id AND p."companyId" = g."companyId"
+          WHERE g."companyId" = $1
+            AND g."deletedAt" IS NULL
+            AND p."deletedAt" IS NULL
+            AND p."entryDate" IS NOT NULL
+          GROUP BY g.id, g.name, g."nuskGroupNumber", g."mutamerCount"
+         HAVING MIN(p."entryDate") BETWEEN $2::date AND $3::date
+          ORDER BY MIN(p."entryDate") LIMIT 50`,
+        [cid, now.slice(0, 10), cutoff.slice(0, 10)]
+      ), []),
     ]);
 
     const events: CalendarEvent[] = [];
@@ -255,6 +296,28 @@ calendarRouter.get("/upcoming", authorize({ feature: "projects", action: "list" 
       link: iv.postingId ? `/hr/recruitment/${iv.postingId}` : "/hr/recruitment",
     }));
 
+    umrahSeasonStarts.forEach((s) => events.push({
+      id: `umrah-season-start-${s.id}`, date: s.date,
+      title: `فتح موسم: ${s.title}`,
+      category: "umrah_season", status: "opens",
+      context: "بداية الموسم", link: `/umrah/seasons/${s.id}`,
+    }));
+
+    umrahSeasonEnds.forEach((s) => events.push({
+      id: `umrah-season-end-${s.id}`, date: s.date,
+      title: `إغلاق موسم: ${s.title}`,
+      category: "umrah_season", status: "closes",
+      context: "نهاية الموسم", link: `/umrah/seasons/${s.id}`,
+    }));
+
+    umrahGroupArrivals.forEach((g) => events.push({
+      id: `umrah-group-${g.id}`, date: g.date,
+      title: `وصول مجموعة: ${g.name || g.nuskGroupNumber}`,
+      category: "umrah_group_arrival", status: "scheduled",
+      context: g.mutamerCount ? `${g.mutamerCount} معتمر` : "",
+      link: `/umrah/groups`,
+    }));
+
     events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     const summary = {
@@ -269,6 +332,8 @@ calendarRouter.get("/upcoming", authorize({ feature: "projects", action: "list" 
       insuranceExpiries: propertyInsurance.length,
       leaves: leaves.length,
       interviews: interviews.length,
+      umrahSeasons: umrahSeasonStarts.length + umrahSeasonEnds.length,
+      umrahGroupArrivals: umrahGroupArrivals.length,
     };
 
     res.json({ events, summary });
