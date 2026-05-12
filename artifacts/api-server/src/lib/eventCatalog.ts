@@ -524,6 +524,9 @@ export const EVENT_CATALOG: EventDefinition[] = [
   // ── Events fired by PRs #303 / #305 / #312 — backfilled here so the
   //    automation rule builder (rulesEngine.ts) lists them as triggers
   //    and the audit dashboard renders the Arabic label.
+  //    umrah.penalty.created and umrah.penalty.waived already exist later
+  //    in this file (auto-generated batch) — only the new bulk waive +
+  //    group / attachment / letter events are added here.
   {
     name: "umrah.group.split",
     label: "تقسيم مجموعة عمرة",
@@ -541,24 +544,6 @@ export const EVENT_CATALOG: EventDefinition[] = [
     payload: { targetGroupId: "number", mergedSourceIds: "number[]", movedCount: "number" },
     consumers: ["invoicingEngine", "execDashboard"],
     sideEffects: ["audit"],
-  },
-  {
-    name: "umrah.penalty.created",
-    label: "إنشاء غرامة عمرة",
-    domain: "umrah",
-    description: "تُصدر عند إنشاء غرامة (تجاوز / مخالفة / فقدان وثيقة / تنظيمية)",
-    payload: { penaltyId: "number", pilgrimId: "number", type: "string", amount: "number" },
-    consumers: ["invoicingEngine", "execDashboard", "actionCenter"],
-    sideEffects: ["notification", "audit"],
-  },
-  {
-    name: "umrah.penalty.waived",
-    label: "إعفاء غرامة عمرة",
-    domain: "umrah",
-    description: "تُصدر عند إعفاء غرامة منفردة (قيد عكسي يُرحَّل تلقائياً)",
-    payload: { penaltyId: "number", reason: "string", amount: "number" },
-    consumers: ["invoicingEngine"],
-    sideEffects: ["gl_post", "audit"],
   },
   {
     name: "umrah.penalty.waived_bulk",
