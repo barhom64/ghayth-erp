@@ -10,6 +10,7 @@ import { Edit, FileText, Users, Package, Calendar, Wallet } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -268,6 +269,7 @@ export default function UmrahInvoiceDetail() {
 
       {id && <EntityComments entityType="umrah-invoice" entityId={id} />}
       {id && <EntityTags entityType="umrah-invoice" entityId={id} />}
+      {id && <UmrahAttachmentsPanel entityType="sales_invoice" entityId={id} />}
     </div>
   );
 
