@@ -1,19 +1,22 @@
 import { useState } from "react";
-import { useApiQuery, asList } from "@/lib/api";
+import { z } from "zod";
+import { useApiQuery, asList, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { UnifiedDateInput } from "@/components/ui/unified-date-input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Wrench, Plus, AlertCircle, CheckCircle, Clock } from "lucide-react";
-import { apiFetch } from "@/lib/api";
-import { toast } from "@/hooks/use-toast";
+import { Wrench, Plus, AlertCircle, Clock } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import {
+  FormShell,
+  FormTextField,
+  FormNumberField,
+  FormSelectField,
+  FormDateField,
+  FormGrid,
+} from "@/components/form-shell";
 
 const SERVICE_TYPES: Record<string, string> = {
   oil_change: "تغيير زيت",
@@ -39,16 +42,23 @@ function getDueStatus(nextDate?: string): "overdue" | "due_soon" | "ok" | "none"
   return "ok";
 }
 
+const planSchema = z.object({
+  vehicleId: z.string().min(1, "المركبة مطلوبة"),
+  serviceType: z.string().min(1, "نوع الخدمة مطلوب"),
+  intervalKm: z.string(),
+  intervalDays: z.string(),
+  lastServiceDate: z.string(),
+  lastServiceMileage: z.string(),
+  nextServiceDate: z.string(),
+  estimatedCost: z.string(),
+  notes: z.string().trim(),
+});
+type PlanForm = z.infer<typeof planSchema>;
+
 export default function PreventivePlansPage() {
   const [showForm, setShowForm] = useState(false);
   const [vehicleFilter, setVehicleFilter] = useState("__all__");
   const [filters, setFilters] = useFilters();
-  const [form, setForm] = useState({
-    vehicleId: "", serviceType: "oil_change",
-    intervalKm: "", intervalDays: "",
-    lastServiceDate: "", lastServiceMileage: "",
-    nextServiceDate: "", estimatedCost: "", notes: "",
-  });
 
   const { data, isLoading, isError, refetch } = useApiQuery<any>(
     ["preventive-plans", vehicleFilter],
@@ -59,22 +69,28 @@ export default function PreventivePlansPage() {
   const { data: vehicles } = useApiQuery<any>(["fleet-vehicles"], "/fleet/vehicles?limit=200");
   const vehicleList = asList(vehicles?.data || vehicles);
 
-  const handleSave = async () => {
-    if (!form.vehicleId || !form.serviceType) { toast({ title: "المركبة ونوع الخدمة مطلوبان", variant: "destructive" }); return; }
-    try {
-      await apiFetch("/fleet/preventive-plans", { method: "POST", body: JSON.stringify({
-        ...form,
-        vehicleId: Number(form.vehicleId),
-        intervalKm: form.intervalKm ? Number(form.intervalKm) : null,
-        intervalDays: form.intervalDays ? Number(form.intervalDays) : null,
-        lastServiceMileage: form.lastServiceMileage ? Number(form.lastServiceMileage) : null,
-        estimatedCost: form.estimatedCost ? Number(form.estimatedCost) : 0,
-      }) });
-      toast({ title: "تم إضافة خطة الصيانة الوقائية" });
-      setShowForm(false);
-      setForm({ vehicleId: "", serviceType: "oil_change", intervalKm: "", intervalDays: "", lastServiceDate: "", lastServiceMileage: "", nextServiceDate: "", estimatedCost: "", notes: "" });
-      refetch();
-    } catch (e: any) { toast({ title: e.message || "خطأ", variant: "destructive" }); }
+  const createMut = useApiMutation<unknown, Record<string, unknown>>(
+    "/fleet/preventive-plans",
+    "POST",
+    [["preventive-plans"]],
+    {
+      successMessage: "تم إضافة خطة الصيانة الوقائية",
+      onSuccess: () => { setShowForm(false); refetch(); },
+    },
+  );
+
+  const handleSave = async (values: PlanForm) => {
+    await createMut.mutateAsync({
+      vehicleId: Number(values.vehicleId),
+      serviceType: values.serviceType,
+      intervalKm: values.intervalKm ? Number(values.intervalKm) : null,
+      intervalDays: values.intervalDays ? Number(values.intervalDays) : null,
+      lastServiceDate: values.lastServiceDate,
+      lastServiceMileage: values.lastServiceMileage ? Number(values.lastServiceMileage) : null,
+      nextServiceDate: values.nextServiceDate,
+      estimatedCost: values.estimatedCost ? Number(values.estimatedCost) : 0,
+      notes: values.notes,
+    });
   };
 
   if (isLoading) return <LoadingSpinner />;
@@ -179,57 +195,58 @@ export default function PreventivePlansPage() {
       {showForm && (
         <Card className="border-2 border-primary/20">
           <CardHeader className="pb-2"><CardTitle className="text-base">خطة صيانة وقائية جديدة</CardTitle></CardHeader>
-          <CardContent className="grid grid-cols-3 gap-4">
-            <div>
-              <Label>المركبة *</Label>
-              <Select value={form.vehicleId} onValueChange={(v) => setForm({ ...form, vehicleId: v })}>
-                <SelectTrigger><SelectValue placeholder="اختر مركبة" /></SelectTrigger>
-                <SelectContent>
-                  {vehicleList.map((v: any) => <SelectItem key={v.id} value={String(v.id)}>{v.plateNumber} — {v.make} {v.model}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>نوع الخدمة *</Label>
-              <Select value={form.serviceType} onValueChange={(v) => setForm({ ...form, serviceType: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(SERVICE_TYPES).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>الفترة (أيام)</Label>
-              <Input type="number" value={form.intervalDays} onChange={(e) => setForm({ ...form, intervalDays: e.target.value })} placeholder="مثال: 90" />
-            </div>
-            <div>
-              <Label>الفترة (كم)</Label>
-              <Input type="number" value={form.intervalKm} onChange={(e) => setForm({ ...form, intervalKm: e.target.value })} placeholder="مثال: 5000" />
-            </div>
-            <div>
-              <Label>آخر خدمة</Label>
-              <UnifiedDateInput value={form.lastServiceDate} onChange={(v) => setForm({ ...form, lastServiceDate: v })} showDualCalendar showPresets />
-            </div>
-            <div>
-              <Label>موعد الخدمة القادمة</Label>
-              <UnifiedDateInput value={form.nextServiceDate} onChange={(v) => setForm({ ...form, nextServiceDate: v })} showDualCalendar showPresets />
-            </div>
-            <div>
-              <Label>التكلفة التقديرية (ر.س)</Label>
-              <Input type="number" value={form.estimatedCost} onChange={(e) => setForm({ ...form, estimatedCost: e.target.value })} />
-            </div>
-            <div>
-              <Label>آخر عداد خدمة (كم)</Label>
-              <Input type="number" value={form.lastServiceMileage} onChange={(e) => setForm({ ...form, lastServiceMileage: e.target.value })} />
-            </div>
-            <div>
-              <Label>ملاحظات</Label>
-              <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-            </div>
-            <div className="col-span-3 flex gap-2">
-              <Button onClick={handleSave} rateLimitAware>حفظ</Button>
-              <Button variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>
-            </div>
+          <CardContent>
+            <FormShell
+              schema={planSchema}
+              defaultValues={{
+                vehicleId: "",
+                serviceType: "oil_change",
+                intervalKm: "",
+                intervalDays: "",
+                lastServiceDate: "",
+                lastServiceMileage: "",
+                nextServiceDate: "",
+                estimatedCost: "",
+                notes: "",
+              }}
+              submitLabel="حفظ"
+              secondaryActions={
+                <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
+                  إلغاء
+                </Button>
+              }
+              onSubmit={async (values) => {
+                await handleSave(values);
+              }}
+            >
+              <FormGrid cols={3}>
+                <FormSelectField
+                  name="vehicleId"
+                  label="المركبة"
+                  required
+                  options={[
+                    { value: "", label: "اختر مركبة" },
+                    ...vehicleList.map((v: any) => ({
+                      value: String(v.id),
+                      label: `${v.plateNumber} — ${v.make} ${v.model}`,
+                    })),
+                  ]}
+                />
+                <FormSelectField
+                  name="serviceType"
+                  label="نوع الخدمة"
+                  required
+                  options={Object.entries(SERVICE_TYPES).map(([value, label]) => ({ value, label }))}
+                />
+                <FormNumberField name="intervalDays" label="الفترة (أيام)" placeholder="مثال: 90" />
+                <FormNumberField name="intervalKm" label="الفترة (كم)" placeholder="مثال: 5000" />
+                <FormDateField name="lastServiceDate" label="آخر خدمة" />
+                <FormDateField name="nextServiceDate" label="موعد الخدمة القادمة" />
+                <FormNumberField name="estimatedCost" label="التكلفة التقديرية (ر.س)" />
+                <FormNumberField name="lastServiceMileage" label="آخر عداد خدمة (كم)" />
+                <FormTextField name="notes" label="ملاحظات" />
+              </FormGrid>
+            </FormShell>
           </CardContent>
         </Card>
       )}
