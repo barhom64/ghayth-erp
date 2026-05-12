@@ -23,7 +23,7 @@ router.get("/", async (req, res) => {
 
     const safe = (p: Promise<any[]>, label: string): Promise<any[]> =>
       p.catch((e) => { logger.error(e, `Action-center ${label} error`); return []; });
-    const ifRole = (roles: string[], p: () => Promise<any[]>, label: string): Promise<any[]> =>
+    const ifRole = (roles: readonly string[], p: () => Promise<any[]>, label: string): Promise<any[]> =>
       roles.includes(scope.role) ? safe(p(), label) : Promise.resolve([]);
 
     const cc = scope.allowedCompanies;
