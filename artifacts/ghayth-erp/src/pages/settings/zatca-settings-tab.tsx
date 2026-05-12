@@ -4,6 +4,7 @@ import { useFormContext, useWatch } from "react-hook-form";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Zap, AlertCircle, AlertTriangle } from "lucide-react";
@@ -126,9 +127,9 @@ export function ZatcaSettingsTab() {
         defaultValues={defaults}
         submitLabel="حفظ الإعدادات"
         secondaryActions={
-          <Button type="button" variant="outline" onClick={handleTestConnection} disabled={testing}>
+          <GuardedButton perm="settings:create" type="button" variant="outline" onClick={handleTestConnection} disabled={testing}>
             <Zap className="h-4 w-4 me-1" />{testing ? "جاري الاختبار..." : "اختبار الاتصال"}
-          </Button>
+          </GuardedButton>
         }
         onSubmit={async (values) => {
           await handleSave(values);

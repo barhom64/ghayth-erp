@@ -4,6 +4,7 @@ import { useApiQuery, asList, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Plus, CheckCircle, Star } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
@@ -123,9 +124,9 @@ export default function InspectionsPage() {
       subtitle="جدولة وتتبع عمليات فحص الوحدات"
       breadcrumbs={[{ href: "/properties/dashboard", label: "إدارة الأملاك" }, { label: "فحص الوحدات العقارية" }]}
       actions={
-        <Button onClick={() => setShowForm(!showForm)} size="sm">
+        <GuardedButton perm="properties:create" onClick={() => setShowForm(!showForm)} size="sm">
           <Plus className="w-4 h-4 me-1" /> جدولة فحص
-        </Button>
+        </GuardedButton>
       }
     >
       <PropertyTabsNav />
@@ -219,9 +220,9 @@ export default function InspectionsPage() {
                   </div>
                 )}
                 {insp.status === "scheduled" && (
-                  <Button size="sm" onClick={() => setCompletingId(insp.id)}>
+                  <GuardedButton perm="properties:create" size="sm" onClick={() => setCompletingId(insp.id)}>
                     <CheckCircle className="w-3.5 h-3.5 me-1" /> إتمام
-                  </Button>
+                  </GuardedButton>
                 )}
               </div>
             </CardContent>

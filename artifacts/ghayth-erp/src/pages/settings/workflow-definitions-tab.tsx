@@ -3,6 +3,7 @@ import { z } from "zod";
 import { useFormContext, useWatch } from "react-hook-form";
 import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -189,9 +190,9 @@ export function WorkflowDefinitionsTab() {
           <Button size="sm" variant="outline" onClick={() => setShowSlaForm(!showSlaForm)}>
             <Clock className="h-4 w-4 me-1" />{showSlaForm ? "إخفاء" : "إعدادات مستوى الخدمة"}
           </Button>
-          <Button size="sm" onClick={() => { if (showForm) resetForm(); else setShowForm(true); }}>
+          <GuardedButton perm="settings:create" size="sm" onClick={() => { if (showForm) resetForm(); else setShowForm(true); }}>
             {showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />تعريف جديد</>}
-          </Button>
+          </GuardedButton>
         </div>
       </div>
 
@@ -301,7 +302,7 @@ export function WorkflowDefinitionsTab() {
               </div>
             </div>
 
-            <Button onClick={handleSave} rateLimitAware><Save className="h-4 w-4 me-1" />{editingId ? "تحديث" : "حفظ"}</Button>
+            <GuardedButton perm="settings:create" onClick={handleSave} rateLimitAware><Save className="h-4 w-4 me-1" />{editingId ? "تحديث" : "حفظ"}</GuardedButton>
           </CardContent>
         </Card>
       )}
@@ -322,7 +323,7 @@ export function WorkflowDefinitionsTab() {
                 </div>
                 <div className="flex gap-1">
                   <Button variant="ghost" size="sm" onClick={() => handleEdit(def)}><Pencil className="h-4 w-4" /></Button>
-                  <Button variant="ghost" size="sm" className="text-red-500" onClick={() => setDeletingDef({ id: def.id, label: def.requestTypeLabel || def.requestType || "—" })}><Trash2 className="h-4 w-4" /></Button>
+                  <GuardedButton perm="settings:create" variant="ghost" size="sm" className="text-red-500" onClick={() => setDeletingDef({ id: def.id, label: def.requestTypeLabel || def.requestType || "—" })}><Trash2 className="h-4 w-4" /></GuardedButton>
                 </div>
               </div>
               {def.description && <p className="text-sm text-gray-500 mb-2">{def.description}</p>}
