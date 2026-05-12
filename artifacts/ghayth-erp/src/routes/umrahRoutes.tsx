@@ -34,6 +34,10 @@ const UmrahDailyRunsheet = lazy(() => import("@/pages/umrah/daily-runsheet"));
 // Reconciliation report — surfaces GET /umrah/reports/reconciliation from PR #312.
 const UmrahReconciliation = lazy(() => import("@/pages/umrah/reconciliation"));
 
+// Groups list + split / merge actions — surfaces /umrah/groups + the two POST
+// endpoints from PR #312.
+const UmrahGroups = lazy(() => import("@/pages/umrah/groups"));
+
 export const umrahRoutes: { path: string; component: any; module?: ModuleType }[] = [
   { path: "/umrah", component: UmrahDashboard, module: "operations" },
   { path: "/umrah/pilgrims", component: UmrahPilgrims, module: "operations" },
@@ -64,4 +68,5 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/import", component: UmrahImportWizard, module: "operations" },
   { path: "/umrah/daily-runsheet", component: UmrahDailyRunsheet, module: "operations" },
   { path: "/umrah/reconciliation", component: UmrahReconciliation, module: "operations" },
+  { path: "/umrah/groups", component: UmrahGroups, module: "operations" },
 ];

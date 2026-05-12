@@ -3,12 +3,13 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Users, Package, Calendar, Receipt, Bus,
   UserCircle, AlertTriangle, Upload, UserPlus, Tag, Briefcase, ShieldAlert,
-  ClipboardList, Scale,
+  ClipboardList, Scale, Layers,
 } from "lucide-react";
 
 const TABS = [
   { href: "/umrah", label: "نظرة عامة", icon: LayoutDashboard, match: ["/umrah"], exact: true },
   { href: "/umrah/pilgrims", label: "المعتمرون", icon: Users, match: ["/umrah/pilgrims"] },
+  { href: "/umrah/groups", label: "المجموعات", icon: Layers, match: ["/umrah/groups"] },
   { href: "/umrah/packages", label: "الباقات", icon: Package, match: ["/umrah/packages"] },
   { href: "/umrah/seasons", label: "المواسم", icon: Calendar, match: ["/umrah/seasons"] },
   { href: "/umrah/agents", label: "الوكلاء", icon: UserCircle, match: ["/umrah/agents"] },
