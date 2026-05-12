@@ -9,70 +9,12 @@ import {
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import type pg from "pg";
-import type { Request as ExpressRequest } from "express";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, currentMonthPadded, generateTimeRef, roundTo2 } from "../lib/businessHelpers.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { logger } from "../lib/logger.js";
-
-type RequestScope = NonNullable<ExpressRequest["scope"]>;
-
-// Local row shapes for CRM tables (not in @workspace/db schema).
-
-interface CrmOpportunityRow {
-  id: number;
-  companyId: number;
-  branchId?: number | null;
-  title: string;
-  clientId?: number | null;
-  contactName?: string | null;
-  contactPhone?: string | null;
-  contactEmail?: string | null;
-  source?: string | null;
-  stage: string;
-  status?: string | null;
-  value: number | string;
-  probability?: number | null;
-  expectedCloseDate?: string | null;
-  assignedTo?: number | null;
-  notes?: string | null;
-  nextFollowUp?: string | null;
-  lostReason?: string | null;
-  closedAt?: string | null;
-  createdAt: string;
-  updatedAt?: string | null;
-  deletedAt?: string | null;
-  [k: string]: unknown;
-}
-
-interface CrmOpportunityListRow extends CrmOpportunityRow {
-  clientName?: string | null;
-  assigneeName?: string | null;
-}
-
-interface CrmActivityRow {
-  id: number;
-  opportunityId: number;
-  type: string;
-  description?: string | null;
-  scheduledAt?: string | null;
-  completedAt?: string | null;
-  createdBy?: number | null;
-  assignedTo?: number | null;
-  createdAt: string;
-  [k: string]: unknown;
-}
-
-interface AssignmentIdRow { id: number }
-interface CountRow { count: string | number }
-interface StageStatRow {
-  stage: string;
-  count: string | number;
-  value: string | number;
-}
 
 const router = Router();
 
@@ -169,7 +111,7 @@ router.get("/opportunities", authorize({ feature: "crm.opportunities", action: "
     let paramIdx = nextParamIndex;
     if (stage) { where += ` AND o.stage = $${paramIdx}`; params.push(stage); paramIdx++; }
     if (status) { where += ` AND o.status = $${paramIdx}`; params.push(status); paramIdx++; }
-    const rows = await rawQuery<CrmOpportunityListRow>(
+    const rows = await rawQuery<any>(
       `SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=o."assignedTo" AND e."deletedAt" IS NULL WHERE ${where} AND o."deletedAt" IS NULL ORDER BY o.id DESC LIMIT 500`,
       params
     );
@@ -299,7 +241,7 @@ router.post("/opportunities", authorize({ feature: "crm.opportunities", action: 
 
     if (b.assignedTo) {
       try {
-        const [asgn] = await rawQuery<AssignmentIdRow>(
+        const [asgn] = await rawQuery<any>(
           `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
           [b.assignedTo, scope.companyId]
         );
@@ -318,7 +260,7 @@ router.post("/opportunities", authorize({ feature: "crm.opportunities", action: 
       } catch (e) { logger.error(e, "CRM notification error:"); }
     }
 
-    const [row] = await rawQuery<CrmOpportunityRow>(`SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -373,7 +315,7 @@ router.patch("/opportunities/:id", authorize({ feature: "crm.opportunities", act
     const oppId = parseId(req.params.id, "id");
     const b = parsed;
 
-    const [existing] = await rawQuery<CrmOpportunityRow>(`SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [oppId, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [oppId, scope.companyId]);
     if (!existing) throw new NotFoundError("الفرصة غير موجودة");
 
     // Phase C domain 2 — stage transition guard. Mirrors the Support
@@ -495,7 +437,7 @@ router.patch("/opportunities/:id", authorize({ feature: "crm.opportunities", act
     }
 
     const sets: string[] = [`"updatedAt"=NOW()`];
-    const params: unknown[] = [];
+    const params: any[] = [];
     if (b.stage !== undefined) { params.push(b.stage); sets.push(`stage=$${params.length}`); }
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
     if (b.lostReason !== undefined) { params.push(b.lostReason); sets.push(`"lostReason"=$${params.length}`); }
@@ -546,7 +488,7 @@ router.patch("/opportunities/:id", authorize({ feature: "crm.opportunities", act
 
       if (existing.assignedTo) {
         try {
-          const [asgn] = await rawQuery<AssignmentIdRow>(
+          const [asgn] = await rawQuery<any>(
             `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
             [existing.assignedTo, scope.companyId]
           );
@@ -567,7 +509,7 @@ router.patch("/opportunities/:id", authorize({ feature: "crm.opportunities", act
     }
 
     if (b.stage === 'closed_won' && existing.stage !== 'closed_won') {
-      await handleDealWon(scope, existing, Number(b.value ?? existing.value));
+      await handleDealWon(scope, existing, b.value ?? existing.value);
       autoActions.push('إنشاء عقد + فاتورة + تحديث إيرادات العميل');
       // Mark follow-up obligation as met and emit deal-won event
       await markObligationMet(scope.companyId, "crm_opportunity", oppId, "follow_up").catch((e) => logger.error(e, "crm background task failed"));
@@ -637,7 +579,7 @@ router.patch("/opportunities/:id", authorize({ feature: "crm.opportunities", act
       }).catch((e) => logger.error(e, "crm background task failed"));
     }
 
-    const [row] = await rawQuery<CrmOpportunityRow>(`SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [oppId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [oppId, scope.companyId]);
 
     // Build a tracked-field diff so the audit log reflects what
     // actually changed instead of just `{ stage, status }`. Same
@@ -688,16 +630,15 @@ router.patch("/opportunities/:id", authorize({ feature: "crm.opportunities", act
   } catch (err) { handleRouteError(err, res, "Update opportunity error:"); }
 });
 
-async function handleDealWon(scope: RequestScope, opp: CrmOpportunityRow, dealValue: number) {
+async function handleDealWon(scope: any, opp: any, dealValue: number) {
   try {
     let clientId = opp.clientId;
 
     if (!clientId && opp.contactName?.trim()) {
-      const contactNameTrimmed = opp.contactName.trim();
-      await withTransaction(async (txClient: pg.PoolClient) => {
+      await withTransaction(async (txClient: any) => {
         const { rows: existing } = await txClient.query(
           `SELECT id FROM clients WHERE "companyId"=$1 AND "deletedAt" IS NULL AND (name=$2 OR phone=$3 OR email=$4) LIMIT 1 FOR UPDATE`,
-          [scope.companyId, contactNameTrimmed, opp.contactPhone || '', opp.contactEmail || '']
+          [scope.companyId, opp.contactName.trim(), opp.contactPhone || '', opp.contactEmail || '']
         );
         if (existing.length > 0) {
           clientId = existing[0].id;
@@ -777,7 +718,7 @@ async function handleDealWon(scope: RequestScope, opp: CrmOpportunityRow, dealVa
 
     if (opp.assignedTo) {
       try {
-        const [asgn] = await rawQuery<AssignmentIdRow>(
+        const [asgn] = await rawQuery<any>(
           `SELECT id FROM employee_assignments WHERE "employeeId"=$1 AND "companyId"=$2 AND status='active' LIMIT 1`,
           [opp.assignedTo, scope.companyId]
         );
@@ -806,14 +747,14 @@ router.get("/opportunities/:id", authorize({ feature: "crm.opportunities", actio
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<CrmOpportunityListRow>(`SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=o."assignedTo" AND e."deletedAt" IS NULL WHERE o.id=$1 AND o."companyId"=$2 AND o."deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=o."assignedTo" AND e."deletedAt" IS NULL WHERE o.id=$1 AND o."companyId"=$2 AND o."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("الفرصة غير موجودة");
 
-    const activities = await rawQuery<CrmActivityRow>(
+    const activities = await rawQuery<any>(
       `SELECT * FROM crm_activities WHERE "opportunityId"=$1 ORDER BY "scheduledAt" DESC LIMIT 500`,
       [row.id]
     );
-    const overdueActivities = activities.filter((a) => !a.completedAt && a.scheduledAt && new Date(a.scheduledAt) < new Date());
+    const overdueActivities = activities.filter((a: any) => !a.completedAt && new Date(a.scheduledAt) < new Date());
 
     res.json({
       ...row, activities, overdueActivities,
@@ -832,7 +773,7 @@ router.post("/opportunities/:id/convert", authorize({ feature: "crm.opportunitie
     const parsed = zodParse(convertOpportunitySchema.safeParse(req.body));
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<CrmOpportunityRow>(
+    const [existing] = await rawQuery<any>(
       `SELECT * FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -845,7 +786,7 @@ router.post("/opportunities/:id/convert", authorize({ feature: "crm.opportunitie
       });
     }
 
-    const dealValue = Number((parsed.value as number | undefined) ?? existing.value ?? 0);
+    const dealValue = (parsed.value as number | undefined) ?? existing.value ?? 0;
 
     // handleDealWon creates / resolves the client and writes a contract +
     // invoice using the global pool. It is idempotent enough for first-call
@@ -854,7 +795,7 @@ router.post("/opportunities/:id/convert", authorize({ feature: "crm.opportunitie
 
     // Re-read the opportunity to pick up the clientId that handleDealWon may
     // have just populated, so we can mirror it into convertedClientId.
-    const [afterDealWon] = await rawQuery<CrmOpportunityRow>(
+    const [afterDealWon] = await rawQuery<any>(
       `SELECT "clientId" FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -898,7 +839,7 @@ router.delete("/opportunities/:id", authorize({ feature: "crm.opportunities", ac
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<{ id: number }>(`SELECT id FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<any>(`SELECT id FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("الفرصة غير موجودة");
     const { affectedRows } = await rawExecute(`UPDATE crm_opportunities SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!affectedRows) throw new NotFoundError("الفرصة غير موجودة");
@@ -926,7 +867,7 @@ router.get("/opportunities/:id/related", authorize({ feature: "crm.opportunities
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [base] = await rawQuery<Pick<CrmOpportunityRow, "id" | "clientId" | "contactName" | "contactPhone" | "contactEmail">>(
+    const [base] = await rawQuery<any>(
       `SELECT id, "clientId", "contactName", "contactPhone", "contactEmail"
          FROM crm_opportunities
         WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -935,7 +876,7 @@ router.get("/opportunities/:id/related", authorize({ feature: "crm.opportunities
     if (!base) throw new NotFoundError("الفرصة غير موجودة");
 
     const conds: string[] = [];
-    const params: unknown[] = [scope.companyId, id];
+    const params: any[] = [scope.companyId, id];
     if (base.clientId) {
       params.push(base.clientId);
       conds.push(`"clientId" = $${params.length}`);
@@ -957,7 +898,7 @@ router.get("/opportunities/:id/related", authorize({ feature: "crm.opportunities
       return;
     }
 
-    const rows = await rawQuery<CrmOpportunityListRow>(
+    const rows = await rawQuery<any>(
       `SELECT o.*, cl.name AS "clientName"
          FROM crm_opportunities o
          LEFT JOIN clients cl ON cl.id = o."clientId" AND cl."deletedAt" IS NULL
@@ -989,12 +930,12 @@ router.get("/opportunities/:id/activities", authorize({ feature: "crm.opportunit
   try {
     const scope = req.scope!;
     const oppId = parseId(req.params.id, "id");
-    const [opp] = await rawQuery<{ id: number }>(
+    const [opp] = await rawQuery<any>(
       `SELECT id FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [oppId, scope.companyId]
     );
     if (!opp) throw new NotFoundError("الفرصة غير موجودة");
-    const rows = await rawQuery<CrmActivityRow>(`SELECT * FROM crm_activities WHERE "opportunityId"=$1 ORDER BY "createdAt" DESC LIMIT 500`, [oppId]);
+    const rows = await rawQuery<any>(`SELECT * FROM crm_activities WHERE "opportunityId"=$1 ORDER BY "createdAt" DESC LIMIT 500`, [oppId]);
     res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
   } catch (err) { handleRouteError(err, res, "CRM activities error:"); }
 });
@@ -1005,7 +946,7 @@ router.post("/opportunities/:id/activities", authorize({ feature: "crm.opportuni
     const scope = req.scope!;
     const b = parsed;
     const oppId = parseId(req.params.id, "id");
-    const [opp] = await rawQuery<{ id: number }>(
+    const [opp] = await rawQuery<any>(
       `SELECT id FROM crm_opportunities WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [oppId, scope.companyId]
     );
@@ -1014,7 +955,7 @@ router.post("/opportunities/:id/activities", authorize({ feature: "crm.opportuni
       `INSERT INTO crm_activities ("opportunityId",type,description,"scheduledAt","createdBy") VALUES ($1,$2,$3,$4,$5)`,
       [oppId, b.type, b.description, b.scheduledAt, scope.userId]
     );
-    const [row] = await rawQuery<CrmActivityRow>(`SELECT ca.* FROM crm_activities ca JOIN crm_opportunities co ON co.id = ca."opportunityId" WHERE ca.id=$1 AND co."companyId"=$2 AND co."deletedAt" IS NULL`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT ca.* FROM crm_activities ca JOIN crm_opportunities co ON co.id = ca."opportunityId" WHERE ca.id=$1 AND co."companyId"=$2 AND co."deletedAt" IS NULL`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "crm.activity.created", entity: "crm_activities", entityId: insertId,
@@ -1029,16 +970,15 @@ router.post("/opportunities/:id/activities", authorize({ feature: "crm.opportuni
   } catch (err) { handleRouteError(err, res, "Create activity error:"); }
 });
 
-router.get("/pipeline", authorize({ feature: "crm.leads", action: "list" }), async (req, res) => {
+router.get("/pipeline", authorize({ feature: "crm", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const stageRows = await rawQuery<StageStatRow>(
+    const stageRows = await rawQuery<any>(
       `SELECT stage, COUNT(*) as count, COALESCE(SUM(value),0) as value FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL GROUP BY stage`,
       [scope.companyId]
     );
-    const stageMap = new Map(stageRows.map((r) => [r.stage, r]));
-    interface PipelineEntry { stage: string; count: number; value: number; autoAction: string | undefined }
-    const result: PipelineEntry[] = STAGE_ORDER.map((stage) => {
+    const stageMap = new Map(stageRows.map((r: any) => [r.stage, r]));
+    const result: any[] = STAGE_ORDER.map((stage) => {
       const row = stageMap.get(stage);
       return { stage, count: Number(row?.count ?? 0), value: Number(row?.value ?? 0), autoAction: STAGE_AUTO_ACTIONS[stage]?.description };
     });
@@ -1046,17 +986,11 @@ router.get("/pipeline", authorize({ feature: "crm.leads", action: "list" }), asy
   } catch (err) { handleRouteError(err, res, "CRM pipeline error:"); }
 });
 
-router.post("/followup-check", authorize({ feature: "crm.clients", action: "create" }), async (req, res) => {
+router.post("/followup-check", authorize({ feature: "crm", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(followupCheckSchema.safeParse(req.body));
     const scope = req.scope!;
-    interface OverdueActivityRow extends CrmActivityRow {
-      oppTitle?: string | null;
-      stage?: string | null;
-      assignedTo?: number | null;
-      assigneeName?: string | null;
-    }
-    const overdueActivities = await rawQuery<OverdueActivityRow>(
+    const overdueActivities = await rawQuery<any>(
       `SELECT ca.*, co.title AS "oppTitle", co.stage, co."assignedTo", e.name AS "assigneeName"
        FROM crm_activities ca
        JOIN crm_opportunities co ON co.id=ca."opportunityId" AND co."deletedAt" IS NULL
@@ -1067,22 +1001,20 @@ router.post("/followup-check", authorize({ feature: "crm.clients", action: "crea
       [scope.companyId]
     );
 
-    interface EscalatedRow { activityId: number; oppTitle: string | null | undefined; overdueDays: number }
-    const escalated: EscalatedRow[] = [];
-    type EscalationCandidate = OverdueActivityRow & { overdueDays: number };
-    const escalationCandidates: EscalationCandidate[] = overdueActivities
-      .map((activity) => ({
+    const escalated: any[] = [];
+    const escalationCandidates = overdueActivities
+      .map((activity: any) => ({
         ...activity,
-        overdueDays: Math.floor((Date.now() - new Date(String(activity.scheduledAt)).getTime()) / (1000 * 60 * 60 * 24)),
+        overdueDays: Math.floor((Date.now() - new Date(activity.scheduledAt).getTime()) / (1000 * 60 * 60 * 24)),
       }))
-      .filter((a): a is EscalationCandidate => a.overdueDays >= 3 && !!a.assignedTo);
+      .filter((a: any) => a.overdueDays >= 3 && a.assignedTo);
 
     // Batch-fetch active assignments for all relevant employeeIds
-    const uniqueEmployeeIds = [...new Set(escalationCandidates.map((a) => a.assignedTo).filter((v): v is number => typeof v === "number"))];
+    const uniqueEmployeeIds = [...new Set(escalationCandidates.map((a: any) => a.assignedTo))];
     const assignmentMap = new Map<number, number>();
     if (uniqueEmployeeIds.length > 0) {
       try {
-        const asgnRows = await rawQuery<{ id: number; employeeId: number }>(
+        const asgnRows = await rawQuery<any>(
           `SELECT DISTINCT ON ("employeeId") id, "employeeId" FROM employee_assignments WHERE "employeeId" = ANY($1) AND "companyId" = $2 AND status='active'`,
           [uniqueEmployeeIds, scope.companyId]
         );
@@ -1093,7 +1025,7 @@ router.post("/followup-check", authorize({ feature: "crm.clients", action: "crea
     }
 
     for (const activity of escalationCandidates) {
-      const assignmentId = activity.assignedTo != null ? assignmentMap.get(activity.assignedTo) : undefined;
+      const assignmentId = assignmentMap.get(activity.assignedTo);
       if (assignmentId) {
         createNotification({
           companyId: scope.companyId,
@@ -1123,40 +1055,33 @@ router.post("/followup-check", authorize({ feature: "crm.clients", action: "crea
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.get("/analytics", authorize({ feature: "crm.clients", action: "list" }), async (req, res) => {
+router.get("/analytics", authorize({ feature: "crm", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
 
-    interface ConversionRow { stage: string; count: number; conversionFromPrev: string | null }
-    const stageCounts = await rawQuery<{ stage: string; count: string }>(
-      `SELECT stage, COUNT(*) as count FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage = ANY($2::text[]) GROUP BY stage`,
-      [cid, STAGE_ORDER]
-    );
-    const countMap = new Map(stageCounts.map(r => [r.stage, Number(r.count)]));
-    const conversionRates: ConversionRow[] = [];
+    const conversionRates: any[] = [];
     let prevCount: number | null = null;
     for (const stage of STAGE_ORDER) {
-      const count = countMap.get(stage) ?? 0;
+      const [row] = await rawQuery<any>(`SELECT COUNT(*) as count FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage=$2`, [cid, stage]);
+      const count = Number(row?.count ?? 0);
       const rate = prevCount !== null && prevCount > 0 ? ((count / prevCount) * 100).toFixed(1) : null;
       conversionRates.push({ stage, count, conversionFromPrev: rate });
       if (!['closed_won', 'closed_lost'].includes(stage)) prevCount = count;
     }
 
-    const [[avgDeal], [revenue], [lostAnalysis]] = await Promise.all([
-      rawQuery<{ avgDays: number | string | null }>(
-        `SELECT AVG(EXTRACT(EPOCH FROM ("updatedAt"::timestamp - "createdAt"::timestamp))/86400) AS "avgDays" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage='closed_won'`,
-        [cid]
-      ),
-      rawQuery<{ wonRevenue: number | string; forecast: number | string }>(
-        `SELECT COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) AS "wonRevenue", COALESCE(SUM(value) FILTER (WHERE status='open'),0) AS "forecast" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
-        [cid]
-      ),
-      rawQuery<{ lostCount: number | string; lostValue: number | string }>(
-        `SELECT COUNT(*) as "lostCount", COALESCE(SUM(value),0) as "lostValue" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage='closed_lost'`,
-        [cid]
-      ),
-    ]);
+    const [avgDeal] = await rawQuery<any>(
+      `SELECT AVG(EXTRACT(EPOCH FROM ("updatedAt"::timestamp - "createdAt"::timestamp))/86400) AS "avgDays" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage='closed_won'`,
+      [cid]
+    );
+    const [revenue] = await rawQuery<any>(
+      `SELECT COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) AS "wonRevenue", COALESCE(SUM(value) FILTER (WHERE status='open'),0) AS "forecast" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
+      [cid]
+    );
+    const [lostAnalysis] = await rawQuery<any>(
+      `SELECT COUNT(*) as "lostCount", COALESCE(SUM(value),0) as "lostValue" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND stage='closed_lost'`,
+      [cid]
+    );
 
     res.json({
       conversionRates,
@@ -1169,23 +1094,15 @@ router.get("/analytics", authorize({ feature: "crm.clients", action: "list" }), 
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.get("/stats", authorize({ feature: "crm.clients", action: "list" }), async (req, res) => {
+router.get("/stats", authorize({ feature: "crm", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    interface OpportunityStatsRow {
-      total: string | number;
-      open: string | number;
-      wonValue: string | number;
-      pipelineValue: string | number;
-    }
-    const [[opp], [overdue]] = await Promise.all([
-      rawQuery<OpportunityStatsRow>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) as "wonValue", COALESCE(SUM(value) FILTER (WHERE status='open'),0) as "pipelineValue" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
-      rawQuery<CountRow>(
-        `SELECT COUNT(*) as count FROM crm_activities ca JOIN crm_opportunities co ON co.id=ca."opportunityId" WHERE co."companyId"=$1 AND co."deletedAt" IS NULL AND ca."completedAt" IS NULL AND ca."scheduledAt" < NOW()`,
-        [cid]
-      ),
-    ]);
+    const [opp] = await rawQuery<any>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status='open') as open, COALESCE(SUM(value) FILTER (WHERE stage='closed_won'),0) as "wonValue", COALESCE(SUM(value) FILTER (WHERE status='open'),0) as "pipelineValue" FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]);
+    const [overdue] = await rawQuery<any>(
+      `SELECT COUNT(*) as count FROM crm_activities ca JOIN crm_opportunities co ON co.id=ca."opportunityId" WHERE co."companyId"=$1 AND co."deletedAt" IS NULL AND ca."completedAt" IS NULL AND ca."scheduledAt" < NOW()`,
+      [cid]
+    );
     res.json({
       totalOpportunities: Number(opp.total), openOpportunities: Number(opp.open),
       wonValue: Number(opp.wonValue), pipelineValue: Number(opp.pipelineValue),
