@@ -15,6 +15,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 const STAGE_LABELS: Record<string, string> = {
   lead: "عميل محتمل",
@@ -219,7 +220,7 @@ function CampaignsTab() {
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold">الحملات التسويقية</h2>
         <Link href="/marketing/create">
-          <Button size="sm"><Plus className="h-4 w-4 me-1" />حملة جديدة</Button>
+          <GuardedButton perm="marketing:create" size="sm"><Plus className="h-4 w-4 me-1" />حملة جديدة</GuardedButton>
         </Link>
       </div>
 
