@@ -57,9 +57,9 @@ for f in "$SCHEMA_FILE" "$ADMIN_FILE"; do
 done
 
 if [ ! -f "$SEED_FILE" ]; then
-  echo "  ⚠ db/seed.sql not found — bootstrap will load schema only."
-  echo "    The API will boot but you'll need to create test data manually."
-  echo "    Run db/dump-seed.sh on Replit to generate it."
+  echo "  ⓘ db/seed.sql not found — using the per-company seed pipeline below"
+  echo "    (seed-admin-user.sql + seed-aldiyaa-albayan.sql + seed-aldiyaa-company-defaults.sql)."
+  echo "    A monolithic db/seed.sql is optional; run db/dump-seed.sh to regenerate it."
 fi
 
 # 2. ensure Postgres is running. If not, try to start it (dev sandbox).
@@ -123,22 +123,14 @@ fi
 echo "  Creating test admin user (owner@local.test / Test1234!)..."
 PGPASSWORD="$DB_PASSWORD" psql "$DSN" -v ON_ERROR_STOP=1 -q -f "$ADMIN_FILE"
 
-# 7b. seed an open fiscal period per company so GL posting is unblocked.
-# Without this, every journal posting attempt fails the period guard.
-PERIODS_FILE="$REPO_ROOT/db/seed-financial-periods.sql"
-if [ -f "$PERIODS_FILE" ]; then
-  echo "  Seeding open fiscal period(s) for current year..."
-  PGPASSWORD="$DB_PASSWORD" psql "$DSN" -v ON_ERROR_STOP=1 -q -f "$PERIODS_FILE"
-fi
-
-# 7c. seed Al-Diyaa wal-Bayan company + sub-branches + owner user.
+# 7b. seed Al-Diyaa wal-Bayan company + sub-branches + owner user.
 ALDIYAA_FILE="$REPO_ROOT/db/seed-aldiyaa-albayan.sql"
 if [ -f "$ALDIYAA_FILE" ]; then
   echo "  Seeding Al-Diyaa wal-Bayan company, branches, owner..."
   PGPASSWORD="$DB_PASSWORD" psql "$DSN" -v ON_ERROR_STOP=1 -q -f "$ALDIYAA_FILE"
 fi
 
-# 7d. seed Al-Diyaa company-level defaults that mirror bootstrapCompany():
+# 7c. seed Al-Diyaa company-level defaults that mirror bootstrapCompany():
 #     chart of accounts, role permissions, leave types, shifts, salary
 #     components, and system_settings (settings + violation types +
 #     approval chains + numbering prefixes + penalty ladder).
@@ -146,6 +138,18 @@ ALDIYAA_DEFAULTS_FILE="$REPO_ROOT/db/seed-aldiyaa-company-defaults.sql"
 if [ -f "$ALDIYAA_DEFAULTS_FILE" ]; then
   echo "  Seeding Al-Diyaa wal-Bayan company defaults (COA, roles, settings)..."
   PGPASSWORD="$DB_PASSWORD" psql "$DSN" -v ON_ERROR_STOP=1 -q -f "$ALDIYAA_DEFAULTS_FILE"
+fi
+
+# 7d. seed an open fiscal period per company so GL posting is unblocked.
+# Without this, every journal posting attempt fails the period guard.
+# Runs AFTER every company-creation seed so each tenant gets a period —
+# previous ordering ran this between admin-user and aldiyaa-albayan and
+# missed the Al-Diyaa company entirely. The seed is idempotent (the
+# NOT EXISTS clause skips companies that already have an open period).
+PERIODS_FILE="$REPO_ROOT/db/seed-financial-periods.sql"
+if [ -f "$PERIODS_FILE" ]; then
+  echo "  Seeding open fiscal period(s) for current year (all companies)..."
+  PGPASSWORD="$DB_PASSWORD" psql "$DSN" -v ON_ERROR_STOP=1 -q -f "$PERIODS_FILE"
 fi
 
 # 8. mark every existing migration as applied so runMigrations skips them
