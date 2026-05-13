@@ -23,13 +23,33 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/admin.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+Event Monitor — راصد الأحداث المركزي. كل حدث business يمر عبر `eventBus` ويُسجل هنا.
+
+| الفئة | الأحداث | المصدر |
+|------|---------|--------|
+| Finance | invoice.created/paid, journal.posted, period.closed, fx.revalued, ... | finance/* |
+| HR | employee.hired, leave.approved, payroll.run, violation.created | hr/* |
+| Fleet | trip.completed, maintenance.due, license.expiring | fleet/* |
+| Property | contract.signed, payment.received, maintenance.requested | properties/* |
+| Workflow | approval.required, escalated, returned, completed | governance/workflows |
+| RBAC | permission.changed, role.assigned | rbac-v2 |
+| System | health.degraded, queue.backlogged, retry.exhausted | core |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| عرض stream الأحداث | GET `/admin/events?limit=100` | `event_logs` ORDER BY desc | ✅ |
+| Filter per domain/severity/dateRange | client filters + server-side WHERE | ✅ |
+| Drill-down للحدث (payload) | GET `/admin/events/:id` | `event_logs.payload` JSON | ✅ |
+| Re-publish (للأحداث الفاشلة) | POST `/admin/events/:id/replay` | useful للتطبيق الـ DLQ | ⚠ تحقق |
+| تصدير CSV (للـ audit/compliance) | `export.ts` | ✅ |
+| Auto-archive (events > 1 year) | cron | يُحرّك لـ cold storage | ⚠ |
+| تنبيهات للـ admin | event=`event_volume_anomaly` | `notifications` | ⚠ |
+| تكامل ELK/Splunk | اختياري | ⚠ |
+
+تحقق يدوي:
+- [ ] هل event payload يحوي PII حساس — هل يُخفى/يُشفّر؟
+- [ ] هل re-publish event غير-idempotent يطلق تحذيراً؟
+- [ ] هل dead-letter queue (`event_dlq`) مرصودة + إشعار بالفشل؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `event-monitor` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
