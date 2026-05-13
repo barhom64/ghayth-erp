@@ -23,13 +23,31 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/warehouse.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+قائمة المستودعات والمخازن — مدخل الوحدة الأساسي.
+
+| العمل | API | DB | الحالة |
+|------|-----|-----|--------|
+| List warehouses (per branch/tenant) | GET `/warehouse` | `warehouses` | ✅ |
+| إنشاء مستودع | راجع `warehouse-create.md` | ✅ |
+| تفعيل/تعطيل | PATCH `/warehouse/:id/status` | `warehouses.isActive` | ⚠ تحقق |
+| ربط بالـ branch | FK | `warehouses.branchId` | ✅ |
+| Default warehouse per branch | flag | `is_default` | ✅ |
+| Inventory snapshot per warehouse | aggregations | `inventory_layers` | ✅ |
+| Movement history | راجع `warehouse-movements.md` | ✅ |
+| Inventory count | راجع `warehouse-inventory-count.md` | ✅ |
+| Transfer بين warehouses | راجع `warehouse-transfers.md` | داخلي ولا يولّد GL إلا بفروقات تكلفة | ✅ |
+| تكامل مع `finance/cogs` | عند بيع/صرف | راجع `finance-cogs.md` | ✅ |
+| تكامل مع `store/sales` | حجز/خصم المخزون | راجع `store-sales.md` | ✅ |
+| تكامل مع `procurement` | استلام PO | راجع `warehouse-receiving.md` | ✅ |
+| Audit log | إجباري لكل تعديل | `audit_logs` | ✅ |
+| Soft delete إذا فيه حركات | guard | لا يحذف إذا كان عليه stock | ✅ critical |
+| RBAC | warehouse manager + above | `subKey=warehouse` | ✅ |
+
+تحقق يدوي:
+- [ ] هل deactivate warehouse يمنع الحركات الجديدة فقط أم يحجب القراءة أيضاً؟
+- [ ] هل default warehouse per branch مفعّل بشكل تلقائي عند إنشاء branch جديد؟
+- [ ] هل cross-branch transfers تحتاج موافقة؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `warehouse` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
