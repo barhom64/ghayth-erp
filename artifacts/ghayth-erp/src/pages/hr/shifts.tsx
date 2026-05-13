@@ -124,6 +124,7 @@ export default function ShiftsPage() {
                         <RowActions
                           onEdit={() => startEdit(s.id, { name: s.name, startTime: s.startTime || "", endTime: s.endTime || "", breakMinutes: s.breakMinutes || s.breakDuration || 0 })}
                           onDelete={() => startDelete(s.id)}
+                          deletePerm="hr:delete"
                         />
                       </div>
                     </div>

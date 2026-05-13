@@ -75,7 +75,7 @@ export default function UmrahViolationDetail() {
       isLoading={isLoading}
       error={error}
       onRetry={refetch}
-      actions={<DetailActionButtons hook={editDelete} />}
+      actions={<DetailActionButtons hook={editDelete} editPerm="umrah:update" deletePerm="umrah:delete" />}
     />
   );
 }

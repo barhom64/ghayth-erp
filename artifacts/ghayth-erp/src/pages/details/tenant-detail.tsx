@@ -276,7 +276,7 @@ export default function TenantDetail() {
       error={isError ? true : undefined}
       onRetry={refetch}
       overview={overview}
-      actions={<DetailActionButtons hook={editDelete} extra={tenantActionsExtra} />}
+      actions={<DetailActionButtons hook={editDelete} editPerm="properties:update" deletePerm="properties:delete" extra={tenantActionsExtra} />}
       extraTabs={extraTabs}
       hideTabs={registryHideTabs}
     />

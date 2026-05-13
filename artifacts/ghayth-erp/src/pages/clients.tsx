@@ -130,6 +130,7 @@ export default function Clients() {
             canEdit={canManage}
             onEdit={() => startEdit(client.id, { name: client.name || "", phone: client.phone || "", classification: client.classification || "regular" })}
             onDelete={() => startDelete(client.id)}
+            deletePerm="clients:delete"
           />
         </div>
       ),

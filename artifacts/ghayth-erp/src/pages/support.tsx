@@ -109,6 +109,7 @@ function Support() {
             canEdit={canManage}
             onEdit={() => startEdit(t.id, { status: t.status || "open", priority: t.priority || "medium", title: t.title || "" })}
             onDelete={() => startDelete(t.id)}
+            deletePerm="support:delete"
           />
           <button onClick={() => setExpandedId(expandedId === t.id ? null : t.id)} className="text-gray-400 hover:text-gray-600 p-1">
             {expandedId === t.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -268,7 +269,7 @@ function KBManagement() {
     {
       key: "actions", header: "إجراءات",
       render: (item) => (
-        <RowActions onEdit={() => startEdit(item.id, { title: item.title, category: item.category || "", status: item.status || "published" })} onDelete={() => startDelete(item.id)} />
+        <RowActions onEdit={() => startEdit(item.id, { title: item.title, category: item.category || "", status: item.status || "published" })} onDelete={() => startDelete(item.id)} deletePerm="support:delete" />
       ),
     },
   ];

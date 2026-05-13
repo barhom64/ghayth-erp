@@ -185,6 +185,7 @@ function CampaignsTab() {
           <RowActions
             onEdit={() => startEdit(c.id, { name: c.name, channel: c.channel || "", budget: Number(c.budget) || 0, spent: Number(c.spent) || 0, revenue: Number(c.revenue) || 0, status: c.status || "draft" })}
             onDelete={() => startDelete(c.id)}
+            deletePerm="marketing:delete"
           />
         </div>
       ),

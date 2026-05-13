@@ -58,6 +58,7 @@ export function RisksTab() {
           <RowActions
             onEdit={() => startEdit(r.id, { title: r.title, severity: r.severity || "medium", status: r.status || "open", description: r.description || "" })}
             onDelete={() => startDelete(r.id)}
+            deletePerm="governance:delete"
           />
         </div>
       ),

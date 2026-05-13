@@ -236,6 +236,8 @@ export default function UmrahAgentDetail() {
       actions={
         <DetailActionButtons
           hook={editDelete}
+          editPerm="umrah:update"
+          deletePerm="umrah:delete"
           extra={
             <EntityPrintButton
               branchId={agent?.branchId}
