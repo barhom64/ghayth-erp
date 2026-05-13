@@ -1,3 +1,4 @@
+// regression guard for batch36 — originally PR #479
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
