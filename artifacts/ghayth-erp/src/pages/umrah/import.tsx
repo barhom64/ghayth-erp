@@ -62,42 +62,77 @@ export default function UmrahImport() {
     setResult(null);
     setFileName(name);
     try {
-      const XLSX = await import("xlsx");
+      // exceljs replaces xlsx@0.18.5 (Prototype Pollution + ReDoS, no fix
+      // available — Task #269). API is async; column normalization
+      // mirrors the previous behaviour (alias map + Date → ISO).
+      const ExcelJS = (await import("exceljs")).default;
       const base64 = dataUrl.split(",")[1];
       const binaryStr = atob(base64);
       const bytes = new Uint8Array(binaryStr.length);
       for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-      const wb = XLSX.read(bytes, { type: "array", cellDates: true });
-      const sheetName = wb.SheetNames[0];
-      if (!sheetName) { setParseError("الملف لا يحتوي على أوراق عمل"); return; }
-      const data = XLSX.utils.sheet_to_json<any>(wb.Sheets[sheetName], { defval: "" });
-      if (data.length === 0) { setParseError("الملف فارغ أو لا يحتوي على بيانات"); return; }
-      const rows = data.map((row: any) => {
-        const keys = Object.keys(row);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(bytes.buffer);
+      const ws = wb.worksheets[0];
+      if (!ws) { setParseError("الملف لا يحتوي على أوراق عمل"); return; }
+      const colCount = Math.max(ws.columnCount, 1);
+      const headers: string[] = [];
+      const headerRow = ws.getRow(1);
+      for (let c = 1; c <= colCount; c++) {
+        headers.push(String(normalizeExcelCellValue(headerRow.getCell(c).value) ?? "").trim());
+      }
+      const fieldMap: Record<string, string> = {
+        "الاسم الكامل": "fullName", "الاسم": "fullName", "name": "fullName", "fullname": "fullName", "full_name": "fullName",
+        "رقم الجواز": "passportNumber", "الجواز": "passportNumber", "passport": "passportNumber", "passport_number": "passportNumber", "passportnumber": "passportNumber",
+        "الجنسية": "nationality", "nationality": "nationality",
+        "تاريخ الوصول": "arrivalDate", "الوصول": "arrivalDate", "arrival": "arrivalDate", "arrival_date": "arrivalDate", "arrivaldate": "arrivalDate",
+        "تاريخ المغادرة": "departureDate", "المغادرة": "departureDate", "departure": "departureDate", "departure_date": "departureDate", "departuredate": "departureDate",
+        "الهاتف": "phone", "phone": "phone", "الجنس": "gender", "gender": "gender",
+        "تاريخ الميلاد": "birthDate", "birthdate": "birthDate", "birth_date": "birthDate",
+      };
+      const mappedHeaders = headers.map((h) => fieldMap[h.toLowerCase()] || fieldMap[h] || h);
+      const rows: any[] = [];
+      ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+        if (rowNumber === 1) return;
         const mapped: any = {};
-        const fieldMap: Record<string, string> = {
-          "الاسم الكامل": "fullName", "الاسم": "fullName", "name": "fullName", "fullname": "fullName", "full_name": "fullName",
-          "رقم الجواز": "passportNumber", "الجواز": "passportNumber", "passport": "passportNumber", "passport_number": "passportNumber", "passportnumber": "passportNumber",
-          "الجنسية": "nationality", "nationality": "nationality",
-          "تاريخ الوصول": "arrivalDate", "الوصول": "arrivalDate", "arrival": "arrivalDate", "arrival_date": "arrivalDate", "arrivaldate": "arrivalDate",
-          "تاريخ المغادرة": "departureDate", "المغادرة": "departureDate", "departure": "departureDate", "departure_date": "departureDate", "departuredate": "departureDate",
-          "الهاتف": "phone", "phone": "phone", "الجنس": "gender", "gender": "gender",
-          "تاريخ الميلاد": "birthDate", "birthdate": "birthDate", "birth_date": "birthDate",
-        };
-        keys.forEach(k => {
-          const normalizedKey = k.trim().toLowerCase();
-          const mappedKey = fieldMap[normalizedKey] || fieldMap[k.trim()] || k.trim();
-          let val = row[k];
+        let anyVal = false;
+        for (let c = 1; c <= colCount; c++) {
+          const key = mappedHeaders[c - 1];
+          if (!key) continue;
+          let val: unknown = normalizeExcelCellValue(row.getCell(c).value);
           if (val instanceof Date) val = val.toISOString().split("T")[0];
-          mapped[mappedKey] = String(val || "").trim();
-        });
-        return mapped;
+          const str = String(val ?? "").trim();
+          if (str) anyVal = true;
+          mapped[key] = str;
+        }
+        if (anyVal) rows.push(mapped);
       });
+      if (rows.length === 0) { setParseError("الملف فارغ أو لا يحتوي على بيانات"); return; }
       setParsedRows(rows);
     } catch (e: any) {
       setParseError(`خطأ في قراءة الملف: ${e.message || "خطأ غير معروف"}`);
     }
   };
+
+  // Mirror of server-side excelCompat.normalizeCellValue: collapses
+  // exceljs richText / hyperlink / formula wrappers into plain values.
+  function normalizeExcelCellValue(v: unknown): unknown {
+    if (v === null || v === undefined) return "";
+    if (v instanceof Date) return v;
+    if (typeof v !== "object") return v;
+    const o: any = v;
+    if (Array.isArray(o.richText)) return o.richText.map((p: any) => p.text ?? "").join("");
+    if ("text" in o) {
+      const t = o.text;
+      if (typeof t === "string") return t;
+      if (t && typeof t === "object" && Array.isArray(t.richText)) {
+        return t.richText.map((p: any) => p.text ?? "").join("");
+      }
+      return String(t ?? "");
+    }
+    if ("result" in o) return o.result ?? "";
+    if ("error" in o) return "";
+    return v;
+  }
 
   const getRowValidation = (row: any) => {
     const missing: string[] = [];
@@ -151,18 +186,18 @@ export default function UmrahImport() {
           <FileDropZone files={dropFiles} onFilesChange={handleDropFiles} label="ملف إكسل أو ملف جدولي" maxSizeMB={10} />
 
           {fileName && parsedRows.length > 0 && (
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-status-info-surface border border-status-info-surface">
-              <Upload className="h-5 w-5 text-status-info-foreground shrink-0" />
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 border border-blue-200">
+              <Upload className="h-5 w-5 text-blue-600 shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-status-info-foreground truncate">{fileName}</p>
-                <p className="text-xs text-status-info-foreground">{parsedRows.length} صف — {validRows.length} صالح، {invalidRows.length} يحتاج مراجعة</p>
+                <p className="text-sm font-medium text-blue-800 truncate">{fileName}</p>
+                <p className="text-xs text-blue-600">{parsedRows.length} صف — {validRows.length} صالح، {invalidRows.length} يحتاج مراجعة</p>
               </div>
-              <Button variant="ghost" size="sm" onClick={clearFile} className="text-status-info-foreground hover:text-status-info-foreground shrink-0">تغيير الملف</Button>
+              <Button variant="ghost" size="sm" onClick={clearFile} className="text-blue-600 hover:text-blue-800 shrink-0">تغيير الملف</Button>
             </div>
           )}
 
           {parseError && (
-            <div className="p-3 rounded-lg bg-status-error-surface border border-status-error-surface text-sm text-status-error-foreground">{parseError}</div>
+            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{parseError}</div>
           )}
 
           {parsedRows.length > 0 && (
@@ -170,7 +205,7 @@ export default function UmrahImport() {
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-semibold">معاينة البيانات ({parsedRows.length} صف)</Label>
                 {invalidRows.length > 0 && (
-                  <Badge className="bg-status-warning-surface text-status-warning-foreground">{invalidRows.length} صف يحتاج مراجعة</Badge>
+                  <Badge className="bg-amber-100 text-amber-700">{invalidRows.length} صف يحتاج مراجعة</Badge>
                 )}
               </div>
               <div className="border rounded-lg overflow-hidden max-h-64 overflow-y-auto">
@@ -180,7 +215,7 @@ export default function UmrahImport() {
                       key: "__index",
                       header: "#",
                       width: "40px",
-                      className: "text-xs text-muted-foreground",
+                      className: "text-xs text-gray-400",
                       render: (_row, i) => i + 1,
                     },
                     ...Object.keys(parsedRows[0] || {}).slice(0, 6).map((k) => ({
@@ -190,7 +225,7 @@ export default function UmrahImport() {
                       render: (row: any) => {
                         const missing = getRowValidation(row);
                         return (
-                          <span className={missing.includes(k) ? "text-status-error-foreground font-medium" : ""}>
+                          <span className={missing.includes(k) ? "text-red-600 font-medium" : ""}>
                             {row[k] || <span className="text-red-400">—</span>}
                           </span>
                         );
@@ -203,22 +238,22 @@ export default function UmrahImport() {
                       render: (row) => {
                         const missing = getRowValidation(row);
                         return missing.length === 0 ? (
-                          <Badge className="bg-status-success-surface text-status-success-foreground text-[10px]">صالح</Badge>
+                          <Badge className="bg-green-100 text-green-700 text-[10px]">صالح</Badge>
                         ) : (
-                          <Badge className="bg-status-warning-surface text-status-warning-foreground text-[10px]">ناقص: {missing.map((m) => FIELD_LABELS[m] || m).join(", ")}</Badge>
+                          <Badge className="bg-amber-100 text-amber-700 text-[10px]">ناقص: {missing.map((m) => FIELD_LABELS[m] || m).join(", ")}</Badge>
                         );
                       },
                     },
                   ] as DataTableColumn<any>[]}
                   data={parsedRows.slice(0, 20)}
                   rowKey={(_row, i) => i}
-                  rowClassName={(row) => (getRowValidation(row).length > 0 ? "bg-status-warning-surface/50" : undefined)}
+                  rowClassName={(row) => (getRowValidation(row).length > 0 ? "bg-amber-50/50" : undefined)}
                   noToolbar
                   pageSize={0}
                   emptyMessage="لا توجد بيانات"
                 />
                 {parsedRows.length > 20 && (
-                  <p className="text-center text-xs text-muted-foreground py-2">و {parsedRows.length - 20} صفوف أخرى...</p>
+                  <p className="text-center text-xs text-gray-400 py-2">و {parsedRows.length - 20} صفوف أخرى...</p>
                 )}
               </div>
             </div>
@@ -233,7 +268,7 @@ export default function UmrahImport() {
 
           {result && (
             <div className="p-3 rounded bg-muted text-sm space-y-1">
-              <div>إجمالي: {result.total} | جديد: <span className="text-status-success-foreground font-bold">{result.new}</span> | محدث: <span className="text-status-info-foreground font-bold">{result.updated}</span> | مكرر: {result.duplicates} | أخطاء: <span className="text-status-error-foreground">{result.errors}</span></div>
+              <div>إجمالي: {result.total} | جديد: <span className="text-green-600 font-bold">{result.new}</span> | محدث: <span className="text-blue-600 font-bold">{result.updated}</span> | مكرر: {result.duplicates} | أخطاء: <span className="text-red-600">{result.errors}</span></div>
             </div>
           )}
         </CardContent>
@@ -247,9 +282,9 @@ export default function UmrahImport() {
               { key: "createdAt", header: "التاريخ", render: (l: any) => formatDateAr(l.createdAt) },
               { key: "fileName", header: "الملف" },
               { key: "totalRows", header: "الإجمالي" },
-              { key: "newRecords", header: "جديد", render: (l: any) => <span className="text-status-success-foreground">{l.newRecords}</span> },
-              { key: "updatedRecords", header: "محدث", render: (l: any) => <span className="text-status-info-foreground">{l.updatedRecords}</span> },
-              { key: "errorRecords", header: "أخطاء", render: (l: any) => <span className="text-status-error-foreground">{l.errorRecords}</span> },
+              { key: "newRecords", header: "جديد", render: (l: any) => <span className="text-green-600">{l.newRecords}</span> },
+              { key: "updatedRecords", header: "محدث", render: (l: any) => <span className="text-blue-600">{l.updatedRecords}</span> },
+              { key: "errorRecords", header: "أخطاء", render: (l: any) => <span className="text-red-600">{l.errorRecords}</span> },
             ] as DataTableColumn<any>[]}
             data={logs?.data || []}
             noToolbar
