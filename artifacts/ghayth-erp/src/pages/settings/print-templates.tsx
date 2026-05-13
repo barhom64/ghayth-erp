@@ -10,7 +10,7 @@
  * is scaffolded with a "coming soon" tab so the route is ready.
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, apiFetch, ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -76,9 +76,60 @@ interface TemplateRow {
   mode: "preset" | "html" | "visual";
   presetKey: string | null;
   htmlContent: string | null;
+  layoutJson: unknown;
   isThermal: boolean;
   isDefault: boolean;
   isActive: boolean;
+}
+
+// ─── Visual builder schema ──────────────────────────────────────────────────
+// Mirrors the block types renderLayoutToHtml() understands on the server.
+
+export type VisualBlock =
+  | { id: string; type: "header" }
+  | { id: string; type: "footer" }
+  | { id: string; type: "title"; text: string; level: 1 | 2 | 3 }
+  | { id: string; type: "text"; body: string }
+  | { id: string; type: "info_grid"; items: Array<{ label: string; value: string }> }
+  | { id: string; type: "items_table" }
+  | { id: string; type: "lines_table" }
+  | { id: string; type: "summary"; items: Array<{ label: string; value: string; bold?: boolean }> }
+  | { id: string; type: "signature"; parties: Array<{ label: string }> }
+  | { id: string; type: "qr"; value?: string }
+  | { id: string; type: "divider" }
+  | { id: string; type: "spacer"; height: number };
+
+const BLOCK_PALETTE: Array<{ type: VisualBlock["type"]; label: string; icon: string }> = [
+  { type: "header", label: "ترويسة الفرع", icon: "🏢" },
+  { type: "title", label: "عنوان", icon: "T" },
+  { type: "text", label: "فقرة نص", icon: "¶" },
+  { type: "info_grid", label: "شبكة معلومات", icon: "▦" },
+  { type: "items_table", label: "جدول البنود", icon: "▤" },
+  { type: "lines_table", label: "جدول السطور", icon: "▥" },
+  { type: "summary", label: "ملخص/إجماليات", icon: "Σ" },
+  { type: "signature", label: "تواقيع", icon: "✍" },
+  { type: "qr", label: "رمز QR", icon: "▢" },
+  { type: "divider", label: "فاصل", icon: "—" },
+  { type: "spacer", label: "مسافة", icon: "↕" },
+  { type: "footer", label: "تذييل الفرع", icon: "▁" },
+];
+
+function newBlock(type: VisualBlock["type"]): VisualBlock {
+  const id = `b-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  switch (type) {
+    case "header": return { id, type };
+    case "footer": return { id, type };
+    case "title": return { id, type, text: "عنوان الوثيقة", level: 2 };
+    case "text": return { id, type, body: "نص الفقرة هنا. يمكن استخدام {{path}} للحقول الديناميكية." };
+    case "info_grid": return { id, type, items: [{ label: "الرقم", value: "{{entity.ref}}" }, { label: "التاريخ", value: "{{entity.date}}" }] };
+    case "items_table": return { id, type };
+    case "lines_table": return { id, type };
+    case "summary": return { id, type, items: [{ label: "الإجمالي", value: "{{entity.total}}", bold: true }] };
+    case "signature": return { id, type, parties: [{ label: "التوقيع الأول" }, { label: "التوقيع الثاني" }] };
+    case "qr": return { id, type, value: "{{entity.zatcaQr}}" };
+    case "divider": return { id, type };
+    case "spacer": return { id, type, height: 16 };
+  }
 }
 
 export default function PrintTemplatesPage() {
@@ -222,6 +273,18 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
   const [presetKey, setPresetKey] = useState(existing?.presetKey ?? "classic");
   const [htmlContent, setHtmlContent] = useState(existing?.htmlContent ?? "");
   const [isDefault, setIsDefault] = useState(existing?.isDefault ?? false);
+  const [layout, setLayout] = useState<VisualBlock[]>(() => {
+    const initial = existing?.layoutJson;
+    return Array.isArray(initial) ? (initial as VisualBlock[]) : [
+      newBlock("header"),
+      newBlock("title"),
+      newBlock("info_grid"),
+      newBlock("items_table"),
+      newBlock("summary"),
+      newBlock("signature"),
+      newBlock("footer"),
+    ];
+  });
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -246,35 +309,27 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
   async function save() {
     setSaving(true);
     try {
+      const body = {
+        name,
+        entityType,
+        branchId,
+        paperSize,
+        mode,
+        presetKey,
+        htmlContent,
+        layoutJson: mode === "visual" ? layout : null,
+        isDefault,
+        isThermal: paperSize.startsWith("THERMAL"),
+      };
       if (templateId) {
         await apiFetch(`/print/templates/${templateId}`, {
           method: "PATCH",
-          body: JSON.stringify({
-            name,
-            entityType,
-            branchId,
-            paperSize,
-            mode,
-            presetKey,
-            htmlContent,
-            isDefault,
-            isThermal: paperSize.startsWith("THERMAL"),
-          }),
+          body: JSON.stringify(body),
         });
       } else {
         await apiFetch(`/print/templates`, {
           method: "POST",
-          body: JSON.stringify({
-            name,
-            entityType,
-            branchId,
-            paperSize,
-            mode,
-            presetKey,
-            htmlContent,
-            isDefault,
-            isThermal: paperSize.startsWith("THERMAL"),
-          }),
+          body: JSON.stringify(body),
         });
       }
       toast({ title: "تم الحفظ" });
@@ -423,11 +478,7 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
                 </p>
               </TabsContent>
               <TabsContent value="visual">
-                <div className="p-6 text-center text-sm text-muted-foreground border border-dashed rounded">
-                  <Layers className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <div>البناء المرئي (drag-and-drop) متاح في الإصدار التالي.</div>
-                  <div className="text-xs mt-1">حالياً استخدم وضع HTML أو القوالب الجاهزة.</div>
-                </div>
+                <VisualBuilder layout={layout} onChange={setLayout} />
               </TabsContent>
             </Tabs>
           </CardContent>
@@ -478,3 +529,364 @@ const SAMPLE_PAYLOADS: Record<string, Record<string, unknown>> = {
     items: [{ name: "قهوة سادة", qty: 2, price: 25, total: 50 }, { name: "كيك", qty: 1, price: 50, total: 50 }],
   },
 };
+
+// ─── Visual builder ─────────────────────────────────────────────────────────
+// A small drag-and-drop layout builder. Uses native HTML5 drag events to keep
+// the dependency footprint zero. Reorder by dragging the handle; click a
+// block to expand its inspector; the right palette adds new blocks.
+
+interface VisualBuilderProps {
+  layout: VisualBlock[];
+  onChange: (next: VisualBlock[]) => void;
+}
+
+function VisualBuilder({ layout, onChange }: VisualBuilderProps) {
+  const [selectedId, setSelectedId] = useState<string | null>(layout[0]?.id ?? null);
+  const dragFromRef = useRef<number | null>(null);
+
+  const selected = selectedId ? layout.find((b) => b.id === selectedId) ?? null : null;
+
+  function addBlock(type: VisualBlock["type"]) {
+    const block = newBlock(type);
+    onChange([...layout, block]);
+    setSelectedId(block.id);
+  }
+
+  function removeBlock(id: string) {
+    onChange(layout.filter((b) => b.id !== id));
+    if (selectedId === id) setSelectedId(null);
+  }
+
+  function moveBlock(id: string, dir: -1 | 1) {
+    const idx = layout.findIndex((b) => b.id === id);
+    if (idx < 0) return;
+    const target = idx + dir;
+    if (target < 0 || target >= layout.length) return;
+    const next = layout.slice();
+    [next[idx], next[target]] = [next[target], next[idx]];
+    onChange(next);
+  }
+
+  function reorderByDrag(fromIdx: number, toIdx: number) {
+    if (fromIdx === toIdx) return;
+    const next = layout.slice();
+    const [picked] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, picked);
+    onChange(next);
+  }
+
+  function patchBlock(id: string, patch: Partial<VisualBlock>) {
+    onChange(layout.map((b) => (b.id === id ? ({ ...b, ...patch } as VisualBlock) : b)));
+  }
+
+  return (
+    <div className="grid grid-cols-12 gap-3" style={{ minHeight: 420 }}>
+      {/* Block palette */}
+      <div className="col-span-3 border rounded p-2 bg-muted/30 overflow-y-auto">
+        <div className="text-xs font-semibold text-muted-foreground mb-2">العناصر المتاحة</div>
+        <div className="grid grid-cols-2 gap-1">
+          {BLOCK_PALETTE.map((p) => (
+            <button
+              key={p.type}
+              type="button"
+              onClick={() => addBlock(p.type)}
+              className="flex flex-col items-center gap-1 p-2 rounded border bg-background hover:bg-accent hover:border-primary text-xs"
+              title={`إضافة ${p.label}`}
+            >
+              <span className="text-lg leading-none">{p.icon}</span>
+              <span>{p.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Canvas */}
+      <div className="col-span-5 border rounded p-2 bg-background overflow-y-auto">
+        <div className="text-xs font-semibold text-muted-foreground mb-2">التخطيط</div>
+        {layout.length === 0 ? (
+          <div className="text-xs text-center p-6 text-muted-foreground border border-dashed rounded">
+            القالب فارغ. أضف عنصراً من اليمين للبدء.
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {layout.map((block, idx) => (
+              <div
+                key={block.id}
+                draggable
+                onDragStart={() => {
+                  dragFromRef.current = idx;
+                }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={() => {
+                  const from = dragFromRef.current;
+                  dragFromRef.current = null;
+                  if (from !== null) reorderByDrag(from, idx);
+                }}
+                onClick={() => setSelectedId(block.id)}
+                className={`flex items-center gap-2 p-2 rounded border text-xs cursor-pointer ${
+                  selectedId === block.id ? "border-primary bg-primary/5" : "hover:bg-muted/50"
+                }`}
+              >
+                <span className="text-muted-foreground select-none cursor-grab">⋮⋮</span>
+                <span className="flex-1 truncate">
+                  <span className="font-semibold">{labelFor(block.type)}</span>
+                  <span className="text-muted-foreground ms-2">{summaryFor(block)}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); moveBlock(block.id, -1); }}
+                  disabled={idx === 0}
+                  className="text-muted-foreground hover:text-foreground disabled:opacity-30 px-1"
+                >▲</button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); moveBlock(block.id, 1); }}
+                  disabled={idx === layout.length - 1}
+                  className="text-muted-foreground hover:text-foreground disabled:opacity-30 px-1"
+                >▼</button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); removeBlock(block.id); }}
+                  className="text-red-600 hover:text-red-700 px-1"
+                  title="حذف"
+                ><Trash2 className="h-3 w-3" /></button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Inspector */}
+      <div className="col-span-4 border rounded p-2 bg-muted/30 overflow-y-auto">
+        <div className="text-xs font-semibold text-muted-foreground mb-2">خصائص العنصر</div>
+        {!selected ? (
+          <div className="text-xs text-center p-6 text-muted-foreground border border-dashed rounded">
+            اختر عنصراً من التخطيط لتعديل خصائصه.
+          </div>
+        ) : (
+          <Inspector block={selected} onChange={(patch) => patchBlock(selected.id, patch)} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function labelFor(type: VisualBlock["type"]): string {
+  return BLOCK_PALETTE.find((p) => p.type === type)?.label ?? type;
+}
+
+function summaryFor(block: VisualBlock): string {
+  switch (block.type) {
+    case "title": return block.text;
+    case "text": return block.body.slice(0, 40) + (block.body.length > 40 ? "…" : "");
+    case "info_grid": return `${block.items.length} حقول`;
+    case "summary": return `${block.items.length} سطور`;
+    case "signature": return `${block.parties.length} أطراف`;
+    case "spacer": return `${block.height}px`;
+    default: return "";
+  }
+}
+
+function Inspector({ block, onChange }: { block: VisualBlock; onChange: (patch: Partial<VisualBlock>) => void }) {
+  if (block.type === "title") {
+    return (
+      <div className="space-y-2">
+        <Label className="text-xs">النص</Label>
+        <Input value={block.text} onChange={(e) => onChange({ text: e.target.value } as Partial<VisualBlock>)} />
+        <Label className="text-xs">حجم العنوان</Label>
+        <Select value={String(block.level)} onValueChange={(v) => onChange({ level: Number(v) as 1 | 2 | 3 } as Partial<VisualBlock>)}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="1">كبير (H1)</SelectItem>
+            <SelectItem value="2">متوسط (H2)</SelectItem>
+            <SelectItem value="3">صغير (H3)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  }
+  if (block.type === "text") {
+    return (
+      <div className="space-y-2">
+        <Label className="text-xs">نص الفقرة</Label>
+        <Textarea rows={5} value={block.body} onChange={(e) => onChange({ body: e.target.value } as Partial<VisualBlock>)} />
+        <div className="text-[10px] text-muted-foreground">يدعم متغيرات {`{{path.to.value}}`}</div>
+      </div>
+    );
+  }
+  if (block.type === "info_grid") {
+    return (
+      <div className="space-y-2">
+        <Label className="text-xs">حقول الشبكة</Label>
+        {block.items.map((item, i) => (
+          <div key={i} className="flex gap-1 items-center">
+            <Input
+              className="text-xs"
+              value={item.label}
+              placeholder="الاسم"
+              onChange={(e) => {
+                const items = block.items.slice();
+                items[i] = { ...items[i], label: e.target.value };
+                onChange({ items } as Partial<VisualBlock>);
+              }}
+            />
+            <Input
+              className="text-xs"
+              value={item.value}
+              placeholder="القيمة (مثال {{entity.ref}})"
+              dir="ltr"
+              onChange={(e) => {
+                const items = block.items.slice();
+                items[i] = { ...items[i], value: e.target.value };
+                onChange({ items } as Partial<VisualBlock>);
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => onChange({ items: block.items.filter((_, j) => j !== i) } as Partial<VisualBlock>)}
+              className="text-red-600 px-1"
+            ><Trash2 className="h-3 w-3" /></button>
+          </div>
+        ))}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => onChange({ items: [...block.items, { label: "", value: "" }] } as Partial<VisualBlock>)}
+          className="w-full gap-1"
+        >
+          <Plus className="h-3 w-3" /> حقل جديد
+        </Button>
+      </div>
+    );
+  }
+  if (block.type === "summary") {
+    return (
+      <div className="space-y-2">
+        <Label className="text-xs">سطور الملخص</Label>
+        {block.items.map((item, i) => (
+          <div key={i} className="space-y-1 border rounded p-2 bg-background">
+            <div className="flex gap-1">
+              <Input
+                className="text-xs"
+                value={item.label}
+                placeholder="الوصف"
+                onChange={(e) => {
+                  const items = block.items.slice();
+                  items[i] = { ...items[i], label: e.target.value };
+                  onChange({ items } as Partial<VisualBlock>);
+                }}
+              />
+              <Input
+                className="text-xs"
+                value={item.value}
+                placeholder="القيمة"
+                dir="ltr"
+                onChange={(e) => {
+                  const items = block.items.slice();
+                  items[i] = { ...items[i], value: e.target.value };
+                  onChange({ items } as Partial<VisualBlock>);
+                }}
+              />
+            </div>
+            <div className="flex justify-between items-center">
+              <label className="text-[10px] flex items-center gap-1">
+                <input
+                  type="checkbox"
+                  checked={Boolean(item.bold)}
+                  onChange={(e) => {
+                    const items = block.items.slice();
+                    items[i] = { ...items[i], bold: e.target.checked };
+                    onChange({ items } as Partial<VisualBlock>);
+                  }}
+                />
+                إجمالي بارز
+              </label>
+              <button
+                type="button"
+                onClick={() => onChange({ items: block.items.filter((_, j) => j !== i) } as Partial<VisualBlock>)}
+                className="text-red-600 text-xs"
+              >حذف</button>
+            </div>
+          </div>
+        ))}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => onChange({ items: [...block.items, { label: "", value: "" }] } as Partial<VisualBlock>)}
+          className="w-full gap-1"
+        >
+          <Plus className="h-3 w-3" /> سطر جديد
+        </Button>
+      </div>
+    );
+  }
+  if (block.type === "signature") {
+    return (
+      <div className="space-y-2">
+        <Label className="text-xs">أطراف التوقيع</Label>
+        {block.parties.map((p, i) => (
+          <div key={i} className="flex gap-1">
+            <Input
+              className="text-xs"
+              value={p.label}
+              placeholder="مثلاً: توقيع المدير"
+              onChange={(e) => {
+                const parties = block.parties.slice();
+                parties[i] = { label: e.target.value };
+                onChange({ parties } as Partial<VisualBlock>);
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => onChange({ parties: block.parties.filter((_, j) => j !== i) } as Partial<VisualBlock>)}
+              className="text-red-600 px-1"
+            ><Trash2 className="h-3 w-3" /></button>
+          </div>
+        ))}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => onChange({ parties: [...block.parties, { label: "توقيع" }] } as Partial<VisualBlock>)}
+          className="w-full gap-1"
+        >
+          <Plus className="h-3 w-3" /> طرف جديد
+        </Button>
+      </div>
+    );
+  }
+  if (block.type === "qr") {
+    return (
+      <div className="space-y-2">
+        <Label className="text-xs">قيمة الرمز</Label>
+        <Input
+          dir="ltr"
+          value={block.value ?? ""}
+          placeholder="{{entity.zatcaQr}}"
+          onChange={(e) => onChange({ value: e.target.value } as Partial<VisualBlock>)}
+        />
+      </div>
+    );
+  }
+  if (block.type === "spacer") {
+    return (
+      <div className="space-y-2">
+        <Label className="text-xs">الارتفاع (بكسل)</Label>
+        <Input
+          type="number"
+          min={4}
+          max={200}
+          value={block.height}
+          onChange={(e) => onChange({ height: Math.max(4, Math.min(200, Number(e.target.value))) } as Partial<VisualBlock>)}
+        />
+      </div>
+    );
+  }
+  return (
+    <div className="text-xs text-muted-foreground p-2">
+      هذا العنصر يولّد محتواه تلقائياً من إعدادات الفرع/البيانات. لا توجد خصائص للتعديل.
+    </div>
+  );
+}

@@ -13,6 +13,7 @@
  */
 
 import type { BranchLetterhead, RenderContext } from "./types.js";
+import { renderLayoutToHtml } from "./layoutRenderer.js";
 
 function escapeHtml(s: unknown): string {
   if (s === null || s === undefined) return "";
@@ -181,8 +182,13 @@ export function substitute(input: SubstitutionInput): string {
 }
 
 export function renderContextToHtml(ctx: RenderContext): string {
+  // Visual-mode templates store a block tree in layoutJson; convert it to the
+  // same {{token}} HTML shape the preset templates use, then run substitution.
+  const baseTemplate = ctx.template.mode === "visual" && ctx.template.layoutJson
+    ? renderLayoutToHtml(ctx.template.layoutJson)
+    : ctx.template.htmlContent ?? "";
   return substitute({
-    template: ctx.template.htmlContent ?? "",
+    template: baseTemplate,
     data: ctx.data,
     branch: ctx.branch,
     isThermal: ctx.template.isThermal || ctx.format.startsWith("thermal"),
