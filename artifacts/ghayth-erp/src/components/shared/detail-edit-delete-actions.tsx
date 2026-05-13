@@ -9,6 +9,7 @@ import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { Pencil, Trash2, Check, X, Loader2 } from "lucide-react";
 import { apiPatch, apiDelete, getErrorMessage } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { usePermission } from "@/components/shared/permission-gate";
 
 export type EditFieldDef = {
   key: string;
@@ -142,24 +143,35 @@ export type DetailEditDeleteHook = ReturnType<typeof useDetailEditDelete>;
 export function DetailActionButtons({
   hook,
   extra,
+  editPerm,
+  deletePerm,
 }: {
   hook: DetailEditDeleteHook;
   extra?: ReactNode;
+  editPerm?: string;
+  deletePerm?: string;
 }) {
+  const canEdit = usePermission(editPerm ?? "");
+  const canDelete = usePermission(deletePerm ?? "");
+  const showEdit = editPerm ? canEdit : true;
+  const showDelete = deletePerm ? canDelete : true;
+
   return (
     <div className="flex items-center gap-2 flex-wrap">
       {extra}
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={hook.startEdit}
-        title="تعديل"
-        disabled={hook.editing}
-      >
-        <Pencil className="h-4 w-4 me-1" />
-        تعديل
-      </Button>
-      {hook.deleting ? (
+      {showEdit && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={hook.startEdit}
+          title="تعديل"
+          disabled={hook.editing}
+        >
+          <Pencil className="h-4 w-4 me-1" />
+          تعديل
+        </Button>
+      )}
+      {showDelete && (hook.deleting ? (
         <div className="flex items-center gap-2">
           <Button
             variant="destructive"
@@ -195,7 +207,7 @@ export function DetailActionButtons({
           <Trash2 className="h-4 w-4 me-1" />
           حذف
         </Button>
-      )}
+      ))}
     </div>
   );
 }

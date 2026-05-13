@@ -373,7 +373,8 @@ router.patch("/enrollments/:id", authorize({ feature: "hr.training", action: "up
     if (b.score !== undefined) { params.push(b.score); sets.push(`score=$${params.length}`); }
     if (sets.length === 0) { res.json(existing); return; }
     params.push(id);
-    await rawExecute(`UPDATE training_enrollments SET ${sets.join(",")} WHERE id=$${params.length} AND "deletedAt" IS NULL`, params);
+    params.push(scope.companyId);
+    await rawExecute(`UPDATE training_enrollments SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "deletedAt" IS NULL AND "programId" IN (SELECT id FROM training_programs WHERE "companyId"=$${params.length})`, params);
     const [row] = await rawQuery<TrainingEnrollmentRow>(`SELECT e.* FROM training_enrollments e JOIN training_programs tp ON e."programId"=tp.id WHERE e.id=$1 AND tp."companyId"=$2 AND e."deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
