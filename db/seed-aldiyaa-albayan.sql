@@ -164,8 +164,50 @@ BEGIN
     );
   END IF;
 
+  -- 3c. Umrah activity under Al-Door Al-Hadithah
+  IF NOT EXISTS (
+    SELECT 1 FROM branches
+     WHERE "companyId" = v_company_id
+       AND name = 'الدور الحديثة — نشاط العمرة'
+  ) THEN
+    INSERT INTO branches (
+      "companyId", name, "nameEn", "crNumber", "taxNumber",
+      city, status, "footerText"
+    ) VALUES (
+      v_company_id,
+      'الدور الحديثة — نشاط العمرة',
+      'Al-Door — Umrah Activity',
+      '4031255541',
+      '7026091814',
+      'محافظة رماح',
+      'active',
+      'نشاط العمرة تحت مؤسسة الدور الحديثة للتطوير العقاري'
+    );
+  END IF;
+
+  -- 3d. Hotels activity under Al-Door Al-Hadithah
+  IF NOT EXISTS (
+    SELECT 1 FROM branches
+     WHERE "companyId" = v_company_id
+       AND name = 'الدور الحديثة — نشاط الفنادق'
+  ) THEN
+    INSERT INTO branches (
+      "companyId", name, "nameEn", "crNumber", "taxNumber",
+      city, status, "footerText"
+    ) VALUES (
+      v_company_id,
+      'الدور الحديثة — نشاط الفنادق',
+      'Al-Door — Hotels Activity',
+      '4031255541',
+      '7026091814',
+      'محافظة رماح',
+      'active',
+      'نشاط الفنادق تحت مؤسسة الدور الحديثة للتطوير العقاري'
+    );
+  END IF;
+
   ------------------------------------------------------------------
-  -- 3c. Additional taxpayer branches from the ZATCA VAT certificate:
+  -- 3e. Additional taxpayer branches from the ZATCA VAT certificate:
   --       - مؤسسة الضياء والبيان للنقليات — مكة المكرمة  (موحد 7026091798)
   --       - مؤسسة الضياء والبيان للنقليات — حفر الباطن (موحد 7033364436)
   ------------------------------------------------------------------

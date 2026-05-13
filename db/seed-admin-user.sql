@@ -34,16 +34,16 @@ BEGIN
   SELECT id INTO v_company_id FROM companies ORDER BY id LIMIT 1;
 
   IF v_company_id IS NULL THEN
-    INSERT INTO companies (name, "nameEn", currency, timezone, status)
-    VALUES ('شركة الاختبار', 'Test Company', 'SAR', 'Asia/Riyadh', 'active')
+    INSERT INTO companies (name, "nameEn", "functionalCurrency", status)
+    VALUES ('شركة الاختبار', 'Test Company', 'SAR', 'active')
     RETURNING id INTO v_company_id;
   END IF;
 
   SELECT id INTO v_branch_id FROM branches WHERE "companyId" = v_company_id ORDER BY id LIMIT 1;
 
   IF v_branch_id IS NULL THEN
-    INSERT INTO branches ("companyId", name, "nameEn", "isActive")
-    VALUES (v_company_id, 'الفرع الرئيسي', 'Head Office', true)
+    INSERT INTO branches ("companyId", name, "nameEn", status)
+    VALUES (v_company_id, 'الفرع الرئيسي', 'Head Office', 'active')
     RETURNING id INTO v_branch_id;
   END IF;
 

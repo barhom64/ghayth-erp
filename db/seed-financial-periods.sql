@@ -23,8 +23,7 @@ SELECT
   NOW(),
   NOW()
 FROM public.companies c
-WHERE c."deletedAt" IS NULL
-  AND NOT EXISTS (
+WHERE NOT EXISTS (
     SELECT 1
     FROM public.financial_periods fp
     WHERE fp."companyId" = c.id
