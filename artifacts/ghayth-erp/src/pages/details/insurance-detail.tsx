@@ -297,7 +297,7 @@ export default function InsuranceDetail() {
               sections={printSections}
             />
           )}
-          <DetailActionButtons hook={editDelete} />
+          <DetailActionButtons hook={editDelete} editPerm="fleet:update" deletePerm="fleet:delete" />
         </>
       }
     />

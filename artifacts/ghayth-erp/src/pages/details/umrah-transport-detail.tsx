@@ -142,6 +142,8 @@ export default function UmrahTransportDetail() {
       actions={
         <DetailActionButtons
           hook={editDelete}
+          editPerm="umrah:update"
+          deletePerm="umrah:delete"
           extra={item ? <Badge className="text-sm px-3 py-1">{st.label}</Badge> : null}
         />
       }

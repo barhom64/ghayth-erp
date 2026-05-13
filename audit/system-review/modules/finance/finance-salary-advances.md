@@ -23,13 +23,27 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/finance.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+السلف على الراتب (Salary Advances) — تختلف عن `hr-loans.md`:
+- **Salary advance**: دفعة من راتب نفس الشهر، يُخصم بالكامل في payroll القادم
+- **Loan**: قرض متعدد الأقساط
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| طلب سلفة راتب | POST `/finance/salary-advances` | `salary_advances` (entity مضاف لـ ENTITY_MAP) | ✅ |
+| Limit check (max 50% of basic) | finance | guard في validation | ⚠ تحقق |
+| سير موافقة (per amount threshold) | governance/workflows | عادة direct manager + HR | `approval_chains` | ✅ |
+| **قيد محاسبي عند الصرف** | finance/GL | DR Salary Advance Receivable / CR Cash | `gl_entries` | ✅ |
+| الخصم في مسير الراتب التالي | hr/payroll | `payroll_lines.salaryAdvanceDeduction` | full deduction | راجع `hr-payroll.md` | ✅ |
+| **قيد عكسي** عند الخصم | finance/GL | DR Salary Expense / CR Salary Advance Receivable | يحدث ضمن قيد الـ payroll | ⚠ تحقق |
+| سلفة بدون استرداد (للحالات الخاصة) | finance | يحتاج موافقة CFO + يُسجَّل كـ bonus | ⚠ |
+| تأثير على رصيد الموظف للسلف | finance/custodies-like | aggregate | ⚠ |
+| Audit log | core | `auditMiddleware` (`/finance/salary-advances`) | ✅ موجود في ENTITY_MAP |
+| إشعار للـ Finance Manager + HR | comms | event=`salary_advance_approved` | `notifications` | ✅ |
+
+تحقق يدوي:
+- [ ] هل سلفة جديدة قبل خصم السابقة محظورة؟
+- [ ] هل غير المسددة عند الاستقالة تُخصم من gratuity تلقائياً؟
+- [ ] هل الفرق بين advance و loan واضح في الـ UX للمستخدم؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `salary-advances` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

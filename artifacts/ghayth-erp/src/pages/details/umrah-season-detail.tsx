@@ -216,6 +216,8 @@ export default function UmrahSeasonDetail() {
       actions={
         <DetailActionButtons
           hook={editDelete}
+          editPerm="umrah:update"
+          deletePerm="umrah:delete"
           extra={
             <EntityPrintButton
               branchId={season?.branchId}

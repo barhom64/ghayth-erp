@@ -27,13 +27,34 @@
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/hr.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+نقل الموظفين بين أقسام/فروع/شركات.
+
+| النوع | المثال |
+|------|--------|
+| Department transfer | داخل نفس الفرع، قسم آخر |
+| Branch transfer | فرع آخر داخل نفس الشركة |
+| Inter-company transfer | شركة أخرى داخل نفس الـ holding |
+| Promotion (with transfer) | منصب جديد + قسم/فرع |
+| Demotion | منصب أقل |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| طلب نقل (يدوي أو HR-driven) | POST `/hr/transfers` | `employee_transfers` | ✅ |
+| سير موافقة (المدير الحالي + الجديد + HR) | governance | `approval_chains` (3 طبقات) | ✅ |
+| تحديث `employee_assignments` | hr | عند الاعتماد → row جديد + close القديم | atomic | ✅ |
+| تأثير على الراتب (لو تغيير) | hr/payroll | `salary_components` per assignment | ⚠ تحقق |
+| تأثير على ميزانية القسم | راجع `finance-budget.md` | الراتب يخصم من قسم آخر | ⚠ |
+| تأثير على approval chains | governance | إعادة بناء `chains.managerId` للموظف | ✅ |
+| إشعار للأطراف المعنية | comms | event=`transfer_requested\|approved\|effective` | `notifications` | ✅ |
+| تكامل GOSI/قوى (للنقل بين شركات) | gov-integrations | تحديث registration | ⚠ يدوي |
+| توليد قرار النقل (مستند) | documents | template + توقيع رقمي | ✅ |
+| ربط بـ promotion bonus (لو مطبق) | hr/payroll | one-time `payroll_lines` | ⚠ |
+| Audit log إجباري | core | `audit_logs` (entity=`employee_transfer`) | ⚠ تحقق |
+
+تحقق يدوي:
+- [ ] هل النقل يطبق فوراً أم في تاريخ effective محدد؟
+- [ ] هل overlap بين assignments قديم/جديد ممكن أم محظور؟
+- [ ] هل النقل بين شركات يتطلب gratuity settlement من الشركة الأولى؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `transfers` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

@@ -279,6 +279,7 @@ function ProjectListTab() {
             canEdit={canManage}
             onEdit={() => startEdit(p.id, { name: p.name, budget: p.budget || 0, progress: p.progress || 0, status: p.status || "active" })}
             onDelete={() => startDelete(p.id)}
+            deletePerm="projects:delete"
           />
         </div>
       ),

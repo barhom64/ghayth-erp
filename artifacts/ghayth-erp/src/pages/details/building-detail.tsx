@@ -176,6 +176,8 @@ export default function BuildingDetail() {
   const actions = (
     <DetailActionButtons
       hook={editDelete}
+      editPerm="properties:update"
+      deletePerm="properties:delete"
       extra={
         <Badge variant="outline">
           {building?.type === "residential" ? "سكني" : building?.type === "commercial" ? "تجاري" : building?.type === "mixed" ? "مختلط" : building?.type}

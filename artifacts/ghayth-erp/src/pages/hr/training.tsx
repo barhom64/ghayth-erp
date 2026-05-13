@@ -99,6 +99,7 @@ export default function TrainingPage() {
             canEdit={canManage}
             onEdit={() => enrollmentActions.startEdit(e.id, { status: e.status || "enrolled", score: e.score || 0 })}
             onDelete={() => enrollmentActions.startDelete(e.id)}
+            deletePerm="hr:delete"
           />
         </div>
       ),
@@ -175,6 +176,7 @@ export default function TrainingPage() {
                         canEdit={canManage}
                         onEdit={() => programActions.startEdit(t.id, { title: t.title, trainer: t.trainer || "", location: t.location || "", capacity: t.capacity || t.maxParticipants || 0, status: t.status || "planned" })}
                         onDelete={() => programActions.startDelete(t.id)}
+                        deletePerm="hr:delete"
                       />
                     </div>
                   </div>

@@ -23,13 +23,31 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/hr.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+تفاصيل طلب overtime واحد — يكمّل `hr-overtime.md` على مستوى الـ entity.
+
+| المحتوى | الوصف |
+|------|------|
+| Hours requested | الساعات المطلوبة |
+| Reason | سبب الـ overtime |
+| Approval chain | راجع `hr-overtime.md` |
+| Approval history | كل خطوة + التاريخ + المُقيّم |
+| Computed cost | hours × hourly_rate × multiplier (1.5 أو 2.0) |
+| Linked attendance | لو موجود check-in/out يطابق الفترة |
+| Status | pending/approved/rejected/paid |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| عرض التفاصيل | GET `/hr/overtime/:id` | `hr_overtime` + joins | ✅ |
+| موافقة/رفض | راجع `requests-byid.md` | ✅ |
+| تعديل بعد التقديم (قبل الاعتماد) | hr | PATCH `/hr/overtime/:id` | ⚠ يحتاج التحقق |
+| Linked to attendance auto-match | hr | راجع `hr-attendance.md` | ✅ |
+| تأثير على payroll | hr/payroll | راجع `hr-overtime.md` و `hr-payroll.md` | ✅ |
+| إشعارات | راجع `hr-overtime.md` | ✅ |
+| Audit log | `auditMiddleware` (`/hr/overtime` لو مضاف) | ⚠ |
+
+تحقق يدوي:
+- [ ] هل تعديل overtime مُعتمد يحتاج re-approval؟
+- [ ] هل overtime لـ ساعات غير actual (تم check-out قبلها) يُكتشف؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `:id` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

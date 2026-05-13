@@ -220,6 +220,7 @@ export default function Employees() {
               })
             }
             onDelete={() => startDelete(employee.id)}
+            deletePerm="hr:delete"
           />
           <Button
             variant="ghost"

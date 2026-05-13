@@ -109,6 +109,7 @@ function ProductsTab() {
           canEdit={canManage}
           onEdit={() => startEdit(p.id, { name: p.name, sku: p.sku || "", minStock: p.minStock || 0, costPrice: p.costPrice || 0, sellPrice: p.sellPrice || 0, status: p.status || "active" })}
           onDelete={() => startDelete(p.id)}
+          deletePerm="warehouse:delete"
         />
       ),
     },
