@@ -91,8 +91,9 @@ async function buildScope(payload: JWTPayload): Promise<RequestScope> {
        LEFT JOIN branches b ON b.id = ea."branchId"
       WHERE ea."employeeId" = $1
         AND ea.status = 'active'
+        AND ea."companyId" = $2
         AND (ea."branchId" IS NULL OR COALESCE(b.status, 'active') = 'active')`,
-    [assignment.employeeId]
+    [assignment.employeeId, assignment.companyId]
   );
 
   const allowedCompanies = [...new Set(allAssignments.map((a) => a.companyId))];
