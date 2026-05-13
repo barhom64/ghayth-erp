@@ -23,13 +23,32 @@ _لم تُلتقط أزرار._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/finance.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+الطلبات المالية (Financial Requests) — مظلّة عامة لكل طلب يحتاج صرف مالي.
+
+| النوع | المثال | الإحالة |
+|------|--------|---------|
+| Cash advance | عهدة طارئة للموظف | راجع `finance-custodies.md` |
+| Petty cash request | شراء صغير | finance/expenses |
+| Salary advance | سلفة على الراتب | راجع `finance-salary-advances.md` |
+| Vendor prepayment | دفعة مقدّمة لمورد | finance/vendors |
+| Reimbursement | استرداد نفقات شخصية | finance/expenses |
+| Inter-company transfer | راجع `finance-intercompany.md` |
+| Emergency fund | احتياطي عاجل | manual workflow |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| تقديم الطلب | POST `/financial-requests` | `financial_requests` | ✅ |
+| سير موافقة (per type threshold) | governance/workflows | راجع `business_rules` | ✅ |
+| Convert إلى entity مناسب (مصروف/عهدة/...) | متغيّر | عند الاعتماد → يولّد الـ entity النهائي | ⚠ تحقق |
+| **قيد محاسبي** عند الصرف | finance/GL | متغيّر حسب النوع | راجع كل entity في الجدول | ✅ |
+| تذكير بـ السداد (للسلف) | comms | cron | راجع `notifications` | ✅ |
+| تتبّع SLA | requests | عبر workflow | ✅ |
+| Audit log إجباري | core | `audit_logs` | ✅ |
+
+تحقق يدوي:
+- [ ] هل الطلب المُعتمد ولم يُصرف لـ X أيام يُلغى تلقائياً؟
+- [ ] هل تصنيف الطلب الخاطئ (cash advance بدل salary advance) يطلق تنبيه؟
+- [ ] هل العميل/الموظف نفسه له طلب مفتوح يمنع طلباً ثانياً (دvalidation)؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `financial-requests` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
