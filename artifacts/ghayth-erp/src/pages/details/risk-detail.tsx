@@ -163,14 +163,14 @@ export default function RiskDetail() {
   // Highlight the current risk cell.
   const matrix = (
     <div className="space-y-2">
-      <div className="text-xs text-gray-500">مصفوفة المخاطر (الاحتمالية × الأثر)</div>
+      <div className="text-xs text-muted-foreground">مصفوفة المخاطر (الاحتمالية × الأثر)</div>
       <div className="overflow-x-auto">
         <table className="text-[10px] border-collapse">
           <thead>
             <tr>
               <th className="p-1"></th>
               {LIKELIHOOD_ORDER.map((lk) => (
-                <th key={lk} className="p-1 text-gray-600 font-normal">
+                <th key={lk} className="p-1 text-muted-foreground font-normal">
                   {LIKELIHOOD_LABELS[lk]}
                 </th>
               ))}
@@ -179,7 +179,7 @@ export default function RiskDetail() {
           <tbody>
             {[...IMPACT_ORDER].reverse().map((imp) => (
               <tr key={imp}>
-                <th className="p-1 text-gray-600 font-normal text-right pe-2">
+                <th className="p-1 text-muted-foreground font-normal text-right pe-2">
                   {SEVERITY_LABELS[imp]}
                 </th>
                 {LIKELIHOOD_ORDER.map((lk) => {
@@ -209,7 +209,7 @@ export default function RiskDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-gray-500" />
+            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
             بيانات المخاطرة
           </CardTitle>
         </CardHeader>
@@ -217,13 +217,13 @@ export default function RiskDetail() {
           <div className="grid grid-cols-2 gap-3">
             {risk?.category && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">التصنيف</p>
+                <p className="text-xs text-muted-foreground mb-0.5">التصنيف</p>
                 <Badge variant="outline">{risk.category}</Badge>
               </div>
             )}
             {risk?.likelihood && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الاحتمالية</p>
+                <p className="text-xs text-muted-foreground mb-0.5">الاحتمالية</p>
                 <Badge variant="secondary">
                   {LIKELIHOOD_LABELS[risk.likelihood] || risk.likelihood}
                 </Badge>
@@ -231,7 +231,7 @@ export default function RiskDetail() {
             )}
             {risk?.impact && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الأثر</p>
+                <p className="text-xs text-muted-foreground mb-0.5">الأثر</p>
                 <Badge variant={severityTone(risk.impact) === "destructive" ? "destructive" : "outline"}>
                   {SEVERITY_LABELS[risk.impact] || risk.impact}
                 </Badge>
@@ -239,7 +239,7 @@ export default function RiskDetail() {
             )}
             {riskScore > 0 && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">درجة المخاطرة</p>
+                <p className="text-xs text-muted-foreground mb-0.5">درجة المخاطرة</p>
                 <span
                   className={`inline-block px-2 py-0.5 rounded font-bold text-xs ${severityCellColor(
                     riskScore
@@ -251,42 +251,42 @@ export default function RiskDetail() {
             )}
             {(risk?.owner || risk?.ownerName) && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">المسؤول</p>
-                <span className="text-gray-800">{risk.owner || risk.ownerName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">المسؤول</p>
+                <span className="text-status-neutral-foreground">{risk.owner || risk.ownerName}</span>
               </div>
             )}
             {(risk?.department || risk?.departmentName) && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">القسم</p>
-                <span className="text-gray-800">{risk.department || risk.departmentName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">القسم</p>
+                <span className="text-status-neutral-foreground">{risk.department || risk.departmentName}</span>
               </div>
             )}
             {risk?.reviewDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ المراجعة</p>
-                <span className="text-gray-800">{formatDateAr(risk.reviewDate)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ المراجعة</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(risk.reviewDate)}</span>
               </div>
             )}
           </div>
 
           {risk?.description && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">وصف المخاطرة</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{risk.description}</p>
+              <p className="text-xs text-muted-foreground mb-1">وصف المخاطرة</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{risk.description}</p>
             </div>
           )}
 
           {risk?.mitigationPlan && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">خطة التخفيف</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{risk.mitigationPlan}</p>
+              <p className="text-xs text-muted-foreground mb-1">خطة التخفيف</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{risk.mitigationPlan}</p>
             </div>
           )}
 
           {risk?.residualRisk && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">المخاطر المتبقية</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{risk.residualRisk}</p>
+              <p className="text-xs text-muted-foreground mb-1">المخاطر المتبقية</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{risk.residualRisk}</p>
             </div>
           )}
         </CardContent>
@@ -307,14 +307,14 @@ export default function RiskDetail() {
           <CardContent className="space-y-2 text-sm">
             {risk?.createdAt && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ الإنشاء</p>
-                <span className="text-gray-800">{formatDateAr(risk.createdAt)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ الإنشاء</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(risk.createdAt)}</span>
               </div>
             )}
             {risk?.createdByName && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">أنشئ بواسطة</p>
-                <span className="text-gray-800">{risk.createdByName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">أنشئ بواسطة</p>
+                <span className="text-status-neutral-foreground">{risk.createdByName}</span>
               </div>
             )}
           </CardContent>

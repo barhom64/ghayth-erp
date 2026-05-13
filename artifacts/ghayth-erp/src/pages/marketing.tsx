@@ -44,10 +44,10 @@ function FunnelTab() {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><BarChart2 className="h-5 w-5 text-blue-600" />قمع المبيعات (مسار علاقات العملاء)</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><BarChart2 className="h-5 w-5 text-status-info-foreground" />قمع المبيعات (مسار علاقات العملاء)</CardTitle></CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="h-32 bg-gray-100 rounded animate-pulse" />
+            <div className="h-32 bg-surface-subtle rounded animate-pulse" />
           ) : (
             <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
               {stages.map((s: any, i: number) => {
@@ -61,8 +61,8 @@ function FunnelTab() {
                         style={{ height: `${Math.max(pct, 4)}%` }}
                       />
                     </div>
-                    <p className="text-sm font-semibold text-gray-800">{s.count}</p>
-                    <p className="text-xs text-gray-500">{STAGE_LABELS[s.stage] || s.stage}</p>
+                    <p className="text-sm font-semibold text-status-neutral-foreground">{s.count}</p>
+                    <p className="text-xs text-muted-foreground">{STAGE_LABELS[s.stage] || s.stage}</p>
                     {s.conversionFromPrev && (
                       <p className="text-[10px] text-emerald-600 mt-0.5">↑ {s.conversionFromPrev}%</p>
                     )}
@@ -86,14 +86,14 @@ function FunnelTab() {
               columns={[
                 { key: "source", header: "المصدر", className: "font-medium", render: (sf) => SOURCE_LABELS[sf.source] || sf.source },
                 { key: "total", header: "إجمالي العملاء", render: (sf) => sf.total },
-                { key: "won", header: "فرص ناجحة", className: "text-green-700", render: (sf) => sf.won },
+                { key: "won", header: "فرص ناجحة", className: "text-status-success-foreground", render: (sf) => sf.won },
                 {
                   key: "rate",
                   header: "معدل التحويل",
                   render: (sf) => {
                     const rate = sf.total > 0 ? ((sf.won / sf.total) * 100).toFixed(1) : "0";
                     return (
-                      <span className={cn("text-sm font-medium", Number(rate) >= 50 ? "text-green-600" : Number(rate) >= 25 ? "text-amber-600" : "text-red-600")}>
+                      <span className={cn("text-sm font-medium", Number(rate) >= 50 ? "text-status-success-foreground" : Number(rate) >= 25 ? "text-status-warning-foreground" : "text-status-error-foreground")}>
                         {rate}%
                       </span>
                     );
@@ -166,10 +166,10 @@ function CampaignsTab() {
         const revenue = Number(c.revenue) || 0;
         const roas = spent > 0 ? (revenue / spent).toFixed(2) : null;
         return roas ? (
-          <span className={cn("text-sm font-medium", Number(roas) >= 3 ? "text-green-600" : Number(roas) >= 1 ? "text-amber-600" : "text-red-600")}>
+          <span className={cn("text-sm font-medium", Number(roas) >= 3 ? "text-status-success-foreground" : Number(roas) >= 1 ? "text-status-warning-foreground" : "text-status-error-foreground")}>
             {roas}×
           </span>
-        ) : <span className="text-gray-400">—</span>;
+        ) : <span className="text-muted-foreground">—</span>;
       },
     },
     { key: "createdAt", header: "التاريخ", sortable: true, render: (c) => formatDateAr(c.createdAt) },
@@ -198,18 +198,18 @@ function CampaignsTab() {
     <div className="space-y-6">
       <KpiGrid items={[
         { label: "إجمالي الحملات", value: s.totalCampaigns || 0, icon: Megaphone, color: "text-pink-600 bg-pink-50" },
-        { label: "نشطة", value: s.activeCampaigns || 0, icon: CheckCircle, color: "text-green-600 bg-green-50" },
-        { label: "مكتملة", value: s.completedCampaigns || 0, icon: Target, color: "text-blue-600 bg-blue-50" },
+        { label: "نشطة", value: s.activeCampaigns || 0, icon: CheckCircle, color: "text-status-success-foreground bg-status-success-surface" },
+        { label: "مكتملة", value: s.completedCampaigns || 0, icon: Target, color: "text-status-info-foreground bg-status-info-surface" },
         { label: "إجمالي العملاء المحتملين", value: s.totalLeads || 0, icon: Users, color: "text-purple-600 bg-purple-50" },
       ]} />
 
       {s.sourceCounts && s.sourceCounts.length > 0 && (
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
-            <p className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2"><Users className="h-4 w-4" />مصادر العملاء</p>
+            <p className="text-sm font-medium text-status-neutral-foreground mb-3 flex items-center gap-2"><Users className="h-4 w-4" />مصادر العملاء</p>
             <div className="flex flex-wrap gap-2">
               {s.sourceCounts.map((sc: any) => (
-                <span key={sc.source} className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full">
+                <span key={sc.source} className="text-xs bg-status-info-surface text-status-info-foreground px-2 py-1 rounded-full">
                   {SOURCE_LABELS[sc.source] || sc.source}: {sc.count}
                 </span>
               ))}

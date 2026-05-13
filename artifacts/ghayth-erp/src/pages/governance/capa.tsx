@@ -28,8 +28,8 @@ const columns: DataTableColumn<CapaItem>[] = [
   {
     key: "status", header: "الحالة", render: (r) => {
       const v = r.status;
-      const colors: Record<string, string> = { open: "bg-yellow-100 text-yellow-800", in_progress: "bg-blue-100 text-blue-800", closed: "bg-green-100 text-green-800" };
-      return <Badge className={colors[v || ""] || "bg-gray-100 text-gray-800"}>{v === "open" ? "مفتوح" : v === "in_progress" ? "قيد التنفيذ" : v === "closed" ? "مغلق" : v || "-"}</Badge>;
+      const colors: Record<string, string> = { open: "bg-status-warning-surface text-yellow-800", in_progress: "bg-status-info-surface text-status-info-foreground", closed: "bg-status-success-surface text-status-success-foreground" };
+      return <Badge className={colors[v || ""] || "bg-surface-subtle text-status-neutral-foreground"}>{v === "open" ? "مفتوح" : v === "in_progress" ? "قيد التنفيذ" : v === "closed" ? "مغلق" : v || "-"}</Badge>;
     }
   },
   { key: "completedAt", header: "تاريخ الإغلاق", render: (r) => formatDateAr(r.completedAt) },

@@ -277,7 +277,7 @@ export function WorkflowDefinitionsTab() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <Workflow className="h-4 w-4 text-blue-500" />
+                  <Workflow className="h-4 w-4 text-status-info" />
                   <span className="font-semibold">{def.requestTypeLabel}</span>
                   <Badge variant="outline" className="text-xs">{def.requestType}</Badge>
                   <Badge variant={def.isActive ? "default" : "secondary"} className="text-xs">
@@ -287,11 +287,11 @@ export function WorkflowDefinitionsTab() {
                 </div>
                 <div className="flex gap-1">
                   <Button variant="ghost" size="sm" onClick={() => handleEdit(def)}><Pencil className="h-4 w-4" /></Button>
-                  <GuardedButton perm="settings:create" variant="ghost" size="sm" className="text-red-500" onClick={() => setDeletingDef({ id: def.id, label: def.requestTypeLabel || def.requestType || "—" })}><Trash2 className="h-4 w-4" /></GuardedButton>
+                  <GuardedButton perm="settings:create" variant="ghost" size="sm" className="text-status-error" onClick={() => setDeletingDef({ id: def.id, label: def.requestTypeLabel || def.requestType || "—" })}><Trash2 className="h-4 w-4" /></GuardedButton>
                 </div>
               </div>
-              {def.description && <p className="text-sm text-gray-500 mb-2">{def.description}</p>}
-              <div className="flex items-center gap-2 text-xs text-gray-500">
+              {def.description && <p className="text-sm text-muted-foreground mb-2">{def.description}</p>}
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Clock className="h-3 w-3" />
                 <span>المهلة: {def.defaultSlaHours} ساعة</span>
                 <span className="mx-1">|</span>
@@ -302,7 +302,7 @@ export function WorkflowDefinitionsTab() {
           </Card>
         ))}
         {defs.length === 0 && !showForm && (
-          <Card><CardContent className="p-8 text-center text-gray-400">
+          <Card><CardContent className="p-8 text-center text-muted-foreground">
             لا توجد تعريفات إجراءات. أضف تعريفاً جديداً لتبدأ.
           </CardContent></Card>
         )}
@@ -398,8 +398,8 @@ function StepsEditor({ roles }: { roles: { value: string; label: string }[] }) {
       </div>
       <div className="space-y-3">
         {fields.map((field, idx) => (
-          <div key={field.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-sm font-bold shrink-0">
+          <div key={field.id} className="flex items-center gap-3 p-3 bg-surface-subtle rounded-lg">
+            <div className="w-8 h-8 rounded-full bg-status-info-surface flex items-center justify-center text-status-info-foreground text-sm font-bold shrink-0">
               {idx + 1}
             </div>
             <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-2">
@@ -419,7 +419,7 @@ function StepsEditor({ roles }: { roles: { value: string; label: string }[] }) {
                 type="button"
                 size="sm"
                 variant="ghost"
-                className="text-red-500 shrink-0"
+                className="text-status-error shrink-0"
                 onClick={() => remove(idx)}
               >
                 <Trash2 className="h-4 w-4" />

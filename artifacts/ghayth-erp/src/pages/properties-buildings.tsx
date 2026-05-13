@@ -54,7 +54,7 @@ export default function PropertiesBuildings() {
       label: "إجمالي المباني",
       value: buildings.length,
       icon: Building2,
-      color: "text-blue-600 bg-blue-50",
+      color: "text-status-info-foreground bg-status-info-surface",
     },
     {
       label: "إجمالي الوحدات",
@@ -72,7 +72,7 @@ export default function PropertiesBuildings() {
       label: "إجمالي الإيرادات",
       value: formatCurrency(totalRevenue),
       icon: TrendingUp,
-      color: "text-green-600 bg-green-50",
+      color: "text-status-success-foreground bg-status-success-surface",
     },
   ];
 
@@ -85,12 +85,12 @@ export default function PropertiesBuildings() {
         <div className="min-w-0">
           <span className="font-medium text-sm block truncate">{b.name}</span>
           {b.address && (
-            <span className="text-xs text-gray-400 truncate block">
+            <span className="text-xs text-muted-foreground truncate block">
               {b.address}{b.city ? ` — ${b.city}` : ""}
             </span>
           )}
           {b.deedNumber && (
-            <span className="text-[10px] text-gray-400">صك: {b.deedNumber}</span>
+            <span className="text-[10px] text-muted-foreground">صك: {b.deedNumber}</span>
           )}
         </div>
       ),
@@ -120,7 +120,7 @@ export default function PropertiesBuildings() {
       sortable: true,
       align: "center",
       render: (b) => (
-        <span className="text-sm font-semibold text-blue-600">{b.rentedUnits || 0}</span>
+        <span className="text-sm font-semibold text-status-info-foreground">{b.rentedUnits || 0}</span>
       ),
     },
     {
@@ -142,11 +142,11 @@ export default function PropertiesBuildings() {
           <div className="min-w-[80px]">
             <span className={cn(
               "text-sm font-bold",
-              occupancy >= 80 ? "text-emerald-600" : occupancy >= 50 ? "text-amber-600" : "text-red-500"
+              occupancy >= 80 ? "text-emerald-600" : occupancy >= 50 ? "text-status-warning-foreground" : "text-status-error"
             )}>
               {occupancy}%
             </span>
-            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mt-1">
+            <div className="h-1.5 bg-surface-subtle rounded-full overflow-hidden mt-1">
               <div
                 className={cn(
                   "h-full rounded-full transition-all",
@@ -164,7 +164,7 @@ export default function PropertiesBuildings() {
       header: "الإيرادات",
       sortable: true,
       render: (b) => (
-        <span className={cn("text-sm font-semibold", b.totalRevenue > 0 ? "text-emerald-600" : "text-gray-400")}>
+        <span className={cn("text-sm font-semibold", b.totalRevenue > 0 ? "text-emerald-600" : "text-muted-foreground")}>
           {b.totalRevenue > 0 ? formatCurrency(b.totalRevenue) : "-"}
         </span>
       ),

@@ -51,7 +51,7 @@ export function PropertyOccupancyTab() {
           { key: "buildingName", header: "المبنى", sortable: true, searchable: true, className: "font-medium", render: (r) => r.buildingName },
           { key: "totalUnits", header: "إجمالي الوحدات", sortable: true, render: (r) => r.totalUnits },
           { key: "occupiedUnits", header: "مؤجرة", sortable: true, className: "text-emerald-600", render: (r) => r.occupiedUnits },
-          { key: "vacantUnits", header: "شاغرة", sortable: true, className: "text-red-600", render: (r) => r.vacantUnits },
+          { key: "vacantUnits", header: "شاغرة", sortable: true, className: "text-status-error-foreground", render: (r) => r.vacantUnits },
           {
             key: "occupancyRate",
             header: "نسبة الإشغال",
@@ -66,7 +66,7 @@ export function PropertyOccupancyTab() {
             ),
           },
           { key: "avgMonthlyRent", header: "متوسط الإيجار", sortable: true, render: (r) => formatNumber(r.avgMonthlyRent) },
-          { key: "totalMonthlyRevenue", header: "الإيرادات الشهرية", sortable: true, className: "text-blue-600 font-medium", render: (r) => formatNumber(r.totalMonthlyRevenue) },
+          { key: "totalMonthlyRevenue", header: "الإيرادات الشهرية", sortable: true, className: "text-status-info-foreground font-medium", render: (r) => formatNumber(r.totalMonthlyRevenue) },
           { key: "annualRevenue", header: "الإيرادات السنوية", sortable: true, className: "text-indigo-600 font-medium", render: (r) => formatNumber(r.annualRevenue) },
         ]}
       />

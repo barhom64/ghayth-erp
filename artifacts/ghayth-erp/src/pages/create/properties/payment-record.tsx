@@ -76,17 +76,17 @@ export default function PaymentRecord() {
       backPath="/properties/contracts"
     >
       {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="space-y-4">
         <h3 className="flex items-center gap-2 text-lg font-semibold">
-          <CreditCard className="h-5 w-5 text-blue-500" /> بيانات الدفعة
+          <CreditCard className="h-5 w-5 text-status-info" /> بيانات الدفعة
         </h3>
         {installment && (
-            <div className="bg-blue-50 rounded-lg p-3 text-sm space-y-1">
+            <div className="bg-status-info-surface rounded-lg p-3 text-sm space-y-1">
               <p>تاريخ الاستحقاق: <strong>{formatDateAr(installment.dueDate)}</strong></p>
               <p>المبلغ المطلوب: <strong>{formatCurrency(installment.amount)}</strong></p>
             </div>

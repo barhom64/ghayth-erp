@@ -33,7 +33,7 @@ export function ActiveLoansCard({ activeLoans }: ActiveLoansCardProps) {
           <Wallet className="w-5 h-5 text-orange-500" />
           سلفي النشطة
           {totalRemaining > 0 && (
-            <span className="text-xs font-normal text-gray-500">
+            <span className="text-xs font-normal text-muted-foreground">
               (متبقي: {formatCurrency(totalRemaining)})
             </span>
           )}
@@ -54,22 +54,22 @@ export function ActiveLoansCard({ activeLoans }: ActiveLoansCardProps) {
             return (
               <div key={loan.id} className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-700">
+                  <span className="text-sm font-medium text-status-neutral-foreground">
                     {loanTypeLabels[loan.loanType] ?? loan.loanType} — {loan.loanNumber}
                   </span>
-                  <span className={cn("text-xs font-semibold", isActive ? "text-orange-600" : "text-yellow-600")}>
+                  <span className={cn("text-xs font-semibold", isActive ? "text-orange-600" : "text-status-warning-foreground")}>
                     {isActive ? `${formatCurrency(loan.remainingAmount)} متبقي` : "معلقة"}
                   </span>
                 </div>
                 {isActive && (
                   <>
-                    <div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden">
+                    <div className="w-full h-2 rounded-full bg-surface-subtle overflow-hidden">
                       <div
                         className="h-full rounded-full bg-orange-500 transition-all duration-500"
                         style={{ width: `${paidPct}%` }}
                       />
                     </div>
-                    <div className="flex items-center justify-between text-xs text-gray-400">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
                       <span>مسدد: {formatCurrency(loan.paidAmount)} من {formatCurrency(loan.amount)}</span>
                       <span>{paidPct}%</span>
                     </div>

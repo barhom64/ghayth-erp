@@ -106,7 +106,7 @@ export default function Properties() {
       }
     >
       <KpiGrid items={[
-        { label: "إجمالي العقارات", value: stats?.totalUnits || 0, icon: Building2, color: "text-blue-600 bg-blue-50" },
+        { label: "إجمالي العقارات", value: stats?.totalUnits || 0, icon: Building2, color: "text-status-info-foreground bg-status-info-surface" },
         { label: "وحدات شاغرة", value: stats?.available || 0, icon: Home, color: "text-emerald-600 bg-emerald-50" },
         { label: "وحدات مؤجرة", value: stats?.rented || 0, icon: Building, color: "text-indigo-600 bg-indigo-50" },
         { label: "نسبة الإشغال", value: stats?.totalUnits ? `${Math.round(((stats?.rented || 0) / stats.totalUnits) * 100)}%` : "0%", icon: DollarSign, color: "text-purple-600 bg-purple-50" },
@@ -136,7 +136,7 @@ export default function Properties() {
       />
 
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><Building className="h-5 w-5 text-blue-500" /> الوحدات العقارية</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Building className="h-5 w-5 text-status-info" /> الوحدات العقارية</CardTitle></CardHeader>
         <CardContent>
           <DataTable
             columns={columns}

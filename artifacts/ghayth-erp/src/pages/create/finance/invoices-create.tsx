@@ -164,9 +164,9 @@ export default function InvoicesCreate() {
   return (
     <CreatePageLayout title="فاتورة جديدة" backPath="/finance/invoices" isDirty={isDirty}>
       {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div data-form>
@@ -221,7 +221,7 @@ export default function InvoicesCreate() {
 
       <div className="mb-4">
         <Label className="text-base font-semibold">البنود</Label>
-        {fieldErrors.lines && <p className="text-xs text-red-600 mt-1">{fieldErrors.lines}</p>}
+        {fieldErrors.lines && <p className="text-xs text-status-error-foreground mt-1">{fieldErrors.lines}</p>}
         {lines.map((line, idx) => (
           <div key={idx} className="grid grid-cols-4 gap-2 mt-2 items-end">
             <div><Label className="text-xs">الوصف</Label><Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} /></div>
@@ -238,7 +238,7 @@ export default function InvoicesCreate() {
         <div className="flex justify-between"><span>الضريبة ({form.vatRate}%):</span><span>{formatCurrency(vatAmount)}</span></div>
         <div className="flex justify-between font-bold"><span>الإجمالي:</span><span>{formatCurrency(total)}</span></div>
       </div>
-      {fieldErrors.totalAmount && <p className="text-xs text-red-600 mt-1">{fieldErrors.totalAmount}</p>}
+      {fieldErrors.totalAmount && <p className="text-xs text-status-error-foreground mt-1">{fieldErrors.totalAmount}</p>}
 
       {form.clientId && subtotal > 0 && (
         <ImpactPreviewButton
@@ -260,7 +260,7 @@ export default function InvoicesCreate() {
       <div className="border rounded-lg p-4 mb-4 space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-sm text-muted-foreground flex items-center gap-2">
-            <span className="text-green-600">🏛</span>
+            <span className="text-status-success-foreground">🏛</span>
             ربط مع هيئة الزكاة والضريبة والجمارك
           </h3>
           <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -299,9 +299,9 @@ export default function InvoicesCreate() {
                 <Input className="mt-1" value={form.exemptionReason} onChange={(e) => setForm((f) => ({ ...f, exemptionReason: e.target.value }))} placeholder="أدخل سبب الإعفاء..." />
               </div>
             )}
-            <div className="md:col-span-3 flex items-start gap-2 p-3 bg-green-50 border border-green-200 rounded-md">
-              <span className="text-green-600 text-xs mt-0.5">✓</span>
-              <p className="text-xs text-green-700">سيتم ربط هذه الفاتورة مع منظومة الفوترة الإلكترونية لهيئة الزكاة والضريبة وتوليد رمز استجابة سريعة متوافق عند الإرسال للهيئة.</p>
+            <div className="md:col-span-3 flex items-start gap-2 p-3 bg-status-success-surface border border-status-success-surface rounded-md">
+              <span className="text-status-success-foreground text-xs mt-0.5">✓</span>
+              <p className="text-xs text-status-success-foreground">سيتم ربط هذه الفاتورة مع منظومة الفوترة الإلكترونية لهيئة الزكاة والضريبة وتوليد رمز استجابة سريعة متوافق عند الإرسال للهيئة.</p>
             </div>
           </div>
         )}

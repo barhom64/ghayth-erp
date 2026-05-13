@@ -27,7 +27,7 @@ export default function PaymentsPage() {
       key: "ref",
       header: "المرجع",
       sortable: true,
-      render: (p) => <span className="font-mono text-blue-600 text-sm">{p.ref}</span>,
+      render: (p) => <span className="font-mono text-status-info-foreground text-sm">{p.ref}</span>,
     },
     {
       key: "description",
@@ -39,13 +39,13 @@ export default function PaymentsPage() {
       key: "amount",
       header: "المبلغ",
       sortable: true,
-      render: (p) => <span className="font-semibold text-red-600">{formatCurrency(Number(p.amount))}</span>,
+      render: (p) => <span className="font-semibold text-status-error-foreground">{formatCurrency(Number(p.amount))}</span>,
     },
     {
       key: "date",
       header: "التاريخ",
       sortable: true,
-      render: (p) => <span className="text-gray-500 text-sm">{p.date ? formatDateAr(p.date) : "-"}</span>,
+      render: (p) => <span className="text-muted-foreground text-sm">{p.date ? formatDateAr(p.date) : "-"}</span>,
     },
   ];
 
@@ -63,12 +63,12 @@ export default function PaymentsPage() {
           <div><p className="text-xs opacity-80">إجمالي المدفوعات</p><p className="text-xl font-bold">{formatCurrency(Number(summary.totalPayments || 0))}</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-blue-100 rounded-lg"><Wallet className="h-5 w-5 text-blue-600" /></div>
-          <div><p className="text-xs text-gray-500">عدد العمليات</p><p className="text-xl font-bold">{summary.count || 0}</p></div>
+          <div className="p-2 bg-status-info-surface rounded-lg"><Wallet className="h-5 w-5 text-status-info-foreground" /></div>
+          <div><p className="text-xs text-muted-foreground">عدد العمليات</p><p className="text-xl font-bold">{summary.count || 0}</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
           <div className="p-2 bg-orange-100 rounded-lg"><Calendar className="h-5 w-5 text-orange-600" /></div>
-          <div><p className="text-xs text-gray-500">المتوسط</p><p className="text-xl font-bold">{summary.count > 0 ? formatCurrency(Math.round(Number(summary.totalPayments) / summary.count)) : "0"}</p></div>
+          <div><p className="text-xs text-muted-foreground">المتوسط</p><p className="text-xl font-bold">{summary.count > 0 ? formatCurrency(Math.round(Number(summary.totalPayments) / summary.count)) : "0"}</p></div>
         </CardContent></Card>
       </div>
 

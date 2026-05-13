@@ -21,15 +21,15 @@ const logColumns: DataTableColumn<any>[] = [
     header: "الوحدة",
     sortable: true,
     searchable: true,
-    className: "text-gray-500",
+    className: "text-muted-foreground",
   },
   {
     key: "createdAt",
     header: "التاريخ",
     sortable: true,
-    className: "text-xs text-gray-400",
+    className: "text-xs text-muted-foreground",
     render: (l) => (
-      <span className="text-xs text-gray-400">
+      <span className="text-xs text-muted-foreground">
         {l.createdAt ? formatDateAr(l.createdAt) : "-"}
       </span>
     ),

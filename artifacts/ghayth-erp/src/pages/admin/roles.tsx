@@ -101,7 +101,7 @@ export default function AdminRolesPage() {
   const [creatingRole, setCreatingRole] = useState(false);
 
   const rolePermColumns: DataTableColumn<any>[] = [
-    { key: "label", header: "الوحدة", width: "144px", render: (r: any) => <span className="font-medium text-sm text-gray-700">{r.label}</span> },
+    { key: "label", header: "الوحدة", width: "144px", render: (r: any) => <span className="font-medium text-sm text-status-neutral-foreground">{r.label}</span> },
     ...PERM_ACTIONS.map((action) => ({
       key: action.key,
       header: action.label,
@@ -116,11 +116,11 @@ export default function AdminRolesPage() {
             onClick={() => !hasWildcard && toggleRolePerm(r.key, action.key)}
             disabled={hasWildcard || isSaving}
             className={cn("w-7 h-7 rounded-md transition-all mx-auto flex items-center justify-center border-2",
-              hasPerm ? hasWildcard ? "bg-blue-100 border-blue-200 cursor-not-allowed" : "bg-green-100 border-green-500 hover:bg-green-200"
-                : "bg-white border-gray-200 hover:border-gray-400",
+              hasPerm ? hasWildcard ? "bg-status-info-surface border-status-info-surface cursor-not-allowed" : "bg-status-success-surface border-green-500 hover:bg-green-200"
+                : "bg-white border-border hover:border-gray-400",
               isSaving && "opacity-50")}
             title={hasWildcard ? "صلاحية كاملة" : hasPerm ? "انقر لإزالة" : "انقر لإضافة"}>
-            {hasPerm && <CheckCircle className={cn("h-4 w-4", hasWildcard ? "text-blue-500" : "text-green-600")} />}
+            {hasPerm && <CheckCircle className={cn("h-4 w-4", hasWildcard ? "text-status-info" : "text-status-success-foreground")} />}
           </button>
         );
       },
@@ -229,13 +229,13 @@ export default function AdminRolesPage() {
       </div>
 
       <div className="flex gap-2 border-b">
-        <button onClick={() => setActiveTab("modules")} className={cn("px-4 py-2 text-sm font-medium border-b-2 transition-colors", activeTab === "modules" ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-gray-800")}>
+        <button onClick={() => setActiveTab("modules")} className={cn("px-4 py-2 text-sm font-medium border-b-2 transition-colors", activeTab === "modules" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-status-neutral-foreground")}>
           الوحدات المسموحة لكل دور
         </button>
-        <button onClick={() => { setActiveTab("permissions"); loadRolePerms(selectedPermRole); }} className={cn("px-4 py-2 text-sm font-medium border-b-2 transition-colors", activeTab === "permissions" ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-gray-800")}>
+        <button onClick={() => { setActiveTab("permissions"); loadRolePerms(selectedPermRole); }} className={cn("px-4 py-2 text-sm font-medium border-b-2 transition-colors", activeTab === "permissions" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-status-neutral-foreground")}>
           مصفوفة الصلاحيات التفصيلية
         </button>
-        <button onClick={() => setActiveTab("create")} className={cn("px-4 py-2 text-sm font-medium border-b-2 transition-colors", activeTab === "create" ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-gray-800")}>
+        <button onClick={() => setActiveTab("create")} className={cn("px-4 py-2 text-sm font-medium border-b-2 transition-colors", activeTab === "create" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-status-neutral-foreground")}>
           إنشاء دور جديد
         </button>
       </div>
@@ -274,7 +274,7 @@ export default function AdminRolesPage() {
                     {ALL_MODULES.map(mod => (
                       <button key={mod} onClick={() => toggleModule(mod)}
                         className={cn("flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs transition-all text-start",
-                          editModules.includes(mod) ? "bg-blue-50 border-blue-400 text-blue-700 font-medium" : "bg-white border-gray-200 text-gray-500 hover:border-gray-400")}>
+                          editModules.includes(mod) ? "bg-status-info-surface border-blue-400 text-status-info-foreground font-medium" : "bg-white border-border text-muted-foreground hover:border-gray-400")}>
                         {editModules.includes(mod) && <CheckCircle className="h-3 w-3 flex-shrink-0" />}
                         {MODULE_LABELS[mod] || mod}
                       </button>
@@ -310,7 +310,7 @@ export default function AdminRolesPage() {
               </Select>
             </div>
             {permsLoading ? (
-              <p className="text-sm text-gray-400 text-center py-4">جاري التحميل...</p>
+              <p className="text-sm text-muted-foreground text-center py-4">جاري التحميل...</p>
             ) : (
               <div>
                 <DataTable
@@ -321,7 +321,7 @@ export default function AdminRolesPage() {
                   rowKey={(r: any) => r.key}
                 />
                 {rolePerms.has("*") && (
-                  <p className="text-xs text-blue-600 mt-2 flex items-center gap-1">
+                  <p className="text-xs text-status-info-foreground mt-2 flex items-center gap-1">
                     <Shield className="h-3 w-3" />هذا الدور يمتلك صلاحيات كاملة (*)
                   </p>
                 )}
@@ -397,7 +397,7 @@ function ModulesPicker() {
               "flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs transition-all text-start",
               modules.includes(mod)
                 ? "bg-purple-50 border-purple-400 text-purple-700 font-medium"
-                : "bg-white border-gray-200 text-gray-500 hover:border-gray-400",
+                : "bg-white border-border text-muted-foreground hover:border-gray-400",
             )}
           >
             {modules.includes(mod) && <CheckCircle className="h-3 w-3 flex-shrink-0" />}
@@ -405,7 +405,7 @@ function ModulesPicker() {
           </button>
         ))}
       </div>
-      <p className="text-xs text-gray-400 mt-2">الوحدات المختارة: {modules.length}</p>
+      <p className="text-xs text-muted-foreground mt-2">الوحدات المختارة: {modules.length}</p>
     </div>
   );
 }

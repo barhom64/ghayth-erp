@@ -141,7 +141,7 @@ export default function MaintenanceDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Wrench className="h-4 w-4 text-gray-500" />
+            <Wrench className="h-4 w-4 text-muted-foreground" />
             بيانات الصيانة
           </CardTitle>
         </CardHeader>
@@ -151,19 +151,19 @@ export default function MaintenanceDetail() {
             <span className="text-3xl font-bold text-gray-900">
               {formatCurrency(cost)}
             </span>
-            <span className="text-xs text-gray-500">ر.س</span>
+            <span className="text-xs text-muted-foreground">ر.س</span>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             {(maintenance?.vehiclePlateNumber || maintenance?.plateNumber) && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">رقم اللوحة</p>
-                <span className="text-gray-800 font-mono">{maintenance.vehiclePlateNumber || maintenance.plateNumber}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">رقم اللوحة</p>
+                <span className="text-status-neutral-foreground font-mono">{maintenance.vehiclePlateNumber || maintenance.plateNumber}</span>
               </div>
             )}
             {(maintenance?.maintenanceType || maintenance?.type) && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">نوع الصيانة</p>
+                <p className="text-xs text-muted-foreground mb-0.5">نوع الصيانة</p>
                 <Badge variant="outline">
                   {MAINTENANCE_TYPE_LABELS[maintenance.maintenanceType || maintenance.type] || maintenance.maintenanceType || maintenance.type}
                 </Badge>
@@ -171,40 +171,40 @@ export default function MaintenanceDetail() {
             )}
             {(maintenance?.vendorName || maintenance?.workshop) && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الورشة / المورد</p>
-                <span className="text-gray-800">{maintenance.vendorName || maintenance.workshop}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">الورشة / المورد</p>
+                <span className="text-status-neutral-foreground">{maintenance.vendorName || maintenance.workshop}</span>
               </div>
             )}
             {(maintenance?.scheduledDate || maintenance?.date) && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">التاريخ المجدول</p>
-                <span className="text-gray-800">{formatDateAr(maintenance.scheduledDate || maintenance.date)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">التاريخ المجدول</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(maintenance.scheduledDate || maintenance.date)}</span>
               </div>
             )}
             {(maintenance?.completionDate || maintenance?.completedAt) && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ الإنجاز</p>
-                <span className="text-gray-800">{formatDateAr(maintenance.completionDate || maintenance.completedAt)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ الإنجاز</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(maintenance.completionDate || maintenance.completedAt)}</span>
               </div>
             )}
             {(maintenance?.mileage || maintenance?.mileageAtService) && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الكيلومترات عند الصيانة</p>
-                <span className="text-gray-800">{maintenance.mileage || maintenance.mileageAtService} كم</span>
+                <p className="text-xs text-muted-foreground mb-0.5">الكيلومترات عند الصيانة</p>
+                <span className="text-status-neutral-foreground">{maintenance.mileage || maintenance.mileageAtService} كم</span>
               </div>
             )}
             {maintenance?.nextServiceMileage && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الصيانة القادمة عند</p>
-                <span className="text-gray-800">{maintenance.nextServiceMileage} كم</span>
+                <p className="text-xs text-muted-foreground mb-0.5">الصيانة القادمة عند</p>
+                <span className="text-status-neutral-foreground">{maintenance.nextServiceMileage} كم</span>
               </div>
             )}
           </div>
 
           {(maintenance?.description || maintenance?.notes) && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">الوصف</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{maintenance.description || maintenance.notes}</p>
+              <p className="text-xs text-muted-foreground mb-1">الوصف</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{maintenance.description || maintenance.notes}</p>
             </div>
           )}
         </CardContent>
@@ -214,7 +214,7 @@ export default function MaintenanceDetail() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Car className="h-4 w-4 text-gray-500" />
+              <Car className="h-4 w-4 text-muted-foreground" />
               المركبة
             </CardTitle>
           </CardHeader>
@@ -223,13 +223,13 @@ export default function MaintenanceDetail() {
               <div className="space-y-1">
                 <p className="font-semibold font-mono">{maintenance.vehiclePlateNumber || maintenance.plateNumber || `#${maintenance.vehicleId}`}</p>
                 {(maintenance.vehicleMake || maintenance.vehicleModel) && (
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-muted-foreground">
                     {[maintenance.vehicleMake, maintenance.vehicleModel].filter(Boolean).join(" ")}
                   </p>
                 )}
               </div>
             ) : (
-              <p className="text-xs text-gray-500">لا توجد مركبة مرتبطة</p>
+              <p className="text-xs text-muted-foreground">لا توجد مركبة مرتبطة</p>
             )}
           </CardContent>
         </Card>
@@ -238,7 +238,7 @@ export default function MaintenanceDetail() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                <User className="h-4 w-4 text-gray-500" />
+                <User className="h-4 w-4 text-muted-foreground" />
                 السائق
               </CardTitle>
             </CardHeader>

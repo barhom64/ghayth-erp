@@ -29,7 +29,7 @@ const securityLogColumns: DataTableColumn<any>[] = [
     render: (row) => (
       <div>
         <div className="font-medium text-xs">{row.userName || row.userEmail || `#${row.userId}`}</div>
-        {row.userEmail && row.userName && <div className="text-gray-400 text-xs">{row.userEmail}</div>}
+        {row.userEmail && row.userName && <div className="text-muted-foreground text-xs">{row.userEmail}</div>}
       </div>
     ),
   },
@@ -44,7 +44,7 @@ const securityLogColumns: DataTableColumn<any>[] = [
     header: "المسار",
     searchable: true,
     render: (row) => (
-      <code className="text-xs bg-gray-100 px-1.5 py-0.5 rounded">{row.method} {row.path}</code>
+      <code className="text-xs bg-surface-subtle px-1.5 py-0.5 rounded">{row.method} {row.path}</code>
     ),
   },
   {
@@ -53,7 +53,7 @@ const securityLogColumns: DataTableColumn<any>[] = [
     render: (row) => (
       <div className="flex flex-wrap gap-1">
         {(Array.isArray(row.requiredPerms) ? row.requiredPerms : []).map((p: string) => (
-          <Badge key={p} className="text-xs bg-red-50 text-red-700 border-red-200">{p}</Badge>
+          <Badge key={p} className="text-xs bg-status-error-surface text-status-error-foreground border-status-error-surface">{p}</Badge>
         ))}
       </div>
     ),
@@ -63,7 +63,7 @@ const securityLogColumns: DataTableColumn<any>[] = [
     header: "السبب",
     sortable: true,
     render: (row) => (
-      <Badge className={cn("text-xs", row.reason === "permission_denied" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700")}>
+      <Badge className={cn("text-xs", row.reason === "permission_denied" ? "bg-status-error-surface text-status-error-foreground" : "bg-status-warning-surface text-status-warning-foreground")}>
         {REASON_LABELS[row.reason] || row.reason}
       </Badge>
     ),
@@ -73,7 +73,7 @@ const securityLogColumns: DataTableColumn<any>[] = [
     header: "الوقت",
     sortable: true,
     render: (row) => (
-      <span className="text-gray-500 text-xs whitespace-nowrap">{formatDateAr(row.createdAt)}</span>
+      <span className="text-muted-foreground text-xs whitespace-nowrap">{formatDateAr(row.createdAt)}</span>
     ),
   },
 ];
@@ -103,7 +103,7 @@ export function SecurityLogTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold flex items-center gap-2">
-          <ShieldAlert className="h-5 w-5 text-red-600" />
+          <ShieldAlert className="h-5 w-5 text-status-error-foreground" />
           سجل محاولات الوصول المرفوضة
         </h3>
         <Button variant="outline" size="sm" onClick={() => refetch()}>تحديث</Button>
@@ -111,9 +111,9 @@ export function SecurityLogTab() {
 
 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "إجمالي المحاولات", value: summary.total, color: "text-gray-700 bg-gray-50" },
-          { label: "آخر 24 ساعة", value: summary.last24h, color: "text-amber-700 bg-amber-50" },
-          { label: "صلاحية مرفوضة", value: summary.permissionDenied, color: "text-red-700 bg-red-50" },
+          { label: "إجمالي المحاولات", value: summary.total, color: "text-status-neutral-foreground bg-surface-subtle" },
+          { label: "آخر 24 ساعة", value: summary.last24h, color: "text-status-warning-foreground bg-status-warning-surface" },
+          { label: "صلاحية مرفوضة", value: summary.permissionDenied, color: "text-status-error-foreground bg-status-error-surface" },
           { label: "وحدة غير مسموحة", value: summary.moduleDenied, color: "text-orange-700 bg-orange-50" },
         ].map(c => (
           <Card key={c.label} className="border-0 shadow-sm">

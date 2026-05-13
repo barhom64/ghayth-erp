@@ -91,10 +91,10 @@ export default function IDPPage() {
   };
 
   const kpis = [
-    { label: "إجمالي الخطط", value: stats.total, icon: Target, color: "text-blue-600 bg-blue-50" },
+    { label: "إجمالي الخطط", value: stats.total, icon: Target, color: "text-status-info-foreground bg-status-info-surface" },
     { label: "مخطط", value: stats.planned, icon: BookOpen, color: "text-indigo-600 bg-indigo-50" },
-    { label: "جارية", value: stats.inProgress, icon: TrendingUp, color: "text-amber-600 bg-amber-50" },
-    { label: "مكتملة", value: stats.completed, icon: CheckCircle, color: "text-green-600 bg-green-50" },
+    { label: "جارية", value: stats.inProgress, icon: TrendingUp, color: "text-status-warning-foreground bg-status-warning-surface" },
+    { label: "مكتملة", value: stats.completed, icon: CheckCircle, color: "text-status-success-foreground bg-status-success-surface" },
   ];
 
   const columns: DataTableColumn<any>[] = [
@@ -126,7 +126,7 @@ export default function IDPPage() {
           : typeof v.goals === "string"
             ? (() => { try { return JSON.parse(v.goals || "[]"); } catch { return []; } })()
             : [];
-        if (!goals.length) return <span className="text-gray-400">-</span>;
+        if (!goals.length) return <span className="text-muted-foreground">-</span>;
         return (
           <div className="flex items-center gap-1">
             <Badge variant="outline" className="text-xs">
@@ -145,14 +145,14 @@ export default function IDPPage() {
           : typeof v.skills === "string"
             ? (() => { try { return JSON.parse(v.skills || "[]"); } catch { return []; } })()
             : [];
-        if (!skills.length) return <span className="text-gray-400">-</span>;
+        if (!skills.length) return <span className="text-muted-foreground">-</span>;
         return (
           <div className="flex flex-wrap gap-1">
             {skills.slice(0, 2).map((s: string, i: number) => (
-              <span key={i} className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-xs">{s}</span>
+              <span key={i} className="px-1.5 py-0.5 bg-status-info-surface text-status-info-foreground rounded text-xs">{s}</span>
             ))}
             {skills.length > 2 && (
-              <span className="text-xs text-gray-400">+{skills.length - 2}</span>
+              <span className="text-xs text-muted-foreground">+{skills.length - 2}</span>
             )}
           </div>
         );
@@ -163,7 +163,7 @@ export default function IDPPage() {
       header: "التاريخ المستهدف",
       sortable: true,
       render: (v) => (
-        <span className="text-sm text-gray-600">
+        <span className="text-sm text-muted-foreground">
           {formatDateAr(v.targetDate)}
         </span>
       ),

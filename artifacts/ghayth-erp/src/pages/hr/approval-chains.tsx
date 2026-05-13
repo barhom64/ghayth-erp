@@ -28,10 +28,10 @@ export default function ApprovalChainsPage() {
   });
 
   const kpis = [
-    { label: "إجمالي المراحل", value: items.length, icon: GitBranch, color: "text-blue-600 bg-blue-50" },
-    { label: "معلقة", value: items.filter((i: any) => i.status === "pending").length, icon: Clock, color: "text-amber-600 bg-amber-50" },
-    { label: "مكتملة", value: items.filter((i: any) => i.status === "approved").length, icon: CheckCircle, color: "text-green-600 bg-green-50" },
-    { label: "تصعيد", value: items.filter((i: any) => i.status === "escalated").length, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
+    { label: "إجمالي المراحل", value: items.length, icon: GitBranch, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "معلقة", value: items.filter((i: any) => i.status === "pending").length, icon: Clock, color: "text-status-warning-foreground bg-status-warning-surface" },
+    { label: "مكتملة", value: items.filter((i: any) => i.status === "approved").length, icon: CheckCircle, color: "text-status-success-foreground bg-status-success-surface" },
+    { label: "تصعيد", value: items.filter((i: any) => i.status === "escalated").length, icon: AlertTriangle, color: "text-status-error-foreground bg-status-error-surface" },
   ];
 
   const columns: DataTableColumn<any>[] = [
@@ -41,10 +41,10 @@ export default function ApprovalChainsPage() {
       sortable: true,
       render: (v) => (
         <div>
-          <span className="font-mono text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-1 rounded">
+          <span className="font-mono text-xs font-semibold text-status-info-foreground bg-status-info-surface px-2 py-1 rounded">
             #{v.requestId}
           </span>
-          <span className="block text-xs text-gray-400 mt-1">
+          <span className="block text-xs text-muted-foreground mt-1">
             {v.leaveTypeName} — {v.days} أيام
           </span>
         </div>
@@ -74,14 +74,14 @@ export default function ApprovalChainsPage() {
       header: "الدور المطلوب",
       sortable: true,
       render: (v) => (
-        <span className="text-sm text-gray-600">{APPROVAL_ROLES[v.requiredRole] || v.requiredRole}</span>
+        <span className="text-sm text-muted-foreground">{APPROVAL_ROLES[v.requiredRole] || v.requiredRole}</span>
       ),
     },
     {
       key: "decision",
       header: "القرار",
       render: (v) => (
-        <span className="text-sm text-gray-600">{v.decision || "-"}</span>
+        <span className="text-sm text-muted-foreground">{v.decision || "-"}</span>
       ),
     },
     {

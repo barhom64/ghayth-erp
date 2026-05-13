@@ -106,7 +106,7 @@ export default function TransferDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <ArrowLeftRight className="h-4 w-4 text-gray-500" />
+            <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
             بيانات النقل
           </CardTitle>
         </CardHeader>
@@ -114,52 +114,52 @@ export default function TransferDetail() {
           <div className="grid grid-cols-2 gap-3">
             {transfer?.employeeName && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">اسم الموظف</p>
-                <span className="text-gray-800 font-bold">{transfer.employeeName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">اسم الموظف</p>
+                <span className="text-status-neutral-foreground font-bold">{transfer.employeeName}</span>
               </div>
             )}
             {transfer?.fromDepartment && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">من القسم</p>
+                <p className="text-xs text-muted-foreground mb-0.5">من القسم</p>
                 <Badge variant="outline">{transfer.fromDepartment}</Badge>
               </div>
             )}
             {transfer?.toDepartment && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">إلى القسم</p>
+                <p className="text-xs text-muted-foreground mb-0.5">إلى القسم</p>
                 <Badge variant="secondary">{transfer.toDepartment}</Badge>
               </div>
             )}
             {transfer?.fromBranch && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">من الفرع</p>
-                <span className="text-gray-800">{transfer.fromBranch}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">من الفرع</p>
+                <span className="text-status-neutral-foreground">{transfer.fromBranch}</span>
               </div>
             )}
             {transfer?.toBranch && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">إلى الفرع</p>
-                <span className="text-gray-800">{transfer.toBranch}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">إلى الفرع</p>
+                <span className="text-status-neutral-foreground">{transfer.toBranch}</span>
               </div>
             )}
             {transfer?.transferDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ النقل</p>
-                <span className="text-gray-800">{formatDateAr(transfer.transferDate)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ النقل</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(transfer.transferDate)}</span>
               </div>
             )}
             {transfer?.reason && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">السبب</p>
-                <span className="text-gray-800">{transfer.reason}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">السبب</p>
+                <span className="text-status-neutral-foreground">{transfer.reason}</span>
               </div>
             )}
           </div>
 
           {transfer?.notes && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">ملاحظات</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{transfer.notes}</p>
+              <p className="text-xs text-muted-foreground mb-1">ملاحظات</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{transfer.notes}</p>
             </div>
           )}
         </CardContent>

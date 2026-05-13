@@ -25,20 +25,20 @@ import { formatDateAr } from "@/lib/formatters";
 // ─── Arabic Maps ────────────────────────────────────────────────────
 
 const APPROVAL_STATUS_MAP: Record<string, { label: string; color: string }> = {
-  draft: { label: "مسودة", color: "bg-gray-100 text-gray-700" },
-  pending_approval: { label: "بانتظار الاعتماد", color: "bg-yellow-100 text-yellow-700" },
-  approved: { label: "معتمد", color: "bg-blue-100 text-blue-700" },
-  rejected: { label: "مرفوض", color: "bg-red-100 text-red-700" },
+  draft: { label: "مسودة", color: "bg-surface-subtle text-status-neutral-foreground" },
+  pending_approval: { label: "بانتظار الاعتماد", color: "bg-status-warning-surface text-status-warning-foreground" },
+  approved: { label: "معتمد", color: "bg-status-info-surface text-status-info-foreground" },
+  rejected: { label: "مرفوض", color: "bg-status-error-surface text-status-error-foreground" },
 };
 
 const CONTRACT_STATUS_MAP: Record<string, { label: string; color: string }> = {
-  draft: { label: "مسودة", color: "bg-gray-100 text-gray-700" },
-  pending_approval: { label: "بانتظار الاعتماد", color: "bg-yellow-100 text-yellow-700" },
-  approved: { label: "معتمد", color: "bg-blue-100 text-blue-700" },
-  rejected: { label: "مرفوض", color: "bg-red-100 text-red-700" },
+  draft: { label: "مسودة", color: "bg-surface-subtle text-status-neutral-foreground" },
+  pending_approval: { label: "بانتظار الاعتماد", color: "bg-status-warning-surface text-status-warning-foreground" },
+  approved: { label: "معتمد", color: "bg-status-info-surface text-status-info-foreground" },
+  rejected: { label: "مرفوض", color: "bg-status-error-surface text-status-error-foreground" },
   signed: { label: "موقّع", color: "bg-purple-100 text-purple-700" },
-  active: { label: "نشط", color: "bg-green-100 text-green-700" },
-  terminated: { label: "منتهي", color: "bg-red-100 text-red-700" },
+  active: { label: "نشط", color: "bg-status-success-surface text-status-success-foreground" },
+  terminated: { label: "منتهي", color: "bg-status-error-surface text-status-error-foreground" },
 };
 
 const CONTRACT_TYPE_MAP: Record<string, string> = {
@@ -120,8 +120,8 @@ export default function ContractsPage() {
     { key: "ref", header: "رقم العقد", sortable: true, searchable: true, render: (r: any) => <span className="font-mono text-sm">{r.ref}</span> },
     { key: "employeeName", header: "الموظف", sortable: true, searchable: true, render: (r: any) => <span className="font-medium">{r.employeeName}</span> },
     { key: "contractType", header: "نوع العقد", sortable: true, render: (r: any) => CONTRACT_TYPE_MAP[r.contractType] || r.contractType },
-    { key: "startDate", header: "تاريخ البداية", sortable: true, render: (r: any) => <span className="text-sm text-gray-600">{r.startDate ? formatDateAr(r.startDate) : "—"}</span> },
-    { key: "endDate", header: "تاريخ النهاية", sortable: true, render: (r: any) => <span className="text-sm text-gray-600">{r.endDate ? formatDateAr(r.endDate) : "—"}</span> },
+    { key: "startDate", header: "تاريخ البداية", sortable: true, render: (r: any) => <span className="text-sm text-muted-foreground">{r.startDate ? formatDateAr(r.startDate) : "—"}</span> },
+    { key: "endDate", header: "تاريخ النهاية", sortable: true, render: (r: any) => <span className="text-sm text-muted-foreground">{r.endDate ? formatDateAr(r.endDate) : "—"}</span> },
     { key: "approvalStatus", header: "حالة الاعتماد", sortable: true, render: (r: any) => <StatusBadge value={r.approvalStatus} map={APPROVAL_STATUS_MAP} /> },
     { key: "status", header: "حالة العقد", sortable: true, render: (r: any) => <StatusBadge value={r.status} map={CONTRACT_STATUS_MAP} /> },
     {
@@ -231,7 +231,7 @@ function ActionsMenu({
         {canReject && <DropdownMenuItem onClick={onReject} className="text-red-600">رفض</DropdownMenuItem>}
         {canSign && <DropdownMenuItem onClick={onSignCompany}>توقيع الشركة</DropdownMenuItem>}
         {canActivate && <DropdownMenuItem onClick={onActivate}>تفعيل</DropdownMenuItem>}
-        {canTerminate && <DropdownMenuItem onClick={onTerminate} className="text-red-600">إنهاء العقد</DropdownMenuItem>}
+        {canTerminate && <DropdownMenuItem onClick={onTerminate} className="text-status-error-foreground">إنهاء العقد</DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu>
   );

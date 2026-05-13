@@ -49,26 +49,26 @@ const ACTION_OPTIONS = [
 ];
 
 const ENTITY_STYLES: Record<string, { icon: typeof Activity; color: string; bg: string }> = {
-  employee: { icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
+  employee: { icon: Users, color: "text-status-info-foreground", bg: "bg-status-info-surface" },
   client: { icon: Users, color: "text-emerald-600", bg: "bg-emerald-50" },
   invoice: { icon: CreditCard, color: "text-indigo-600", bg: "bg-indigo-50" },
   request: { icon: ClipboardList, color: "text-orange-600", bg: "bg-orange-50" },
   leave_request: { icon: Calendar, color: "text-teal-600", bg: "bg-teal-50" },
-  expense: { icon: DollarSign, color: "text-red-600", bg: "bg-red-50" },
+  expense: { icon: DollarSign, color: "text-status-error-foreground", bg: "bg-status-error-surface" },
   voucher: { icon: FileText, color: "text-purple-600", bg: "bg-purple-50" },
-  task: { icon: ClipboardList, color: "text-amber-600", bg: "bg-amber-50" },
+  task: { icon: ClipboardList, color: "text-status-warning-foreground", bg: "bg-status-warning-surface" },
   project: { icon: Activity, color: "text-cyan-600", bg: "bg-cyan-50" },
   support_ticket: { icon: MessageCircle, color: "text-pink-600", bg: "bg-pink-50" },
   communication: { icon: MessageCircle, color: "text-violet-600", bg: "bg-violet-50" },
-  default: { icon: FileText, color: "text-gray-600", bg: "bg-gray-50" },
+  default: { icon: FileText, color: "text-muted-foreground", bg: "bg-surface-subtle" },
 };
 
 const ACTION_LABELS: Record<string, { label: string; icon: typeof Activity; color: string }> = {
-  create: { label: "إنشاء", icon: Plus, color: "text-green-600" },
-  update: { label: "تعديل", icon: Edit, color: "text-blue-600" },
-  delete: { label: "حذف", icon: Trash2, color: "text-red-600" },
-  approve: { label: "اعتماد", icon: CheckCircle, color: "text-green-700" },
-  reject: { label: "رفض", icon: XCircle, color: "text-red-700" },
+  create: { label: "إنشاء", icon: Plus, color: "text-status-success-foreground" },
+  update: { label: "تعديل", icon: Edit, color: "text-status-info-foreground" },
+  delete: { label: "حذف", icon: Trash2, color: "text-status-error-foreground" },
+  approve: { label: "اعتماد", icon: CheckCircle, color: "text-status-success-foreground" },
+  reject: { label: "رفض", icon: XCircle, color: "text-status-error-foreground" },
   escalate: { label: "تصعيد", icon: Activity, color: "text-purple-600" },
 };
 
@@ -176,25 +176,25 @@ function formatValue(val: unknown): string {
 function DiffViewer({ changes, before, after }: { changes?: any[]; before?: any; after?: any }) {
   if (changes && Array.isArray(changes) && changes.length > 0) {
     return (
-      <div className="mt-2 space-y-1 bg-gray-50 rounded-lg p-3 border border-gray-100">
-        <div className="text-xs font-semibold text-gray-500 mb-1.5 flex items-center gap-1.5">
+      <div className="mt-2 space-y-1 bg-surface-subtle rounded-lg p-3 border border-border">
+        <div className="text-xs font-semibold text-muted-foreground mb-1.5 flex items-center gap-1.5">
           <ArrowRightLeft className="h-3 w-3" />
           التغييرات ({changes.length} حقل)
         </div>
         {changes.slice(0, 10).map((change: any, i: number) => (
           <div key={i} className="flex items-start gap-2 text-xs">
-            <span className="font-medium text-gray-600 min-w-[80px] text-start">
+            <span className="font-medium text-muted-foreground min-w-[80px] text-start">
               {FIELD_LABELS[change.field] || change.field}:
             </span>
             <div className="flex items-center gap-1.5 flex-wrap">
               {change.oldValue !== null && change.oldValue !== undefined && (
-                <span className="bg-red-100 text-red-700 px-1.5 py-0.5 rounded line-through">
+                <span className="bg-status-error-surface text-status-error-foreground px-1.5 py-0.5 rounded line-through">
                   {formatValue(change.oldValue)}
                 </span>
               )}
-              <span className="text-gray-400">←</span>
+              <span className="text-muted-foreground">←</span>
               {change.newValue !== null && change.newValue !== undefined && (
-                <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded">
+                <span className="bg-status-success-surface text-status-success-foreground px-1.5 py-0.5 rounded">
                   {formatValue(change.newValue)}
                 </span>
               )}
@@ -202,7 +202,7 @@ function DiffViewer({ changes, before, after }: { changes?: any[]; before?: any;
           </div>
         ))}
         {changes.length > 10 && (
-          <div className="text-xs text-gray-400 pt-1">و {changes.length - 10} تغييرات أخرى...</div>
+          <div className="text-xs text-muted-foreground pt-1">و {changes.length - 10} تغييرات أخرى...</div>
         )}
       </div>
     );
@@ -212,17 +212,17 @@ function DiffViewer({ changes, before, after }: { changes?: any[]; before?: any;
     return (
       <div className="mt-2 grid grid-cols-2 gap-2">
         {before && (
-          <div className="bg-red-50 rounded-lg p-2 border border-red-100">
-            <div className="text-[10px] font-semibold text-red-500 mb-1">قبل التعديل</div>
-            <pre className="text-[10px] text-red-700 whitespace-pre-wrap overflow-hidden max-h-20">
+          <div className="bg-status-error-surface rounded-lg p-2 border border-status-error-surface">
+            <div className="text-[10px] font-semibold text-status-error mb-1">قبل التعديل</div>
+            <pre className="text-[10px] text-status-error-foreground whitespace-pre-wrap overflow-hidden max-h-20">
               {typeof before === "object" ? JSON.stringify(before, null, 1) : String(before)}
             </pre>
           </div>
         )}
         {after && (
-          <div className="bg-green-50 rounded-lg p-2 border border-green-100">
-            <div className="text-[10px] font-semibold text-green-500 mb-1">بعد التعديل</div>
-            <pre className="text-[10px] text-green-700 whitespace-pre-wrap overflow-hidden max-h-20">
+          <div className="bg-status-success-surface rounded-lg p-2 border border-status-success-surface">
+            <div className="text-[10px] font-semibold text-status-success mb-1">بعد التعديل</div>
+            <pre className="text-[10px] text-status-success-foreground whitespace-pre-wrap overflow-hidden max-h-20">
               {typeof after === "object" ? JSON.stringify(after, null, 1) : String(after)}
             </pre>
           </div>
@@ -273,10 +273,10 @@ export default function ActivityLogPage() {
   const alertCards = [
     { label: "طلبات معلقة", value: summary.pendingRequests || 0, icon: ClipboardList, color: "text-orange-600", bg: "bg-orange-50", link: "/requests" },
     { label: "إجازات معلقة", value: summary.pendingLeaves || 0, icon: Calendar, color: "text-teal-600", bg: "bg-teal-50", link: "/hr/leaves" },
-    { label: "فواتير متأخرة", value: summary.overdueInvoices || 0, icon: CreditCard, color: "text-red-600", bg: "bg-red-50", link: "/finance/invoices" },
+    { label: "فواتير متأخرة", value: summary.overdueInvoices || 0, icon: CreditCard, color: "text-status-error-foreground", bg: "bg-status-error-surface", link: "/finance/invoices" },
     { label: "تذاكر مفتوحة", value: summary.openTickets || 0, icon: MessageCircle, color: "text-purple-600", bg: "bg-purple-50", link: "/support" },
-    { label: "عقود تنتهي قريباً", value: summary.expiringContracts || 0, icon: FileText, color: "text-amber-600", bg: "bg-amber-50", link: "/legal" },
-    { label: "منتجات منخفضة", value: summary.lowStock || 0, icon: Activity, color: "text-blue-600", bg: "bg-blue-50", link: "/warehouse" },
+    { label: "عقود تنتهي قريباً", value: summary.expiringContracts || 0, icon: FileText, color: "text-status-warning-foreground", bg: "bg-status-warning-surface", link: "/legal" },
+    { label: "منتجات منخفضة", value: summary.lowStock || 0, icon: Activity, color: "text-status-info-foreground", bg: "bg-status-info-surface", link: "/warehouse" },
   ];
 
   const activeAlerts = alertCards.filter(a => a.value > 0);
@@ -311,7 +311,7 @@ export default function ActivityLogPage() {
                 <alert.icon className={`w-5 h-5 ${alert.color}`} />
                 <div>
                   <p className="text-lg font-bold text-gray-900">{alert.value}</p>
-                  <p className="text-xs text-gray-600">{alert.label}</p>
+                  <p className="text-xs text-muted-foreground">{alert.label}</p>
                 </div>
               </div>
             </Link>
@@ -320,7 +320,7 @@ export default function ActivityLogPage() {
       )}
 
       <div className="flex flex-wrap items-center gap-3 bg-white p-3 rounded-xl border">
-        <Filter className="w-4 h-4 text-gray-400" />
+        <Filter className="w-4 h-4 text-muted-foreground" />
 
         <Select value={entityFilter} onValueChange={(v) => { setEntityFilter(v); setPage(0); }}>
           <SelectTrigger className="w-40">
@@ -356,9 +356,9 @@ export default function ActivityLogPage() {
         </Select>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400">من</span>
+          <span className="text-xs text-muted-foreground">من</span>
           <DatePicker value={dateFrom} onChange={(v) => { setDateFrom(v); setPage(0); }} className="w-36" />
-          <span className="text-xs text-gray-400">إلى</span>
+          <span className="text-xs text-muted-foreground">إلى</span>
           <DatePicker value={dateTo} onChange={(v) => { setDateTo(v); setPage(0); }} className="w-36" />
         </div>
 
@@ -366,7 +366,7 @@ export default function ActivityLogPage() {
           <Button
             variant="ghost"
             size="sm"
-            className="text-xs text-gray-500"
+            className="text-xs text-muted-foreground"
             onClick={clearFilters}
           >
             <X className="w-3 h-3 me-1" />
@@ -394,16 +394,16 @@ export default function ActivityLogPage() {
           ) : isError ? (
             <div className="p-12 text-center">
               <RefreshCw className="w-8 h-8 text-red-400 mx-auto mb-3" />
-              <p className="text-red-600 font-medium">حدث خطأ في تحميل السجل</p>
+              <p className="text-status-error-foreground font-medium">حدث خطأ في تحميل السجل</p>
               <Button variant="outline" size="sm" onClick={() => refetch()} className="mt-3">إعادة المحاولة</Button>
             </div>
           ) : items.length === 0 ? (
             <div className="p-12 text-center">
               <Search className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-500 font-medium">
+              <p className="text-muted-foreground font-medium">
                 {hasFilters ? "لا توجد نتائج مطابقة للفلاتر المحددة" : "لا توجد سجلات تدقيق بعد"}
               </p>
-              <p className="text-gray-400 text-sm mt-1">
+              <p className="text-muted-foreground text-sm mt-1">
                 {hasFilters ? "جرب تغيير معايير البحث" : "ستظهر هنا جميع العمليات التي تتم في النظام"}
               </p>
               {hasFilters && (
@@ -415,7 +415,7 @@ export default function ActivityLogPage() {
               {items.map((item: any) => {
                 const entityStyle = ENTITY_STYLES[item.entity] || ENTITY_STYLES.default;
                 const Icon = entityStyle.icon;
-                const actionInfo = ACTION_LABELS[item.action] || { label: item.action, icon: Activity, color: "text-gray-600" };
+                const actionInfo = ACTION_LABELS[item.action] || { label: item.action, icon: Activity, color: "text-muted-foreground" };
                 const ActionIcon = actionInfo.icon;
                 const link = getEntityLink(item.entity, item.entityId);
                 const isExpanded = expandedRow === item.id;
@@ -423,7 +423,7 @@ export default function ActivityLogPage() {
                 const entityLabel = ENTITY_LABELS[item.entity] || item.entity;
 
                 return (
-                  <div key={item.id} className="hover:bg-gray-50/50 transition-colors">
+                  <div key={item.id} className="hover:bg-surface-subtle/50 transition-colors">
                     <div className="flex items-start gap-4 p-4">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${entityStyle.bg}`}>
                         <Icon className={`w-5 h-5 ${entityStyle.color}`} />
@@ -439,14 +439,14 @@ export default function ActivityLogPage() {
                           </span>
                         </div>
                         <div className="flex items-center gap-3 mt-1.5">
-                          <span className="text-xs text-gray-500 flex items-center gap-1">
+                          <span className="text-xs text-muted-foreground flex items-center gap-1">
                             <Users className="w-3 h-3" /> {item.userName || "النظام"}
                           </span>
-                          <span className="text-xs text-gray-400 flex items-center gap-1">
+                          <span className="text-xs text-muted-foreground flex items-center gap-1">
                             <Clock className="w-3 h-3" /> {formatTimeAgo(item.createdAt)}
                           </span>
                           {item.reason && (
-                            <span className="text-xs text-amber-600 flex items-center gap-1">
+                            <span className="text-xs text-status-warning-foreground flex items-center gap-1">
                               📝 {item.reason}
                             </span>
                           )}
@@ -496,7 +496,7 @@ export default function ActivityLogPage() {
 
       {total > pageSize && (
         <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-muted-foreground">
             عرض {page * pageSize + 1} - {Math.min((page + 1) * pageSize, total)} من {total}
           </p>
           <div className="flex items-center gap-2">

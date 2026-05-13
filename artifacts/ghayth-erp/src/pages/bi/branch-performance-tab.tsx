@@ -18,8 +18,8 @@ export function BranchPerformanceTab() {
     { key: "rank", header: "الترتيب", sortable: true, render: (r) => <Badge variant={r.rank === 1 ? "default" : "outline"}>{r.rank}</Badge> },
     { key: "branchName", header: "الفرع", sortable: true, searchable: true, className: "font-medium", render: (r) => r.branchName },
     { key: "revenue", header: "الإيرادات", sortable: true, className: "text-emerald-600 font-medium", render: (r) => formatNumber(r.revenue) },
-    { key: "expenses", header: "المصروفات", sortable: true, className: "text-red-600", render: (r) => formatNumber(r.expenses) },
-    { key: "netProfit", header: "صافي الربح", sortable: true, render: (r) => <span className={cn("font-bold", r.netProfit >= 0 ? "text-emerald-700" : "text-red-700")}>{formatNumber(r.netProfit)}</span> },
+    { key: "expenses", header: "المصروفات", sortable: true, className: "text-status-error-foreground", render: (r) => formatNumber(r.expenses) },
+    { key: "netProfit", header: "صافي الربح", sortable: true, render: (r) => <span className={cn("font-bold", r.netProfit >= 0 ? "text-emerald-700" : "text-status-error-foreground")}>{formatNumber(r.netProfit)}</span> },
     { key: "employees", header: "الموظفون", sortable: true, render: (r) => r.employees },
     {
       key: "attendanceRate", header: "نسبة الحضور", sortable: true,

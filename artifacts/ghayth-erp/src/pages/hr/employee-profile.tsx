@@ -13,5 +13,5 @@ export default function EmployeeProfilePage() {
     if (id) navigate(`/employees/${id}`, { replace: true });
   }, [id, navigate]);
 
-  return <div className="text-center py-12 text-gray-400">جاري التحويل...</div>;
+  return <div className="text-center py-12 text-muted-foreground">جاري التحويل...</div>;
 }

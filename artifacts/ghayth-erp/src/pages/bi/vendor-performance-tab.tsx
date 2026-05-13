@@ -16,7 +16,7 @@ export function VendorPerformanceTab() {
   const columns: DataTableColumn<any>[] = [
     { key: "vendorName", header: "المورد", sortable: true, searchable: true, className: "font-medium", render: (r) => r.vendorName },
     { key: "totalOrders", header: "عدد الطلبات", sortable: true, render: (r) => r.totalOrders },
-    { key: "totalSpend", header: "إجمالي المشتريات", sortable: true, className: "text-blue-600", render: (r) => formatNumber(r.totalSpend) },
+    { key: "totalSpend", header: "إجمالي المشتريات", sortable: true, className: "text-status-info-foreground", render: (r) => formatNumber(r.totalSpend) },
     { key: "avgOrderValue", header: "متوسط الطلب", sortable: true, render: (r) => formatNumber(r.avgOrderValue) },
     {
       key: "onTimeDeliveryRate", header: "معدل الالتزام بالمواعيد", sortable: true,
@@ -35,8 +35,8 @@ export function VendorPerformanceTab() {
       render: (r) => (
         <Badge className={cn(
           r.qualityScore >= 90 ? "bg-emerald-100 text-emerald-700" :
-          r.qualityScore >= 70 ? "bg-amber-100 text-amber-700" :
-          "bg-red-100 text-red-700"
+          r.qualityScore >= 70 ? "bg-status-warning-surface text-status-warning-foreground" :
+          "bg-status-error-surface text-status-error-foreground"
         )}>{r.qualityScore}</Badge>
       ),
     },

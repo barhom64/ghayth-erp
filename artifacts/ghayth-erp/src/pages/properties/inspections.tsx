@@ -193,7 +193,7 @@ export default function InspectionsPage() {
 
       <div className="space-y-3">
         {inspections.length === 0 ? (
-          <Card><CardContent className="py-8 text-center text-gray-400">لا توجد عمليات فحص</CardContent></Card>
+          <Card><CardContent className="py-8 text-center text-muted-foreground">لا توجد عمليات فحص</CardContent></Card>
         ) : inspections.map((insp: any) => (
           <Card key={insp.id} className="hover:shadow-md">
             <CardContent className="p-4 flex items-start justify-between">
@@ -201,9 +201,9 @@ export default function InspectionsPage() {
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{insp.unitNumber} — {insp.buildingName}</span>
                   <PageStatusBadge status={insp.status} />
-                  <Badge className="bg-gray-100 text-gray-600">{TYPES[insp.type] || insp.type}</Badge>
+                  <Badge className="bg-surface-subtle text-muted-foreground">{TYPES[insp.type] || insp.type}</Badge>
                 </div>
-                <div className="text-sm text-gray-500 mt-1 space-y-0.5">
+                <div className="text-sm text-muted-foreground mt-1 space-y-0.5">
                   {insp.inspectorName && <p>المفتش: {insp.inspectorName}</p>}
                   <p>
                     {insp.status === "scheduled" ? "موعد الفحص:" : "تاريخ الفحص:"}
@@ -214,7 +214,7 @@ export default function InspectionsPage() {
               </div>
               <div className="flex items-center gap-2">
                 {insp.conditionRating && (
-                  <div className="flex items-center gap-1 text-yellow-500">
+                  <div className="flex items-center gap-1 text-status-warning">
                     <Star className="w-4 h-4 fill-current" />
                     <span className="text-sm font-medium">{insp.conditionRating}/5</span>
                   </div>

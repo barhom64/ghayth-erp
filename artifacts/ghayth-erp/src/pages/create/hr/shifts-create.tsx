@@ -110,9 +110,9 @@ export default function ShiftsCreate() {
   return (
     <CreatePageLayout title="إضافة وردية جديدة" backPath="/hr/shifts">
       {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -121,8 +121,8 @@ export default function ShiftsCreate() {
 
       <div className="space-y-6">
         <div>
-          <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-            {isNightShift ? <Moon className="w-4 h-4 text-indigo-500" /> : <Sun className="w-4 h-4 text-yellow-500" />}
+          <h3 className="text-sm font-semibold text-status-neutral-foreground mb-3 flex items-center gap-2">
+            {isNightShift ? <Moon className="w-4 h-4 text-indigo-500" /> : <Sun className="w-4 h-4 text-status-warning" />}
             معلومات الوردية
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -165,8 +165,8 @@ export default function ShiftsCreate() {
                 className={cn(
                   "px-4 py-2 rounded-lg border-2 text-sm font-medium transition-all",
                   selectedDays.includes(day.key)
-                    ? "border-blue-400 bg-blue-50 text-blue-700"
-                    : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
+                    ? "border-blue-400 bg-status-info-surface text-status-info-foreground"
+                    : "border-border bg-white text-muted-foreground hover:border-border"
                 )}
               >
                 {day.label}
@@ -175,7 +175,7 @@ export default function ShiftsCreate() {
           </div>
         </div>
 
-        <Card className="bg-gray-50 border-gray-200">
+        <Card className="bg-surface-subtle border-border">
           <CardContent className="p-4">
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div className="flex items-center gap-6 text-sm">
@@ -189,7 +189,7 @@ export default function ShiftsCreate() {
                 </div>
                 <div>
                   <span className="text-muted-foreground">النوع:</span>
-                  <span className={cn("font-bold ms-1", isNightShift ? "text-indigo-600" : "text-yellow-600")}>
+                  <span className={cn("font-bold ms-1", isNightShift ? "text-indigo-600" : "text-status-warning-foreground")}>
                     {isNightShift ? "ليلية" : "نهارية"}
                   </span>
                 </div>

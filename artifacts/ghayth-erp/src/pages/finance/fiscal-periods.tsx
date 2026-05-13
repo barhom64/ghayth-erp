@@ -56,7 +56,7 @@ export default function FiscalPeriodsPage() {
       key: "period",
       header: "الفترة",
       sortable: true,
-      className: "font-mono text-blue-600",
+      className: "font-mono text-status-info-foreground",
       render: (p) => p.period,
     },
     {
@@ -97,8 +97,8 @@ export default function FiscalPeriodsPage() {
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 bg-blue-50 rounded-lg">
-              <Calendar className="h-5 w-5 text-blue-600" />
+            <div className="p-2 bg-status-info-surface rounded-lg">
+              <Calendar className="h-5 w-5 text-status-info-foreground" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground">إجمالي الفترات</p>

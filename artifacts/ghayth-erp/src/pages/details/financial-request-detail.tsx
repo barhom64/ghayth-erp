@@ -123,53 +123,53 @@ export default function FinancialRequestDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <FileText className="h-4 w-4 text-gray-500" />
+            <FileText className="h-4 w-4 text-muted-foreground" />
             بيانات الطلب المالي
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           <div className="flex items-baseline gap-2 border-b pb-3">
             <span className="text-3xl font-bold text-gray-900">{formatCurrency(amount)}</span>
-            <span className="text-xs text-gray-500">ر.س</span>
+            <span className="text-xs text-muted-foreground">ر.س</span>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             {item?.type && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">نوع الطلب</p>
+                <p className="text-xs text-muted-foreground mb-0.5">نوع الطلب</p>
                 <Badge variant="outline">{TYPE_LABELS[item.type] || item.type}</Badge>
               </div>
             )}
             {item?.paymentMethod && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">طريقة الصرف</p>
+                <p className="text-xs text-muted-foreground mb-0.5">طريقة الصرف</p>
                 <Badge variant="secondary">{item.paymentMethod}</Badge>
               </div>
             )}
             {(item?.employeeName || item?.requesterName) && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">طالب الصرف</p>
-                <span className="text-gray-800 font-medium">{item.employeeName || item.requesterName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">طالب الصرف</p>
+                <span className="text-status-neutral-foreground font-medium">{item.employeeName || item.requesterName}</span>
               </div>
             )}
             {item?.purpose && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">الغرض</p>
-                <span className="text-gray-800">{item.purpose}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">الغرض</p>
+                <span className="text-status-neutral-foreground">{item.purpose}</span>
               </div>
             )}
           </div>
 
           {item?.description && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">التفاصيل</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{item.description}</p>
+              <p className="text-xs text-muted-foreground mb-1">التفاصيل</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{item.description}</p>
             </div>
           )}
 
           {item?.returnReason && (
-            <div className="rounded-md bg-amber-50 border border-amber-100 p-3">
-              <p className="text-xs text-amber-700 font-medium mb-1">سبب الإرجاع</p>
+            <div className="rounded-md bg-status-warning-surface border border-status-warning-surface p-3">
+              <p className="text-xs text-status-warning-foreground font-medium mb-1">سبب الإرجاع</p>
               <p className="text-sm text-amber-900 whitespace-pre-wrap">{item.returnReason}</p>
             </div>
           )}

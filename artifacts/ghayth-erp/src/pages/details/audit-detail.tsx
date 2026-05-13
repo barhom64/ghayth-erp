@@ -122,7 +122,7 @@ export default function AuditDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <ClipboardCheck className="h-4 w-4 text-gray-500" />
+            <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
             بيانات التدقيق
           </CardTitle>
         </CardHeader>
@@ -130,7 +130,7 @@ export default function AuditDetail() {
           <div className="grid grid-cols-2 gap-3">
             {audit?.type && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">النوع</p>
+                <p className="text-xs text-muted-foreground mb-0.5">النوع</p>
                 <Badge variant="outline">
                   {TYPE_LABELS[audit.type] || audit.type}
                 </Badge>
@@ -138,7 +138,7 @@ export default function AuditDetail() {
             )}
             {audit?.riskLevel && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">مستوى المخاطر</p>
+                <p className="text-xs text-muted-foreground mb-0.5">مستوى المخاطر</p>
                 <Badge variant={riskTone(audit.riskLevel) === "destructive" ? "destructive" : "outline"}>
                   {RISK_LABELS[audit.riskLevel] || audit.riskLevel}
                 </Badge>
@@ -146,48 +146,48 @@ export default function AuditDetail() {
             )}
             {audit?.auditor && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">المدقق</p>
-                <span className="text-gray-800">{audit.auditor}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">المدقق</p>
+                <span className="text-status-neutral-foreground">{audit.auditor}</span>
               </div>
             )}
             {(audit?.department || audit?.departmentName) && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">القسم</p>
-                <span className="text-gray-800">{audit.department || audit.departmentName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">القسم</p>
+                <span className="text-status-neutral-foreground">{audit.department || audit.departmentName}</span>
               </div>
             )}
             {audit?.startDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ البداية</p>
-                <span className="text-gray-800">{formatDateAr(audit.startDate)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ البداية</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(audit.startDate)}</span>
               </div>
             )}
             {audit?.endDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ النهاية</p>
-                <span className="text-gray-800">{formatDateAr(audit.endDate)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ النهاية</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(audit.endDate)}</span>
               </div>
             )}
           </div>
 
           {audit?.scope && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">نطاق التدقيق</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{audit.scope}</p>
+              <p className="text-xs text-muted-foreground mb-1">نطاق التدقيق</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{audit.scope}</p>
             </div>
           )}
 
           {(audit?.findings || audit?.findingsSummary) && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">ملخص النتائج</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{audit.findings || audit.findingsSummary}</p>
+              <p className="text-xs text-muted-foreground mb-1">ملخص النتائج</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{audit.findings || audit.findingsSummary}</p>
             </div>
           )}
 
           {audit?.recommendations && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">التوصيات</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{audit.recommendations}</p>
+              <p className="text-xs text-muted-foreground mb-1">التوصيات</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{audit.recommendations}</p>
             </div>
           )}
         </CardContent>
@@ -201,14 +201,14 @@ export default function AuditDetail() {
           <CardContent className="space-y-2 text-sm">
             {audit?.createdAt && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ الإنشاء</p>
-                <span className="text-gray-800">{formatDateAr(audit.createdAt)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ الإنشاء</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(audit.createdAt)}</span>
               </div>
             )}
             {audit?.createdByName && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">أنشئ بواسطة</p>
-                <span className="text-gray-800">{audit.createdByName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">أنشئ بواسطة</p>
+                <span className="text-status-neutral-foreground">{audit.createdByName}</span>
               </div>
             )}
           </CardContent>

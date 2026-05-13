@@ -91,14 +91,14 @@ function AnnotatedScreenshot({
   onCalloutClick: (id: number) => void;
 }) {
   return (
-    <div className="relative rounded-xl border border-gray-200 overflow-hidden shadow-lg bg-white">
-      <div className="bg-gray-100 border-b border-gray-200 px-4 py-2 flex items-center gap-2">
+    <div className="relative rounded-xl border border-border overflow-hidden shadow-lg bg-white">
+      <div className="bg-surface-subtle border-b border-border px-4 py-2 flex items-center gap-2">
         <div className="flex gap-1.5">
           <div className="w-3 h-3 rounded-full bg-red-400" />
           <div className="w-3 h-3 rounded-full bg-amber-400" />
           <div className="w-3 h-3 rounded-full bg-emerald-400" />
         </div>
-        <div className="flex-1 bg-white rounded text-xs text-gray-400 px-3 py-1 text-center max-w-xs mx-auto">
+        <div className="flex-1 bg-white rounded text-xs text-muted-foreground px-3 py-1 text-center max-w-xs mx-auto">
           نظام غيث — إدارة الأملاك
         </div>
       </div>
@@ -120,10 +120,10 @@ function AnnotatedScreenshot({
 /* ─── Callout Detail Panel ───────────────────── */
 function CalloutDetails({ callouts, activeId }: { callouts: CalloutMarker[]; activeId: number | null }) {
   const colorBg: Record<string, string> = {
-    blue: "bg-blue-50 border-blue-200 text-blue-800",
+    blue: "bg-status-info-surface border-status-info-surface text-status-info-foreground",
     emerald: "bg-emerald-50 border-emerald-200 text-emerald-800",
-    amber: "bg-amber-50 border-amber-200 text-amber-800",
-    red: "bg-red-50 border-red-200 text-red-800",
+    amber: "bg-status-warning-surface border-status-warning-surface text-status-warning-foreground",
+    red: "bg-status-error-surface border-status-error-surface text-status-error-foreground",
     violet: "bg-violet-50 border-violet-200 text-violet-800",
     indigo: "bg-indigo-50 border-indigo-200 text-indigo-800",
     orange: "bg-orange-50 border-orange-200 text-orange-800",
@@ -169,14 +169,14 @@ function CalloutDetails({ callouts, activeId }: { callouts: CalloutMarker[]; act
 /* ─── Step Arrow Component ───────────────────── */
 function StepList({ steps }: { steps: GuideStep[] }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 mt-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
+    <div className="flex flex-wrap items-center gap-2 mt-4 p-3 bg-surface-subtle rounded-lg border border-border">
       {steps.map((s, i) => (
         <div key={i} className="flex items-center gap-2">
           <div className="flex items-center gap-1.5">
             <span className="w-6 h-6 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center shrink-0">
               {i + 1}
             </span>
-            <span className="text-xs text-gray-700">{s.icon} {s.text}</span>
+            <span className="text-xs text-status-neutral-foreground">{s.icon} {s.text}</span>
           </div>
           {i < steps.length - 1 && (
             <ArrowLeft className="h-4 w-4 text-gray-300 shrink-0 rotate-180" />
@@ -191,14 +191,14 @@ function StepList({ steps }: { steps: GuideStep[] }) {
 
 function DashboardMockScreen() {
   return (
-    <div className="p-4 bg-gray-50 min-h-[400px] text-xs" dir="rtl">
+    <div className="p-4 bg-surface-subtle min-h-[400px] text-xs" dir="rtl">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <div className="text-lg font-bold text-gray-800">لوحة تحكم الأملاك</div>
-          <div className="text-gray-400 text-[10px]">نظرة شاملة على أداء المحفظة العقارية</div>
+          <div className="text-lg font-bold text-status-neutral-foreground">لوحة تحكم الأملاك</div>
+          <div className="text-muted-foreground text-[10px]">نظرة شاملة على أداء المحفظة العقارية</div>
         </div>
         <div className="flex gap-1.5">
-          <div className="bg-white border rounded px-2 py-1 text-[10px] text-gray-600">+ مبنى جديد</div>
+          <div className="bg-white border rounded px-2 py-1 text-[10px] text-muted-foreground">+ مبنى جديد</div>
           <div className="bg-blue-600 text-white rounded px-2 py-1 text-[10px]">+ وحدة جديدة</div>
         </div>
       </div>
@@ -226,64 +226,64 @@ function DashboardMockScreen() {
       </div>
       <div className="grid grid-cols-2 gap-2 mb-3">
         <div className="bg-white border rounded-lg p-3">
-          <div className="text-[10px] font-semibold text-gray-600 mb-2">📅 الإيرادات السنوية</div>
+          <div className="text-[10px] font-semibold text-muted-foreground mb-2">📅 الإيرادات السنوية</div>
           <div className="grid grid-cols-3 gap-1 text-center">
             <div className="bg-indigo-50 rounded p-1.5">
               <div className="font-bold text-indigo-700 text-sm">940,000</div>
-              <div className="text-[9px] text-gray-400">محصل</div>
+              <div className="text-[9px] text-muted-foreground">محصل</div>
             </div>
-            <div className="bg-gray-50 rounded p-1.5">
-              <div className="font-bold text-gray-700 text-sm">1,200,000</div>
-              <div className="text-[9px] text-gray-400">متوقع</div>
+            <div className="bg-surface-subtle rounded p-1.5">
+              <div className="font-bold text-status-neutral-foreground text-sm">1,200,000</div>
+              <div className="text-[9px] text-muted-foreground">متوقع</div>
             </div>
-            <div className="bg-red-50 rounded p-1.5">
-              <div className="font-bold text-red-500 text-sm">260,000</div>
-              <div className="text-[9px] text-gray-400">متبقي</div>
+            <div className="bg-status-error-surface rounded p-1.5">
+              <div className="font-bold text-status-error text-sm">260,000</div>
+              <div className="text-[9px] text-muted-foreground">متبقي</div>
             </div>
           </div>
-          <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div className="mt-2 h-1.5 bg-surface-subtle rounded-full overflow-hidden">
             <div className="h-full bg-indigo-500 rounded-full" style={{ width: "78%" }} />
           </div>
         </div>
         <div className="bg-white border rounded-lg p-3">
-          <div className="text-[10px] font-semibold text-gray-600 mb-2">⏰ عقود تنتهي قريباً</div>
+          <div className="text-[10px] font-semibold text-muted-foreground mb-2">⏰ عقود تنتهي قريباً</div>
           <div className="grid grid-cols-3 gap-1 text-center">
-            <div className="bg-red-50 border border-red-100 rounded p-1.5">
-              <div className="text-2xl font-bold text-red-600">2</div>
-              <div className="text-[9px] text-gray-400">30 يوم</div>
+            <div className="bg-status-error-surface border border-status-error-surface rounded p-1.5">
+              <div className="text-2xl font-bold text-status-error-foreground">2</div>
+              <div className="text-[9px] text-muted-foreground">30 يوم</div>
             </div>
             <div className="bg-orange-50 border border-orange-100 rounded p-1.5">
               <div className="text-2xl font-bold text-orange-600">5</div>
-              <div className="text-[9px] text-gray-400">60 يوم</div>
+              <div className="text-[9px] text-muted-foreground">60 يوم</div>
             </div>
-            <div className="bg-amber-50 border border-amber-100 rounded p-1.5">
-              <div className="text-2xl font-bold text-amber-600">8</div>
-              <div className="text-[9px] text-gray-400">90 يوم</div>
+            <div className="bg-status-warning-surface border border-status-warning-surface rounded p-1.5">
+              <div className="text-2xl font-bold text-status-warning-foreground">8</div>
+              <div className="text-[9px] text-muted-foreground">90 يوم</div>
             </div>
           </div>
         </div>
       </div>
       <div className="grid grid-cols-3 gap-2">
         <div className="bg-white border rounded-lg p-3">
-          <div className="text-[10px] font-semibold text-gray-600 mb-1">🔧 طلبات الصيانة</div>
-          <div className="text-3xl font-bold text-amber-600">7</div>
-          <div className="text-[9px] text-gray-400">طلب مفتوح</div>
-          <div className="mt-2 bg-gray-50 border rounded text-[9px] text-center py-1 text-gray-500">+ طلب صيانة جديد</div>
+          <div className="text-[10px] font-semibold text-muted-foreground mb-1">🔧 طلبات الصيانة</div>
+          <div className="text-3xl font-bold text-status-warning-foreground">7</div>
+          <div className="text-[9px] text-muted-foreground">طلب مفتوح</div>
+          <div className="mt-2 bg-surface-subtle border rounded text-[9px] text-center py-1 text-muted-foreground">+ طلب صيانة جديد</div>
         </div>
         <div className="bg-white border rounded-lg p-3">
-          <div className="text-[10px] font-semibold text-gray-600 mb-1">💰 إجمالي التحصيل</div>
+          <div className="text-[10px] font-semibold text-muted-foreground mb-1">💰 إجمالي التحصيل</div>
           <div className="text-xl font-bold text-violet-700">4,820,000</div>
-          <div className="text-[9px] text-gray-400">من 6,000,000 إجمالي</div>
-          <div className="mt-1.5 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div className="text-[9px] text-muted-foreground">من 6,000,000 إجمالي</div>
+          <div className="mt-1.5 h-1.5 bg-surface-subtle rounded-full overflow-hidden">
             <div className="h-full bg-emerald-500 rounded-full" style={{ width: "80%" }} />
           </div>
         </div>
         <div className="bg-white border rounded-lg p-3">
-          <div className="text-[10px] font-semibold text-gray-600 mb-1">🔗 روابط سريعة</div>
+          <div className="text-[10px] font-semibold text-muted-foreground mb-1">🔗 روابط سريعة</div>
           <div className="space-y-1">
-            <div className="text-[9px] text-gray-500 bg-gray-50 rounded px-1.5 py-1">+ إضافة مستأجر جديد</div>
-            <div className="text-[9px] text-gray-500 bg-gray-50 rounded px-1.5 py-1">+ إنشاء عقد إيجار</div>
-            <div className="text-[9px] text-gray-500 bg-gray-50 rounded px-1.5 py-1">💵 تسجيل دفعة</div>
+            <div className="text-[9px] text-muted-foreground bg-surface-subtle rounded px-1.5 py-1">+ إضافة مستأجر جديد</div>
+            <div className="text-[9px] text-muted-foreground bg-surface-subtle rounded px-1.5 py-1">+ إنشاء عقد إيجار</div>
+            <div className="text-[9px] text-muted-foreground bg-surface-subtle rounded px-1.5 py-1">💵 تسجيل دفعة</div>
           </div>
         </div>
       </div>
@@ -293,17 +293,17 @@ function DashboardMockScreen() {
 
 function BuildingsMockScreen() {
   return (
-    <div className="p-4 bg-gray-50 min-h-[380px] text-xs" dir="rtl">
+    <div className="p-4 bg-surface-subtle min-h-[380px] text-xs" dir="rtl">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <div className="text-lg font-bold text-gray-800">المباني والمجمعات</div>
-          <div className="text-gray-400 text-[10px]">3 مباني مسجلة</div>
+          <div className="text-lg font-bold text-status-neutral-foreground">المباني والمجمعات</div>
+          <div className="text-muted-foreground text-[10px]">3 مباني مسجلة</div>
         </div>
         <div className="bg-blue-600 text-white rounded px-2 py-1 text-[10px]">+ إضافة مبنى</div>
       </div>
       <div className="bg-white border rounded mb-3 flex items-center gap-1.5 px-2 py-1.5">
         <span className="text-gray-300">🔍</span>
-        <span className="text-[10px] text-gray-400">بحث بالاسم أو العنوان...</span>
+        <span className="text-[10px] text-muted-foreground">بحث بالاسم أو العنوان...</span>
       </div>
       <div className="grid grid-cols-3 gap-2">
         {[
@@ -314,40 +314,40 @@ function BuildingsMockScreen() {
           <div key={i} className="bg-white border rounded-lg p-3">
             <div className="flex items-start justify-between mb-1">
               <div>
-                <div className="font-semibold text-gray-800 text-[11px]">{b.name}</div>
-                <div className="text-[9px] text-gray-400">{b.address}</div>
+                <div className="font-semibold text-status-neutral-foreground text-[11px]">{b.name}</div>
+                <div className="text-[9px] text-muted-foreground">{b.address}</div>
               </div>
-              <div className="text-[9px] border rounded px-1 text-gray-500">{b.type}</div>
+              <div className="text-[9px] border rounded px-1 text-muted-foreground">{b.type}</div>
             </div>
             <div className="grid grid-cols-3 gap-1 text-center my-2">
-              <div className="bg-gray-50 rounded p-1">
+              <div className="bg-surface-subtle rounded p-1">
                 <div className="font-bold">{b.total}</div>
-                <div className="text-[8px] text-gray-400">إجمالي</div>
+                <div className="text-[8px] text-muted-foreground">إجمالي</div>
               </div>
-              <div className="bg-blue-50 rounded p-1">
-                <div className="font-bold text-blue-600">{b.rented}</div>
-                <div className="text-[8px] text-gray-400">مؤجرة</div>
+              <div className="bg-status-info-surface rounded p-1">
+                <div className="font-bold text-status-info-foreground">{b.rented}</div>
+                <div className="text-[8px] text-muted-foreground">مؤجرة</div>
               </div>
               <div className="bg-emerald-50 rounded p-1">
                 <div className="font-bold text-emerald-600">{b.available}</div>
-                <div className="text-[8px] text-gray-400">شاغرة</div>
+                <div className="text-[8px] text-muted-foreground">شاغرة</div>
               </div>
             </div>
             <div className="mb-2">
-              <div className="flex justify-between text-[8px] text-gray-400 mb-0.5">
+              <div className="flex justify-between text-[8px] text-muted-foreground mb-0.5">
                 <span>الإشغال</span><span className="font-bold">{b.occ}%</span>
               </div>
-              <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-1 bg-surface-subtle rounded-full overflow-hidden">
                 <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${b.occ}%` }} />
               </div>
             </div>
             <div className="flex justify-between items-center text-[9px] mb-2">
-              <span className="text-gray-400">الإيرادات</span>
+              <span className="text-muted-foreground">الإيرادات</span>
               <span className="font-bold text-emerald-600">{b.rev} ر.س</span>
             </div>
             <div className="flex gap-1">
-              <div className="flex-1 text-center bg-gray-50 border rounded py-1 text-[8px] text-gray-500">👁 عرض الوحدات</div>
-              <div className="w-7 text-center bg-gray-50 border rounded py-1 text-[8px] text-gray-500">✏</div>
+              <div className="flex-1 text-center bg-surface-subtle border rounded py-1 text-[8px] text-muted-foreground">👁 عرض الوحدات</div>
+              <div className="w-7 text-center bg-surface-subtle border rounded py-1 text-[8px] text-muted-foreground">✏</div>
             </div>
           </div>
         ))}
@@ -358,44 +358,44 @@ function BuildingsMockScreen() {
 
 function UnitsMockScreen() {
   return (
-    <div className="p-4 bg-gray-50 min-h-[380px] text-xs" dir="rtl">
+    <div className="p-4 bg-surface-subtle min-h-[380px] text-xs" dir="rtl">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <div className="text-lg font-bold text-gray-800">الوحدات العقارية</div>
-          <div className="text-gray-400 text-[10px]">إدارة وتتبع الوحدات العقارية</div>
+          <div className="text-lg font-bold text-status-neutral-foreground">الوحدات العقارية</div>
+          <div className="text-muted-foreground text-[10px]">إدارة وتتبع الوحدات العقارية</div>
         </div>
         <div className="bg-blue-600 text-white rounded px-2 py-1 text-[10px]">+ إضافة وحدة</div>
       </div>
       <div className="grid grid-cols-4 gap-2 mb-3">
-        <div className="bg-white border rounded p-2 text-center"><div className="text-lg font-bold">48</div><div className="text-[9px] text-gray-400">إجمالي الوحدات</div></div>
+        <div className="bg-white border rounded p-2 text-center"><div className="text-lg font-bold">48</div><div className="text-[9px] text-muted-foreground">إجمالي الوحدات</div></div>
         <div className="bg-emerald-600 text-white rounded p-2 text-center"><div className="text-lg font-bold">8</div><div className="text-[9px] opacity-80">متاحة</div></div>
         <div className="bg-blue-600 text-white rounded p-2 text-center"><div className="text-lg font-bold">40</div><div className="text-[9px] opacity-80">مؤجرة</div></div>
         <div className="bg-violet-600 text-white rounded p-2 text-center"><div className="text-[11px] font-bold">4,820,000</div><div className="text-[9px] opacity-80">إجمالي التحصيل</div></div>
       </div>
       <div className="bg-white border rounded p-2 mb-3 flex items-center gap-2">
         <span className="text-gray-300 text-sm">🔍</span>
-        <span className="text-[10px] text-gray-400 flex-1">بحث برقم الوحدة أو المبنى...</span>
-        <span className="text-[9px] border rounded px-1.5 py-0.5 text-gray-500">الحالة ▾</span>
+        <span className="text-[10px] text-muted-foreground flex-1">بحث برقم الوحدة أو المبنى...</span>
+        <span className="text-[9px] border rounded px-1.5 py-0.5 text-muted-foreground">الحالة ▾</span>
         <span className="text-[9px] border rounded px-1.5 py-0.5 text-emerald-600">تصدير جدولي</span>
       </div>
       <div className="bg-white border rounded overflow-hidden">
-        <div className="grid grid-cols-6 bg-gray-50 border-b">
+        <div className="grid grid-cols-6 bg-surface-subtle border-b">
           {["رقم الوحدة", "المبنى", "النوع", "المساحة", "الإيجار", "الحالة"].map((h, i) => (
-            <div key={i} className="px-2 py-1.5 text-[9px] text-gray-500 font-semibold">{h}</div>
+            <div key={i} className="px-2 py-1.5 text-[9px] text-muted-foreground font-semibold">{h}</div>
           ))}
         </div>
         {[
-          { unit: "A-101", bld: "برج النخيل", type: "شقة", area: "120 م²", rent: "3,500 ر.س", status: "مؤجرة", color: "bg-blue-100 text-blue-700" },
+          { unit: "A-101", bld: "برج النخيل", type: "شقة", area: "120 م²", rent: "3,500 ر.س", status: "مؤجرة", color: "bg-status-info-surface text-status-info-foreground" },
           { unit: "A-102", bld: "برج النخيل", type: "شقة", area: "95 م²", rent: "2,800 ر.س", status: "متاحة", color: "bg-emerald-100 text-emerald-700" },
-          { unit: "B-201", bld: "مجمع الواحة", type: "فيلا", area: "350 م²", rent: "8,000 ر.س", status: "مؤجرة", color: "bg-blue-100 text-blue-700" },
+          { unit: "B-201", bld: "مجمع الواحة", type: "فيلا", area: "350 م²", rent: "8,000 ر.س", status: "مؤجرة", color: "bg-status-info-surface text-status-info-foreground" },
           { unit: "C-101", bld: "المركز التجاري", type: "محل", area: "80 م²", rent: "5,000 ر.س", status: "صيانة", color: "bg-orange-100 text-orange-700" },
         ].map((r, i) => (
-          <div key={i} className="grid grid-cols-6 border-b hover:bg-gray-50">
-            <div className="px-2 py-1.5 text-[9px] text-blue-600 font-medium">{r.unit}</div>
-            <div className="px-2 py-1.5 text-[9px] text-gray-600">{r.bld}</div>
-            <div className="px-2 py-1.5 text-[9px] text-gray-600">{r.type}</div>
-            <div className="px-2 py-1.5 text-[9px] text-gray-600">{r.area}</div>
-            <div className="px-2 py-1.5 text-[9px] font-bold text-gray-800">{r.rent}</div>
+          <div key={i} className="grid grid-cols-6 border-b hover:bg-surface-subtle">
+            <div className="px-2 py-1.5 text-[9px] text-status-info-foreground font-medium">{r.unit}</div>
+            <div className="px-2 py-1.5 text-[9px] text-muted-foreground">{r.bld}</div>
+            <div className="px-2 py-1.5 text-[9px] text-muted-foreground">{r.type}</div>
+            <div className="px-2 py-1.5 text-[9px] text-muted-foreground">{r.area}</div>
+            <div className="px-2 py-1.5 text-[9px] font-bold text-status-neutral-foreground">{r.rent}</div>
             <div className="px-2 py-1.5"><span className={cn("text-[8px] px-1 rounded", r.color)}>{r.status}</span></div>
           </div>
         ))}
@@ -406,23 +406,23 @@ function UnitsMockScreen() {
 
 function TenantsMockScreen() {
   return (
-    <div className="p-4 bg-gray-50 min-h-[360px] text-xs" dir="rtl">
+    <div className="p-4 bg-surface-subtle min-h-[360px] text-xs" dir="rtl">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <div className="text-lg font-bold text-gray-800">المستأجرون</div>
-          <div className="text-gray-400 text-[10px]">سجل كامل لجميع المستأجرين الحاليين والسابقين</div>
+          <div className="text-lg font-bold text-status-neutral-foreground">المستأجرون</div>
+          <div className="text-muted-foreground text-[10px]">سجل كامل لجميع المستأجرين الحاليين والسابقين</div>
         </div>
         <div className="bg-blue-600 text-white rounded px-2 py-1 text-[10px]">+ مستأجر جديد</div>
       </div>
       <div className="bg-white border rounded p-2 mb-3 flex items-center gap-2">
         <span className="text-gray-300 text-sm">🔍</span>
-        <span className="text-[10px] text-gray-400 flex-1">بحث بالاسم أو الهاتف أو رقم الهوية...</span>
+        <span className="text-[10px] text-muted-foreground flex-1">بحث بالاسم أو الهاتف أو رقم الهوية...</span>
         <span className="text-[9px] border rounded px-1.5 py-0.5 text-emerald-600">تصدير جدولي</span>
       </div>
       <div className="bg-white border rounded overflow-hidden">
-        <div className="grid bg-gray-50 border-b" style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 2fr 1fr" }}>
+        <div className="grid bg-surface-subtle border-b" style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 2fr 1fr" }}>
           {["الاسم", "الهاتف", "رقم الهوية", "العقود", "الوحدة الحالية", "إجمالي المدفوعات", "إجراءات"].map((h, i) => (
-            <div key={i} className="px-2 py-1.5 text-[9px] text-gray-500 font-semibold">{h}</div>
+            <div key={i} className="px-2 py-1.5 text-[9px] text-muted-foreground font-semibold">{h}</div>
           ))}
         </div>
         {[
@@ -430,18 +430,18 @@ function TenantsMockScreen() {
           { name: "المستأجر ٢ (مثال)", phone: "05X-XXX-XX02", id: "XXXXXXXX02", contracts: "1 نشط", unit: "B-201", paid: "96,000 ر.س" },
           { name: "المستأجر ٣ (مثال)", phone: "05X-XXX-XX03", id: "XXXXXXXX03", contracts: "1 نشط", unit: "C-305", paid: "28,000 ر.س" },
         ].map((t, i) => (
-          <div key={i} className="grid border-b hover:bg-gray-50" style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 2fr 1fr" }}>
+          <div key={i} className="grid border-b hover:bg-surface-subtle" style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 2fr 1fr" }}>
             <div className="px-2 py-2 flex items-center gap-1.5">
               <div className="w-6 h-6 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center text-[9px] font-bold shrink-0">{t.name[0]}</div>
               <span className="text-[9px] font-medium">{t.name}</span>
             </div>
-            <div className="px-2 py-2 text-[9px] text-blue-600">{t.phone}</div>
+            <div className="px-2 py-2 text-[9px] text-status-info-foreground">{t.phone}</div>
             <div className="px-2 py-2 text-[9px] font-mono">{t.id}</div>
             <div className="px-2 py-2"><span className="text-[8px] bg-emerald-100 text-emerald-700 px-1 rounded">{t.contracts}</span></div>
-            <div className="px-2 py-2 text-[9px] text-gray-600">{t.unit}</div>
+            <div className="px-2 py-2 text-[9px] text-muted-foreground">{t.unit}</div>
             <div className="px-2 py-2 text-[9px] font-bold text-emerald-600">{t.paid}</div>
             <div className="px-2 py-2 flex gap-1">
-              <span className="text-[8px] border rounded px-1 py-0.5 text-gray-500">ملف</span>
+              <span className="text-[8px] border rounded px-1 py-0.5 text-muted-foreground">ملف</span>
               <span className="text-[10px] text-gray-300">⌄</span>
             </div>
           </div>
@@ -453,22 +453,22 @@ function TenantsMockScreen() {
 
 function OwnersMockScreen() {
   return (
-    <div className="p-4 bg-gray-50 min-h-[320px] text-xs" dir="rtl">
+    <div className="p-4 bg-surface-subtle min-h-[320px] text-xs" dir="rtl">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <div className="text-lg font-bold text-gray-800">الملاك</div>
-          <div className="text-gray-400 text-[10px]">سجل ملاك العقارات — للعقارات المُدارة لصالح الغير</div>
+          <div className="text-lg font-bold text-status-neutral-foreground">الملاك</div>
+          <div className="text-muted-foreground text-[10px]">سجل ملاك العقارات — للعقارات المُدارة لصالح الغير</div>
         </div>
         <div className="bg-blue-600 text-white rounded px-2 py-1 text-[10px]">+ إضافة مالك</div>
       </div>
       <div className="bg-white border rounded p-2 mb-3 flex gap-2 items-center">
         <span className="text-gray-300">🔍</span>
-        <span className="text-[10px] text-gray-400">بحث بالاسم أو الهاتف أو رقم الهوية...</span>
+        <span className="text-[10px] text-muted-foreground">بحث بالاسم أو الهاتف أو رقم الهوية...</span>
       </div>
       <div className="bg-white border rounded overflow-hidden">
-        <div className="grid bg-gray-50 border-b" style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr 1fr" }}>
+        <div className="grid bg-surface-subtle border-b" style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr 1fr" }}>
           {["الاسم", "النوع", "الهاتف", "المباني", "الوحدات", "العقود النشطة", "إجراءات"].map((h) => (
-            <div key={h} className="px-2 py-1.5 text-[9px] text-gray-500 font-semibold">{h}</div>
+            <div key={h} className="px-2 py-1.5 text-[9px] text-muted-foreground font-semibold">{h}</div>
           ))}
         </div>
         {[
@@ -476,18 +476,18 @@ function OwnersMockScreen() {
           { name: "شركة عقارية (مثال)", type: "شركة", phone: "01X-XXX-XX11", buildings: 1, units: 15, contracts: 11 },
           { name: "المالك ٣ (مثال)", type: "فرد", phone: "05X-XXX-XX12", buildings: 1, units: 13, contracts: 13 },
         ].map((o, i) => (
-          <div key={i} className="grid border-b hover:bg-gray-50" style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr 1fr" }}>
+          <div key={i} className="grid border-b hover:bg-surface-subtle" style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr 1fr" }}>
             <div className="px-2 py-2 flex items-center gap-1.5">
-              <div className="w-6 h-6 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center text-[9px] font-bold">{o.name[0]}</div>
+              <div className="w-6 h-6 rounded-full bg-status-warning-surface text-status-warning-foreground flex items-center justify-center text-[9px] font-bold">{o.name[0]}</div>
               <span className="text-[9px] font-medium">{o.name}</span>
             </div>
             <div className="px-2 py-2"><span className="text-[8px] border rounded px-1">{o.type}</span></div>
-            <div className="px-2 py-2 text-[9px] text-blue-600">{o.phone}</div>
-            <div className="px-2 py-2 text-[9px] text-gray-600">{o.buildings}</div>
-            <div className="px-2 py-2 text-[9px] text-gray-600">{o.units}</div>
+            <div className="px-2 py-2 text-[9px] text-status-info-foreground">{o.phone}</div>
+            <div className="px-2 py-2 text-[9px] text-muted-foreground">{o.buildings}</div>
+            <div className="px-2 py-2 text-[9px] text-muted-foreground">{o.units}</div>
             <div className="px-2 py-2"><span className="text-[8px] bg-emerald-100 text-emerald-700 px-1 rounded">{o.contracts} نشط</span></div>
             <div className="px-2 py-2 flex gap-1">
-              <span className="text-[8px] border rounded px-1 py-0.5 text-gray-500">تعديل</span>
+              <span className="text-[8px] border rounded px-1 py-0.5 text-muted-foreground">تعديل</span>
               <span className="text-[8px] text-red-400">🗑</span>
             </div>
           </div>
@@ -499,46 +499,46 @@ function OwnersMockScreen() {
 
 function ContractsMockScreen() {
   return (
-    <div className="p-4 bg-gray-50 min-h-[360px] text-xs" dir="rtl">
+    <div className="p-4 bg-surface-subtle min-h-[360px] text-xs" dir="rtl">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <div className="text-lg font-bold text-gray-800">عقود الإيجار</div>
-          <div className="text-gray-400 text-[10px]">إدارة وتتبع جميع عقود الإيجار — متوافق مع إيجار</div>
+          <div className="text-lg font-bold text-status-neutral-foreground">عقود الإيجار</div>
+          <div className="text-muted-foreground text-[10px]">إدارة وتتبع جميع عقود الإيجار — متوافق مع إيجار</div>
         </div>
         <div className="bg-blue-600 text-white rounded px-2 py-1 text-[10px]">+ إضافة عقد</div>
       </div>
       <div className="bg-white border rounded p-2 mb-3 flex items-center gap-2">
         <span className="text-gray-300">🔍</span>
-        <span className="text-[10px] text-gray-400 flex-1">بحث بالمستأجر أو الوحدة أو رقم إيجار...</span>
+        <span className="text-[10px] text-muted-foreground flex-1">بحث بالمستأجر أو الوحدة أو رقم إيجار...</span>
         <span className="text-[9px] border rounded px-1.5 py-0.5">الحالة ▾</span>
         <span className="text-[9px] border rounded px-1.5 py-0.5">التاريخ</span>
       </div>
       <div className="bg-white border rounded overflow-hidden">
-        <div className="grid bg-gray-50 border-b" style={{ gridTemplateColumns: "1fr 1fr 2fr 1fr 1fr 1fr 1fr 1fr 1fr" }}>
+        <div className="grid bg-surface-subtle border-b" style={{ gridTemplateColumns: "1fr 1fr 2fr 1fr 1fr 1fr 1fr 1fr 1fr" }}>
           {["رقم إيجار", "الوحدة", "المستأجر", "من", "إلى", "الإيجار", "الدورة", "الحالة", "تفاصيل"].map((h) => (
-            <div key={h} className="px-2 py-1.5 text-[8px] text-gray-500 font-semibold">{h}</div>
+            <div key={h} className="px-2 py-1.5 text-[8px] text-muted-foreground font-semibold">{h}</div>
           ))}
         </div>
         {[
           { ejar: "EJR-2024-001", unit: "A-101", tenant: "المستأجر ١ (مثال)", from: "2024/01/01", to: "2024/12/31", rent: "3,500", freq: "شهري", status: "ساري", sColor: "bg-emerald-100 text-emerald-700" },
           { ejar: "EJR-2024-002", unit: "B-201", tenant: "المستأجر ٢ (مثال)", from: "2024/03/01", to: "2025/02/28", rent: "8,000", freq: "ربع سنوي", status: "ساري", sColor: "bg-emerald-100 text-emerald-700" },
-          { ejar: "EJR-2023-045", unit: "C-305", tenant: "المستأجر ٣ (مثال)", from: "2023/06/01", to: "2024/05/31", rent: "2,800", freq: "شهري", status: "منتهي", sColor: "bg-gray-100 text-gray-600" },
+          { ejar: "EJR-2023-045", unit: "C-305", tenant: "المستأجر ٣ (مثال)", from: "2023/06/01", to: "2024/05/31", rent: "2,800", freq: "شهري", status: "منتهي", sColor: "bg-surface-subtle text-muted-foreground" },
         ].map((c, i) => (
-          <div key={i} className={cn("grid border-b hover:bg-gray-50 cursor-pointer", i === 1 ? "bg-blue-50/40" : "")} style={{ gridTemplateColumns: "1fr 1fr 2fr 1fr 1fr 1fr 1fr 1fr 1fr" }}>
+          <div key={i} className={cn("grid border-b hover:bg-surface-subtle cursor-pointer", i === 1 ? "bg-status-info-surface/40" : "")} style={{ gridTemplateColumns: "1fr 1fr 2fr 1fr 1fr 1fr 1fr 1fr 1fr" }}>
             {[c.ejar, c.unit, c.tenant, c.from, c.to, c.rent + " ر.س", c.freq].map((v, j) => (
-              <div key={j} className="px-2 py-2 text-[8px] text-gray-700">{v}</div>
+              <div key={j} className="px-2 py-2 text-[8px] text-status-neutral-foreground">{v}</div>
             ))}
             <div className="px-2 py-2"><span className={cn("text-[8px] px-1 rounded", c.sColor)}>{c.status}</span></div>
             <div className="px-2 py-2 text-gray-300 text-center">⌄</div>
           </div>
         ))}
-        <div className="border-t p-3 bg-blue-50/30 text-[9px]">
-          <div className="font-semibold text-gray-600 mb-2">📋 تفاصيل العقد EJR-2024-002</div>
+        <div className="border-t p-3 bg-status-info-surface text-[9px]">
+          <div className="font-semibold text-muted-foreground mb-2">📋 تفاصيل العقد EJR-2024-002</div>
           <div className="grid grid-cols-4 gap-2">
-            <div className="bg-white border rounded p-2"><div className="text-[8px] text-gray-400">نوع العقد</div><div className="font-medium">سكني</div></div>
-            <div className="bg-white border rounded p-2"><div className="text-[8px] text-gray-400">الإيجار السنوي</div><div className="font-bold text-emerald-700">32,000 ر.س</div></div>
-            <div className="bg-white border rounded p-2"><div className="text-[8px] text-gray-400">التأمين</div><div className="font-medium">5,000 ر.س</div></div>
-            <div className="bg-white border rounded p-2"><div className="text-[8px] text-gray-400">التجديد التلقائي</div><div className="text-emerald-600">مفعّل</div></div>
+            <div className="bg-white border rounded p-2"><div className="text-[8px] text-muted-foreground">نوع العقد</div><div className="font-medium">سكني</div></div>
+            <div className="bg-white border rounded p-2"><div className="text-[8px] text-muted-foreground">الإيجار السنوي</div><div className="font-bold text-emerald-700">32,000 ر.س</div></div>
+            <div className="bg-white border rounded p-2"><div className="text-[8px] text-muted-foreground">التأمين</div><div className="font-medium">5,000 ر.س</div></div>
+            <div className="bg-white border rounded p-2"><div className="text-[8px] text-muted-foreground">التجديد التلقائي</div><div className="text-emerald-600">مفعّل</div></div>
           </div>
         </div>
       </div>
@@ -548,36 +548,36 @@ function ContractsMockScreen() {
 
 function PaymentsMockScreen() {
   return (
-    <div className="p-4 bg-gray-50 min-h-[340px] text-xs" dir="rtl">
+    <div className="p-4 bg-surface-subtle min-h-[340px] text-xs" dir="rtl">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <div className="text-lg font-bold text-gray-800">مدفوعات الإيجار</div>
-          <div className="text-gray-400 text-[10px]">متابعة وتسجيل مدفوعات الإيجار</div>
+          <div className="text-lg font-bold text-status-neutral-foreground">مدفوعات الإيجار</div>
+          <div className="text-muted-foreground text-[10px]">متابعة وتسجيل مدفوعات الإيجار</div>
         </div>
         <div className="bg-blue-600 text-white rounded px-2 py-1 text-[10px]">💵 تسجيل دفعة</div>
       </div>
       <div className="bg-white border rounded p-2 mb-3 flex items-center gap-2">
         <span className="text-gray-300">🔍</span>
-        <span className="text-[10px] text-gray-400 flex-1">بحث بالمستأجر أو الوحدة...</span>
+        <span className="text-[10px] text-muted-foreground flex-1">بحث بالمستأجر أو الوحدة...</span>
         <span className="text-[9px] border rounded px-1.5 py-0.5">مدفوع</span>
         <span className="text-[9px] border rounded px-1.5 py-0.5">معلق</span>
         <span className="text-[9px] border rounded px-1.5 py-0.5">متأخر</span>
       </div>
       <div className="bg-white border rounded overflow-hidden">
-        <div className="grid bg-gray-50 border-b" style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr 1fr" }}>
+        <div className="grid bg-surface-subtle border-b" style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr 1fr" }}>
           {["المستأجر", "الوحدة", "تاريخ الاستحقاق", "المبلغ", "المدفوع", "الحالة", "إجراء"].map((h) => (
-            <div key={h} className="px-2 py-1.5 text-[9px] text-gray-500 font-semibold">{h}</div>
+            <div key={h} className="px-2 py-1.5 text-[9px] text-muted-foreground font-semibold">{h}</div>
           ))}
         </div>
         {[
           { tenant: "المستأجر ١ (مثال)", unit: "A-101", due: "2024/12/01", amount: "3,500", paid: "3,500", status: "مدفوع", sColor: "bg-emerald-100 text-emerald-700", action: null },
-          { tenant: "المستأجر ٢ (مثال)", unit: "B-201", due: "2024/12/01", amount: "8,000", paid: "0", status: "معلق", sColor: "bg-gray-100 text-gray-500", action: "تسجيل" },
-          { tenant: "المستأجر ٣ (مثال)", unit: "C-305", due: "2024/11/01", amount: "2,800", paid: "0", status: "متأخر", sColor: "bg-red-100 text-red-700", action: "تسجيل" },
+          { tenant: "المستأجر ٢ (مثال)", unit: "B-201", due: "2024/12/01", amount: "8,000", paid: "0", status: "معلق", sColor: "bg-surface-subtle text-muted-foreground", action: "تسجيل" },
+          { tenant: "المستأجر ٣ (مثال)", unit: "C-305", due: "2024/11/01", amount: "2,800", paid: "0", status: "متأخر", sColor: "bg-status-error-surface text-status-error-foreground", action: "تسجيل" },
         ].map((p, i) => (
-          <div key={i} className={cn("grid border-b", p.status === "متأخر" ? "bg-rose-50" : "hover:bg-gray-50")} style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr 1fr" }}>
+          <div key={i} className={cn("grid border-b", p.status === "متأخر" ? "bg-rose-50" : "hover:bg-surface-subtle")} style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr 1fr" }}>
             <div className="px-2 py-2 text-[9px] font-medium">{p.tenant}</div>
-            <div className="px-2 py-2 text-[9px] text-gray-600">{p.unit}</div>
-            <div className="px-2 py-2 text-[9px] text-gray-600">{p.due}</div>
+            <div className="px-2 py-2 text-[9px] text-muted-foreground">{p.unit}</div>
+            <div className="px-2 py-2 text-[9px] text-muted-foreground">{p.due}</div>
             <div className="px-2 py-2 text-[9px] font-bold">{formatCurrency(Number(p.amount.replace(/,/g, "")))}</div>
             <div className="px-2 py-2 text-[9px] text-emerald-600">{formatCurrency(Number(p.paid.replace(/,/g, "")))}</div>
             <div className="px-2 py-2"><span className={cn("text-[8px] px-1 rounded", p.sColor)}>{p.status}</span></div>
@@ -593,46 +593,46 @@ function PaymentsMockScreen() {
 
 function MaintenanceMockScreen() {
   return (
-    <div className="p-4 bg-gray-50 min-h-[340px] text-xs" dir="rtl">
+    <div className="p-4 bg-surface-subtle min-h-[340px] text-xs" dir="rtl">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <div className="text-lg font-bold text-gray-800">طلبات الصيانة</div>
-          <div className="text-gray-400 text-[10px]">إدارة ومتابعة طلبات الصيانة</div>
+          <div className="text-lg font-bold text-status-neutral-foreground">طلبات الصيانة</div>
+          <div className="text-muted-foreground text-[10px]">إدارة ومتابعة طلبات الصيانة</div>
         </div>
         <div className="bg-blue-600 text-white rounded px-2 py-1 text-[10px]">+ طلب صيانة جديد</div>
       </div>
       <div className="flex gap-2 mb-3">
         <div className="bg-white border rounded p-2 flex-1 flex items-center gap-1">
           <span className="text-gray-300">🔍</span>
-          <span className="text-[10px] text-gray-400">بحث سريع...</span>
+          <span className="text-[10px] text-muted-foreground">بحث سريع...</span>
         </div>
       </div>
       <div className="flex gap-1 mb-3">
         {["الكل", "مفتوح", "جاري", "مكتمل", "مغلق"].map((s, i) => (
-          <span key={i} className={cn("text-[9px] px-2 py-1 rounded border", i === 0 ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-500")}>{s}</span>
+          <span key={i} className={cn("text-[9px] px-2 py-1 rounded border", i === 0 ? "bg-blue-600 text-white border-blue-600" : "bg-white text-muted-foreground")}>{s}</span>
         ))}
       </div>
       <div className="bg-white border rounded overflow-hidden">
-        <div className="grid bg-gray-50 border-b" style={{ gridTemplateColumns: "1fr 1fr 1fr 2fr 1fr 1fr 1fr" }}>
+        <div className="grid bg-surface-subtle border-b" style={{ gridTemplateColumns: "1fr 1fr 1fr 2fr 1fr 1fr 1fr" }}>
           {["الوحدة", "المبنى", "الفئة", "الوصف", "الأولوية", "الحالة", "إجراء"].map((h) => (
-            <div key={h} className="px-2 py-1.5 text-[9px] text-gray-500 font-semibold">{h}</div>
+            <div key={h} className="px-2 py-1.5 text-[9px] text-muted-foreground font-semibold">{h}</div>
           ))}
         </div>
         {[
-          { unit: "A-101", bld: "برج النخيل", cat: "سباكة", desc: "تسرب مياه من الحمام", pri: "عالية", priColor: "bg-red-100 text-red-700", status: "مفتوح", stColor: "bg-blue-100 text-blue-700" },
-          { unit: "B-205", bld: "مجمع الواحة", cat: "كهرباء", desc: "انقطاع الكهرباء في الغرفة", pri: "متوسطة", priColor: "bg-amber-100 text-amber-700", status: "جاري", stColor: "bg-indigo-100 text-indigo-700" },
-          { unit: "C-102", bld: "المركز التجاري", cat: "تكييف", desc: "عطل في جهاز التكييف", pri: "منخفضة", priColor: "bg-gray-100 text-gray-600", status: "مفتوح", stColor: "bg-blue-100 text-blue-700" },
+          { unit: "A-101", bld: "برج النخيل", cat: "سباكة", desc: "تسرب مياه من الحمام", pri: "عالية", priColor: "bg-status-error-surface text-status-error-foreground", status: "مفتوح", stColor: "bg-status-info-surface text-status-info-foreground" },
+          { unit: "B-205", bld: "مجمع الواحة", cat: "كهرباء", desc: "انقطاع الكهرباء في الغرفة", pri: "متوسطة", priColor: "bg-status-warning-surface text-status-warning-foreground", status: "جاري", stColor: "bg-indigo-100 text-indigo-700" },
+          { unit: "C-102", bld: "المركز التجاري", cat: "تكييف", desc: "عطل في جهاز التكييف", pri: "منخفضة", priColor: "bg-surface-subtle text-muted-foreground", status: "مفتوح", stColor: "bg-status-info-surface text-status-info-foreground" },
         ].map((r, i) => (
-          <div key={i} className="grid border-b hover:bg-gray-50" style={{ gridTemplateColumns: "1fr 1fr 1fr 2fr 1fr 1fr 1fr" }}>
+          <div key={i} className="grid border-b hover:bg-surface-subtle" style={{ gridTemplateColumns: "1fr 1fr 1fr 2fr 1fr 1fr 1fr" }}>
             <div className="px-2 py-2 text-[9px] font-medium">{r.unit}</div>
-            <div className="px-2 py-2 text-[9px] text-gray-600">{r.bld}</div>
-            <div className="px-2 py-2 text-[9px] text-gray-600">{r.cat}</div>
-            <div className="px-2 py-2 text-[9px] text-gray-600 truncate">{r.desc}</div>
+            <div className="px-2 py-2 text-[9px] text-muted-foreground">{r.bld}</div>
+            <div className="px-2 py-2 text-[9px] text-muted-foreground">{r.cat}</div>
+            <div className="px-2 py-2 text-[9px] text-muted-foreground truncate">{r.desc}</div>
             <div className="px-2 py-2"><span className={cn("text-[8px] px-1 rounded", r.priColor)}>{r.pri}</span></div>
             <div className="px-2 py-2"><span className={cn("text-[8px] px-1 rounded", r.stColor)}>{r.status}</span></div>
             <div className="px-2 py-2 flex gap-1">
               <span className="text-[8px] text-emerald-600 border border-emerald-200 rounded px-1">قبول</span>
-              <span className="text-[8px] text-red-400 border border-red-200 rounded px-1">رفض</span>
+              <span className="text-[8px] text-red-400 border border-status-error-surface rounded px-1">رفض</span>
             </div>
           </div>
         ))}
@@ -643,40 +643,40 @@ function MaintenanceMockScreen() {
 
 function InspectionsMockScreen() {
   return (
-    <div className="p-4 bg-gray-50 min-h-[340px] text-xs" dir="rtl">
+    <div className="p-4 bg-surface-subtle min-h-[340px] text-xs" dir="rtl">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <div className="text-lg font-bold text-gray-800">فحص الوحدات العقارية</div>
-          <div className="text-gray-400 text-[10px]">جدولة وتتبع عمليات فحص الوحدات</div>
+          <div className="text-lg font-bold text-status-neutral-foreground">فحص الوحدات العقارية</div>
+          <div className="text-muted-foreground text-[10px]">جدولة وتتبع عمليات فحص الوحدات</div>
         </div>
         <div className="bg-blue-600 text-white rounded px-2 py-1 text-[10px]">+ جدولة فحص</div>
       </div>
       <div className="flex gap-1 mb-3">
         {["الكل", "مجدول", "مكتمل", "ملغى"].map((s, i) => (
-          <span key={i} className={cn("text-[9px] px-2 py-1 rounded border", i === 0 ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-500")}>{s}</span>
+          <span key={i} className={cn("text-[9px] px-2 py-1 rounded border", i === 0 ? "bg-blue-600 text-white border-blue-600" : "bg-white text-muted-foreground")}>{s}</span>
         ))}
       </div>
       <div className="space-y-2">
         {[
-          { unit: "A-101", bld: "برج النخيل", inspector: "محمد الزهراني", date: "2024/12/15", type: "دوري", status: "مجدول", rating: null, sColor: "bg-blue-100 text-blue-700" },
-          { unit: "B-201", bld: "مجمع الواحة", inspector: "فهد العتيبي", date: "2024/11/20", type: "دخول مستأجر", status: "مكتمل", rating: 4, sColor: "bg-green-100 text-green-700" },
-          { unit: "C-305", bld: "المركز التجاري", inspector: "سلمى البلوي", date: "2024/12/10", type: "خروج مستأجر", status: "مجدول", rating: null, sColor: "bg-blue-100 text-blue-700" },
+          { unit: "A-101", bld: "برج النخيل", inspector: "محمد الزهراني", date: "2024/12/15", type: "دوري", status: "مجدول", rating: null, sColor: "bg-status-info-surface text-status-info-foreground" },
+          { unit: "B-201", bld: "مجمع الواحة", inspector: "فهد العتيبي", date: "2024/11/20", type: "دخول مستأجر", status: "مكتمل", rating: 4, sColor: "bg-status-success-surface text-status-success-foreground" },
+          { unit: "C-305", bld: "المركز التجاري", inspector: "سلمى البلوي", date: "2024/12/10", type: "خروج مستأجر", status: "مجدول", rating: null, sColor: "bg-status-info-surface text-status-info-foreground" },
         ].map((insp, i) => (
           <div key={i} className="bg-white border rounded-lg p-3 flex items-start justify-between hover:shadow-sm">
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <span className="font-medium text-[10px]">{insp.unit} — {insp.bld}</span>
                 <span className={cn("text-[8px] px-1 rounded", insp.sColor)}>{insp.status}</span>
-                <span className="text-[8px] bg-gray-100 text-gray-600 px-1 rounded">{insp.type}</span>
+                <span className="text-[8px] bg-surface-subtle text-muted-foreground px-1 rounded">{insp.type}</span>
               </div>
-              <div className="text-[9px] text-gray-500">
+              <div className="text-[9px] text-muted-foreground">
                 <span>المفتش: {insp.inspector}</span>
                 <span className="mx-2">·</span>
                 <span>الموعد: {formatDateAr(insp.date)}</span>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {insp.rating && <span className="text-[9px] text-yellow-500">⭐ {insp.rating}/5</span>}
+              {insp.rating && <span className="text-[9px] text-status-warning">⭐ {insp.rating}/5</span>}
               {insp.status === "مجدول" && (
                 <span className="text-[8px] bg-blue-600 text-white rounded px-1.5 py-0.5">✓ إتمام</span>
               )}
@@ -690,55 +690,55 @@ function InspectionsMockScreen() {
 
 function DepositsMockScreen() {
   return (
-    <div className="p-4 bg-gray-50 min-h-[340px] text-xs" dir="rtl">
+    <div className="p-4 bg-surface-subtle min-h-[340px] text-xs" dir="rtl">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <div className="text-lg font-bold text-gray-800">ودائع الضمان</div>
-          <div className="text-gray-400 text-[10px]">إدارة ودائع ضمان المستأجرين</div>
+          <div className="text-lg font-bold text-status-neutral-foreground">ودائع الضمان</div>
+          <div className="text-muted-foreground text-[10px]">إدارة ودائع ضمان المستأجرين</div>
         </div>
         <div className="bg-blue-600 text-white rounded px-2 py-1 text-[10px]">+ تسجيل وديعة</div>
       </div>
       <div className="grid grid-cols-3 gap-2 mb-3">
         <div className="border rounded-lg p-2 text-center">
           <div className="text-xl font-bold">5</div>
-          <div className="text-[9px] text-gray-500">إجمالي الودائع</div>
+          <div className="text-[9px] text-muted-foreground">إجمالي الودائع</div>
         </div>
-        <div className="border border-blue-200 bg-blue-50/30 rounded-lg p-2 text-center">
-          <div className="text-xl font-bold text-blue-600">47,500 ر.س</div>
-          <div className="text-[9px] text-gray-500">ودائع محتجزة</div>
+        <div className="border border-status-info-surface bg-status-info-surface rounded-lg p-2 text-center">
+          <div className="text-xl font-bold text-status-info-foreground">47,500 ر.س</div>
+          <div className="text-[9px] text-muted-foreground">ودائع محتجزة</div>
         </div>
-        <div className="border border-green-200 bg-green-50/30 rounded-lg p-2 text-center">
-          <div className="text-xl font-bold text-green-600">12,000 ر.س</div>
-          <div className="text-[9px] text-gray-500">مُستردة</div>
+        <div className="border border-status-success-surface bg-status-success-surface rounded-lg p-2 text-center">
+          <div className="text-xl font-bold text-status-success-foreground">12,000 ر.س</div>
+          <div className="text-[9px] text-muted-foreground">مُستردة</div>
         </div>
       </div>
       <div className="flex gap-1 mb-3">
         {["الكل", "محتجزة", "مستردة"].map((s, i) => (
-          <span key={i} className={cn("text-[9px] px-2 py-1 rounded border", i === 0 ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-500")}>{s}</span>
+          <span key={i} className={cn("text-[9px] px-2 py-1 rounded border", i === 0 ? "bg-blue-600 text-white border-blue-600" : "bg-white text-muted-foreground")}>{s}</span>
         ))}
       </div>
       <div className="space-y-2">
         {[
-          { tenant: "المستأجر ١ (مثال)", unit: "A-101", bld: "برج النخيل", amount: "8,500", received: "2024/01/10", status: "محتجزة", sColor: "bg-blue-100 text-blue-700", refund: null },
-          { tenant: "المستأجر ٣ (مثال)", unit: "C-305", bld: "المركز التجاري", amount: "12,000", received: "2023/06/01", status: "مستردة", sColor: "bg-green-100 text-green-700", refund: "12,000" },
-          { tenant: "المستأجر ٢ (مثال)", unit: "B-201", bld: "مجمع الواحة", amount: "6,000", received: "2024/03/15", status: "محتجزة", sColor: "bg-blue-100 text-blue-700", refund: null },
+          { tenant: "المستأجر ١ (مثال)", unit: "A-101", bld: "برج النخيل", amount: "8,500", received: "2024/01/10", status: "محتجزة", sColor: "bg-status-info-surface text-status-info-foreground", refund: null },
+          { tenant: "المستأجر ٣ (مثال)", unit: "C-305", bld: "المركز التجاري", amount: "12,000", received: "2023/06/01", status: "مستردة", sColor: "bg-status-success-surface text-status-success-foreground", refund: "12,000" },
+          { tenant: "المستأجر ٢ (مثال)", unit: "B-201", bld: "مجمع الواحة", amount: "6,000", received: "2024/03/15", status: "محتجزة", sColor: "bg-status-info-surface text-status-info-foreground", refund: null },
         ].map((d, i) => (
           <div key={i} className="bg-white border rounded-lg p-3 flex items-center justify-between hover:shadow-sm">
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <span className="font-medium text-[10px]">{d.tenant}</span>
-                <span className="text-gray-500 text-[9px]">— {d.unit} ({d.bld})</span>
+                <span className="text-muted-foreground text-[9px]">— {d.unit} ({d.bld})</span>
                 <span className={cn("text-[8px] px-1 rounded", d.sColor)}>{d.status}</span>
               </div>
-              <div className="text-[9px] text-gray-500">
+              <div className="text-[9px] text-muted-foreground">
                 تاريخ الاستلام: {d.received}
-                {d.refund && <span className="mr-2 text-green-600"> · مُسترد: {formatCurrency(Number(d.refund.replace(/,/g, "")))}</span>}
+                {d.refund && <span className="mr-2 text-status-success-foreground"> · مُسترد: {formatCurrency(Number(d.refund.replace(/,/g, "")))}</span>}
               </div>
             </div>
             <div className="flex items-center gap-3">
               <div className="font-bold text-[11px]">{formatCurrency(Number(d.amount.replace(/,/g, "")))}</div>
               {d.status === "محتجزة" && (
-                <span className="text-[8px] border border-gray-300 rounded px-1.5 py-0.5 text-gray-600">استرداد</span>
+                <span className="text-[8px] border border-border rounded px-1.5 py-0.5 text-muted-foreground">استرداد</span>
               )}
             </div>
           </div>
@@ -750,39 +750,39 @@ function DepositsMockScreen() {
 
 function OccupancyMockScreen() {
   return (
-    <div className="p-4 bg-gray-50 min-h-[360px] text-xs" dir="rtl">
+    <div className="p-4 bg-surface-subtle min-h-[360px] text-xs" dir="rtl">
       <div className="flex items-center gap-2 mb-3">
         <span className="text-lg">🏢</span>
         <div>
-          <div className="text-lg font-bold text-gray-800">تقرير الإشغال العقاري</div>
-          <div className="text-gray-400 text-[10px]">نظرة شاملة على حالة الوحدات العقارية</div>
+          <div className="text-lg font-bold text-status-neutral-foreground">تقرير الإشغال العقاري</div>
+          <div className="text-muted-foreground text-[10px]">نظرة شاملة على حالة الوحدات العقارية</div>
         </div>
       </div>
       <div className="grid grid-cols-5 gap-2 mb-3">
-        <div className="border-2 border-blue-200 rounded-lg p-2 text-center">
-          <div className="text-2xl font-bold text-blue-600">83%</div>
-          <div className="text-[9px] text-gray-500">معدل الإشغال</div>
+        <div className="border-2 border-status-info-surface rounded-lg p-2 text-center">
+          <div className="text-2xl font-bold text-status-info-foreground">83%</div>
+          <div className="text-[9px] text-muted-foreground">معدل الإشغال</div>
         </div>
         <div className="border rounded-lg p-2 text-center">
           <div className="text-xl font-bold">48</div>
-          <div className="text-[9px] text-gray-500">إجمالي الوحدات</div>
+          <div className="text-[9px] text-muted-foreground">إجمالي الوحدات</div>
         </div>
-        <div className="border border-green-200 bg-green-50/30 rounded-lg p-2 text-center">
-          <div className="text-xl font-bold text-green-600">40</div>
-          <div className="text-[9px] text-gray-500">مؤجرة</div>
+        <div className="border border-status-success-surface bg-status-success-surface rounded-lg p-2 text-center">
+          <div className="text-xl font-bold text-status-success-foreground">40</div>
+          <div className="text-[9px] text-muted-foreground">مؤجرة</div>
         </div>
-        <div className="border border-blue-200 bg-blue-50/30 rounded-lg p-2 text-center">
-          <div className="text-xl font-bold text-blue-600">8</div>
-          <div className="text-[9px] text-gray-500">متاحة</div>
+        <div className="border border-status-info-surface bg-status-info-surface rounded-lg p-2 text-center">
+          <div className="text-xl font-bold text-status-info-foreground">8</div>
+          <div className="text-[9px] text-muted-foreground">متاحة</div>
         </div>
         <div className="border rounded-lg p-2 text-center">
           <div className="text-lg font-bold">150,000</div>
-          <div className="text-[9px] text-gray-500">إيجار شهري (ر.س)</div>
+          <div className="text-[9px] text-muted-foreground">إيجار شهري (ر.س)</div>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div className="bg-white border rounded-lg p-3">
-          <div className="text-[10px] font-semibold text-gray-600 mb-2">توزيع حالة الوحدات</div>
+          <div className="text-[10px] font-semibold text-muted-foreground mb-2">توزيع حالة الوحدات</div>
           <div className="flex items-center gap-3">
             <div className="w-20 h-20 rounded-full border-8 border-emerald-500 flex items-center justify-center relative">
               <div className="absolute inset-1 rounded-full border-4 border-transparent border-t-blue-500 border-r-blue-500" style={{ transform: "rotate(45deg)" }} />
@@ -796,7 +796,7 @@ function OccupancyMockScreen() {
           </div>
         </div>
         <div className="bg-white border rounded-lg p-3">
-          <div className="text-[10px] font-semibold text-gray-600 mb-2">الإشغال حسب المبنى</div>
+          <div className="text-[10px] font-semibold text-muted-foreground mb-2">الإشغال حسب المبنى</div>
           <div className="space-y-2">
             {[
               { name: "برج النخيل", occ: 18, total: 20, rate: 90 },
@@ -806,9 +806,9 @@ function OccupancyMockScreen() {
               <div key={i}>
                 <div className="flex justify-between text-[9px] mb-0.5">
                   <span>{b.name}</span>
-                  <span className="text-gray-400">{b.occ}/{b.total} ({b.rate}%)</span>
+                  <span className="text-muted-foreground">{b.occ}/{b.total} ({b.rate}%)</span>
                 </div>
-                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-1.5 bg-surface-subtle rounded-full overflow-hidden">
                   <div className="h-full bg-blue-500 rounded-full" style={{ width: `${b.rate}%` }} />
                 </div>
               </div>
@@ -817,23 +817,23 @@ function OccupancyMockScreen() {
         </div>
       </div>
       <div className="bg-white border rounded overflow-hidden">
-        <div className="px-3 py-2 text-[10px] font-semibold text-gray-600 border-b bg-gray-50">قائمة الوحدات (48)</div>
-        <div className="grid bg-gray-50 border-b" style={{ gridTemplateColumns: "1fr 1fr 1fr 2fr 1fr 1fr" }}>
+        <div className="px-3 py-2 text-[10px] font-semibold text-muted-foreground border-b bg-surface-subtle">قائمة الوحدات (48)</div>
+        <div className="grid bg-surface-subtle border-b" style={{ gridTemplateColumns: "1fr 1fr 1fr 2fr 1fr 1fr" }}>
           {["الوحدة", "المبنى", "الحالة", "المستأجر", "الإيجار الشهري", "انتهاء العقد"].map((h) => (
-            <div key={h} className="px-2 py-1 text-[8px] text-gray-500">{h}</div>
+            <div key={h} className="px-2 py-1 text-[8px] text-muted-foreground">{h}</div>
           ))}
         </div>
         {[
-          { unit: "A-101", bld: "برج النخيل", status: "مؤجرة", sColor: "bg-green-100 text-green-600", tenant: "المستأجر ١ (مثال)", rent: "3,500 ر.س", end: "2024/12/31" },
-          { unit: "A-102", bld: "برج النخيل", status: "متاحة", sColor: "bg-blue-100 text-blue-600", tenant: "—", rent: "2,800 ر.س", end: "—" },
+          { unit: "A-101", bld: "برج النخيل", status: "مؤجرة", sColor: "bg-status-success-surface text-status-success-foreground", tenant: "المستأجر ١ (مثال)", rent: "3,500 ر.س", end: "2024/12/31" },
+          { unit: "A-102", bld: "برج النخيل", status: "متاحة", sColor: "bg-status-info-surface text-status-info-foreground", tenant: "—", rent: "2,800 ر.س", end: "—" },
         ].map((u, i) => (
-          <div key={i} className="grid border-b hover:bg-gray-50" style={{ gridTemplateColumns: "1fr 1fr 1fr 2fr 1fr 1fr" }}>
+          <div key={i} className="grid border-b hover:bg-surface-subtle" style={{ gridTemplateColumns: "1fr 1fr 1fr 2fr 1fr 1fr" }}>
             <div className="px-2 py-1.5 text-[9px] font-medium">{u.unit}</div>
-            <div className="px-2 py-1.5 text-[9px] text-gray-500">{u.bld}</div>
+            <div className="px-2 py-1.5 text-[9px] text-muted-foreground">{u.bld}</div>
             <div className="px-2 py-1.5"><span className={cn("text-[8px] px-1 rounded", u.sColor)}>{u.status}</span></div>
             <div className="px-2 py-1.5 text-[9px]">{u.tenant}</div>
             <div className="px-2 py-1.5 text-[9px]">{u.rent}</div>
-            <div className="px-2 py-1.5 text-[9px] text-gray-400">{u.end}</div>
+            <div className="px-2 py-1.5 text-[9px] text-muted-foreground">{u.end}</div>
           </div>
         ))}
       </div>
@@ -848,7 +848,7 @@ const sections: Section[] = [
     id: "dashboard",
     title: "لوحة تحكم الأملاك",
     icon: LayoutDashboard,
-    color: "text-blue-600",
+    color: "text-status-info-foreground",
     overview: "لوحة التحكم هي نقطة البداية لإدارة الأملاك. توفر نظرة شاملة ولحظية على أداء محفظتك العقارية بالكامل.",
     subsections: [
       {
@@ -992,7 +992,7 @@ const sections: Section[] = [
     id: "owners",
     title: "إدارة الملاك",
     icon: Crown,
-    color: "text-amber-600",
+    color: "text-status-warning-foreground",
     overview: "سجل ملاك العقارات المُدارة — مخصص للعقارات التي تديرها النيابةً عن ملاكها.",
     subsections: [
       {
@@ -1026,7 +1026,7 @@ const sections: Section[] = [
     id: "contracts",
     title: "إدارة العقود",
     icon: FileText,
-    color: "text-blue-600",
+    color: "text-status-info-foreground",
     overview: "إنشاء ومتابعة عقود الإيجار كاملةً — من التوقيع إلى التجديد أو الإنهاء، مع جدول الدفعات التلقائي.",
     subsections: [
       {
@@ -1196,7 +1196,7 @@ const sections: Section[] = [
     id: "occupancy",
     title: "تقرير الإشغال",
     icon: BarChart3,
-    color: "text-blue-700",
+    color: "text-status-info-foreground",
     overview: "تقرير شامل لحالة إشغال جميع الوحدات العقارية مع رسوم بيانية ومقارنة أداء المباني.",
     subsections: [
       {
@@ -1252,21 +1252,21 @@ export default function PropertiesGuide() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50" dir="rtl">
+    <div className="min-h-screen bg-surface-subtle" dir="rtl">
       {/* Header */}
       <div className="bg-white border-b sticky top-0 z-20 shadow-sm">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <button
-              className="md:hidden p-1.5 rounded hover:bg-gray-100"
+              className="md:hidden p-1.5 rounded hover:bg-surface-subtle"
               onClick={() => setSidebarOpen(!sidebarOpen)}
             >
               {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
-            <BookOpen className="h-5 w-5 text-blue-600" />
+            <BookOpen className="h-5 w-5 text-status-info-foreground" />
             <div>
-              <h1 className="text-base font-bold text-gray-800">دليل إدارة الأملاك</h1>
-              <p className="text-[10px] text-gray-400">دليل إرشادي مصور — نظام غيث لتخطيط موارد المؤسسات</p>
+              <h1 className="text-base font-bold text-status-neutral-foreground">دليل إدارة الأملاك</h1>
+              <p className="text-[10px] text-muted-foreground">دليل إرشادي مصور — نظام غيث لتخطيط موارد المؤسسات</p>
             </div>
           </div>
           <Link href="/properties/dashboard">
@@ -1288,7 +1288,7 @@ export default function PropertiesGuide() {
           )}
         >
           <div className="p-4">
-            <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-3">محتويات الدليل</p>
+            <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-3">محتويات الدليل</p>
             <nav className="space-y-1">
               {sections.map((s) => {
                 const Icon = s.icon;
@@ -1301,7 +1301,7 @@ export default function PropertiesGuide() {
                       "w-full text-right flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all",
                       isActive
                         ? "bg-blue-600 text-white shadow-sm"
-                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-800"
+                        : "text-muted-foreground hover:bg-surface-subtle hover:text-status-neutral-foreground"
                     )}
                   >
                     <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-white" : s.color)} />
@@ -1322,8 +1322,8 @@ export default function PropertiesGuide() {
                 <currentSection.icon className={cn("h-6 w-6", currentSection.color)} />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-gray-800">{currentSection.title}</h2>
-                <p className="text-sm text-gray-500 mt-0.5">{currentSection.overview}</p>
+                <h2 className="text-xl font-bold text-status-neutral-foreground">{currentSection.title}</h2>
+                <p className="text-sm text-muted-foreground mt-0.5">{currentSection.overview}</p>
               </div>
             </div>
           </div>
@@ -1331,12 +1331,12 @@ export default function PropertiesGuide() {
           {/* Subsections */}
           {currentSection.subsections.map((sub) => (
             <div key={sub.id} className="space-y-4 mb-8">
-              <h3 className="text-base font-semibold text-gray-700 border-b pb-2 flex items-center gap-2">
+              <h3 className="text-base font-semibold text-status-neutral-foreground border-b pb-2 flex items-center gap-2">
                 <span className="w-1 h-5 bg-blue-600 rounded-full inline-block" />
                 {sub.title}
               </h3>
 
-              <p className="text-sm text-gray-600 leading-relaxed">{sub.description}</p>
+              <p className="text-sm text-muted-foreground leading-relaxed">{sub.description}</p>
 
               {/* Screenshot with Callouts */}
               <AnnotatedScreenshot
@@ -1348,7 +1348,7 @@ export default function PropertiesGuide() {
               </AnnotatedScreenshot>
 
               {/* Hint */}
-              <div className="flex items-center gap-2 text-xs text-gray-400 bg-blue-50 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground bg-status-info-surface rounded-lg px-3 py-2">
                 <Info className="h-3.5 w-3.5 text-blue-400 shrink-0" />
                 <span>انقر على الأرقام الملونة في الصورة لعرض شرح تفصيلي لكل عنصر</span>
               </div>
@@ -1359,7 +1359,7 @@ export default function PropertiesGuide() {
               {/* Steps */}
               {sub.steps && sub.steps.length > 0 && (
                 <div>
-                  <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <h4 className="text-sm font-semibold text-status-neutral-foreground mb-2 flex items-center gap-2">
                     <CheckCircle className="h-4 w-4 text-emerald-500" />
                     خطوات العمل
                   </h4>
@@ -1369,15 +1369,15 @@ export default function PropertiesGuide() {
 
               {/* Tips */}
               {sub.tips && sub.tips.length > 0 && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                  <h4 className="text-sm font-semibold text-amber-800 mb-2 flex items-center gap-2">
+                <div className="bg-status-warning-surface border border-status-warning-surface rounded-xl p-4">
+                  <h4 className="text-sm font-semibold text-status-warning-foreground mb-2 flex items-center gap-2">
                     <Lightbulb className="h-4 w-4" />
                     نصائح مهمة
                   </h4>
                   <ul className="space-y-1.5">
                     {sub.tips.map((tip, i) => (
                       <li key={i} className="flex items-start gap-2 text-xs text-amber-900">
-                        <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-500" />
+                        <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-status-warning" />
                         {tip}
                       </li>
                     ))}
@@ -1398,7 +1398,7 @@ export default function PropertiesGuide() {
                   {prev ? (
                     <button
                       onClick={() => handleSectionClick(prev.id)}
-                      className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 font-medium"
+                      className="flex items-center gap-2 text-sm text-status-info-foreground hover:text-status-info-foreground font-medium"
                     >
                       <ChevronRight className="h-4 w-4" />
                       {prev.title}
@@ -1407,13 +1407,13 @@ export default function PropertiesGuide() {
                   {next ? (
                     <button
                       onClick={() => handleSectionClick(next.id)}
-                      className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 font-medium"
+                      className="flex items-center gap-2 text-sm text-status-info-foreground hover:text-status-info-foreground font-medium"
                     >
                       {next.title}
                       <ChevronRight className="h-4 w-4 rotate-180" />
                     </button>
                   ) : (
-                    <div className="text-xs text-gray-400 flex items-center gap-1">
+                    <div className="text-xs text-muted-foreground flex items-center gap-1">
                       <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
                       اكتملت جميع أقسام الدليل
                     </div>

@@ -186,12 +186,12 @@ export default function UmrahImportWizard() {
 
       {/* Steps header */}
       <div className="flex items-center gap-4">
-        <div className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium ${step === 1 ? "bg-blue-100 text-blue-800" : "bg-muted text-muted-foreground"}`}>
+        <div className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium ${step === 1 ? "bg-status-info-surface text-status-info-foreground" : "bg-muted text-muted-foreground"}`}>
           <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center">1</span>
           رفع الملف
         </div>
         <ArrowRight className="h-4 w-4 text-muted-foreground rotate-180" />
-        <div className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium ${step === 2 ? "bg-blue-100 text-blue-800" : "bg-muted text-muted-foreground"}`}>
+        <div className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium ${step === 2 ? "bg-status-info-surface text-status-info-foreground" : "bg-muted text-muted-foreground"}`}>
           <span className={`w-6 h-6 rounded-full text-xs flex items-center justify-center ${step === 2 ? "bg-blue-600 text-white" : "bg-muted-foreground/40 text-white"}`}>2</span>
           تأكيد الاستيراد
         </div>
@@ -246,22 +246,22 @@ export default function UmrahImportWizard() {
             />
 
             {fileName && parsedRows.length > 0 && (
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 border border-blue-200">
-                <FileSpreadsheet className="h-5 w-5 text-blue-600 shrink-0" />
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-status-info-surface border border-status-info-surface">
+                <FileSpreadsheet className="h-5 w-5 text-status-info-foreground shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-blue-800 truncate">{fileName}</p>
-                  <p className="text-xs text-blue-600">
+                  <p className="text-sm font-medium text-status-info-foreground truncate">{fileName}</p>
+                  <p className="text-xs text-status-info-foreground">
                     تم قراءة {formatNumber(parsedRows.length)} صف من الملف
                   </p>
                 </div>
-                <Button variant="ghost" size="sm" onClick={clearFile} className="text-blue-600">
+                <Button variant="ghost" size="sm" onClick={clearFile} className="text-status-info-foreground">
                   تغيير الملف
                 </Button>
               </div>
             )}
 
             {parseError && (
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-status-error-surface border border-status-error-surface text-sm text-status-error-foreground">
                 <AlertOctagon className="h-4 w-4 shrink-0 mt-0.5" />
                 <span>{parseError}</span>
               </div>
@@ -297,7 +297,7 @@ export default function UmrahImportWizard() {
             </CardContent></Card>
             <Card><CardContent className="p-3">
               <p className="text-xs text-muted-foreground">محدث</p>
-              <p className="text-xl font-bold text-blue-700">{formatNumber(preview.updatedCount ?? 0)}</p>
+              <p className="text-xl font-bold text-status-info-foreground">{formatNumber(preview.updatedCount ?? 0)}</p>
             </CardContent></Card>
             <Card><CardContent className="p-3">
               <p className="text-xs text-muted-foreground">بدون تغيير</p>
@@ -305,15 +305,15 @@ export default function UmrahImportWizard() {
             </CardContent></Card>
             <Card><CardContent className="p-3">
               <p className="text-xs text-muted-foreground">أخطاء</p>
-              <p className="text-xl font-bold text-red-700">{formatNumber(preview.errorCount ?? 0)}</p>
+              <p className="text-xl font-bold text-status-error-foreground">{formatNumber(preview.errorCount ?? 0)}</p>
             </CardContent></Card>
           </div>
 
           {preview.violationsDetected != null && preview.violationsDetected > 0 && (
-            <Card className="border-amber-300 bg-amber-50">
+            <Card className="border-amber-300 bg-status-warning-surface">
               <CardContent className="p-3 flex items-center gap-3">
-                <AlertTriangle className="h-5 w-5 text-amber-600" />
-                <p className="text-sm text-amber-800">
+                <AlertTriangle className="h-5 w-5 text-status-warning-foreground" />
+                <p className="text-sm text-status-warning-foreground">
                   تم رصد <strong>{formatNumber(preview.violationsDetected)}</strong> مخالفة محتملة ستُنشأ تلقائياً.
                 </p>
               </CardContent>
@@ -325,7 +325,7 @@ export default function UmrahImportWizard() {
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <Link2 className="h-4 w-4 text-red-600" />
+                  <Link2 className="h-4 w-4 text-status-error-foreground" />
                   <h3 className="font-semibold">وكلاء فرعيون غير مربوطين ({formatNumber(preview.unlinkedSubAgents.length)})</h3>
                 </div>
                 <p className="text-xs text-muted-foreground mb-3">
@@ -370,13 +370,13 @@ export default function UmrahImportWizard() {
 
           {/* Errors */}
           {preview.errors && preview.errors.length > 0 && (
-            <Card className="border-red-200">
+            <Card className="border-status-error-surface">
               <CardContent className="p-4">
-                <h3 className="font-semibold mb-2 text-red-700">أخطاء في الصفوف</h3>
+                <h3 className="font-semibold mb-2 text-status-error-foreground">أخطاء في الصفوف</h3>
                 <ul className="text-xs space-y-1 max-h-40 overflow-y-auto">
                   {preview.errors.slice(0, 20).map((e, i) => (
-                    <li key={i} className="flex gap-2 p-1.5 bg-red-50 rounded">
-                      <Badge variant="outline" className="bg-red-100 text-red-700 border-red-200">
+                    <li key={i} className="flex gap-2 p-1.5 bg-status-error-surface rounded">
+                      <Badge variant="outline" className="bg-status-error-surface text-status-error-foreground border-status-error-surface">
                         صف {formatNumber(e.row)}
                       </Badge>
                       <span>{e.message}</span>

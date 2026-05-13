@@ -89,9 +89,9 @@ export default function JournalManualCreatePage() {
       backPath="/finance/journal-manual"
     >
       {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div dir="rtl">
@@ -114,7 +114,7 @@ export default function JournalManualCreatePage() {
 
             <div className="rounded-xl border overflow-hidden">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50">
+                <thead className="bg-surface-subtle">
                   <tr>
                     <th className="px-3 py-2 text-right">رمز الحساب</th>
                     <th className="px-3 py-2 text-right">البيان</th>
@@ -152,11 +152,11 @@ export default function JournalManualCreatePage() {
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="bg-gray-50 font-semibold">
+                <tfoot className="bg-surface-subtle font-semibold">
                   <tr>
-                    <td colSpan={2} className="px-3 py-2 text-gray-500">المجموع</td>
-                    <td className={`px-3 py-2 ${isBalanced ? "text-green-700" : "text-red-600"}`}>{formatCurrency(totalDebit)}</td>
-                    <td className={`px-3 py-2 ${isBalanced ? "text-green-700" : "text-red-600"}`}>{formatCurrency(totalCredit)}</td>
+                    <td colSpan={2} className="px-3 py-2 text-muted-foreground">المجموع</td>
+                    <td className={`px-3 py-2 ${isBalanced ? "text-status-success-foreground" : "text-status-error-foreground"}`}>{formatCurrency(totalDebit)}</td>
+                    <td className={`px-3 py-2 ${isBalanced ? "text-status-success-foreground" : "text-status-error-foreground"}`}>{formatCurrency(totalCredit)}</td>
                     <td></td>
                   </tr>
                 </tfoot>
@@ -164,12 +164,12 @@ export default function JournalManualCreatePage() {
             </div>
 
             {!isBalanced && totalDebit > 0 && (
-              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              <div className="text-sm text-status-error-foreground bg-status-error-surface border border-status-error-surface rounded-lg px-3 py-2">
                 القيد غير متوازن — الفرق: {formatCurrency(Math.abs(totalDebit - totalCredit))}
               </div>
             )}
             {isBalanced && (
-              <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+              <div className="text-sm text-status-success-foreground bg-status-success-surface border border-status-success-surface rounded-lg px-3 py-2">
                 القيد متوازن
               </div>
             )}

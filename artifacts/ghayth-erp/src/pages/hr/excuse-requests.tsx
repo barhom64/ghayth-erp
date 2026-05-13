@@ -43,10 +43,10 @@ export default function ExcuseRequestsPage() {
   };
 
   const kpis = [
-    { label: "إجمالي الطلبات", value: items.length, icon: LogOut, color: "text-blue-600 bg-blue-50" },
-    { label: "بانتظار الموافقة", value: items.filter((i: any) => i.status === "pending").length, icon: Clock, color: "text-amber-600 bg-amber-50" },
-    { label: "موافق عليها", value: items.filter((i: any) => i.status === "approved").length, icon: CheckCircle, color: "text-green-600 bg-green-50" },
-    { label: "مرفوضة", value: items.filter((i: any) => i.status === "rejected").length, icon: XCircle, color: "text-red-600 bg-red-50" },
+    { label: "إجمالي الطلبات", value: items.length, icon: LogOut, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "بانتظار الموافقة", value: items.filter((i: any) => i.status === "pending").length, icon: Clock, color: "text-status-warning-foreground bg-status-warning-surface" },
+    { label: "موافق عليها", value: items.filter((i: any) => i.status === "approved").length, icon: CheckCircle, color: "text-status-success-foreground bg-status-success-surface" },
+    { label: "مرفوضة", value: items.filter((i: any) => i.status === "rejected").length, icon: XCircle, color: "text-status-error-foreground bg-status-error-surface" },
   ];
 
   const columns: DataTableColumn<any>[] = [
@@ -69,7 +69,7 @@ export default function ExcuseRequestsPage() {
           <AvatarInitial name={r.employeeName} color="purple" />
           <div>
             <span className="font-medium text-sm block">{r.employeeName}</span>
-            {r.empNumber && <span className="text-xs text-gray-400">#{r.empNumber}</span>}
+            {r.empNumber && <span className="text-xs text-muted-foreground">#{r.empNumber}</span>}
           </div>
         </div>
       ),
@@ -79,7 +79,7 @@ export default function ExcuseRequestsPage() {
       header: "التاريخ",
       sortable: true,
       render: (r) => (
-        <span className="text-sm text-gray-600">
+        <span className="text-sm text-muted-foreground">
           {formatDateAr(r.excuseDate)}
         </span>
       ),
@@ -98,7 +98,7 @@ export default function ExcuseRequestsPage() {
     {
       key: "reason",
       header: "السبب",
-      render: (r) => <span className="text-sm text-gray-500 max-w-32 truncate block">{r.reason || "-"}</span>,
+      render: (r) => <span className="text-sm text-muted-foreground max-w-32 truncate block">{r.reason || "-"}</span>,
     },
     {
       key: "status",

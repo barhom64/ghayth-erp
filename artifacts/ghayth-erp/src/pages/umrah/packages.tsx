@@ -53,7 +53,7 @@ const emptyForm: PackageForm = {
   includesMeals: false, includesZiyarat: false,
 };
 
-const BoolIcon = ({ v }: { v?: boolean }) => v ? <Check className="h-4 w-4 text-green-600 mx-auto" /> : <X className="h-4 w-4 text-gray-300 mx-auto" />;
+const BoolIcon = ({ v }: { v?: boolean }) => v ? <Check className="h-4 w-4 text-status-success-foreground mx-auto" /> : <X className="h-4 w-4 text-gray-300 mx-auto" />;
 
 export default function UmrahPackages() {
   const [, navigate] = useLocation();
@@ -136,14 +136,14 @@ export default function UmrahPackages() {
     {
       key: "status", header: "الحالة", render: (r) => {
         const v = r.status;
-        return <Badge className={v === "active" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}>{v === "active" ? "نشطة" : v === "inactive" ? "غير نشطة" : v || "-"}</Badge>;
+        return <Badge className={v === "active" ? "bg-status-success-surface text-status-success-foreground" : "bg-surface-subtle text-status-neutral-foreground"}>{v === "active" ? "نشطة" : v === "inactive" ? "غير نشطة" : v || "-"}</Badge>;
       }
     },
     {
       key: "id" as any, header: "", render: (r) => (
         <div className="flex gap-1">
           <Button variant="ghost" size="icon" onClick={() => openEdit(r)}><Pencil className="h-4 w-4" /></Button>
-          <Button variant="ghost" size="icon" onClick={() => setDeleteId(r.id)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
+          <Button variant="ghost" size="icon" onClick={() => setDeleteId(r.id)}><Trash2 className="h-4 w-4 text-status-error" /></Button>
         </div>
       ),
     },

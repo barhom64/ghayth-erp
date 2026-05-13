@@ -101,13 +101,13 @@ export default function PilgrimDetail() {
 
       {(data?.penalties || []).length > 0 && (
         <Card>
-          <CardHeader><CardTitle className="text-base flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-red-500" />الغرامات ({data.penalties.length})</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-status-error" />الغرامات ({data.penalties.length})</CardTitle></CardHeader>
           <CardContent>
             <DataTable
               columns={[
                 { key: "type", header: "النوع", render: (p) => p.type === "overstay" ? "تجاوز مدة" : p.type },
                 { key: "daysOverstayed", header: "أيام التأخر", render: (p) => `${p.daysOverstayed} يوم` },
-                { key: "amount", header: "المبلغ", render: (p) => <span className="font-bold text-red-600">{formatCurrency(Number(p.amount))}</span> },
+                { key: "amount", header: "المبلغ", render: (p) => <span className="font-bold text-status-error-foreground">{formatCurrency(Number(p.amount))}</span> },
                 { key: "status", header: "الحالة", render: (p) => <PageStatusBadge status={p.status} /> },
               ] as DataTableColumn<any>[]}
               data={data.penalties}

@@ -47,7 +47,7 @@ export default function ViolationDetail() {
   const item = data?.data ?? data;
 
   const severity = item
-    ? (SEVERITY_LEVELS[item.severity] ?? { label: item.severity || "متوسطة", color: "bg-gray-100 text-gray-600" })
+    ? (SEVERITY_LEVELS[item.severity] ?? { label: item.severity || "متوسطة", color: "bg-surface-subtle text-muted-foreground" })
     : { label: "—", color: "" };
   const memos: any[] = item?.memos || [];
 
@@ -73,9 +73,9 @@ export default function ViolationDetail() {
     <div className="space-y-4">
       {/* KPI cards */}
       <KpiGrid items={[
-        { label: "الموظف", value: item.employeeName, icon: User, color: "text-blue-600 bg-blue-50", size: "sm" },
-        { label: "النوع", value: INCIDENT_LABELS[item.type] || item.type, icon: AlertTriangle, color: "text-amber-600 bg-amber-50", size: "sm" },
-        { label: "الخصم", value: formatCurrency(Number(item.deduction || 0)), icon: DollarSign, color: "text-red-600 bg-red-50", size: "sm" },
+        { label: "الموظف", value: item.employeeName, icon: User, color: "text-status-info-foreground bg-status-info-surface", size: "sm" },
+        { label: "النوع", value: INCIDENT_LABELS[item.type] || item.type, icon: AlertTriangle, color: "text-status-warning-foreground bg-status-warning-surface", size: "sm" },
+        { label: "الخصم", value: formatCurrency(Number(item.deduction || 0)), icon: DollarSign, color: "text-status-error-foreground bg-status-error-surface", size: "sm" },
         { label: "الفترة", value: item.period || "—", icon: Calendar, color: "text-purple-600 bg-purple-50", size: "sm" },
       ]} />
 
@@ -95,43 +95,43 @@ export default function ViolationDetail() {
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
             <div>
-              <p className="text-gray-500">الموظف</p>
+              <p className="text-muted-foreground">الموظف</p>
               <p className="font-medium">{item.employeeName}</p>
-              {item.empNumber && <p className="text-xs text-gray-400">#{item.empNumber}</p>}
+              {item.empNumber && <p className="text-xs text-muted-foreground">#{item.empNumber}</p>}
             </div>
             <div>
-              <p className="text-gray-500">المسمى الوظيفي</p>
+              <p className="text-muted-foreground">المسمى الوظيفي</p>
               <p className="font-medium">{item.jobTitle || "—"}</p>
             </div>
             <div>
-              <p className="text-gray-500">الفرع</p>
+              <p className="text-muted-foreground">الفرع</p>
               <p className="font-medium">{item.branchName || "—"}</p>
             </div>
             <div>
-              <p className="text-gray-500">نوع المخالفة</p>
+              <p className="text-muted-foreground">نوع المخالفة</p>
               <p className="font-medium">{INCIDENT_LABELS[item.type] || item.type}</p>
             </div>
             <div>
-              <p className="text-gray-500">الدرجة</p>
+              <p className="text-muted-foreground">الدرجة</p>
               <Badge variant="outline" className={cn("text-xs", severity.color)}>
                 {severity.label}
               </Badge>
             </div>
             <div>
-              <p className="text-gray-500">مبلغ الخصم</p>
-              <p className="font-medium text-red-600">{formatCurrency(Number(item.deduction || 0))}</p>
+              <p className="text-muted-foreground">مبلغ الخصم</p>
+              <p className="font-medium text-status-error-foreground">{formatCurrency(Number(item.deduction || 0))}</p>
             </div>
             <div>
-              <p className="text-gray-500">الفترة</p>
+              <p className="text-muted-foreground">الفترة</p>
               <p className="font-medium font-mono">{item.period || "—"}</p>
             </div>
             <div>
-              <p className="text-gray-500">تاريخ التسجيل</p>
+              <p className="text-muted-foreground">تاريخ التسجيل</p>
               <p className="font-medium">{item.createdAt ? formatDateAr(item.createdAt) : "—"}</p>
             </div>
             {item.description && (
               <div className="col-span-full">
-                <p className="text-gray-500">الوصف</p>
+                <p className="text-muted-foreground">الوصف</p>
                 <p className="font-medium">{item.description}</p>
               </div>
             )}
@@ -167,7 +167,7 @@ export default function ViolationDetail() {
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
-              <Shield className="h-4 w-4 text-blue-600" />
+              <Shield className="h-4 w-4 text-status-info-foreground" />
               محاضر التحقيق المرتبطة
             </CardTitle>
           </CardHeader>
@@ -176,13 +176,13 @@ export default function ViolationDetail() {
               columns={[
                 { key: "memoNumber", header: "رقم المحضر", sortable: true, render: (v) => (
                   <Link href={`/hr/discipline/memos/${v.id}`}>
-                    <span className="font-mono text-xs text-blue-700 hover:underline cursor-pointer">{v.memoNumber}</span>
+                    <span className="font-mono text-xs text-status-info-foreground hover:underline cursor-pointer">{v.memoNumber}</span>
                   </Link>
                 ) },
-                { key: "penaltyLabel", header: "الجزاء", sortable: true, render: (v) => <span className="text-gray-700">{v.penaltyLabel || "—"}</span> },
-                { key: "totalDeductionAmount", header: "المبلغ", sortable: true, render: (v) => <span className="font-medium text-red-600">{formatCurrency(Number(v.totalDeductionAmount || 0))}</span> },
+                { key: "penaltyLabel", header: "الجزاء", sortable: true, render: (v) => <span className="text-status-neutral-foreground">{v.penaltyLabel || "—"}</span> },
+                { key: "totalDeductionAmount", header: "المبلغ", sortable: true, render: (v) => <span className="font-medium text-status-error-foreground">{formatCurrency(Number(v.totalDeductionAmount || 0))}</span> },
                 { key: "status", header: "الحالة", sortable: true, render: (v) => <PageStatusBadge status={v.status} domain="memo" /> },
-                { key: "createdAt", header: "التاريخ", sortable: true, render: (v) => <span className="text-gray-500">{v.createdAt ? formatDateAr(v.createdAt) : "—"}</span> },
+                { key: "createdAt", header: "التاريخ", sortable: true, render: (v) => <span className="text-muted-foreground">{v.createdAt ? formatDateAr(v.createdAt) : "—"}</span> },
               ] as DataTableColumn<any>[]}
               data={memos}
               noToolbar

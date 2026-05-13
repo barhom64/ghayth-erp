@@ -60,7 +60,7 @@ export function RolesTab() {
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">الأدوار المتاحة في النظام</h3>
-      <p className="text-sm text-gray-500">يمكنك تعديل الوحدات المتاحة لكل دور بالنقر على "تعديل الوحدات".</p>
+      <p className="text-sm text-muted-foreground">يمكنك تعديل الوحدات المتاحة لكل دور بالنقر على "تعديل الوحدات".</p>
       <div className="grid grid-cols-1 gap-4">
         {predefinedRoles.map((r) => (
           <Card key={r.roleKey} className="hover:shadow-md transition-shadow">
@@ -104,8 +104,8 @@ export function RolesTab() {
                       className={cn(
                         "flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs transition-all text-start",
                         editModules.includes(mod)
-                          ? "bg-blue-50 border-blue-400 text-blue-700 font-medium"
-                          : "bg-white border-gray-200 text-gray-500 hover:border-gray-400"
+                          ? "bg-status-info-surface border-blue-400 text-status-info-foreground font-medium"
+                          : "bg-white border-border text-muted-foreground hover:border-gray-400"
                       )}
                     >
                       {editModules.includes(mod) && <CheckCircle className="h-3 w-3 flex-shrink-0" />}

@@ -161,16 +161,16 @@ export default function YearEndClosePage() {
           {preview.missingPeriods && preview.missingPeriods.length > 0 && (
             <Card>
               <CardContent className="p-4">
-                <p className="text-sm font-semibold text-amber-700 mb-2">
+                <p className="text-sm font-semibold text-status-warning-foreground mb-2">
                   فترات شهرية غير مُقفلة ({preview.missingPeriods.length})
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {preview.missingPeriods.map((p) => (
-                    <Badge key={p} className="bg-amber-100 text-amber-700">{p}</Badge>
+                    <Badge key={p} className="bg-status-warning-surface text-status-warning-foreground">{p}</Badge>
                   ))}
                 </div>
                 {!force && (
-                  <p className="text-xs text-amber-700 mt-2">
+                  <p className="text-xs text-status-warning-foreground mt-2">
                     فعّل خيار "إقفال الفترات الشهرية المتبقية تلقائياً" للمتابعة
                   </p>
                 )}
@@ -181,23 +181,23 @@ export default function YearEndClosePage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <Card>
               <CardContent className="p-4 flex items-center gap-3">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <TrendingUp className="h-5 w-5 text-green-600" />
+                <div className="p-2 bg-status-success-surface rounded-lg">
+                  <TrendingUp className="h-5 w-5 text-status-success-foreground" />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">إجمالي الإيرادات</p>
-                  <p className="text-lg font-bold text-green-700">{formatCurrency(preview.totalRevenue)}</p>
+                  <p className="text-xs text-muted-foreground">إجمالي الإيرادات</p>
+                  <p className="text-lg font-bold text-status-success-foreground">{formatCurrency(preview.totalRevenue)}</p>
                 </div>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4 flex items-center gap-3">
-                <div className="p-2 bg-red-100 rounded-lg">
-                  <TrendingDown className="h-5 w-5 text-red-600" />
+                <div className="p-2 bg-status-error-surface rounded-lg">
+                  <TrendingDown className="h-5 w-5 text-status-error-foreground" />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">إجمالي المصروفات</p>
-                  <p className="text-lg font-bold text-red-700">{formatCurrency(preview.totalExpense)}</p>
+                  <p className="text-xs text-muted-foreground">إجمالي المصروفات</p>
+                  <p className="text-lg font-bold text-status-error-foreground">{formatCurrency(preview.totalExpense)}</p>
                 </div>
               </CardContent>
             </Card>
@@ -207,9 +207,9 @@ export default function YearEndClosePage() {
                   <Archive className="h-5 w-5 text-indigo-600" />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">صافي الدخل</p>
+                  <p className="text-xs text-muted-foreground">صافي الدخل</p>
                   <p
-                    className={`text-lg font-bold ${preview.netIncome >= 0 ? "text-green-700" : "text-red-700"}`}
+                    className={`text-lg font-bold ${preview.netIncome >= 0 ? "text-status-success-foreground" : "text-status-error-foreground"}`}
                   >
                     {formatCurrency(preview.netIncome)}
                   </p>
@@ -232,7 +232,7 @@ export default function YearEndClosePage() {
                 emptyMessage="لا توجد بنود"
               />
               {closed && preview.ref && (
-                <p className="text-sm text-green-700 mt-3">
+                <p className="text-sm text-status-success-foreground mt-3">
                   تم ترحيل القيد: <span className="font-mono">{preview.ref}</span> (#{preview.id})
                 </p>
               )}

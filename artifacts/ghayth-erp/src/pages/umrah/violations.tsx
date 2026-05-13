@@ -66,17 +66,17 @@ const EMPTY_FORM: ViolationForm = {
 };
 
 const TYPE_LABEL: Record<ViolationType, { label: string; cls: string; icon: React.ComponentType<{ className?: string }> }> = {
-  overstay: { label: "تأخر مغادرة", cls: "bg-amber-100 text-amber-700 border-amber-200", icon: Clock },
-  absconded: { label: "هروب", cls: "bg-red-100 text-red-700 border-red-200", icon: UserX },
+  overstay: { label: "تأخر مغادرة", cls: "bg-status-warning-surface text-status-warning-foreground border-status-warning-surface", icon: Clock },
+  absconded: { label: "هروب", cls: "bg-status-error-surface text-status-error-foreground border-status-error-surface", icon: UserX },
   other: { label: "أخرى", cls: "bg-slate-100 text-slate-700 border-slate-200", icon: HelpCircle },
 };
 
 const STATUS_LABEL: Record<ViolationStatus, { label: string; cls: string }> = {
   detected: { label: "مكتشفة", cls: "bg-purple-100 text-purple-700 border-purple-200" },
-  open: { label: "مفتوحة", cls: "bg-red-100 text-red-700 border-red-200" },
-  invoiced: { label: "بفاتورة", cls: "bg-blue-100 text-blue-700 border-blue-200" },
+  open: { label: "مفتوحة", cls: "bg-status-error-surface text-status-error-foreground border-status-error-surface" },
+  invoiced: { label: "بفاتورة", cls: "bg-status-info-surface text-status-info-foreground border-status-info-surface" },
   paid: { label: "مسددة", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  disputed: { label: "متنازع عليها", cls: "bg-amber-100 text-amber-700 border-amber-200" },
+  disputed: { label: "متنازع عليها", cls: "bg-status-warning-surface text-status-warning-foreground border-status-warning-surface" },
   closed: { label: "مغلقة", cls: "bg-slate-100 text-slate-700 border-slate-200" },
 };
 
@@ -291,19 +291,19 @@ export default function UmrahViolations() {
       <div className="grid gap-3 md:grid-cols-4">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-red-50 flex items-center justify-center">
-              <AlertTriangle className="w-5 h-5 text-red-600" />
+            <div className="w-11 h-11 rounded-xl bg-status-error-surface flex items-center justify-center">
+              <AlertTriangle className="w-5 h-5 text-status-error-foreground" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-red-700">{formatCurrency(summary.totalOpen)}</p>
+              <p className="text-2xl font-bold text-status-error-foreground">{formatCurrency(summary.totalOpen)}</p>
               <p className="text-xs text-muted-foreground">إجمالي المخالفات المفتوحة</p>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-amber-50 flex items-center justify-center">
-              <Clock className="w-5 h-5 text-amber-600" />
+            <div className="w-11 h-11 rounded-xl bg-status-warning-surface flex items-center justify-center">
+              <Clock className="w-5 h-5 text-status-warning-foreground" />
             </div>
             <div>
               <p className="text-2xl font-bold">{formatNumber(summary.byType.overstay)}</p>
@@ -313,8 +313,8 @@ export default function UmrahViolations() {
         </Card>
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-red-50 flex items-center justify-center">
-              <UserX className="w-5 h-5 text-red-600" />
+            <div className="w-11 h-11 rounded-xl bg-status-error-surface flex items-center justify-center">
+              <UserX className="w-5 h-5 text-status-error-foreground" />
             </div>
             <div>
               <p className="text-2xl font-bold">{formatNumber(summary.byType.absconded)}</p>

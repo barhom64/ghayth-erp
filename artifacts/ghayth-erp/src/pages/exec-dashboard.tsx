@@ -11,10 +11,10 @@ import {
 } from "lucide-react";
 
 const riskColors: Record<string, string> = {
-  low: "bg-green-100 text-green-700 border-green-300",
-  medium: "bg-yellow-100 text-yellow-700 border-yellow-300",
+  low: "bg-status-success-surface text-status-success-foreground border-status-success-surface",
+  medium: "bg-status-warning-surface text-status-warning-foreground border-yellow-300",
   high: "bg-orange-100 text-orange-700 border-orange-300",
-  critical: "bg-red-100 text-red-700 border-red-300",
+  critical: "bg-status-error-surface text-status-error-foreground border-status-error-surface",
 };
 
 const riskLabels: Record<string, string> = {
@@ -28,8 +28,8 @@ function AgingBar({ label, amount, total }: { label: string; amount: number; tot
   const pct = total > 0 ? (amount / total) * 100 : 0;
   return (
     <div className="flex items-center gap-3 text-sm">
-      <span className="w-20 text-gray-500 shrink-0">{label}</span>
-      <div className="flex-1 bg-gray-100 rounded-full h-2.5">
+      <span className="w-20 text-muted-foreground shrink-0">{label}</span>
+      <div className="flex-1 bg-surface-subtle rounded-full h-2.5">
         <div
           className="bg-blue-500 rounded-full h-2.5 transition-all"
           style={{ width: `${Math.min(pct, 100)}%` }}
@@ -65,7 +65,7 @@ export default function ExecDashboard() {
               <Shield className="w-8 h-8" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">مؤشر المخاطر العام</p>
+              <p className="text-sm text-muted-foreground">مؤشر المخاطر العام</p>
               <p className="text-4xl font-bold">{d.riskScore ?? 0}</p>
             </div>
           </div>
@@ -79,34 +79,34 @@ export default function ExecDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-green-600" />
+            <div className="w-12 h-12 rounded-xl bg-status-success-surface flex items-center justify-center">
+              <TrendingUp className="w-6 h-6 text-status-success-foreground" />
             </div>
             <div>
-              <p className="text-xs text-gray-500">إيرادات الشهر</p>
+              <p className="text-xs text-muted-foreground">إيرادات الشهر</p>
               <p className="text-xl font-bold">{formatCurrency(d.mtd?.revenue)}</p>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center">
-              <TrendingDown className="w-6 h-6 text-red-600" />
+            <div className="w-12 h-12 rounded-xl bg-status-error-surface flex items-center justify-center">
+              <TrendingDown className="w-6 h-6 text-status-error-foreground" />
             </div>
             <div>
-              <p className="text-xs text-gray-500">مصروفات الشهر</p>
+              <p className="text-xs text-muted-foreground">مصروفات الشهر</p>
               <p className="text-xl font-bold">{formatCurrency(d.mtd?.expense)}</p>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center">
-              <DollarSign className="w-6 h-6 text-blue-600" />
+            <div className="w-12 h-12 rounded-xl bg-status-info-surface flex items-center justify-center">
+              <DollarSign className="w-6 h-6 text-status-info-foreground" />
             </div>
             <div>
-              <p className="text-xs text-gray-500">صافي الربح</p>
-              <p className={cn("text-xl font-bold", (d.mtd?.net ?? 0) >= 0 ? "text-green-600" : "text-red-600")}>
+              <p className="text-xs text-muted-foreground">صافي الربح</p>
+              <p className={cn("text-xl font-bold", (d.mtd?.net ?? 0) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground")}>
                 {formatCurrency(d.mtd?.net)}
               </p>
             </div>
@@ -118,14 +118,14 @@ export default function ExecDashboard() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <DollarSign className="w-5 h-5 text-blue-500" />
+            <DollarSign className="w-5 h-5 text-status-info" />
             الوضع النقدي
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-3xl font-bold text-blue-600 mb-2">{formatCurrency(d.cashPosition?.total)}</p>
+          <p className="text-3xl font-bold text-status-info-foreground mb-2">{formatCurrency(d.cashPosition?.total)}</p>
           {d.cashPosition?.accounts?.length > 0 && (
-            <div className="space-y-1 text-sm text-gray-600">
+            <div className="space-y-1 text-sm text-muted-foreground">
               {d.cashPosition.accounts.slice(0, 5).map((a: any) => (
                 <div key={a.code} className="flex justify-between">
                   <span>{a.name || a.code}</span>
@@ -160,18 +160,18 @@ export default function ExecDashboard() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-red-500" />
+              <AlertTriangle className="w-5 h-5 text-status-error" />
               إشارات المخاطر
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {[
-              { label: "التزامات متأخرة", value: d.riskSignals?.criticalObligations, icon: AlertTriangle, color: "text-red-600" },
+              { label: "التزامات متأخرة", value: d.riskSignals?.criticalObligations, icon: AlertTriangle, color: "text-status-error-foreground" },
               { label: "انتهاكات SLA", value: (d.slaBreaches?.support ?? 0) + (d.slaBreaches?.workflow ?? 0), icon: Clock, color: "text-orange-600" },
-              { label: "سير عمل متعطل", value: d.stuckWorkflows, icon: Clock, color: "text-amber-600" },
-              { label: "تجاوز ميزانية", value: d.budgetOverages?.over100 ?? 0, icon: TrendingUp, color: "text-red-600" },
+              { label: "سير عمل متعطل", value: d.stuckWorkflows, icon: Clock, color: "text-status-warning-foreground" },
+              { label: "تجاوز ميزانية", value: d.budgetOverages?.over100 ?? 0, icon: TrendingUp, color: "text-status-error-foreground" },
               { label: "عقود تنتهي قريباً", value: d.expiringContracts, icon: FileText, color: "text-purple-600" },
-              { label: "صيانة أسطول قادمة", value: d.fleetMaintenance, icon: Truck, color: "text-blue-600" },
+              { label: "صيانة أسطول قادمة", value: d.fleetMaintenance, icon: Truck, color: "text-status-info-foreground" },
               { label: "وثائق موظفين تنتهي", value: d.hrDocExpiries, icon: Users, color: "text-teal-600" },
             ].map((s) => {
               const Icon = s.icon;
@@ -202,29 +202,29 @@ export default function ExecDashboard() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold text-purple-600">{formatCurrency(d.ap?.total)}</p>
-            <p className="text-sm text-gray-500">{d.ap?.count ?? 0} أمر شراء مفتوح</p>
+            <p className="text-sm text-muted-foreground">{d.ap?.count ?? 0} أمر شراء مفتوح</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              <AlertTriangle className="w-5 h-5 text-status-warning" />
               الالتزامات
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-3 gap-3 text-center">
               <div>
-                <p className="text-xl font-bold text-amber-600">{d.obligations?.pending ?? 0}</p>
-                <p className="text-xs text-gray-500">معلقة</p>
+                <p className="text-xl font-bold text-status-warning-foreground">{d.obligations?.pending ?? 0}</p>
+                <p className="text-xs text-muted-foreground">معلقة</p>
               </div>
               <div>
-                <p className="text-xl font-bold text-red-600">{d.obligations?.breached ?? 0}</p>
-                <p className="text-xs text-gray-500">متأخرة</p>
+                <p className="text-xl font-bold text-status-error-foreground">{d.obligations?.breached ?? 0}</p>
+                <p className="text-xs text-muted-foreground">متأخرة</p>
               </div>
               <div>
                 <p className="text-xl font-bold text-orange-600">{d.obligations?.dueIn24h ?? 0}</p>
-                <p className="text-xs text-gray-500">خلال 24 ساعة</p>
+                <p className="text-xs text-muted-foreground">خلال 24 ساعة</p>
               </div>
             </div>
           </CardContent>
@@ -236,7 +236,7 @@ export default function ExecDashboard() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-red-500" />
+              <BarChart3 className="w-5 h-5 text-status-error" />
               تجاوزات الميزانية (أعلى 5)
             </CardTitle>
           </CardHeader>
@@ -244,9 +244,9 @@ export default function ExecDashboard() {
             <div className="space-y-2">
               {d.budgetOverages.top5.map((b: any) => (
                 <div key={b.accountCode} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-700">{b.accountName || b.accountCode}</span>
+                  <span className="text-status-neutral-foreground">{b.accountName || b.accountCode}</span>
                   <div className="flex items-center gap-3">
-                    <span className="text-gray-500">{formatCurrency(b.actual)} / {formatCurrency(b.budget)}</span>
+                    <span className="text-muted-foreground">{formatCurrency(b.actual)} / {formatCurrency(b.budget)}</span>
                     <Badge variant={b.pct > 100 ? "destructive" : "secondary"}>
                       {b.pct.toFixed(0)}%
                     </Badge>

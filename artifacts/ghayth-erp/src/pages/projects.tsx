@@ -42,19 +42,19 @@ function OverviewTab() {
   return (
     <div className="space-y-6">
       <KpiGrid items={[
-        { label: "إجمالي المشاريع", value: c?.total ?? 0, icon: FolderKanban, color: "text-blue-600 bg-blue-50" },
-        { label: "نشطة", value: c?.active ?? 0, icon: Activity, color: "text-green-600 bg-green-50" },
-        { label: "متأخرة", value: c?.slipping ?? 0, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
+        { label: "إجمالي المشاريع", value: c?.total ?? 0, icon: FolderKanban, color: "text-status-info-foreground bg-status-info-surface" },
+        { label: "نشطة", value: c?.active ?? 0, icon: Activity, color: "text-status-success-foreground bg-status-success-surface" },
+        { label: "متأخرة", value: c?.slipping ?? 0, icon: AlertTriangle, color: "text-status-error-foreground bg-status-error-surface" },
         { label: "إجمالي الميزانية", value: formatCurrency(b?.total ?? 0), icon: DollarSign, color: "text-purple-600 bg-purple-50" },
       ]} />
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {[
-          { label: "تخطيط", value: c?.planning ?? 0, color: "bg-gray-100 text-gray-700" },
-          { label: "نشطة", value: c?.active ?? 0, color: "bg-blue-100 text-blue-700" },
-          { label: "متوقفة", value: c?.onHold ?? 0, color: "bg-yellow-100 text-yellow-700" },
-          { label: "مكتملة", value: c?.completed ?? 0, color: "bg-green-100 text-green-700" },
-          { label: "ملغاة", value: c?.cancelled ?? 0, color: "bg-red-100 text-red-700" },
+          { label: "تخطيط", value: c?.planning ?? 0, color: "bg-surface-subtle text-status-neutral-foreground" },
+          { label: "نشطة", value: c?.active ?? 0, color: "bg-status-info-surface text-status-info-foreground" },
+          { label: "متوقفة", value: c?.onHold ?? 0, color: "bg-status-warning-surface text-status-warning-foreground" },
+          { label: "مكتملة", value: c?.completed ?? 0, color: "bg-status-success-surface text-status-success-foreground" },
+          { label: "ملغاة", value: c?.cancelled ?? 0, color: "bg-status-error-surface text-status-error-foreground" },
         ].map((s) => (
           <Card key={s.label} className="text-center">
             <CardContent className="p-3">
@@ -70,10 +70,10 @@ function OverviewTab() {
           <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><ListTodo className="w-4 h-4" /> ملخص المهام</CardTitle></CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-center text-sm">
-              <div className="p-2 rounded bg-gray-50"><p className="text-lg font-bold">{t.total}</p><p className="text-muted-foreground">إجمالي</p></div>
-              <div className="p-2 rounded bg-blue-50"><p className="text-lg font-bold text-blue-600">{t.inProgress}</p><p className="text-muted-foreground">جاري</p></div>
-              <div className="p-2 rounded bg-green-50"><p className="text-lg font-bold text-green-600">{t.done}</p><p className="text-muted-foreground">مكتمل</p></div>
-              <div className="p-2 rounded bg-red-50"><p className="text-lg font-bold text-red-600">{t.blocked}</p><p className="text-muted-foreground">محجوب</p></div>
+              <div className="p-2 rounded bg-surface-subtle"><p className="text-lg font-bold">{t.total}</p><p className="text-muted-foreground">إجمالي</p></div>
+              <div className="p-2 rounded bg-status-info-surface"><p className="text-lg font-bold text-status-info-foreground">{t.inProgress}</p><p className="text-muted-foreground">جاري</p></div>
+              <div className="p-2 rounded bg-status-success-surface"><p className="text-lg font-bold text-status-success-foreground">{t.done}</p><p className="text-muted-foreground">مكتمل</p></div>
+              <div className="p-2 rounded bg-status-error-surface"><p className="text-lg font-bold text-status-error-foreground">{t.blocked}</p><p className="text-muted-foreground">محجوب</p></div>
               <div className="p-2 rounded bg-orange-50"><p className="text-lg font-bold text-orange-600">{t.overdue}</p><p className="text-muted-foreground">متأخر</p></div>
             </div>
             {t.total > 0 && (
@@ -91,16 +91,16 @@ function OverviewTab() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {(overview?.slippingProjects?.length ?? 0) > 0 && (
-          <Card className="border-red-200">
+          <Card className="border-status-error-surface">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2 text-red-600">
+              <CardTitle className="text-base flex items-center gap-2 text-status-error-foreground">
                 <AlertTriangle className="w-4 h-4" /> مشاريع متأخرة
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {overview.slippingProjects.map((p: any) => (
                 <Link key={p.id} href={`/projects/${p.id}`}>
-                  <div className="flex items-center justify-between p-2 rounded hover:bg-red-50 cursor-pointer">
+                  <div className="flex items-center justify-between p-2 rounded hover:bg-status-error-surface cursor-pointer">
                     <div>
                       <p className="font-medium text-sm">{p.name}</p>
                       <p className="text-xs text-muted-foreground">{p.managerName || "—"} • انتهاء {formatDateAr(p.endDate)}</p>
@@ -126,7 +126,7 @@ function OverviewTab() {
             <CardContent className="space-y-2">
               {overview.recentProjects.map((p: any) => (
                 <Link key={p.id} href={`/projects/${p.id}`}>
-                  <div className="flex items-center justify-between p-2 rounded hover:bg-gray-50 cursor-pointer">
+                  <div className="flex items-center justify-between p-2 rounded hover:bg-surface-subtle cursor-pointer">
                     <div>
                       <p className="font-medium text-sm">{p.name}</p>
                       <p className="text-xs text-muted-foreground">{p.managerName || "—"}</p>
@@ -153,7 +153,7 @@ function OverviewTab() {
             <CardContent className="space-y-2">
               {overview.upcomingMilestones.map((m: any) => (
                 <Link key={m.id} href={`/projects/${m.projectId}`}>
-                  <div className="flex items-center justify-between p-2 rounded hover:bg-gray-50 cursor-pointer">
+                  <div className="flex items-center justify-between p-2 rounded hover:bg-surface-subtle cursor-pointer">
                     <div>
                       <p className="font-medium text-sm">{m.title}</p>
                       <p className="text-xs text-muted-foreground">{m.projectName}</p>
@@ -185,10 +185,10 @@ function OverviewTab() {
                       <p className="text-xs text-muted-foreground">{r.projectName}</p>
                     </div>
                     <Badge className={
-                      r.riskLevel === "critical" ? "bg-red-100 text-red-700" :
+                      r.riskLevel === "critical" ? "bg-status-error-surface text-status-error-foreground" :
                       r.riskLevel === "high" ? "bg-orange-100 text-orange-700" :
-                      r.riskLevel === "medium" ? "bg-yellow-100 text-yellow-700" :
-                      "bg-green-100 text-green-700"
+                      r.riskLevel === "medium" ? "bg-status-warning-surface text-status-warning-foreground" :
+                      "bg-status-success-surface text-status-success-foreground"
                     }>{r.riskLevel === "critical" ? "حرج" : r.riskLevel === "high" ? "عالٍ" : r.riskLevel === "medium" ? "متوسط" : "منخفض"}</Badge>
                   </div>
                 </Link>
@@ -292,8 +292,8 @@ function ProjectListTab() {
   return (
     <div className="space-y-4">
       <KpiGrid items={[
-        { label: "إجمالي المشاريع", value: (stats as any)?.totalProjects || 0, icon: FolderKanban, color: "text-blue-600 bg-blue-50" },
-        { label: "نشط", value: (stats as any)?.activeProjects || 0, icon: Activity, color: "text-green-600 bg-green-50" },
+        { label: "إجمالي المشاريع", value: (stats as any)?.totalProjects || 0, icon: FolderKanban, color: "text-status-info-foreground bg-status-info-surface" },
+        { label: "نشط", value: (stats as any)?.activeProjects || 0, icon: Activity, color: "text-status-success-foreground bg-status-success-surface" },
         { label: "مكتمل", value: (stats as any)?.completedProjects || 0, icon: CheckCircle, color: "text-emerald-600 bg-emerald-50" },
         { label: "إجمالي الميزانية", value: formatCurrency((stats as any)?.totalBudget || 0), icon: DollarSign, color: "text-purple-600 bg-purple-50" },
       ]} />

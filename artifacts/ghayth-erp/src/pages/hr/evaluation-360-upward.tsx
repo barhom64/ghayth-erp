@@ -23,7 +23,7 @@ const UPWARD_CRITERIA = [
 ];
 
 function ScoreSlider({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
-  const color = value >= 80 ? "text-green-600" : value >= 60 ? "text-yellow-600" : "text-red-600";
+  const color = value >= 80 ? "text-status-success-foreground" : value >= 60 ? "text-status-warning-foreground" : "text-status-error-foreground";
   return (
     <div className="space-y-2">
       <div className="flex justify-between">
@@ -35,7 +35,7 @@ function ScoreSlider({ label, value, onChange }: { label: string; value: number;
         value={[value]}
         onValueChange={([v]) => onChange(v!)}
       />
-      <div className="flex justify-between text-xs text-gray-400">
+      <div className="flex justify-between text-xs text-muted-foreground">
         <span>ضعيف</span>
         <span>مقبول</span>
         <span>جيد</span>
@@ -105,12 +105,12 @@ export default function Evaluation360UpwardPage() {
   if (submitted) {
     return (
       <div className="max-w-lg mx-auto text-center py-16 space-y-4">
-        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-          <Shield className="w-10 h-10 text-green-600" />
+        <div className="w-20 h-20 bg-status-success-surface rounded-full flex items-center justify-center mx-auto">
+          <Shield className="w-10 h-10 text-status-success-foreground" />
         </div>
-        <h2 className="text-2xl font-bold text-green-700">تم الإرسال بنجاح</h2>
-        <p className="text-gray-600">تم إرسال تقييمك العكسي بشكل سري تام. لن يعرف أحد هويتك.</p>
-        <p className="text-sm text-gray-400">تُعرض النتائج فقط كمتوسط مجمّع عند وجود 3 تقييمات أو أكثر</p>
+        <h2 className="text-2xl font-bold text-status-success-foreground">تم الإرسال بنجاح</h2>
+        <p className="text-muted-foreground">تم إرسال تقييمك العكسي بشكل سري تام. لن يعرف أحد هويتك.</p>
+        <p className="text-sm text-muted-foreground">تُعرض النتائج فقط كمتوسط مجمّع عند وجود 3 تقييمات أو أكثر</p>
         <Link href={`/hr/evaluation-360/${cycleId}`}>
           <Button>العودة إلى الدورة</Button>
         </Link>
@@ -165,7 +165,7 @@ export default function Evaluation360UpwardPage() {
             </SelectContent>
           </Select>
           {managerCandidates.length === 0 && (
-            <p className="text-xs text-amber-600 mt-1">
+            <p className="text-xs text-status-warning-foreground mt-1">
               يجب أن يُضيف قسم الموارد البشرية مشرفاً بدور "مدير" ضمن المقيِّمين قبل إرسال تقييم عكسي
             </p>
           )}
@@ -190,10 +190,10 @@ export default function Evaluation360UpwardPage() {
       </Card>
 
       {/* Overall */}
-      <Card className={cn("border-0 shadow-sm", avgScore >= 80 ? "bg-green-50" : avgScore >= 60 ? "bg-yellow-50" : "bg-red-50")}>
+      <Card className={cn("border-0 shadow-sm", avgScore >= 80 ? "bg-status-success-surface" : avgScore >= 60 ? "bg-status-warning-surface" : "bg-status-error-surface")}>
         <CardContent className="p-4 text-center">
-          <p className="text-sm text-gray-500 mb-1">الدرجة الإجمالية</p>
-          <p className={cn("text-5xl font-black", avgScore >= 80 ? "text-green-600" : avgScore >= 60 ? "text-yellow-600" : "text-red-600")}>
+          <p className="text-sm text-muted-foreground mb-1">الدرجة الإجمالية</p>
+          <p className={cn("text-5xl font-black", avgScore >= 80 ? "text-status-success-foreground" : avgScore >= 60 ? "text-status-warning-foreground" : "text-status-error-foreground")}>
             {avgScore}%
           </p>
         </CardContent>
@@ -210,7 +210,7 @@ export default function Evaluation360UpwardPage() {
             onChange={(e) => setComments(e.target.value)}
             rows={3}
           />
-          <div className="flex items-center gap-2 mt-2 text-xs text-gray-400">
+          <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
             <AlertCircle className="w-3 h-3" />
             <span>لا تذكر معلومات تُعرِّف بهويتك</span>
           </div>

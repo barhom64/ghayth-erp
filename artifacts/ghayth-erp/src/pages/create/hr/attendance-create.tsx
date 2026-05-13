@@ -14,8 +14,8 @@ import { TextAreaField, NumberField, FormFieldWrapper } from "@/components/share
 type ActivityType = "check_in" | "check_out";
 
 const activityTypes: { value: ActivityType; label: string; icon: any; color: string }[] = [
-  { value: "check_in", label: "تسجيل حضور", icon: LogIn, color: "border-green-200 bg-green-50 text-green-700" },
-  { value: "check_out", label: "تسجيل انصراف", icon: LogOut, color: "border-red-200 bg-red-50 text-red-700" },
+  { value: "check_in", label: "تسجيل حضور", icon: LogIn, color: "border-status-success-surface bg-status-success-surface text-status-success-foreground" },
+  { value: "check_out", label: "تسجيل انصراف", icon: LogOut, color: "border-status-error-surface bg-status-error-surface text-status-error-foreground" },
 ];
 
 const DRAFT_KEY = "hr_attendance_create";
@@ -96,9 +96,9 @@ export default function AttendanceCreate() {
   return (
     <CreatePageLayout title="تسجيل حضور / انصراف" backPath="/hr/attendance">
       {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -110,7 +110,7 @@ export default function AttendanceCreate() {
 
       <div className="space-y-6">
         <div>
-          <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-status-neutral-foreground mb-3 flex items-center gap-2">
             <Clock className="w-4 h-4" />
             نوع النشاط
           </h3>
@@ -120,17 +120,17 @@ export default function AttendanceCreate() {
                 key={at.value}
                 type="button"
                 onClick={() => setForm((f) => ({ ...f, activityType: at.value }))}
-                className={`p-4 rounded-xl border-2 text-center transition-all ${form.activityType === at.value ? at.color + " ring-2 ring-offset-1 shadow-sm" : "border-gray-200 bg-white hover:border-gray-300"}`}
+                className={`p-4 rounded-xl border-2 text-center transition-all ${form.activityType === at.value ? at.color + " ring-2 ring-offset-1 shadow-sm" : "border-border bg-white hover:border-border"}`}
               >
-                <at.icon className={`w-6 h-6 mx-auto mb-2 ${form.activityType === at.value ? "" : "text-gray-400"}`} />
-                <p className={`text-sm font-medium ${form.activityType === at.value ? "" : "text-gray-600"}`}>{at.label}</p>
+                <at.icon className={`w-6 h-6 mx-auto mb-2 ${form.activityType === at.value ? "" : "text-muted-foreground"}`} />
+                <p className={`text-sm font-medium ${form.activityType === at.value ? "" : "text-muted-foreground"}`}>{at.label}</p>
               </button>
             ))}
           </div>
         </div>
 
         <div>
-          <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-status-neutral-foreground mb-3 flex items-center gap-2">
             <MapPin className="w-4 h-4" />
             الموقع الجغرافي
           </h3>
@@ -142,7 +142,7 @@ export default function AttendanceCreate() {
                 {locationLoading ? (
                   <><Loader2 className="w-4 h-4 me-2 animate-spin" />جاري التحديد...</>
                 ) : locationStatus === "success" ? (
-                  <><CheckCircle className="w-4 h-4 me-2 text-green-600" />تم التحديد</>
+                  <><CheckCircle className="w-4 h-4 me-2 text-status-success-foreground" />تم التحديد</>
                 ) : (
                   <><MapPin className="w-4 h-4 me-2" />تحديد الموقع تلقائياً</>
                 )}
@@ -151,7 +151,7 @@ export default function AttendanceCreate() {
           </div>
           {locationStatus === "success" && form.lat && form.lon && (
             <div className="mt-2 flex items-center gap-2">
-              <Badge className="bg-green-50 text-green-700 text-xs">
+              <Badge className="bg-status-success-surface text-status-success-foreground text-xs">
                 <MapPin className="w-3 h-3 me-1" />
                 {form.lat}, {form.lon}
               </Badge>

@@ -173,7 +173,7 @@ export default function CommitmentDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <FileSignature className="h-4 w-4 text-gray-500" />
+            <FileSignature className="h-4 w-4 text-muted-foreground" />
             بيانات الالتزام
           </CardTitle>
         </CardHeader>
@@ -183,9 +183,9 @@ export default function CommitmentDetail() {
             <span className="text-3xl font-bold text-gray-900">
               {formatCurrency(amount)}
             </span>
-            <span className="text-xs text-gray-500">ر.س</span>
+            <span className="text-xs text-muted-foreground">ر.س</span>
             {commitment?.title && (
-              <span className="text-sm text-gray-600 ms-3 truncate">
+              <span className="text-sm text-muted-foreground ms-3 truncate">
                 {commitment.title}
               </span>
             )}
@@ -194,21 +194,21 @@ export default function CommitmentDetail() {
           {/* Fulfillment progress — the second headline metric */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <p className="text-xs text-gray-500 flex items-center gap-1">
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
                 <Target className="h-3 w-3" /> نسبة التنفيذ
               </p>
-              <span className="text-xs font-semibold text-gray-700">
+              <span className="text-xs font-semibold text-status-neutral-foreground">
                 {fulfillmentPct.toFixed(1)}%
               </span>
             </div>
-            <div className="h-2 rounded bg-gray-100 overflow-hidden">
+            <div className="h-2 rounded bg-surface-subtle overflow-hidden">
               <div
                 className="h-full bg-blue-600 transition-all"
                 style={{ width: `${fulfillmentPct}%` }}
               />
             </div>
             {fulfilled > 0 && (
-              <p className="text-[11px] text-gray-500 mt-1">
+              <p className="text-[11px] text-muted-foreground mt-1">
                 منفذ: {formatCurrency(fulfilled)} من {formatCurrency(amount)}
               </p>
             )}
@@ -217,50 +217,50 @@ export default function CommitmentDetail() {
           <div className="grid grid-cols-2 gap-3">
             {beneficiaryDisplay && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">المستفيد</p>
-                <span className="text-gray-800">{beneficiaryDisplay}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">المستفيد</p>
+                <span className="text-status-neutral-foreground">{beneficiaryDisplay}</span>
               </div>
             )}
             {commitment?.costCenter && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">مركز التكلفة</p>
+                <p className="text-xs text-muted-foreground mb-0.5">مركز التكلفة</p>
                 <Badge variant="outline">{commitment.costCenter}</Badge>
               </div>
             )}
             {commitment?.projectName && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">المشروع</p>
-                <span className="text-gray-800">{commitment.projectName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">المشروع</p>
+                <span className="text-status-neutral-foreground">{commitment.projectName}</span>
               </div>
             )}
             {commitment?.purpose && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">الغرض</p>
-                <span className="text-gray-800">{commitment.purpose}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">الغرض</p>
+                <span className="text-status-neutral-foreground">{commitment.purpose}</span>
               </div>
             )}
             {commitment?.commitmentDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+                <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
                   <Calendar className="h-3 w-3" /> تاريخ الالتزام
                 </p>
-                <span className="text-gray-800">{formatDateAr(commitment.commitmentDate)}</span>
+                <span className="text-status-neutral-foreground">{formatDateAr(commitment.commitmentDate)}</span>
               </div>
             )}
             {commitment?.releaseDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+                <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
                   <Calendar className="h-3 w-3" /> تاريخ التحرير
                 </p>
-                <span className="text-gray-800">{formatDateAr(commitment.releaseDate)}</span>
+                <span className="text-status-neutral-foreground">{formatDateAr(commitment.releaseDate)}</span>
               </div>
             )}
           </div>
 
           {commitment?.description && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">الوصف</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{commitment.description}</p>
+              <p className="text-xs text-muted-foreground mb-1">الوصف</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{commitment.description}</p>
             </div>
           )}
         </CardContent>

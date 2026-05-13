@@ -66,7 +66,7 @@ export default function ExitDetail() {
     queryClient.invalidateQueries({ queryKey: ["hr-exit-detail", id] });
   };
 
-  const st = EXIT_REQUEST_STATUS[item?.status] ?? { label: item?.status ?? "—", color: "bg-gray-100 text-gray-600" };
+  const st = EXIT_REQUEST_STATUS[item?.status] ?? { label: item?.status ?? "—", color: "bg-surface-subtle text-muted-foreground" };
   const clearance: any[] = item?.clearance || [];
 
   const hireDate = item?.hireDate ? new Date(item.hireDate) : null;
@@ -78,10 +78,10 @@ export default function ExitDetail() {
     <div className="space-y-4">
       {/* KPI cards */}
       <KpiGrid items={[
-        { label: "الموظف", value: item.employeeName, icon: User, color: "text-blue-600 bg-blue-50", size: "sm" },
-        { label: "نوع الإنهاء", value: EXIT_TYPES[item.exitType] || item.exitType, icon: LogOut, color: "text-red-600 bg-red-50", size: "sm" },
+        { label: "الموظف", value: item.employeeName, icon: User, color: "text-status-info-foreground bg-status-info-surface", size: "sm" },
+        { label: "نوع الإنهاء", value: EXIT_TYPES[item.exitType] || item.exitType, icon: LogOut, color: "text-status-error-foreground bg-status-error-surface", size: "sm" },
         { label: "سنوات الخدمة", value: yearsOfService, icon: Calendar, color: "text-purple-600 bg-purple-50", size: "sm" },
-        { label: "المكافأة المقدّرة", value: formatCurrency(Number(item.estimatedGratuity || 0)), icon: DollarSign, color: "text-green-600 bg-green-50", size: "sm" },
+        { label: "المكافأة المقدّرة", value: formatCurrency(Number(item.estimatedGratuity || 0)), icon: DollarSign, color: "text-status-success-foreground bg-status-success-surface", size: "sm" },
       ]} />
 
       {/* شريط مراحل نهاية الخدمة */}
@@ -94,7 +94,7 @@ export default function ExitDetail() {
 
       {/* تنبيه الفصل */}
       {item.exitType === "termination" && (
-        <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+        <div className="flex items-center gap-2 p-3 bg-status-error-surface border border-status-error-surface rounded-lg text-sm text-status-error-foreground">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span>حالة فصل — يرجى التأكد من استكمال الإجراءات التأديبية</span>
         </div>
@@ -108,43 +108,43 @@ export default function ExitDetail() {
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
             <div>
-              <p className="text-gray-500">الموظف</p>
+              <p className="text-muted-foreground">الموظف</p>
               <p className="font-medium">{item.employeeName}</p>
-              {item.empNumber && <p className="text-xs text-gray-400">#{item.empNumber}</p>}
+              {item.empNumber && <p className="text-xs text-muted-foreground">#{item.empNumber}</p>}
             </div>
             <div>
-              <p className="text-gray-500">المسمى الوظيفي</p>
+              <p className="text-muted-foreground">المسمى الوظيفي</p>
               <p className="font-medium">{item.jobTitle || "—"}</p>
             </div>
             <div>
-              <p className="text-gray-500">الفرع</p>
+              <p className="text-muted-foreground">الفرع</p>
               <p className="font-medium">{item.branchName || "—"}</p>
             </div>
             <div>
-              <p className="text-gray-500">الراتب</p>
+              <p className="text-muted-foreground">الراتب</p>
               <p className="font-medium">{formatCurrency(Number(item.salary || 0))}</p>
             </div>
             <div>
-              <p className="text-gray-500">تاريخ التعيين</p>
+              <p className="text-muted-foreground">تاريخ التعيين</p>
               <p className="font-medium">{hireDate ? formatDateAr(hireDate) : "—"}</p>
             </div>
             <div>
-              <p className="text-gray-500">آخر يوم عمل</p>
+              <p className="text-muted-foreground">آخر يوم عمل</p>
               <p className="font-medium">{item.lastWorkingDay ? formatDateAr(item.lastWorkingDay) : "—"}</p>
             </div>
             <div>
-              <p className="text-gray-500">تاريخ الطلب</p>
+              <p className="text-muted-foreground">تاريخ الطلب</p>
               <p className="font-medium">{item.createdAt ? formatDateAr(item.createdAt) : "—"}</p>
             </div>
             {item.approvedAt && (
               <div>
-                <p className="text-gray-500">تاريخ الموافقة</p>
+                <p className="text-muted-foreground">تاريخ الموافقة</p>
                 <p className="font-medium">{formatDateAr(item.approvedAt)}</p>
               </div>
             )}
             {item.exitReason && (
               <div className="col-span-full">
-                <p className="text-gray-500">سبب الإنهاء</p>
+                <p className="text-muted-foreground">سبب الإنهاء</p>
                 <p className="font-medium">{item.exitReason}</p>
               </div>
             )}
@@ -160,39 +160,39 @@ export default function ExitDetail() {
         <CardContent>
           <div className="space-y-3 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-600">مكافأة نهاية الخدمة</span>
-              <span className="font-medium text-green-700">{formatCurrency(Number(item.estimatedGratuity || 0))}</span>
+              <span className="text-muted-foreground">مكافأة نهاية الخدمة</span>
+              <span className="font-medium text-status-success-foreground">{formatCurrency(Number(item.estimatedGratuity || 0))}</span>
             </div>
             {item.leaveBalance != null && (
               <div className="flex justify-between">
-                <span className="text-gray-600">رصيد إجازات متبقي</span>
+                <span className="text-muted-foreground">رصيد إجازات متبقي</span>
                 <span className="font-medium">{item.leaveBalance} يوم</span>
               </div>
             )}
             {item.leaveCashOut != null && (
               <div className="flex justify-between">
-                <span className="text-gray-600">تعويض الإجازات</span>
-                <span className="font-medium text-blue-700">{formatCurrency(Number(item.leaveCashOut))}</span>
+                <span className="text-muted-foreground">تعويض الإجازات</span>
+                <span className="font-medium text-status-info-foreground">{formatCurrency(Number(item.leaveCashOut))}</span>
               </div>
             )}
             {Number(item.otherDeductions) > 0 && (
               <div className="flex justify-between">
-                <span className="text-gray-600">خصومات أخرى</span>
-                <span className="font-medium text-red-600">-{formatCurrency(Number(item.otherDeductions))}</span>
+                <span className="text-muted-foreground">خصومات أخرى</span>
+                <span className="font-medium text-status-error-foreground">-{formatCurrency(Number(item.otherDeductions))}</span>
               </div>
             )}
             {Number(item.loanBalance) > 0 && (
               <div className="flex justify-between">
-                <span className="text-gray-600">رصيد سلف متبقي</span>
-                <span className="font-medium text-red-600">-{formatCurrency(Number(item.loanBalance))}</span>
+                <span className="text-muted-foreground">رصيد سلف متبقي</span>
+                <span className="font-medium text-status-error-foreground">-{formatCurrency(Number(item.loanBalance))}</span>
               </div>
             )}
             {item.netSettlement != null && (
               <>
-                <hr className="border-gray-200" />
+                <hr className="border-border" />
                 <div className="flex justify-between font-bold text-base">
                   <span>صافي التسوية</span>
-                  <span className={Number(item.netSettlement) >= 0 ? "text-green-700" : "text-red-700"}>
+                  <span className={Number(item.netSettlement) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground"}>
                     {formatCurrency(Number(item.netSettlement))}
                   </span>
                 </div>
@@ -212,12 +212,12 @@ export default function ExitDetail() {
             <DataTable
               columns={[
                 { key: "department", header: "القسم", sortable: true, render: (v) => <span className="font-medium">{v.department || v.section || "—"}</span> },
-                { key: "responsibleName", header: "المسؤول", sortable: true, render: (v) => <span className="text-gray-600">{v.responsibleName || "—"}</span> },
+                { key: "responsibleName", header: "المسؤول", sortable: true, render: (v) => <span className="text-muted-foreground">{v.responsibleName || "—"}</span> },
                 { key: "status", header: "الحالة", sortable: true, render: (v) => {
-                  const cSt = CLEARANCE_STATUS[v.status] ?? { label: v.status, color: "text-gray-600 bg-gray-50" };
+                  const cSt = CLEARANCE_STATUS[v.status] ?? { label: v.status, color: "text-muted-foreground bg-surface-subtle" };
                   return <span className={cn("inline-flex px-2 py-0.5 rounded-full text-xs font-medium", cSt.color)}>{cSt.label}</span>;
                 } },
-                { key: "notes", header: "ملاحظات", render: (v) => <span className="text-gray-500 text-xs">{v.notes || "—"}</span> },
+                { key: "notes", header: "ملاحظات", render: (v) => <span className="text-muted-foreground text-xs">{v.notes || "—"}</span> },
               ] as DataTableColumn<any>[]}
               data={clearance}
               noToolbar

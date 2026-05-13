@@ -129,19 +129,19 @@ export default function InventoryCountPage() {
       label: "إجمالي الجلسات",
       value: stats.total,
       icon: FileText,
-      color: "text-blue-600 bg-blue-50",
+      color: "text-status-info-foreground bg-status-info-surface",
     },
     {
       label: "مسودة",
       value: stats.draft,
       icon: Clock,
-      color: "text-amber-600 bg-amber-50",
+      color: "text-status-warning-foreground bg-status-warning-surface",
     },
     {
       label: "مُعتمد",
       value: stats.approved,
       icon: CheckCircle,
-      color: "text-green-600 bg-green-50",
+      color: "text-status-success-foreground bg-status-success-surface",
     },
     {
       label: "إجمالي المنتجات",
@@ -159,7 +159,7 @@ export default function InventoryCountPage() {
       sortable: true,
       render: (row) => (
         <div className="flex items-center gap-2">
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${row.status === "approved" ? "bg-green-100 text-green-600" : "bg-blue-100 text-blue-600"}`}>
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${row.status === "approved" ? "bg-status-success-surface text-status-success-foreground" : "bg-status-info-surface text-status-info-foreground"}`}>
             {row.status === "approved" ? <CheckCircle className="w-4 h-4" /> : <ClipboardCheck className="w-4 h-4" />}
           </div>
           <span className="font-medium text-sm">جرد {row.countDate?.split("T")[0]}</span>
@@ -171,7 +171,7 @@ export default function InventoryCountPage() {
       header: "موقع المستودع",
       sortable: true,
       render: (row) => (
-        <span className="text-sm text-gray-600">{row.warehouseLocation || "—"}</span>
+        <span className="text-sm text-muted-foreground">{row.warehouseLocation || "—"}</span>
       ),
     },
     {
@@ -179,14 +179,14 @@ export default function InventoryCountPage() {
       header: "بواسطة",
       sortable: true,
       render: (row) => (
-        <span className="text-sm text-gray-500">{row.conductedByName || "—"}</span>
+        <span className="text-sm text-muted-foreground">{row.conductedByName || "—"}</span>
       ),
     },
     {
       key: "notes",
       header: "ملاحظات",
       render: (row) => (
-        <span className="text-xs text-gray-400 truncate max-w-[200px] block">{row.notes || "—"}</span>
+        <span className="text-xs text-muted-foreground truncate max-w-[200px] block">{row.notes || "—"}</span>
       ),
     },
     {
@@ -194,7 +194,7 @@ export default function InventoryCountPage() {
       header: "الحالة",
       sortable: true,
       render: (row) => (
-        <Badge className={row.status === "approved" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>
+        <Badge className={row.status === "approved" ? "bg-status-success-surface text-status-success-foreground" : "bg-status-warning-surface text-status-warning-foreground"}>
           {row.status === "approved" ? "مُعتمد" : "مسودة"}
         </Badge>
       ),
@@ -209,7 +209,7 @@ export default function InventoryCountPage() {
               perm="warehouse:create"
               size="sm"
               variant="outline"
-              className="h-7 px-2 text-green-700 hover:bg-green-50"
+              className="h-7 px-2 text-status-success-foreground hover:bg-status-success-surface"
               onClick={(e) => { e.stopPropagation(); setApproveTargetId(row.id); }}
             >
               <CheckCircle className="w-3.5 h-3.5 me-1" /> اعتماد
@@ -245,7 +245,7 @@ export default function InventoryCountPage() {
         key: "sku",
         header: "رمز المنتج",
         align: "center",
-        render: (_row) => <span className="text-xs text-gray-400">{_row.sku || "—"}</span>,
+        render: (_row) => <span className="text-xs text-muted-foreground">{_row.sku || "—"}</span>,
       },
       {
         key: "systemStock",
@@ -292,7 +292,7 @@ export default function InventoryCountPage() {
           const variance = existing?.variance ?? (physVal !== "" ? Number(physVal) - Number(sysStock) : null);
           if (variance === null) return null;
           return (
-            <span className={`flex items-center justify-center gap-0.5 font-medium text-xs ${variance > 0 ? "text-green-600" : variance < 0 ? "text-red-600" : "text-gray-400"}`}>
+            <span className={`flex items-center justify-center gap-0.5 font-medium text-xs ${variance > 0 ? "text-status-success-foreground" : variance < 0 ? "text-status-error-foreground" : "text-muted-foreground"}`}>
               {variance > 0 ? <ArrowUp className="w-3 h-3" /> : variance < 0 ? <ArrowDown className="w-3 h-3" /> : null}
               {Math.abs(variance)}
             </span>
@@ -327,7 +327,7 @@ export default function InventoryCountPage() {
     return (
       <div className="p-4 bg-muted/30 border-t">
         {count.status !== "approved" && (
-          <div className="mb-3 p-3 bg-blue-50 rounded text-xs text-blue-700">
+          <div className="mb-3 p-3 bg-status-info-surface rounded text-xs text-status-info-foreground">
             أدخل الكمية الفعلية لكل منتج ثم احفظ — يُحدَّث المخزون عند الاعتماد.
           </div>
         )}
@@ -344,7 +344,7 @@ export default function InventoryCountPage() {
             const sysStock = existing?.systemStock ?? p.currentStock;
             const variance = existing?.variance ?? (physVal !== "" ? Number(physVal) - Number(sysStock) : null);
             if (variance !== null && variance !== 0) {
-              return variance > 0 ? "bg-green-50/50" : "bg-red-50/50";
+              return variance > 0 ? "bg-status-success-surface" : "bg-status-error-surface";
             }
             return undefined;
           }}
@@ -367,7 +367,7 @@ export default function InventoryCountPage() {
       <KpiGrid items={kpis} />
 
       {stats.draft > 0 && (
-        <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+        <div className="flex items-center gap-2 p-3 bg-status-warning-surface border border-status-warning-surface rounded-lg text-sm text-status-warning-foreground">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span>
             يوجد <strong>{stats.draft}</strong> جلسة جرد بحالة مسودة بانتظار الاعتماد

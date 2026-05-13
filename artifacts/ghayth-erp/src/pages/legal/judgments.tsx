@@ -34,8 +34,8 @@ const columns: DataTableColumn<Judgment>[] = [
   {
     key: "riskLevel", header: "مستوى المخاطرة", render: (r) => {
       const v = r.riskLevel;
-      const colors: Record<string, string> = { high: "bg-red-100 text-red-800", medium: "bg-yellow-100 text-yellow-800", low: "bg-green-100 text-green-800" };
-      return <Badge className={colors[v || ""] || "bg-gray-100 text-gray-800"}>{v === "high" ? "عالية" : v === "medium" ? "متوسطة" : v === "low" ? "منخفضة" : v || "-"}</Badge>;
+      const colors: Record<string, string> = { high: "bg-status-error-surface text-status-error-foreground", medium: "bg-status-warning-surface text-yellow-800", low: "bg-status-success-surface text-status-success-foreground" };
+      return <Badge className={colors[v || ""] || "bg-surface-subtle text-status-neutral-foreground"}>{v === "high" ? "عالية" : v === "medium" ? "متوسطة" : v === "low" ? "منخفضة" : v || "-"}</Badge>;
     }
   },
 ];
@@ -62,8 +62,8 @@ export default function LegalJudgments() {
     >
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card><CardContent className="p-4 text-center"><p className="text-sm text-muted-foreground">إجمالي المبالغ</p><p className="text-xl font-bold">{formatCurrency(Number(totalAmount))}</p></CardContent></Card>
-        <Card><CardContent className="p-4 text-center"><p className="text-sm text-muted-foreground">المدفوع</p><p className="text-xl font-bold text-green-600">{formatCurrency(Number(totalPaid))}</p></CardContent></Card>
-        <Card><CardContent className="p-4 text-center"><p className="text-sm text-muted-foreground">المتبقي</p><p className="text-xl font-bold text-red-600">{formatCurrency(Number(outstanding))}</p></CardContent></Card>
+        <Card><CardContent className="p-4 text-center"><p className="text-sm text-muted-foreground">المدفوع</p><p className="text-xl font-bold text-status-success-foreground">{formatCurrency(Number(totalPaid))}</p></CardContent></Card>
+        <Card><CardContent className="p-4 text-center"><p className="text-sm text-muted-foreground">المتبقي</p><p className="text-xl font-bold text-status-error-foreground">{formatCurrency(Number(outstanding))}</p></CardContent></Card>
       </div>
       <AdvancedFilters config={{ searchPlaceholder: "بحث...", showDateRange: false }} values={filters} onChange={setFilters} resultCount={filtered.length} />
       <DataTable columns={columns} data={filtered} isLoading={isLoading} isError={isError} error={error} onRowClick={(j) => navigate(`/legal/judgments/${j.id}`)} />

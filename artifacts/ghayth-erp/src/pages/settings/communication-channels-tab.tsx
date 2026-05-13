@@ -89,7 +89,7 @@ export function CommunicationChannelsTab() {
   return (
     <div className="space-y-6">
       <h3 className="text-lg font-semibold flex items-center gap-2">
-        <MessageSquare className="h-5 w-5 text-blue-500" />
+        <MessageSquare className="h-5 w-5 text-status-info" />
         إعدادات قنوات الاتصال
       </h3>
 
@@ -115,7 +115,7 @@ export function CommunicationChannelsTab() {
               </CardTitle>
               <BooleanToggle name="sms_enabled" />
             </div>
-            <p className="text-xs text-gray-500">أدخل بيانات حساب مزود خدمة الرسائل لإرسال الرسائل النصية. يمكنك إنشاء حساب مجاني من موقع المزود.</p>
+            <p className="text-xs text-muted-foreground">أدخل بيانات حساب مزود خدمة الرسائل لإرسال الرسائل النصية. يمكنك إنشاء حساب مجاني من موقع المزود.</p>
           </CardHeader>
           <CardContent>
             <FormGrid cols={2}>
@@ -154,7 +154,7 @@ export function CommunicationChannelsTab() {
               </CardTitle>
               <BooleanToggle name="whatsapp_enabled" />
             </div>
-            <p className="text-xs text-gray-500">أدخل بيانات واجهة ربط أعمال واتساب من منصة ميتا للمطورين. تحتاج إلى حساب تجاري معتمد من ميتا.</p>
+            <p className="text-xs text-muted-foreground">أدخل بيانات واجهة ربط أعمال واتساب من منصة ميتا للمطورين. تحتاج إلى حساب تجاري معتمد من ميتا.</p>
           </CardHeader>
           <CardContent>
             <FormGrid cols={2}>
@@ -168,9 +168,9 @@ export function CommunicationChannelsTab() {
               <FormTextField name="whatsapp_phone_id" label="معرّف رقم الهاتف" placeholder="123456789012345" />
               <FormTextField name="whatsapp_verify_token" label="رمز التحقق (لخطاف الاستدعاء)" placeholder="ghayth_erp_verify" />
             </FormGrid>
-            <div className="bg-blue-50 rounded-md p-3 text-xs text-blue-700 space-y-1 mt-3">
+            <div className="bg-status-info-surface rounded-md p-3 text-xs text-status-info-foreground space-y-1 mt-3">
               <p className="font-medium">رابط خطاف الاستدعاء:</p>
-              <code className="bg-blue-100 px-2 py-1 rounded block" dir="ltr">{window.location.origin}/api/communications/whatsapp/webhook</code>
+              <code className="bg-status-info-surface px-2 py-1 rounded block" dir="ltr">{window.location.origin}/api/communications/whatsapp/webhook</code>
             </div>
           </CardContent>
         </Card>
@@ -194,12 +194,12 @@ export function CommunicationChannelsTab() {
               </CardTitle>
               <BooleanToggle name="push_enabled" />
             </div>
-            <p className="text-xs text-gray-500">إشعارات المتصفح تعمل عبر VAPID keys. يجب ضبط متغيرات البيئة VAPID_PUBLIC_KEY وVAPID_PRIVATE_KEY على الخادم لتفعيل هذه الميزة.</p>
+            <p className="text-xs text-muted-foreground">إشعارات المتصفح تعمل عبر VAPID keys. يجب ضبط متغيرات البيئة VAPID_PUBLIC_KEY وVAPID_PRIVATE_KEY على الخادم لتفعيل هذه الميزة.</p>
           </CardHeader>
           <CardContent>
-            <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-xs text-amber-800 space-y-1">
+            <div className="bg-status-warning-surface border border-status-warning-surface rounded-md p-3 text-xs text-status-warning-foreground space-y-1">
               <p className="font-medium">لتوليد مفاتيح VAPID:</p>
-              <code className="bg-amber-100 px-2 py-1 rounded block" dir="ltr">npx web-push generate-vapid-keys</code>
+              <code className="bg-status-warning-surface px-2 py-1 rounded block" dir="ltr">npx web-push generate-vapid-keys</code>
               <p className="mt-1">أضف المفاتيح الناتجة كمتغيرات بيئة: VAPID_PUBLIC_KEY و VAPID_PRIVATE_KEY و VAPID_SUBJECT</p>
             </div>
           </CardContent>
@@ -219,7 +219,7 @@ function BooleanToggle<TForm extends Record<string, unknown>>({ name }: { name: 
   const value = useWatch({ name: name as never }) as unknown as boolean | undefined;
   return (
     <div className="flex items-center gap-2">
-      <Label className="text-xs text-gray-500">تفعيل</Label>
+      <Label className="text-xs text-muted-foreground">تفعيل</Label>
       <input
         type="checkbox"
         checked={Boolean(value)}
@@ -245,7 +245,7 @@ function SecretField<TForm extends Record<string, unknown>>({
   return (
     <div className={className}>
       {configured && !value && (
-        <p className="text-xs text-green-600 mb-1">✓ تم الضبط — اتركه فارغاً للإبقاء على القيمة الحالية</p>
+        <p className="text-xs text-status-success-foreground mb-1">✓ تم الضبط — اتركه فارغاً للإبقاء على القيمة الحالية</p>
       )}
       <FormTextField
         name={name}

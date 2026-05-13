@@ -32,13 +32,13 @@ export default function StoreOrderDetailPage() {
     <div className="space-y-4">
       <div className="grid md:grid-cols-3 gap-4">
         <Card><CardContent className="p-4">
-          <div className="flex items-center gap-2 mb-3 text-gray-500"><User className="h-4 w-4" /><span className="text-sm">بيانات العميل</span></div>
+          <div className="flex items-center gap-2 mb-3 text-muted-foreground"><User className="h-4 w-4" /><span className="text-sm">بيانات العميل</span></div>
           <p className="font-bold text-lg">{order?.customerName || "-"}</p>
-          {order?.customerPhone && <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><Phone className="h-3 w-3" />{order.customerPhone}</p>}
+          {order?.customerPhone && <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1"><Phone className="h-3 w-3" />{order.customerPhone}</p>}
         </CardContent></Card>
 
         <Card><CardContent className="p-4">
-          <div className="flex items-center gap-2 mb-3 text-gray-500"><Package className="h-4 w-4" /><span className="text-sm">ملخص الطلب</span></div>
+          <div className="flex items-center gap-2 mb-3 text-muted-foreground"><Package className="h-4 w-4" /><span className="text-sm">ملخص الطلب</span></div>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between"><span>رقم الطلب</span><span className="font-mono font-medium">{order?.orderNumber || `#${order?.id}`}</span></div>
             <div className="flex justify-between border-t pt-2 font-bold text-base"><span>المبلغ الإجمالي</span><span className="text-primary">{formatCurrency(Number(order?.totalAmount || 0))}</span></div>
@@ -46,7 +46,7 @@ export default function StoreOrderDetailPage() {
         </CardContent></Card>
 
         <Card><CardContent className="p-4">
-          <div className="flex items-center gap-2 mb-3 text-gray-500"><Calendar className="h-4 w-4" /><span className="text-sm">التواريخ</span></div>
+          <div className="flex items-center gap-2 mb-3 text-muted-foreground"><Calendar className="h-4 w-4" /><span className="text-sm">التواريخ</span></div>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between"><span>تاريخ الإنشاء</span><span>{order?.createdAt ? formatDateAr(order.createdAt) : "-"}</span></div>
           </div>
@@ -59,7 +59,7 @@ export default function StoreOrderDetailPage() {
           <CardContent className="p-0">
             <DataTable
               columns={[
-                { key: "_index", header: "#", render: (_r: any, i: number) => <span className="text-gray-400">{i + 1}</span> },
+                { key: "_index", header: "#", render: (_r: any, i: number) => <span className="text-muted-foreground">{i + 1}</span> },
                 { key: "name", header: "المنتج", render: (r: any) => <span className="font-medium">{r.name || r.description || "-"}</span> },
                 { key: "quantity", header: "الكمية", sortable: true, render: (r: any) => r.quantity || 1 },
                 { key: "price", header: "السعر", sortable: true, render: (r: any) => formatCurrency(Number(r.price || r.unitPrice || 0)) },
@@ -78,7 +78,7 @@ export default function StoreOrderDetailPage() {
       {order?.notes && (
         <Card>
           <CardHeader><CardTitle>ملاحظات</CardTitle></CardHeader>
-          <CardContent><p className="text-gray-600">{order.notes}</p></CardContent>
+          <CardContent><p className="text-muted-foreground">{order.notes}</p></CardContent>
         </Card>
       )}
 

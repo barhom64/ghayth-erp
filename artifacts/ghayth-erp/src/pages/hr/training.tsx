@@ -44,8 +44,8 @@ export default function TrainingPage() {
   const filtered = applyFilters(items, filters, { searchFields: ["title", "trainer"], statusField: "status" });
 
   const kpis = [
-    { label: "إجمالي البرامج", value: stats.totalPrograms ?? items.length, icon: BookOpen, color: "text-blue-600 bg-blue-50" },
-    { label: "برامج نشطة", value: stats.activePrograms ?? items.filter((i: any) => i.status === "active").length, icon: GraduationCap, color: "text-green-600 bg-green-50" },
+    { label: "إجمالي البرامج", value: stats.totalPrograms ?? items.length, icon: BookOpen, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "برامج نشطة", value: stats.activePrograms ?? items.filter((i: any) => i.status === "active").length, icon: GraduationCap, color: "text-status-success-foreground bg-status-success-surface" },
     { label: "إجمالي التسجيلات", value: stats.totalEnrollments ?? enrollments.length, icon: Users, color: "text-purple-600 bg-purple-50" },
     { label: "مكتملة", value: stats.completedEnrollments ?? 0, icon: Award, color: "text-orange-600 bg-orange-50" },
   ];
@@ -166,8 +166,8 @@ export default function TrainingPage() {
               <Card key={t.id} className="hover:shadow-md transition-shadow">
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between mb-3">
-                    <Link href={`/hr/training/${t.id}`} className="flex items-center gap-2 hover:text-blue-600 transition-colors">
-                      <GraduationCap className="w-5 h-5 text-blue-500" />
+                    <Link href={`/hr/training/${t.id}`} className="flex items-center gap-2 hover:text-status-info-foreground transition-colors">
+                      <GraduationCap className="w-5 h-5 text-status-info" />
                       <span className="font-semibold">{t.title}</span>
                     </Link>
                     <div className="flex items-center gap-1">
@@ -180,8 +180,8 @@ export default function TrainingPage() {
                       />
                     </div>
                   </div>
-                  <div className="space-y-2 text-sm text-gray-500">
-                    {t.trainer && <p>المدرب: <span className="text-gray-700">{t.trainer}</span></p>}
+                  <div className="space-y-2 text-sm text-muted-foreground">
+                    {t.trainer && <p>المدرب: <span className="text-status-neutral-foreground">{t.trainer}</span></p>}
                     {t.startDate && <p>التاريخ: {formatDateAr(t.startDate)} {t.endDate ? `— ${formatDateAr(t.endDate)}` : ""}</p>}
                     {t.location && <p>الموقع: {t.location}</p>}
                     <div className="flex items-center justify-between pt-2 border-t">
@@ -202,7 +202,7 @@ export default function TrainingPage() {
                 </CardContent>
               </Card>
             ))}
-            {filtered.length === 0 && <p className="text-gray-400 col-span-3 text-center py-8">لا توجد برامج تدريبية</p>}
+            {filtered.length === 0 && <p className="text-muted-foreground col-span-3 text-center py-8">لا توجد برامج تدريبية</p>}
           </div>
         </TabsContent>
         <TabsContent value="enrollments">

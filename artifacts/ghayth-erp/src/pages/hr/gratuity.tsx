@@ -52,7 +52,7 @@ export default function GratuityPage() {
       contentClassName="space-y-4 max-w-3xl mx-auto"
     >
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">بيانات الحساب</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">بيانات الحساب</CardTitle></CardHeader>
         <CardContent>
           <FormShell
             schema={gratuitySchema}
@@ -89,8 +89,8 @@ export default function GratuityPage() {
       </Card>
 
       {error && (
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="p-4 text-red-600 text-sm">خطأ في الحساب — تأكد من وجود عقد نشط للموظف</CardContent>
+        <Card className="border-status-error-surface bg-status-error-surface">
+          <CardContent className="p-4 text-status-error-foreground text-sm">خطأ في الحساب — تأكد من وجود عقد نشط للموظف</CardContent>
         </Card>
       )}
 
@@ -103,29 +103,29 @@ export default function GratuityPage() {
                 <User className="w-5 h-5 text-primary" />
                 <div>
                   <div className="font-semibold text-lg">{result.employeeName}</div>
-                  <div className="text-sm text-gray-500">{result.jobTitle}</div>
+                  <div className="text-sm text-muted-foreground">{result.jobTitle}</div>
                 </div>
               </div>
 
               <div className="grid grid-cols-3 gap-4">
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <Calendar className="w-4 h-4 mx-auto text-gray-400 mb-1" />
+                <div className="text-center p-3 bg-surface-subtle rounded-lg">
+                  <Calendar className="w-4 h-4 mx-auto text-muted-foreground mb-1" />
                   <div className="text-sm font-medium">{result.yearsOfService} سنة</div>
-                  <div className="text-xs text-gray-500">مدة الخدمة</div>
+                  <div className="text-xs text-muted-foreground">مدة الخدمة</div>
                 </div>
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <DollarSign className="w-4 h-4 mx-auto text-gray-400 mb-1" />
+                <div className="text-center p-3 bg-surface-subtle rounded-lg">
+                  <DollarSign className="w-4 h-4 mx-auto text-muted-foreground mb-1" />
                   <div className="text-sm font-medium">{formatCurrency(result.monthlySalary)}</div>
-                  <div className="text-xs text-gray-500">الراتب الشهري</div>
+                  <div className="text-xs text-muted-foreground">الراتب الشهري</div>
                 </div>
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <span className="text-xs text-gray-400">{TERMINATION_TYPES[result.terminationType] || result.terminationType}</span>
-                  <div className="text-xs text-gray-500 mt-1">نوع الإنهاء</div>
+                <div className="text-center p-3 bg-surface-subtle rounded-lg">
+                  <span className="text-xs text-muted-foreground">{TERMINATION_TYPES[result.terminationType] || result.terminationType}</span>
+                  <div className="text-xs text-muted-foreground mt-1">نوع الإنهاء</div>
                 </div>
               </div>
 
               <div className="border rounded-lg overflow-hidden">
-                <div className="bg-gray-50 px-4 py-2 text-sm font-medium">تفصيل الحساب</div>
+                <div className="bg-surface-subtle px-4 py-2 text-sm font-medium">تفصيل الحساب</div>
                 <div className="divide-y">
                   <div className="flex justify-between px-4 py-2 text-sm">
                     <span>أول 5 سنوات (نصف شهر/سنة)</span>
@@ -160,10 +160,10 @@ export default function GratuityPage() {
         </div>
       )}
 
-      <Card className="bg-gray-50 border-dashed">
+      <Card className="bg-surface-subtle border-dashed">
         <CardContent className="p-4">
           <h3 className="font-medium text-sm mb-2">ملاحظات نظام العمل السعودي:</h3>
-          <ul className="text-xs text-gray-500 space-y-1 list-disc list-inside">
+          <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
             <li>أول 5 سنوات: نصف أجر شهري عن كل سنة</li>
             <li>ما زاد عن 5 سنوات: أجر شهري كامل عن كل سنة</li>
             <li>الاستقالة بعد سنتين وقبل 5 سنوات: ثلث المكافأة</li>

@@ -341,8 +341,14 @@ router.put("/general", authorize({ feature: "settings", action: "update" }), asy
 router.get("/branches", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // Hide disabled branches by default so the header picker, every
+    // dropdown, and every list consumer sees only active branches.
+    // Settings → Branches page can opt in to archived rows via
+    // `?includeInactive=true`.
+    const includeInactive = String(req.query.includeInactive ?? "") === "true";
+    const statusFilter = includeInactive ? "" : ` AND COALESCE(status, 'active') = 'active'`;
     const rows = await rawQuery(
-      `SELECT * FROM branches WHERE "companyId" = ANY($1) ORDER BY name`,
+      `SELECT * FROM branches WHERE "companyId" = ANY($1)${statusFilter} ORDER BY name`,
       [scope.allowedCompanies]
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
@@ -452,41 +458,66 @@ router.put("/branches/:id", authorize({ feature: "settings", action: "update" })
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
+// DELETE /settings/branches/:id is a *soft* disable: it flips the row's
+// status to "inactive" instead of removing the record. Branches sit at the
+// root of 15 FK relations (employee_assignments, purchase_orders, departments,
+// shifts, credit/debit_memos, bank_guarantees, customer_advances,
+// document_templates, employee_of_month, hr_employee_loans, hr_exit_requests,
+// hr_inquiry_memos, hr_overtime_requests, payment_runs), so a hard DELETE
+// would either fail under RESTRICT or orphan data; soft-disable hides the
+// branch from the header picker (the GET filter above already excludes
+// `status != 'active'`) while keeping every historical row addressable.
+//
+// Force-disable is blocked when active employees or open purchase orders
+// still reference the branch — the operator is asked to reassign or close
+// those first. `?force=true` is reserved for a future hard-delete path
+// gated on every FK count being zero; until then it has no effect.
 router.delete("/branches/:id", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
     const branchId = parseId(req.params.id, "id");
     const scope = req.scope!;
 
+    const [beforeBranch] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM branches WHERE id=$1 AND "companyId"=$2`,
+      [branchId, scope.companyId],
+    );
+    if (!beforeBranch) throw new NotFoundError("الفرع غير موجود");
+    if ((beforeBranch.status as string | null) === "inactive") {
+      throw new ValidationError("الفرع مُعطَّل مسبقاً");
+    }
+
     const [activeEmployees] = await rawQuery<CountRow>(
       `SELECT COUNT(*) AS cnt FROM employee_assignments WHERE "branchId" = $1 AND status = 'active' AND "companyId" = $2`,
-      [branchId, scope.companyId]
+      [branchId, scope.companyId],
     );
     const [openOrders] = await rawQuery<CountRow>(
       `SELECT COUNT(*) AS cnt FROM purchase_orders WHERE "branchId" = $1 AND status NOT IN ('cancelled','received','completed') AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [branchId, scope.companyId]
+      [branchId, scope.companyId],
     );
 
     const blockers: string[] = [];
     if (Number(activeEmployees?.cnt ?? 0) > 0) {
-      blockers.push(`يوجد ${activeEmployees.cnt} موظف نشط مرتبط بهذا الفرع`);
+      blockers.push(`يوجد ${activeEmployees.cnt} موظف نشط مرتبط بهذا الفرع — أعد إسنادهم أولاً`);
     }
     if (Number(openOrders?.cnt ?? 0) > 0) {
-      blockers.push(`يوجد ${openOrders.cnt} أمر شراء مفتوح مرتبط بهذا الفرع`);
+      blockers.push(`يوجد ${openOrders.cnt} أمر شراء مفتوح مرتبط بهذا الفرع — أغلقها أو حوّلها`);
     }
     if (blockers.length > 0) {
-      throw new ValidationError("لا يمكن حذف الفرع — يوجد بيانات مرتبطة نشطة", { meta: { blockers } });
+      throw new ValidationError("لا يمكن تعطيل الفرع — يوجد بيانات نشطة مرتبطة", { meta: { blockers } });
     }
 
-    const [beforeBranch] = await rawQuery(`SELECT * FROM branches WHERE id=$1 AND "companyId"=$2`, [branchId, scope.companyId]);
-    if (!beforeBranch) throw new NotFoundError("الفرع غير موجود");
-    await rawExecute(`DELETE FROM branches WHERE id=$1 AND "companyId"=$2 RETURNING id`, [branchId, scope.companyId]);
+    await rawExecute(
+      `UPDATE branches SET status='inactive' WHERE id=$1 AND "companyId"=$2`,
+      [branchId, scope.companyId],
+    );
     createAuditLog({
-      companyId: scope.companyId, userId: scope.userId, action: "delete_branch",
+      companyId: scope.companyId, userId: scope.userId, action: "disable_branch",
       entity: "branches", entityId: branchId,
       before: beforeBranch,
+      after: { ...beforeBranch, status: "inactive" },
     }).catch((e) => logger.error(e, "settings background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: branchId, details: JSON.stringify({ key: "branch" }) }).catch((e) => logger.error(e, "settings background task failed"));
-    res.json({ success: true });
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: branchId, details: JSON.stringify({ key: "branch", mode: "soft-disable" }) }).catch((e) => logger.error(e, "settings background task failed"));
+    res.json({ success: true, mode: "soft-disable" });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 

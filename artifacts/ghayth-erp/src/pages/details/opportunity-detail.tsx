@@ -142,20 +142,20 @@ export default function OpportunityDetail() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border-0 shadow-sm"><CardContent className="p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-green-50"><DollarSign className="w-5 h-5 text-green-600" /></div>
-          <div><p className="text-xl font-bold">{value > 0 ? `${(value / 1000).toFixed(0)}K` : "0"}</p><p className="text-xs text-gray-500">{`قيمة الفرصة ( ${getCurrencySymbol()})`}</p></div>
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-status-success-surface"><DollarSign className="w-5 h-5 text-status-success-foreground" /></div>
+          <div><p className="text-xl font-bold">{value > 0 ? `${(value / 1000).toFixed(0)}K` : "0"}</p><p className="text-xs text-muted-foreground">{`قيمة الفرصة ( ${getCurrencySymbol()})`}</p></div>
         </CardContent></Card>
         <Card className="border-0 shadow-sm"><CardContent className="p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-blue-50"><TrendingUp className="w-5 h-5 text-blue-600" /></div>
-          <div><p className="text-xl font-bold">{probability}%</p><p className="text-xs text-gray-500">احتمالية الإغلاق</p></div>
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-status-info-surface"><TrendingUp className="w-5 h-5 text-status-info-foreground" /></div>
+          <div><p className="text-xl font-bold">{probability}%</p><p className="text-xs text-muted-foreground">احتمالية الإغلاق</p></div>
         </CardContent></Card>
         <Card className="border-0 shadow-sm"><CardContent className="p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-purple-50"><Calendar className="w-5 h-5 text-purple-600" /></div>
-          <div><p className="text-lg font-bold">{opportunity?.expectedCloseDate ? formatDateAr(opportunity.expectedCloseDate) : "-"}</p><p className="text-xs text-gray-500">الإغلاق المتوقع</p></div>
+          <div><p className="text-lg font-bold">{opportunity?.expectedCloseDate ? formatDateAr(opportunity.expectedCloseDate) : "-"}</p><p className="text-xs text-muted-foreground">الإغلاق المتوقع</p></div>
         </CardContent></Card>
         <Card className="border-0 shadow-sm"><CardContent className="p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-orange-50"><MessageSquare className="w-5 h-5 text-orange-600" /></div>
-          <div><p className="text-xl font-bold">{activities.length}</p><p className="text-xs text-gray-500">الأنشطة</p></div>
+          <div><p className="text-xl font-bold">{activities.length}</p><p className="text-xs text-muted-foreground">الأنشطة</p></div>
         </CardContent></Card>
       </div>
 
@@ -164,21 +164,21 @@ export default function OpportunityDetail() {
           <Card>
             <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Target className="w-5 h-5" /> الأنشطة</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              {activities.length === 0 && <p className="text-center text-gray-400 py-4">لا توجد أنشطة</p>}
+              {activities.length === 0 && <p className="text-center text-muted-foreground py-4">لا توجد أنشطة</p>}
               {activities.map((a: any) => {
                 const at = actTypeMap[a.type];
                 const Icon = at?.icon || MessageSquare;
                 return (
                   <div key={a.id} className="flex items-start gap-3 p-3 rounded-lg border">
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-50 shrink-0">
-                      <Icon className="w-4 h-4 text-blue-600" />
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-status-info-surface shrink-0">
+                      <Icon className="w-4 h-4 text-status-info-foreground" />
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
                         <span className="font-medium text-sm">{a.description}</span>
                         <PageStatusBadge status={a.status || "pending"} />
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">{at?.label || a.type} • {a.scheduledAt ? formatDateAr(a.scheduledAt) : a.createdAt ? formatDateAr(a.createdAt) : "-"}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{at?.label || a.type} • {a.scheduledAt ? formatDateAr(a.scheduledAt) : a.createdAt ? formatDateAr(a.createdAt) : "-"}</p>
                     </div>
                   </div>
                 );
@@ -191,12 +191,12 @@ export default function OpportunityDetail() {
         <Card>
           <CardHeader><CardTitle className="text-base">معلومات الفرصة</CardTitle></CardHeader>
           <CardContent className="space-y-3 text-sm">
-            <div className="py-2 border-b"><span className="text-gray-500 block mb-1">جهة الاتصال</span><span className="font-medium">{opportunity?.contactName || "-"}</span></div>
-            <div className="py-2 border-b"><span className="text-gray-500 block mb-1">الهاتف</span><span dir="ltr">{opportunity?.contactPhone || "-"}</span></div>
-            <div className="py-2 border-b"><span className="text-gray-500 block mb-1">البريد</span><span>{opportunity?.contactEmail || "-"}</span></div>
-            <div className="py-2 border-b"><span className="text-gray-500 block mb-1">المسؤول</span><span>{opportunity?.assigneeName || "-"}</span></div>
-            <div className="py-2 border-b"><span className="text-gray-500 block mb-1">المصدر</span><span>{opportunity?.source || "-"}</span></div>
-            <div className="py-2"><span className="text-gray-500 block mb-1">تاريخ الإنشاء</span><span>{opportunity?.createdAt ? formatDateAr(opportunity.createdAt) : "-"}</span></div>
+            <div className="py-2 border-b"><span className="text-muted-foreground block mb-1">جهة الاتصال</span><span className="font-medium">{opportunity?.contactName || "-"}</span></div>
+            <div className="py-2 border-b"><span className="text-muted-foreground block mb-1">الهاتف</span><span dir="ltr">{opportunity?.contactPhone || "-"}</span></div>
+            <div className="py-2 border-b"><span className="text-muted-foreground block mb-1">البريد</span><span>{opportunity?.contactEmail || "-"}</span></div>
+            <div className="py-2 border-b"><span className="text-muted-foreground block mb-1">المسؤول</span><span>{opportunity?.assigneeName || "-"}</span></div>
+            <div className="py-2 border-b"><span className="text-muted-foreground block mb-1">المصدر</span><span>{opportunity?.source || "-"}</span></div>
+            <div className="py-2"><span className="text-muted-foreground block mb-1">تاريخ الإنشاء</span><span>{opportunity?.createdAt ? formatDateAr(opportunity.createdAt) : "-"}</span></div>
           </CardContent>
         </Card>
         </div>
