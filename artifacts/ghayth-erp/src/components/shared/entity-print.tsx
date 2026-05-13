@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Printer } from "lucide-react";
 import { PrintPreviewModal } from "@/components/print-layout";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
+import { PrintButton, type PrintFormat } from "@/components/shared/print-button";
 
 /**
  * Structured print section — caller composes a document from these blocks
@@ -53,6 +54,11 @@ interface EntityPrintButtonProps {
   label?: string;
   variant?: "default" | "outline" | "ghost";
   size?: "default" | "sm" | "lg";
+  /** When set, the new Print Engine v2 is used instead of the local sections. */
+  entityType?: string;
+  entityId?: string | number;
+  /** Output formats supported by the entity (only used in v2 mode). */
+  formats?: PrintFormat[];
 }
 
 export function EntityPrintButton({
@@ -65,9 +71,28 @@ export function EntityPrintButton({
   label = "طباعة / معاينة",
   variant = "outline",
   size = "sm",
+  entityType,
+  entityId,
+  formats,
 }: EntityPrintButtonProps) {
   const [open, setOpen] = useState(false);
   const letterhead = useBranchLetterhead(branchId);
+
+  // Print Engine v2 — when entityType + entityId are supplied, delegate to the
+  // unified <PrintButton/> so this entity uses branch-aware templates, gets a
+  // print_jobs audit row, and supports thermal/label/excel formats.
+  if (entityType && entityId !== undefined && entityId !== null) {
+    return (
+      <PrintButton
+        entityType={entityType}
+        entityId={entityId}
+        formats={formats}
+        label={label}
+        variant={variant === "ghost" ? "ghost" : variant}
+        size={size}
+      />
+    );
+  }
 
   return (
     <>
