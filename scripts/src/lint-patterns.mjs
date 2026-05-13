@@ -133,6 +133,29 @@ const RULES = [
       "Account code resolution should happen inside the domain engine " +
       "(e.g. fleetEngine, propertiesEngine) via financialEngine.resolveAccountCode().",
   },
+  {
+    id: "unlocalized-toLocaleString",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR],
+    extensions: [".tsx", ".ts"],
+    // The shadcn chart wrapper uses toLocaleString() for tooltip values
+    // and is upstream code; date-utils + formatters are the canonical
+    // formatters and are allowed to call it directly with an explicit
+    // locale (which the regex below already excludes).
+    skip: (file) =>
+      file.endsWith("/components/ui/chart.tsx")
+      || file.endsWith("/lib/date-utils.ts")
+      || file.endsWith("/lib/formatters.ts"),
+    // Match `.toLocaleString(` followed immediately by `)` — i.e. no
+    // arguments. Calls with a locale string (`toLocaleString("ar-SA")`)
+    // and calls with a NumberFormat options object pass cleanly.
+    regex: /\.toLocaleString\(\s*\)/,
+    message:
+      "`.toLocaleString()` without an explicit locale falls back to the " +
+      "user's browser locale, producing inconsistent digit grouping and " +
+      "numerals across users. Import `formatNumber` from `@/lib/formatters` " +
+      "(returns Arabic-Indic digits with en-US grouping) or pass an " +
+      "explicit locale string if you need a non-default behaviour.",
+  },
 ];
 
 /** Recursively yield every file under a directory matching the given extensions. */

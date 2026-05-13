@@ -1,7 +1,7 @@
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, formatNumber } from "@/lib/formatters";
 import {
   Truck, Fuel, Wrench, Shield, MapPin, AlertTriangle, Info, Calendar,
 } from "lucide-react";
@@ -145,7 +145,7 @@ export function VehicleContextCard({
         {/* Core grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           <InfoTile label="السائق المعيّن" value={data.driverName || "—"} />
-          <InfoTile label="عداد الكيلومترات" value={data.mileage ? `${Number(data.mileage).toLocaleString()} كم` : "—"} />
+          <InfoTile label="عداد الكيلومترات" value={data.mileage ? `${formatNumber(Number(data.mileage))} كم` : "—"} />
           <InfoTile label="عدد الرحلات" value={`${(data.trips || []).length}`} />
           <InfoTile label="تزويدات سابقة" value={`${(data.fuelLogs || []).length}`} />
         </div>

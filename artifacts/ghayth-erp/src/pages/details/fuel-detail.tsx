@@ -12,7 +12,7 @@ import { EntityPrintButton, type PrintSection } from "@/components/shared/entity
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Fuel, Gauge } from "lucide-react";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -145,7 +145,7 @@ export default function FuelDetail() {
                 <p className="text-xs text-gray-500 mb-0.5">عداد الكيلومترات</p>
                 <div className="flex items-center gap-1">
                   <Gauge className="h-3.5 w-3.5 text-gray-400" />
-                  <span className="text-gray-800 font-mono">{Number(item.odometer).toLocaleString()} كم</span>
+                  <span className="text-gray-800 font-mono">{formatNumber(Number(item.odometer))} كم</span>
                 </div>
               </div>
             )}

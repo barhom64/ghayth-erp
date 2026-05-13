@@ -16,7 +16,7 @@ export default function StoreOrderDetailPage() {
   const id = params?.id;
   const { extraTabs, hideTabs } = useRegistryTabs("store_order", id ?? "");
 
-  const { data: order, isLoading, isError } = useApiQuery<any>(["store-order-detail", id || ""], `/store/orders/${id}`, !!id);
+  const { data: order, isLoading, isError, refetch } = useApiQuery<any>(["store-order-detail", id || ""], `/store/orders/${id}`, !!id);
   const [showPreview, setShowPreview] = useState(false);
   const printContainerRef = useRef<HTMLDivElement>(null);
 
@@ -197,7 +197,7 @@ export default function StoreOrderDetailPage() {
       entityId={id || ""}
       isLoading={isLoading}
       error={isError ? true : undefined}
-      onRetry={() => window.location.reload()}
+      onRetry={() => { void refetch(); }}
       createdAt={order?.createdAt}
       updatedAt={order?.updatedAt}
       overview={overview}

@@ -215,7 +215,7 @@ function FleetDashboard() {
             <div className="text-xs text-muted-foreground space-y-1 mt-2">
               <div>نشطة: {data.trips?.active ?? 0}</div>
               <div>مكتملة: {data.trips?.completed ?? 0}</div>
-              <div>المسافة الإجمالية: {Number(data.trips?.totalDistance ?? 0).toLocaleString()} كم</div>
+              <div>المسافة الإجمالية: {formatNumber(Number(data.trips?.totalDistance ?? 0))} كم</div>
             </div>
           </CardContent>
         </Card>
@@ -232,7 +232,7 @@ function FleetDashboard() {
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(Number(data.fuel?.totalCost ?? 0))}</div>
             <p className="text-xs text-muted-foreground">إجمالي تكلفة الوقود</p>
-            <p className="text-xs mt-2">{Number(data.fuel?.totalLiters ?? 0).toLocaleString()} لتر</p>
+            <p className="text-xs mt-2">{formatNumber(Number(data.fuel?.totalLiters ?? 0))} لتر</p>
           </CardContent>
         </Card>
       </div>
