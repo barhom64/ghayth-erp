@@ -56,6 +56,22 @@ export async function rawExecute(
   return { insertId, affectedRows: result.rowCount ?? 0 };
 }
 
+// Guard for the ON CONFLICT DO NOTHING + read-back pattern: rawExecute
+// returns insertId=0 when no row was actually inserted (or the INSERT
+// didn't surface an id), and a follow-up SELECT id=0 silently returns
+// nothing. Wrap the destructured value to fail loudly at the source
+// instead of cascading into a confusing NotFound from the next query.
+//
+//   const { insertId } = await rawExecute(`INSERT INTO clients ...`);
+//   assertInsert(insertId, "clients");        // throws on 0
+//   const [row] = await rawQuery(`SELECT * FROM clients WHERE id = $1`, [insertId]);
+export function assertInsert(insertId: number, entity: string): number {
+  if (!Number.isFinite(insertId) || insertId <= 0) {
+    throw new Error(`assertInsert: ${entity} INSERT returned no id (likely ON CONFLICT DO NOTHING with no RETURNING)`);
+  }
+  return insertId;
+}
+
 export async function withTransaction<T>(
   fn: (client: pg.PoolClient) => Promise<T>
 ): Promise<T> {

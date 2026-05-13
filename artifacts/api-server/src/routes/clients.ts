@@ -1,7 +1,7 @@
 import { handleRouteError, ValidationError, NotFoundError, ConflictError, parseId, zodParse } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -430,6 +430,7 @@ router.post("/auto-create", authorize({ feature: "crm.clients", action: "create"
        VALUES ($1, $2, 'prospect', $3, $4, $5, false)`,
       [clientName, phone, source, code, scope.companyId]
     );
+    assertInsert(insertId, "clients");
 
     const [newClient] = await rawQuery<ClientRow>(`SELECT * FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     if (!newClient) throw new NotFoundError("فشل في استرجاع العميل");
@@ -556,6 +557,7 @@ router.post("/:id/portal-account", authorize({ feature: "crm.clients", action: "
        VALUES ($1, $2, $3, $4, true, true)`,
       [id, scope.companyId, email, passwordHash]
     );
+    assertInsert(insertId, "client_portal_accounts");
     const [account] = await rawQuery<PortalAccountRow>(
       `SELECT id, email, "isActive", "mustChangePassword", "createdAt" FROM client_portal_accounts WHERE id = $1 AND "companyId" = $2`,
       [insertId, scope.companyId]
