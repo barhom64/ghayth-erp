@@ -23,13 +23,46 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/settings.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+قواعد النظام (Business Rules) — Configurable rules per company/module.
+
+| الفئة | المثال |
+|------|--------|
+| Approval thresholds | "expenses > 5000 SAR requires CFO approval" |
+| Discount limits | "max 20% per order, > 20% requires manager" |
+| Leave policies | "annual leave 30 days post-5-years tenure" |
+| Loan eligibility | "min 1 year tenure, max 6 months salary" |
+| Pricing rules | "client tier A gets 10% off" |
+| Tax rules | "0% VAT for exports" |
+| Working hours | "Ramadan 6h/day per Saudi Labor Law" |
+| SLA defaults | "urgent ticket 2h response" |
+| Notification rules | "send email + SMS for critical" |
+| Audit retention | "10 years for finance, 5 for HR" |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| List rules | GET `/settings/rules` | `business_rules` | ✅ |
+| Create rule | POST | with category + condition + action | ✅ |
+| Edit rule | PATCH | with audit + version | ✅ critical |
+| Test rule (dry-run) | POST `/rules/:id/test` | with mock data | ⚠ |
+| Activate/Deactivate | toggle | ✅ |
+| Version history | snapshots | ✅ critical |
+| Rule conflicts detection | which fires first? | ⚠ |
+| Audit log on rule changes | `audit_logs` | ✅ critical |
+| تكامل مع `governance/approvals.md` (approval rules) | ✅ critical |
+| تكامل مع `automation.md` (action rules) | ✅ |
+| تكامل مع `hr-payroll.md` (compensation rules) | ✅ critical |
+| تكامل مع `finance-tax.md` (tax rules) | ✅ critical |
+| تكامل مع `finance-budget.md` (budget rules) | ✅ |
+| تكامل مع `eventCatalog.ts` (rule triggers) | ✅ |
+| RBAC | admin + finance + hr per scope | ✅ critical |
+
+تحقق يدوي:
+- [ ] هل rule changes effective-dated (لا retroactive without explicit flag)?
+- [ ] هل conflict resolution between rules deterministic?
+- [ ] هل dry-run truly side-effect-free?
+- [ ] هل rule version history reviewable for audit purposes?
+- [ ] هل rule conditions DSL secure (no code injection)?
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `rules` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
