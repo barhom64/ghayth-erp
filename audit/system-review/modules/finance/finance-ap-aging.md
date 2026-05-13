@@ -23,13 +23,32 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/finance.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+AP Aging Report — الفواتير غير المدفوعة للموردين، حسب أيام التأخر.
+
+| Bucket | المدى | الأولوية |
+|--------|-------|---------|
+| Current | 0-30 days | دفع طبيعي |
+| 30-60 | due — pay this week | متوسطة |
+| 60-90 | overdue — pay now | عالية |
+| 90+ | متأخر جداً — risk to vendor | حرجة (قد يقطع التوريد) |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| Aggregate per vendor/branch/period | GET `/ap-aging` | من `vendors.balance` + invoices | ✅ |
+| Drill-down per vendor | راجع `finance-vendors.md` | ✅ |
+| Payment plan (للمبالغ الكبيرة) | finance | scheduled payments | ⚠ |
+| Bulk payment (نهاية اليوم) | finance | aggregate `vouchers` per vendor | ✅ |
+| Cash flow impact | راجع `finance-cash-flow-forecast.md` | upcoming outflow | ✅ |
+| Vendor relationship risk | crm-like | كثرة التأخر تخفض rating | ⚠ |
+| Early payment discount (2/10 net 30) | finance | اقتراح | ⚠ |
+| Late fees من المورد | finance/expenses | لو المورد يفرضها | ⚠ |
+| تقرير شهري للـ CFO | bi/exec-dashboard | DPO calculation | ✅ |
+| Audit log | read-only | ✅ |
+
+تحقق يدوي:
+- [ ] هل تأخّر مستمر مع مورد واحد يطلق تنبيه supply-risk؟
+- [ ] هل توصيات الـ early payment discount محسوبة آلياً؟
+- [ ] هل WHT يُخصم تلقائياً قبل aggregate الدفع؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `ap-aging` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

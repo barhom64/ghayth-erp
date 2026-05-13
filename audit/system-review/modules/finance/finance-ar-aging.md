@@ -23,13 +23,32 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/finance.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+AR Aging Report — يصنّف الفواتير غير المدفوعة حسب أيام التأخر.
+
+| Bucket | المدى | الإجراء |
+|--------|-------|---------|
+| Current | 0-30 days | متابعة عادية |
+| 30-60 | تأخر بسيط | reminder ودود |
+| 60-90 | تأخر متوسط | reminder حازم + اتصال |
+| 90-180 | تأخر طويل | credit hold + escalation |
+| 180+ | متعثر | legal collection |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| Aggregate per client/branch/period | `finance-reports.ts` GET `/ar-aging` | من `invoices` (paidAmount < total) | ✅ |
+| Drill-down per client | راجع `finance-receivables.md` | ✅ |
+| إرسال reminders (cron) | comms | per bucket | ✅ |
+| Credit hold عند 60+ | crm | `clients.creditHold=true` | راجع `clients-byid.md` | ✅ |
+| Provision for doubtful debts | finance/GL | aggregate × probability | ⚠ يدوي |
+| Write-off | راجع `finance-receivables.md` | ⚠ |
+| تأثير على cash flow forecast | راجع `finance-cash-flow-forecast.md` | ✅ |
+| تقرير شهري للـ CFO | bi/exec-dashboard | ✅ |
+| Audit log | read-only | ✅ |
+
+تحقق يدوي:
+- [ ] هل aging يحسب من `dueDate` أم `issueDate`؟
+- [ ] هل المرتجعات تنعكس آلياً؟
+- [ ] هل multi-currency aging موحّد أم منفصل؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `ar-aging` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
