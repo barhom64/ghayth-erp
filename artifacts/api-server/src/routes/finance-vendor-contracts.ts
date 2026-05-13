@@ -64,7 +64,10 @@ vendorContractsRouter.get(
     try {
       const scope = req.scope!;
       const filters = parseScopeFilters(req);
-      const { where, params } = buildScopedWhere(scope, filters, { softDeleteColumn: 'vc."deletedAt"' });
+      const { where, params } = buildScopedWhere(scope, filters, {
+        companyColumn: 'vc."companyId"',
+        softDeleteColumn: 'vc."deletedAt"',
+      });
       const status = typeof req.query.status === "string" ? req.query.status : null;
       const vendorIdRaw = typeof req.query.vendorId === "string" ? req.query.vendorId : null;
 
@@ -85,7 +88,7 @@ vendorContractsRouter.get(
         `SELECT vc.*, s.name AS "vendorName"
          FROM vendor_contracts vc
          LEFT JOIN suppliers s ON s.id = vc."vendorId" AND s."deletedAt" IS NULL
-         WHERE ${where.replace(/"deletedAt"/g, 'vc."deletedAt"').replace(/"companyId"/g, 'vc."companyId"')}${extraWhere}
+         WHERE ${where}${extraWhere}
          ORDER BY vc."endDate" ASC
          LIMIT 500`,
         params
@@ -248,6 +251,7 @@ vendorContractsRouter.patch(
         action: "update",
         entity: "vendor_contracts",
         entityId: id,
+        before: { changedFields: Object.keys(req.body ?? {}) },
         after: body,
       }).catch((e) => logger.error(e, "[audit] vendor_contract.updated"));
 
@@ -286,6 +290,7 @@ vendorContractsRouter.delete(
         action: "delete",
         entity: "vendor_contracts",
         entityId: id,
+        before: { changedFields: Object.keys(req.body ?? {}) },
       }).catch((e) => logger.error(e, "[audit] vendor_contract.deleted"));
 
       res.status(204).send();
