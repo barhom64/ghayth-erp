@@ -55,10 +55,10 @@ const IMPACT_OPTIONS = [
 ];
 
 const RISK_LEVEL_COLORS: Record<string, string> = {
-  low: "bg-green-100 text-green-700",
-  medium: "bg-yellow-100 text-yellow-700",
+  low: "bg-status-success-surface text-status-success-foreground",
+  medium: "bg-status-warning-surface text-status-warning-foreground",
   high: "bg-orange-100 text-orange-700",
-  critical: "bg-red-100 text-red-700",
+  critical: "bg-status-error-surface text-status-error-foreground",
 };
 
 const RISK_LEVEL_LABELS: Record<string, string> = {
@@ -130,7 +130,7 @@ export default function RisksPage() {
       render: (r) => (
         <div>
           <div className="font-medium">{r.title}</div>
-          {r.description && <div className="text-xs text-gray-500 mt-0.5 max-w-xs truncate">{r.description}</div>}
+          {r.description && <div className="text-xs text-muted-foreground mt-0.5 max-w-xs truncate">{r.description}</div>}
         </div>
       ),
     },
@@ -139,7 +139,7 @@ export default function RisksPage() {
       header: "مستوى الخطورة",
       sortable: true,
       render: (r) => (
-        <Badge className={RISK_LEVEL_COLORS[r.riskLevel] || "bg-gray-100 text-gray-600"}>
+        <Badge className={RISK_LEVEL_COLORS[r.riskLevel] || "bg-surface-subtle text-muted-foreground"}>
           {RISK_LEVEL_LABELS[r.riskLevel] || r.riskLevel}
         </Badge>
       ),
@@ -175,8 +175,8 @@ export default function RisksPage() {
       key: "mitigationPlan",
       header: "خطة التخفيف",
       render: (r) => r.mitigationPlan ? (
-        <div className="text-xs text-gray-600 max-w-xs truncate">{r.mitigationPlan}</div>
-      ) : <span className="text-gray-400">-</span>,
+        <div className="text-xs text-muted-foreground max-w-xs truncate">{r.mitigationPlan}</div>
+      ) : <span className="text-muted-foreground">-</span>,
     },
     {
       key: "status",
@@ -199,7 +199,7 @@ export default function RisksPage() {
       breadcrumbs={[{ href: "/projects", label: "المشاريع" }, { label: "مخاطر المشاريع" }]}
       actions={
         <>
-          {criticalCount > 0 && <Badge className="bg-red-100 text-red-700">{criticalCount} حرج</Badge>}
+          {criticalCount > 0 && <Badge className="bg-status-error-surface text-status-error-foreground">{criticalCount} حرج</Badge>}
           {highCount > 0 && <Badge className="bg-orange-100 text-orange-700">{highCount} عالٍ</Badge>}
           <GuardedButton perm="projects:create" onClick={() => setShowForm(!showForm)} size="sm" disabled={!projectId}>
             <Plus className="w-4 h-4 me-1" /> إضافة مخاطرة
@@ -248,7 +248,7 @@ export default function RisksPage() {
       )}
 
       {!projectId ? (
-        <Card><CardContent className="py-8 text-center text-gray-400">اختر مشروعاً لعرض المخاطر</CardContent></Card>
+        <Card><CardContent className="py-8 text-center text-muted-foreground">اختر مشروعاً لعرض المخاطر</CardContent></Card>
       ) : (
         <>
           <AdvancedFilters
@@ -275,7 +275,7 @@ export default function RisksPage() {
             emptyMessage="لا توجد مخاطر مسجلة لهذا المشروع"
             emptyIcon={<ShieldAlert className="w-10 h-10 text-gray-300" />}
             rowClassName={(r) => {
-              if (r.riskLevel === "critical") return "bg-red-50/30";
+              if (r.riskLevel === "critical") return "bg-status-error-surface";
               if (r.riskLevel === "high") return "bg-orange-50/30";
               return undefined as any;
             }}

@@ -120,7 +120,7 @@ export default function ComplianceDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-gray-500" />
+            <ShieldCheck className="h-4 w-4 text-muted-foreground" />
             بيانات الامتثال
           </CardTitle>
         </CardHeader>
@@ -128,36 +128,36 @@ export default function ComplianceDetail() {
           <div className="grid grid-cols-2 gap-3">
             {compliance?.framework && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الإطار</p>
+                <p className="text-xs text-muted-foreground mb-0.5">الإطار</p>
                 <Badge variant="outline">{compliance.framework}</Badge>
               </div>
             )}
             {compliance?.assessmentDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ التقييم</p>
-                <span className="text-gray-800">{formatDateAr(compliance.assessmentDate)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ التقييم</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(compliance.assessmentDate)}</span>
               </div>
             )}
             {(compliance?.nextReview || compliance?.nextReviewDate) && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ المراجعة التالية</p>
-                <span className="text-gray-800">
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ المراجعة التالية</p>
+                <span className="text-status-neutral-foreground">
                   {formatDateAr(compliance.nextReview || compliance.nextReviewDate)}
                 </span>
               </div>
             )}
             {(compliance?.responsibleParty || compliance?.responsiblePartyName) && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">المسؤول</p>
-                <span className="text-gray-800">
+                <p className="text-xs text-muted-foreground mb-0.5">المسؤول</p>
+                <span className="text-status-neutral-foreground">
                   {compliance.responsibleParty || compliance.responsiblePartyName}
                 </span>
               </div>
             )}
             {(compliance?.requirement || compliance?.title) && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">المتطلب</p>
-                <span className="text-gray-800">
+                <p className="text-xs text-muted-foreground mb-0.5">المتطلب</p>
+                <span className="text-status-neutral-foreground">
                   {compliance.requirement || compliance.title}
                 </span>
               </div>
@@ -166,22 +166,22 @@ export default function ComplianceDetail() {
 
           {compliance?.description && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">الوصف</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{compliance.description}</p>
+              <p className="text-xs text-muted-foreground mb-1">الوصف</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{compliance.description}</p>
             </div>
           )}
 
           {compliance?.evidence && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">الأدلة</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{compliance.evidence}</p>
+              <p className="text-xs text-muted-foreground mb-1">الأدلة</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{compliance.evidence}</p>
             </div>
           )}
 
           {compliance?.notes && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">ملاحظات</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{compliance.notes}</p>
+              <p className="text-xs text-muted-foreground mb-1">ملاحظات</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{compliance.notes}</p>
             </div>
           )}
         </CardContent>
@@ -226,20 +226,20 @@ export default function ComplianceDetail() {
           <CardContent className="space-y-2 text-sm">
             {compliance?.createdAt && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ الإنشاء</p>
-                <span className="text-gray-800">{formatDateAr(compliance.createdAt)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ الإنشاء</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(compliance.createdAt)}</span>
               </div>
             )}
             {compliance?.createdByName && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">أنشئ بواسطة</p>
-                <span className="text-gray-800">{compliance.createdByName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">أنشئ بواسطة</p>
+                <span className="text-status-neutral-foreground">{compliance.createdByName}</span>
               </div>
             )}
             {compliance?.updatedAt && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">آخر تحديث</p>
-                <span className="text-gray-800">{formatDateAr(compliance.updatedAt)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">آخر تحديث</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(compliance.updatedAt)}</span>
               </div>
             )}
           </CardContent>

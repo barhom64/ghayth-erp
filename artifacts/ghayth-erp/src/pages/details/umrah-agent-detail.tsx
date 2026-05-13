@@ -107,56 +107,56 @@ export default function UmrahAgentDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Users className="h-4 w-4 text-gray-500" />
+            <Users className="h-4 w-4 text-muted-foreground" />
             بيانات الوكيل
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">اسم الوكيل</p>
-              <span className="text-gray-800 font-medium">{agent?.name || "-"}</span>
+              <p className="text-xs text-muted-foreground mb-0.5">اسم الوكيل</p>
+              <span className="text-status-neutral-foreground font-medium">{agent?.name || "-"}</span>
             </div>
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">رقم الترخيص</p>
-              <span className="text-gray-800 font-mono text-xs">{agent?.licenseNumber || "-"}</span>
+              <p className="text-xs text-muted-foreground mb-0.5">رقم الترخيص</p>
+              <span className="text-status-neutral-foreground font-mono text-xs">{agent?.licenseNumber || "-"}</span>
             </div>
             {agent?.phone && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الهاتف</p>
-                <span className="text-gray-800 flex items-center gap-1" dir="ltr">
-                  <Phone className="h-3 w-3 text-gray-400" />
+                <p className="text-xs text-muted-foreground mb-0.5">الهاتف</p>
+                <span className="text-status-neutral-foreground flex items-center gap-1" dir="ltr">
+                  <Phone className="h-3 w-3 text-muted-foreground" />
                   {agent.phone}
                 </span>
               </div>
             )}
             {agent?.email && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">البريد الإلكتروني</p>
-                <span className="text-gray-800 flex items-center gap-1 text-xs" dir="ltr">
-                  <Mail className="h-3 w-3 text-gray-400" />
+                <p className="text-xs text-muted-foreground mb-0.5">البريد الإلكتروني</p>
+                <span className="text-status-neutral-foreground flex items-center gap-1 text-xs" dir="ltr">
+                  <Mail className="h-3 w-3 text-muted-foreground" />
                   {agent.email}
                 </span>
               </div>
             )}
             {agent?.address && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">العنوان</p>
-                <span className="text-gray-800 flex items-center gap-1">
-                  <MapPin className="h-3 w-3 text-gray-400" />
+                <p className="text-xs text-muted-foreground mb-0.5">العنوان</p>
+                <span className="text-status-neutral-foreground flex items-center gap-1">
+                  <MapPin className="h-3 w-3 text-muted-foreground" />
                   {agent.address}
                 </span>
               </div>
             )}
             {agent?.commissionRate != null && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">نسبة العمولة</p>
+                <p className="text-xs text-muted-foreground mb-0.5">نسبة العمولة</p>
                 <Badge variant="outline">{agent.commissionRate}%</Badge>
               </div>
             )}
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">إجمالي المعتمرين</p>
-              <span className="text-gray-800 font-semibold">{agent?.totalPilgrims ?? agent?.pilgrimsCount ?? 0}</span>
+              <p className="text-xs text-muted-foreground mb-0.5">إجمالي المعتمرين</p>
+              <span className="text-status-neutral-foreground font-semibold">{agent?.totalPilgrims ?? agent?.pilgrimsCount ?? 0}</span>
             </div>
           </div>
 
@@ -164,14 +164,14 @@ export default function UmrahAgentDetail() {
             <div className="pt-2 border-t grid grid-cols-2 gap-3">
               {agent.contractStart && (
                 <div>
-                  <p className="text-xs text-gray-500 mb-0.5">بداية العقد</p>
-                  <span className="text-gray-800">{formatDateAr(agent.contractStart)}</span>
+                  <p className="text-xs text-muted-foreground mb-0.5">بداية العقد</p>
+                  <span className="text-status-neutral-foreground">{formatDateAr(agent.contractStart)}</span>
                 </div>
               )}
               {agent.contractEnd && (
                 <div>
-                  <p className="text-xs text-gray-500 mb-0.5">نهاية العقد</p>
-                  <span className="text-gray-800">{formatDateAr(agent.contractEnd)}</span>
+                  <p className="text-xs text-muted-foreground mb-0.5">نهاية العقد</p>
+                  <span className="text-status-neutral-foreground">{formatDateAr(agent.contractEnd)}</span>
                 </div>
               )}
             </div>
@@ -179,8 +179,8 @@ export default function UmrahAgentDetail() {
 
           {agent?.notes && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">ملاحظات</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{agent.notes}</p>
+              <p className="text-xs text-muted-foreground mb-1">ملاحظات</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{agent.notes}</p>
             </div>
           )}
         </CardContent>
@@ -190,7 +190,7 @@ export default function UmrahAgentDetail() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Wallet className="h-4 w-4 text-gray-500" />
+              <Wallet className="h-4 w-4 text-muted-foreground" />
               الرصيد
             </CardTitle>
           </CardHeader>
@@ -199,7 +199,7 @@ export default function UmrahAgentDetail() {
               <span className="text-2xl font-bold text-gray-900">
                 {formatCurrency(Number(agent?.balance ?? 0))}
               </span>
-              <span className="text-xs text-gray-500">ر.س</span>
+              <span className="text-xs text-muted-foreground">ر.س</span>
             </div>
           </CardContent>
         </Card>

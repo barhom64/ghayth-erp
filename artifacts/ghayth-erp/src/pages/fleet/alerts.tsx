@@ -46,8 +46,8 @@ export default function FleetAlerts() {
       render: (a) => (
         <span className={`px-2 py-1 rounded text-xs font-medium ${
           a.type?.includes('expiry') || a.type?.includes('overdue') ? 'bg-rose-100 text-rose-700' :
-          a.type?.includes('fuel') ? 'bg-amber-100 text-amber-700' :
-          'bg-blue-100 text-blue-700'
+          a.type?.includes('fuel') ? 'bg-status-warning-surface text-status-warning-foreground' :
+          'bg-status-info-surface text-status-info-foreground'
         }`}>
           {typeLabels[a.type] || a.type}
         </span>
@@ -85,10 +85,10 @@ export default function FleetAlerts() {
     >
       <FleetTabsNav />
       <KpiGrid items={[
-        { label: "إجمالي التنبيهات", value: allAlerts.length, icon: Bell, color: "text-blue-600 bg-blue-50" },
-        { label: "حرجة", value: allAlerts.filter((a: any) => a.severity === "critical" || a.type?.includes("overdue")).length, icon: AlertOctagon, color: "text-red-600 bg-red-50" },
-        { label: "عالية", value: allAlerts.filter((a: any) => a.severity === "high" || a.type?.includes("expiry")).length, icon: ShieldAlert, color: "text-amber-600 bg-amber-50" },
-        { label: "تم الحل", value: allAlerts.filter((a: any) => a.status === "resolved").length, icon: CheckCircle, color: "text-green-600 bg-green-50" },
+        { label: "إجمالي التنبيهات", value: allAlerts.length, icon: Bell, color: "text-status-info-foreground bg-status-info-surface" },
+        { label: "حرجة", value: allAlerts.filter((a: any) => a.severity === "critical" || a.type?.includes("overdue")).length, icon: AlertOctagon, color: "text-status-error-foreground bg-status-error-surface" },
+        { label: "عالية", value: allAlerts.filter((a: any) => a.severity === "high" || a.type?.includes("expiry")).length, icon: ShieldAlert, color: "text-status-warning-foreground bg-status-warning-surface" },
+        { label: "تم الحل", value: allAlerts.filter((a: any) => a.status === "resolved").length, icon: CheckCircle, color: "text-status-success-foreground bg-status-success-surface" },
       ]} />
 
       <AdvancedFilters

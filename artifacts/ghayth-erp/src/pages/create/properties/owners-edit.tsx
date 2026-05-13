@@ -84,7 +84,7 @@ export default function OwnersEdit() {
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => refetch()} />;
-  if (!owner || !owner.id) return <div className="text-center py-16 text-gray-500">المالك غير موجود</div>;
+  if (!owner || !owner.id) return <div className="text-center py-16 text-muted-foreground">المالك غير موجود</div>;
 
   return (
     <CreatePageLayout
@@ -122,7 +122,7 @@ export default function OwnersEdit() {
         }}
       >
         <h3 className="flex items-center gap-2 text-lg font-semibold mb-4">
-          <Crown className="h-5 w-5 text-amber-500" /> بيانات المالك
+          <Crown className="h-5 w-5 text-status-warning" /> بيانات المالك
         </h3>
         <OwnerFormBody />
       </FormShell>
@@ -163,7 +163,7 @@ function OwnerFormBody() {
       </FormGrid>
 
       <div className="border-t pt-4 mt-4">
-        <p className="text-sm font-bold text-gray-600 mb-3">البيانات البنكية (لتحويل الإيرادات)</p>
+        <p className="text-sm font-bold text-muted-foreground mb-3">البيانات البنكية (لتحويل الإيرادات)</p>
         <FormGrid cols={2}>
           <FormTextField name="iban" label="رقم الآيبان" placeholder="SA0000000000000000000000" />
           <FormTextField name="bankName" label="اسم البنك" />
@@ -171,7 +171,7 @@ function OwnerFormBody() {
       </div>
 
       <div className="border-t pt-4 mt-4">
-        <p className="text-sm font-bold text-gray-600 mb-3">الوكالة / التفويض</p>
+        <p className="text-sm font-bold text-muted-foreground mb-3">الوكالة / التفويض</p>
         <FormGrid cols={3}>
           <FormTextField name="authorizationNumber" label="رقم الوكالة" />
           <FormDateField name="authorizationDate" label="تاريخ الوكالة" />

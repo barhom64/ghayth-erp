@@ -56,6 +56,23 @@
   --color-sidebar-accent-border: var(--sidebar-accent-border);
   --color-sidebar-ring: hsl(var(--sidebar-ring));
 
+  --color-status-success: hsl(var(--status-success));
+  --color-status-success-foreground: hsl(var(--status-success-foreground));
+  --color-status-success-surface: hsl(var(--status-success-surface));
+  --color-status-warning: hsl(var(--status-warning));
+  --color-status-warning-foreground: hsl(var(--status-warning-foreground));
+  --color-status-warning-surface: hsl(var(--status-warning-surface));
+  --color-status-error: hsl(var(--status-error));
+  --color-status-error-foreground: hsl(var(--status-error-foreground));
+  --color-status-error-surface: hsl(var(--status-error-surface));
+  --color-status-info: hsl(var(--status-info));
+  --color-status-info-foreground: hsl(var(--status-info-foreground));
+  --color-status-info-surface: hsl(var(--status-info-surface));
+  --color-status-neutral: hsl(var(--status-neutral));
+  --color-status-neutral-foreground: hsl(var(--status-neutral-foreground));
+  --color-status-neutral-surface: hsl(var(--status-neutral-surface));
+  --color-surface-subtle: hsl(var(--surface-subtle));
+
   --font-sans: var(--app-font-sans);
   --font-serif: var(--app-font-serif);
   --font-mono: var(--app-font-mono);
@@ -117,6 +134,23 @@
   --chart-3: 142 71% 45%;
   --chart-4: 0 84% 60%;
   --chart-5: 280 65% 60%;
+
+  --status-success: 142 71% 45%;
+  --status-success-foreground: 142 71% 29%;
+  --status-success-surface: 142 76% 96%;
+  --status-warning: 38 92% 50%;
+  --status-warning-foreground: 32 95% 30%;
+  --status-warning-surface: 48 96% 95%;
+  --status-error: 0 84% 60%;
+  --status-error-foreground: 0 72% 38%;
+  --status-error-surface: 0 86% 97%;
+  --status-info: 217 91% 60%;
+  --status-info-foreground: 221 83% 38%;
+  --status-info-surface: 214 95% 96%;
+  --status-neutral: 220 9% 46%;
+  --status-neutral-foreground: 220 9% 33%;
+  --status-neutral-surface: 220 14% 96%;
+  --surface-subtle: 210 40% 96%;
 
   --app-font-sans: 'IBM Plex Sans Arabic', system-ui, sans-serif;
   --app-font-serif: Georgia, serif;
@@ -192,6 +226,23 @@
   --chart-3: 142 71% 45%;
   --chart-4: 0 84% 60%;
   --chart-5: 280 65% 60%;
+
+  --status-success: 142 71% 45%;
+  --status-success-foreground: 142 76% 80%;
+  --status-success-surface: 142 30% 18%;
+  --status-warning: 38 92% 50%;
+  --status-warning-foreground: 48 96% 80%;
+  --status-warning-surface: 32 30% 18%;
+  --status-error: 0 84% 60%;
+  --status-error-foreground: 0 86% 80%;
+  --status-error-surface: 0 30% 18%;
+  --status-info: 217 91% 60%;
+  --status-info-foreground: 214 95% 80%;
+  --status-info-surface: 221 30% 18%;
+  --status-neutral: 220 9% 60%;
+  --status-neutral-foreground: 220 14% 75%;
+  --status-neutral-surface: 220 15% 18%;
+  --surface-subtle: 217.2 32.6% 14%;
 
   --shadow-2xs: 0px 2px 0px 0px rgba(0,0,0,0.2);
   --shadow-xs: 0px 2px 0px 0px rgba(0,0,0,0.3);

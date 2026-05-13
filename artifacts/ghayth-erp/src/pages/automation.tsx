@@ -90,7 +90,7 @@ export default function Automation() {
       key: "automationType", header: "نوع الأتمتة", sortable: true,
       render: (l) => (
         <div className="flex items-center gap-2">
-          <Bot className="h-4 w-4 text-blue-500" />
+          <Bot className="h-4 w-4 text-status-info" />
           <span className="font-medium text-sm">{AUTOMATION_TYPE_LABELS[l.automationType] || l.automationType}</span>
         </div>
       ),
@@ -131,7 +131,7 @@ export default function Automation() {
         </Card>
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Bot className="h-4 w-4" /> الأتمتة الاستباقية</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold text-blue-600">{activeProactiveCount}</div><p className="text-xs text-muted-foreground">من {proactiveRules.length} قاعدة</p></CardContent>
+          <CardContent><div className="text-2xl font-bold text-status-info-foreground">{activeProactiveCount}</div><p className="text-xs text-muted-foreground">من {proactiveRules.length} قاعدة</p></CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Activity className="h-4 w-4" /> إجراءات تلقائية اليوم</CardTitle></CardHeader>
@@ -158,7 +158,7 @@ export default function Automation() {
               <p className="text-sm text-muted-foreground mb-4">النظام يراقب هذه الأحداث ويُنشئ المهام تلقائياً بدون تدخل المستخدم</p>
               <div className="grid gap-4 md:grid-cols-2">
                 {proactiveRules.map((rule: any) => (
-                  <Card key={rule.id} className={`border ${rule.isActive ? 'border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/20' : 'border-gray-200 opacity-60'}`}>
+                  <Card key={rule.id} className={`border ${rule.isActive ? 'border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/20' : 'border-border opacity-60'}`}>
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
@@ -201,7 +201,7 @@ export default function Automation() {
             <CardHeader><CardTitle className="flex items-center gap-2"><Activity className="h-5 w-5" /> سجل الأتمتة الاستباقية</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="relative">
-                <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input className="ps-9" placeholder="بحث في سجل الأتمتة..." value={autoLogSearch} onChange={(e) => setAutoLogSearch(e.target.value)} />
               </div>
 
@@ -239,7 +239,7 @@ export default function Automation() {
             <CardHeader><CardTitle className="flex items-center gap-2"><Cog className="h-5 w-5" /> المهام المجدولة</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="relative">
-                <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input className="ps-9" placeholder="بحث بالاسم أو الوصف..." value={jobSearch} onChange={(e) => setJobSearch(e.target.value)} />
               </div>
               <DataTable
@@ -266,7 +266,7 @@ export default function Automation() {
             <CardHeader><CardTitle className="flex items-center gap-2"><Clock className="h-5 w-5" /> سجل التشغيل</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="relative">
-                <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input className="ps-9" placeholder="بحث في سجل التشغيل..." value={logSearch} onChange={(e) => setLogSearch(e.target.value)} />
               </div>
               <DataTable

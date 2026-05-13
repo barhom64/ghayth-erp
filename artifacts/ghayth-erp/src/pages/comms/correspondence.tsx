@@ -62,16 +62,16 @@ interface CorrespondenceStats {
 
 function DirectionBadge({ direction }: { direction: string }) {
   if (direction === "outgoing") {
-    return <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">صادر</Badge>;
+    return <Badge className="bg-status-info-surface text-status-info-foreground hover:bg-status-info-surface">صادر</Badge>;
   }
-  return <Badge className="bg-green-100 text-green-700 hover:bg-green-100">وارد</Badge>;
+  return <Badge className="bg-status-success-surface text-status-success-foreground hover:bg-status-success-surface">وارد</Badge>;
 }
 
 function StatusBadge({ status }: { status: string }) {
   if (status === "draft") {
-    return <Badge variant="secondary" className="bg-gray-100 text-gray-600">مسودة</Badge>;
+    return <Badge variant="secondary" className="bg-surface-subtle text-muted-foreground">مسودة</Badge>;
   }
-  return <Badge className="bg-green-100 text-green-700 hover:bg-green-100">مرسل</Badge>;
+  return <Badge className="bg-status-success-surface text-status-success-foreground hover:bg-status-success-surface">مرسل</Badge>;
 }
 
 const STATUS_OPTIONS = [
@@ -100,11 +100,11 @@ export default function CorrespondencePage() {
   const respondMut = useApiMutation<unknown, { id: number }>((b) => `/correspondence/${b.id}/respond`, "POST", [["correspondence"]]);
 
   const kpis = useMemo(() => [
-    { label: "صادر", value: stats?.totalOutgoing ?? items.filter((i) => i.direction === "outgoing").length, icon: SendHorizonal, color: "text-blue-600 bg-blue-50" },
-    { label: "وارد", value: stats?.totalIncoming ?? items.filter((i) => i.direction === "incoming").length, icon: Inbox, color: "text-green-600 bg-green-50" },
-    { label: "مسودة", value: stats?.totalDraft ?? items.filter((i) => i.status === "draft").length, icon: FileText, color: "text-gray-600 bg-gray-50" },
+    { label: "صادر", value: stats?.totalOutgoing ?? items.filter((i) => i.direction === "outgoing").length, icon: SendHorizonal, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "وارد", value: stats?.totalIncoming ?? items.filter((i) => i.direction === "incoming").length, icon: Inbox, color: "text-status-success-foreground bg-status-success-surface" },
+    { label: "مسودة", value: stats?.totalDraft ?? items.filter((i) => i.status === "draft").length, icon: FileText, color: "text-muted-foreground bg-surface-subtle" },
     { label: "مرسل", value: stats?.totalSent ?? items.filter((i) => i.status === "sent").length, icon: Send, color: "text-emerald-600 bg-emerald-50" },
-    { label: "معلّق", value: stats?.totalPending ?? 0, icon: Mail, color: "text-amber-600 bg-amber-50" },
+    { label: "معلّق", value: stats?.totalPending ?? 0, icon: Mail, color: "text-status-warning-foreground bg-status-warning-surface" },
   ], [stats, items]);
 
   const handleSend = (id: number) => {
@@ -128,7 +128,7 @@ export default function CorrespondencePage() {
     {
       key: "ref", header: "الرقم المرجعي", sortable: true, searchable: true,
       render: (r: any) => (
-        <span className="font-mono text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-1 rounded">
+        <span className="font-mono text-xs font-semibold text-status-info-foreground bg-status-info-surface px-2 py-1 rounded">
           {r.ref || `#${r.id}`}
         </span>
       ),
@@ -140,7 +140,7 @@ export default function CorrespondencePage() {
       render: (r: any) => (
         <div className="text-sm">
           <span>{r.senderName || "-"}</span>
-          {r.senderOrg && <span className="text-xs text-gray-400 block">{r.senderOrg}</span>}
+          {r.senderOrg && <span className="text-xs text-muted-foreground block">{r.senderOrg}</span>}
         </div>
       ),
     },
@@ -149,12 +149,12 @@ export default function CorrespondencePage() {
       render: (r: any) => (
         <div className="text-sm">
           <span>{r.recipientName || "-"}</span>
-          {r.recipientOrg && <span className="text-xs text-gray-400 block">{r.recipientOrg}</span>}
+          {r.recipientOrg && <span className="text-xs text-muted-foreground block">{r.recipientOrg}</span>}
         </div>
       ),
     },
     { key: "status", header: "الحالة", sortable: true, render: (r: any) => <StatusBadge status={r.status} /> },
-    { key: "createdAt", header: "التاريخ", sortable: true, render: (r: any) => <span className="text-sm text-gray-600">{formatDateAr(r.createdAt)}</span> },
+    { key: "createdAt", header: "التاريخ", sortable: true, render: (r: any) => <span className="text-sm text-muted-foreground">{formatDateAr(r.createdAt)}</span> },
     {
       key: "actions", header: "", width: "60px",
       render: (r: any) => (
@@ -202,7 +202,7 @@ export default function CorrespondencePage() {
                 <kpi.icon className={`h-5 w-5 ${kpi.color.split(" ")[0]}`} />
               </div>
               <div>
-                <p className="text-sm text-gray-500">{kpi.label}</p>
+                <p className="text-sm text-muted-foreground">{kpi.label}</p>
                 <p className="text-xl font-bold">{kpi.value}</p>
               </div>
             </CardContent>

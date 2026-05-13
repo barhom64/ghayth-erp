@@ -82,7 +82,7 @@ export function LetterheadSettings() {
       </h3>
 
       {branches.length === 0 ? (
-        <Card><CardContent className="p-8 text-center text-gray-400">
+        <Card><CardContent className="p-8 text-center text-muted-foreground">
           لا توجد فروع. أضف فرعاً أولاً من تبويب الفروع.
         </CardContent></Card>
       ) : selectedBranch ? (
@@ -194,13 +194,13 @@ function LivePreview() {
     <div className="border rounded-lg p-6 bg-white shadow-inner" style={{ minHeight: "300px" }}>
       <LetterheadHeader branch={previewBranch} />
       <div className="text-center my-8">
-        <p className="text-gray-400 text-sm">محتوى المستند يظهر هنا</p>
-        <div className="border-t border-dashed border-gray-300 mt-4 pt-4">
-          <p className="text-xs text-gray-400">هذه معاينة توضيحية لشكل الكليشة</p>
+        <p className="text-muted-foreground text-sm">محتوى المستند يظهر هنا</p>
+        <div className="border-t border-dashed border-border mt-4 pt-4">
+          <p className="text-xs text-muted-foreground">هذه معاينة توضيحية لشكل الكليشة</p>
         </div>
       </div>
       {values.footerText && (
-        <div className="border-t border-gray-300 pt-3 mt-8 text-xs text-gray-500">
+        <div className="border-t border-border pt-3 mt-8 text-xs text-muted-foreground">
           {values.footerText}
         </div>
       )}

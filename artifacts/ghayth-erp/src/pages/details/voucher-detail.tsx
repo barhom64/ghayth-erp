@@ -172,7 +172,7 @@ export default function VoucherDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Receipt className="h-4 w-4 text-gray-500" />
+            <Receipt className="h-4 w-4 text-muted-foreground" />
             بيانات السند
           </CardTitle>
         </CardHeader>
@@ -182,52 +182,52 @@ export default function VoucherDetail() {
             <span className="text-3xl font-bold text-gray-900">
               {formatCurrency(amount)}
             </span>
-            <span className="text-xs text-gray-500">ر.س</span>
+            <span className="text-xs text-muted-foreground">ر.س</span>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             {voucherTypeLabel && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">نوع السند</p>
+                <p className="text-xs text-muted-foreground mb-0.5">نوع السند</p>
                 <Badge variant="outline">{voucherTypeLabel}</Badge>
               </div>
             )}
             {voucher?.payeeName && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">المستفيد / الدافع</p>
-                <span className="text-gray-800">{voucher.payeeName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">المستفيد / الدافع</p>
+                <span className="text-status-neutral-foreground">{voucher.payeeName}</span>
               </div>
             )}
             {paymentMethodLabel && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">طريقة الدفع</p>
+                <p className="text-xs text-muted-foreground mb-0.5">طريقة الدفع</p>
                 <Badge variant="secondary">{paymentMethodLabel}</Badge>
               </div>
             )}
             {voucher?.createdAt && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ السند</p>
-                <span className="text-gray-800">{formatDateAr(voucher.createdAt)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ السند</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(voucher.createdAt)}</span>
               </div>
             )}
             {voucher?.costCenter && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">مركز التكلفة</p>
-                <span className="text-gray-800">{voucher.costCenter}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">مركز التكلفة</p>
+                <span className="text-status-neutral-foreground">{voucher.costCenter}</span>
               </div>
             )}
             {voucher?.reference && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">الرقم المرجعي</p>
-                <span className="text-gray-800 font-mono text-xs">{voucher.reference}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">الرقم المرجعي</p>
+                <span className="text-status-neutral-foreground font-mono text-xs">{voucher.reference}</span>
               </div>
             )}
           </div>
 
           {voucher?.description && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">الوصف</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{voucher.description}</p>
+              <p className="text-xs text-muted-foreground mb-1">الوصف</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{voucher.description}</p>
             </div>
           )}
         </CardContent>
@@ -239,12 +239,12 @@ export default function VoucherDetail() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                <Paperclip className="h-4 w-4 text-gray-500" />
+                <Paperclip className="h-4 w-4 text-muted-foreground" />
                 المرفق
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-1.5">
-              <div className="flex items-center justify-between gap-2 p-2 rounded border text-xs hover:bg-gray-50">
+              <div className="flex items-center justify-between gap-2 p-2 rounded border text-xs hover:bg-surface-subtle">
                 <span className="truncate min-w-0">
                   {voucher.attachmentType || "مستند السند"}
                 </span>
@@ -252,7 +252,7 @@ export default function VoucherDetail() {
                   href={voucher.attachmentUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-blue-600 hover:text-blue-700 shrink-0"
+                  className="text-status-info-foreground hover:text-status-info-foreground shrink-0"
                   title="فتح"
                 >
                   <Eye className="h-3.5 w-3.5" />

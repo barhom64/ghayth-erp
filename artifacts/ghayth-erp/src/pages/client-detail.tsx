@@ -46,16 +46,16 @@ const TABS = [
 type TabKey = (typeof TABS)[number]["key"];
 
 const CLASSIFICATION_COLORS: Record<string, string> = {
-  vip: "bg-yellow-100 text-yellow-800 border-yellow-200",
+  vip: "bg-status-warning-surface text-yellow-800 border-status-warning-surface",
   premium: "bg-purple-100 text-purple-800 border-purple-200",
-  regular: "bg-blue-100 text-blue-800 border-blue-200",
-  prospect: "bg-green-100 text-green-800 border-green-200",
-  churned: "bg-red-100 text-red-800 border-red-200",
+  regular: "bg-status-info-surface text-status-info-foreground border-status-info-surface",
+  prospect: "bg-status-success-surface text-status-success-foreground border-status-success-surface",
+  churned: "bg-status-error-surface text-status-error-foreground border-status-error-surface",
 };
 
 const TIMELINE_ICONS: Record<string, { icon: typeof FileText; color: string; bg: string }> = {
-  invoice: { icon: FileText, color: "text-blue-600", bg: "bg-blue-50" },
-  opportunity: { icon: Target, color: "text-green-600", bg: "bg-green-50" },
+  invoice: { icon: FileText, color: "text-status-info-foreground", bg: "bg-status-info-surface" },
+  opportunity: { icon: Target, color: "text-status-success-foreground", bg: "bg-status-success-surface" },
   ticket: { icon: Headphones, color: "text-orange-600", bg: "bg-orange-50" },
   project: { icon: FolderKanban, color: "text-purple-600", bg: "bg-purple-50" },
 };
@@ -167,25 +167,25 @@ export default function ClientDetail() {
       {activeTab === "overview" && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="border-0 shadow-sm bg-blue-50/50">
+            <Card className="border-0 shadow-sm bg-status-info-surface">
               <CardContent className="p-4 text-center">
-                <p className="text-xs text-blue-600 mb-1">إجمالي الفواتير</p>
-                <p className="text-xl font-bold text-blue-700">{formatCurrency(Number(financials.totalInvoiced) || 0)}</p>
-                <p className="text-[10px] text-blue-500">{Number(financials.invoiceCount) || 0} فاتورة</p>
+                <p className="text-xs text-status-info-foreground mb-1">إجمالي الفواتير</p>
+                <p className="text-xl font-bold text-status-info-foreground">{formatCurrency(Number(financials.totalInvoiced) || 0)}</p>
+                <p className="text-[10px] text-status-info">{Number(financials.invoiceCount) || 0} فاتورة</p>
               </CardContent>
             </Card>
-            <Card className="border-0 shadow-sm bg-green-50/50">
+            <Card className="border-0 shadow-sm bg-status-success-surface">
               <CardContent className="p-4 text-center">
-                <p className="text-xs text-green-600 mb-1">المدفوع</p>
-                <p className="text-xl font-bold text-green-700">{formatCurrency(Number(financials.totalPaid) || 0)}</p>
-                <p className="text-[10px] text-green-500">{Number(financials.paidCount) || 0} مدفوعة</p>
+                <p className="text-xs text-status-success-foreground mb-1">المدفوع</p>
+                <p className="text-xl font-bold text-status-success-foreground">{formatCurrency(Number(financials.totalPaid) || 0)}</p>
+                <p className="text-[10px] text-status-success">{Number(financials.paidCount) || 0} مدفوعة</p>
               </CardContent>
             </Card>
-            <Card className="border-0 shadow-sm bg-red-50/50">
+            <Card className="border-0 shadow-sm bg-status-error-surface">
               <CardContent className="p-4 text-center">
-                <p className="text-xs text-red-600 mb-1">المستحق</p>
-                <p className="text-xl font-bold text-red-700">{formatCurrency(Number(financials.totalOutstanding) || 0)}</p>
-                <p className="text-[10px] text-red-500">{Number(financials.overdueCount) || 0} متأخرة</p>
+                <p className="text-xs text-status-error-foreground mb-1">المستحق</p>
+                <p className="text-xl font-bold text-status-error-foreground">{formatCurrency(Number(financials.totalOutstanding) || 0)}</p>
+                <p className="text-[10px] text-status-error">{Number(financials.overdueCount) || 0} متأخرة</p>
               </CardContent>
             </Card>
             <Card className="border-0 shadow-sm bg-purple-50/50">
@@ -201,35 +201,35 @@ export default function ClientDetail() {
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <User className="w-4 h-4 text-blue-500" /> بيانات العميل
+                  <User className="w-4 h-4 text-status-info" /> بيانات العميل
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
-                    <p className="text-xs text-gray-500">الاسم</p>
+                    <p className="text-xs text-muted-foreground">الاسم</p>
                     <p className="font-medium">{client?.name}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">التصنيف</p>
-                    <Badge className={cn("text-xs", CLASSIFICATION_COLORS[client?.classification] || "bg-gray-100")}>
+                    <p className="text-xs text-muted-foreground">التصنيف</p>
+                    <Badge className={cn("text-xs", CLASSIFICATION_COLORS[client?.classification] || "bg-surface-subtle")}>
                       {CLASSIFICATIONS[client?.classification] || client?.classification || "-"}
                     </Badge>
                   </div>
                   {client?.phone && <div>
-                    <p className="text-xs text-gray-500">الجوال</p>
+                    <p className="text-xs text-muted-foreground">الجوال</p>
                     <p className="font-medium" dir="ltr">{client?.phone}</p>
                   </div>}
                   {client?.email && <div>
-                    <p className="text-xs text-gray-500">البريد</p>
+                    <p className="text-xs text-muted-foreground">البريد</p>
                     <p className="font-medium text-xs">{client?.email}</p>
                   </div>}
                   <div>
-                    <p className="text-xs text-gray-500">المصدر</p>
+                    <p className="text-xs text-muted-foreground">المصدر</p>
                     <p className="font-medium">{client?.source || "-"}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">تاريخ الإنشاء</p>
+                    <p className="text-xs text-muted-foreground">تاريخ الإنشاء</p>
                     <p className="font-medium">{client?.createdAt ? formatDateAr(client?.createdAt) : "-"}</p>
                   </div>
                 </div>
@@ -244,13 +244,13 @@ export default function ClientDetail() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="p-2 rounded-lg bg-blue-50 text-center">
-                    <p className="text-lg font-bold text-blue-700">{invoices.length}</p>
-                    <p className="text-[10px] text-blue-600">فاتورة</p>
+                  <div className="p-2 rounded-lg bg-status-info-surface text-center">
+                    <p className="text-lg font-bold text-status-info-foreground">{invoices.length}</p>
+                    <p className="text-[10px] text-status-info-foreground">فاتورة</p>
                   </div>
-                  <div className="p-2 rounded-lg bg-green-50 text-center">
-                    <p className="text-lg font-bold text-green-700">{opportunities.length}</p>
-                    <p className="text-[10px] text-green-600">فرصة</p>
+                  <div className="p-2 rounded-lg bg-status-success-surface text-center">
+                    <p className="text-lg font-bold text-status-success-foreground">{opportunities.length}</p>
+                    <p className="text-[10px] text-status-success-foreground">فرصة</p>
                   </div>
                   <div className="p-2 rounded-lg bg-orange-50 text-center">
                     <p className="text-lg font-bold text-orange-700">{tickets.length}</p>
@@ -266,23 +266,23 @@ export default function ClientDetail() {
           </div>
 
           {Number(financials.overdueCount) > 0 && (
-            <Card className="border-red-200 bg-red-50/30">
+            <Card className="border-status-error-surface bg-status-error-surface">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2 text-red-700">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2 text-status-error-foreground">
                   <AlertTriangle className="w-4 h-4" /> فواتير متأخرة ({financials.overdueCount})
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
                   {invoices.filter((inv: any) => inv.status === "overdue").slice(0, 3).map((inv: any) => (
-                    <div key={inv.id} className="flex items-center justify-between p-2 rounded-lg border border-red-100">
+                    <div key={inv.id} className="flex items-center justify-between p-2 rounded-lg border border-status-error-surface">
                       <div>
                         <p className="text-sm font-mono">{inv.ref}</p>
-                        <p className="text-xs text-red-500">{inv.createdAt ? formatDateAr(inv.createdAt) : ""}</p>
+                        <p className="text-xs text-status-error">{inv.createdAt ? formatDateAr(inv.createdAt) : ""}</p>
                       </div>
                       <div className="text-right">
                         <p className="font-bold text-sm">{formatCurrency(Number(inv.total || 0))}</p>
-                        <p className="text-xs text-gray-500">مدفوع: {formatCurrency(Number(inv.paidAmount || 0))}</p>
+                        <p className="text-xs text-muted-foreground">مدفوع: {formatCurrency(Number(inv.paidAmount || 0))}</p>
                       </div>
                     </div>
                   ))}
@@ -437,7 +437,7 @@ export default function ClientDetail() {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
-                <BookOpen className="h-5 w-5 text-blue-600" />
+                <BookOpen className="h-5 w-5 text-status-info-foreground" />
                 الملف المالي الشامل للعميل
               </CardTitle>
             </CardHeader>
@@ -613,7 +613,7 @@ export default function ClientDetail() {
       actions={
         <>
           {client && (
-            <Badge className={cn("text-sm px-3 py-1", CLASSIFICATION_COLORS[client?.classification] || "bg-gray-100")}>
+            <Badge className={cn("text-sm px-3 py-1", CLASSIFICATION_COLORS[client?.classification] || "bg-surface-subtle")}>
               {CLASSIFICATIONS[client?.classification] || client?.classification}
             </Badge>
           )}
@@ -692,15 +692,15 @@ function ClientPortalTab({ clientId, clientEmail }: { clientId: string; clientEm
     <Card>
       <CardHeader>
         <CardTitle className="text-lg flex items-center gap-2">
-          <Globe className="h-5 w-5 text-blue-600" />
+          <Globe className="h-5 w-5 text-status-info-foreground" />
           بوابة العميل الإلكترونية
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {!account ? (
           <div className="space-y-4">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <p className="text-sm text-blue-800">لا يوجد حساب بوابة لهذا العميل بعد. يمكنك إنشاء حساب يتيح له الدخول إلى بوابة العملاء ومتابعة فواتيره وطلباته.</p>
+            <div className="bg-status-info-surface border border-status-info-surface rounded-lg p-4">
+              <p className="text-sm text-status-info-foreground">لا يوجد حساب بوابة لهذا العميل بعد. يمكنك إنشاء حساب يتيح له الدخول إلى بوابة العملاء ومتابعة فواتيره وطلباته.</p>
             </div>
             {!showCreate ? (
               <GuardedButton perm="clients:create" onClick={() => setShowCreate(true)} className="gap-2">
@@ -735,13 +735,13 @@ function ClientPortalTab({ clientId, clientEmail }: { clientId: string; clientEm
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3">
-              <CheckCircle className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
+            <div className="bg-status-success-surface border border-status-success-surface rounded-lg p-4 flex items-start gap-3">
+              <CheckCircle className="h-5 w-5 text-status-success-foreground shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-green-800">الحساب مُفعَّل</p>
-                <p className="text-xs text-green-700 mt-0.5">البريد: <span dir="ltr">{account.email}</span></p>
+                <p className="text-sm font-medium text-status-success-foreground">الحساب مُفعَّل</p>
+                <p className="text-xs text-status-success-foreground mt-0.5">البريد: <span dir="ltr">{account.email}</span></p>
                 {account.lastLoginAt && (
-                  <p className="text-xs text-green-700">آخر دخول: {formatDateAr(account.lastLoginAt)}</p>
+                  <p className="text-xs text-status-success-foreground">آخر دخول: {formatDateAr(account.lastLoginAt)}</p>
                 )}
               </div>
             </div>
@@ -753,7 +753,7 @@ function ClientPortalTab({ clientId, clientEmail }: { clientId: string; clientEm
                 size="sm"
                 onClick={handleToggleActive}
                 disabled={updateMut.isPending}
-                className={account.isActive ? "text-red-600 hover:text-red-700 border-red-200" : "text-green-600 hover:text-green-700 border-green-200"}
+                className={account.isActive ? "text-status-error-foreground hover:text-status-error-foreground border-status-error-surface" : "text-status-success-foreground hover:text-status-success-foreground border-status-success-surface"}
               >
                 {account.isActive ? "تعطيل الحساب" : "تفعيل الحساب"}
               </GuardedButton>
@@ -779,7 +779,7 @@ function ClientPortalTab({ clientId, clientEmail }: { clientId: string; clientEm
             <div className="text-xs text-muted-foreground flex items-center gap-1">
               <Globe className="h-3 w-3" />
               رابط بوابة العميل:
-              <a href="/portal/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline" dir="ltr">
+              <a href="/portal/" target="_blank" rel="noopener noreferrer" className="text-status-info-foreground hover:underline" dir="ltr">
                 /portal/
               </a>
             </div>
@@ -823,9 +823,9 @@ function UmrahTab({ clientId }: { clientId: string }) {
                 <p className="text-lg font-bold text-emerald-700">{sa.pilgrimCount ?? sa.totalMutamers ?? 0}</p>
                 <p className="text-[10px] text-emerald-600">معتمر</p>
               </div>
-              <div className="p-2 rounded-lg bg-blue-50 text-center">
-                <p className="text-lg font-bold text-blue-700">{sa.groupCount ?? 0}</p>
-                <p className="text-[10px] text-blue-600">مجموعة</p>
+              <div className="p-2 rounded-lg bg-status-info-surface text-center">
+                <p className="text-lg font-bold text-status-info-foreground">{sa.groupCount ?? 0}</p>
+                <p className="text-[10px] text-status-info-foreground">مجموعة</p>
               </div>
               <div className="p-2 rounded-lg bg-orange-50 text-center">
                 <p className="text-lg font-bold text-orange-700">{sa.violationCount ?? 0}</p>
@@ -875,11 +875,11 @@ function QuickStat({ label, value, icon: Icon, color }: {
   label: string; value: string; icon: typeof DollarSign; color: string;
 }) {
   const colorMap: Record<string, { bg: string; text: string; icon: string }> = {
-    blue: { bg: "bg-blue-50", text: "text-blue-700", icon: "text-blue-500" },
-    green: { bg: "bg-green-50", text: "text-green-700", icon: "text-green-500" },
-    red: { bg: "bg-red-50", text: "text-red-700", icon: "text-red-500" },
+    blue: { bg: "bg-status-info-surface", text: "text-status-info-foreground", icon: "text-status-info" },
+    green: { bg: "bg-status-success-surface", text: "text-status-success-foreground", icon: "text-status-success" },
+    red: { bg: "bg-status-error-surface", text: "text-status-error-foreground", icon: "text-status-error" },
     orange: { bg: "bg-orange-50", text: "text-orange-700", icon: "text-orange-500" },
-    gray: { bg: "bg-gray-50", text: "text-gray-700", icon: "text-gray-400" },
+    gray: { bg: "bg-surface-subtle", text: "text-status-neutral-foreground", icon: "text-muted-foreground" },
     purple: { bg: "bg-purple-50", text: "text-purple-700", icon: "text-purple-500" },
   };
   const c = colorMap[color] || colorMap.gray;
@@ -896,13 +896,13 @@ function FinancialItem({ label, value, sub, color }: {
   label: string; value: number; sub: string; color: string;
 }) {
   const colorMap: Record<string, string> = {
-    blue: "border-blue-100",
-    green: "border-green-100",
-    red: "border-red-100",
+    blue: "border-status-info-surface",
+    green: "border-status-success-surface",
+    red: "border-status-error-surface",
     purple: "border-purple-100",
   };
   return (
-    <div className={cn("p-3 rounded-lg border", colorMap[color] || "border-gray-100")}>
+    <div className={cn("p-3 rounded-lg border", colorMap[color] || "border-border")}>
       <p className="text-2xl font-bold">{value}</p>
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="text-xs font-medium mt-1">{sub}</p>
@@ -912,13 +912,13 @@ function FinancialItem({ label, value, sub, color }: {
 
 function SummaryItem({ label, value, color }: { label: string; value: number; color: string }) {
   const colorMap: Record<string, string> = {
-    blue: "bg-blue-50 text-blue-700 border-blue-100",
-    green: "bg-green-50 text-green-700 border-green-100",
+    blue: "bg-status-info-surface text-status-info-foreground border-status-info-surface",
+    green: "bg-status-success-surface text-status-success-foreground border-status-success-surface",
     orange: "bg-orange-50 text-orange-700 border-orange-100",
     purple: "bg-purple-50 text-purple-700 border-purple-100",
   };
   return (
-    <div className={cn("p-4 rounded-xl border text-center", colorMap[color] || "bg-gray-50")}>
+    <div className={cn("p-4 rounded-xl border text-center", colorMap[color] || "bg-surface-subtle")}>
       <p className="text-2xl font-bold">{value}</p>
       <p className="text-xs mt-1">{label}</p>
     </div>
@@ -927,10 +927,10 @@ function SummaryItem({ label, value, color }: { label: string; value: number; co
 
 function PriorityBadge({ priority }: { priority: string }) {
   const colors: Record<string, string> = {
-    critical: "bg-red-100 text-red-800",
+    critical: "bg-status-error-surface text-status-error-foreground",
     high: "bg-orange-100 text-orange-800",
-    medium: "bg-yellow-100 text-yellow-800",
-    low: "bg-green-100 text-green-800",
+    medium: "bg-status-warning-surface text-yellow-800",
+    low: "bg-status-success-surface text-status-success-foreground",
   };
   const labels: Record<string, string> = {
     critical: "حرج",
@@ -939,7 +939,7 @@ function PriorityBadge({ priority }: { priority: string }) {
     low: "منخفض",
   };
   return (
-    <Badge className={cn("text-[10px]", colors[priority] || "bg-gray-100 text-gray-800")}>
+    <Badge className={cn("text-[10px]", colors[priority] || "bg-surface-subtle text-status-neutral-foreground")}>
       {labels[priority] || priority}
     </Badge>
   );

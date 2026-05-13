@@ -102,7 +102,7 @@ export default function ExcuseDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Clock className="h-4 w-4 text-gray-500" />
+            <Clock className="h-4 w-4 text-muted-foreground" />
             بيانات الاستئذان
           </CardTitle>
         </CardHeader>
@@ -117,47 +117,47 @@ export default function ExcuseDetail() {
           <div className="grid grid-cols-2 gap-3">
             {excuse?.date && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">التاريخ</p>
-                <span className="text-gray-800">{formatDateAr(excuse.date)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">التاريخ</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(excuse.date)}</span>
               </div>
             )}
             {excuse?.startTime && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">وقت البداية</p>
-                <span className="text-gray-800 font-mono">{excuse.startTime}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">وقت البداية</p>
+                <span className="text-status-neutral-foreground font-mono">{excuse.startTime}</span>
               </div>
             )}
             {excuse?.endTime && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">وقت النهاية</p>
-                <span className="text-gray-800 font-mono">{excuse.endTime}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">وقت النهاية</p>
+                <span className="text-status-neutral-foreground font-mono">{excuse.endTime}</span>
               </div>
             )}
             {excuse?.duration && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">المدة</p>
-                <span className="text-gray-800">{excuse.duration}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">المدة</p>
+                <span className="text-status-neutral-foreground">{excuse.duration}</span>
               </div>
             )}
             {excuse?.createdAt && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ الطلب</p>
-                <span className="text-gray-800">{formatDateAr(excuse.createdAt)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ الطلب</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(excuse.createdAt)}</span>
               </div>
             )}
           </div>
 
           {excuse?.reason && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">السبب</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{excuse.reason}</p>
+              <p className="text-xs text-muted-foreground mb-1">السبب</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{excuse.reason}</p>
             </div>
           )}
 
           {excuse?.notes && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">ملاحظات</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{excuse.notes}</p>
+              <p className="text-xs text-muted-foreground mb-1">ملاحظات</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{excuse.notes}</p>
             </div>
           )}
         </CardContent>

@@ -21,7 +21,7 @@ const EVAL_CRITERIA = [
 ];
 
 function ScoreSlider({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
-  const color = value >= 80 ? "text-green-600" : value >= 60 ? "text-yellow-600" : "text-red-600";
+  const color = value >= 80 ? "text-status-success-foreground" : value >= 60 ? "text-status-warning-foreground" : "text-status-error-foreground";
   return (
     <div className="space-y-2">
       <div className="flex justify-between">
@@ -34,7 +34,7 @@ function ScoreSlider({ label, value, onChange }: { label: string; value: number;
         onValueChange={([v]) => onChange(v!)}
         className="w-full"
       />
-      <div className="flex justify-between text-xs text-gray-400">
+      <div className="flex justify-between text-xs text-muted-foreground">
         <span>ضعيف</span>
         <span>مقبول</span>
         <span>جيد</span>
@@ -106,9 +106,9 @@ export default function Evaluation360PeerPage() {
 
       {/* System report reference */}
       {systemEval && (
-        <Card className="border-0 shadow-sm bg-blue-50 border border-blue-200">
+        <Card className="border-0 shadow-sm bg-status-info-surface border border-status-info-surface">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-blue-700 flex items-center gap-2">
+            <CardTitle className="text-sm text-status-info-foreground flex items-center gap-2">
               <Target className="w-4 h-4" />
               التقرير الآلي كمرجع
             </CardTitle>
@@ -124,15 +124,15 @@ export default function Evaluation360PeerPage() {
               ].map(({ label, score, icon: Icon }) => (
                 <div key={label} className="text-center bg-white rounded-lg p-2">
                   <Icon className="w-4 h-4 mx-auto text-blue-400 mb-1" />
-                  <p className="text-xs text-gray-500">{label}</p>
-                  <p className={cn("font-bold text-sm", score >= 80 ? "text-green-600" : score >= 60 ? "text-yellow-600" : "text-red-600")}>
+                  <p className="text-xs text-muted-foreground">{label}</p>
+                  <p className={cn("font-bold text-sm", score >= 80 ? "text-status-success-foreground" : score >= 60 ? "text-status-warning-foreground" : "text-status-error-foreground")}>
                     {score}%
                   </p>
                 </div>
               ))}
             </div>
             <div className="mt-3 text-center">
-              <span className="text-xs text-blue-600 font-medium">الدرجة الآلية الإجمالية: {systemEval.overallScore}%</span>
+              <span className="text-xs text-status-info-foreground font-medium">الدرجة الآلية الإجمالية: {systemEval.overallScore}%</span>
             </div>
           </CardContent>
         </Card>
@@ -158,11 +158,11 @@ export default function Evaluation360PeerPage() {
       {/* Overall score display */}
       <Card className={cn(
         "border-0 shadow-sm",
-        avgScore >= 80 ? "bg-green-50" : avgScore >= 60 ? "bg-yellow-50" : "bg-red-50"
+        avgScore >= 80 ? "bg-status-success-surface" : avgScore >= 60 ? "bg-status-warning-surface" : "bg-status-error-surface"
       )}>
         <CardContent className="p-4 text-center">
-          <p className="text-sm text-gray-500 mb-1">الدرجة الإجمالية</p>
-          <p className={cn("text-5xl font-black", avgScore >= 80 ? "text-green-600" : avgScore >= 60 ? "text-yellow-600" : "text-red-600")}>
+          <p className="text-sm text-muted-foreground mb-1">الدرجة الإجمالية</p>
+          <p className={cn("text-5xl font-black", avgScore >= 80 ? "text-status-success-foreground" : avgScore >= 60 ? "text-status-warning-foreground" : "text-status-error-foreground")}>
             {avgScore}%
           </p>
         </CardContent>

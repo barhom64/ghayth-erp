@@ -33,11 +33,11 @@ function exportCSV(data: any[], filename: string) {
 }
 
 const BUCKETS = [
-  { key: "current", label: "حالي", color: "bg-green-100 text-green-700" },
-  { key: "1_30", label: "1-30 يوم", color: "bg-yellow-100 text-yellow-700" },
+  { key: "current", label: "حالي", color: "bg-status-success-surface text-status-success-foreground" },
+  { key: "1_30", label: "1-30 يوم", color: "bg-status-warning-surface text-status-warning-foreground" },
   { key: "31_60", label: "31-60 يوم", color: "bg-orange-100 text-orange-700" },
-  { key: "61_90", label: "61-90 يوم", color: "bg-red-100 text-red-700" },
-  { key: "over90", label: "+90 يوم", color: "bg-red-200 text-red-800" },
+  { key: "61_90", label: "61-90 يوم", color: "bg-status-error-surface text-status-error-foreground" },
+  { key: "over90", label: "+90 يوم", color: "bg-red-200 text-status-error-foreground" },
 ];
 
 export default function ApAgingPage() {
@@ -64,16 +64,16 @@ export default function ApAgingPage() {
       render: (s) => (
         <div>
           <p className="font-semibold text-sm">{s.supplierName}</p>
-          <p className="text-xs text-gray-500">{s.orders?.length ?? 0} أمر شراء</p>
+          <p className="text-xs text-muted-foreground">{s.orders?.length ?? 0} أمر شراء</p>
         </div>
       ),
     },
-    { key: "current", header: "حالي", sortable: true, render: (s) => s.current > 0 ? <Badge className="bg-green-100 text-green-700">{formatCurrency(s.current)}</Badge> : "—" },
-    { key: "1_30", header: "1-30 يوم", sortable: true, render: (s) => s["1_30"] > 0 ? <Badge className="bg-yellow-100 text-yellow-700">{formatCurrency(s["1_30"])}</Badge> : "—" },
+    { key: "current", header: "حالي", sortable: true, render: (s) => s.current > 0 ? <Badge className="bg-status-success-surface text-status-success-foreground">{formatCurrency(s.current)}</Badge> : "—" },
+    { key: "1_30", header: "1-30 يوم", sortable: true, render: (s) => s["1_30"] > 0 ? <Badge className="bg-status-warning-surface text-status-warning-foreground">{formatCurrency(s["1_30"])}</Badge> : "—" },
     { key: "31_60", header: "31-60 يوم", sortable: true, render: (s) => s["31_60"] > 0 ? <Badge className="bg-orange-100 text-orange-700">{formatCurrency(s["31_60"])}</Badge> : "—" },
-    { key: "61_90", header: "61-90 يوم", sortable: true, render: (s) => s["61_90"] > 0 ? <Badge className="bg-red-100 text-red-700">{formatCurrency(s["61_90"])}</Badge> : "—" },
-    { key: "over90", header: "+90 يوم", sortable: true, render: (s) => s.over90 > 0 ? <Badge className="bg-red-200 text-red-800">{formatCurrency(s.over90)}</Badge> : "—" },
-    { key: "total", header: "الإجمالي", sortable: true, className: "font-bold text-blue-600", render: (s) => formatCurrency(s.total) },
+    { key: "61_90", header: "61-90 يوم", sortable: true, render: (s) => s["61_90"] > 0 ? <Badge className="bg-status-error-surface text-status-error-foreground">{formatCurrency(s["61_90"])}</Badge> : "—" },
+    { key: "over90", header: "+90 يوم", sortable: true, render: (s) => s.over90 > 0 ? <Badge className="bg-red-200 text-status-error-foreground">{formatCurrency(s.over90)}</Badge> : "—" },
+    { key: "total", header: "الإجمالي", sortable: true, className: "font-bold text-status-info-foreground", render: (s) => formatCurrency(s.total) },
   ];
 
   return (
@@ -94,22 +94,22 @@ export default function ApAgingPage() {
         {BUCKETS.map(b => (
           <Card key={b.key}>
             <CardContent className="p-4 text-center">
-              <p className="text-xs text-gray-500 mb-1">{b.label}</p>
+              <p className="text-xs text-muted-foreground mb-1">{b.label}</p>
               <p className="text-lg font-bold">{formatCurrency(Number(summary[b.key] ?? 0))}</p>
             </CardContent>
           </Card>
         ))}
       </div>
-      <Card className="bg-blue-50 border-blue-200">
+      <Card className="bg-status-info-surface border-status-info-surface">
         <CardContent className="p-4 flex items-center gap-3">
-          <AlertTriangle className="h-5 w-5 text-blue-600" />
+          <AlertTriangle className="h-5 w-5 text-status-info-foreground" />
           <div>
-            <p className="text-sm text-gray-500">إجمالي الذمم الدائنة المستحقة</p>
-            <p className="text-2xl font-bold text-blue-600">{formatCurrency(Number(summary.grandTotal ?? 0))}</p>
+            <p className="text-sm text-muted-foreground">إجمالي الذمم الدائنة المستحقة</p>
+            <p className="text-2xl font-bold text-status-info-foreground">{formatCurrency(Number(summary.grandTotal ?? 0))}</p>
           </div>
           <div className="ms-auto text-end">
-            <p className="text-xs text-gray-500">عدد الموردين</p>
-            <p className="text-xl font-bold text-gray-700">{suppliers.length}</p>
+            <p className="text-xs text-muted-foreground">عدد الموردين</p>
+            <p className="text-xl font-bold text-status-neutral-foreground">{suppliers.length}</p>
           </div>
         </CardContent>
       </Card>
@@ -134,7 +134,7 @@ export default function ApAgingPage() {
           const sid = s.supplierId ?? s.supplierName;
           if (expanded !== sid || !s.orders?.length) return null;
           return (
-            <div className="border-t bg-gray-50/30 p-3">
+            <div className="border-t bg-surface-subtle/30 p-3">
               <DataTable
                 noToolbar
                 pageSize={0}
@@ -142,8 +142,8 @@ export default function ApAgingPage() {
                 rowKey={(po) => po.id}
                 emptyMessage="لا توجد أوامر"
                 columns={[
-                  { key: "ref", header: "المرجع", className: "font-mono text-blue-600 text-xs", render: (po: any) => po.ref },
-                  { key: "dueDate", header: "تاريخ الاستحقاق", className: "text-xs text-gray-500", render: (po: any) => po.dueDate ? formatDateAr(po.dueDate) : "-" },
+                  { key: "ref", header: "المرجع", className: "font-mono text-status-info-foreground text-xs", render: (po: any) => po.ref },
+                  { key: "dueDate", header: "تاريخ الاستحقاق", className: "text-xs text-muted-foreground", render: (po: any) => po.dueDate ? formatDateAr(po.dueDate) : "-" },
                   { key: "outstanding", header: "المستحق", className: "font-semibold", render: (po: any) => formatCurrency(po.outstanding) },
                   {
                     key: "bucket",

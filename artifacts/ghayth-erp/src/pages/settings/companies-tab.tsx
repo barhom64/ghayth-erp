@@ -50,12 +50,12 @@ export function CompaniesTab() {
       render: (r: any) => (
         <div className="font-medium">
           {r.name}
-          {r.nameEn && <span className="text-gray-400 text-xs me-2 block">{r.nameEn}</span>}
+          {r.nameEn && <span className="text-muted-foreground text-xs me-2 block">{r.nameEn}</span>}
         </div>
       ),
     },
-    { key: "taxNumber", header: "الرقم الضريبي", searchable: true, render: (r: any) => <span className="text-gray-500">{r.vatNumber || "-"}</span> },
-    { key: "crNumber", header: "السجل التجاري", searchable: true, render: (r: any) => <span className="text-gray-500">{r.crNumber || "-"}</span> },
+    { key: "taxNumber", header: "الرقم الضريبي", searchable: true, render: (r: any) => <span className="text-muted-foreground">{r.vatNumber || "-"}</span> },
+    { key: "crNumber", header: "السجل التجاري", searchable: true, render: (r: any) => <span className="text-muted-foreground">{r.crNumber || "-"}</span> },
     {
       key: "actions",
       header: "إجراءات",
@@ -68,7 +68,7 @@ export function CompaniesTab() {
             onClick={() => setDeletingCompany({ id: r.id, name: r.name || "—" })}
             disabled={deleting === r.id}
             title="حذف"
-            className="text-red-500 hover:text-red-700"
+            className="text-status-error hover:text-status-error-foreground"
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -149,15 +149,15 @@ export function CompaniesTab() {
       </div>
 
       {lastBootstrapOps && (
-        <Card className="border-green-200 bg-green-50">
+        <Card className="border-status-success-surface bg-status-success-surface">
           <CardContent className="p-4">
             <div className="flex items-start gap-3">
-              <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 shrink-0" />
+              <CheckCircle className="h-5 w-5 text-status-success-foreground mt-0.5 shrink-0" />
               <div>
-                <p className="font-semibold text-green-800 mb-2">تم إنشاء الشركة مع كامل الإعدادات الافتراضية</p>
+                <p className="font-semibold text-status-success-foreground mb-2">تم إنشاء الشركة مع كامل الإعدادات الافتراضية</p>
                 <div className="flex flex-wrap gap-1.5">
                   {lastBootstrapOps.map((op, i) => (
-                    <Badge key={i} className="bg-green-100 text-green-700 border-green-200 text-xs">{op}</Badge>
+                    <Badge key={i} className="bg-status-success-surface text-status-success-foreground border-status-success-surface text-xs">{op}</Badge>
                   ))}
                 </div>
               </div>
@@ -170,7 +170,7 @@ export function CompaniesTab() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
-              {editingId ? <Pencil className="h-4 w-4" /> : <Zap className="h-4 w-4 text-blue-600" />}
+              {editingId ? <Pencil className="h-4 w-4" /> : <Zap className="h-4 w-4 text-status-info-foreground" />}
               {editingId ? "تعديل بيانات الشركة" : "إنشاء شركة جديدة (تهيئة تلقائية)"}
             </CardTitle>
           </CardHeader>
@@ -196,12 +196,12 @@ export function CompaniesTab() {
                 <FormTextField name="crNumber" label="رقم السجل التجاري" placeholder="1010000000" />
               </FormGrid>
               {!editingId && (
-                <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
-                  <p className="text-sm text-blue-700 font-medium mb-1 flex items-center gap-1.5">
+                <div className="mt-4 p-3 bg-status-info-surface rounded-lg border border-status-info-surface">
+                  <p className="text-sm text-status-info-foreground font-medium mb-1 flex items-center gap-1.5">
                     <Zap className="h-4 w-4" />
                     سيتم إنشاء ما يلي تلقائياً:
                   </p>
-                  <p className="text-xs text-blue-600">
+                  <p className="text-xs text-status-info-foreground">
                     فرع افتراضي، 10 أنواع إجازات، 3 ورديات، 5 سلاسل موافقات، 6 مكونات رواتب، 26 حساباً محاسبياً، 6 أدوار، 8 بادئات ترقيم، سلم عقوبات، 120+ إعداد
                   </p>
                 </div>

@@ -52,10 +52,10 @@ const DEPARTMENT_LABELS: Record<string, string> = {
 };
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  critical: { label: "حرج", color: "text-red-700", bg: "bg-red-100" },
+  critical: { label: "حرج", color: "text-status-error-foreground", bg: "bg-status-error-surface" },
   high: { label: "عالي", color: "text-orange-700", bg: "bg-orange-100" },
-  medium: { label: "متوسط", color: "text-yellow-700", bg: "bg-yellow-100" },
-  low: { label: "منخفض", color: "text-blue-700", bg: "bg-blue-100" },
+  medium: { label: "متوسط", color: "text-status-warning-foreground", bg: "bg-status-warning-surface" },
+  low: { label: "منخفض", color: "text-status-info-foreground", bg: "bg-status-info-surface" },
 };
 
 export default function ViolationsReportPage() {
@@ -106,7 +106,7 @@ export default function ViolationsReportPage() {
       key: "department",
       header: "القسم",
       render: (v) => (
-        <span className="text-xs text-gray-600">
+        <span className="text-xs text-muted-foreground">
           {DEPARTMENT_LABELS[v.department] || v.department || "-"}
         </span>
       ),
@@ -137,16 +137,16 @@ export default function ViolationsReportPage() {
       header: "الحالة",
       render: (v) =>
         v.status === "resolved" ? (
-          <Badge className="bg-green-100 text-green-700 text-xs">تم الحل</Badge>
+          <Badge className="bg-status-success-surface text-status-success-foreground text-xs">تم الحل</Badge>
         ) : (
-          <Badge className="bg-red-100 text-red-700 text-xs">مفتوحة</Badge>
+          <Badge className="bg-status-error-surface text-status-error-foreground text-xs">مفتوحة</Badge>
         ),
     },
     {
       key: "auditDate",
       header: "التاريخ",
       render: (v) => (
-        <span className="text-xs text-gray-400">
+        <span className="text-xs text-muted-foreground">
           {v.auditDate ? formatDateAr(v.auditDate) : "-"}
         </span>
       ),
@@ -172,10 +172,10 @@ export default function ViolationsReportPage() {
   ];
 
   const summaryCards = [
-    { label: "مخالفات اليوم", value: Number(summary.total || 0), icon: ShieldAlert, color: "text-gray-700 bg-gray-100" },
-    { label: "مفتوحة اليوم", value: Number(summary.open || 0), icon: AlertTriangle, color: "text-red-600 bg-red-50" },
-    { label: "تم حلها اليوم", value: Number(summary.resolved || 0), icon: CheckCircle2, color: "text-green-600 bg-green-50" },
-    { label: "حرجة اليوم", value: Number(summary.critical || 0), icon: TrendingUp, color: "text-red-700 bg-red-100" },
+    { label: "مخالفات اليوم", value: Number(summary.total || 0), icon: ShieldAlert, color: "text-status-neutral-foreground bg-surface-subtle" },
+    { label: "مفتوحة اليوم", value: Number(summary.open || 0), icon: AlertTriangle, color: "text-status-error-foreground bg-status-error-surface" },
+    { label: "تم حلها اليوم", value: Number(summary.resolved || 0), icon: CheckCircle2, color: "text-status-success-foreground bg-status-success-surface" },
+    { label: "حرجة اليوم", value: Number(summary.critical || 0), icon: TrendingUp, color: "text-status-error-foreground bg-status-error-surface" },
   ];
 
   return (
@@ -193,7 +193,7 @@ export default function ViolationsReportPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{c.value}</p>
-                <p className="text-xs text-gray-500">{c.label}</p>
+                <p className="text-xs text-muted-foreground">{c.label}</p>
               </div>
             </CardContent>
           </Card>
@@ -204,7 +204,7 @@ export default function ViolationsReportPage() {
         <Card className="lg:col-span-2">
           <CardContent className="p-4">
             <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-blue-500" />
+              <BarChart3 className="h-4 w-4 text-status-info" />
               تطور المخالفات (آخر 30 يوم)
             </h3>
             {trend.length > 0 ? (
@@ -221,7 +221,7 @@ export default function ViolationsReportPage() {
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <p className="text-gray-400 text-sm text-center py-8">لا توجد بيانات</p>
+              <p className="text-muted-foreground text-sm text-center py-8">لا توجد بيانات</p>
             )}
           </CardContent>
         </Card>
@@ -236,14 +236,14 @@ export default function ViolationsReportPage() {
               {byType.length > 0 ? (
                 <div className="space-y-2 max-h-[100px] overflow-y-auto">
                   {byType.map((t: any) => (
-                    <div key={t.type} className="flex items-center justify-between p-1.5 rounded border bg-gray-50 text-xs">
+                    <div key={t.type} className="flex items-center justify-between p-1.5 rounded border bg-surface-subtle text-xs">
                       <span>{TYPE_LABELS[t.type] || t.type}</span>
                       <Badge variant="outline" className="text-[10px]">{t.count}</Badge>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-gray-400 text-xs text-center py-4">لا توجد مخالفات مفتوحة</p>
+                <p className="text-muted-foreground text-xs text-center py-4">لا توجد مخالفات مفتوحة</p>
               )}
             </CardContent>
           </Card>
@@ -256,14 +256,14 @@ export default function ViolationsReportPage() {
               {byDepartment.length > 0 ? (
                 <div className="space-y-2">
                   {byDepartment.map((d: any) => (
-                    <div key={d.department} className="flex items-center justify-between p-1.5 rounded border bg-gray-50 text-xs">
+                    <div key={d.department} className="flex items-center justify-between p-1.5 rounded border bg-surface-subtle text-xs">
                       <span>{DEPARTMENT_LABELS[d.department] || d.department}</span>
                       <Badge variant="outline" className="text-[10px]">{d.count}</Badge>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-gray-400 text-xs text-center py-4">لا توجد بيانات</p>
+                <p className="text-muted-foreground text-xs text-center py-4">لا توجد بيانات</p>
               )}
             </CardContent>
           </Card>
@@ -273,7 +273,7 @@ export default function ViolationsReportPage() {
       <Card>
         <CardContent className="p-4">
           <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-            <Filter className="h-4 w-4 text-gray-500" />
+            <Filter className="h-4 w-4 text-muted-foreground" />
             تصفية
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

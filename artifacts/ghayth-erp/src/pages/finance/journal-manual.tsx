@@ -144,14 +144,14 @@ export default function JournalManualPage() {
       key: "ref",
       header: "المرجع",
       sortable: true,
-      render: (row) => <span className="font-mono text-blue-600 text-xs">{row.ref}</span>,
+      render: (row) => <span className="font-mono text-status-info-foreground text-xs">{row.ref}</span>,
     },
     {
       key: "createdAt",
       header: "التاريخ",
       sortable: true,
       render: (row) => (
-        <span className="text-gray-500 text-xs">{row.createdAt ? formatDate(row.createdAt) : "-"}</span>
+        <span className="text-muted-foreground text-xs">{row.createdAt ? formatDate(row.createdAt) : "-"}</span>
       ),
     },
     { key: "description", header: "البيان", sortable: true },
@@ -170,14 +170,14 @@ export default function JournalManualPage() {
       render: (row) => (
         <div className="flex gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
           <Link href={`/finance/journal-manual/${row.id}`}>
-            <button className="text-blue-600 hover:underline text-xs">عرض</button>
+            <button className="text-status-info-foreground hover:underline text-xs">عرض</button>
           </Link>
           {row.approvalStatus === "draft" && (
             <GuardedButton
               perm="finance:create"
               variant="link"
               size="sm"
-              className="text-amber-600 hover:underline text-xs p-0 h-auto"
+              className="text-status-warning-foreground hover:underline text-xs p-0 h-auto"
               onClick={() => setActionModal({ type: "submit", journal: row })}
             >
               إرسال للمراجعة
@@ -308,7 +308,7 @@ export default function JournalManualPage() {
                   <GuardedButton
                     perm="finance:approve"
                     variant="outline"
-                    className="border-red-300 text-red-600"
+                    className="border-status-error-surface text-status-error-foreground"
                     disabled={reviewMutation.isPending}
                     onClick={() =>
                       reviewMutation.mutate({

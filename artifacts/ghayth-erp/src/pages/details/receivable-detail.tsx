@@ -82,11 +82,11 @@ const AGING_TONE: Record<AgingBucket, "success" | "info" | "warning" | "destruct
 };
 
 const AGING_CLASS: Record<AgingBucket, string> = {
-  "current": "bg-green-100 text-green-700 border-green-300",
-  "1-30": "bg-blue-100 text-blue-700 border-blue-300",
-  "31-60": "bg-yellow-100 text-yellow-700 border-yellow-300",
+  "current": "bg-status-success-surface text-status-success-foreground border-status-success-surface",
+  "1-30": "bg-status-info-surface text-status-info-foreground border-status-info-surface",
+  "31-60": "bg-status-warning-surface text-status-warning-foreground border-yellow-300",
   "61-90": "bg-orange-100 text-orange-700 border-orange-300",
-  "90+": "bg-red-100 text-red-700 border-red-300",
+  "90+": "bg-status-error-surface text-status-error-foreground border-status-error-surface",
 };
 
 export default function ReceivableDetail() {
@@ -210,7 +210,7 @@ export default function ReceivableDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <ArrowDownCircle className="h-4 w-4 text-gray-500" />
+            <ArrowDownCircle className="h-4 w-4 text-muted-foreground" />
             بيانات المستحق
           </CardTitle>
         </CardHeader>
@@ -220,63 +220,63 @@ export default function ReceivableDetail() {
             <span className="text-3xl font-bold text-gray-900">
               {formatCurrency(total)}
             </span>
-            <span className="text-xs text-gray-500">ر.س</span>
-            <span className="text-xs text-gray-400 ms-2">إجمالي الفاتورة</span>
+            <span className="text-xs text-muted-foreground">ر.س</span>
+            <span className="text-xs text-muted-foreground ms-2">إجمالي الفاتورة</span>
           </div>
 
           {/* Paid / remaining split — the collection snapshot */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded border bg-green-50 p-3">
-              <p className="text-xs text-gray-500 mb-0.5">المدفوع</p>
-              <p className="text-lg font-semibold text-green-700">{formatCurrency(paid)}</p>
+            <div className="rounded border bg-status-success-surface p-3">
+              <p className="text-xs text-muted-foreground mb-0.5">المدفوع</p>
+              <p className="text-lg font-semibold text-status-success-foreground">{formatCurrency(paid)}</p>
             </div>
-            <div className="rounded border bg-red-50 p-3">
-              <p className="text-xs text-gray-500 mb-0.5">المتبقي</p>
-              <p className="text-lg font-semibold text-red-700">{formatCurrency(remaining)}</p>
+            <div className="rounded border bg-status-error-surface p-3">
+              <p className="text-xs text-muted-foreground mb-0.5">المتبقي</p>
+              <p className="text-lg font-semibold text-status-error-foreground">{formatCurrency(remaining)}</p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             {receivable?.clientName && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">العميل</p>
-                <span className="text-gray-800">{receivable.clientName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">العميل</p>
+                <span className="text-status-neutral-foreground">{receivable.clientName}</span>
               </div>
             )}
             {receivable?.invoiceRef && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">رقم الفاتورة</p>
-                <span className="text-gray-800 font-mono text-xs">{receivable.invoiceRef}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">رقم الفاتورة</p>
+                <span className="text-status-neutral-foreground font-mono text-xs">{receivable.invoiceRef}</span>
               </div>
             )}
             {receivable?.dueDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+                <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
                   <Calendar className="h-3 w-3" /> تاريخ الاستحقاق
                 </p>
-                <span className="text-gray-800">{formatDateAr(receivable.dueDate)}</span>
+                <span className="text-status-neutral-foreground">{formatDateAr(receivable.dueDate)}</span>
               </div>
             )}
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">شريحة العمر</p>
+              <p className="text-xs text-muted-foreground mb-0.5">شريحة العمر</p>
               <Badge variant="outline" className={AGING_CLASS[bucket]}>
                 {AGING_LABEL[bucket]}
               </Badge>
             </div>
             {isActuallyOverdue && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
-                  <AlertTriangle className="h-3 w-3 text-red-500" /> أيام التأخر
+                <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3 text-status-error" /> أيام التأخر
                 </p>
-                <span className="text-red-600 font-semibold">{daysOverdue} يوم</span>
+                <span className="text-status-error-foreground font-semibold">{daysOverdue} يوم</span>
               </div>
             )}
           </div>
 
           {receivable?.description && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">ملاحظات</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{receivable.description}</p>
+              <p className="text-xs text-muted-foreground mb-1">ملاحظات</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{receivable.description}</p>
             </div>
           )}
         </CardContent>
@@ -288,7 +288,7 @@ export default function ReceivableDetail() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                <Receipt className="h-4 w-4 text-gray-500" />
+                <Receipt className="h-4 w-4 text-muted-foreground" />
                 سجل الدفعات ({paymentHistory.length})
               </CardTitle>
             </CardHeader>
@@ -298,16 +298,16 @@ export default function ReceivableDetail() {
                   key={p.id || i}
                   className="flex items-center justify-between text-xs border-b last:border-b-0 pb-1.5 last:pb-0"
                 >
-                  <span className="text-gray-600">
+                  <span className="text-muted-foreground">
                     {p.date ? formatDateAr(p.date) : `دفعة #${i + 1}`}
                   </span>
-                  <span className="font-semibold text-green-700">
+                  <span className="font-semibold text-status-success-foreground">
                     {formatCurrency(Number(p.amount || 0))}
                   </span>
                 </div>
               ))}
               {paymentHistory.length > 5 && (
-                <p className="text-[11px] text-gray-400 pt-1">
+                <p className="text-[11px] text-muted-foreground pt-1">
                   و {paymentHistory.length - 5} دفعة أخرى...
                 </p>
               )}

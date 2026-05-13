@@ -23,9 +23,9 @@ import { ProjectsTabsNav } from "@/components/shared/projects-tabs-nav";
 import { GuardedButton } from "@/components/shared/permission-gate";
 
 const statusOptions = [
-  { value: "pending", label: "معلق", color: "bg-amber-100 text-amber-700" },
-  { value: "in_progress", label: "جاري", color: "bg-blue-100 text-blue-700" },
-  { value: "completed", label: "مكتمل", color: "bg-green-100 text-green-700" },
+  { value: "pending", label: "معلق", color: "bg-status-warning-surface text-status-warning-foreground" },
+  { value: "in_progress", label: "جاري", color: "bg-status-info-surface text-status-info-foreground" },
+  { value: "completed", label: "مكتمل", color: "bg-status-success-surface text-status-success-foreground" },
   { value: "overdue", label: "متأخر", color: "bg-rose-100 text-rose-700" },
 ];
 
@@ -146,7 +146,7 @@ export default function Tasks() {
     { key: "linkedEntity", header: "الكيان المرتبط", render: (r: any) => (
       r.linkedEntityType ? (
         <Link href={getEntityLink(r.linkedEntityType, r.linkedEntityId)}>
-          <span className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline cursor-pointer">
+          <span className="inline-flex items-center gap-1 text-xs text-status-info-foreground hover:underline cursor-pointer">
             <Link2 className="h-3 w-3" />
             {ENTITY_TYPE_LABELS[r.linkedEntityType] || r.linkedEntityType}
             {r.linkedEntityName ? (
@@ -157,14 +157,14 @@ export default function Tasks() {
           </span>
         </Link>
       ) : (
-        <span className="text-xs text-gray-400">{"—"}</span>
+        <span className="text-xs text-muted-foreground">{"—"}</span>
       )
     ) },
     { key: "type", header: "النوع", sortable: true, render: (r: any) => <span className="text-muted-foreground">{typeLabels[r.type] || "مهمة عامة"}</span> },
     { key: "priority", header: "الأولوية", sortable: true, render: (r: any) => (
       <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
         r.priority === "high" ? "bg-rose-100 text-rose-700" :
-        r.priority === "medium" ? "bg-amber-100 text-amber-700" :
+        r.priority === "medium" ? "bg-status-warning-surface text-status-warning-foreground" :
         "bg-emerald-100 text-emerald-700"
       }`}>
         {priorityLabel(r.priority)}
@@ -197,7 +197,7 @@ export default function Tasks() {
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 px-2 text-green-600 hover:text-green-700 hover:bg-green-50"
+            className="h-7 px-2 text-status-success-foreground hover:text-status-success-foreground hover:bg-status-success-surface"
             onClick={() => quickStatusChange(r.id, "completed")}
             title="إكمال المهمة"
           >
@@ -208,7 +208,7 @@ export default function Tasks() {
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+            className="h-7 px-2 text-status-info-foreground hover:text-status-info-foreground hover:bg-status-info-surface"
             onClick={() => quickStatusChange(r.id, "in_progress")}
             title="بدء العمل"
           >
@@ -249,7 +249,7 @@ export default function Tasks() {
             <Trash2 className="h-4 w-4" />
           </Button>
         )}
-        <button onClick={() => setExpandedId(expandedId === r.id ? null : r.id)} className="text-gray-400 hover:text-gray-600 p-1">
+        <button onClick={() => setExpandedId(expandedId === r.id ? null : r.id)} className="text-muted-foreground hover:text-muted-foreground p-1">
           {expandedId === r.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>
       </div>
@@ -268,10 +268,10 @@ export default function Tasks() {
       <ProjectsTabsNav />
       <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
         {[
-          { label: "إجمالي المهام", value: tasks?.length || 0, color: "text-blue-600" },
-          { label: "معلقة", value: tasks?.filter((t: any) => t.status === "pending").length || 0, color: "text-amber-600" },
-          { label: "جارية", value: tasks?.filter((t: any) => t.status === "in_progress").length || 0, color: "text-blue-600" },
-          { label: "مكتملة", value: tasks?.filter((t: any) => t.status === "completed").length || 0, color: "text-green-600" },
+          { label: "إجمالي المهام", value: tasks?.length || 0, color: "text-status-info-foreground" },
+          { label: "معلقة", value: tasks?.filter((t: any) => t.status === "pending").length || 0, color: "text-status-warning-foreground" },
+          { label: "جارية", value: tasks?.filter((t: any) => t.status === "in_progress").length || 0, color: "text-status-info-foreground" },
+          { label: "مكتملة", value: tasks?.filter((t: any) => t.status === "completed").length || 0, color: "text-status-success-foreground" },
         ].map((stat) => (
           <Card key={stat.label}>
             <CardContent className="p-4 text-center">
@@ -339,13 +339,13 @@ export default function Tasks() {
           });
         }}
         rowClassName={(task: any) =>
-          editingId === task.id ? "bg-blue-50" : selectedIds.has(task.id) ? "bg-blue-50/50" : undefined
+          editingId === task.id ? "bg-status-info-surface" : selectedIds.has(task.id) ? "bg-status-info-surface" : undefined
         }
         renderRowExtras={(task: any) => {
           const parts: React.ReactNode[] = [];
           if (expandedId === task.id) {
             parts.push(
-              <div key="expanded" className="bg-gray-50/50 p-4">
+              <div key="expanded" className="bg-surface-subtle/50 p-4">
                 <div className="space-y-3">
                   <EntityTags entityType="task" entityId={task.id} />
                   <EntityComments entityType="task" entityId={task.id} />
@@ -355,7 +355,7 @@ export default function Tasks() {
           }
           if (editingId === task.id) {
             parts.push(
-              <div key="edit" className="bg-blue-50/50 p-4">
+              <div key="edit" className="bg-status-info-surface p-4">
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                   <div>
                     <label className="text-xs text-muted-foreground mb-1 block">العنوان</label>

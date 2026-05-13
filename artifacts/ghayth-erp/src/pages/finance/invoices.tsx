@@ -68,7 +68,7 @@ export default function InvoicesPage() {
       key: "ref",
       header: "الرقم",
       sortable: true,
-      render: (inv) => <span className="font-mono text-blue-600">{inv.ref || `#${inv.id}`}</span>,
+      render: (inv) => <span className="font-mono text-status-info-foreground">{inv.ref || `#${inv.id}`}</span>,
     },
     {
       key: "tags",
@@ -97,7 +97,7 @@ export default function InvoicesPage() {
       key: "dueDate",
       header: "الاستحقاق",
       sortable: true,
-      render: (inv) => <span className="text-gray-500">{inv.dueDate ? formatDateAr(inv.dueDate) : "-"}</span>,
+      render: (inv) => <span className="text-muted-foreground">{inv.dueDate ? formatDateAr(inv.dueDate) : "-"}</span>,
     },
     {
       key: "status",
@@ -143,11 +143,11 @@ export default function InvoicesPage() {
             <Copy className="h-4 w-4" />
           </Button>
           <Link href={`/finance/invoices/create?copyFrom=${inv.id}`}>
-            <Button variant="ghost" size="sm" className="h-7 px-2 text-gray-500" title="نسخ الفاتورة">
+            <Button variant="ghost" size="sm" className="h-7 px-2 text-muted-foreground" title="نسخ الفاتورة">
               <Copy className="h-3.5 w-3.5" />
             </Button>
           </Link>
-          <button onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === inv.id ? null : inv.id); }} className="text-gray-400 hover:text-gray-600 p-1">
+          <button onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === inv.id ? null : inv.id); }} className="text-muted-foreground hover:text-muted-foreground p-1">
             {expandedId === inv.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
         </div>
@@ -172,10 +172,10 @@ export default function InvoicesPage() {
     >
       <FinanceTabsNav />
       <KpiGrid items={[
-        { label: "إجمالي الإيرادات", value: formatCurrency(stats?.totalRevenue || 0), icon: DollarSign, color: "text-blue-600 bg-blue-50" },
-        { label: "المدفوع هذا الشهر", value: formatCurrency(stats?.paidThisMonth || 0), icon: CheckCircle, color: "text-green-600 bg-green-50" },
-        { label: "المعلقة", value: formatCurrency(stats?.pendingAmount || 0), icon: Receipt, color: "text-amber-600 bg-amber-50" },
-        { label: "المتأخرة", value: formatCurrency(stats?.overdueAmount || 0), icon: AlertTriangle, color: "text-red-600 bg-red-50" },
+        { label: "إجمالي الإيرادات", value: formatCurrency(stats?.totalRevenue || 0), icon: DollarSign, color: "text-status-info-foreground bg-status-info-surface" },
+        { label: "المدفوع هذا الشهر", value: formatCurrency(stats?.paidThisMonth || 0), icon: CheckCircle, color: "text-status-success-foreground bg-status-success-surface" },
+        { label: "المعلقة", value: formatCurrency(stats?.pendingAmount || 0), icon: Receipt, color: "text-status-warning-foreground bg-status-warning-surface" },
+        { label: "المتأخرة", value: formatCurrency(stats?.overdueAmount || 0), icon: AlertTriangle, color: "text-status-error-foreground bg-status-error-surface" },
       ]} />
 
       <AdvancedFilters
@@ -233,8 +233,8 @@ export default function InvoicesPage() {
         emptyMessage="لا توجد فواتير"
         emptyIcon={<Receipt className="h-6 w-6 text-slate-400" />}
         rowClassName={(inv) => {
-          if (selectedIds.has(inv.id)) return "bg-blue-50/50";
-          if (inv.status === "overdue") return "bg-red-50/30";
+          if (selectedIds.has(inv.id)) return "bg-status-info-surface";
+          if (inv.status === "overdue") return "bg-status-error-surface";
           return undefined;
         }}
         noToolbar
@@ -242,7 +242,7 @@ export default function InvoicesPage() {
         renderRowExtras={(inv) => {
           if (expandedId !== inv.id) return null;
           return (
-            <div className="bg-gray-50/50 p-3">
+            <div className="bg-surface-subtle/50 p-3">
               <div className="space-y-3">
                 {inv.status === "pending_approval" && (
                   <ApprovalActions

@@ -28,14 +28,14 @@ export function EntityCardsSection({ roleEntities, role }: EntityCardsSectionPro
                   <Building className="w-5 h-5 text-emerald-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-800">الوحدات العقارية</p>
-                  <p className="text-xs text-gray-500">{roleEntities.units.total} وحدة</p>
+                  <p className="text-sm font-semibold text-status-neutral-foreground">الوحدات العقارية</p>
+                  <p className="text-xs text-muted-foreground">{roleEntities.units.total} وحدة</p>
                 </div>
               </div>
               <div className="flex gap-3 text-xs">
-                <span className="text-green-600">{roleEntities.units.available || 0} متاحة</span>
-                <span className="text-blue-600">{roleEntities.units.rented || 0} مؤجرة</span>
-                <span className="text-amber-600">{roleEntities.units.inMaintenance || 0} صيانة</span>
+                <span className="text-status-success-foreground">{roleEntities.units.available || 0} متاحة</span>
+                <span className="text-status-info-foreground">{roleEntities.units.rented || 0} مؤجرة</span>
+                <span className="text-status-warning-foreground">{roleEntities.units.inMaintenance || 0} صيانة</span>
               </div>
             </CardContent>
           </Card>
@@ -47,18 +47,18 @@ export function EntityCardsSection({ roleEntities, role }: EntityCardsSectionPro
           <Card className="border-0 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
             <CardContent className="p-4">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-blue-50">
-                  <Car className="w-5 h-5 text-blue-600" />
+                <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-status-info-surface">
+                  <Car className="w-5 h-5 text-status-info-foreground" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-800">الأسطول</p>
-                  <p className="text-xs text-gray-500">{roleEntities.vehicles.total} مركبة</p>
+                  <p className="text-sm font-semibold text-status-neutral-foreground">الأسطول</p>
+                  <p className="text-xs text-muted-foreground">{roleEntities.vehicles.total} مركبة</p>
                 </div>
               </div>
               <div className="flex gap-3 text-xs">
-                <span className="text-green-600">{roleEntities.vehicles.available || 0} متاحة</span>
-                <span className="text-blue-600">{roleEntities.vehicles.inUse || 0} قيد الاستخدام</span>
-                <span className="text-amber-600">{roleEntities.vehicles.inMaintenance || 0} صيانة</span>
+                <span className="text-status-success-foreground">{roleEntities.vehicles.available || 0} متاحة</span>
+                <span className="text-status-info-foreground">{roleEntities.vehicles.inUse || 0} قيد الاستخدام</span>
+                <span className="text-status-warning-foreground">{roleEntities.vehicles.inMaintenance || 0} صيانة</span>
               </div>
             </CardContent>
           </Card>
@@ -74,12 +74,12 @@ export function EntityCardsSection({ roleEntities, role }: EntityCardsSectionPro
                   <Scale className="w-5 h-5 text-purple-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-800">القضايا القانونية</p>
-                  <p className="text-xs text-gray-500">{roleEntities.cases.total} قضية</p>
+                  <p className="text-sm font-semibold text-status-neutral-foreground">القضايا القانونية</p>
+                  <p className="text-xs text-muted-foreground">{roleEntities.cases.total} قضية</p>
                 </div>
               </div>
               <div className="flex gap-3 text-xs">
-                <span className="text-blue-600">{roleEntities.cases.active || 0} نشطة</span>
+                <span className="text-status-info-foreground">{roleEntities.cases.active || 0} نشطة</span>
               </div>
             </CardContent>
           </Card>

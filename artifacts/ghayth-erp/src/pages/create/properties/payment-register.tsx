@@ -79,9 +79,9 @@ export default function PaymentRegisterPage() {
       backPath="/properties/payments"
     >
       {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       {payment && (
@@ -89,13 +89,13 @@ export default function PaymentRegisterPage() {
           <h3 className="flex items-center gap-2 text-lg font-semibold">
             <Banknote className="h-5 w-5 text-emerald-500" /> بيانات الدفعة
           </h3>
-          <div className="bg-blue-50 rounded-lg p-4 text-sm space-y-1">
+          <div className="bg-status-info-surface rounded-lg p-4 text-sm space-y-1">
               <p>المستأجر: <strong>{payment.tenantName}</strong></p>
               <p>الوحدة: <strong>{payment.unitNumber || "—"}</strong></p>
               <p>تاريخ الاستحقاق: <strong>{formatDateAr(payment.dueDate)}</strong></p>
               <p>المبلغ الكلي: <strong>{formatCurrency(payment.amount)}</strong></p>
               <p>المدفوع سابقاً: <strong>{formatCurrency(payment.paidAmount || 0)}</strong></p>
-              <p>المتبقي: <strong className="text-red-600">{formatCurrency(remaining)}</strong></p>
+              <p>المتبقي: <strong className="text-status-error-foreground">{formatCurrency(remaining)}</strong></p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

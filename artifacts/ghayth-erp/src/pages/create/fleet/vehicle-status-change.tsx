@@ -20,9 +20,9 @@ const VEHICLE_STATUS_OPTIONS = [
 ];
 
 const SEVERITY_COLORS: Record<string, string> = {
-  info: "border-blue-200 bg-blue-50",
-  warning: "border-yellow-200 bg-yellow-50",
-  danger: "border-red-200 bg-red-50",
+  info: "border-status-info-surface bg-status-info-surface",
+  warning: "border-status-warning-surface bg-status-warning-surface",
+  danger: "border-status-error-surface bg-status-error-surface",
 };
 
 const SEVERITY_ICON: Record<string, any> = {
@@ -84,8 +84,8 @@ export default function VehicleStatusChangePage() {
     }
   };
 
-  if (isLoading) return <div className="text-center py-20 text-gray-400">جاري التحميل...</div>;
-  if (!vehicle) return <div className="text-center py-20 text-gray-400">المركبة غير موجودة</div>;
+  if (isLoading) return <div className="text-center py-20 text-muted-foreground">جاري التحميل...</div>;
+  if (!vehicle) return <div className="text-center py-20 text-muted-foreground">المركبة غير موجودة</div>;
 
   return (
     <CreatePageLayout
@@ -94,16 +94,16 @@ export default function VehicleStatusChangePage() {
       backPath={`/fleet/${id}`}
     >
       {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="space-y-5">
         <h3 className="flex items-center gap-2 text-lg font-semibold">
-          <Pencil className="h-5 w-5 text-blue-500" /> تغيير الحالة
+          <Pencil className="h-5 w-5 text-status-info" /> تغيير الحالة
         </h3>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-muted-foreground">
             الحالة الحالية: <PageStatusBadge status={vehicle.status} domain="vehicle" />
           </p>
 
@@ -116,7 +116,7 @@ export default function VehicleStatusChangePage() {
                   onClick={() => loadImpactPreview(opt.value)}
                   className={cn(
                     "p-4 rounded-lg border-2 text-sm font-medium transition-all text-start",
-                    selectedNewStatus === opt.value ? "border-primary bg-primary/5" : "border-gray-200 hover:border-gray-300"
+                    selectedNewStatus === opt.value ? "border-primary bg-primary/5" : "border-border hover:border-border"
                   )}
                 >
                   {opt.label}
@@ -134,14 +134,14 @@ export default function VehicleStatusChangePage() {
 
           {impactData && !impactLoading && (
             <div className="space-y-3">
-              <p className="text-sm font-semibold text-gray-700">التأثيرات المتوقعة:</p>
+              <p className="text-sm font-semibold text-status-neutral-foreground">التأثيرات المتوقعة:</p>
               {impactData.blockers?.length > 0 && (
-                <div className="rounded-lg border-2 border-red-300 bg-red-50 p-3 space-y-1">
-                  <p className="text-sm font-semibold text-red-700 flex items-center gap-1">
+                <div className="rounded-lg border-2 border-status-error-surface bg-status-error-surface p-3 space-y-1">
+                  <p className="text-sm font-semibold text-status-error-foreground flex items-center gap-1">
                     <XCircle className="h-4 w-4" /> موانع التنفيذ
                   </p>
                   {impactData.blockers.map((b: string, i: number) => (
-                    <p key={i} className="text-sm text-red-600">• {b}</p>
+                    <p key={i} className="text-sm text-status-error-foreground">• {b}</p>
                   ))}
                 </div>
               )}

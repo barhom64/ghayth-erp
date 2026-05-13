@@ -75,18 +75,18 @@ export default function BankManualMatchPage() {
       backPath="/finance/bank-reconciliation"
     >
       {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="space-y-6">
         {row && (
           <div>
             <h3 className="flex items-center gap-2 text-lg font-semibold mb-3">
-              <Link2 className="h-5 w-5 text-blue-500" /> بيانات السطر البنكي
+              <Link2 className="h-5 w-5 text-status-info" /> بيانات السطر البنكي
             </h3>
-            <div className="bg-gray-50 p-4 rounded-lg flex flex-wrap gap-6 text-sm">
+            <div className="bg-surface-subtle p-4 rounded-lg flex flex-wrap gap-6 text-sm">
               <span>المبلغ: <strong>{formatCurrency(Number(row.amount))}</strong></span>
               <span>النوع: <strong>{row.type === "debit" ? "مدين" : "دائن"}</strong></span>
               <span>التاريخ: <strong>{row.statementDate ? formatDateAr(row.statementDate) : "-"}</strong></span>
@@ -111,7 +111,7 @@ export default function BankManualMatchPage() {
             </Button>
           </div>
 
-          {jeSearching && <p className="text-gray-400 text-sm text-center">جارٍ البحث...</p>}
+          {jeSearching && <p className="text-muted-foreground text-sm text-center">جارٍ البحث...</p>}
 
           {jeResults.length > 0 && (
             <div className="overflow-x-auto max-h-96 overflow-y-auto border rounded">
@@ -120,7 +120,7 @@ export default function BankManualMatchPage() {
                   {
                     key: "ref",
                     header: "المرجع",
-                    className: "font-mono text-xs text-blue-600",
+                    className: "font-mono text-xs text-status-info-foreground",
                     render: (jl) => jl.jeRef || jl.ref || "-",
                   },
                   {
@@ -132,7 +132,7 @@ export default function BankManualMatchPage() {
                   {
                     key: "date",
                     header: "التاريخ",
-                    className: "text-xs text-gray-500",
+                    className: "text-xs text-muted-foreground",
                     render: (jl) => (jl.jeDate ? formatDateAr(jl.jeDate) : "-"),
                   },
                   {
@@ -159,7 +159,7 @@ export default function BankManualMatchPage() {
                 ] as DataTableColumn<any>[]}
                 data={jeResults}
                 rowKey={(jl) => jl.id}
-                rowClassName={() => "hover:bg-blue-50"}
+                rowClassName={() => "hover:bg-status-info-surface"}
                 noToolbar
                 pageSize={0}
                 emptyMessage="لا توجد نتائج"
@@ -168,11 +168,11 @@ export default function BankManualMatchPage() {
           )}
 
           {jeResults.length === 0 && !jeSearching && form.jeSearch && (
-            <p className="text-gray-400 text-sm text-center">لا توجد نتائج</p>
+            <p className="text-muted-foreground text-sm text-center">لا توجد نتائج</p>
           )}
 
           {matchMsg && (
-            <p className={`text-sm font-medium ${matchMsg.includes("خطأ") ? "text-red-600" : "text-green-600"}`}>
+            <p className={`text-sm font-medium ${matchMsg.includes("خطأ") ? "text-status-error-foreground" : "text-status-success-foreground"}`}>
               {matchMsg}
             </p>
           )}

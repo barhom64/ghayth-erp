@@ -85,7 +85,7 @@ export default function CustodyDetailPage() {
           </p>
           <ProcessStages steps={lifecycleSteps} />
           {data?.daysOverdue > 0 && (
-            <p className="text-xs text-red-600 mt-2">
+            <p className="text-xs text-status-error-foreground mt-2">
               ⚠️ متأخرة بـ {data.daysOverdue} يوم عن تاريخ الإرجاع المتوقع
             </p>
           )}
@@ -95,8 +95,8 @@ export default function CustodyDetailPage() {
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-blue-50 border border-blue-100">
-              <DollarSign className="h-5 w-5 text-blue-600" />
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-status-info-surface border border-status-info-surface">
+              <DollarSign className="h-5 w-5 text-status-info-foreground" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground">المبلغ الأصلي</p>
@@ -119,12 +119,12 @@ export default function CustodyDetailPage() {
         </Card>
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-amber-50 border border-amber-100">
-              <AlertTriangle className="h-5 w-5 text-amber-600" />
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-status-warning-surface border border-status-warning-surface">
+              <AlertTriangle className="h-5 w-5 text-status-warning-foreground" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground">المتبقي</p>
-              <p className="text-xl font-bold text-amber-700">
+              <p className="text-xl font-bold text-status-warning-foreground">
                 {formatCurrency(data?.remainingAmount)}
               </p>
             </div>
@@ -160,7 +160,7 @@ export default function CustodyDetailPage() {
               <InfoLine
                 label="تاريخ الإرجاع المتوقع"
                 value={
-                  <span className={data.daysOverdue > 0 ? "text-red-600 font-semibold" : ""}>
+                  <span className={data.daysOverdue > 0 ? "text-status-error-foreground font-semibold" : ""}>
                     {formatDateAr(data.expectedReturnDate)}
                     {data.daysOverdue > 0 && ` (متأخر ${data.daysOverdue} يوم)`}
                   </span>
@@ -203,10 +203,10 @@ export default function CustodyDetailPage() {
                 {data.settlements.map((s: any, i: number) => (
                   <div
                     key={i}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border"
+                    className="flex items-center justify-between p-3 bg-surface-subtle rounded-lg border"
                   >
                     <div>
-                      <p className="font-mono text-xs text-blue-600">{s.ref}</p>
+                      <p className="font-mono text-xs text-status-info-foreground">{s.ref}</p>
                       <p className="text-sm text-muted-foreground">
                         {s.date ? formatDateAr(s.date) : ""}
                       </p>
@@ -250,7 +250,7 @@ export default function CustodyDetailPage() {
                                 ? "border-red-400"
                                 : event.action === "settlement"
                                   ? "border-amber-400"
-                                  : "border-gray-300"
+                                  : "border-border"
                         }`}
                       >
                         <Icon className="h-3.5 w-3.5" />
@@ -285,7 +285,7 @@ export default function CustodyDetailPage() {
                           </p>
                         )}
                         {event.notes && (
-                          <p className="text-xs text-muted-foreground mt-1 bg-gray-50 p-2 rounded">
+                          <p className="text-xs text-muted-foreground mt-1 bg-surface-subtle p-2 rounded">
                             {event.notes}
                           </p>
                         )}

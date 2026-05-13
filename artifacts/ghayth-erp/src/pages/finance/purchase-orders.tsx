@@ -92,7 +92,7 @@ export default function PurchaseOrdersPage() {
       header: "الرقم",
       sortable: true,
       render: (po) => (
-        <span className="font-mono text-blue-600">{po.ref || `#${formatNumber(po.id)}`}</span>
+        <span className="font-mono text-status-info-foreground">{po.ref || `#${formatNumber(po.id)}`}</span>
       ),
     },
     {
@@ -184,9 +184,9 @@ export default function PurchaseOrdersPage() {
     >
       <FinanceTabsNav />
       <KpiGrid items={[
-        { label: "إجمالي الطلبات", value: formatNumber(items.length), icon: ShoppingCart, color: "text-blue-600 bg-blue-50" },
-        { label: "بانتظار الاعتماد", value: formatNumber(pendingCount), icon: Clock, color: "text-amber-600 bg-amber-50" },
-        { label: "معتمدة", value: formatNumber(items.filter((po: any) => po.status === "approved").length), icon: CheckCircle, color: "text-green-600 bg-green-50" },
+        { label: "إجمالي الطلبات", value: formatNumber(items.length), icon: ShoppingCart, color: "text-status-info-foreground bg-status-info-surface" },
+        { label: "بانتظار الاعتماد", value: formatNumber(pendingCount), icon: Clock, color: "text-status-warning-foreground bg-status-warning-surface" },
+        { label: "معتمدة", value: formatNumber(items.filter((po: any) => po.status === "approved").length), icon: CheckCircle, color: "text-status-success-foreground bg-status-success-surface" },
         { label: "إجمالي المبالغ", value: formatCurrency(totalAmount), icon: DollarSign, color: "text-emerald-600 bg-emerald-50" },
       ]} />
 
@@ -252,7 +252,7 @@ export default function PurchaseOrdersPage() {
         emptyIcon={<ShoppingCart className="h-6 w-6 text-slate-400" />}
         rowClassName={(po) =>
           po.status === "pending" || po.status === "pending_approval"
-            ? "bg-amber-50/30"
+            ? "bg-status-warning-surface/30"
             : undefined
         }
         noToolbar
@@ -260,9 +260,9 @@ export default function PurchaseOrdersPage() {
         renderRowExtras={(po) => {
           if (expandedId !== po.id) return null;
           return (
-            <div className="p-3 bg-gray-50/50 space-y-4">
+            <div className="p-3 bg-surface-subtle/50 space-y-4">
               {(po.status === "pending" || po.status === "pending_approval") && (
-                <div className="bg-white p-4 rounded-lg border border-amber-200">
+                <div className="bg-white p-4 rounded-lg border border-status-warning-surface">
                   <h4 className="font-semibold mb-3">اتخاذ إجراء</h4>
                   <ApprovalActions
                     entityType="purchase-order"

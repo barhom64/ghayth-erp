@@ -64,11 +64,11 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: "bg-amber-100 text-amber-800 border-amber-300",
-  approved: "bg-green-100 text-green-800 border-green-300",
-  rejected: "bg-red-100 text-red-800 border-red-300",
-  expired: "bg-gray-100 text-gray-700 border-gray-300",
-  cancelled: "bg-gray-100 text-gray-500 border-gray-300",
+  pending: "bg-status-warning-surface text-status-warning-foreground border-amber-300",
+  approved: "bg-status-success-surface text-status-success-foreground border-status-success-surface",
+  rejected: "bg-status-error-surface text-status-error-foreground border-status-error-surface",
+  expired: "bg-surface-subtle text-status-neutral-foreground border-border",
+  cancelled: "bg-surface-subtle text-muted-foreground border-border",
 };
 
 const SCOPE_LABELS: Record<string, string> = {
@@ -121,7 +121,7 @@ export function JitRequestsTab() {
             <Clock className="h-5 w-5" />
             طلبات الصلاحيات المؤقتة (JIT)
           </h3>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             للحالات الاستثنائية: أطلب صلاحية مؤقتة بمبرّر، يعتمدها مديرك، ويسحبها النظام تلقائياً عند انتهاء المدة.
           </p>
         </div>
@@ -153,14 +153,14 @@ export function JitRequestsTab() {
 
         <TabsContent value="pending" className="mt-3">
           {pending.length === 0 ? (
-            <div className="p-8 text-center text-gray-400">
+            <div className="p-8 text-center text-muted-foreground">
               <ShieldCheck className="h-10 w-10 mx-auto mb-2 opacity-40" />
               <p>لا توجد طلبات بانتظار المراجعة</p>
             </div>
           ) : (
             <div className="space-y-2">
               {pending.map((r) => (
-                <Card key={r.id} className="border-amber-200">
+                <Card key={r.id} className="border-status-warning-surface">
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
@@ -168,14 +168,14 @@ export function JitRequestsTab() {
                           <span className="font-medium">{r.userName || `User #${r.userId}`}</span>
                           <Badge className="text-xs">{r.requested_minutes} دقيقة</Badge>
                         </div>
-                        <div className="text-sm text-gray-700 mb-2 font-mono">
+                        <div className="text-sm text-status-neutral-foreground mb-2 font-mono">
                           {r.feature_key} · {r.action} · {SCOPE_LABELS[r.scope] || r.scope}
                         </div>
-                        <div className="bg-gray-50 rounded p-2 text-sm text-gray-600 mb-2">
+                        <div className="bg-surface-subtle rounded p-2 text-sm text-muted-foreground mb-2">
                           <FileText className="h-3 w-3 inline me-1" />
                           {r.justification}
                         </div>
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text-muted-foreground">
                           مُقدَّم: {new Date(r.createdAt).toLocaleString("ar")}
                         </p>
                       </div>
@@ -199,7 +199,7 @@ export function JitRequestsTab() {
 
         <TabsContent value="my" className="mt-3">
           {myRequests.length === 0 ? (
-            <div className="p-8 text-center text-gray-400">
+            <div className="p-8 text-center text-muted-foreground">
               <Hourglass className="h-10 w-10 mx-auto mb-2 opacity-40" />
               <p>لم تقدّم أي طلبات سابقاً</p>
             </div>
@@ -214,7 +214,7 @@ export function JitRequestsTab() {
                           <Badge className={`text-xs ${STATUS_COLORS[r.status]}`}>
                             {STATUS_LABELS[r.status]}
                           </Badge>
-                          <span className="text-sm font-mono text-gray-700">
+                          <span className="text-sm font-mono text-status-neutral-foreground">
                             {r.feature_key} · {r.action}
                           </span>
                           {r.status === "approved" && r.expires_at && (
@@ -223,11 +223,11 @@ export function JitRequestsTab() {
                             </Badge>
                           )}
                         </div>
-                        <p className="text-xs text-gray-500 mb-1">{r.justification}</p>
+                        <p className="text-xs text-muted-foreground mb-1">{r.justification}</p>
                         {r.rejectedReason && (
-                          <p className="text-xs text-red-600">سبب الرفض: {r.rejectedReason}</p>
+                          <p className="text-xs text-status-error-foreground">سبب الرفض: {r.rejectedReason}</p>
                         )}
-                        <p className="text-[10px] text-gray-400">
+                        <p className="text-[10px] text-muted-foreground">
                           {new Date(r.createdAt).toLocaleString("ar")}
                           {r.granted_at && ` · مُنح: ${new Date(r.granted_at).toLocaleTimeString("ar")}`}
                         </p>
@@ -370,7 +370,7 @@ function MinutesHint() {
   const minutes = useWatch<JitRequestForm, "requestedMinutes">({ name: "requestedMinutes" });
   const n = Number(minutes) || 0;
   return (
-    <p className="text-[10px] text-gray-500 mt-1">
+    <p className="text-[10px] text-muted-foreground mt-1">
       {n >= 60 ? `${Math.floor(n / 60)} ساعة ${n % 60} د` : `${n} دقيقة`}
     </p>
   );
@@ -380,7 +380,7 @@ function MinutesHint() {
 function JustificationCounter() {
   const justification = useWatch<JitRequestForm, "justification">({ name: "justification" });
   return (
-    <p className="text-[10px] text-gray-400 mt-1">
+    <p className="text-[10px] text-muted-foreground mt-1">
       {(justification || "").length} / 500
     </p>
   );
@@ -425,12 +425,12 @@ function DecisionDialog({ info, onClose, onDone }: {
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {isApprove ? <Check className="h-5 w-5 text-green-600" /> : <AlertTriangle className="h-5 w-5 text-red-600" />}
+            {isApprove ? <Check className="h-5 w-5 text-status-success-foreground" /> : <AlertTriangle className="h-5 w-5 text-status-error-foreground" />}
             {isApprove ? "اعتماد طلب صلاحية" : "رفض طلب صلاحية"}
           </DialogTitle>
         </DialogHeader>
         <div>
-          <label className="text-xs text-gray-600 mb-1 block">
+          <label className="text-xs text-muted-foreground mb-1 block">
             {isApprove ? "ملاحظة (اختياري)" : "سبب الرفض (مطلوب)"}
           </label>
           <textarea

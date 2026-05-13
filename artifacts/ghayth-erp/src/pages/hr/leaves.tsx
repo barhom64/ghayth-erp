@@ -76,7 +76,7 @@ function LeaveApprovalStages({ leaveId, leaveStatus }: { leaveId: number; leaveS
 
   return (
     <div className="space-y-2">
-      <p className="text-xs font-medium text-gray-600 flex items-center gap-1">
+      <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
         <Timer className="w-3.5 h-3.5" />
         مسار الموافقة
       </p>
@@ -152,7 +152,7 @@ export default function LeavesPage() {
       sortable: true,
       className: "max-w-32 truncate",
       render: (l) => (
-        <div className="text-gray-500">
+        <div className="text-muted-foreground">
           {l.reason || "-"}
           <NotesDisplay status={l.status} notes={l.rejectedReason} returnReason={l.returnReason} rejectionReason={l.rejectedReason} />
         </div>
@@ -185,13 +185,13 @@ export default function LeavesPage() {
       (l) => (
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
           <Link href={`/hr/leaves/create?copyLeaveType=${encodeURIComponent(l.leaveTypeId || l.leaveType || "")}&copyReason=${encodeURIComponent(l.reason || "")}`}>
-            <Button variant="ghost" size="sm" className="h-7 px-2 text-gray-500" title="نسخ الطلب">
+            <Button variant="ghost" size="sm" className="h-7 px-2 text-muted-foreground" title="نسخ الطلب">
               <Copy className="h-3.5 w-3.5" />
             </Button>
           </Link>
           <button
             onClick={() => setExpandedId(expandedId === l.id ? null : l.id)}
-            className="text-gray-400 hover:text-gray-600 p-1"
+            className="text-muted-foreground hover:text-muted-foreground p-1"
           >
             {expandedId === l.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
@@ -202,10 +202,10 @@ export default function LeavesPage() {
   ];
 
   const kpis = [
-    { label: "إجمالي الطلبات", value: stats?.total ?? items.length, icon: Calendar, color: "text-blue-600 bg-blue-50" },
-    { label: "معلقة", value: stats?.pending ?? items.filter((i: any) => i.status === "pending").length, icon: Clock, color: "text-yellow-600 bg-yellow-50" },
-    { label: "موافق عليها", value: stats?.approved ?? items.filter((i: any) => i.status === "approved").length, icon: CheckCircle, color: "text-green-600 bg-green-50" },
-    { label: "مرفوضة", value: stats?.rejected ?? items.filter((i: any) => i.status === "rejected").length, icon: XCircle, color: "text-red-600 bg-red-50" },
+    { label: "إجمالي الطلبات", value: stats?.total ?? items.length, icon: Calendar, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "معلقة", value: stats?.pending ?? items.filter((i: any) => i.status === "pending").length, icon: Clock, color: "text-status-warning-foreground bg-status-warning-surface" },
+    { label: "موافق عليها", value: stats?.approved ?? items.filter((i: any) => i.status === "approved").length, icon: CheckCircle, color: "text-status-success-foreground bg-status-success-surface" },
+    { label: "مرفوضة", value: stats?.rejected ?? items.filter((i: any) => i.status === "rejected").length, icon: XCircle, color: "text-status-error-foreground bg-status-error-surface" },
   ];
 
   if (isLoading) return <LoadingSpinner />;
@@ -273,7 +273,7 @@ export default function LeavesPage() {
         onRowClick={(l) => navigate(`/hr/leaves/${l.id}`)}
         renderRowExtras={(l) =>
           expandedId === l.id ? (
-            <div className="p-4 bg-gray-50/50 space-y-4">
+            <div className="p-4 bg-surface-subtle/50 space-y-4">
               <LeaveApprovalStages leaveId={l.id} leaveStatus={l.status} />
               <ActionHistory entityType="leave" entityId={l.id} defaultOpen />
               <EntityTimeline entityType="leave-request" entityId={l.id} maxItems={10} />

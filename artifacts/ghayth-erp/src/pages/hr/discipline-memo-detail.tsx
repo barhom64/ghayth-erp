@@ -165,7 +165,7 @@ export default function DisciplineMemoDetailPage() {
                 )}
                 <div className="pt-2 border-t">
                   <div className="text-muted-foreground text-xs">الإجمالي</div>
-                  <div className="text-lg font-bold text-red-600">
+                  <div className="text-lg font-bold text-status-error-foreground">
                     {formatCurrency(totalDeduction)}
                   </div>
                 </div>
@@ -220,7 +220,7 @@ export default function DisciplineMemoDetailPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {memo.justification && (
-              <div className="bg-gray-50 rounded p-3 text-sm">
+              <div className="bg-surface-subtle rounded p-3 text-sm">
                 <div className="text-xs text-muted-foreground mb-1">تبرير الموظف</div>
                 {memo.justification}
               </div>
@@ -268,7 +268,7 @@ export default function DisciplineMemoDetailPage() {
             <CardTitle className="text-base">الخطوة 3: قرار المدير العام</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm">
+            <div className="bg-status-warning-surface border border-status-warning-surface rounded p-3 text-sm">
               <p className="font-medium">توصية المدير المباشر:</p>
               <p className="mt-1">
                 {memo.managerRecommendation === "approve_excuse"
@@ -323,7 +323,7 @@ export default function DisciplineMemoDetailPage() {
             <GuardedButton
               perm="hr:delete"
               variant="outline"
-              className="text-red-600"
+              className="text-status-error-foreground"
               onClick={() => setShowCancelDialog(true)}
               disabled={busy}
             >
@@ -336,10 +336,10 @@ export default function DisciplineMemoDetailPage() {
 
       {/* Appeal — الاستئناف */}
       {memo.status === "approved" && (
-        <Card className="border-blue-200">
+        <Card className="border-status-info-surface">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <Scale className="w-4 h-4 text-blue-600" /> استئناف القرار
+              <Scale className="w-4 h-4 text-status-info-foreground" /> استئناف القرار
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -377,7 +377,7 @@ export default function DisciplineMemoDetailPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {memo.appealReason && (
-              <div className="bg-blue-50 rounded p-3 text-sm">
+              <div className="bg-status-info-surface rounded p-3 text-sm">
                 <div className="text-xs text-muted-foreground mb-1">سبب الاستئناف</div>
                 {memo.appealReason}
               </div>
@@ -435,10 +435,10 @@ export default function DisciplineMemoDetailPage() {
                     </p>
                   </div>
                   {ev.action === "gm_decided" && memo.status === "approved" && (
-                    <CheckCircle className="w-5 h-5 text-green-600" />
+                    <CheckCircle className="w-5 h-5 text-status-success-foreground" />
                   )}
                   {ev.action === "gm_decided" && memo.status === "rejected" && (
-                    <XCircle className="w-5 h-5 text-red-600" />
+                    <XCircle className="w-5 h-5 text-status-error-foreground" />
                   )}
                 </div>
               ))}

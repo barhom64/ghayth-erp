@@ -125,7 +125,7 @@ export default function LeaveDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <CalendarDays className="h-4 w-4 text-gray-500" />
+            <CalendarDays className="h-4 w-4 text-muted-foreground" />
             بيانات الإجازة
           </CardTitle>
         </CardHeader>
@@ -140,7 +140,7 @@ export default function LeaveDetail() {
           <div className="grid grid-cols-2 gap-3">
             {leave?.leaveType && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">نوع الإجازة</p>
+                <p className="text-xs text-muted-foreground mb-0.5">نوع الإجازة</p>
                 <Badge variant="outline">
                   {LEAVE_TYPE_LABELS[leave.leaveType] || leave.leaveType}
                 </Badge>
@@ -148,34 +148,34 @@ export default function LeaveDetail() {
             )}
             {leave?.startDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ البداية</p>
-                <span className="text-gray-800">{formatDateAr(leave.startDate)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ البداية</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(leave.startDate)}</span>
               </div>
             )}
             {leave?.endDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ النهاية</p>
-                <span className="text-gray-800">{formatDateAr(leave.endDate)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ النهاية</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(leave.endDate)}</span>
               </div>
             )}
             {duration && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">المدة</p>
-                <span className="text-gray-800">{duration} يوم</span>
+                <p className="text-xs text-muted-foreground mb-0.5">المدة</p>
+                <span className="text-status-neutral-foreground">{duration} يوم</span>
               </div>
             )}
             {leave?.createdAt && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ الطلب</p>
-                <span className="text-gray-800">{formatDateAr(leave.createdAt)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ الطلب</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(leave.createdAt)}</span>
               </div>
             )}
           </div>
 
           {(leave?.reason || leave?.description) && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">سبب الإجازة</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{leave.reason || leave.description}</p>
+              <p className="text-xs text-muted-foreground mb-1">سبب الإجازة</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{leave.reason || leave.description}</p>
             </div>
           )}
         </CardContent>

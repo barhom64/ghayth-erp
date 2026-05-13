@@ -30,12 +30,12 @@ export default function AdminPostingFailures() {
     { key: "id", header: "#", render: (r: any) => <span className="text-xs">{r.id}</span> },
     { key: "operation", header: "العملية", searchable: true, render: (r: any) => <span className="font-mono text-xs">{r.operation || r.action || "—"}</span> },
     { key: "entity", header: "الكيان", searchable: true, render: (r: any) => <span className="text-xs">{r.entity || "—"} {r.entityId ? `#${r.entityId}` : ""}</span> },
-    { key: "error", header: "الخطأ", render: (r: any) => <span className="text-xs text-red-600 max-w-[300px] truncate block">{r.error || r.errorMessage || "—"}</span> },
+    { key: "error", header: "الخطأ", render: (r: any) => <span className="text-xs text-status-error-foreground max-w-[300px] truncate block">{r.error || r.errorMessage || "—"}</span> },
     { key: "createdAt", header: "التاريخ", sortable: true, render: (r: any) => <span className="text-xs">{formatDateAr(r.createdAt)}</span> },
     { key: "resolved", header: "الحالة", render: (r: any) => r.resolved ? (
-      <Badge className="bg-green-100 text-green-800">محلول</Badge>
+      <Badge className="bg-status-success-surface text-status-success-foreground">محلول</Badge>
     ) : (
-      <Badge className="bg-red-100 text-red-800">مفتوح</Badge>
+      <Badge className="bg-status-error-surface text-status-error-foreground">مفتوح</Badge>
     )},
     { key: "actions", header: "إجراء", hidden: showResolved, render: (r: any) => (
       <GuardedButton
@@ -73,22 +73,22 @@ export default function AdminPostingFailures() {
       <PageStateWrapper isLoading={isLoading && !data} error={error} onRetry={refetch}>
         <div className="space-y-6">
           <div className="grid grid-cols-2 gap-4">
-            <Card className={rows.length > 0 && !showResolved ? "bg-red-50/50" : "bg-green-50/50"}>
+            <Card className={rows.length > 0 && !showResolved ? "bg-status-error-surface" : "bg-status-success-surface"}>
               <CardContent className="p-4 flex items-center gap-3">
                 {rows.length > 0 && !showResolved ? (
-                  <XCircle className="w-8 h-8 text-red-600" />
+                  <XCircle className="w-8 h-8 text-status-error-foreground" />
                 ) : (
-                  <CheckCircle className="w-8 h-8 text-green-600" />
+                  <CheckCircle className="w-8 h-8 text-status-success-foreground" />
                 )}
                 <div>
                   <p className="text-2xl font-bold">{rows.length}</p>
-                  <p className="text-xs text-gray-500">{showResolved ? "فشل محلول" : "فشل مفتوح"}</p>
+                  <p className="text-xs text-muted-foreground">{showResolved ? "فشل محلول" : "فشل مفتوح"}</p>
                 </div>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4">
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-muted-foreground">
                   عندما تفشل عملية ترحيل مالي (خطأ في القيد، حساب مغلق، فترة مغلقة)، يتم تسجيلها هنا.
                   إذا تجاوز العدد 10، يمنع حاكم النظام تنفيذ عمليات مالية جديدة.
                 </p>

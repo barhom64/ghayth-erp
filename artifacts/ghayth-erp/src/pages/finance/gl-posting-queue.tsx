@@ -214,7 +214,7 @@ export default function GLPostingQueuePage() {
       key: "period",
       header: "الفترة",
       sortable: true,
-      className: "font-mono text-blue-600",
+      className: "font-mono text-status-info-foreground",
       render: (r) => r.period ?? "—",
     },
     {
@@ -322,7 +322,7 @@ export default function GLPostingQueuePage() {
       key: "asOfDate",
       header: "بتاريخ",
       sortable: true,
-      className: "font-mono text-blue-600",
+      className: "font-mono text-status-info-foreground",
       render: (r) => r.asOfDate,
     },
     {
@@ -341,7 +341,7 @@ export default function GLPostingQueuePage() {
       key: "totalLoss",
       header: "إجمالي الخسارة",
       sortable: true,
-      className: "font-semibold text-red-600",
+      className: "font-semibold text-status-error-foreground",
       render: (r) => formatCurrency(Number(r.totalLoss)),
     },
     {
@@ -448,7 +448,7 @@ export default function GLPostingQueuePage() {
       render: (r) => {
         const v = Number(r.gainLoss);
         return (
-          <span className={v >= 0 ? "text-emerald-600" : "text-red-600"}>
+          <span className={v >= 0 ? "text-emerald-600" : "text-status-error-foreground"}>
             {formatCurrency(v)}
           </span>
         );
@@ -458,7 +458,7 @@ export default function GLPostingQueuePage() {
       key: "journalEntryId",
       header: "قيد المحاسبة",
       sortable: true,
-      className: "font-mono text-blue-600",
+      className: "font-mono text-status-info-foreground",
       render: (r) => `#${r.journalEntryId}`,
     },
     {
@@ -478,8 +478,8 @@ export default function GLPostingQueuePage() {
       <div className="grid gap-3 grid-cols-2 md:grid-cols-6">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 bg-blue-50 rounded-lg">
-              <Coins className="h-5 w-5 text-blue-600" />
+            <div className="p-2 bg-status-info-surface rounded-lg">
+              <Coins className="h-5 w-5 text-status-info-foreground" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground">رواتب Mudad</p>
@@ -489,8 +489,8 @@ export default function GLPostingQueuePage() {
         </Card>
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 bg-amber-50 rounded-lg">
-              <PackageX className="h-5 w-5 text-amber-600" />
+            <div className="p-2 bg-status-warning-surface rounded-lg">
+              <PackageX className="h-5 w-5 text-status-warning-foreground" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground">شطب دفعات</p>

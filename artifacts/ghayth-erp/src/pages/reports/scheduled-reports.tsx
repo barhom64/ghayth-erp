@@ -96,10 +96,10 @@ export default function ScheduledReportsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <Clock className="h-7 w-7 text-blue-600" />
+            <Clock className="h-7 w-7 text-status-info-foreground" />
             التقارير المجدولة
           </h1>
-          <p className="text-sm text-gray-500 mt-1">جدولة إرسال التقارير تلقائياً بالبريد الإلكتروني</p>
+          <p className="text-sm text-muted-foreground mt-1">جدولة إرسال التقارير تلقائياً بالبريد الإلكتروني</p>
         </div>
         <GuardedButton perm="reports:create" size="sm" onClick={() => setShowForm(!showForm)}>
           <Plus className="h-4 w-4 me-1" />
@@ -108,7 +108,7 @@ export default function ScheduledReportsPage() {
       </div>
 
       {showForm && (
-        <Card className="border-blue-200 bg-blue-50/30">
+        <Card className="border-status-info-surface bg-status-info-surface">
           <CardHeader><CardTitle className="text-base">إنشاء جدولة تقرير جديدة</CardTitle></CardHeader>
           <CardContent>
             <FormShell
@@ -168,13 +168,13 @@ export default function ScheduledReportsPage() {
         <TabsContent value="schedules">
           <div className="grid gap-3 mt-4">
             {isLoading ? (
-              [...Array(3)].map((_, i) => <Card key={i}><CardContent className="p-4"><div className="h-16 bg-gray-100 rounded animate-pulse" /></CardContent></Card>)
+              [...Array(3)].map((_, i) => <Card key={i}><CardContent className="p-4"><div className="h-16 bg-surface-subtle rounded animate-pulse" /></CardContent></Card>)
             ) : items.length === 0 ? (
               <Card>
                 <CardContent className="p-10 text-center">
                   <Clock className="h-10 w-10 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500">لا توجد تقارير مجدولة</p>
-                  <p className="text-xs text-gray-400 mt-1">أنشئ جدولة جديدة لإرسال التقارير تلقائياً</p>
+                  <p className="text-muted-foreground">لا توجد تقارير مجدولة</p>
+                  <p className="text-xs text-muted-foreground mt-1">أنشئ جدولة جديدة لإرسال التقارير تلقائياً</p>
                 </CardContent>
               </Card>
             ) : (
@@ -189,16 +189,16 @@ export default function ScheduledReportsPage() {
             <CardContent className="p-0">
               <div className="divide-y">
                 {history.length === 0 ? (
-                  <p className="p-6 text-center text-gray-400">لا يوجد سجل إرسال</p>
+                  <p className="p-6 text-center text-muted-foreground">لا يوجد سجل إرسال</p>
                 ) : history.map((h: any) => (
                   <div key={h.id} className="p-3 flex items-center gap-3">
                     <div className={`w-2 h-2 rounded-full ${h.status === "sent" ? "bg-green-500" : "bg-red-500"}`} />
                     <div className="flex-1">
                       <p className="text-sm font-medium">{h.reportTitle}</p>
-                      <p className="text-xs text-gray-500">{h.sentAt ? formatDateAr(h.sentAt) : "-"}</p>
+                      <p className="text-xs text-muted-foreground">{h.sentAt ? formatDateAr(h.sentAt) : "-"}</p>
                     </div>
                     <PageStatusBadge status={h.status} />
-                    {h.error && <p className="text-xs text-red-500 max-w-xs">{h.error}</p>}
+                    {h.error && <p className="text-xs text-status-error max-w-xs">{h.error}</p>}
                   </div>
                 ))}
               </div>
@@ -239,30 +239,30 @@ function ScheduledReportCard({ item }: { item: any }) {
     <Card>
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
-          <div className="p-2 bg-blue-50 rounded-lg">
-            <Icon className="h-5 w-5 text-blue-600" />
+          <div className="p-2 bg-status-info-surface rounded-lg">
+            <Icon className="h-5 w-5 text-status-info-foreground" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <p className="font-semibold">{item.title}</p>
               <Badge variant="outline" className="text-xs">{FREQUENCY_LABELS[item.frequency] || item.frequency}</Badge>
-              <Badge className={item.isActive ? "bg-green-100 text-green-700 text-xs" : "bg-gray-100 text-gray-500 text-xs"}>
+              <Badge className={item.isActive ? "bg-status-success-surface text-status-success-foreground text-xs" : "bg-surface-subtle text-muted-foreground text-xs"}>
                 {item.isActive ? "نشط" : "متوقف"}
               </Badge>
             </div>
-            <p className="text-xs text-gray-500">{reportType?.label || item.reportType} — {reportType?.format}</p>
-            <div className="flex items-center gap-1 mt-1 text-xs text-gray-400">
+            <p className="text-xs text-muted-foreground">{reportType?.label || item.reportType} — {reportType?.format}</p>
+            <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
               <Mail className="h-3 w-3" />
               <span dir="ltr">{(item.recipients || []).join(", ")}</span>
             </div>
             {item.lastSentAt && (
-              <p className="text-xs text-gray-400 mt-1">آخر إرسال: {formatDateAr(item.lastSentAt)}</p>
+              <p className="text-xs text-muted-foreground mt-1">آخر إرسال: {formatDateAr(item.lastSentAt)}</p>
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Switch checked={item.isActive} onCheckedChange={handleToggle} />
             <GuardedButton perm="reports:create" variant="ghost" size="sm" onClick={handleDelete} disabled={deleteMut.isPending}>
-              <Trash2 className="h-4 w-4 text-red-500" />
+              <Trash2 className="h-4 w-4 text-status-error" />
             </GuardedButton>
           </div>
         </div>

@@ -17,16 +17,16 @@ export function AccountInfoCard({ email, name, selectedRoleLabel }: AccountInfoC
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
-          <span className="text-sm text-gray-600">البريد الإلكتروني</span>
-          <span className="text-sm font-mono font-medium text-gray-800">{email || "—"}</span>
+        <div className="flex items-center justify-between p-3 rounded-lg bg-surface-subtle">
+          <span className="text-sm text-muted-foreground">البريد الإلكتروني</span>
+          <span className="text-sm font-mono font-medium text-status-neutral-foreground">{email || "—"}</span>
         </div>
-        <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
-          <span className="text-sm text-gray-600">الدور الحالي</span>
+        <div className="flex items-center justify-between p-3 rounded-lg bg-surface-subtle">
+          <span className="text-sm text-muted-foreground">الدور الحالي</span>
           <span className="text-sm font-medium text-indigo-700">{selectedRoleLabel}</span>
         </div>
-        <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
-          <span className="text-sm text-gray-600">اسم الموظف</span>
+        <div className="flex items-center justify-between p-3 rounded-lg bg-surface-subtle">
+          <span className="text-sm text-muted-foreground">اسم الموظف</span>
           <span className="text-sm font-medium">{name || "—"}</span>
         </div>
       </CardContent>

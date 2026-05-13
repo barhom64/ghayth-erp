@@ -70,7 +70,7 @@ export default function VendorsPage() {
       header: "الاسم",
       sortable: true,
       render: (v) => (
-        <span className="font-medium text-blue-700 hover:text-blue-900 hover:underline cursor-pointer">
+        <span className="font-medium text-status-info-foreground hover:text-blue-900 hover:underline cursor-pointer">
           {v.name}
         </span>
       ),
@@ -79,14 +79,14 @@ export default function VendorsPage() {
       key: "contactPerson",
       header: "جهة الاتصال",
       sortable: true,
-      render: (v) => <span className="text-gray-500">{v.contactPerson || "-"}</span>,
+      render: (v) => <span className="text-muted-foreground">{v.contactPerson || "-"}</span>,
     },
     {
       key: "phone",
       header: "الهاتف",
       sortable: true,
       render: (v) => v.phone
-        ? <span className="flex items-center gap-1 text-gray-600"><Phone className="h-3 w-3" />{v.phone}</span>
+        ? <span className="flex items-center gap-1 text-muted-foreground"><Phone className="h-3 w-3" />{v.phone}</span>
         : "-",
     },
     {
@@ -94,14 +94,14 @@ export default function VendorsPage() {
       header: "البريد",
       sortable: true,
       render: (v) => v.email
-        ? <span className="flex items-center gap-1 text-gray-600"><Mail className="h-3 w-3" />{v.email}</span>
+        ? <span className="flex items-center gap-1 text-muted-foreground"><Mail className="h-3 w-3" />{v.email}</span>
         : "-",
     },
     {
       key: "taxNumber",
       header: "الرقم الضريبي",
       sortable: true,
-      render: (v) => <span className="font-mono text-sm text-gray-500">{v.taxNumber || "-"}</span>,
+      render: (v) => <span className="font-mono text-sm text-muted-foreground">{v.taxNumber || "-"}</span>,
     },
     {
       key: "category",
@@ -128,8 +128,8 @@ export default function VendorsPage() {
     >
       <FinanceTabsNav />
       <KpiGrid items={[
-        { label: "إجمالي الموردين", value: items.length, icon: Users, color: "text-blue-600 bg-blue-50" },
-        { label: "نشطون", value: items.length, icon: Star, color: "text-green-600 bg-green-50" },
+        { label: "إجمالي الموردين", value: items.length, icon: Users, color: "text-status-info-foreground bg-status-info-surface" },
+        { label: "نشطون", value: items.length, icon: Star, color: "text-status-success-foreground bg-status-success-surface" },
         { label: "التصنيفات", value: categories.length, icon: Building2, color: "text-emerald-600 bg-emerald-50" },
         { label: "أُضيف هذا الشهر", value: items.filter((v: any) => { const d = new Date(v.createdAt); const now = new Date(); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); }).length, icon: Calendar, color: "text-orange-600 bg-orange-50" },
       ]} />

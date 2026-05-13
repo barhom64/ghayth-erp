@@ -19,7 +19,7 @@ export function SecondaryAlertsSection({ overdueItems, expiringSoon }: Secondary
         <Card className="border-0 shadow-sm border-s-4 border-s-red-400">
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-red-500" />
+              <AlertCircle className="w-5 h-5 text-status-error" />
               عناصر متأخرة
               <Badge variant="destructive" className="text-xs">{overdueItems.length}</Badge>
             </CardTitle>
@@ -28,15 +28,15 @@ export function SecondaryAlertsSection({ overdueItems, expiringSoon }: Secondary
             <div className="space-y-2">
               {overdueItems.slice(0, 5).map((item: any, idx: number) => (
                 <Link key={`overdue-${idx}`} href={item.itemType === "task" ? `/tasks/${item.id}` : "/hr/leaves"}>
-                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-red-50/50 hover:bg-red-50 transition-colors cursor-pointer">
+                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-status-error-surface hover:bg-status-error-surface transition-colors cursor-pointer">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{item.title}</p>
-                      <p className="text-xs text-red-500">
+                      <p className="text-sm font-medium text-status-neutral-foreground truncate">{item.title}</p>
+                      <p className="text-xs text-status-error">
                         {item.itemType === "task" ? "مهمة متأخرة" : "طلب معلق"}
                         {item.deadline && ` — ${formatDateAr(item.deadline)}`}
                       </p>
                     </div>
-                    <Badge className="text-[10px] bg-red-100 text-red-700 shrink-0">{resolveStatus(item.status)?.label || item.status}</Badge>
+                    <Badge className="text-[10px] bg-status-error-surface text-status-error-foreground shrink-0">{resolveStatus(item.status)?.label || item.status}</Badge>
                   </div>
                 </Link>
               ))}
@@ -49,9 +49,9 @@ export function SecondaryAlertsSection({ overdueItems, expiringSoon }: Secondary
         <Card className="border-0 shadow-sm border-s-4 border-s-amber-400">
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
-              <RefreshCw className="w-5 h-5 text-amber-500" />
+              <RefreshCw className="w-5 h-5 text-status-warning" />
               يحتاج تجديد قريبا
-              <Badge className="text-xs bg-amber-100 text-amber-700">{expiringSoon.length}</Badge>
+              <Badge className="text-xs bg-status-warning-surface text-status-warning-foreground">{expiringSoon.length}</Badge>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -59,14 +59,14 @@ export function SecondaryAlertsSection({ overdueItems, expiringSoon }: Secondary
               {expiringSoon.slice(0, 5).map((item: any, idx: number) => {
                 const daysLeft = item.expiryDate ? Math.ceil((new Date(item.expiryDate).getTime() - Date.now()) / 86400000) : 0;
                 return (
-                  <div key={`expiring-${idx}`} className="flex items-center justify-between p-2.5 rounded-lg bg-amber-50/50">
+                  <div key={`expiring-${idx}`} className="flex items-center justify-between p-2.5 rounded-lg bg-status-warning-surface/50">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{item.title}</p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-sm font-medium text-status-neutral-foreground truncate">{item.title}</p>
+                      <p className="text-xs text-muted-foreground">
                         {item.itemType === "document" ? "مستند" : "عقد"}
                       </p>
                     </div>
-                    <Badge className={cn("text-[10px] shrink-0", daysLeft <= 7 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700")}>
+                    <Badge className={cn("text-[10px] shrink-0", daysLeft <= 7 ? "bg-status-error-surface text-status-error-foreground" : "bg-status-warning-surface text-status-warning-foreground")}>
                       {daysLeft <= 0 ? "منتهي" : `${daysLeft} يوم`}
                     </Badge>
                   </div>

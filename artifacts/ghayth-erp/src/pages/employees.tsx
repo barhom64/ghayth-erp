@@ -177,8 +177,8 @@ export default function Employees() {
           {e.iqamaExpiry ? (() => {
             const daysLeft = Math.ceil((new Date(e.iqamaExpiry).getTime() - Date.now()) / 86400000);
             return daysLeft <= 0 ? <Badge variant="destructive" className="text-xs gap-1"><Shield className="h-3 w-3" />منتهية</Badge>
-              : daysLeft <= 30 ? <Badge className="text-xs gap-1 bg-amber-100 text-amber-700 hover:bg-amber-100"><Shield className="h-3 w-3" />{daysLeft} يوم</Badge>
-              : <Badge variant="outline" className="text-xs gap-1 text-green-700"><Shield className="h-3 w-3" />سارية</Badge>;
+              : daysLeft <= 30 ? <Badge className="text-xs gap-1 bg-status-warning-surface text-status-warning-foreground hover:bg-status-warning-surface"><Shield className="h-3 w-3" />{daysLeft} يوم</Badge>
+              : <Badge variant="outline" className="text-xs gap-1 text-status-success-foreground"><Shield className="h-3 w-3" />سارية</Badge>;
           })() : <span className="text-xs text-muted-foreground">—</span>}
           {e.govLinkCount > 0 && <Badge variant="secondary" className="text-xs gap-1"><Link2 className="h-3 w-3" />مرتبط ({e.govLinkCount})</Badge>}
         </div>
@@ -310,9 +310,9 @@ export default function Employees() {
     >
       <HrTabsNav />
       <KpiGrid items={[
-        { label: "إجمالي الموظفين", value: total, icon: Users, color: "text-blue-600 bg-blue-50" },
-        { label: "نشط", value: employees?.filter((e: any) => e.status === "active").length || 0, icon: UserCheck, color: "text-green-600 bg-green-50" },
-        { label: "في فترة تجربة", value: employees?.filter((e: any) => e.status === "probation").length || 0, icon: UserX, color: "text-amber-600 bg-amber-50" },
+        { label: "إجمالي الموظفين", value: total, icon: Users, color: "text-status-info-foreground bg-status-info-surface" },
+        { label: "نشط", value: employees?.filter((e: any) => e.status === "active").length || 0, icon: UserCheck, color: "text-status-success-foreground bg-status-success-surface" },
+        { label: "في فترة تجربة", value: employees?.filter((e: any) => e.status === "probation").length || 0, icon: UserX, color: "text-status-warning-foreground bg-status-warning-surface" },
         { label: "جديد هذا الشهر", value: employees?.filter((e: any) => { const d = new Date(e.createdAt); const now = new Date(); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); }).length || 0, icon: UserPlus, color: "text-purple-600 bg-purple-50" },
       ]} />
 
@@ -335,7 +335,7 @@ export default function Employees() {
         renderRowExtras={(employee) => {
           if (expandedId === employee.id) {
             return (
-              <div className="space-y-3 p-2 bg-gray-50/50">
+              <div className="space-y-3 p-2 bg-surface-subtle/50">
                 <EntityTags entityType="employee" entityId={employee.id} />
                 <EntityComments entityType="employee" entityId={employee.id} />
               </div>

@@ -104,14 +104,14 @@ export default function UmrahDailyRunsheet() {
     {
       key: "overstayDays",
       header: "أيام التجاوز",
-      render: (p) => <span className="font-bold text-red-600">{p.overstayDays}</span>,
+      render: (p) => <span className="font-bold text-status-error-foreground">{p.overstayDays}</span>,
     },
   ];
 
   const kpis = [
-    { label: "الوصول اليوم", value: arrivals.length, icon: PlaneLanding, color: "text-blue-600 bg-blue-50" },
+    { label: "الوصول اليوم", value: arrivals.length, icon: PlaneLanding, color: "text-status-info-foreground bg-status-info-surface" },
     { label: "المغادرة اليوم", value: departures.length, icon: PlaneTakeoff, color: "text-emerald-600 bg-emerald-50" },
-    { label: "المتجاوزون حالياً", value: overstays.length, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
+    { label: "المتجاوزون حالياً", value: overstays.length, icon: AlertTriangle, color: "text-status-error-foreground bg-status-error-surface" },
   ];
 
   return (

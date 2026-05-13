@@ -38,9 +38,9 @@ export default function CrmActivities() {
   });
 
   const kpis = [
-    { label: "إجمالي الأنشطة", value: allActivities.length, icon: Calendar, color: "text-blue-600 bg-blue-50" },
-    { label: "مكالمات", value: allActivities.filter((a: any) => a.type === "call").length, icon: Phone, color: "text-green-600 bg-green-50" },
-    { label: "مجدولة", value: allActivities.filter((a: any) => !a.completedAt).length, icon: Clock, color: "text-yellow-600 bg-yellow-50" },
+    { label: "إجمالي الأنشطة", value: allActivities.length, icon: Calendar, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "مكالمات", value: allActivities.filter((a: any) => a.type === "call").length, icon: Phone, color: "text-status-success-foreground bg-status-success-surface" },
+    { label: "مجدولة", value: allActivities.filter((a: any) => !a.completedAt).length, icon: Clock, color: "text-status-warning-foreground bg-status-warning-surface" },
     { label: "مكتملة", value: allActivities.filter((a: any) => a.completedAt).length, icon: CheckCircle2, color: "text-emerald-600 bg-emerald-50" },
   ];
 
@@ -55,13 +55,13 @@ export default function CrmActivities() {
       key: "client",
       header: "الفرصة",
       sortable: true,
-      render: (row) => <span className="text-gray-500">{row.client}</span>,
+      render: (row) => <span className="text-muted-foreground">{row.client}</span>,
     },
     {
       key: "contact",
       header: "جهة الاتصال",
       sortable: true,
-      render: (row) => <span className="text-gray-500">{row.contact}</span>,
+      render: (row) => <span className="text-muted-foreground">{row.contact}</span>,
     },
     {
       key: "type",
@@ -76,7 +76,7 @@ export default function CrmActivities() {
       header: "التاريخ",
       sortable: true,
       render: (row) => (
-        <span className="text-gray-500">
+        <span className="text-muted-foreground">
           {row.scheduledAt ? formatDateAr(row.scheduledAt) : "-"}
         </span>
       ),

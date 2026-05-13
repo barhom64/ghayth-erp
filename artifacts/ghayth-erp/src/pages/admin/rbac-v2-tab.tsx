@@ -100,10 +100,10 @@ const FIELD_MODE_LABELS: Record<string, string> = {
 };
 
 const FIELD_MODE_COLORS: Record<string, string> = {
-  visible: "bg-green-50 text-green-700 border-green-300",
-  masked: "bg-amber-50 text-amber-700 border-amber-300",
-  hidden: "bg-red-50 text-red-700 border-red-300",
-  readonly: "bg-blue-50 text-blue-700 border-blue-300",
+  visible: "bg-status-success-surface text-status-success-foreground border-status-success-surface",
+  masked: "bg-status-warning-surface text-status-warning-foreground border-amber-300",
+  hidden: "bg-status-error-surface text-status-error-foreground border-status-error-surface",
+  readonly: "bg-status-info-surface text-status-info-foreground border-status-info-surface",
   editable: "bg-purple-50 text-purple-700 border-purple-300",
 };
 
@@ -303,8 +303,8 @@ export function RbacV2Tab() {
                 <button
                   key={r.id}
                   onClick={() => setSelectedRoleId(r.id)}
-                  className={`w-full text-start p-3 border-b hover:bg-gray-50 transition ${
-                    selectedRoleId === r.id ? "bg-blue-50 border-r-4 border-r-blue-500" : ""
+                  className={`w-full text-start p-3 border-b hover:bg-surface-subtle transition ${
+                    selectedRoleId === r.id ? "bg-status-info-surface border-r-4 border-r-blue-500" : ""
                   }`}
                 >
                   <div className="flex items-center gap-2">
@@ -312,7 +312,7 @@ export function RbacV2Tab() {
                     <span className="font-medium text-sm">{r.label_ar}</span>
                     {r.is_system && <Badge variant="outline" className="text-xs">نظامي</Badge>}
                   </div>
-                  <div className="text-xs text-gray-500 mt-1">
+                  <div className="text-xs text-muted-foreground mt-1">
                     {r.member_count} موظف · {r.grant_count} صلاحية · المستوى {r.level}
                   </div>
                 </button>
@@ -324,7 +324,7 @@ export function RbacV2Tab() {
         <div className="lg:col-span-9 overflow-x-auto">
           {!selectedRole ? (
             <Card>
-              <CardContent className="p-12 text-center text-gray-400">
+              <CardContent className="p-12 text-center text-muted-foreground">
                 <Shield className="h-12 w-12 mx-auto mb-3 opacity-50" />
                 <p>اختر دوراً لعرض وتعديل صلاحياته</p>
               </CardContent>
@@ -337,7 +337,7 @@ export function RbacV2Tab() {
                     <Shield className="h-5 w-5" />
                     {selectedRole.label_ar}
                   </CardTitle>
-                  <p className="text-sm text-gray-500 mt-1">
+                  <p className="text-sm text-muted-foreground mt-1">
                     {selectedRole.role_key} · المستوى {selectedRole.level}
                   </p>
                 </div>
@@ -441,11 +441,11 @@ function FeatureTree({ features, tree, grants, onToggleAction, onScopeChange, on
     const children = tree.get(feature.feature_key) || [];
     return (
       <div key={feature.feature_key} className="border-b last:border-b-0">
-        <div className="grid grid-cols-12 gap-2 items-center py-2 hover:bg-gray-50" style={{ paddingInlineStart: `${depth * 20 + 8}px` }}>
+        <div className="grid grid-cols-12 gap-2 items-center py-2 hover:bg-surface-subtle" style={{ paddingInlineStart: `${depth * 20 + 8}px` }}>
           <div className="col-span-3 flex items-center gap-2">
             <span className="font-medium text-sm">{feature.label_ar}</span>
-            {feature.is_self_service && <Badge variant="outline" className="text-xs bg-green-50 text-green-700">خدمة ذاتية</Badge>}
-            {feature.is_system_critical && <Badge variant="outline" className="text-xs bg-red-50 text-red-700">حساس</Badge>}
+            {feature.is_self_service && <Badge variant="outline" className="text-xs bg-status-success-surface text-status-success-foreground">خدمة ذاتية</Badge>}
+            {feature.is_system_critical && <Badge variant="outline" className="text-xs bg-status-error-surface text-status-error-foreground">حساس</Badge>}
           </div>
           <div className="col-span-5 flex flex-wrap gap-1">
             {feature.available_actions.map((a) => {
@@ -454,7 +454,7 @@ function FeatureTree({ features, tree, grants, onToggleAction, onScopeChange, on
                 <label
                   key={a}
                   className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs border cursor-pointer ${
-                    checked ? "bg-blue-50 border-blue-300 text-blue-700" : "bg-gray-50 border-gray-200 text-gray-500"
+                    checked ? "bg-status-info-surface border-status-info-surface text-status-info-foreground" : "bg-surface-subtle border-border text-muted-foreground"
                   }`}
                 >
                   <Checkbox checked={checked} onCheckedChange={() => onToggleAction(feature, a)} className="h-3 w-3" />
@@ -492,7 +492,7 @@ function FeatureTree({ features, tree, grants, onToggleAction, onScopeChange, on
   const roots = tree.get("__root__") || [];
   return (
     <div className="border rounded">
-      <div className="grid grid-cols-12 gap-2 items-center py-2 px-2 bg-gray-100 border-b text-xs font-semibold text-gray-600">
+      <div className="grid grid-cols-12 gap-2 items-center py-2 px-2 bg-surface-subtle border-b text-xs font-semibold text-muted-foreground">
         <div className="col-span-3">الميزة</div>
         <div className="col-span-5">الإجراءات</div>
         <div className="col-span-2">النطاق</div>
@@ -538,7 +538,7 @@ function FieldPoliciesEditor({ roleId, features, editingFields, setEditingFields
 
   if (features.length === 0) {
     return (
-      <div className="p-8 text-center text-gray-400">
+      <div className="p-8 text-center text-muted-foreground">
         <EyeOff className="h-10 w-10 mx-auto mb-2 opacity-40" />
         <p>لا توجد ميزات تحتوي على حقول حساسة في هذا النطاق</p>
       </div>
@@ -547,10 +547,10 @@ function FieldPoliciesEditor({ roleId, features, editingFields, setEditingFields
 
   return (
     <div className="space-y-2">
-      <p className="text-sm text-gray-600 mb-3">
-        تحدّد سياسة الحقول كيف يرى صاحب هذا الدور كل حقل حساس: <Badge variant="outline" className="text-xs bg-green-50">ظاهر</Badge>{" "}
-        أو <Badge variant="outline" className="text-xs bg-amber-50">مُقنَّع</Badge> (مثل ABC***12) أو{" "}
-        <Badge variant="outline" className="text-xs bg-red-50">مخفي</Badge> تماماً من الواجهة.
+      <p className="text-sm text-muted-foreground mb-3">
+        تحدّد سياسة الحقول كيف يرى صاحب هذا الدور كل حقل حساس: <Badge variant="outline" className="text-xs bg-status-success-surface">ظاهر</Badge>{" "}
+        أو <Badge variant="outline" className="text-xs bg-status-warning-surface">مُقنَّع</Badge> (مثل ABC***12) أو{" "}
+        <Badge variant="outline" className="text-xs bg-status-error-surface">مخفي</Badge> تماماً من الواجهة.
       </p>
       <div className="border rounded">
         {features.map((f) => {
@@ -560,31 +560,31 @@ function FieldPoliciesEditor({ roleId, features, editingFields, setEditingFields
             <div key={f.feature_key} className="border-b last:border-b-0">
               <button
                 onClick={() => toggleExpand(f.feature_key)}
-                className="w-full flex items-center gap-2 p-3 hover:bg-gray-50 text-start"
+                className="w-full flex items-center gap-2 p-3 hover:bg-surface-subtle text-start"
               >
                 {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                 <span className="font-medium text-sm">{f.label_ar}</span>
                 <Badge variant="outline" className="text-xs">{f.sensitive_fields?.length || 0} حقل</Badge>
                 {fieldsWithPolicy.length > 0 && (
-                  <Badge className="text-xs bg-blue-100 text-blue-700">{fieldsWithPolicy.length} مقيّد</Badge>
+                  <Badge className="text-xs bg-status-info-surface text-status-info-foreground">{fieldsWithPolicy.length} مقيّد</Badge>
                 )}
               </button>
               {expanded && (
-                <div className="bg-gray-50 px-4 py-2 space-y-1">
+                <div className="bg-surface-subtle px-4 py-2 space-y-1">
                   {(f.sensitive_fields || []).map((fn) => {
                     const key = `${f.feature_key}::${fn}`;
                     const cur = editingFields.get(key);
                     const mode = cur?.mode ?? "visible";
                     return (
-                      <div key={fn} className="flex items-center justify-between gap-2 py-1.5 border-b last:border-b-0 border-gray-200">
-                        <span className="font-mono text-xs text-gray-700">{fn}</span>
+                      <div key={fn} className="flex items-center justify-between gap-2 py-1.5 border-b last:border-b-0 border-border">
+                        <span className="font-mono text-xs text-status-neutral-foreground">{fn}</span>
                         <div className="flex gap-1">
                           {(["visible", "masked", "hidden", "readonly"] as const).map((m) => (
                             <button
                               key={m}
                               onClick={() => setMode(f.feature_key, fn, m)}
                               className={`px-2 py-1 text-xs rounded border ${
-                                mode === m ? FIELD_MODE_COLORS[m] : "bg-white text-gray-400 border-gray-200 hover:bg-gray-50"
+                                mode === m ? FIELD_MODE_COLORS[m] : "bg-white text-muted-foreground border-border hover:bg-surface-subtle"
                               }`}
                             >
                               {FIELD_MODE_LABELS[m]}
@@ -626,7 +626,7 @@ function ApprovalLimitsEditor({ roleId, features, editingLimits, setEditingLimit
 
   if (features.length === 0) {
     return (
-      <div className="p-8 text-center text-gray-400">
+      <div className="p-8 text-center text-muted-foreground">
         <DollarSign className="h-10 w-10 mx-auto mb-2 opacity-40" />
         <p>لا توجد ميزات تحتوي على إجراءات اعتماد</p>
       </div>
@@ -635,12 +635,12 @@ function ApprovalLimitsEditor({ roleId, features, editingLimits, setEditingLimit
 
   return (
     <div className="space-y-2">
-      <p className="text-sm text-gray-600 mb-3">
+      <p className="text-sm text-muted-foreground mb-3">
         سقف الاعتماد يحدّد أقصى مبلغ يستطيع صاحب هذا الدور اعتماده. عند تجاوز السقف يُرفض الطلب تلقائياً
         ويُحوَّل لمدير أعلى. <strong>مراجعة ثنائية</strong> تتطلب موافقة شخصين على نفس العملية.
       </p>
       <div className="border rounded overflow-hidden">
-        <div className="grid grid-cols-12 gap-2 items-center py-2 px-3 bg-gray-100 border-b text-xs font-semibold text-gray-600">
+        <div className="grid grid-cols-12 gap-2 items-center py-2 px-3 bg-surface-subtle border-b text-xs font-semibold text-muted-foreground">
           <div className="col-span-4">الميزة</div>
           <div className="col-span-2">الإجراء</div>
           <div className="col-span-3">السقف (ر.س)</div>
@@ -652,7 +652,7 @@ function ApprovalLimitsEditor({ roleId, features, editingLimits, setEditingLimit
             const key = `${f.feature_key}::${a}::SAR`;
             const cur = editingLimits.get(key);
             return (
-              <div key={key} className="grid grid-cols-12 gap-2 items-center py-2 px-3 border-b last:border-b-0 hover:bg-gray-50">
+              <div key={key} className="grid grid-cols-12 gap-2 items-center py-2 px-3 border-b last:border-b-0 hover:bg-surface-subtle">
                 <div className="col-span-4 text-sm">{f.label_ar}</div>
                 <div className="col-span-2 text-sm">
                   <Badge variant="outline" className="text-xs">{ACTION_LABELS[a] || a}</Badge>
@@ -669,7 +669,7 @@ function ApprovalLimitsEditor({ roleId, features, editingLimits, setEditingLimit
                     className="h-8 text-sm"
                   />
                 </div>
-                <div className="col-span-2 text-sm text-gray-500">SAR</div>
+                <div className="col-span-2 text-sm text-muted-foreground">SAR</div>
                 <div className="col-span-1">
                   <Checkbox
                     checked={cur?.requires_dual_control || false}
@@ -745,11 +745,11 @@ function SimulateDialog({ open, onClose, features }: { open: boolean; onClose: (
           <TabsContent value="check" className="mt-3 space-y-3">
             <div className="grid grid-cols-3 gap-2">
               <div>
-                <label className="text-xs text-gray-600 mb-1 block">رقم المستخدم</label>
+                <label className="text-xs text-muted-foreground mb-1 block">رقم المستخدم</label>
                 <Input value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="userId" />
               </div>
               <div>
-                <label className="text-xs text-gray-600 mb-1 block">الميزة</label>
+                <label className="text-xs text-muted-foreground mb-1 block">الميزة</label>
                 <Select value={feature} onValueChange={setFeature}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -760,7 +760,7 @@ function SimulateDialog({ open, onClose, features }: { open: boolean; onClose: (
                 </Select>
               </div>
               <div>
-                <label className="text-xs text-gray-600 mb-1 block">الإجراء</label>
+                <label className="text-xs text-muted-foreground mb-1 block">الإجراء</label>
                 <Select value={action} onValueChange={setAction}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -775,21 +775,21 @@ function SimulateDialog({ open, onClose, features }: { open: boolean; onClose: (
               {running ? "جاري التشغيل..." : "تشغيل المحاكاة"}
             </Button>
             {result && (
-              <Card className={result.result?.allowed ? "border-green-300 bg-green-50" : "border-red-300 bg-red-50"}>
+              <Card className={result.result?.allowed ? "border-status-success-surface bg-status-success-surface" : "border-status-error-surface bg-status-error-surface"}>
                 <CardContent className="p-4 text-sm space-y-2">
                   <div className="flex items-center gap-2">
                     <Badge className={result.result?.allowed ? "bg-green-600" : "bg-red-600"}>
                       {result.result?.allowed ? "مسموح" : "ممنوع"}
                     </Badge>
                     <span className="font-medium">{result.target?.userName}</span>
-                    <span className="text-gray-500">— {result.target?.role}</span>
+                    <span className="text-muted-foreground">— {result.target?.role}</span>
                   </div>
-                  {result.result?.reasonAr && <p className="text-red-700">{result.result.reasonAr}</p>}
+                  {result.result?.reasonAr && <p className="text-status-error-foreground">{result.result.reasonAr}</p>}
                   {result.result?.diagnostics && (
-                    <div className="text-xs space-y-1 text-gray-600">
+                    <div className="text-xs space-y-1 text-muted-foreground">
                       <div>النطاق المُمنوح: {SCOPE_LABELS[result.result.diagnostics.grantedScope] || result.result.diagnostics.grantedScope || "—"}</div>
                       <div>الإجراءات الممنوحة: {(result.result.diagnostics.grantedActions || []).map((a: string) => ACTION_LABELS[a] || a).join(", ") || "—"}</div>
-                      {result.result.diagnostics.requiredFix && <div className="text-amber-700">الحل: {result.result.diagnostics.requiredFix}</div>}
+                      {result.result.diagnostics.requiredFix && <div className="text-status-warning-foreground">الحل: {result.result.diagnostics.requiredFix}</div>}
                     </div>
                   )}
                 </CardContent>
@@ -810,11 +810,11 @@ function SimulateDialog({ open, onClose, features }: { open: boolean; onClose: (
                   <CardContent className="p-3 flex items-center gap-3">
                     <span className="font-semibold">{effective.target?.userName}</span>
                     <Badge variant="outline">{effective.target?.role}</Badge>
-                    {effective.target?.jobTitle && <span className="text-sm text-gray-500">— {effective.target.jobTitle}</span>}
+                    {effective.target?.jobTitle && <span className="text-sm text-muted-foreground">— {effective.target.jobTitle}</span>}
                   </CardContent>
                 </Card>
                 <div>
-                  <p className="text-xs font-semibold text-gray-600 mb-2">الأدوار المُعيَّنة ({effective.roles?.length || 0})</p>
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">الأدوار المُعيَّنة ({effective.roles?.length || 0})</p>
                   <div className="flex flex-wrap gap-1">
                     {(effective.roles || []).map((r: any) => (
                       <Badge key={r.role_id} className="text-xs" style={{ backgroundColor: r.color }}>
@@ -825,18 +825,18 @@ function SimulateDialog({ open, onClose, features }: { open: boolean; onClose: (
                   </div>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-gray-600 mb-2">
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">
                     صلاحيات الميزات ({effective.grants?.length || 0})
                   </p>
                   <div className="border rounded text-xs">
-                    <div className="grid grid-cols-12 gap-2 py-1.5 px-2 bg-gray-100 font-semibold">
+                    <div className="grid grid-cols-12 gap-2 py-1.5 px-2 bg-surface-subtle font-semibold">
                       <div className="col-span-4">الميزة</div>
                       <div className="col-span-5">الإجراءات</div>
                       <div className="col-span-2">النطاق</div>
                       <div className="col-span-1">الدور</div>
                     </div>
                     {(effective.grants || []).map((g: any, i: number) => (
-                      <div key={i} className="grid grid-cols-12 gap-2 py-1 px-2 border-t hover:bg-gray-50">
+                      <div key={i} className="grid grid-cols-12 gap-2 py-1 px-2 border-t hover:bg-surface-subtle">
                         <div className="col-span-4 font-mono text-[10px]">{g.feature_key}</div>
                         <div className="col-span-5">{(g.actions || []).map((a: string) => ACTION_LABELS[a] || a).join(", ")}</div>
                         <div className="col-span-2">{SCOPE_LABELS[g.scope] || g.scope}</div>
@@ -847,7 +847,7 @@ function SimulateDialog({ open, onClose, features }: { open: boolean; onClose: (
                 </div>
                 {(effective.fields || []).length > 0 && (
                   <div>
-                    <p className="text-xs font-semibold text-gray-600 mb-2">سياسات الحقول ({effective.fields.length})</p>
+                    <p className="text-xs font-semibold text-muted-foreground mb-2">سياسات الحقول ({effective.fields.length})</p>
                     <div className="flex flex-wrap gap-1">
                       {effective.fields.map((f: any, i: number) => (
                         <Badge key={i} variant="outline" className={`text-xs ${FIELD_MODE_COLORS[f.mode]}`}>
@@ -859,10 +859,10 @@ function SimulateDialog({ open, onClose, features }: { open: boolean; onClose: (
                 )}
                 {(effective.limits || []).length > 0 && (
                   <div>
-                    <p className="text-xs font-semibold text-gray-600 mb-2">سقوف الاعتماد ({effective.limits.length})</p>
+                    <p className="text-xs font-semibold text-muted-foreground mb-2">سقوف الاعتماد ({effective.limits.length})</p>
                     <div className="border rounded text-xs">
                       {effective.limits.map((l: any, i: number) => (
-                        <div key={i} className="grid grid-cols-3 gap-2 py-1 px-2 border-t first:border-t-0 hover:bg-gray-50">
+                        <div key={i} className="grid grid-cols-3 gap-2 py-1 px-2 border-t first:border-t-0 hover:bg-surface-subtle">
                           <div className="font-mono text-[10px]">{l.feature_key} · {l.action}</div>
                           <div>{l.max_amount ? `${l.max_amount} ${l.currency}` : "بلا حد"}</div>
                           <div>{l.requires_dual_control ? "ثنائي" : "—"}</div>
@@ -925,11 +925,11 @@ function CloneDialog({ open, onClose, sourceRoleId, sourceLabel, onDone }: {
         </DialogHeader>
         <div className="space-y-3">
           <div>
-            <label className="text-xs text-gray-600 mb-1 block">المفتاح الجديد</label>
+            <label className="text-xs text-muted-foreground mb-1 block">المفتاح الجديد</label>
             <Input value={newKey} onChange={(e) => setNewKey(e.target.value)} placeholder="custom_role_key" />
           </div>
           <div>
-            <label className="text-xs text-gray-600 mb-1 block">الاسم بالعربية</label>
+            <label className="text-xs text-muted-foreground mb-1 block">الاسم بالعربية</label>
             <Input value={labelAr} onChange={(e) => setLabelAr(e.target.value)} placeholder="مدير المبيعات" />
           </div>
           <label className="flex items-center gap-2">
@@ -971,7 +971,7 @@ function HistoryDialog({ open, onClose, roleId, roleLabel }: {
           {isLoading ? (
             <LoadingSpinner />
           ) : !data?.history?.length ? (
-            <p className="text-center text-gray-400 py-8">لا توجد تغييرات مسجلة</p>
+            <p className="text-center text-muted-foreground py-8">لا توجد تغييرات مسجلة</p>
           ) : (
             <div className="space-y-2">
               {data.history.map((h) => (
@@ -982,9 +982,9 @@ function HistoryDialog({ open, onClose, roleId, roleLabel }: {
                         <Badge variant="outline" className="text-xs">{h.change_type}</Badge>
                         <span className="text-sm font-medium">{h.changedByName || `User #${h.changedBy}`}</span>
                       </div>
-                      <span className="text-xs text-gray-500">{new Date(h.createdAt).toLocaleString("ar")}</span>
+                      <span className="text-xs text-muted-foreground">{new Date(h.createdAt).toLocaleString("ar")}</span>
                     </div>
-                    {h.reason && <p className="text-xs text-gray-600 mt-1">{h.reason}</p>}
+                    {h.reason && <p className="text-xs text-muted-foreground mt-1">{h.reason}</p>}
                   </CardContent>
                 </Card>
               ))}
@@ -1056,13 +1056,13 @@ function TemplatesDialog({ open, onClose, onApplied }: { open: boolean; onClose:
             {isLoading ? (
               <LoadingSpinner />
             ) : !data?.templates?.length ? (
-              <p className="text-center text-gray-400 py-8">لا توجد قوالب جاهزة</p>
+              <p className="text-center text-muted-foreground py-8">لا توجد قوالب جاهزة</p>
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 {data.templates.map((t) => (
                   <Card
                     key={t.id}
-                    className="cursor-pointer hover:shadow-md transition border-2 hover:border-blue-300"
+                    className="cursor-pointer hover:shadow-md transition border-2 hover:border-status-info-surface"
                     onClick={() => {
                       setPickedTemplate(t);
                       setNewKey(t.role_key.replace(/^tpl_/, ""));
@@ -1074,10 +1074,10 @@ function TemplatesDialog({ open, onClose, onApplied }: { open: boolean; onClose:
                         <span className="inline-block w-3 h-3 rounded-full mt-1" style={{ backgroundColor: t.color }} />
                         <div className="flex-1">
                           <p className="font-semibold text-sm">{t.label_ar}</p>
-                          {t.label_en && <p className="text-xs text-gray-500">{t.label_en}</p>}
+                          {t.label_en && <p className="text-xs text-muted-foreground">{t.label_en}</p>}
                         </div>
                       </div>
-                      {t.description && <p className="text-xs text-gray-600 mb-2">{t.description}</p>}
+                      {t.description && <p className="text-xs text-muted-foreground mb-2">{t.description}</p>}
                       <div className="flex gap-1 flex-wrap">
                         <Badge variant="outline" className="text-xs">{t.grant_count} صلاحية</Badge>
                         {Number(t.field_count) > 0 && <Badge variant="outline" className="text-xs">{t.field_count} سياسة حقل</Badge>}
@@ -1092,17 +1092,17 @@ function TemplatesDialog({ open, onClose, onApplied }: { open: boolean; onClose:
           </div>
         ) : (
           <div className="space-y-3">
-            <Card className="bg-blue-50 border-blue-200">
+            <Card className="bg-status-info-surface border-status-info-surface">
               <CardContent className="p-3 text-sm">
                 {pickedTemplate.description}
               </CardContent>
             </Card>
             <div>
-              <label className="text-xs text-gray-600 mb-1 block">المفتاح في شركتك</label>
+              <label className="text-xs text-muted-foreground mb-1 block">المفتاح في شركتك</label>
               <Input value={newKey} onChange={(e) => setNewKey(e.target.value)} placeholder="branch_accountant" />
             </div>
             <div>
-              <label className="text-xs text-gray-600 mb-1 block">الاسم بالعربية</label>
+              <label className="text-xs text-muted-foreground mb-1 block">الاسم بالعربية</label>
               <Input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="محاسب فرع" />
             </div>
           </div>
@@ -1163,33 +1163,33 @@ function SodViolationsBanner({ violations, onPickRole }: { violations: SodViolat
   const offendersTotal = violations.reduce((sum, v) => sum + v.offenders.length, 0);
 
   return (
-    <Card className="border-red-200 bg-red-50">
+    <Card className="border-status-error-surface bg-status-error-surface">
       <CardContent className="p-4">
         <button
           onClick={() => setExpanded((e) => !e)}
           className="w-full flex items-center gap-3 text-start"
         >
-          <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0" />
+          <AlertTriangle className="h-5 w-5 text-status-error-foreground flex-shrink-0" />
           <div className="flex-1">
-            <p className="font-semibold text-red-800">
+            <p className="font-semibold text-status-error-foreground">
               {violations.length} انتهاك لقاعدة فصل المهام (SoD) — {offendersTotal} دور متأثر
             </p>
-            <p className="text-sm text-red-600">
+            <p className="text-sm text-status-error-foreground">
               {violations.slice(0, 3).map((v) => v.rule.label_ar).join(" · ")}
               {violations.length > 3 && ` · +${violations.length - 3}`}
             </p>
           </div>
-          {expanded ? <ChevronDown className="h-4 w-4 text-red-600" /> : <ChevronRight className="h-4 w-4 text-red-600" />}
+          {expanded ? <ChevronDown className="h-4 w-4 text-status-error-foreground" /> : <ChevronRight className="h-4 w-4 text-status-error-foreground" />}
         </button>
         {expanded && (
           <div className="mt-3 space-y-2">
             {violations.map((v) => (
-              <div key={v.rule.id} className="bg-white rounded p-3 border border-red-200">
+              <div key={v.rule.id} className="bg-white rounded p-3 border border-status-error-surface">
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div>
                     <p className="font-semibold text-sm">{v.rule.label_ar}</p>
-                    <p className="text-xs text-gray-600 mt-0.5 font-mono">
-                      {v.rule.feature_a}.{v.rule.action_a} <span className="text-red-500">↔</span> {v.rule.feature_b}.{v.rule.action_b}
+                    <p className="text-xs text-muted-foreground mt-0.5 font-mono">
+                      {v.rule.feature_a}.{v.rule.action_a} <span className="text-status-error">↔</span> {v.rule.feature_b}.{v.rule.action_b}
                     </p>
                   </div>
                   <Badge className={`text-xs ${SEVERITY_COLORS[v.rule.severity] || ""}`}>
@@ -1197,12 +1197,12 @@ function SodViolationsBanner({ violations, onPickRole }: { violations: SodViolat
                   </Badge>
                 </div>
                 <div className="flex flex-wrap gap-1 mt-2">
-                  <span className="text-xs text-gray-600 me-2">الأدوار المتأثرة:</span>
+                  <span className="text-xs text-muted-foreground me-2">الأدوار المتأثرة:</span>
                   {v.offenders.map((o) => (
                     <button
                       key={o.role_id}
                       onClick={() => onPickRole(o.role_id)}
-                      className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-red-100 text-red-700 border border-red-300 hover:bg-red-200"
+                      className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-status-error-surface text-status-error-foreground border border-status-error-surface hover:bg-status-error-surface"
                     >
                       {o.label_ar}
                     </button>

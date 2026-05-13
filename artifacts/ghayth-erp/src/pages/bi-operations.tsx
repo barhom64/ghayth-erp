@@ -44,8 +44,8 @@ function useChartExport() {
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white/95 backdrop-blur-sm p-3 rounded-xl shadow-lg border border-gray-100 text-xs" dir="rtl">
-      <p className="font-semibold mb-1.5 text-gray-700">{label}</p>
+    <div className="bg-white/95 backdrop-blur-sm p-3 rounded-xl shadow-lg border border-border text-xs" dir="rtl">
+      <p className="font-semibold mb-1.5 text-status-neutral-foreground">{label}</p>
       {payload.map((p: any, i: number) => (
         <p key={i} style={{ color: p.color }} className="flex items-center gap-1.5 py-0.5">
           <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: p.color }} />
@@ -73,7 +73,7 @@ function SlaDelaysTab({ from, to, departmentId }: { from: string; to: string; de
   const slaColumns: DataTableColumn<any>[] = [
     { key: "department", header: "القسم", sortable: true, searchable: true, render: (r: any) => <span className="font-medium">{r.department}</span> },
     { key: "total", header: "الإجمالي", sortable: true, render: (r: any) => formatNumber(Number(r.total)) },
-    { key: "delayed", header: "المتأخر", sortable: true, render: (r: any) => <span className="text-red-600 font-bold">{formatNumber(Number(r.delayed))}</span> },
+    { key: "delayed", header: "المتأخر", sortable: true, render: (r: any) => <span className="text-status-error-foreground font-bold">{formatNumber(Number(r.delayed))}</span> },
     { key: "delayPct", header: "نسبة التأخر", sortable: true, render: (r: any) => (
       <Badge variant={Number(r.delayPct) > 20 ? "destructive" : "secondary"}>
         {r.delayPct}%
@@ -140,7 +140,7 @@ function RejectionRateTab({ from, to }: { from: string; to: string }) {
   const rejectionColumns: DataTableColumn<any>[] = [
     { key: "type", header: "النوع", sortable: true, searchable: true, render: (r: any) => <span className="font-medium">{r.type}</span> },
     { key: "total", header: "الإجمالي", sortable: true, render: (r: any) => formatNumber(Number(r.total)) },
-    { key: "rejected", header: "المرفوض", sortable: true, render: (r: any) => <span className="text-red-600">{formatNumber(Number(r.rejected))}</span> },
+    { key: "rejected", header: "المرفوض", sortable: true, render: (r: any) => <span className="text-status-error-foreground">{formatNumber(Number(r.rejected))}</span> },
     { key: "rejectionPct", header: "نسبة الرفض", sortable: true, render: (r: any) => (
       <Badge variant={Number(r.rejectionPct) > 15 ? "destructive" : "secondary"}>{r.rejectionPct}%</Badge>
     ) },
@@ -148,7 +148,7 @@ function RejectionRateTab({ from, to }: { from: string; to: string }) {
 
   return (
     <Card className="border-0 shadow-sm">
-      <CardHeader><CardTitle className="text-base flex items-center gap-2"><XCircle className="w-5 h-5 text-red-500" /> نسبة الرفض والإرجاع حسب النوع</CardTitle></CardHeader>
+      <CardHeader><CardTitle className="text-base flex items-center gap-2"><XCircle className="w-5 h-5 text-status-error" /> نسبة الرفض والإرجاع حسب النوع</CardTitle></CardHeader>
       <CardContent>
         {rows.length === 0 ? (
           <p className="text-center text-muted-foreground py-8">لا توجد بيانات</p>
@@ -195,19 +195,19 @@ function BottleneckTab({ from, to, departmentId }: { from: string; to: string; d
   const departmentDelayColumns: DataTableColumn<any>[] = [
     { key: "department", header: "القسم", sortable: true, searchable: true, render: (r: any) => <span className="font-medium">{r.department}</span> },
     { key: "avgHours", header: "متوسط الساعات", sortable: true, render: (r: any) => `${r.avgHours} ساعة` },
-    { key: "overdueCount", header: "المتأخر", sortable: true, render: (r: any) => <span className="text-red-600 font-bold">{formatNumber(Number(r.overdueCount))}</span> },
+    { key: "overdueCount", header: "المتأخر", sortable: true, render: (r: any) => <span className="text-status-error-foreground font-bold">{formatNumber(Number(r.overdueCount))}</span> },
   ];
 
   const approvalBottleneckColumns: DataTableColumn<any>[] = [
     { key: "department", header: "القسم", sortable: true, searchable: true, render: (r: any) => <span className="font-medium">{r.department}</span> },
-    { key: "pendingApprovals", header: "الموافقات المعلقة", sortable: true, render: (r: any) => <span className="text-amber-600 font-bold">{formatNumber(Number(r.pendingApprovals))}</span> },
+    { key: "pendingApprovals", header: "الموافقات المعلقة", sortable: true, render: (r: any) => <span className="text-status-warning-foreground font-bold">{formatNumber(Number(r.pendingApprovals))}</span> },
     { key: "avgWaitHours", header: "متوسط وقت الانتظار", sortable: true, render: (r: any) => `${r.avgWaitHours} ساعة` },
   ];
 
   return (
     <div className="space-y-6">
       <Card className="border-0 shadow-sm">
-        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Timer className="w-5 h-5 text-amber-500" /> أكثر الأقسام تأخراً</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base flex items-center gap-2"><Timer className="w-5 h-5 text-status-warning" /> أكثر الأقسام تأخراً</CardTitle></CardHeader>
         <CardContent>
           {departmentDelay.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">لا توجد بيانات</p>
@@ -243,7 +243,7 @@ function BottleneckTab({ from, to, departmentId }: { from: string; to: string; d
 
       {approvalBottleneck.length > 0 && (
         <Card className="border-0 shadow-sm">
-          <CardHeader><CardTitle className="text-base flex items-center gap-2"><Clock className="w-5 h-5 text-blue-500" /> اختناقات الموافقات</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base flex items-center gap-2"><Clock className="w-5 h-5 text-status-info" /> اختناقات الموافقات</CardTitle></CardHeader>
           <CardContent>
             <DataTable
               columns={approvalBottleneckColumns}
@@ -276,7 +276,7 @@ function ProductivityTab({ from, to, departmentId }: { from: string; to: string;
   const productivityColumns: DataTableColumn<any>[] = [
     { key: "name", header: "الموظف", sortable: true, searchable: true, render: (r: any) => <span className="font-medium">{r.name}</span> },
     { key: "department", header: "القسم", sortable: true, searchable: true, render: (r: any) => <span className="text-muted-foreground">{r.department}</span> },
-    { key: "completedTasks", header: "مكتملة", sortable: true, render: (r: any) => <span className="text-green-600 font-bold">{formatNumber(Number(r.completedTasks))}</span> },
+    { key: "completedTasks", header: "مكتملة", sortable: true, render: (r: any) => <span className="text-status-success-foreground font-bold">{formatNumber(Number(r.completedTasks))}</span> },
     { key: "totalTasks", header: "الإجمالي", sortable: true, render: (r: any) => formatNumber(Number(r.totalTasks)) },
     { key: "completionRate", header: "نسبة الإنجاز", sortable: true, render: (r: any) => (
       <Badge variant={Number(r.completionRate) >= 80 ? "default" : Number(r.completionRate) >= 50 ? "secondary" : "destructive"}>
@@ -293,7 +293,7 @@ function ProductivityTab({ from, to, departmentId }: { from: string; to: string;
 
   return (
     <Card className="border-0 shadow-sm">
-      <CardHeader><CardTitle className="text-base flex items-center gap-2"><Users className="w-5 h-5 text-blue-500" /> إنتاجية الموظفين</CardTitle></CardHeader>
+      <CardHeader><CardTitle className="text-base flex items-center gap-2"><Users className="w-5 h-5 text-status-info" /> إنتاجية الموظفين</CardTitle></CardHeader>
       <CardContent>
         {rows.length === 0 ? (
           <p className="text-center text-muted-foreground py-8">لا توجد بيانات</p>
@@ -432,19 +432,19 @@ function ApprovalTimeliness({ from, to, departmentId }: { from: string; to: stri
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       <Card className="border-0 shadow-sm">
         <CardContent className="pt-4 text-center">
-          <div className="text-2xl font-bold text-blue-600">{formatNumber(Number(data.total))}</div>
+          <div className="text-2xl font-bold text-status-info-foreground">{formatNumber(Number(data.total))}</div>
           <p className="text-xs text-muted-foreground mt-1">إجمالي الطلبات</p>
         </CardContent>
       </Card>
       <Card className="border-0 shadow-sm">
         <CardContent className="pt-4 text-center">
-          <div className="text-2xl font-bold text-green-600">{formatNumber(Number(data.approved))}</div>
+          <div className="text-2xl font-bold text-status-success-foreground">{formatNumber(Number(data.approved))}</div>
           <p className="text-xs text-muted-foreground mt-1">تم اعتمادها</p>
         </CardContent>
       </Card>
       <Card className="border-0 shadow-sm">
         <CardContent className="pt-4 text-center">
-          <div className="text-2xl font-bold text-amber-600">{formatNumber(Number(data.pending))}</div>
+          <div className="text-2xl font-bold text-status-warning-foreground">{formatNumber(Number(data.pending))}</div>
           <p className="text-xs text-muted-foreground mt-1">قيد الانتظار</p>
         </CardContent>
       </Card>

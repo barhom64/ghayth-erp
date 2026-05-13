@@ -199,9 +199,9 @@ export default function VouchersCreate() {
   return (
     <CreatePageLayout title="سند جديد" backPath="/finance/vouchers">
       {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <CreationDateField />
@@ -430,12 +430,12 @@ export default function VouchersCreate() {
         <div className="flex items-center gap-2">
           <Paperclip className="h-4 w-4" />
           <h3 className="font-semibold text-sm text-muted-foreground">المرفقات</h3>
-          {requiresAttachment && <span className="text-xs text-red-500 font-medium">(إلزامي)</span>}
+          {requiresAttachment && <span className="text-xs text-status-error font-medium">(إلزامي)</span>}
         </div>
         {requiresAttachment && !form.attachmentUrl && (
-          <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-md">
-            <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
-            <p className="text-sm text-red-700">
+          <div className="flex items-start gap-2 p-3 bg-status-error-surface border border-status-error-surface rounded-md">
+            <AlertCircle className="h-4 w-4 text-status-error mt-0.5 shrink-0" />
+            <p className="text-sm text-status-error-foreground">
               {Number(form.amount) >= HIGH_VALUE_THRESHOLD && form.type === "payment"
                 ? `سندات الصرف بمبلغ ${formatCurrency(HIGH_VALUE_THRESHOLD)} أو أكثر تستوجب إرفاق إشعار التحويل أو وصل الاستلام.`
                 : "هذا النوع من السندات يستوجب إرفاق مستند داعم."}

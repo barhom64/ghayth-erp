@@ -87,42 +87,42 @@ export default function TaskDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <FileText className="h-4 w-4 text-gray-500" />
+            <FileText className="h-4 w-4 text-muted-foreground" />
             بيانات المهمة
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           <div>
-            <p className="text-xs text-gray-500">العنوان</p>
+            <p className="text-xs text-muted-foreground">العنوان</p>
             <p className="text-base font-semibold">{task?.title || "-"}</p>
           </div>
 
           {task?.description && (
             <div>
-              <p className="text-xs text-gray-500">الوصف</p>
+              <p className="text-xs text-muted-foreground">الوصف</p>
               <p className="whitespace-pre-wrap text-sm">{task.description}</p>
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-3 border-t pt-3">
             <div>
-              <p className="text-xs text-gray-500">النوع</p>
+              <p className="text-xs text-muted-foreground">النوع</p>
               <p className="font-medium">{task?.type || "-"}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500">الأولوية</p>
+              <p className="text-xs text-muted-foreground">الأولوية</p>
               <Badge variant={priorityTone(task?.priority) as any}>
                 {PRIORITY_LABELS[task?.priority] || task?.priority || "-"}
               </Badge>
             </div>
             <div>
-              <p className="text-xs text-gray-500">تاريخ البدء المجدول</p>
+              <p className="text-xs text-muted-foreground">تاريخ البدء المجدول</p>
               <p className="font-medium">
                 {task?.scheduledStart ? formatDateAr(task.scheduledStart) : "-"}
               </p>
             </div>
             <div>
-              <p className="text-xs text-gray-500">تاريخ النهاية المجدول</p>
+              <p className="text-xs text-muted-foreground">تاريخ النهاية المجدول</p>
               <p className="font-medium">
                 {task?.scheduledEnd ? formatDateAr(task.scheduledEnd) : "-"}
               </p>
@@ -134,20 +134,20 @@ export default function TaskDetail() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <User className="h-4 w-4 text-gray-500" />
+            <User className="h-4 w-4 text-muted-foreground" />
             المُعيَّن إليه
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <div>
-            <p className="text-xs text-gray-500">الموظف</p>
+            <p className="text-xs text-muted-foreground">الموظف</p>
             <p className="font-medium">
               {task?.assignedToName || (task?.assignedTo ? `#${task.assignedTo}` : "غير مُعيَّن")}
             </p>
           </div>
           {(task?.lat && task?.lon) ? (
             <div>
-              <p className="text-xs text-gray-500 flex items-center gap-1">
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
                 <MapPin className="h-3 w-3" /> الموقع
               </p>
               <p className="font-mono text-xs" dir="ltr">
@@ -157,7 +157,7 @@ export default function TaskDetail() {
           ) : null}
           {task?.refType && task?.refId && (
             <div className="border-t pt-2">
-              <p className="text-xs text-gray-500">مرتبط بـ</p>
+              <p className="text-xs text-muted-foreground">مرتبط بـ</p>
               <p className="font-medium">{task.refType} #{task.refId}</p>
             </div>
           )}

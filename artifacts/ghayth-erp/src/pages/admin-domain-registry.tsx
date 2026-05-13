@@ -33,31 +33,31 @@ export default function AdminDomainRegistry() {
             <Card>
               <CardContent className="p-4 text-center">
                 <p className="text-2xl font-bold">{stats.totalDomains ?? domains.length}</p>
-                <p className="text-xs text-gray-500">نطاق</p>
+                <p className="text-xs text-muted-foreground">نطاق</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4 text-center">
                 <p className="text-2xl font-bold">{stats.totalTables ?? 0}</p>
-                <p className="text-xs text-gray-500">جدول</p>
+                <p className="text-xs text-muted-foreground">جدول</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4 text-center">
                 <p className="text-2xl font-bold">{stats.totalEngines ?? 0}</p>
-                <p className="text-xs text-gray-500">محرك</p>
+                <p className="text-xs text-muted-foreground">محرك</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4 text-center">
                 <p className="text-2xl font-bold">{stats.totalPermissions ?? 0}</p>
-                <p className="text-xs text-gray-500">صلاحية</p>
+                <p className="text-xs text-muted-foreground">صلاحية</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4 text-center">
                 <p className="text-2xl font-bold">{stats.domainsWithGL ?? 0}</p>
-                <p className="text-xs text-gray-500">مع ربط مالي</p>
+                <p className="text-xs text-muted-foreground">مع ربط مالي</p>
               </CardContent>
             </Card>
           </div>
@@ -70,7 +70,7 @@ export default function AdminDomainRegistry() {
                     <Layers className="w-5 h-5 text-primary" />
                     {domain.label}
                     <Badge variant="outline" className="font-mono text-xs">{domain.id}</Badge>
-                    {domain.glIntegration && <Badge className="bg-green-100 text-green-800">GL</Badge>}
+                    {domain.glIntegration && <Badge className="bg-status-success-surface text-status-success-foreground">GL</Badge>}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -92,7 +92,7 @@ export default function AdminDomainRegistry() {
                       </p>
                       <div className="flex flex-wrap gap-1">
                         {(domain.engines || []).map((e: string) => (
-                          <Badge key={e} className="bg-blue-100 text-blue-800 text-[10px]">{e}</Badge>
+                          <Badge key={e} className="bg-status-info-surface text-status-info-foreground text-[10px]">{e}</Badge>
                         ))}
                       </div>
                     </div>
@@ -139,7 +139,7 @@ export default function AdminDomainRegistry() {
                         <p className="font-medium mb-1">الالتزامات</p>
                         <div className="flex flex-wrap gap-1">
                           {domain.obligationTypes.map((o: string) => (
-                            <Badge key={o} className="bg-amber-100 text-amber-800 text-[10px]">{o}</Badge>
+                            <Badge key={o} className="bg-status-warning-surface text-status-warning-foreground text-[10px]">{o}</Badge>
                           ))}
                         </div>
                       </div>

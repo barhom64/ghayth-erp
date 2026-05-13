@@ -44,7 +44,7 @@ export default function ViolationsManagementPage() {
   const columns: DataTableColumn<any>[] = [
     { key: "employeeName", header: "الموظف", sortable: true, render: (v) => <span className="font-medium">{v.employeeName}</span> },
     { key: "type", header: "النوع", sortable: true, render: (v) => v.type },
-    { key: "description", header: "الوصف", sortable: true, className: "text-gray-500 max-w-48 truncate", render: (v) => v.description },
+    { key: "description", header: "الوصف", sortable: true, className: "text-muted-foreground max-w-48 truncate", render: (v) => v.description },
     {
       key: "severity",
       header: "الشدة",
@@ -55,7 +55,7 @@ export default function ViolationsManagementPage() {
       key: "deduction",
       header: "الخصم",
       sortable: true,
-      className: "text-red-600 font-medium",
+      className: "text-status-error-foreground font-medium",
       render: (v) => formatCurrency(Number(v.deduction || 0)),
     },
     {
@@ -98,8 +98,8 @@ export default function ViolationsManagementPage() {
     >
       <HrTabsNav />
       <KpiGrid items={[
-        { label: "إجمالي المخالفات", value: stats?.total ?? items.length, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
-        { label: "نشطة", value: stats?.active ?? 0, icon: Scale, color: "text-yellow-600 bg-yellow-50" },
+        { label: "إجمالي المخالفات", value: stats?.total ?? items.length, icon: AlertTriangle, color: "text-status-error-foreground bg-status-error-surface" },
+        { label: "نشطة", value: stats?.active ?? 0, icon: Scale, color: "text-status-warning-foreground bg-status-warning-surface" },
         { label: "إجمالي الخصومات", value: formatCurrency(stats?.totalDeductions ?? 0), icon: DollarSign, color: "text-orange-600 bg-orange-50" },
         { label: "أنواع المخالفات", value: Object.keys(byType).length, icon: TrendingUp, color: "text-purple-600 bg-purple-50" },
       ]} />
@@ -138,7 +138,7 @@ export default function ViolationsManagementPage() {
                 {Object.entries(byType).sort(([,a], [,b]) => (b as number) - (a as number)).map(([type, count]) => (
                   <div key={type} className="flex items-center gap-3">
                     <span className="text-sm w-40 truncate">{type}</span>
-                    <div className="flex-1 bg-gray-100 rounded-full h-6 overflow-hidden">
+                    <div className="flex-1 bg-surface-subtle rounded-full h-6 overflow-hidden">
                       <div className="h-full bg-red-400 rounded-full" style={{ width: `${(count as number / items.length) * 100}%` }} />
                     </div>
                     <span className="text-sm font-medium w-8">{count as number}</span>

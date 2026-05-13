@@ -76,9 +76,9 @@ export default function ClientsCreate() {
   return (
     <CreatePageLayout title="إضافة عميل جديد" backPath="/clients">
       {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -138,7 +138,7 @@ export default function ClientsCreate() {
       </div>
       <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات العميل" />
 
-      <div className="mt-6 border rounded-lg p-4 bg-blue-50/50">
+      <div className="mt-6 border rounded-lg p-4 bg-status-info-surface">
         <div className="flex items-center gap-3">
           <Checkbox
             id="createPortal"
@@ -146,7 +146,7 @@ export default function ClientsCreate() {
             onCheckedChange={(v) => setCreatePortalAccount(v === true)}
           />
           <label htmlFor="createPortal" className="flex items-center gap-2 text-sm font-medium cursor-pointer select-none">
-            <Globe className="h-4 w-4 text-blue-600" />
+            <Globe className="h-4 w-4 text-status-info-foreground" />
             إنشاء حساب بوابة للعميل
           </label>
         </div>
@@ -162,7 +162,7 @@ export default function ClientsCreate() {
               error={fieldErrors.portalPassword}
             />
             {!form.email && (
-              <p className="text-xs text-amber-600">يرجى إدخال البريد الإلكتروني للعميل في الحقل أعلاه</p>
+              <p className="text-xs text-status-warning-foreground">يرجى إدخال البريد الإلكتروني للعميل في الحقل أعلاه</p>
             )}
           </div>
         )}

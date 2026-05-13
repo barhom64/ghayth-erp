@@ -21,8 +21,8 @@ import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/formatters";
 
 const violationTypes = [
-  { value: "overstay", label: "تأخر مغادرة", icon: Clock, cls: "border-amber-300 bg-amber-50 ring-amber-200", desc: "تأخر المعتمر عن موعد المغادرة المحدد" },
-  { value: "absconded", label: "هروب", icon: UserX, cls: "border-red-300 bg-red-50 ring-red-200", desc: "هروب المعتمر من مقر الإقامة" },
+  { value: "overstay", label: "تأخر مغادرة", icon: Clock, cls: "border-amber-300 bg-status-warning-surface ring-amber-200", desc: "تأخر المعتمر عن موعد المغادرة المحدد" },
+  { value: "absconded", label: "هروب", icon: UserX, cls: "border-status-error-surface bg-status-error-surface ring-red-200", desc: "هروب المعتمر من مقر الإقامة" },
   { value: "other", label: "أخرى", icon: HelpCircle, cls: "border-slate-300 bg-slate-50 ring-slate-200", desc: "مخالفة غير مصنفة" },
 ];
 
@@ -93,13 +93,13 @@ function DraftManager({ defaults }: { defaults: ViolationForm }) {
   if (!visible) return null;
 
   return (
-    <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+    <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
       <span>تم استعادة مسودة محفوظة سابقا</span>
       <Button
         type="button"
         variant="ghost"
         size="sm"
-        className="text-amber-600 h-7 px-2"
+        className="text-status-warning-foreground h-7 px-2"
         onClick={() => {
           localStorage.removeItem(STORAGE_KEY);
           form.reset(defaults);
@@ -119,8 +119,8 @@ function ViolationTypeSelector() {
 
   return (
     <div>
-      <h3 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
-        <AlertTriangle className="h-4 w-4" /> نوع المخالفة <span className="text-red-500">*</span>
+      <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
+        <AlertTriangle className="h-4 w-4" /> نوع المخالفة <span className="text-status-error">*</span>
       </h3>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {violationTypes.map((vt) => {
@@ -134,19 +134,19 @@ function ViolationTypeSelector() {
                 "p-4 rounded-xl border-2 text-right transition-all",
                 currentType === vt.value
                   ? `${vt.cls} ring-2 ring-offset-1`
-                  : "border-gray-200 hover:border-gray-300",
+                  : "border-border hover:border-border",
               )}
             >
               <div className="flex items-center gap-2 mb-1">
                 <Icon className="h-5 w-5" />
                 <span className="text-sm font-medium">{vt.label}</span>
               </div>
-              <p className="text-xs text-gray-500">{vt.desc}</p>
+              <p className="text-xs text-muted-foreground">{vt.desc}</p>
             </button>
           );
         })}
       </div>
-      {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+      {error && <p className="text-xs text-status-error-foreground mt-1">{error}</p>}
     </div>
   );
 }
@@ -163,7 +163,7 @@ function ViolationSummary({ agents, subAgents }: { agents: any[]; subAgents: any
   return (
     <div className={cn(
       "p-4 rounded-xl border",
-      type === "absconded" ? "bg-red-50 border-red-200" : type === "overstay" ? "bg-amber-50 border-amber-200" : "bg-slate-50 border-slate-200",
+      type === "absconded" ? "bg-status-error-surface border-status-error-surface" : type === "overstay" ? "bg-status-warning-surface border-status-warning-surface" : "bg-slate-50 border-slate-200",
     )}>
       <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
         <DollarSign className="h-4 w-4" /> ملخص المخالفة

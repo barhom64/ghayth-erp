@@ -56,9 +56,9 @@ export default function DriversPage() {
       ),
     },
     { key: "name", header: "الاسم", sortable: true, searchable: true, className: "font-medium" },
-    { key: "phone", header: "الهاتف", sortable: true, searchable: true, className: "text-gray-500", render: (d) => d.phone || "-" },
+    { key: "phone", header: "الهاتف", sortable: true, searchable: true, className: "text-muted-foreground", render: (d) => d.phone || "-" },
     { key: "licenseType", header: "الرخصة", sortable: true, searchable: true, sortKey: "licenseNumber", render: (d) => d.licenseNumber || "-" },
-    { key: "licenseExpiry", header: "انتهاء الرخصة", sortable: true, className: "text-gray-500", render: (d) => d.licenseExpiry || "-" },
+    { key: "licenseExpiry", header: "انتهاء الرخصة", sortable: true, className: "text-muted-foreground", render: (d) => d.licenseExpiry || "-" },
     {
       key: "status",
       header: "الحالة",
@@ -97,9 +97,9 @@ export default function DriversPage() {
     >
       <FleetTabsNav />
       <KpiGrid items={[
-        { label: "إجمالي السائقين", value: items.length, icon: Users, color: "text-blue-600 bg-blue-50" },
-        { label: "نشطين", value: items.filter((d: any) => d.status === "active").length, icon: UserCheck, color: "text-green-600 bg-green-50" },
-        { label: "غير نشطين", value: items.filter((d: any) => d.status !== "active").length, icon: UserX, color: "text-red-600 bg-red-50" },
+        { label: "إجمالي السائقين", value: items.length, icon: Users, color: "text-status-info-foreground bg-status-info-surface" },
+        { label: "نشطين", value: items.filter((d: any) => d.status === "active").length, icon: UserCheck, color: "text-status-success-foreground bg-status-success-surface" },
+        { label: "غير نشطين", value: items.filter((d: any) => d.status !== "active").length, icon: UserX, color: "text-status-error-foreground bg-status-error-surface" },
         { label: "المركبات المسندة", value: items.filter((d: any) => d.vehicleId).length, icon: Car, color: "text-purple-600 bg-purple-50" },
       ]} />
 

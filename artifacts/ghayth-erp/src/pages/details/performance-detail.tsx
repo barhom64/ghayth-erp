@@ -61,17 +61,17 @@ function statusTone(status?: string | null) {
 function ratingColorClass(rating?: string | null): string {
   switch (rating) {
     case "excellent":
-      return "bg-green-100 text-green-800 border-green-300";
+      return "bg-status-success-surface text-status-success-foreground border-status-success-surface";
     case "good":
       return "bg-emerald-100 text-emerald-800 border-emerald-300";
     case "satisfactory":
-      return "bg-yellow-100 text-yellow-800 border-yellow-300";
+      return "bg-status-warning-surface text-yellow-800 border-yellow-300";
     case "needs_improvement":
       return "bg-orange-100 text-orange-800 border-orange-300";
     case "unsatisfactory":
-      return "bg-red-100 text-red-800 border-red-300";
+      return "bg-status-error-surface text-status-error-foreground border-status-error-surface";
     default:
-      return "bg-gray-100 text-gray-700 border-gray-300";
+      return "bg-surface-subtle text-status-neutral-foreground border-border";
   }
 }
 
@@ -224,14 +224,14 @@ export default function PerformanceDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Star className="h-4 w-4 text-gray-500" />
+            <Star className="h-4 w-4 text-muted-foreground" />
             بيانات التقييم
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           {/* Hero rating badge */}
           <div className="border-b pb-4">
-            <p className="text-xs text-gray-500 mb-2">التقييم العام</p>
+            <p className="text-xs text-muted-foreground mb-2">التقييم العام</p>
             {ratingLabel ? (
               <span
                 className={cn(
@@ -243,10 +243,10 @@ export default function PerformanceDetail() {
                 {ratingLabel}
               </span>
             ) : (
-              <span className="text-gray-400 text-sm">لم يتم التقييم بعد</span>
+              <span className="text-muted-foreground text-sm">لم يتم التقييم بعد</span>
             )}
             {review?.employeeName && (
-              <p className="mt-3 text-sm text-gray-700">
+              <p className="mt-3 text-sm text-status-neutral-foreground">
                 للموظف: <span className="font-medium">{review.employeeName}</span>
               </p>
             )}
@@ -255,26 +255,26 @@ export default function PerformanceDetail() {
           <div className="grid grid-cols-2 gap-3">
             {review?.reviewPeriod && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">فترة التقييم</p>
+                <p className="text-xs text-muted-foreground mb-0.5">فترة التقييم</p>
                 <Badge variant="outline">{review.reviewPeriod}</Badge>
               </div>
             )}
             {review?.reviewerName && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">المُقيِّم</p>
-                <span className="text-gray-800">{review.reviewerName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">المُقيِّم</p>
+                <span className="text-status-neutral-foreground">{review.reviewerName}</span>
               </div>
             )}
             {review?.createdAt && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ الإنشاء</p>
-                <span className="text-gray-800">{formatDateAr(review.createdAt)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ الإنشاء</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(review.createdAt)}</span>
               </div>
             )}
             {review?.completedAt && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ الإكمال</p>
-                <span className="text-gray-800">{formatDateAr(review.completedAt)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ الإكمال</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(review.completedAt)}</span>
               </div>
             )}
           </div>
@@ -282,7 +282,7 @@ export default function PerformanceDetail() {
           {/* Scores breakdown */}
           {scoreEntries.length > 0 && (
             <div className="pt-3 border-t">
-              <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
+              <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
                 <TrendingUp className="h-3.5 w-3.5" />
                 تفاصيل الدرجات
               </p>
@@ -292,15 +292,15 @@ export default function PerformanceDetail() {
                     key={s.label}
                     className="flex items-center justify-between border rounded p-2 text-xs"
                   >
-                    <span className="text-gray-700">{s.label}</span>
+                    <span className="text-status-neutral-foreground">{s.label}</span>
                     <span
                       className={cn(
                         "font-bold",
                         s.score >= 4
-                          ? "text-green-600"
+                          ? "text-status-success-foreground"
                           : s.score >= 3
-                          ? "text-yellow-600"
-                          : "text-red-600"
+                          ? "text-status-warning-foreground"
+                          : "text-status-error-foreground"
                       )}
                     >
                       {s.score.toFixed(1)}
@@ -313,31 +313,31 @@ export default function PerformanceDetail() {
 
           {review?.strengths && (
             <div className="pt-3 border-t">
-              <p className="text-xs text-gray-500 mb-1">نقاط القوة</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{review.strengths}</p>
+              <p className="text-xs text-muted-foreground mb-1">نقاط القوة</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{review.strengths}</p>
             </div>
           )}
           {review?.areasForImprovement && (
             <div className="pt-3 border-t">
-              <p className="text-xs text-gray-500 mb-1">مجالات التحسين</p>
-              <p className="text-gray-800 whitespace-pre-wrap">
+              <p className="text-xs text-muted-foreground mb-1">مجالات التحسين</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">
                 {review.areasForImprovement}
               </p>
             </div>
           )}
           {review?.goals && (
             <div className="pt-3 border-t">
-              <p className="text-xs text-gray-500 mb-1 flex items-center gap-1">
+              <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
                 <Target className="h-3.5 w-3.5" />
                 الأهداف
               </p>
-              <p className="text-gray-800 whitespace-pre-wrap">{review.goals}</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{review.goals}</p>
             </div>
           )}
           {review?.developmentPlan && (
             <div className="pt-3 border-t">
-              <p className="text-xs text-gray-500 mb-1">خطة التطوير</p>
-              <p className="text-gray-800 whitespace-pre-wrap">
+              <p className="text-xs text-muted-foreground mb-1">خطة التطوير</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">
                 {review.developmentPlan}
               </p>
             </div>

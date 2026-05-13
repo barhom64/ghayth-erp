@@ -55,9 +55,9 @@ export default function ProjectCostingDetailPage() {
   const overview = (
     <>
       <div className="grid gap-4 md:grid-cols-4">
-        <KpiCard icon={DollarSign} label="الميزانية" value={formatCurrency(budget)} color="text-blue-600 bg-blue-50" />
-        <KpiCard icon={TrendingUp} label="التكلفة الفعلية" value={formatCurrency(actualCost)} color="text-gray-700 bg-gray-100" />
-        <KpiCard icon={Wallet} label="المتبقي" value={formatCurrency(budgetRemaining)} color={budgetRemaining >= 0 ? "text-green-600 bg-green-50" : "text-red-600 bg-red-50"} />
+        <KpiCard icon={DollarSign} label="الميزانية" value={formatCurrency(budget)} color="text-status-info-foreground bg-status-info-surface" />
+        <KpiCard icon={TrendingUp} label="التكلفة الفعلية" value={formatCurrency(actualCost)} color="text-status-neutral-foreground bg-surface-subtle" />
+        <KpiCard icon={Wallet} label="المتبقي" value={formatCurrency(budgetRemaining)} color={budgetRemaining >= 0 ? "text-status-success-foreground bg-status-success-surface" : "text-status-error-foreground bg-status-error-surface"} />
         <KpiCard icon={Percent} label="نسبة الاستخدام" value={`${usagePct}%`} color="text-purple-600 bg-purple-50" />
       </div>
 
@@ -79,7 +79,7 @@ export default function ProjectCostingDetailPage() {
                 columns={[
                   { key: "ref", header: "المرجع", render: (r) => <span className="font-mono text-xs">{r.ref}</span> },
                   { key: "description", header: "البيان" },
-                  { key: "date", header: "التاريخ", render: (r) => <span className="text-gray-500">{r.date ? formatDateAr(r.date) : "—"}</span> },
+                  { key: "date", header: "التاريخ", render: (r) => <span className="text-muted-foreground">{r.date ? formatDateAr(r.date) : "—"}</span> },
                   { key: "amount", header: "المبلغ", sortable: true, render: (r) => <span className="font-semibold">{formatCurrency(Number(r.amount) || 0)}</span> },
                 ] satisfies DataTableColumn<any>[]}
                 data={costDetails}
@@ -138,8 +138,8 @@ function KpiCard({ icon: Icon, label, value, color }: { icon: any; label: string
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
   return (
     <div>
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="text-sm font-medium text-gray-800 mt-0.5">{value || "—"}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-sm font-medium text-status-neutral-foreground mt-0.5">{value || "—"}</p>
     </div>
   );
 }

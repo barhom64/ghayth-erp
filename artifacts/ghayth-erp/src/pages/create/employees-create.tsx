@@ -81,7 +81,7 @@ export default function EmployeesCreate() {
   if (isError) return <ErrorState />;
 
   const errCls = (field: string) => fieldErrorClass(fieldErrors[field]);
-  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-status-error-foreground mt-1">{fieldErrors[field]}</p> : null;
 
   const handleSubmit = async () => {
     const firstError = validate({
@@ -130,32 +130,32 @@ export default function EmployeesCreate() {
     return (
       <CreatePageLayout title="تم إنشاء الموظف بنجاح" backPath="/employees">
         {userAccount?.isNewAccount && (
-          <Card className="border-green-200 bg-green-50 mb-4">
+          <Card className="border-status-success-surface bg-status-success-surface mb-4">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2 text-green-800">
+              <CardTitle className="text-base flex items-center gap-2 text-status-success-foreground">
                 <Shield className="w-5 h-5" />
                 تم إنشاء حساب دخول للموظف
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-sm text-green-700">احفظ هذه البيانات وأرسلها للموظف — لن تظهر مرة أخرى:</p>
+              <p className="text-sm text-status-success-foreground">احفظ هذه البيانات وأرسلها للموظف — لن تظهر مرة أخرى:</p>
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-white rounded-lg p-3 border border-green-200">
-                  <p className="text-xs text-gray-500 mb-1">البريد الإلكتروني</p>
+                <div className="bg-white rounded-lg p-3 border border-status-success-surface">
+                  <p className="text-xs text-muted-foreground mb-1">البريد الإلكتروني</p>
                   <p className="font-mono text-sm font-medium">{userAccount.email}</p>
                 </div>
-                <div className="bg-white rounded-lg p-3 border border-green-200">
-                  <p className="text-xs text-gray-500 mb-1">كلمة المرور المؤقتة</p>
-                  <p className="font-mono text-sm font-bold text-blue-700">{userAccount.tempPassword}</p>
+                <div className="bg-white rounded-lg p-3 border border-status-success-surface">
+                  <p className="text-xs text-muted-foreground mb-1">كلمة المرور المؤقتة</p>
+                  <p className="font-mono text-sm font-bold text-status-info-foreground">{userAccount.tempPassword}</p>
                 </div>
               </div>
-              <p className="text-xs text-green-600">يُنصح الموظف بتغيير كلمة المرور بعد أول تسجيل دخول من صفحة "مساحتي".</p>
+              <p className="text-xs text-status-success-foreground">يُنصح الموظف بتغيير كلمة المرور بعد أول تسجيل دخول من صفحة "مساحتي".</p>
             </CardContent>
           </Card>
         )}
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2 text-green-700">
+            <CardTitle className="text-lg flex items-center gap-2 text-status-success-foreground">
               <CheckCircle className="w-6 h-6" />
               {creationResult.name} — عمليات التهيئة
             </CardTitle>
@@ -165,15 +165,15 @@ export default function EmployeesCreate() {
               const Icon = op.icon;
               const isDone = op.key !== "user" || !!userAccount;
               return (
-                <div key={op.key} className="flex items-center gap-3 p-2.5 rounded-lg bg-gray-50">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${isDone ? "bg-green-100" : "bg-gray-100"}`}>
-                    <CheckCircle className={`w-3.5 h-3.5 ${isDone ? "text-green-600" : "text-gray-300"}`} />
+                <div key={op.key} className="flex items-center gap-3 p-2.5 rounded-lg bg-surface-subtle">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${isDone ? "bg-status-success-surface" : "bg-surface-subtle"}`}>
+                    <CheckCircle className={`w-3.5 h-3.5 ${isDone ? "text-status-success-foreground" : "text-gray-300"}`} />
                   </div>
-                  <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
-                    <Icon className="w-4 h-4 text-blue-600" />
+                  <div className="w-8 h-8 rounded-lg bg-status-info-surface flex items-center justify-center shrink-0">
+                    <Icon className="w-4 h-4 text-status-info-foreground" />
                   </div>
-                  <span className="text-sm font-medium text-gray-700">{i + 1}. {op.label}</span>
-                  <Badge className={`ms-auto text-[10px] ${isDone ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                  <span className="text-sm font-medium text-status-neutral-foreground">{i + 1}. {op.label}</span>
+                  <Badge className={`ms-auto text-[10px] ${isDone ? "bg-status-success-surface text-status-success-foreground" : "bg-surface-subtle text-muted-foreground"}`}>
                     {isDone ? "مكتمل" : op.key === "user" ? "يتطلب بريد إلكتروني" : "—"}
                   </Badge>
                 </div>
@@ -214,9 +214,9 @@ export default function EmployeesCreate() {
   return (
     <CreatePageLayout title="إضافة موظف جديد" backPath="/employees">
       {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="mb-4">
@@ -255,7 +255,7 @@ export default function EmployeesCreate() {
         <TextField label="البريد الإلكتروني" type="email" dir="ltr" value={form.email} onChange={(v) => setForm((f) => ({ ...f, email: v }))} error={fieldErrors.email} />
 
         <div className="md:col-span-2">
-          <Label>المدير المباشر <span className="text-red-500">*</span></Label>
+          <Label>المدير المباشر <span className="text-status-error">*</span></Label>
           <div className="relative mt-1">
             <Input
               placeholder="ابحث عن المدير المباشر..."
@@ -270,7 +270,7 @@ export default function EmployeesCreate() {
             />
             <FieldHint field="managerId" />
             {showManagerDropdown && managerSearch && !form.managerId && (
-              <div className="absolute z-10 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-52 overflow-y-auto mt-1">
+              <div className="absolute z-10 w-full bg-white border border-border rounded-md shadow-lg max-h-52 overflow-y-auto mt-1">
                 {employeesList
                   .filter((emp: { name?: string; jobTitle?: string }) =>
                     emp.name?.toLowerCase().includes(managerSearch.toLowerCase()) ||
@@ -281,33 +281,33 @@ export default function EmployeesCreate() {
                     <button
                       key={emp.id}
                       type="button"
-                      className="w-full text-right px-3 py-2 text-sm hover:bg-gray-50 flex justify-between items-center gap-2"
+                      className="w-full text-right px-3 py-2 text-sm hover:bg-surface-subtle flex justify-between items-center gap-2"
                       onClick={() => {
                         setForm((f) => ({ ...f, managerId: String(emp.id) }));
                         setManagerSearch(`${emp.name}${emp.jobTitle ? ` (${emp.jobTitle})` : ""}`);
                         setShowManagerDropdown(false);
                       }}
                     >
-                      <span className="font-medium text-gray-800">{emp.name}</span>
-                      {emp.jobTitle && <span className="text-xs text-gray-400">{emp.jobTitle}</span>}
+                      <span className="font-medium text-status-neutral-foreground">{emp.name}</span>
+                      {emp.jobTitle && <span className="text-xs text-muted-foreground">{emp.jobTitle}</span>}
                     </button>
                   ))}
                 {employeesList.filter((emp: { name?: string; jobTitle?: string }) =>
                   emp.name?.toLowerCase().includes(managerSearch.toLowerCase()) ||
                   emp.jobTitle?.toLowerCase().includes(managerSearch.toLowerCase())
                 ).length === 0 && (
-                  <div className="px-3 py-2 text-sm text-gray-400">لا توجد نتائج</div>
+                  <div className="px-3 py-2 text-sm text-muted-foreground">لا توجد نتائج</div>
                 )}
               </div>
             )}
             {form.managerId && (
               <div className="flex items-center gap-2 mt-1">
-                <p className="text-xs text-green-600">
+                <p className="text-xs text-status-success-foreground">
                   ✓ المدير المحدد: {employeesList.find((e: { id: number }) => String(e.id) === form.managerId)?.name}
                 </p>
                 <button
                   type="button"
-                  className="text-xs text-red-400 hover:text-red-600"
+                  className="text-xs text-red-400 hover:text-status-error-foreground"
                   onClick={() => {
                     setForm((f) => ({ ...f, managerId: "" }));
                     setManagerSearch("");
@@ -396,7 +396,7 @@ export default function EmployeesCreate() {
         <FormFieldWrapper label="تاريخ التعيين"><DatePicker value={form.hireDate} onChange={(v) => setForm((f) => ({ ...f, hireDate: v }))} /></FormFieldWrapper>
 
         <div className="md:col-span-2 border-t pt-4 mt-2">
-          <h3 className="text-sm font-semibold text-gray-600 mb-3">بيانات الإقامة والجواز</h3>
+          <h3 className="text-sm font-semibold text-muted-foreground mb-3">بيانات الإقامة والجواز</h3>
         </div>
         <TextField label="رقم الإقامة" dir="ltr" value={form.iqamaNumber} onChange={(v) => setForm((f) => ({ ...f, iqamaNumber: v }))} />
         <TextField label="رقم الجواز" dir="ltr" value={form.passportNumber} onChange={(v) => setForm((f) => ({ ...f, passportNumber: v }))} />
@@ -404,7 +404,7 @@ export default function EmployeesCreate() {
         <FormFieldWrapper label="تاريخ انتهاء الجواز"><DatePicker value={form.passportExpiry} onChange={(v) => setForm((f) => ({ ...f, passportExpiry: v }))} /></FormFieldWrapper>
 
         <div className="md:col-span-2 border-t pt-4 mt-2">
-          <h3 className="text-sm font-semibold text-blue-700 mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-status-info-foreground mb-3 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>
             بيانات التأشيرة والتصاريح — الربط الحكومي (مقيم)
           </h3>
@@ -440,7 +440,7 @@ export default function EmployeesCreate() {
         </FormFieldWrapper>
 
         <div className="md:col-span-2 border-t pt-4 mt-2">
-          <h3 className="text-sm font-semibold text-gray-600 mb-3">البيانات البنكية</h3>
+          <h3 className="text-sm font-semibold text-muted-foreground mb-3">البيانات البنكية</h3>
         </div>
         <FormFieldWrapper label="اسم البنك">
           <Select value={form.bankName || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, bankName: v === "_none" ? "" : v }))}>
@@ -465,7 +465,7 @@ export default function EmployeesCreate() {
         <TextField label="رقم الآيبان" dir="ltr" value={form.iban} onChange={(v) => setForm((f) => ({ ...f, iban: v }))} placeholder="SA..." />
 
         <div className="md:col-span-2 border-t pt-4 mt-2">
-          <h3 className="text-sm font-semibold text-gray-600 mb-3">جهة الاتصال في حالة الطوارئ</h3>
+          <h3 className="text-sm font-semibold text-muted-foreground mb-3">جهة الاتصال في حالة الطوارئ</h3>
         </div>
         <TextField label="اسم جهة الاتصال" value={form.emergencyContact} onChange={(v) => setForm((f) => ({ ...f, emergencyContact: v }))} />
         <TextField label="رقم الطوارئ" dir="ltr" value={form.emergencyPhone} onChange={(v) => setForm((f) => ({ ...f, emergencyPhone: v }))} />

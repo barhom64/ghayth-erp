@@ -25,13 +25,13 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: "bg-gray-100 text-gray-700",
-  met: "bg-green-100 text-green-700",
-  breached: "bg-red-100 text-red-700",
+  pending: "bg-surface-subtle text-status-neutral-foreground",
+  met: "bg-status-success-surface text-status-success-foreground",
+  breached: "bg-status-error-surface text-status-error-foreground",
   escalated_l1: "bg-orange-100 text-orange-700",
-  escalated_l2: "bg-red-200 text-red-800",
+  escalated_l2: "bg-red-200 text-status-error-foreground",
   closed: "bg-slate-100 text-slate-600",
-  cancelled: "bg-gray-100 text-gray-500",
+  cancelled: "bg-surface-subtle text-muted-foreground",
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -124,10 +124,10 @@ export default function ObligationsPage() {
       }
     >
       <KpiGrid items={[
-        { label: "إجمالي معلق", value: s.pending || 0, icon: Clock, color: "text-gray-600 bg-gray-50" },
-        { label: "متجاوزة", value: s.breached || 0, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
+        { label: "إجمالي معلق", value: s.pending || 0, icon: Clock, color: "text-muted-foreground bg-surface-subtle" },
+        { label: "متجاوزة", value: s.breached || 0, icon: AlertTriangle, color: "text-status-error-foreground bg-status-error-surface" },
         { label: "تصعيد", value: (s.escalated_l1 || 0) + (s.escalated_l2 || 0), icon: ShieldAlert, color: "text-orange-600 bg-orange-50" },
-        { label: "تستحق خلال 24س", value: s.dueIn24h || 0, icon: Clock, color: "text-amber-600 bg-amber-50" },
+        { label: "تستحق خلال 24س", value: s.dueIn24h || 0, icon: Clock, color: "text-status-warning-foreground bg-status-warning-surface" },
       ]} />
 
       <div className="flex items-center gap-3 mt-4">
@@ -171,7 +171,7 @@ export default function ObligationsPage() {
               {filtered.map((o: any) => {
                 const overdue = o.status !== "met" && o.status !== "cancelled" && o.dueAt && isOverdue(o.dueAt);
                 return (
-                  <div key={o.id} className={`p-4 flex items-start justify-between gap-4 ${overdue ? "bg-red-50/40" : ""}`}>
+                  <div key={o.id} className={`p-4 flex items-start justify-between gap-4 ${overdue ? "bg-status-error-surface" : ""}`}>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-sm">{o.title}</span>
@@ -185,7 +185,7 @@ export default function ObligationsPage() {
                       <div className="mt-1 text-xs text-muted-foreground flex items-center gap-3 flex-wrap">
                         <span>{ENTITY_LABELS[o.entityType] || o.entityType} #{o.entityId}</span>
                         {o.dueAt && (
-                          <span className={overdue ? "text-red-600 font-medium" : ""}>
+                          <span className={overdue ? "text-status-error-foreground font-medium" : ""}>
                             <Clock className="h-3 w-3 inline ms-1" />
                             استحقاق: {formatDateAr(o.dueAt)}
                           </span>

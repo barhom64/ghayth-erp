@@ -159,31 +159,31 @@ export default function RequestDetail() {
         <CardContent className="space-y-3 text-sm">
           {request?.description && (
             <div>
-              <p className="text-xs text-gray-500 mb-1">الوصف</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{request.description}</p>
+              <p className="text-xs text-muted-foreground mb-1">الوصف</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{request.description}</p>
             </div>
           )}
           {request?.priority && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">الأولوية:</span>
+              <span className="text-xs text-muted-foreground">الأولوية:</span>
               <Badge variant="outline">{PRIORITY_LABELS[request.priority] || request.priority}</Badge>
             </div>
           )}
           {request?.category && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">التصنيف:</span>
+              <span className="text-xs text-muted-foreground">التصنيف:</span>
               <Badge variant="outline">{CATEGORY_LABELS[request.category] || request.category}</Badge>
             </div>
           )}
           {request?.currentApprover && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">المعتمد الحالي:</span>
+              <span className="text-xs text-muted-foreground">المعتمد الحالي:</span>
               <Badge>{request.currentApproverName || `#${request.currentApprover}`}</Badge>
             </div>
           )}
           {request?.returnReason && (
-            <div className="rounded-md bg-amber-50 border border-amber-100 p-3">
-              <p className="text-xs text-amber-700 font-medium mb-1">سبب الإرجاع</p>
+            <div className="rounded-md bg-status-warning-surface border border-status-warning-surface p-3">
+              <p className="text-xs text-status-warning-foreground font-medium mb-1">سبب الإرجاع</p>
               <p className="text-sm text-amber-900 whitespace-pre-wrap">{request.returnReason}</p>
             </div>
           )}
@@ -197,7 +197,7 @@ export default function RequestDetail() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                <Paperclip className="h-4 w-4 text-gray-500" />
+                <Paperclip className="h-4 w-4 text-muted-foreground" />
                 المرفقات ({attachments.length})
               </CardTitle>
             </CardHeader>
@@ -205,11 +205,11 @@ export default function RequestDetail() {
               {attachments.map((a, i) => {
                 const canPreview = !!a.id;
                 return (
-                  <div key={i} className="flex items-center justify-between gap-2 p-2 rounded border text-xs hover:bg-gray-50">
+                  <div key={i} className="flex items-center justify-between gap-2 p-2 rounded border text-xs hover:bg-surface-subtle">
                     <span className="truncate min-w-0">{a.name}</span>
                     {canPreview && (
                       <button
-                        className="text-blue-600 hover:text-blue-700 shrink-0"
+                        className="text-status-info-foreground hover:text-status-info-foreground shrink-0"
                         onClick={() => setPreviewAttachment({
                           id: a.id!,
                           title: a.name,

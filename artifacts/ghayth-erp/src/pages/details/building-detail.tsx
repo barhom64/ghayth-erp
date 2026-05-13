@@ -66,10 +66,10 @@ export default function BuildingDetail() {
     <>
       <InlineEditCard hook={editDelete} />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="border-0 shadow-sm bg-blue-50/50">
+        <Card className="border-0 shadow-sm bg-status-info-surface">
           <CardContent className="p-4 text-center">
-            <p className="text-xs text-blue-600 mb-1">إجمالي الوحدات</p>
-            <p className="text-2xl font-bold text-blue-700">{totalUnits}</p>
+            <p className="text-xs text-status-info-foreground mb-1">إجمالي الوحدات</p>
+            <p className="text-2xl font-bold text-status-info-foreground">{totalUnits}</p>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm bg-emerald-50/50">
@@ -78,23 +78,23 @@ export default function BuildingDetail() {
             <p className="text-2xl font-bold text-emerald-700">{rentedUnits}</p>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-sm bg-amber-50/50">
+        <Card className="border-0 shadow-sm bg-status-warning-surface/50">
           <CardContent className="p-4 text-center">
-            <p className="text-xs text-amber-600 mb-1">شاغرة</p>
-            <p className="text-2xl font-bold text-amber-700">{availableUnits}</p>
+            <p className="text-xs text-status-warning-foreground mb-1">شاغرة</p>
+            <p className="text-2xl font-bold text-status-warning-foreground">{availableUnits}</p>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4 text-center">
-            <p className="text-xs text-gray-500 mb-1">الإشغال</p>
-            <p className={cn("text-2xl font-bold", occupancy >= 80 ? "text-emerald-600" : occupancy >= 50 ? "text-amber-600" : "text-red-600")}>{occupancy}%</p>
+            <p className="text-xs text-muted-foreground mb-1">الإشغال</p>
+            <p className={cn("text-2xl font-bold", occupancy >= 80 ? "text-emerald-600" : occupancy >= 50 ? "text-status-warning-foreground" : "text-status-error-foreground")}>{occupancy}%</p>
           </CardContent>
         </Card>
       </div>
 
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold flex items-center gap-2">
-          <Home className="h-5 w-5 text-blue-500" /> وحدات المبنى
+          <Home className="h-5 w-5 text-status-info" /> وحدات المبنى
         </h2>
         {canManage && (
           <Link href={`/properties/create?buildingId=${id}&buildingName=${encodeURIComponent(building?.name || "")}`}>
@@ -108,7 +108,7 @@ export default function BuildingDetail() {
       {units.length === 0 ? (
         <div className="text-center py-12">
           <Home className="h-10 w-10 mx-auto mb-3 text-gray-300" />
-          <p className="text-gray-500">لا توجد وحدات في هذا المبنى</p>
+          <p className="text-muted-foreground">لا توجد وحدات في هذا المبنى</p>
           {canManage && (
             <Link href={`/properties/create?buildingId=${id}&buildingName=${encodeURIComponent(building?.name || "")}`}>
               <Button className="mt-4 gap-2" size="sm"><Plus className="h-4 w-4" /> إضافة وحدة</Button>
@@ -124,22 +124,22 @@ export default function BuildingDetail() {
                   <div className="flex items-start justify-between mb-2">
                     <div>
                       <p className="font-bold text-sm">{u.unitNumber}</p>
-                      <p className="text-xs text-gray-400">{u.type === "apartment" ? "شقة" : u.type === "villa" ? "فيلا" : u.type === "office" ? "مكتب" : u.type === "shop" ? "محل" : u.type}</p>
+                      <p className="text-xs text-muted-foreground">{u.type === "apartment" ? "شقة" : u.type === "villa" ? "فيلا" : u.type === "office" ? "مكتب" : u.type === "shop" ? "محل" : u.type}</p>
                     </div>
                     <PageStatusBadge status={u.status} />
                   </div>
                   <div className="grid grid-cols-3 gap-1 text-center mt-3">
                     <div>
                       <p className="text-xs font-bold">{u.area ? `${u.area}م²` : "—"}</p>
-                      <p className="text-[10px] text-gray-400">المساحة</p>
+                      <p className="text-[10px] text-muted-foreground">المساحة</p>
                     </div>
                     <div>
                       <p className="text-xs font-bold">{u.bedrooms || "—"}</p>
-                      <p className="text-[10px] text-gray-400">غرف</p>
+                      <p className="text-[10px] text-muted-foreground">غرف</p>
                     </div>
                     <div>
                       <p className="text-xs font-bold text-emerald-600">{formatCurrency(u.monthlyRent || 0)}</p>
-                      <p className="text-[10px] text-gray-400">إيجار</p>
+                      <p className="text-[10px] text-muted-foreground">إيجار</p>
                     </div>
                   </div>
                 </CardContent>
@@ -151,7 +151,7 @@ export default function BuildingDetail() {
       <Card className="mt-6">
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <BookOpen className="h-4 w-4 text-blue-600" />
+            <BookOpen className="h-4 w-4 text-status-info-foreground" />
             الملف المالي الشامل للمبنى
           </CardTitle>
         </CardHeader>

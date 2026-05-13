@@ -41,26 +41,26 @@ export default function AttendanceReportsPage() {
   }));
 
   const kpis = [
-    { label: "أيام الحضور", value: stats.present ?? 0, icon: Users, color: "text-green-600 bg-green-50" },
-    { label: "أيام الغياب", value: stats.absent ?? 0, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
-    { label: "حالات التأخير", value: stats.late ?? 0, icon: Clock, color: "text-yellow-600 bg-yellow-50" },
+    { label: "أيام الحضور", value: stats.present ?? 0, icon: Users, color: "text-status-success-foreground bg-status-success-surface" },
+    { label: "أيام الغياب", value: stats.absent ?? 0, icon: AlertTriangle, color: "text-status-error-foreground bg-status-error-surface" },
+    { label: "حالات التأخير", value: stats.late ?? 0, icon: Clock, color: "text-status-warning-foreground bg-status-warning-surface" },
     { label: "إجمالي الخصومات", value: formatCurrency(deductions.reduce((s: number, d: any) => s + Number(d.amount || 0), 0)), icon: DollarSign, color: "text-orange-600 bg-orange-50" },
   ];
 
   const monthlyColumns: DataTableColumn<any>[] = [
     { key: "employeeName", header: "الموظف", sortable: true, render: (m) => <span className="font-medium">{m.employeeName}</span> },
-    { key: "presentDays", header: "أيام الحضور", sortable: true, render: (m) => <span className="text-green-600">{m.presentDays || 0}</span> },
-    { key: "absentDays", header: "أيام الغياب", sortable: true, render: (m) => <span className="text-red-600">{m.absentDays || 0}</span> },
-    { key: "lateDays", header: "أيام التأخير", sortable: true, render: (m) => <span className="text-yellow-600">{m.lateDays || 0}</span> },
+    { key: "presentDays", header: "أيام الحضور", sortable: true, render: (m) => <span className="text-status-success-foreground">{m.presentDays || 0}</span> },
+    { key: "absentDays", header: "أيام الغياب", sortable: true, render: (m) => <span className="text-status-error-foreground">{m.absentDays || 0}</span> },
+    { key: "lateDays", header: "أيام التأخير", sortable: true, render: (m) => <span className="text-status-warning-foreground">{m.lateDays || 0}</span> },
     { key: "totalLateMinutes", header: "دقائق التأخير", sortable: true, render: (m) => m.totalLateMinutes || 0 },
-    { key: "totalDeduction", header: "الخصومات", sortable: true, render: (m) => <span className="text-red-600">{formatCurrency(Number(m.totalDeduction || 0))}</span> },
+    { key: "totalDeduction", header: "الخصومات", sortable: true, render: (m) => <span className="text-status-error-foreground">{formatCurrency(Number(m.totalDeduction || 0))}</span> },
   ];
 
   const deductionsColumns: DataTableColumn<any>[] = [
     { key: "employeeName", header: "الموظف", sortable: true, render: (d) => <span className="font-medium">{d.employeeName}</span> },
     { key: "type", header: "النوع", sortable: true, render: (d) => d.type === "late" ? "تأخير" : d.type === "absence" ? "غياب" : d.type },
     { key: "minutes", header: "الدقائق", sortable: true, render: (d) => d.minutes || 0 },
-    { key: "amount", header: "المبلغ", sortable: true, render: (d) => <span className="text-red-600 font-medium">{formatCurrency(Number(d.amount || 0))}</span> },
+    { key: "amount", header: "المبلغ", sortable: true, render: (d) => <span className="text-status-error-foreground font-medium">{formatCurrency(Number(d.amount || 0))}</span> },
     { key: "status", header: "الحالة", sortable: true, render: (d) => (
       <PageStatusBadge status={d.status} />
     ) },
