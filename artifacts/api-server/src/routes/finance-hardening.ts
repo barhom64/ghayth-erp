@@ -379,7 +379,7 @@ financeHardeningRouter.get("/journal-manual", authorize({ feature: "finance.hard
     const scope = req.scope!;
     const { status } = req.query as Record<string, string | undefined>;
     const conditions = [`je."companyId"=$1`, `je."isManual"=TRUE`, `je."deletedAt" IS NULL`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`je."approvalStatus"=$${params.length}`); }
 
     const rows = await rawQuery<Record<string, unknown>>(
@@ -720,8 +720,8 @@ financeHardeningRouter.patch("/bank-guarantees/:id", authorize({ feature: "finan
     const { id } = req.params;
     const b = zodParse(updateBankGuaranteeSchema.safeParse(req.body ?? {}));
     const sets: string[] = [`"updatedAt"=NOW()`];
-    const params: any[] = [];
-    const f = (col: string, val: any) => { if (val !== undefined) { params.push(val); sets.push(`"${col}"=$${params.length}`); } };
+    const params: unknown[] = [];
+    const f = (col: string, val: unknown) => { if (val !== undefined) { params.push(val); sets.push(`"${col}"=$${params.length}`); } };
     f("bank", b.bank); f("beneficiary", b.beneficiary); f("amount", b.amount);
     f("expiryDate", b.expiryDate); f("status", b.status); f("notes", b.notes);
     f("attachmentUrl", b.attachmentUrl); f("guaranteeType", b.guaranteeType);
@@ -1312,7 +1312,7 @@ financeHardeningRouter.get("/cost-center-report", authorize({ feature: "finance.
     const scope = req.scope!;
     const { startDate, endDate, costCenter } = req.query as Record<string, string | undefined>;
     const conditions = [`je."companyId"=$1`, `je."deletedAt" IS NULL`, `je.status = 'posted'`, `je."costCenter" IS NOT NULL`];
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (startDate) { params.push(startDate); conditions.push(`je."createdAt"::date >= $${params.length}`); }
     if (endDate) { params.push(endDate); conditions.push(`je."createdAt"::date <= $${params.length}`); }
     if (costCenter) { params.push(costCenter); conditions.push(`je."costCenter"=$${params.length}`); }

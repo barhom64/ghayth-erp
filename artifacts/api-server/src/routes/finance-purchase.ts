@@ -210,7 +210,7 @@ purchaseRouter.get("/purchase-requests", authorize({ feature: "finance.purchase"
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
     const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'pr."companyId"', branchColumn: 'pr."branchId"', enforceBranchScope: true });
-    const { status: filterStatus, page = "1", limit: lim = "20" } = req.query as any;
+    const { status: filterStatus, page = "1", limit: lim = "20" } = req.query as Record<string, string | undefined>;
     const safeLimPR = Math.min(Number(lim) || 50, 500);
 
     let extraWhere = "";
@@ -498,13 +498,13 @@ purchaseRouter.get("/purchase-orders", authorize({ feature: "finance.purchase", 
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
     const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'po."companyId"', branchColumn: 'po."branchId"', enforceBranchScope: true, softDeleteColumn: 'po."deletedAt"' });
-    const { status: filterStatus, page = "1", limit: lim = "20" } = req.query as any;
+    const { status: filterStatus, page = "1", limit: lim = "20" } = req.query as Record<string, string | undefined>;
     const safeLim = Math.min(Number(lim) || 50, 500);
 
     let extraWhere = "";
     let paramIdx = nextParamIndex;
     if (filterStatus) { params.push(filterStatus); extraWhere += ` AND po.status = $${paramIdx++}`; }
-    const { productId } = req.query as any;
+    const { productId } = req.query as Record<string, string | undefined>;
     // productId filter disabled: purchase_order_items has no productId column
 
     const offset = (Math.max(Number(page) || 1, 1) - 1) * safeLim;
@@ -940,7 +940,7 @@ purchaseRouter.get("/payment-run/pending", authorize({ feature: "finance.purchas
   try {
     const scope = req.scope!;
 
-    const { cutoffDate, supplierId } = req.query as any;
+    const { cutoffDate, supplierId } = req.query as Record<string, string | undefined>;
     const params: unknown[] = [scope.companyId];
     let where = `po."companyId" = $1 AND po.status = 'invoice_matched' AND po."deletedAt" IS NULL`;
     if (supplierId) { params.push(Number(supplierId) || 0); where += ` AND po."supplierId" = $${params.length}`; }

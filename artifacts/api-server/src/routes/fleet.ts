@@ -285,7 +285,7 @@ const DRIVER_TRANSITIONS: Record<string, readonly string[]> = {
 router.get("/vehicles", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { status, search } = req.query as any;
+    const { status, search } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
     if (search) { filters.search = String(search); filters.searchColumns = ['v."plateNumber"', 'v.make', 'v.model']; }
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'v."companyId"', branchColumn: 'v."branchId"', enforceBranchScope: true });
@@ -389,7 +389,7 @@ router.post("/vehicles", authorize({ feature: "fleet.vehicles", action: "create"
 router.get("/drivers", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { search, status } = req.query as any;
+    const { search, status } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'd."companyId"' });
     let where = baseWhere;
@@ -863,7 +863,7 @@ router.delete("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "de
 router.get("/trips", authorize({ feature: "fleet.trips", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { status, search } = req.query as any;
+    const { status, search } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 't."companyId"', branchColumn: 't."branchId"', enforceBranchScope: true });
     let where = baseWhere;
@@ -1320,7 +1320,7 @@ router.post("/trips/:id/waypoints", authorize({ feature: "fleet.trips", action: 
 router.get("/maintenance", authorize({ feature: "fleet.maintenance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { vehicleId, search, status } = req.query as any;
+    const { vehicleId, search, status } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'm."companyId"', branchColumn: 'm."branchId"', enforceBranchScope: true });
     let where = baseWhere;
@@ -1741,7 +1741,7 @@ router.get("/alerts", authorize({ feature: "fleet.vehicles", action: "list" }), 
 router.get("/fuel-logs", authorize({ feature: "fleet.trips", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { vehicleId, search, status } = req.query as any;
+    const { vehicleId, search, status } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'f."companyId"', branchColumn: 'f."branchId"', enforceBranchScope: true });
     let where = baseWhere;
@@ -1877,7 +1877,7 @@ router.post("/fuel-logs", authorize({ feature: "fleet.trips", action: "create" }
 router.get("/insurance", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { vehicleId } = req.query as any;
+    const { vehicleId } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'i."companyId"', branchColumn: 'i."branchId"', enforceBranchScope: true });
     let where = baseWhere;
@@ -2523,7 +2523,7 @@ router.get("/stats", authorize({ feature: "fleet.vehicles", action: "list" }), a
 router.get("/preventive-plans", authorize({ feature: "fleet.maintenance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { vehicleId } = req.query as any;
+    const { vehicleId } = req.query as Record<string, string | undefined>;
     const conditions = [`p."companyId"=$1`];
     const params: unknown[] = [scope.companyId];
     if (vehicleId) { params.push(Number(vehicleId) || 0); conditions.push(`p."vehicleId"=$${params.length}`); }
@@ -2693,7 +2693,7 @@ router.patch("/preventive-plans/:id", authorize({ feature: "fleet.maintenance", 
 router.get("/traffic-violations", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { vehicleId, driverId } = req.query as any;
+    const { vehicleId, driverId } = req.query as Record<string, string | undefined>;
     const conditions = [`tv."companyId"=$1`];
     const params: unknown[] = [scope.companyId];
     if (vehicleId) { params.push(Number(vehicleId) || 0); conditions.push(`tv."vehicleId"=$${params.length}`); }

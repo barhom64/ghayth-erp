@@ -441,7 +441,7 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
         // Single bulk INSERT instead of one round-trip per line.
         const COLS_PER_ROW = 7;
         const valuesSql: string[] = [];
-        const params: any[] = [];
+        const params: unknown[] = [];
         for (const l of validatedLines) {
           const base = params.length;
           valuesSql.push(
@@ -843,7 +843,7 @@ invoicesRouter.patch("/invoices/:id", authorize({ feature: "finance.invoices", a
     }
 
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};
     let idx = 1;
@@ -1741,7 +1741,7 @@ invoicesRouter.get("/customer-advances", authorize({ feature: "finance.invoices"
   try {
     const scope = req.scope!;
     const { clientId, status } = req.query as Record<string, string | undefined>;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     let where = `"companyId" = $1`;
     if (clientId) { params.push(Number(clientId)); where += ` AND "clientId" = $${params.length}`; }
     if (status) { params.push(status); where += ` AND status = $${params.length}`; }
@@ -1997,7 +1997,7 @@ invoicesRouter.get("/dunning/history", authorize({ feature: "finance.collection"
     const scope = req.scope!;
     await ensureDunningTables();
     const { invoiceId, clientId, stage } = req.query as Record<string, string | undefined>;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     let where = `dl."companyId"=$1`;
     if (invoiceId) { params.push(Number(invoiceId)); where += ` AND dl."invoiceId"=$${params.length}`; }
     if (clientId) { params.push(Number(clientId)); where += ` AND dl."clientId"=$${params.length}`; }

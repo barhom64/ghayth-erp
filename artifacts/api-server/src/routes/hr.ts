@@ -5038,7 +5038,7 @@ async function recomputeSummary(cycleId: number, companyId: number, employeeId: 
 router.get("/evaluation-cycles", authorize({ feature: "hr.performance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { employeeId } = req.query as any;
+    const { employeeId } = req.query as Record<string, string | undefined>;
     let rows: any[];
 
     if (isHR(scope)) {
@@ -5797,7 +5797,7 @@ router.post("/delegations", authorize({ feature: "hr.organization", action: "app
 router.get("/public-holidays", authorize({ feature: "hr.organization", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { year } = req.query as any;
+    const { year } = req.query as Record<string, string | undefined>;
     const conditions = [`"companyId" = $1`, `"deletedAt" IS NULL`];
     const params: unknown[] = [scope.companyId];
     if (year) { params.push(Number(year)); conditions.push(`year = $${params.length}`); }
@@ -5874,7 +5874,7 @@ router.patch("/public-holidays/:id", authorize({ feature: "hr.organization", act
 router.get("/public-holidays/check", authorize({ feature: "hr.organization", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { date } = req.query as any;
+    const { date } = req.query as Record<string, string | undefined>;
     if (!date) throw new ValidationError("التاريخ مطلوب", { field: "date" });
     const [holiday] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM public_holidays WHERE "companyId"=$1 AND $2::date BETWEEN "startDate"::date AND "endDate"::date`,
@@ -5911,7 +5911,7 @@ router.delete("/public-holidays/:id", authorize({ feature: "hr.organization", ac
 router.get("/transfers", authorize({ feature: "hr.exit", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { status } = req.query as any;
+    const { status } = req.query as Record<string, string | undefined>;
     const conditions = [`t."companyId"=$1`];
     const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`t.status=$${params.length}`); }
@@ -6274,7 +6274,7 @@ router.patch("/transfers/:id/receive", authorize({ feature: "hr.exit", action: "
 router.get("/idp", authorize({ feature: "hr.exit", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { employeeId } = req.query as any;
+    const { employeeId } = req.query as Record<string, string | undefined>;
     const conditions = [`idp."companyId"=$1`, `idp."deletedAt" IS NULL`];
     const params: unknown[] = [scope.companyId];
     if (employeeId) { params.push(Number(employeeId)); conditions.push(`idp."employeeId"=$${params.length}`); }
@@ -6376,7 +6376,7 @@ router.get("/gratuity/:employeeId", authorize({ feature: "hr.exit", action: "vie
   try {
     const scope = req.scope!;
     const employeeId = parseId(req.params.employeeId, "employeeId");
-    const { terminationType, terminationDate } = req.query as any;
+    const { terminationType, terminationDate } = req.query as Record<string, string | undefined>;
 
     const [assignment] = await rawQuery<Record<string, unknown>>(
       `SELECT ea.salary, ea."hireDate" AS "startDate", ea."jobTitle",
@@ -6651,7 +6651,7 @@ router.get("/accruals/preview", authorize({ feature: "hr.payroll", action: "list
 router.get("/turnover-report", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { year } = req.query as any;
+    const { year } = req.query as Record<string, string | undefined>;
     const targetYear = year ? Number(year) : currentYear();
 
     const [[totalActive], terminated] = await Promise.all([
@@ -6900,7 +6900,7 @@ router.get("/expiring-documents", authorize({ feature: "hr.employees", action: "
 router.get("/company-documents", authorize({ feature: "hr.organization", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { page = "1", limit: lim = "50" } = req.query as any;
+    const { page = "1", limit: lim = "50" } = req.query as Record<string, string | undefined>;
     const pageNum = Math.max(Number(page) || 1, 1);
     const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
@@ -6948,7 +6948,7 @@ router.post("/company-documents", authorize({ feature: "hr.organization", action
 router.get("/employee-documents", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { employeeId, page = "1", limit: lim = "50" } = req.query as any;
+    const { employeeId, page = "1", limit: lim = "50" } = req.query as Record<string, string | undefined>;
     const pageNum = Math.max(Number(page) || 1, 1);
     const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
@@ -7020,7 +7020,7 @@ router.post("/employee-documents", authorize({ feature: "hr.employees", action: 
 router.get("/excuse-requests", authorize({ feature: "hr.attendance", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { status, month } = req.query as any;
+    const { status, month } = req.query as Record<string, string | undefined>;
     const targetMonth = month || currentPeriod();
     let where = `e."companyId" = $1 AND TO_CHAR(e."excuseDate", 'YYYY-MM') = $2`;
     const params: unknown[] = [scope.companyId, targetMonth];

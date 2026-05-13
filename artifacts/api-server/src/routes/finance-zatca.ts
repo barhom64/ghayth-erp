@@ -389,7 +389,7 @@ zatcaRouter.put("/zatca/settings", authorize({ feature: "finance.zatca", action:
         `"buildingNumber" = $8`, `"cityName" = $9`, `"postalCode" = $10`, `"countryCode" = $11`,
         `"oauthClientId" = $12`, `"updatedAt" = NOW()`,
       ];
-      const params: any[] = [
+      const params: unknown[] = [
         enabled ?? false, environment ?? "sandbox", vatRegistrationNumber ?? null,
         crNumber ?? null, organizationName ?? null, organizationNameEn ?? null,
         streetName ?? null, buildingNumber ?? null, cityName ?? null,
@@ -805,7 +805,7 @@ zatcaRouter.get("/zatca/submissions", authorize({ feature: "finance.zatca", acti
     const offset = (Math.max(Number(page) || 1, 1) - 1) * safeLim;
 
     let whereExtra = "";
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     if (status) {
       params.push(status);
       whereExtra = ` AND l.status = $${params.length}`;
@@ -871,7 +871,7 @@ zatcaRouter.patch("/zatca/invoice/:id", authorize({ feature: "finance.zatca", ac
     const b = zodParse(zatcaInvoicePatchSchema.safeParse(req.body ?? {}));
 
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     let idx = 1;
     if (b.isTaxLinked !== undefined) { sets.push(`"isTaxLinked" = $${idx++}`); params.push(b.isTaxLinked); }
     if (b.invoiceTypeCode !== undefined) { sets.push(`"invoiceTypeCode" = $${idx++}`); params.push(b.invoiceTypeCode); }
@@ -902,7 +902,7 @@ zatcaRouter.patch("/zatca/expense/:id", authorize({ feature: "finance.zatca", ac
     const b = zodParse(zatcaExpensePatchSchema.safeParse(req.body ?? {}));
 
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     let idx = 1;
     if (b.isTaxLinked !== undefined) { sets.push(`"isTaxLinked" = $${idx++}`); params.push(b.isTaxLinked); }
     if (b.invoiceTypeCode !== undefined) { sets.push(`"invoiceTypeCode" = $${idx++}`); params.push(b.invoiceTypeCode); }

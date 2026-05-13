@@ -2,7 +2,7 @@ import { pool } from "./rawdb.js";
 import { logger } from "./logger.js";
 import type pg from "pg";
 
-async function exec(client: pg.PoolClient, sql: string, params: any[] = []) {
+async function exec(client: pg.PoolClient, sql: string, params: unknown[] = []) {
   return client.query(sql, params);
 }
 

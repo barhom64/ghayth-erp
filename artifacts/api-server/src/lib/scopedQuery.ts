@@ -64,7 +64,7 @@ export function buildScopedWhere(
   filters: ScopeFilters = {},
   options: ScopedQueryOptions = {},
   startParamIndex = 1
-): { where: string; params: any[]; nextParamIndex: number } {
+): { where: string; params: unknown[]; nextParamIndex: number } {
   const companyCol = options.companyColumn || '"companyId"';
   const branchCol = options.branchColumn || '"branchId"';
 
