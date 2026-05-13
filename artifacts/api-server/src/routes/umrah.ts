@@ -838,6 +838,7 @@ router.post("/import/preview", authorize({ feature: "umrah", action: "create" })
   try {
     const scope = req.scope!;
     const { seasonId, rows: importRows, fileType } = zodParse(importPreviewSchema.safeParse(req.body));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "preview", entity: "umrah_pilgrims", entityId: seasonId, after: { seasonId, rows: importRows.length, fileType } }).catch((e) => logger.error(e, "umrah import preview audit failed"));
     const passportHashes = importRows.filter((r) => r.passportNumber).map((r) => blindIndex(String(r.passportNumber)));
     const existingRows = passportHashes.length > 0
       ? await rawQuery<Record<string, unknown>>(`SELECT "passportNumber_hash" FROM umrah_pilgrims WHERE "companyId"=$1 AND "seasonId"=$2 AND "passportNumber_hash" = ANY($3) AND "deletedAt" IS NULL`, [scope.companyId, seasonId, passportHashes])
@@ -870,9 +871,9 @@ router.post("/import/mutamers", authorize({ feature: "umrah", action: "create" }
     const scope = req.scope!;
     const { seasonId, rows: importRows } = zodParse(importMutamersSchema.safeParse(req.body));
     const importBody = { seasonId, rows: importRows, fileType: "mutamers", fileName: "import-mutamers" };
-    const fakeReq = { ...req, body: importBody };
     // Reuse existing import logic via internal redirect
     const result = await doImport(scope, importBody);
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "import", entity: "umrah_pilgrims", entityId: result.importLogId, after: { seasonId, rows: importRows.length, new: result.new, updated: result.updated, errors: result.errors } }).catch((e) => logger.error(e, "umrah import mutamers audit failed"));
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Import mutamers error"); }
 });
@@ -882,6 +883,7 @@ router.post("/import/vouchers", authorize({ feature: "umrah", action: "create" }
     const scope = req.scope!;
     const { seasonId, rows: importRows } = zodParse(importVouchersSchema.safeParse(req.body));
     const result = await doImport(scope, { seasonId, rows: importRows, fileType: "vouchers", fileName: "import-vouchers" });
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "import", entity: "umrah_vouchers", entityId: result.importLogId, after: { seasonId, rows: importRows.length, new: result.new, updated: result.updated, errors: result.errors } }).catch((e) => logger.error(e, "umrah import vouchers audit failed"));
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Import vouchers error"); }
 });
@@ -965,7 +967,9 @@ async function doImport(scope: any, body: { seasonId: number; rows: any[]; fileT
 router.post("/import", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const result = await doImport(scope, zodParse(importSchema.safeParse(req.body)));
+    const parsed = zodParse(importSchema.safeParse(req.body));
+    const result = await doImport(scope, parsed);
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "import", entity: "umrah_pilgrims", entityId: result.importLogId, after: { seasonId: parsed.seasonId, rows: parsed.rows.length, new: result.new, updated: result.updated, errors: result.errors } }).catch((e) => logger.error(e, "umrah import audit failed"));
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Import error"); }
 });
@@ -1752,11 +1756,13 @@ router.patch("/violations/:id", authorize({ feature: "umrah", action: "update" }
         sets.push(`${col}=$${params.length}`);
       }
     }
-    const [row] = await rawQuery(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `UPDATE umrah_violations SET ${sets.join(",")} WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL RETURNING *`,
       params
     );
     if (!row) throw new NotFoundError("المخالفة غير موجودة");
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "umrah_violations", entityId: id, after: b }).catch((e) => logger.error(e, "umrah update violation audit failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.violation.updated", entity: "umrah_violations", entityId: id, after: { status: row.status } }).catch((e) => logger.error(e, "umrah update violation event failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update violation error"); }
 });
