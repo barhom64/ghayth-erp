@@ -65,7 +65,7 @@ const assignUserRoleSchema = z.object({
 }).strict();
 
 // ─── Catalog (read-only, anyone authenticated) ──────────────────────────────
-router.get("/features", async (req, res) => {
+router.get("/features", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT feature_key, parent_key, module_key, label_ar, label_en, description_ar, icon,
@@ -181,7 +181,7 @@ router.delete("/roles/:id", authorize({ feature: "admin.roles", action: "delete"
     const [{ count }] = await rawQuery<{ count: string }>(`SELECT COUNT(*)::text AS count FROM rbac_user_roles WHERE role_id = $1`, [id]);
     if (Number(count) > 0) return void res.status(409).json({ error: `الدور مرتبط بـ ${count} مستخدم — افصلهم أولاً` });
 
-    await rawExecute(`DELETE FROM rbac_roles WHERE id = $1`, [id]);
+    await rawExecute(`DELETE FROM rbac_roles WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     await recordHistory(id, scope.companyId, scope.userId, "role.delete", role, null, null);
     await bumpCacheVersion(scope.companyId);
     res.json({ deleted: 1 });
