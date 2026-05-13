@@ -213,33 +213,26 @@ plus the discovery + cleanup of duplicate-named migration files.
   on any new identical pair (unconditionally) and on divergent pairs
   (when `ENFORCE=1`).
 
-### Open in this phase
+### Resolved later in the same sweep
 
-- [ ] **9 divergent migration pairs.** Same basename, different DDL —
-  the more dangerous form because two files claim the same logical
-  change but actually do different things. Each pair needs a manual
-  reading to determine which file is authoritative and what the other
-  was trying to do (then either merge or rename one):
-  | basename | files |
-  | --- | --- |
-  | `hr_discipline_regulation.sql` | `034_…`, `066_…` |
-  | `inventory_projects_gl_accounts.sql` | `035_…`, `066_…` |
-  | `three_way_match.sql` | `036_…`, `067_…` |
-  | `rbac_v2_role_templates.sql` | `110_…`, `161_…` |
-  | `multi_currency_foundations.sql` | `140_…`, `162_…` |
-  | `rbac_jit_elevation.sql` | `140_…`, `163_…` |
-  | `system_settings_createdAt.sql` | `140_…`, `164_…` |
-  | `drop_unused_legacy_tables.sql` | `141_…`, `165_…` |
-  | `inventory_advanced_foundations.sql` | `141_…`, `166_…` |
-
-  Once resolved, set `ENFORCE=1` on `check:duplicate-migrations` so
-  the next divergent pair fails CI immediately.
-
-- [ ] **`PERSIST_ALL_EVENTS=true`** in production: still defaults off
-  (`businessHelpers.ts:144-150`). PDPL audit-trail completeness benefits
-  from flipping this on, but it adds an INSERT to every `emitEvent`
-  hot path so the call needs sizing against `event_logs` growth rate
-  first. Tracked here so it's not lost.
+- [x] **9 "divergent" migration pairs — confirmed false alarm.** When the
+  detector was extended to strip the file's self-referencing header
+  comment line (e.g. `-- 034_hr_discipline_regulation.sql` vs
+  `-- 066_…`, or `-- Migration 140: …` vs `-- Migration 164: …`), all
+  9 pairs collapsed to identical DDL. The higher-numbered file was
+  deleted in each case (same logic as the original 10 identical pairs).
+  Migration baseline is now **0 collisions of any kind**.
+- [x] **`check:duplicate-migrations` wired into `scripts/guard.sh`** as
+  step 9 (between `audit:domain-routes` and `test`). It now fails CI
+  on ANY collision — identical or divergent — unconditionally. No
+  `ENFORCE=1` opt-in needed; the baseline is clean.
+- [x] **PERSIST_ALL_EVENTS startup warning.** `index.ts` now logs a
+  loud `logger.warn` at startup if `NODE_ENV !== "development"` and
+  `PERSIST_ALL_EVENTS` is not set to `"true"`. The default behaviour
+  is unchanged (avoiding a hot-path INSERT regression on existing
+  deployments) — but operators can no longer silently miss the PDPL
+  audit-trail gap. Flip the flag on once event_logs growth rate has
+  been sized.
 
 ---
 
