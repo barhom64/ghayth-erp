@@ -195,7 +195,7 @@ interface PortalQueryOptions {
 function buildPortalWhere(
   scope: PortalScope,
   opts: PortalQueryOptions = {}
-): { where: string; params: any[] } {
+): { where: string; params: unknown[] } {
   const cc = opts.clientColumn ?? '"clientId"';
   const mc = opts.companyColumn ?? '"companyId"';
   let where = `${cc} = $1 AND ${mc} = $2`;
@@ -204,7 +204,7 @@ function buildPortalWhere(
   return { where, params };
 }
 
-function assertPortalScopeInParams(scope: PortalScope, params: any[]): void {
+function assertPortalScopeInParams(scope: PortalScope, params: unknown[]): void {
   const hasClientId = params.some(p => String(p) === String(scope.clientId));
   const hasCompanyId = params.some(p => String(p) === String(scope.companyId));
   if (!hasClientId || !hasCompanyId) {
@@ -218,7 +218,7 @@ function assertPortalScopeInParams(scope: PortalScope, params: any[]): void {
 async function portalScopedQuery<T = any>(
   scope: PortalScope,
   sql: string,
-  params: any[] = []
+  params: unknown[] = []
 ): Promise<T[]> {
   assertPortalScopeInParams(scope, params);
   return rawQuery<T>(sql, params);
@@ -227,7 +227,7 @@ async function portalScopedQuery<T = any>(
 async function portalScopedExecute(
   scope: PortalScope,
   sql: string,
-  params: any[] = []
+  params: unknown[] = []
 ) {
   assertPortalScopeInParams(scope, params);
   return rawExecute(sql, params);

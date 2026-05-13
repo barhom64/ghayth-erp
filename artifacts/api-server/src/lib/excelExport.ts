@@ -44,7 +44,7 @@ export function workbookToBuffer(wb: XLSX.WorkBook): Buffer {
 
 export async function exportTrialBalanceExcel(companyId: number, startDate?: string, endDate?: string): Promise<Buffer> {
   let dateFilter = "";
-  const params: any[] = [companyId];
+  const params: unknown[] = [companyId];
   if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
   if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
 
@@ -80,7 +80,7 @@ export async function exportTrialBalanceExcel(companyId: number, startDate?: str
 
 export async function exportIncomeStatementExcel(companyId: number, startDate?: string, endDate?: string): Promise<Buffer> {
   let dateFilter = "";
-  const params: any[] = [companyId];
+  const params: unknown[] = [companyId];
   if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
   if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
 
@@ -117,7 +117,7 @@ export async function exportIncomeStatementExcel(companyId: number, startDate?: 
 
 export async function exportInvoicesExcel(companyId: number, startDate?: string, endDate?: string): Promise<Buffer> {
   let dateFilter = "";
-  const params: any[] = [companyId];
+  const params: unknown[] = [companyId];
   if (startDate) { params.push(startDate); dateFilter += ` AND i."createdAt" >= $${params.length}`; }
   if (endDate) { params.push(endDate); dateFilter += ` AND i."createdAt" <= $${params.length}`; }
 
@@ -152,7 +152,7 @@ export async function exportInvoicesExcel(companyId: number, startDate?: string,
 
 export async function exportPayrollExcel(companyId: number, period?: string): Promise<Buffer> {
   let filter = "";
-  const params: any[] = [companyId];
+  const params: unknown[] = [companyId];
   if (period) { params.push(period); filter = ` AND pr.period = $${params.length}`; }
 
   const records = await rawQuery<Record<string, unknown>>(
@@ -206,7 +206,7 @@ export async function exportPayrollExcel(companyId: number, period?: string): Pr
 
 export async function exportAttendanceExcel(companyId: number, startDate?: string, endDate?: string): Promise<Buffer> {
   let dateFilter = "";
-  const params: any[] = [companyId];
+  const params: unknown[] = [companyId];
   if (startDate) { params.push(startDate); dateFilter += ` AND a.date >= $${params.length}`; }
   if (endDate) { params.push(endDate); dateFilter += ` AND a.date <= $${params.length}`; }
 
