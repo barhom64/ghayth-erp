@@ -83,6 +83,7 @@ import { collectionRouter } from "./finance-collection.js";
 import { budgetRouter } from "./finance-budget.js";
 import { accountsRouter } from "./finance-accounts.js";
 import { vendorsRouter } from "./finance-vendors.js";
+import { vendorContractsRouter } from "./finance-vendor-contracts.js";
 import { costCentersRouter } from "./finance-cost-centers.js";
 import disciplineRouter from "./hr-discipline.js";
 import loansRouter from "./hr-loans.js";
@@ -300,6 +301,7 @@ router.use("/finance", requireModule("finance"), requireGuards("financial"), col
 router.use("/finance", requireModule("finance"), requireGuards("financial"), budgetRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), accountsRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), vendorsRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), vendorContractsRouter);
 router.use("/finance", requireModule("finance"), financeHardeningRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), recurringRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), costCentersRouter);
