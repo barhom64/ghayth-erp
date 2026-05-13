@@ -77,9 +77,21 @@ async function buildScope(payload: JWTPayload): Promise<RequestScope> {
 
   if (!assignment) throw new Error("التعيين غير موجود أو غير نشط");
 
+  // Pull assignments + join `branches` so we drop any whose branch has
+  // been soft-disabled (status='inactive'). Without the join, a user
+  // keeps "allowed" access to a branch the operator already turned off
+  // via PR #513's soft-disable flow — buildScopedWhere would happily
+  // emit `branchId = ANY(...)` with the disabled id, leaking reads and
+  // letting writes land on it. employee_assignments.branchId is
+  // nullable for owners/general_managers, so the OR clause keeps those
+  // rows in.
   const allAssignments = await rawQuery<{ id: number; companyId: number; branchId: number | null }>(
-    `SELECT id, "companyId", "branchId" FROM employee_assignments
-     WHERE "employeeId" = $1 AND status = 'active'`,
+    `SELECT ea.id, ea."companyId", ea."branchId"
+       FROM employee_assignments ea
+       LEFT JOIN branches b ON b.id = ea."branchId"
+      WHERE ea."employeeId" = $1
+        AND ea.status = 'active'
+        AND (ea."branchId" IS NULL OR COALESCE(b.status, 'active') = 'active')`,
     [assignment.employeeId]
   );
 
@@ -93,8 +105,10 @@ async function buildScope(payload: JWTPayload): Promise<RequestScope> {
   ];
 
   if (assignment.role === "owner" || assignment.role === "general_manager") {
+    // Same status filter for the company-wide expansion — owners must
+    // not silently regain access to a disabled branch.
     const companyBranches = await rawQuery<{ id: number }>(
-      `SELECT id FROM branches WHERE "companyId" = ANY($1)`,
+      `SELECT id FROM branches WHERE "companyId" = ANY($1) AND COALESCE(status, 'active') = 'active'`,
       [allowedCompanies]
     );
     for (const b of companyBranches) {
