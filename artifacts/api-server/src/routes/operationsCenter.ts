@@ -342,7 +342,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
   }
 });
 
-async function buildChecklistItems(scope: any, where: string, params: any[], companies: number[], today: string): Promise<any[]> {
+async function buildChecklistItems(scope: any, where: string, params: unknown[], companies: number[], today: string): Promise<any[]> {
     const safe = <T>(p: Promise<T[]>): Promise<T | null> => p.then(r => r[0] ?? null).catch(() => null);
 
     const [att, pending, maint, overdue, tasks, tickets, receipts, payments] = await Promise.all([

@@ -3,7 +3,7 @@ import { emitEvent, createGuardedJournalEntry, getAccountCodeFromMapping, roundT
 import { NotFoundError } from "./errorHandler.js";
 import { logger } from "./logger.js";
 
-type QueryFn = (sql: string, params: any[]) => Promise<{ rows: any[] }>;
+type QueryFn = (sql: string, params: unknown[]) => Promise<{ rows: any[] }>;
 
 // ---------------------------------------------------------------------------
 // Types

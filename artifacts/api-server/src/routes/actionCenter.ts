@@ -255,7 +255,7 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
       // 1. Sub-agents on file but never linked to a client record — blocks
       //    invoice + statement flows for that sub-agent. Surfaced here so
       //    ops can finish the linkage before the next import cycle.
-      safe(rawQuery<any>(
+      safe(rawQuery<Record<string, unknown>>(
         `SELECT sa.id, sa."nuskCode", sa.name, sa."paymentTerms", sa.country, sa."createdAt"
            FROM umrah_sub_agents sa
           WHERE sa."companyId" = ANY($1::int[])
@@ -267,7 +267,7 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
       ), "umrahUnlinkedSubAgents"),
       // 2. Pilgrims with overstayDays > 0 who don't have a penalty row yet
       //    — typically means cron C27 didn't run or was rate-limited.
-      safe(rawQuery<any>(
+      safe(rawQuery<Record<string, unknown>>(
         `SELECT p.id, p."nuskNumber", p."fullName", p.nationality,
                 p."overstayDays", g.name AS "groupName"
            FROM umrah_pilgrims p
@@ -288,7 +288,7 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
       ), "umrahOverstayWithoutPenalty"),
       // 3. Postpaid umrah sales invoices that have aged past their due date
       //    without being marked paid — top operational AR follow-up item.
-      safe(rawQuery<any>(
+      safe(rawQuery<Record<string, unknown>>(
         `SELECT si.id, si.ref, si.total, si."paidAmount", si.status,
                 si."invoiceDate", si."dueDate",
                 sa.name AS "subAgentName"
@@ -305,7 +305,7 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
       ), "umrahOverdueInvoices"),
       // 4. NUSK file ↔ posted-GL amount diffs (subset of the reconciliation
       //    report, kept lean for the dashboard).
-      safe(rawQuery<any>(
+      safe(rawQuery<Record<string, unknown>>(
         `SELECT ni.id, ni."nuskInvoiceNumber", ni."totalAmount" AS "fileTotal",
                 ni."nuskStatus",
                 COALESCE(je_ap.total, 0) AS "postedAp",
