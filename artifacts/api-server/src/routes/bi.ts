@@ -1365,11 +1365,17 @@ router.get("/reports/umrah-season-summary", authorize({ feature: "bi", action: "
     const scope = req.scope!;
     const cid = scope.companyId;
 
+    // NOTE: umrah_seasons has no "hijriYear" or "isCurrent" columns in the
+    // live schema — the previous version of this query referenced them and
+    // failed at runtime (ghost-column drift caught by check:schema-drift,
+    // task #212). We sort by startDate desc instead and omit those fields
+    // from the response. If/when those columns are added by migration,
+    // restore them here and to the response mapping below.
     const seasons = await rawQuery<Record<string, unknown>>(
-      `SELECT id, title, "hijriYear", "startDate", "endDate", status, "isCurrent"
+      `SELECT id, title, "startDate", "endDate", status
          FROM umrah_seasons
         WHERE "companyId" = $1 AND "deletedAt" IS NULL
-        ORDER BY "hijriYear" DESC, "startDate" DESC NULLS LAST
+        ORDER BY "startDate" DESC NULLS LAST
         LIMIT 50`,
       [cid]
     ).catch((e) => { logger.error(e, "bi umrah seasons query failed"); return []; });
@@ -1438,11 +1444,9 @@ router.get("/reports/umrah-season-summary", authorize({ feature: "bi", action: "
       return {
         seasonId: s.id,
         title: s.title,
-        hijriYear: s.hijriYear,
         startDate: s.startDate,
         endDate: s.endDate,
         status: s.status,
-        isCurrent: s.isCurrent,
         pilgrims:  { total: Number(p.total), active: Number(p.active), departed: Number(p.departed), overstay: Number(p.overstay), violated: Number(p.violated) },
         groups:    { total: Number(g.total), invoiced: Number(g.invoiced) },
         sales:     { invoiced: Number(sa.invoiced), paid: Number(sa.paid), outstanding: Number(sa.invoiced) - Number(sa.paid), pendingCount: Number(sa.pendingCount) },
