@@ -26,13 +26,31 @@ _لم تُلتقط أزرار._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/finance.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+تكلفة المخزون (Inventory Costing). FIFO/AVG/LIFO. المرجع: `docs/INVENTORY_ADVANCED_DESIGN.md`.
+
+| الطريقة | الوصف | متى تُستخدم |
+|---------|------|------------|
+| **FIFO** (First-In First-Out) | كل واحدة لها cost = أقدم layer | الافتراضي IFRS |
+| **AVG** (Weighted Average) | running average per product | شائع في الـ retail |
+| **LIFO** | آخر داخل أول خارج | غير مسموح IFRS لكن يُستخدم محلياً |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| إنشاء inventory layer عند الإدخال | `lib/inventory/valuation/` | `inventory_layers` (qty, cost, date) | ✅ |
+| استهلاك من layer عند الإخراج | FIFO: من الأقدم؛ AVG: weighted | يخفض `qty`، يحفظ snapshot في `inventory_cost_lines` | ✅ |
+| **قيد محاسبي عند الإخراج** | finance/GL | DR COGS / CR Inventory (بقيمة الـ layer المستخدمة) | راجع `finance-fixed-assets.md` | ✅ |
+| Variance من standard cost | aggregation per product | تقرير | ⚠ تحقق |
+| Cycle count adjustments | warehouse | عند inventory-count discrepancy | يولّد قيد adjustment | راجع `warehouse-products-byid.md` |
+| Lot tracking (للأدوية/الأغذية) | warehouse | `inventory_lots.expiryDate` | ✅ |
+| Write-off (expired/damaged) | finance/GL | DR Inventory Loss / CR Inventory | `lotWriteoffJournal` test يغطّيها | ✅ |
+| تأثير على balance sheet | finance/reports | `inventory_value` aggregate | ✅ |
+| GL reconciliation | راجع `admin-gl-reconciliation.md` | sum layers vs gl_lines Inventory account | ✅ |
+| Audit log | core | `auditMiddleware` (`/warehouse/movements`) | ✅ |
+
+تحقق يدوي:
+- [ ] هل التحوّل من طريقة لأخرى (FIFO ↔ AVG) محظور أم ممكن مع revaluation؟
+- [ ] هل cost layer منفصل per branch/warehouse أم unified؟
+- [ ] هل expired lots تطلق تنبيه قبل anti-write-off?
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `inventory-costing` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
