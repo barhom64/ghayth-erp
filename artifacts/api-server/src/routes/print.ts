@@ -129,7 +129,7 @@ router.post(
       let overrideTemplate;
       if (body.templateId) {
         const [t] = await rawQuery(
-          `SELECT * FROM document_templates WHERE id = $1 AND ("companyId" = $2 OR "companyId" IS NULL) LIMIT 1`,
+          `SELECT * FROM document_templates WHERE id = $1 AND ("companyId" = $2 OR "companyId" IS NULL) AND "deletedAt" IS NULL LIMIT 1`,
           [body.templateId, scope.companyId]
         );
         if (!t) throw new NotFoundError("template");
@@ -292,7 +292,7 @@ router.delete(
       if (!Number.isInteger(id)) throw new ValidationError("invalid id");
       const scope = scopeFromReq(req);
       await rawExecute(
-        `UPDATE document_templates SET "isActive" = false, "updatedAt" = NOW()
+        `UPDATE document_templates SET "isActive" = false, "deletedAt" = NOW(), "updatedAt" = NOW()
          WHERE id = $1 AND "companyId" = $2`,
         [id, scope.companyId]
       );
@@ -315,7 +315,7 @@ router.get(
         `SELECT a.id, a."branchId", a."entityType", a."templateId", a."isDefault",
                 t.name AS "templateName", b.name AS "branchName"
          FROM print_template_assignments a
-         JOIN document_templates t ON t.id = a."templateId"
+         JOIN document_templates t ON t.id = a."templateId" AND t."deletedAt" IS NULL
          LEFT JOIN branches b ON b.id = a."branchId"
          WHERE a."companyId" = $1
          ORDER BY a."branchId" NULLS FIRST, a."entityType"`,

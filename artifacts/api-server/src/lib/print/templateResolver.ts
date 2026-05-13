@@ -64,7 +64,7 @@ export async function resolveTemplate(opts: {
       `SELECT id, name, "entityType", "branchId", "companyId", "paperSize", "mode",
               "presetKey", "htmlContent", "layoutJson", "cssOverrides",
               "headerOverride", "footerOverride", "isThermal", "version"
-       FROM document_templates WHERE id = $1 LIMIT 1`,
+       FROM document_templates WHERE id = $1 AND "deletedAt" IS NULL LIMIT 1`,
       [templateId]
     );
     if (rows[0]) return toTemplate(rows[0]);
@@ -76,7 +76,7 @@ export async function resolveTemplate(opts: {
             t."presetKey", t."htmlContent", t."layoutJson", t."cssOverrides",
             t."headerOverride", t."footerOverride", t."isThermal", t."version"
      FROM print_template_assignments a
-     JOIN document_templates t ON t.id = a."templateId"
+     JOIN document_templates t ON t.id = a."templateId" AND t."deletedAt" IS NULL
      WHERE a."companyId" = $1
        AND a."entityType" = $2
        AND a."isDefault" = true
@@ -93,7 +93,7 @@ export async function resolveTemplate(opts: {
             "presetKey", "htmlContent", "layoutJson", "cssOverrides",
             "headerOverride", "footerOverride", "isThermal", "version"
      FROM document_templates
-     WHERE "companyId" = $1 AND "entityType" = $2 AND "isDefault" = true AND "isActive" = true
+     WHERE "companyId" = $1 AND "entityType" = $2 AND "isDefault" = true AND "isActive" = true AND "deletedAt" IS NULL
      ORDER BY "branchId" NULLS LAST, id DESC
      LIMIT 1`,
     [companyId, entityType]
@@ -106,7 +106,7 @@ export async function resolveTemplate(opts: {
             "presetKey", "htmlContent", "layoutJson", "cssOverrides",
             "headerOverride", "footerOverride", "isThermal", "version"
      FROM document_templates
-     WHERE "companyId" IS NULL AND "entityType" = $1 AND "presetKey" = 'classic'
+     WHERE "companyId" IS NULL AND "entityType" = $1 AND "presetKey" = 'classic' AND "deletedAt" IS NULL
      ORDER BY id ASC LIMIT 1`,
     [entityType]
   );
@@ -120,7 +120,7 @@ export async function listTemplates(opts: {
   branchId?: number | null;
   entityType?: string;
 }): Promise<PrintTemplate[]> {
-  const where: string[] = [`("companyId" = $1 OR "companyId" IS NULL)`];
+  const where: string[] = [`("companyId" = $1 OR "companyId" IS NULL)`, `"deletedAt" IS NULL`];
   const params: unknown[] = [opts.companyId];
   if (opts.entityType) {
     params.push(opts.entityType);
