@@ -80,30 +80,66 @@ export default function UmrahImportWizard() {
     setParseError("");
     setFileName(latest.name);
     try {
-      const XLSX: any = await import("xlsx");
+      // exceljs replaces xlsx@0.18.5 (Prototype Pollution + ReDoS, no fix
+      // available — Task #269). API surface is async-only.
+      const ExcelJS = (await import("exceljs")).default;
       const base64 = latest.dataUrl.split(",")[1];
       const binaryStr = atob(base64);
       const bytes = new Uint8Array(binaryStr.length);
       for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-      const wb = XLSX.read(bytes, { type: "array", cellDates: true });
-      const sheetName = wb.SheetNames[0];
-      if (!sheetName) { setParseError("الملف لا يحتوي على أوراق عمل"); return; }
-      const data: any[] = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: "" });
-      if (data.length === 0) { setParseError("الملف فارغ"); return; }
-      const rows = data.map((row: any) => {
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(bytes.buffer);
+      const ws = wb.worksheets[0];
+      if (!ws) { setParseError("الملف لا يحتوي على أوراق عمل"); return; }
+      const headers: string[] = [];
+      const headerRow = ws.getRow(1);
+      const colCount = Math.max(ws.columnCount, 1);
+      for (let c = 1; c <= colCount; c++) {
+        headers.push(String(normalizeExcelCellValue(headerRow.getCell(c).value) ?? "").trim());
+      }
+      const rows: any[] = [];
+      ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+        if (rowNumber === 1) return;
         const mapped: any = {};
-        Object.keys(row).forEach((k) => {
-          let val = row[k];
+        let anyVal = false;
+        for (let c = 1; c <= colCount; c++) {
+          const key = headers[c - 1];
+          if (!key) continue;
+          let val: unknown = normalizeExcelCellValue(row.getCell(c).value);
           if (val instanceof Date) val = val.toISOString().split("T")[0];
-          mapped[k.trim()] = String(val ?? "").trim();
-        });
-        return mapped;
+          const str = String(val ?? "").trim();
+          if (str) anyVal = true;
+          mapped[key] = str;
+        }
+        if (anyVal) rows.push(mapped);
       });
+      if (rows.length === 0) { setParseError("الملف فارغ"); return; }
       setParsedRows(rows);
     } catch (e: any) {
       setParseError(`خطأ في قراءة الملف: ${e?.message ?? "خطأ غير معروف"}`);
     }
   };
+
+  // Mirror of server-side excelCompat.normalizeCellValue: collapses
+  // exceljs richText / hyperlink / formula wrappers into plain values.
+  function normalizeExcelCellValue(v: unknown): unknown {
+    if (v === null || v === undefined) return "";
+    if (v instanceof Date) return v;
+    if (typeof v !== "object") return v;
+    const o: any = v;
+    if (Array.isArray(o.richText)) return o.richText.map((p: any) => p.text ?? "").join("");
+    if ("text" in o) {
+      const t = o.text;
+      if (typeof t === "string") return t;
+      if (t && typeof t === "object" && Array.isArray(t.richText)) {
+        return t.richText.map((p: any) => p.text ?? "").join("");
+      }
+      return String(t ?? "");
+    }
+    if ("result" in o) return o.result ?? "";
+    if ("error" in o) return "";
+    return v;
+  }
 
   const runPreview = async () => {
     if (!seasonId || parsedRows.length === 0) return;
