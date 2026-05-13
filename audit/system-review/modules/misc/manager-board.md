@@ -25,13 +25,35 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/misc.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+لوحة المدير (Manager Board) — KPIs قسمية + الإجراءات المنتظرة للمدير.
+
+| القسم | المصدر | البيانات |
+|------|--------|----------|
+| Pending approvals | requests + workflows | عدد الطلبات تنتظر موافقتي |
+| Team attendance today | hr/attendance | check-in count + lateness |
+| Team performance KPIs | hr/performance | scores per employee |
+| Team productivity | tasks/projects | tasks completed/pending |
+| Department budget status | finance/budget | % spent, alerts |
+| Open tickets | support | tickets assigned to my team |
+| Compliance status | governance | open audit findings + CAPA |
+| Open risks | governance | risks I own |
+| Upcoming reviews | hr/performance | reviews due in 30 days |
+| Direct reports list | hr | scope: my team only |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| تجميع KPIs | aggregate من 8+ مصدر | محسوب لحظياً | ✅ |
+| فلترة scope=team | يطبق reportingChain | RBAC | ✅ |
+| Quick actions (approve from board) | inline approval | راجع `requests-byid.md` | ✅ |
+| Drill-down per employee | navigate to `employee-detail` | راجع `employees-byid.md` | ✅ |
+| تصدير report | `export.ts` | weekly summary | ⚠ |
+| إشعارات للمدير | comms | event=`team_kpi_alert` | `notifications` | ⚠ |
+| Audit log | core | read-only operations لا تُسجّل | ✅ |
+
+تحقق يدوي:
+- [ ] هل scope of "team" يشمل grandchildren (manager-of-manager view)؟
+- [ ] هل البيانات الحساسة (راتب الموظف) محصورة على المدير المباشر + HR؟
+- [ ] هل اللوحة محدثّة real-time أم cached؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `manager-board` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

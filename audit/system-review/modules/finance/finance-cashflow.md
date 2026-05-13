@@ -27,13 +27,35 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/finance.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+تقرير التدفقات النقدية (Cash Flow Statement) — IFRS standard.
+
+| المصدر | البيان | تأثير على cash |
+|--------|--------|----------------|
+| **Operating Activities** | فواتير عملاء مدفوعة | +Inflow |
+| | مصاريف تشغيلية مدفوعة | -Outflow |
+| | رواتب مصروفة | -Outflow |
+| | VAT to/from ZATCA | net effect |
+| **Investing Activities** | شراء أصول ثابتة | -Outflow |
+| | بيع أصول ثابتة | +Inflow |
+| | استثمارات قصيرة الأجل | varies |
+| **Financing Activities** | قروض جديدة | +Inflow |
+| | سداد قروض | -Outflow |
+| | توزيعات أرباح | -Outflow |
+| | bank margins (BGs) | hold/release |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| توليد cash flow statement | `finance-reports.ts` GET `/cashflow` | aggregation من `gl_lines` مع classification | ✅ |
+| تصنيف كل قيد (operating/investing/financing) | finance | `gl_entries.cashflowCategory` أو inferred من accountCode | ⚠ تحقق |
+| Direct method vs Indirect method | finance/reports | يدعم النوعين | ⚠ غالباً Indirect |
+| تكامل مع cash forecast | finance | يستخدم التاريخ كـ baseline للتنبؤ | راجع `finance-cash-flow-forecast.md` |
+| تصدير لـ ZATCA/audit | finance | تقرير سنوي | ⚠ |
+| ربط بـ fiscal periods | finance | فقط للفترات المغلقة (للنهائي) | ✅ |
+
+تحقق يدوي:
+- [ ] هل القيود المباشرة (manual journals) تُصنّف آلياً أم يدوياً؟
+- [ ] هل التحويلات بين حسابات شركة واحدة تظهر في الـ cashflow أم تُستبعد؟
+- [ ] هل البنوك متعددة (multi-currency) محسوبة بـ closing FX أم average؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `cashflow` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

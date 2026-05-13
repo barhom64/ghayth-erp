@@ -24,13 +24,27 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/admin.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+محرّك السياسات (Policy Engine) — `business_rules` القابلة للتعديل بدون إعادة نشر.
+
+| الحركة | الوحدة الهدف | مدخل API | مدخل DB | الحالة |
+|--------|--------------|----------|---------|--------|
+| تعريف قاعدة عمل | admin/policy | POST `/rules` | `business_rules` | ✅ |
+| نوع (threshold/workflow/calculation/validation) | admin | `rule.type`, `scope`, `appliesTo` | ✅ |
+| تأثير على approvals | governance/workflows | rules تحدّد thresholds + chains | راجع `governance-workflows-rules.md` | ✅ |
+| تأثير على calculations | متعدد | gratuity rule, overtime rate, late deduction | يُقرأ في `payroll`, `hr`, `finance` | ✅ |
+| تأثير على validations | core | منع إجراءات تحت شروط معيّنة | guard in routes | ✅ |
+| تأثير real-time | core | invalidate cache `businessRulesCache` | ✅ |
+| versioning | admin | `rule_versions` — تتبّع التغييرات | للـ rollback | ✅ |
+| دvalid before/after | admin | `rule.effectiveDate`, `expiringDate` | يدعم الجدولة المسبقة | ✅ |
+| Approval workflow (للقواعد المالية) | governance | يحتاج CFO + admin | ✅ |
+| Audit log + emit event | core | إجباري | `audit_logs`, `event_logs` | ✅ critical |
+| إشعار للمعنيين | comms | event=`business_rule_changed` | `notifications` | ⚠ |
+| تصدير policy report | admin | شامل كل rules النشطة | للـ governance review | ✅ |
+
+تحقق يدوي:
+- [ ] هل تعديل rule مالي حساس (مثل threshold الموافقة) يحتاج 2-of-N admin؟
+- [ ] هل rollback لإصدار قديم يحفظ سبب التراجع في الـ audit؟
+- [ ] هل الأحداث الجارية (طلبات مفتوحة) تتأثر بـ rule جديد أم تعمل بقاعدة وقت الإنشاء؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `policy-engine` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

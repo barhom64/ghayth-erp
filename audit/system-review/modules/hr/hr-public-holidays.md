@@ -23,13 +23,34 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/hr.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+العطل الرسمية (Public Holidays). تأثير عرضي على كل وحدة جدولة.
+
+| الوحدة المتأثرة | كيف تستخدم holidays |
+|------------------|----------------------|
+| hr/attendance | تستثني العطل من حساب الـ working days |
+| hr/leaves | حساب أيام الإجازة لا يشمل العطل |
+| hr/payroll | حساب الراتب الشهري كامل (no deduction) |
+| hr/overtime | overtime ×2 (rate أعلى للعطلة) |
+| hr/shifts | shifts النصب تعتبر العطل |
+| fleet/trips | جدولة المهام تتجنب العطل |
+| properties/contracts | حساب مدة العقد (لو يستخدم business days) |
+| finance/recurring-journals | تأجيل التنفيذ لو العطلة تتزامن |
+| misc/calendar | تظهر بلون مميّز |
+| properties/maintenance | جدولة الصيانة |
+| legal/sessions | المحاكم مغلقة في العطل الرسمية |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| إدارة عطل سنوية | POST `/hr/public-holidays` | `public_holidays` | ✅ |
+| استيراد من تقويم رسمي | gov-integrations | اختياري — Hijri calendar API | ⚠ |
+| Multi-country support | per-country list | `holidays.country` | ⚠ تحقق |
+| Override per branch | branch-specific holidays | `holidays.branchId` | ⚠ |
+| Audit log | core | `auditMiddleware` لو مضاف | `audit_logs` | ⚠ |
+
+تحقق يدوي:
+- [ ] هل تعديل عطلة سابقة (لو أعلنت متأخراً) تعيد حساب payroll/overtime؟
+- [ ] هل التقويم الهجري vs الميلادي محسوب صحيحاً للعطل الإسلامية؟
+- [ ] هل عطل خاصة بكل دولة (multi-country company) مدعومة؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `public-holidays` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

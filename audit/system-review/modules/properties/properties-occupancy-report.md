@@ -23,13 +23,34 @@ _لم تُلتقط أزرار._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/properties.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+تقرير الإشغال (Occupancy Report) — read-only، KPI رئيسي للملاك.
+
+| البيانات | المصدر | الحساب |
+|---------|--------|--------|
+| Total units | `property_units` count | per building/owner/portfolio |
+| Occupied | `units WHERE status='occupied'` | with active contract |
+| Vacant | `units WHERE status='vacant'` | available for rent |
+| Maintenance | `units WHERE status='maintenance'` | excluded from supply |
+| Reserved | `units WHERE status='reserved'` | pending contract |
+| Occupancy rate | (occupied / total) × 100 | KPI |
+| Average rent | sum(active contracts.monthlyRent) / count | per type/area |
+| Revenue projection | rent × 12 × occupancy_rate | annual estimate |
+| Aging vacancy | days since last contract ended | per unit |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| توليد التقرير | `properties.ts` GET `/occupancy-report` | aggregation | ✅ |
+| Filter per scope | يطبق branchId/buildingId | ✅ |
+| تجميع per type (residential/commercial) | aggregation per category | ✅ |
+| تصدير PDF/Excel | `export.ts` | ✅ |
+| ربط بـ bi-dashboards | exec dashboard | KPIs | ✅ |
+| إشعار عند انخفاض occupancy | comms | event=`occupancy_below_threshold` | `notifications` | ⚠ |
+| ربط بـ tco/profitability | finance | per building NOI calc | ⚠ |
+
+تحقق يدوي:
+- [ ] هل وحدة under_maintenance تُحتسب في إجمالي units (denominator) أم تُستبعد؟
+- [ ] هل التقرير الشهري يحفظ snapshot للأرشيف أم محسوب لحظياً فقط؟
+- [ ] هل المتوسط (avg rent) يستثني الوحدات الكبيرة شاذة الـ outliers؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `occupancy-report` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
