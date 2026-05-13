@@ -21,7 +21,7 @@ COMPANY_NAME='مؤسسة الضياء والبيان للمقاولات'
 # Expected counts after running both seed files
 declare -A EXPECTED=(
   [companies]=1
-  [branches]=5
+  [branches]=7
   [employees]=1
   [users]=1
   [employee_assignments]=1
