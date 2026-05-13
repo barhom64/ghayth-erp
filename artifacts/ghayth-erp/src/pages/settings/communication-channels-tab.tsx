@@ -113,14 +113,14 @@ export function CommunicationChannelsTab() {
                 <span className="text-lg">📱</span>
                 الرسائل النصية القصيرة
               </CardTitle>
-              <BooleanToggle<SmsForm> name="sms_enabled" />
+              <BooleanToggle name="sms_enabled" />
             </div>
             <p className="text-xs text-gray-500">أدخل بيانات حساب مزود خدمة الرسائل لإرسال الرسائل النصية. يمكنك إنشاء حساب مجاني من موقع المزود.</p>
           </CardHeader>
           <CardContent>
             <FormGrid cols={2}>
               <FormTextField name="sms_account_sid" label="معرّف الحساب" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
-              <SecretField<SmsForm>
+              <SecretField
                 name="sms_auth_token"
                 label="رمز المصادقة"
                 configured={smsTokenConfigured}
@@ -152,13 +152,13 @@ export function CommunicationChannelsTab() {
                 <span className="text-lg">💬</span>
                 واتساب — واجهة السحابة
               </CardTitle>
-              <BooleanToggle<WhatsappForm> name="whatsapp_enabled" />
+              <BooleanToggle name="whatsapp_enabled" />
             </div>
             <p className="text-xs text-gray-500">أدخل بيانات واجهة ربط أعمال واتساب من منصة ميتا للمطورين. تحتاج إلى حساب تجاري معتمد من ميتا.</p>
           </CardHeader>
           <CardContent>
             <FormGrid cols={2}>
-              <SecretField<WhatsappForm>
+              <SecretField
                 name="whatsapp_access_token"
                 label="رمز الوصول"
                 configured={waTokenConfigured}
@@ -192,7 +192,7 @@ export function CommunicationChannelsTab() {
                 <span className="text-lg">🔔</span>
                 إشعارات المتصفح الفورية
               </CardTitle>
-              <BooleanToggle<PushForm> name="push_enabled" />
+              <BooleanToggle name="push_enabled" />
             </div>
             <p className="text-xs text-gray-500">إشعارات المتصفح تعمل عبر VAPID keys. يجب ضبط متغيرات البيئة VAPID_PUBLIC_KEY وVAPID_PRIVATE_KEY على الخادم لتفعيل هذه الميزة.</p>
           </CardHeader>
