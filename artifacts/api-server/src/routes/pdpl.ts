@@ -44,90 +44,6 @@ const dataRequestSchema = z.object({
 
 const router = Router();
 
-interface RetentionPolicyRow {
-  id: number;
-  companyId: number | null;
-  dataType: string;
-  retentionPeriodDays: number;
-  legalBasis: string | null;
-  isDefault: boolean;
-  description: string | null;
-  createdAt: string;
-  updatedAt: string | null;
-}
-
-interface EmployeePersonalDataRow {
-  id: number;
-  name: string;
-  nameEn: string | null;
-  nationalId: string | null;
-  phone: string | null;
-  email: string | null;
-  dateOfBirth: string | null;
-  nationality: string | null;
-  gender: string | null;
-  profileImageUrl: string | null;
-}
-
-interface EmploymentAssignmentRow {
-  id: number;
-  role: string | null;
-  jobTitle: string | null;
-  salary: number | string | null;
-  status: string;
-  startDate: string | null;
-  endDate: string | null;
-  companyName: string;
-  branchName: string;
-}
-
-interface AttendanceSummaryRow {
-  period: string;
-  presentDays: number | null;
-  lateDays: number | null;
-  totalLateMinutes: number | null;
-  totalDeduction: number | string | null;
-  overtimeMinutes: number | null;
-}
-
-interface LeaveRequestRow {
-  id: number;
-  leaveType: string;
-  startDate: string;
-  endDate: string;
-  days: number;
-  status: string;
-  createdAt: string;
-}
-
-interface DataAccessRequestRow {
-  id: number;
-  companyId: number;
-  requestType: string;
-  requesterId: number | null;
-  requesterName: string | null;
-  requesterEmail: string | null;
-  status: string;
-  notes: string | null;
-  dueDate: string;
-  createdAt: string;
-  updatedAt: string | null;
-}
-
-interface ProcessingActivityLogRow {
-  id: number;
-  companyId: number;
-  activityType: string;
-  dataCategories: unknown;
-  dataSubjects: string | null;
-  purpose: string | null;
-  legalBasis: string | null;
-  performedBy: number | null;
-  createdAt: string;
-  performedByRole: string | null;
-  performedByName: string | null;
-}
-
 router.get("/privacy-notice", privacyNoticeIpLimiter, async (req, res) => {
   try {
     res.json({
@@ -166,7 +82,7 @@ router.get("/privacy-notice", privacyNoticeIpLimiter, async (req, res) => {
 router.get("/retention-policies", authMiddleware, pdplUserLimiter, authorize({ feature: "admin.pdpl", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<RetentionPolicyRow>(
+    const rows = await rawQuery<any>(
       `SELECT * FROM data_retention_policies
        WHERE ("companyId" IS NULL OR "companyId" = $1)
        ORDER BY "isDefault" DESC, "dataType" ASC`,
@@ -183,22 +99,17 @@ router.get("/employee-data-export/:employeeId", authMiddleware, pdplUserLimiter,
     const scope = req.scope!;
     const employeeId = parseId(req.params.employeeId, "employeeId");
 
-    // Self-service exception: an employee can always export their
-    // own PDPL data without holding admin.pdpl. For any OTHER
-    // employee, fall through to the standard pdpl-export permission
-    // OR the legacy hr:read fallback (subject-access requests filed
-    // by HR on behalf of an employee).
     const isOwnData = scope.employeeId === employeeId;
     const canExportEmployeeData =
-      isOwnData
-      || (await userHasPermission(scope, "hr:read"))
-      || (await userHasPermission(scope, "admin.pdpl:export"));
+      isOwnData ||
+      (await userHasPermission(scope, "admin.pdpl:export")) ||
+      (await userHasPermission(scope, "hr:read"));
 
     if (!canExportEmployeeData) {
-      throw new ForbiddenError("يمكنك فقط تصدير بياناتك الشخصية أو يجب أن تملك صلاحية تصدير بيانات حماية البيانات الشخصية");
+      throw new ForbiddenError("يمكنك فقط تصدير بياناتك الشخصية أو يجب أن تملك صلاحية قراءة بيانات الموارد البشرية");
     }
 
-    const [employee] = await rawQuery<EmployeePersonalDataRow>(
+    const [employee] = await rawQuery<any>(
       `SELECT e.id, e.name, e."nameEn", e."nationalId", e.phone, e.email, e."dateOfBirth",
               e.nationality, e.gender, e."photoUrl" AS "profileImageUrl"
        FROM employees e
@@ -212,7 +123,7 @@ router.get("/employee-data-export/:employeeId", authMiddleware, pdplUserLimiter,
     }
 
     const [assignments, attendanceSummary, leaveRequests] = await Promise.all([
-      rawQuery<EmploymentAssignmentRow>(
+      rawQuery<any>(
         `SELECT ea.id, ea.role, ea."jobTitle", ea.salary, ea.status, ea."hireDate" AS "startDate", ea."endDate",
                 c.name AS "companyName", b.name AS "branchName"
          FROM employee_assignments ea
@@ -221,7 +132,7 @@ router.get("/employee-data-export/:employeeId", authMiddleware, pdplUserLimiter,
          WHERE ea."employeeId" = $1 AND ea."companyId" = $2`,
         [employeeId, scope.companyId]
       ),
-      rawQuery<AttendanceSummaryRow>(
+      rawQuery<any>(
         `SELECT period, "presentDays", "lateDays", "totalLateMinutes", "totalDeduction", "overtimeMinutes"
          FROM employee_monthly_attendance
          WHERE "assignmentId" IN (
@@ -230,7 +141,7 @@ router.get("/employee-data-export/:employeeId", authMiddleware, pdplUserLimiter,
          ORDER BY period DESC LIMIT 12`,
         [employeeId, scope.companyId]
       ),
-      rawQuery<LeaveRequestRow>(
+      rawQuery<any>(
         `SELECT lr.id, lt.name AS "leaveType", lr."startDate", lr."endDate", lr.days, lr.status, lr."createdAt"
          FROM hr_leave_requests lr
          JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
@@ -303,7 +214,7 @@ router.post("/data-request", authMiddleware, pdplUserLimiter, authorize({ featur
     }).catch((e) => logger.error(e, "pdpl background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "pdpl.data_request.created", entity: "data_access_requests", entityId: insertId, details: JSON.stringify({ requestType, requesterName: requesterName ?? scope.userName }) }).catch((e) => logger.error(e, "pdpl background task failed"));
 
-    const [row] = await rawQuery<DataAccessRequestRow>(`SELECT * FROM data_access_requests WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<any>(`SELECT * FROM data_access_requests WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json({ ...row, message: "تم استلام طلبك وسيتم الرد خلال 30 يوماً وفق متطلبات PDPL" });
   } catch (err) {
     handleRouteError(err, res, "Data request error:");
@@ -313,7 +224,7 @@ router.post("/data-request", authMiddleware, pdplUserLimiter, authorize({ featur
 router.get("/processing-log", authMiddleware, pdplUserLimiter, authorize({ feature: "admin.pdpl", action: "view" }), requireMinLevel(90), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<ProcessingActivityLogRow>(
+    const rows = await rawQuery<any>(
       `SELECT pal.*, ea.role AS "performedByRole", e.name AS "performedByName"
        FROM processing_activities_log pal
        LEFT JOIN employee_assignments ea ON ea.id = pal."performedBy"
