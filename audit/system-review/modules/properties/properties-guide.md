@@ -23,13 +23,28 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/properties.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+صفحة الـ Guide — onboarding tutorial. **مستخدمة فقط للعرض** — لا حركات backend.
+
+| الجانب | التفاصيل |
+|------|---------|
+| الغرض | شرح وحدة العقارات للمستخدمين الجدد |
+| البيانات المعروضة | placeholders (`"المستأجر ١ (مثال)"`, `05X-XXX-XX01`) | راجع `properties-guide.tsx` |
+| PII safety | ✅ تم استبدال جميع الأسماء/الأرقام الحقيقية بـ placeholders (PR #445) |
+| Backend reads | لا — كل البيانات mock داخل المكوّن |
+| Backend writes | لا — تعليمي فقط |
+| RBAC | متاح للجميع بدور property |
+| Audit log | لا — read-only static |
+
+| الإشكاليات السابقة | الحل |
+|--------------------|-----|
+| 🔴 PII حقيقية (6 أسماء + 10 هواتف + 6 IDs) | ✅ مُعالج في PR #445 |
+| 🟡 الـ scanner كان يكشفها كـ hardcoded-dummy | ✅ scanner refined لـ placeholder filter |
+| 🟢 الحالة الآن | آمنة بالكامل |
+
+تحقق يدوي:
+- [ ] هل البيانات الديموية واضحة بأنها أمثلة (وليست بيانات عملاء)؟
+- [ ] هل صور screenshots/diagrams بدون PII حقيقية؟
+- [ ] هل التحديث الديموي يحفظ التزامن مع التغييرات في وحدة العقارات؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `guide` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

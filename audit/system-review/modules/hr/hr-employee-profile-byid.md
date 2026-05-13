@@ -23,13 +23,39 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/hr.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+ملف الموظف الشخصي (Self-Service View) — للموظف نفسه فقط.
+
+| القسم | البيانات | المصدر |
+|------|---------|--------|
+| Personal info | name, ID, phone, email, address | hr/employees |
+| Job info | title, department, manager, hire date | employee_assignments |
+| Salary structure (own) | basic + allowances | salary_components |
+| Attendance summary | this month + history | hr/attendance |
+| Leave balances | remaining per type | hr_leave_balances |
+| Documents | عقد العمل، شهادات، خطابات | documents |
+| Performance reviews (mine) | KPIs + scores | hr_performance_reviews |
+| Training certifications | training_certificates | hr/training |
+| Loans (mine) | hr_employee_loans | حساباتي + استلامات |
+| Gratuity estimate | محسوب per current salary | hr/gratuity |
+| Tasks (mine) | tasks WHERE assignee=me | operations/tasks |
+| Pending approvals (mine) | requests + workflows | governance |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| Read-only view | GET `/my-space/profile` | aggregations | ✅ |
+| Update self info | PATCH `/my-space/profile` (limited fields) | `employees` | ⚠ تحقق من المسموح |
+| Request leave | راجع `hr-leaves.md` | ✅ |
+| Request loan | راجع `hr-loans.md` | ✅ |
+| Update profile picture | storage | `users.avatarUrl` | ✅ |
+| تكامل مع dashboard | راجع `misc/dashboard.md` | ✅ |
+| **PDPL** — Right to access | export کل بياناتي | PDPL data subject access request | ⚠ |
+| **PDPL** — Right to delete | request | حسب retention | ⚠ |
+| Audit log | كل تعديل ذاتي | `audit_logs` | ✅ |
+
+تحقق يدوي:
+- [ ] هل الموظف يستطيع تعديل phone/address دون موافقة HR؟
+- [ ] هل البيانات السرية (تقييمات سرية، 360 upward) محصورة؟
+- [ ] هل export PDPL يشمل كل البيانات في 30 يوم max (قانوني)؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `:id` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

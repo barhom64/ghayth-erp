@@ -23,13 +23,32 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/finance.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+GL Posting Queue — قيود تنتظر الترحيل (pending posting).
+
+| الحالة | الوصف |
+|--------|------|
+| `pending` | منتظر — لاعتماد أو فترة مفتوحة |
+| `approved` | اعتُمد لكن لم يُرحَّل |
+| `posting` | جاري الترحيل (lock) |
+| `posted` | مُرحَّل في `gl_lines` |
+| `failed` | فشل — راجع `admin-posting-failures.md` |
+| `held` | معلَّق يدوياً (CFO override) |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| Enqueue قيد | كل عملية مالية تدفع للـ queue | `gl_posting_queue` | ✅ |
+| فحص فترة مالية | راجع `finance-fiscal-periods.md` | guard | ✅ |
+| فحص توازن (DR=CR) | inside `withTransaction` | rollback | ✅ |
+| Bulk posting (نهاية اليوم) | راجع `daily-close.md` | cron 23:00 | ✅ |
+| Reverse posted entry | counter entry فقط، لا حذف | ✅ |
+| Block period close | guard | ✅ |
+| إشعار CFO عند held > 24h | event=`gl_posting_held` | `notifications` | ⚠ |
+| Audit log إجباري | كل تغيير | `audit_logs` | ✅ critical |
+
+تحقق يدوي:
+- [ ] هل reverse فقط لتصحيح القيود (لا delete)?
+- [ ] هل القيود pending > N أيام تطلق escalation؟
+- [ ] هل re-try يعمل آلياً عند فتح فترة مغلقة؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `gl-posting-queue` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
