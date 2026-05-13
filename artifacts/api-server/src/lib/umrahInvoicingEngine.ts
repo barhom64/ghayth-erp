@@ -171,13 +171,34 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     });
   }
 
-  // VAT: fetch company umrah VAT policy (defaults to 0 for exempt umrah services)
+  // VAT on the MARGIN (sale − cost), not on the full sale.
+  // Umrah services in KSA fall under the travel-agent margin scheme: the
+  // VAT base is the gross profit (sale price minus the NUSK purchase
+  // invoice total for the same groups), not the full sale price. Charging
+  // VAT on the full subtotal overcharges the buyer and overstates the
+  // company's VAT liability.
+  //
+  // Cost basis = sum of umrah_nusk_invoices.totalAmount for every NUSK
+  // invoice linked to the groups being billed (joined via group_id).
+  // Penalties are pure revenue (no offsetting cost), so they stay in the
+  // VAT base when the company opts in.
+  const costRows = await rawQuery<Record<string, unknown>>(
+    `SELECT COALESCE(SUM("totalAmount"), 0) AS cost_basis
+       FROM umrah_nusk_invoices
+      WHERE "companyId" = $1
+        AND "groupId" = ANY($2)
+        AND "deletedAt" IS NULL`,
+    [scope.companyId, groupIds]
+  );
+  const costBasis = roundTo2(Number(costRows[0]?.cost_basis ?? 0));
+  const marginBase = roundTo2(Math.max(0, subtotal - costBasis));
+
   const [vatSetting] = await rawQuery<Record<string, unknown>>(
     `SELECT value FROM system_settings WHERE "companyId" = $1 AND key = 'umrah_vat_rate' LIMIT 1`,
     [scope.companyId]
   );
   const vatRate = vatSetting ? Number(vatSetting.value) : 0;
-  const vatAmount = roundTo2(subtotal * (vatRate / 100));
+  const vatAmount = roundTo2(marginBase * (vatRate / 100));
   const total = subtotal + penaltiesTotal + vatAmount;
 
   const [seqRow] = await rawQuery<Record<string, unknown>>(`SELECT nextval('umrah_sales_invoice_seq') AS seq`);
@@ -191,14 +212,15 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     const invRes = await client.query(
       `INSERT INTO umrah_sales_invoices
        ("companyId","branchId","subAgentId","clientId","seasonId",ref,"invoiceDate",
-        subtotal,"penaltiesTotal","vatRate","vatAmount",total,"paidAmount",status,
-        "dueDate","nuskInvoiceRefs","groupRefs","pilgrimCount","createdBy","createdAt","updatedAt")
-       VALUES ($1,$2,$3,$4,$5,$6,CURRENT_DATE,$7,$8,$9,$10,$11,0,'draft',
-               CURRENT_DATE + INTERVAL '30 days',$12,$13,$14,$15,NOW(),NOW())
+        subtotal,"penaltiesTotal","vatRate","vatAmount","costBasis","marginBase",total,
+        "paidAmount",status,"dueDate","nuskInvoiceRefs","groupRefs","pilgrimCount",
+        "createdBy","createdAt","updatedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,CURRENT_DATE,$7,$8,$9,$10,$11,$12,$13,0,'draft',
+               CURRENT_DATE + INTERVAL '30 days',$14,$15,$16,$17,NOW(),NOW())
        RETURNING id`,
       [
         scope.companyId, scope.branchId || null, subAgentId, subAgent.clientId, seasonId,
-        ref, subtotal, penaltiesTotal, vatRate, vatAmount, total,
+        ref, subtotal, penaltiesTotal, vatRate, vatAmount, costBasis, marginBase, total,
         nuskInvoiceRefs.join(","), groupRefs.join(","), totalPilgrims, scope.userId,
       ]
     );
