@@ -28,7 +28,7 @@ export const pool = new Proxy({} as pg.Pool, {
   },
 });
 
-export async function rawQuery<T = any>(sql: string, params: any[] = []): Promise<T[]> {
+export async function rawQuery<T = any>(sql: string, params: unknown[] = []): Promise<T[]> {
   const result = await pool.query(sql, params);
   return result.rows as T[];
 }
@@ -38,13 +38,13 @@ export function emptyToNull(v: any): any {
   return v;
 }
 
-export function cleanParams(params: any[]): any[] {
+export function cleanParams(params: unknown[]): any[] {
   return params.map(emptyToNull);
 }
 
 export async function rawExecute(
   sql: string,
-  params: any[] = []
+  params: unknown[] = []
 ): Promise<{ insertId: number; affectedRows: number }> {
   const cleanSQL = sql.trimEnd().replace(/;$/, "");
   const hasReturning = /RETURNING/i.test(cleanSQL);

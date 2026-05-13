@@ -693,7 +693,7 @@ financeAlgorithmsRouter.patch("/fixed-assets/:id", authorize({ feature: "finance
     if (b.usefulLifeYears !== undefined && b.usefulLifeYears <= 0) {
       throw new ValidationError("العمر الإنتاجي يجب أن يكون أكبر من صفر");
     }
-    const f = (col: string, val: any) => { if (val !== undefined) { params.push(val); sets.push(`"${col}"=$${params.length}`); } };
+    const f = (col: string, val: unknown) => { if (val !== undefined) { params.push(val); sets.push(`"${col}"=$${params.length}`); } };
     f("name", b.name); f("description", b.description); f("category", b.category);
     f("salvageValue", b.salvageValue); f("usefulLifeYears", b.usefulLifeYears);
     f("depreciationMethod", b.depreciationMethod); f("status", b.status);

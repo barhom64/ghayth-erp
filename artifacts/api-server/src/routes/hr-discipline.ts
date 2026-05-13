@@ -247,7 +247,7 @@ router.get("/regulation", authorize({ feature: "hr.discipline", action: "list" }
   try {
     const scope = req.scope!;
     const section = (req.query.section as string) || null;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     let where = `"companyId" = $1 AND "deletedAt" IS NULL AND "isActive" = TRUE`;
     if (section) {
       params.push(section);
@@ -464,7 +464,7 @@ router.patch("/regulation/:id", authorize({ feature: "hr.discipline", action: "u
       "extraDeduction", "severity", "isTermination", "legalReference", "isActive",
     ];
     const sets: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
     for (const k of allowed) {
       if (k in (body ?? {})) {
         params.push((body as any)[k]);
@@ -568,7 +568,7 @@ router.get("/memos", authorize({ feature: "hr.discipline", action: "list" }), as
     const status = (req.query.status as string) || null;
     const assignmentId = req.query.assignmentId ? Number(req.query.assignmentId) : null;
     const employeeId = req.query.employeeId ? Number(req.query.employeeId) : null;
-    const params: any[] = [scope.companyId];
+    const params: unknown[] = [scope.companyId];
     let where = `m."companyId" = $1 AND m."deletedAt" IS NULL`;
     if (status) { params.push(status); where += ` AND m.status = $${params.length}`; }
     if (Number.isFinite(assignmentId)) { params.push(assignmentId); where += ` AND m."assignmentId" = $${params.length}`; }
