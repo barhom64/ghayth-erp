@@ -9,7 +9,7 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { movingAverage } from "../lib/algorithms.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -331,6 +331,7 @@ router.post("/products", authorize({ feature: "warehouse.inventory", action: "cr
       `INSERT INTO warehouse_products ("companyId",sku,name,description,"categoryId",unit,"minStock","maxStock","currentStock","costPrice","sellPrice",location,"branchId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
       [scope.companyId, b.sku.trim(), b.name.trim(), b.description, b.categoryId || null, b.unit || 'piece', b.minStock || 0, b.maxStock || 99999, b.currentStock || 0, costPrice, sellPrice, b.location, b.branchId || scope.branchId]
     );
+    assertInsert(insertId, "warehouse_products");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     createAuditLog({
@@ -983,6 +984,7 @@ router.post("/categories", authorize({ feature: "warehouse.inventory", action: "
       `INSERT INTO warehouse_categories ("companyId",name,"parentId") VALUES ($1,$2,$3)`,
       [scope.companyId, b.name.trim(), b.parentId || null]
     );
+    assertInsert(insertId, "warehouse_categories");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM warehouse_categories WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
@@ -1061,6 +1063,7 @@ router.post("/suppliers", authorize({ feature: "warehouse.inventory", action: "c
       `INSERT INTO suppliers ("companyId",name,"contactPerson",phone,email,address,"taxNumber","paymentTerms") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [scope.companyId, b.name.trim(), b.contactPerson, b.phone, b.email, b.address, b.taxNumber, b.paymentTerms || 30]
     );
+    assertInsert(insertId, "suppliers");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM suppliers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
@@ -1271,6 +1274,7 @@ router.post("/inventory-counts", authorize({ feature: "warehouse.inventory", act
        scope.employeeId || null,
        b.notes || null, b.warehouseLocation || null]
     );
+    assertInsert(insertId, "inventory_counts");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM inventory_counts WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,

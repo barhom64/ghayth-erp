@@ -7,7 +7,7 @@ import {
   zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
-import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { haversineKm } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded } from "../lib/businessHelpers.js";
@@ -216,6 +216,7 @@ router.post("/contracts", authorize({ feature: "legal.contracts", action: "creat
       `INSERT INTO legal_contracts ("companyId",ref,title,"contractType","partyName","partyContact","startDate","endDate",value,status,notes,"createdBy") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
       [scope.companyId, b.ref || null, b.title.trim(), b.contractType || null, b.partyName.trim(), b.partyContact || null, b.startDate, b.endDate, b.value || 0, b.status || 'draft', b.notes || null, scope.userId]
     );
+    assertInsert(insertId, "legal_contracts");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     createAuditLog({
@@ -603,6 +604,7 @@ router.post("/cases", authorize({ feature: "legal.cases", action: "create" }), a
       `INSERT INTO legal_cases ("companyId","caseNumber",title,"caseType",court,"filingDate","opposingParty","lawyerName",status,priority,description,notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
       [scope.companyId, b.caseNumber, b.title, b.caseType, b.court, b.filingDate, b.opposingParty, lawyerName, b.status || 'open', b.priority || 'medium', b.description, b.notes ?? null]
     );
+    assertInsert(insertId, "legal_cases");
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -843,6 +845,7 @@ router.post("/cases/:caseId/sessions", authorize({ feature: "legal.cases", actio
       `INSERT INTO legal_sessions ("caseId","sessionDate",location,judge,result,"nextSessionDate",notes) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [caseId, b.sessionDate, b.location, b.judge, b.result, b.nextSessionDate, b.notes]
     );
+    assertInsert(insertId, "legal_sessions");
 
     if (legalCase.lawyerName) {
       try {
@@ -1024,6 +1027,7 @@ router.post("/cases/:caseId/correspondence", authorize({ feature: "legal.cases",
       `INSERT INTO legal_correspondence ("caseId","companyId",direction,subject,parties,"correspondenceDate","documentRef",notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [caseId, scope.companyId, b.direction || 'outgoing', b.subject, b.parties, b.correspondenceDate || todayISO(), b.documentRef || null, b.notes || null]
     );
+    assertInsert(insertId, "legal_correspondence");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_correspondence WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     createAuditLog({

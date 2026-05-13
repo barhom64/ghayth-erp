@@ -9,7 +9,7 @@ import {
   zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
-import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
@@ -298,6 +298,7 @@ purchaseRouter.post("/purchase-requests", authorize({ feature: "finance.purchase
        VALUES ($1,$2,$3,$4,'draft',$5,$6,$7,$8,$9)`,
       [scope.companyId, scope.branchId, scope.activeAssignmentId, ref, totalAmount, supplierId ?? null, notes ?? null, expectedDate ?? null, costCenter ?? null]
     );
+    assertInsert(insertId, "purchase_requests");
 
     if (Array.isArray(items) && items.length > 0) {
       const valuesSql: string[] = [];
@@ -556,6 +557,7 @@ purchaseRouter.post("/purchase-orders", authorize({ feature: "finance.purchase",
        VALUES ($1,$2,$3,'pending',$4,$5,$6,$7,$8)`,
       [effectiveCompanyId, effectiveBranchId, ref, Number(totalAmount), supplierId, notes ?? null, expectedDelivery ?? null, scope.userId]
     );
+    assertInsert(insertId, "purchase_orders");
 
     if (Array.isArray(items) && items.length > 0) {
       const valuesSql: string[] = [];
