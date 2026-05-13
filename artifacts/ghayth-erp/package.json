@@ -54,6 +54,7 @@
     "clsx": "catalog:",
     "cmdk": "catalog:",
     "embla-carousel-react": "catalog:",
+    "exceljs": "^4.4.0",
     "input-otp": "catalog:",
     "lucide-react": "catalog:",
     "react": "catalog:",
@@ -74,7 +75,6 @@
     "@types/leaflet": "^1.9.21",
     "dompurify": "^3.3.3",
     "html-to-image": "^1.11.13",
-    "leaflet": "^1.9.4",
-    "xlsx": "^0.18.5"
+    "leaflet": "^1.9.4"
   }
 }
