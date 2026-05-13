@@ -428,7 +428,7 @@ router.patch("/products/:id", authorize({ feature: "warehouse.inventory", action
     }
 
     if (Object.keys(after).length === 0) {
-      res.json({ ...existing, sellPriceWarning: sellPriceWarning ? "سعر البيع أقل من سعر التكلفة" : null });
+      res.json(maskFields(req, { ...existing, sellPriceWarning: sellPriceWarning ? "سعر البيع أقل من سعر التكلفة" : null }));
       return;
     }
 
@@ -496,7 +496,7 @@ router.patch("/products/:id", authorize({ feature: "warehouse.inventory", action
       }).catch((e) => logger.error(e, "warehouse background task failed"));
     }
 
-    res.json({ ...row, sellPriceWarning: sellPriceWarning ? "سعر البيع أقل من سعر التكلفة" : null });
+    res.json(maskFields(req, { ...row, sellPriceWarning: sellPriceWarning ? "سعر البيع أقل من سعر التكلفة" : null }));
   } catch (err) {
     const mapped = lifecycleErrorResponse(err);
     if (mapped) { res.status(mapped.status).json(mapped.body); return; }
@@ -1107,7 +1107,7 @@ router.patch("/categories/:id", authorize({ feature: "warehouse.inventory", acti
       action: "update", entity: "warehouse_categories", entityId: id,
       after: { name: b.name, parentId: b.parentId },
     }).catch((e) => logger.error(e, "warehouse background task failed"));
-    res.json(rows[0]);
+    res.json(maskFields(req, rows[0]));
   } catch (err) { handleRouteError(err, res, "Update category error:"); }
 });
 
@@ -1194,7 +1194,7 @@ router.patch("/suppliers/:id", authorize({ feature: "warehouse.inventory", actio
       action: "update", entity: "warehouse_suppliers", entityId: id,
       after: { name: b.name, contactPerson: b.contactPerson, phone: b.phone, email: b.email, taxNumber: b.taxNumber },
     }).catch((e) => logger.error(e, "warehouse background task failed"));
-    res.json(rows[0]);
+    res.json(maskFields(req, rows[0]));
   } catch (err) { handleRouteError(err, res, "Update supplier error:"); }
 });
 

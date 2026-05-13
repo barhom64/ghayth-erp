@@ -664,7 +664,7 @@ router.patch("/integrations/:id", authorize({ feature: "admin", action: "update"
       entityId: id,
       details: JSON.stringify({ name: b.name, type: b.type, status: b.status }),
     }).catch((e) => logger.error(e, "admin background task failed"));
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
@@ -765,7 +765,7 @@ router.post("/integration-logs/retry", authorize({ feature: "admin", action: "up
       entity: "integration_logs",
       entityId: 0,
     }).catch((e) => logger.error(e, "admin background task failed"));
-    res.json(result);
+    res.json(maskFields(req, result));
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
@@ -1026,7 +1026,7 @@ router.patch("/violations/:id/resolve", authorize({ feature: "admin", action: "u
       entity: "audit_violations",
       entityId: id,
     }).catch((e) => logger.error(e, "admin background task failed"));
-    res.json(updated);
+    res.json(maskFields(req, updated));
   } catch (err) { handleRouteError(err, res, "admin"); }
 });
 
