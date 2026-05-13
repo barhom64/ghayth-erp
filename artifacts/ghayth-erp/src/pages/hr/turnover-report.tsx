@@ -189,7 +189,7 @@ export default function TurnoverReportPage() {
                     <Badge variant="outline" className={cn(
                       "text-xs",
                       v.terminationType === "termination" ? "border-status-error-surface text-status-error-foreground bg-status-error-surface" :
-                      v.terminationType === "resignation" ? "border-amber-300 text-status-warning-foreground bg-status-warning-surface" :
+                      v.terminationType === "resignation" ? "border-status-warning-surface text-status-warning-foreground bg-status-warning-surface" :
                       "border-border",
                     )}>
                       {REASON_LABELS[v.terminationType] || v.terminationType}

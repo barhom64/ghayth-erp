@@ -65,9 +65,9 @@ const SEVERITY_LABELS: Record<string, string> = {
 
 const SEVERITY_COLORS: Record<string, string> = {
   critical: "bg-red-700 text-white",
-  high: "bg-red-500 text-white",
-  medium: "bg-amber-500 text-white",
-  low: "bg-yellow-500 text-white",
+  high: "bg-status-error-surface0 text-white",
+  medium: "bg-status-warning-surface0 text-white",
+  low: "bg-status-warning-surface0 text-white",
 };
 
 export function SodRulesTab() {

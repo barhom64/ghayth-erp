@@ -200,7 +200,7 @@ export default function UmrahPackageDetail() {
               {pkg?.capacity && (
                 <div className="w-full bg-surface-subtle rounded-full h-2 mt-2">
                   <div
-                    className="bg-blue-500 h-2 rounded-full"
+                    className="bg-status-info-surface0 h-2 rounded-full"
                     style={{
                       width: `${Math.min(100, ((pkg.bookedCount ?? 0) / pkg.capacity) * 100)}%`,
                     }}

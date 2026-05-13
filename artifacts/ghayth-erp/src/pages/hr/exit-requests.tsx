@@ -116,7 +116,7 @@ export default function ExitRequestsPage() {
           className={cn(
             "text-xs",
             v.exitType === "termination" ? "border-status-error-surface text-status-error-foreground bg-status-error-surface" :
-            v.exitType === "resignation" ? "border-amber-300 text-status-warning-foreground bg-status-warning-surface" :
+            v.exitType === "resignation" ? "border-status-warning-surface text-status-warning-foreground bg-status-warning-surface" :
             "border-border",
           )}
         >
@@ -163,7 +163,7 @@ export default function ExitRequestsPage() {
       render: (v) => (
         v.clearanceCompleted
           ? <Badge className="bg-status-success-surface text-status-success-foreground text-xs">مكتمل</Badge>
-          : <Badge variant="outline" className="text-xs border-amber-300 text-status-warning-foreground">غير مكتمل</Badge>
+          : <Badge variant="outline" className="text-xs border-status-warning-surface text-status-warning-foreground">غير مكتمل</Badge>
       ),
     },
     {

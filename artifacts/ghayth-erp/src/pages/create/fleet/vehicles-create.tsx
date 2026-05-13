@@ -119,7 +119,7 @@ export default function VehiclesCreate() {
         </div>
         <div className="border-t pt-4 mt-2">
           <h3 className="text-sm font-semibold text-status-info-foreground mb-3 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
+            <span className="w-2 h-2 rounded-full bg-status-info-surface0 inline-block" />
             بيانات التسجيل والفحص — الربط الحكومي (تم)
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

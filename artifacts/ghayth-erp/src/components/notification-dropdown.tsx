@@ -105,9 +105,9 @@ export function NotificationDropdown() {
       case "urgent":
         return "text-rose-500 bg-rose-50";
       case "medium":
-        return "text-amber-500 bg-amber-50";
+        return "text-amber-500 bg-status-warning-surface";
       default:
-        return "text-blue-500 bg-blue-50";
+        return "text-blue-500 bg-status-info-surface";
     }
   };
 
@@ -119,16 +119,16 @@ export function NotificationDropdown() {
         className="relative h-8 w-8"
         onClick={() => setIsOpen(!isOpen)}
       >
-        <Bell className="h-4 w-4 text-gray-500" />
+        <Bell className="h-4 w-4 text-muted-foreground" />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -end-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1">
+          <span className="absolute -top-0.5 -end-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-status-error-surface0 text-white text-[10px] font-bold px-1">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
       </Button>
 
       {isOpen && (
-        <div className="absolute top-full mt-2 end-0 w-80 sm:w-96 bg-white rounded-xl shadow-xl border border-gray-200 z-50 max-h-[420px] overflow-hidden flex flex-col">
+        <div className="absolute top-full mt-2 end-0 w-80 sm:w-96 bg-white rounded-xl shadow-xl border border-border z-50 max-h-[420px] overflow-hidden flex flex-col">
           <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-bold text-gray-900">الإشعارات</h3>
@@ -140,7 +140,7 @@ export function NotificationDropdown() {
               {unreadCount > 0 && (
                 <button
                   onClick={markAllRead}
-                  className="text-xs text-green-600 hover:text-green-800 font-medium flex items-center gap-0.5"
+                  className="text-xs text-status-success-foreground hover:text-status-success-foreground font-medium flex items-center gap-0.5"
                   title="تعليم الكل كمقروء"
                 >
                   <CheckCheck className="h-3.5 w-3.5" />
@@ -149,7 +149,7 @@ export function NotificationDropdown() {
               )}
               <button
                 onClick={() => { navigate("/notifications"); setIsOpen(false); }}
-                className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-0.5"
+                className="text-xs text-status-info-foreground hover:text-status-info-foreground font-medium flex items-center gap-0.5"
               >
                 عرض الكل
                 <ChevronLeft className="h-3 w-3" />
@@ -161,7 +161,7 @@ export function NotificationDropdown() {
             {notifications.length === 0 ? (
               <div className="py-10 text-center">
                 <Bell className="h-8 w-8 text-gray-200 mx-auto mb-2" />
-                <p className="text-sm text-gray-400">لا توجد إشعارات</p>
+                <p className="text-sm text-muted-foreground">لا توجد إشعارات</p>
               </div>
             ) : (
               <div className="divide-y">
@@ -170,8 +170,8 @@ export function NotificationDropdown() {
                     key={n.id}
                     onClick={() => handleNotificationClick(n)}
                     className={cn(
-                      "w-full text-right px-4 py-3 flex items-start gap-3 transition-colors hover:bg-gray-50",
-                      !n.isRead && "bg-blue-50/40"
+                      "w-full text-right px-4 py-3 flex items-start gap-3 transition-colors hover:bg-surface-subtle",
+                      !n.isRead && "bg-status-info-surface/40"
                     )}
                   >
                     <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5", getPriorityColor(n.priority))}>
@@ -188,9 +188,9 @@ export function NotificationDropdown() {
                         {n.title}
                       </p>
                       {n.body && (
-                        <p className="text-xs text-gray-500 truncate mt-0.5">{n.body}</p>
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">{n.body}</p>
                       )}
-                      <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
+                      <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
                         <Clock className="h-2.5 w-2.5" />
                         {n.createdAt ? formatTimeAgo(n.createdAt) : ""}
                       </p>

@@ -141,10 +141,10 @@ export function ApprovalActions({
   if (!action) {
     return (
       <div className="flex items-center gap-1.5 flex-wrap">
-        <Button size="sm" variant="ghost" className="h-7 px-2 text-green-600 hover:bg-green-50 hover:text-green-700" onClick={() => setAction("approve")}>
+        <Button size="sm" variant="ghost" className="h-7 px-2 text-status-success-foreground hover:bg-status-success-surface hover:text-status-success-foreground" onClick={() => setAction("approve")}>
           <CheckCircle className="h-3.5 w-3.5 me-1" />قبول
         </Button>
-        <Button size="sm" variant="ghost" className="h-7 px-2 text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => setAction("reject")}>
+        <Button size="sm" variant="ghost" className="h-7 px-2 text-status-error-foreground hover:bg-status-error-surface hover:text-status-error-foreground" onClick={() => setAction("reject")}>
           <XCircle className="h-3.5 w-3.5 me-1" />رفض
         </Button>
         {returnEndpoint !== undefined && (
@@ -185,7 +185,7 @@ export function ApprovalActions({
   };
 
   return (
-    <div className="bg-gray-50 rounded-lg p-3 space-y-2 border">
+    <div className="bg-surface-subtle rounded-lg p-3 space-y-2 border">
       <ImpactCard entityType={entityType} entityId={entityId} action={action} />
       <div className="flex items-center gap-2 text-sm font-medium">
         <MessageSquare className="h-4 w-4" />
@@ -228,10 +228,10 @@ export interface ActionHistoryProps {
 }
 
 const actionLabelsMap: Record<string, { label: string; color: string }> = {
-  approved: { label: "موافقة", color: "text-green-600" },
-  rejected: { label: "رفض", color: "text-red-600" },
+  approved: { label: "موافقة", color: "text-status-success-foreground" },
+  rejected: { label: "رفض", color: "text-status-error-foreground" },
   returned: { label: "إرجاع", color: "text-orange-600" },
-  in_review: { label: "مراجعة", color: "text-blue-600" },
+  in_review: { label: "مراجعة", color: "text-status-info-foreground" },
   escalated: { label: "تصعيد", color: "text-purple-600" },
   referred: { label: "إحالة", color: "text-indigo-600" },
 };
@@ -243,7 +243,7 @@ export function ActionHistory({ entityType, entityId, defaultOpen = false }: Act
 
   return (
     <div>
-      <button onClick={() => setOpen(!open)} className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600">
+      <button onClick={() => setOpen(!open)} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-muted-foreground">
         <History className="h-3 w-3" />
         سجل الإجراءات
         {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
@@ -251,19 +251,19 @@ export function ActionHistory({ entityType, entityId, defaultOpen = false }: Act
       {open && actions.length > 0 && (
         <div className="mt-2 space-y-1.5">
           {actions.map((a: any) => (
-            <div key={a.id} className="flex items-start gap-2 text-xs bg-gray-50 rounded p-2 border">
-              <span className={cn("font-medium", actionLabelsMap[a.action]?.color || "text-gray-600")}>
+            <div key={a.id} className="flex items-start gap-2 text-xs bg-surface-subtle rounded p-2 border">
+              <span className={cn("font-medium", actionLabelsMap[a.action]?.color || "text-muted-foreground")}>
                 {actionLabelsMap[a.action]?.label || a.action}
               </span>
-              <span className="text-gray-400">&bull;</span>
-              <span className="text-gray-500">{a.actionByEmail || a.actionByName || "النظام"}</span>
-              {a.notes && <><span className="text-gray-400">&bull;</span><span className="text-gray-600 flex-1">{a.notes}</span></>}
-              <span className="text-gray-400 ms-auto">{formatDateAr(a.createdAt)}</span>
+              <span className="text-muted-foreground">&bull;</span>
+              <span className="text-muted-foreground">{a.actionByEmail || a.actionByName || "النظام"}</span>
+              {a.notes && <><span className="text-muted-foreground">&bull;</span><span className="text-muted-foreground flex-1">{a.notes}</span></>}
+              <span className="text-muted-foreground ms-auto">{formatDateAr(a.createdAt)}</span>
             </div>
           ))}
         </div>
       )}
-      {open && actions.length === 0 && <p className="text-xs text-gray-400 mt-1">لا توجد إجراءات سابقة</p>}
+      {open && actions.length === 0 && <p className="text-xs text-muted-foreground mt-1">لا توجد إجراءات سابقة</p>}
     </div>
   );
 }
@@ -285,7 +285,7 @@ export function NotesDisplay({ status, notes, returnReason, rejectionReason }: N
   }
   if (status === "rejected" && (rejectionReason || notes)) {
     return (
-      <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 text-xs font-normal max-w-48 truncate">
+      <Badge variant="outline" className="bg-status-error-surface text-status-error-foreground border-status-error-surface text-xs font-normal max-w-48 truncate">
         سبب الرفض: {rejectionReason || notes}
       </Badge>
     );

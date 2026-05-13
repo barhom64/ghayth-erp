@@ -77,21 +77,21 @@ export function RateLimitFallbackBanner() {
 
   return (
     <div className="mx-4 lg:mx-8 mt-3" role="alert" data-testid="banner-ratelimit-fallback">
-      <div className="bg-amber-50 border border-amber-300 rounded-lg p-3">
+      <div className="bg-status-warning-surface border border-status-warning-surface rounded-lg p-3">
         <div className="flex items-start gap-3">
           <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-            <AlertTriangle className="h-4 w-4 text-amber-700" />
+            <AlertTriangle className="h-4 w-4 text-status-warning-foreground" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-semibold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
+              <span className="text-xs font-semibold text-status-warning-foreground bg-amber-100 px-2 py-0.5 rounded-full">
                 تنبيه تشغيلي
               </span>
             </div>
             <p className="text-sm font-medium text-amber-900">
               حدود الطلبات تعمل حالياً بالذاكرة المحلية فقط (تعذّر الاتصال بـ Redis)
             </p>
-            <p className="text-xs text-amber-800 mt-1">
+            <p className="text-xs text-status-warning-foreground mt-1">
               لا تزال الحدود مُطبَّقة، لكنها تُحسب لكل خادم على حدة. يُرجى مراجعة حالة Redis في
               <span className="font-semibold"> صفحة حالة النظام </span>
               في أقرب وقت. سيختفي هذا التنبيه تلقائياً عند عودة الاتصال.
@@ -107,7 +107,7 @@ export function RateLimitFallbackBanner() {
           </div>
           <button
             onClick={handleDismiss}
-            className="text-amber-500 hover:text-amber-700 flex-shrink-0"
+            className="text-amber-500 hover:text-status-warning-foreground flex-shrink-0"
             aria-label="إخفاء التنبيه"
             data-testid="button-dismiss-ratelimit-banner"
           >

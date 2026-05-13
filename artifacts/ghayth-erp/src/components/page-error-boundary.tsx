@@ -167,7 +167,7 @@ export class PageErrorBoundary extends Component<Props, State> {
         <Card className="max-w-2xl mx-auto">
           <CardContent className="pt-6 space-y-4">
             <div className="flex items-start gap-3">
-              <div className="shrink-0 rounded-full bg-red-50 p-2">
+              <div className="shrink-0 rounded-full bg-status-error-surface p-2">
                 <AlertTriangle className="h-6 w-6 text-red-500" />
               </div>
               <div className="flex-1 space-y-2">
@@ -175,14 +175,14 @@ export class PageErrorBoundary extends Component<Props, State> {
                   <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
                   {code && <Badge variant={codeBadgeVariant(code)}>{code}</Badge>}
                 </div>
-                <p className="text-sm text-gray-600">{message}</p>
+                <p className="text-sm text-muted-foreground">{message}</p>
                 {field && (
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-muted-foreground">
                     الحقل: <code className="bg-gray-100 px-1 rounded">{field}</code>
                   </p>
                 )}
                 {fix && (
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-muted-foreground">
                     <span className="font-medium">إصلاح مقترح:</span> {fix}
                   </p>
                 )}
@@ -215,9 +215,9 @@ export class PageErrorBoundary extends Component<Props, State> {
             </div>
 
             {isDev && err.stack && (
-              <details className="text-xs text-gray-500 mt-2">
+              <details className="text-xs text-muted-foreground mt-2">
                 <summary className="cursor-pointer select-none">عرض تفاصيل المطور</summary>
-                <pre className="mt-2 p-2 bg-gray-50 rounded overflow-auto text-[10px] leading-tight">
+                <pre className="mt-2 p-2 bg-surface-subtle rounded overflow-auto text-[10px] leading-tight">
                   {err.stack}
                 </pre>
               </details>

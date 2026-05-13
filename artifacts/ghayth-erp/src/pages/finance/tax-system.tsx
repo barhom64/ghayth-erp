@@ -110,7 +110,7 @@ export default function TaxSystemPage() {
         >
           <Zap className="h-4 w-4 inline me-1" />ربط هيئة الزكاة والضريبة
           {settings?.enabled && (
-            <span className="ms-1.5 inline-flex h-2 w-2 rounded-full bg-green-500" />
+            <span className="ms-1.5 inline-flex h-2 w-2 rounded-full bg-status-success-surface0" />
           )}
         </button>
       </div>

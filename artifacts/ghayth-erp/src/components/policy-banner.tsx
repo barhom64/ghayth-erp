@@ -55,27 +55,27 @@ export function PolicyBanner({ currentPath }: { currentPath: string }) {
 
   return (
     <div className="mx-4 lg:mx-8 mt-3">
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+      <div className="bg-status-info-surface border border-status-info-surface rounded-lg p-3">
         <div className="flex items-start gap-3">
           <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-            <FileCheck className="h-4 w-4 text-blue-600" />
+            <FileCheck className="h-4 w-4 text-status-info-foreground" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+              <span className="text-xs font-semibold text-status-info-foreground bg-blue-100 px-2 py-0.5 rounded-full">
                 سياسة {moduleLabel(module)}
               </span>
             </div>
             <p className="text-sm font-medium text-blue-900">{first.title}</p>
             {first.description && (
-              <p className="text-xs text-blue-700 mt-1 line-clamp-2">{first.description}</p>
+              <p className="text-xs text-status-info-foreground mt-1 line-clamp-2">{first.description}</p>
             )}
             {hasMore && expanded && (
-              <div className="mt-2 space-y-2 border-t border-blue-200 pt-2">
+              <div className="mt-2 space-y-2 border-t border-status-info-surface pt-2">
                 {policies.slice(1).map((p) => (
                   <div key={p.id}>
                     <p className="text-sm font-medium text-blue-900">{p.title}</p>
-                    {p.description && <p className="text-xs text-blue-700 mt-0.5">{p.description}</p>}
+                    {p.description && <p className="text-xs text-status-info-foreground mt-0.5">{p.description}</p>}
                   </div>
                 ))}
               </div>
@@ -83,7 +83,7 @@ export function PolicyBanner({ currentPath }: { currentPath: string }) {
             {hasMore && (
               <button
                 onClick={() => setExpanded(!expanded)}
-                className="text-xs text-blue-600 hover:text-blue-800 mt-1 flex items-center gap-1"
+                className="text-xs text-status-info-foreground hover:text-status-info-foreground mt-1 flex items-center gap-1"
               >
                 {expanded ? (
                   <><ChevronUp className="h-3 w-3" />إخفاء</>
@@ -95,7 +95,7 @@ export function PolicyBanner({ currentPath }: { currentPath: string }) {
           </div>
           <button
             onClick={handleDismiss}
-            className="text-blue-400 hover:text-blue-600 flex-shrink-0"
+            className="text-blue-400 hover:text-status-info-foreground flex-shrink-0"
           >
             <X className="h-4 w-4" />
           </button>

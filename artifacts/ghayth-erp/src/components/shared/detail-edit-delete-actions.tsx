@@ -200,7 +200,7 @@ export function DetailActionButtons({
         <Button
           variant="outline"
           size="sm"
-          className="text-red-600"
+          className="text-status-error-foreground"
           onClick={hook.startDelete}
           title="حذف"
         >
@@ -215,7 +215,7 @@ export function DetailActionButtons({
 export function InlineEditCard({ hook }: { hook: DetailEditDeleteHook }) {
   if (!hook.editing) return null;
   return (
-    <Card className="border-blue-200 bg-blue-50/30">
+    <Card className="border-status-info-surface bg-status-info-surface/30">
       <CardHeader className="pb-2">
         <CardTitle className="text-base">تعديل {hook.entityLabel}</CardTitle>
       </CardHeader>

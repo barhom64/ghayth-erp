@@ -64,7 +64,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: "bg-status-warning-surface text-status-warning-foreground border-amber-300",
+  pending: "bg-status-warning-surface text-status-warning-foreground border-status-warning-surface",
   approved: "bg-status-success-surface text-status-success-foreground border-status-success-surface",
   rejected: "bg-status-error-surface text-status-error-foreground border-status-error-surface",
   expired: "bg-surface-subtle text-status-neutral-foreground border-border",
@@ -146,7 +146,7 @@ export function JitRequestsTab() {
         <TabsList>
           <TabsTrigger value="pending">
             بانتظار المراجعة
-            {pending.length > 0 && <Badge className="ms-2 bg-amber-500">{pending.length}</Badge>}
+            {pending.length > 0 && <Badge className="ms-2 bg-status-warning-surface0">{pending.length}</Badge>}
           </TabsTrigger>
           <TabsTrigger value="my">طلباتي ({myRequests.length})</TabsTrigger>
         </TabsList>

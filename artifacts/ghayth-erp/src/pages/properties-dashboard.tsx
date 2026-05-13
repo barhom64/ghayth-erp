@@ -126,7 +126,7 @@ export default function PropertiesDashboard() {
             <div
               className={cn(
                 "h-full rounded-full",
-                row.occupancyRate >= 80 ? "bg-emerald-500" : row.occupancyRate >= 50 ? "bg-amber-500" : "bg-red-400"
+                row.occupancyRate >= 80 ? "bg-emerald-500" : row.occupancyRate >= 50 ? "bg-status-warning-surface0" : "bg-red-400"
               )}
               style={{ width: `${row.occupancyRate || 0}%` }}
             />
@@ -291,7 +291,7 @@ export default function PropertiesDashboard() {
               </div>
               <div className="h-2 bg-surface-subtle rounded-full overflow-hidden">
                 <div
-                  className={cn("h-full rounded-full transition-all", (s.collectionRate || 0) >= 80 ? "bg-emerald-500" : (s.collectionRate || 0) >= 50 ? "bg-amber-500" : "bg-red-500")}
+                  className={cn("h-full rounded-full transition-all", (s.collectionRate || 0) >= 80 ? "bg-emerald-500" : (s.collectionRate || 0) >= 50 ? "bg-status-warning-surface0" : "bg-status-error-surface0")}
                   style={{ width: `${Math.min(s.collectionRate || 0, 100)}%` }}
                 />
               </div>

@@ -27,13 +27,47 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/operations.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+وكلاء العمرة — Umrah agents (typically external B2B partners).
+
+| نوع الوكيل | الوصف |
+|----------|------|
+| Main agent (وكيل رئيسي) | direct B2B | with credit terms |
+| Sub-agent | راجع `umrah-sub-agents.md` | reports to main |
+| Inbound | foreign agents bringing pilgrims | Saudi MoHaj license |
+| Outbound | local agents | within KSA |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| List agents | GET `/umrah/agents` | `umrah_agents` | ✅ |
+| Create agent | راجع `crm/clients.md` (as B2B client) + add MoHaj license | ✅ |
+| MoHaj license tracking | mandatory for inbound | راجع `governance-compliance.md` | ✅ critical |
+| License expiry alerts | راجع `notifications.md` | ✅ critical |
+| Commission plan assignment | راجع `umrah-commission-plans.md` | ✅ |
+| Credit limit per agent | راجع `crm/clients.md` for AR | ✅ critical |
+| Active groups per agent | aggregate | راجع `umrah-groups.md` | ✅ |
+| Pilgrim count YTD | KPI | ✅ |
+| Revenue from agent | aggregate | ✅ |
+| Commission paid YTD | aggregate | راجع `finance-payments.md` | ✅ |
+| Outstanding AR | راجع `finance-ar-aging.md` | ✅ critical |
+| Sub-agent network | راجع `umrah-sub-agents.md` | ⚠ |
+| Performance rating | quality, on-time, complaints | ⚠ |
+| Blacklist (لو issues) | guard | يمنع new groups | ✅ critical |
+| Contract (B2B) | راجع `legal-contracts-byid.md` | ✅ |
+| تكامل مع `umrah-groups.md` (assignment) | ✅ |
+| تكامل مع `umrah-commission-plans.md` (compensation) | ✅ critical |
+| تكامل مع `finance-invoices.md` (B2B invoicing) | ✅ critical |
+| تكامل مع Saudi MoHaj (Nusuk platform) | external | راجع `admin-integrations.md` | ✅ critical |
+| تكامل مع `crm/clients.md` (master record) | ✅ |
+| Audit log إجباري | كل تعديل | `audit_logs` | ✅ critical |
+| RBAC | umrah-manager + finance for credit | ✅ |
+
+تحقق يدوي:
+- [ ] هل MoHaj license expiry يمنع creating new groups بعد expiry؟
+- [ ] هل credit limit enforced للـ B2B agents بدقة؟
+- [ ] هل commission auto-calculated per group accurately?
+- [ ] هل blacklist prevents kicked-off agents من العودة بأسماء أخرى (national ID/CR check)?
+- [ ] هل Nusuk integration syncs agent licenses + pilgrim assignments بشكل صحيح?
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `agents` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

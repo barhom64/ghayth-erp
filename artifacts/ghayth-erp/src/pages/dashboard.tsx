@@ -538,8 +538,8 @@ export default function Dashboard() {
                     <div className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-surface-subtle transition-colors cursor-pointer">
                       <div className={cn(
                         "w-2 h-2 rounded-full shrink-0",
-                        task.status === "completed" ? "bg-green-500" :
-                        task.status === "in_progress" ? "bg-blue-500" : "bg-yellow-500"
+                        task.status === "completed" ? "bg-status-success-surface0" :
+                        task.status === "in_progress" ? "bg-status-info-surface0" : "bg-status-warning-surface0"
                       )} />
                       <div className="flex-1 min-w-0">
                         <p className={cn(

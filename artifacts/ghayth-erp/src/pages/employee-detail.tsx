@@ -142,7 +142,7 @@ function LeaveBalanceSummary({ employeeId }: { employeeId: string }) {
           </div>
           <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
             <div
-              className="bg-green-500 h-1.5 rounded-full"
+              className="bg-status-success-surface0 h-1.5 rounded-full"
               style={{ width: `${Math.min(100, ((b.remaining ?? 0) / (b.maxDays || b.entitled || 1)) * 100)}%` }}
             />
           </div>
