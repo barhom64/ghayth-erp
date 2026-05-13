@@ -274,12 +274,12 @@ vendorsRouter.get("/stats", authorize({ feature: "finance.vendors", action: "lis
       params
     );
 
-    res.json({
+    res.json(maskFields(req, {
       totalRevenue: Number(stats?.totalRevenue ?? 0),
       pendingAmount: Number(stats?.pendingAmount ?? 0),
       overdueAmount: Number(stats?.overdueAmount ?? 0),
       paidThisMonth: Number(stats?.paidThisMonth ?? 0),
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
   }
@@ -309,7 +309,7 @@ vendorsRouter.get("/receivables", authorize({ feature: "finance.vendors", action
        ORDER BY i."dueDate" ASC LIMIT 100`,
       [scope.companyId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
   }
@@ -328,7 +328,7 @@ vendorsRouter.get("/receivables/:id", authorize({ feature: "finance.vendors", ac
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("المستحق غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Receivable detail error:"); }
 });
 
@@ -354,7 +354,7 @@ vendorsRouter.get("/payments", authorize({ feature: "finance.vendors", action: "
        ORDER BY je."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
   }
@@ -384,7 +384,7 @@ vendorsRouter.get("/commitments", authorize({ feature: "finance.vendors", action
        ORDER BY po."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
   }
@@ -403,7 +403,7 @@ vendorsRouter.get("/commitments/:id", authorize({ feature: "finance.vendors", ac
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("الالتزام غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Commitment detail error:"); }
 });
 
@@ -421,7 +421,7 @@ vendorsRouter.get("/financial-requests/:id", authorize({ feature: "finance.vendo
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("الطلب المالي غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Financial request detail error:"); }
 });
 
@@ -447,7 +447,7 @@ vendorsRouter.get("/financial-requests", authorize({ feature: "finance.vendors",
        ORDER BY wr."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
   }
@@ -481,7 +481,7 @@ vendorsRouter.get("/vendors/:id", authorize({ feature: "finance.vendors", action
       [id, scope.allowedCompanies]
     );
     if (!vendor) throw new NotFoundError("المورد غير موجود");
-    res.json(vendor);
+    res.json(maskFields(req, vendor));
   } catch (err) {
     handleRouteError(err, res, "Get vendor error:");
   }
