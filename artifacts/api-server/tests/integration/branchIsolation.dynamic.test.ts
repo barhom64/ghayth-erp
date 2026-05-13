@@ -37,7 +37,7 @@ d("Branch isolation & parameter tampering (real Postgres)", () => {
       "./_fixtures/branchIsolation.js"
     );
     fx = await setupBranchIsolationFixture();
-  });
+  }, 60_000);
 
   // ─── 1. Branch-scoped list isolation ───────────────────────────────
   // A branch_manager token should never receive rows from a branch
