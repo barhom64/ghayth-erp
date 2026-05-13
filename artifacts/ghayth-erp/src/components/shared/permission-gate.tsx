@@ -42,26 +42,30 @@ export function PermissionGate({ perm, mode = "all", children, fallback = null }
 }
 
 /**
- * Permission-aware button. Renders a disabled button with a lock icon and a
- * tooltip explaining why it's unavailable when the user lacks the permission.
- * This is more discoverable than hiding entirely — users can see the action
- * exists and ask their admin for access.
+ * Permission-aware button. By default, **hides** the button entirely when the
+ * user lacks the permission — features they can't use shouldn't be visible.
+ * Opt in to the legacy "disable + lock icon + tooltip" presentation with
+ * `hideWhenDenied={false}` when discoverability matters more than minimalism
+ * (e.g. an admin-only action you want power users to know exists).
  *
  *   <GuardedButton perm="finance:create" onClick={...}>إنشاء فاتورة</GuardedButton>
  */
 interface GuardedButtonProps extends ButtonProps {
   perm: string | string[];
   mode?: "all" | "any";
-  /** Hide instead of disable when not allowed. Default: disable with tooltip. */
+  /**
+   * Hide entirely (default) vs. render a disabled button with a lock + tooltip.
+   * Default is `true` so the UI never advertises actions the user can't take.
+   */
   hideWhenDenied?: boolean;
-  /** Override tooltip text shown on denial. */
+  /** Override tooltip text shown on denial (only meaningful when not hidden). */
   deniedTooltip?: string;
 }
 
 export function GuardedButton({
   perm,
   mode = "all",
-  hideWhenDenied = false,
+  hideWhenDenied = true,
   deniedTooltip,
   children,
   disabled,
