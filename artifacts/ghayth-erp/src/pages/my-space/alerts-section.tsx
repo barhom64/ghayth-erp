@@ -28,7 +28,7 @@ export function AlertsSection({ overdueItems, expiringSoon }: AlertsSectionProps
               {overdueItems.slice(0, 5).map((item: any, i: number) => (
                 <Link key={`overdue-${i}`} href={item.type === "task" ? `/tasks` : "/hr/leaves"}>
                   <div className="flex items-center gap-3 p-2.5 rounded-lg bg-status-error-surface hover:bg-status-error-surface transition-colors cursor-pointer">
-                    <div className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                    <div className="w-2 h-2 rounded-full bg-status-error-surface0 shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-status-neutral-foreground truncate">{item.title}</p>
                       <p className="text-xs text-status-error">
@@ -66,7 +66,7 @@ export function AlertsSection({ overdueItems, expiringSoon }: AlertsSectionProps
                 const categoryLabels: Record<string, string> = { document: "مستند", contract: "عقد", insurance: "تأمين" };
                 return (
                   <div key={`expiring-${i}`} className="flex items-center gap-3 p-2.5 rounded-lg bg-status-warning-surface/50">
-                    <div className={cn("w-2 h-2 rounded-full shrink-0", daysLeft <= 7 ? "bg-red-500" : "bg-amber-500")} />
+                    <div className={cn("w-2 h-2 rounded-full shrink-0", daysLeft <= 7 ? "bg-status-error-surface0" : "bg-status-warning-surface0")} />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-status-neutral-foreground truncate">{item.name || item.title}</p>
                       <p className="text-xs text-muted-foreground">{categoryLabels[item.category] || item.category}</p>

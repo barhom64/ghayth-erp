@@ -310,7 +310,7 @@ export default function UmrahImportWizard() {
           </div>
 
           {preview.violationsDetected != null && preview.violationsDetected > 0 && (
-            <Card className="border-amber-300 bg-status-warning-surface">
+            <Card className="border-status-warning-surface bg-status-warning-surface">
               <CardContent className="p-3 flex items-center gap-3">
                 <AlertTriangle className="h-5 w-5 text-status-warning-foreground" />
                 <p className="text-sm text-status-warning-foreground">

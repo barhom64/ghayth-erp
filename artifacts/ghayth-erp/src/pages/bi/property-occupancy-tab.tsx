@@ -59,7 +59,7 @@ export function PropertyOccupancyTab() {
             render: (r) => (
               <div className="flex items-center gap-2">
                 <div className="w-16 bg-gray-200 rounded-full h-2">
-                  <div className={cn("h-2 rounded-full", r.occupancyRate >= 80 ? "bg-emerald-500" : r.occupancyRate >= 50 ? "bg-amber-500" : "bg-red-500")} style={{ width: `${r.occupancyRate}%` }} />
+                  <div className={cn("h-2 rounded-full", r.occupancyRate >= 80 ? "bg-emerald-500" : r.occupancyRate >= 50 ? "bg-status-warning-surface0" : "bg-status-error-surface0")} style={{ width: `${r.occupancyRate}%` }} />
                 </div>
                 <span className="text-sm font-medium">{r.occupancyRate}%</span>
               </div>

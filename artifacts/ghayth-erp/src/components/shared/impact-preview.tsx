@@ -20,10 +20,10 @@ interface ImpactPreview {
 }
 
 const SEVERITY_STYLES: Record<string, { bg: string; text: string; icon: any }> = {
-  info: { bg: "bg-blue-50 border-blue-200", text: "text-blue-700", icon: Info },
-  warning: { bg: "bg-yellow-50 border-yellow-200", text: "text-yellow-700", icon: AlertTriangle },
-  danger: { bg: "bg-red-50 border-red-200", text: "text-red-700", icon: XCircle },
-  success: { bg: "bg-green-50 border-green-200", text: "text-green-700", icon: CheckCircle },
+  info: { bg: "bg-status-info-surface border-status-info-surface", text: "text-status-info-foreground", icon: Info },
+  warning: { bg: "bg-status-warning-surface border-yellow-200", text: "text-yellow-700", icon: AlertTriangle },
+  danger: { bg: "bg-status-error-surface border-status-error-surface", text: "text-status-error-foreground", icon: XCircle },
+  success: { bg: "bg-status-success-surface border-status-success-surface", text: "text-status-success-foreground", icon: CheckCircle },
 };
 
 interface ImpactPreviewButtonProps {
@@ -71,9 +71,9 @@ export function ImpactPreviewButton({ endpoint, payload, label = "معاينة �
         disabled={loading}
         className={cn(
           "gap-1.5",
-          hasDanger && shown ? "border-red-300 text-red-600 hover:bg-red-50" :
-          hasWarning && shown ? "border-yellow-300 text-yellow-600 hover:bg-yellow-50" :
-          "border-blue-300 text-blue-600 hover:bg-blue-50"
+          hasDanger && shown ? "border-status-error-surface text-status-error-foreground hover:bg-status-error-surface" :
+          hasWarning && shown ? "border-yellow-300 text-yellow-600 hover:bg-status-warning-surface" :
+          "border-status-info-surface text-status-info-foreground hover:bg-status-info-surface"
         )}
       >
         {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
@@ -95,9 +95,9 @@ export function ImpactPreviewPanel({ impact }: { impact: ImpactPreview }) {
   const hasDanger = impact.items.some(i => i.severity === "danger");
   const hasWarning = impact.items.some(i => i.severity === "warning");
 
-  const summaryStyle = hasDanger ? "bg-red-50 border-red-300 text-red-700"
-    : hasWarning ? "bg-yellow-50 border-yellow-300 text-yellow-700"
-    : "bg-green-50 border-green-300 text-green-700";
+  const summaryStyle = hasDanger ? "bg-status-error-surface border-status-error-surface text-status-error-foreground"
+    : hasWarning ? "bg-status-warning-surface border-yellow-300 text-yellow-700"
+    : "bg-status-success-surface border-status-success-surface text-status-success-foreground";
 
   const groupedItems = impact.items.reduce((acc: Record<string, ImpactItem[]>, item) => {
     if (!acc[item.category]) acc[item.category] = [];
@@ -106,7 +106,7 @@ export function ImpactPreviewPanel({ impact }: { impact: ImpactPreview }) {
   }, {});
 
   return (
-    <div className="rounded-xl border bg-gray-50 p-4 space-y-3 text-sm">
+    <div className="rounded-xl border bg-surface-subtle p-4 space-y-3 text-sm">
       <div className="flex items-center gap-2">
         {hasDanger ? <XCircle className="h-4 w-4 text-red-500" /> :
          hasWarning ? <AlertTriangle className="h-4 w-4 text-yellow-500" /> :
@@ -116,7 +116,7 @@ export function ImpactPreviewPanel({ impact }: { impact: ImpactPreview }) {
 
       {Object.entries(groupedItems).map(([cat, items]) => (
         <div key={cat}>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{cat}</p>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">{cat}</p>
           <div className="space-y-1.5">
             {items.map((item, idx) => {
               const style = SEVERITY_STYLES[item.severity] || SEVERITY_STYLES.info;
@@ -126,7 +126,7 @@ export function ImpactPreviewPanel({ impact }: { impact: ImpactPreview }) {
                   <Icon className={cn("h-3.5 w-3.5 mt-0.5 flex-shrink-0", style.text)} />
                   <div className="min-w-0">
                     <span className={cn("text-xs font-medium", style.text)}>{item.label}: </span>
-                    <span className="text-xs text-gray-600">{item.value}</span>
+                    <span className="text-xs text-muted-foreground">{item.value}</span>
                   </div>
                 </div>
               );

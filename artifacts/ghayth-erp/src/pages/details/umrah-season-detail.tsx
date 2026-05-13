@@ -160,7 +160,7 @@ export default function UmrahSeasonDetail() {
               {season?.capacity && (
                 <div className="w-full bg-surface-subtle rounded-full h-2 mt-2">
                   <div
-                    className="bg-blue-500 h-2 rounded-full"
+                    className="bg-status-info-surface0 h-2 rounded-full"
                     style={{
                       width: `${Math.min(100, ((season.registeredPilgrims ?? season.pilgrimsCount ?? 0) / season.capacity) * 100)}%`,
                     }}

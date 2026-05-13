@@ -170,7 +170,7 @@ export default function CashflowDashboard() {
                         </div>
                         <div className="w-full h-3 rounded-full bg-surface-subtle overflow-hidden">
                           <div className={cn("h-full rounded-full transition-all duration-700",
-                            isHealthy ? "bg-emerald-500" : isWarning ? "bg-amber-400" : "bg-red-500")}
+                            isHealthy ? "bg-emerald-500" : isWarning ? "bg-amber-400" : "bg-status-error-surface0")}
                             style={{ width: `${spendPct}%` }} />
                         </div>
                         <div className="flex justify-between text-xs text-muted-foreground">
@@ -295,7 +295,7 @@ export default function CashflowDashboard() {
                           <div className="w-full h-2 rounded-full bg-surface-subtle overflow-hidden">
                             <div
                               className={cn("h-full rounded-full transition-all duration-500",
-                                isOver ? "bg-red-500" : isCritical ? "bg-orange-500" : isHigh ? "bg-amber-400" : "bg-emerald-500")}
+                                isOver ? "bg-status-error-surface0" : isCritical ? "bg-orange-500" : isHigh ? "bg-amber-400" : "bg-emerald-500")}
                               style={{ width: `${Math.min(100, pct)}%` }}
                             />
                           </div>

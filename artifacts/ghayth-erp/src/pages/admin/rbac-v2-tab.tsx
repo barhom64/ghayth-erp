@@ -101,7 +101,7 @@ const FIELD_MODE_LABELS: Record<string, string> = {
 
 const FIELD_MODE_COLORS: Record<string, string> = {
   visible: "bg-status-success-surface text-status-success-foreground border-status-success-surface",
-  masked: "bg-status-warning-surface text-status-warning-foreground border-amber-300",
+  masked: "bg-status-warning-surface text-status-warning-foreground border-status-warning-surface",
   hidden: "bg-status-error-surface text-status-error-foreground border-status-error-surface",
   readonly: "bg-status-info-surface text-status-info-foreground border-status-info-surface",
   editable: "bg-purple-50 text-purple-700 border-purple-300",
@@ -1153,9 +1153,9 @@ const SEVERITY_LABELS: Record<string, string> = {
 
 const SEVERITY_COLORS: Record<string, string> = {
   critical: "bg-red-700 text-white",
-  high: "bg-red-500 text-white",
-  medium: "bg-amber-500 text-white",
-  low: "bg-yellow-500 text-white",
+  high: "bg-status-error-surface0 text-white",
+  medium: "bg-status-warning-surface0 text-white",
+  low: "bg-status-warning-surface0 text-white",
 };
 
 function SodViolationsBanner({ violations, onPickRole }: { violations: SodViolation[]; onPickRole: (roleId: number) => void }) {

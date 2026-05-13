@@ -18,7 +18,7 @@ interface QuickPreviewDialogProps {
 }
 
 function renderValue(field: PreviewField, value: any) {
-  if (value == null || value === "") return <span className="text-gray-400">-</span>;
+  if (value == null || value === "") return <span className="text-muted-foreground">-</span>;
   switch (field.type) {
     case "date":
       return <span>{formatDateAr(value)}</span>;
@@ -44,8 +44,8 @@ export function QuickPreviewDialog({ open, onOpenChange, title, data, fields }: 
         </DialogHeader>
         <div className="space-y-3 mt-2">
           {fields.map((field) => (
-            <div key={field.key} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
-              <span className="text-sm text-gray-500 font-medium">{field.label}</span>
+            <div key={field.key} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+              <span className="text-sm text-muted-foreground font-medium">{field.label}</span>
               <div className="text-sm">{renderValue(field, data[field.key])}</div>
             </div>
           ))}

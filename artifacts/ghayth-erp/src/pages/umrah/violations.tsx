@@ -261,7 +261,7 @@ export default function UmrahViolations() {
             <Pencil className="h-3.5 w-3.5" />
           </GuardedButton>
           {(v.status === "open" || v.status === "detected") && (
-            <GuardedButton perm="umrah:create" size="sm" variant="ghost" className="text-red-600" onClick={() => setDeleteId(v.id)}>
+            <GuardedButton perm="umrah:create" size="sm" variant="ghost" className="text-status-error-foreground" onClick={() => setDeleteId(v.id)}>
               <Trash2 className="h-3.5 w-3.5" />
             </GuardedButton>
           )}

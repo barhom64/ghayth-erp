@@ -271,7 +271,7 @@ export default function ProjectDetail() {
           <Button variant="outline" size="sm" onClick={() => setDeleting(false)}>إلغاء</Button>
         </div>
       ) : (
-        <Button variant="outline" size="sm" className="text-red-600" onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4 me-1" />حذف</Button>
+        <Button variant="outline" size="sm" className="text-status-error-foreground" onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4 me-1" />حذف</Button>
       )}
     </div>
   ) : undefined;

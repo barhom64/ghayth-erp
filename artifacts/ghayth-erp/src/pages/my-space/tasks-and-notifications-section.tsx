@@ -40,7 +40,7 @@ export function TasksAndNotificationsSection({ todayTasks, notifications }: Task
                   <div className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-subtle transition-colors cursor-pointer">
                     <div className={cn(
                       "w-2 h-2 rounded-full shrink-0",
-                      t.status === "completed" ? "bg-green-500" : t.status === "in_progress" ? "bg-blue-500" : "bg-yellow-500"
+                      t.status === "completed" ? "bg-status-success-surface0" : t.status === "in_progress" ? "bg-status-info-surface0" : "bg-status-warning-surface0"
                     )} />
                     <p className="text-sm font-medium text-status-neutral-foreground truncate flex-1">{t.title}</p>
                     {t.priority && (
