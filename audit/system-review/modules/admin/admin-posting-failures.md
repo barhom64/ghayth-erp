@@ -24,13 +24,32 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/admin.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+Posting Failures — مركز معالجة القيود المالية الفاشلة. **حرج جداً** للسلامة المالية.
+
+| السبب | كيف يحدث | كيف يُعالَج |
+|------|---------|--------------|
+| Fiscal period closed | محاولة post في فترة مغلقة | إعادة فتح الفترة (admin only) أو نقل للفترة المفتوحة |
+| Account not found | accountCode غير موجود في `chart_of_accounts` | إضافة الحساب ثم retry |
+| Balance constraint | DR ≠ CR | تصحيح يدوي للقيد |
+| Tenant scope mismatch | companyId mismatch | إصلاح يدوي + audit |
+| FX rate missing | عملة جديدة بدون rate | تحديث `fx_rates` ثم retry |
+| Network/DB error | transient infrastructure | retry تلقائي 3 مرات ثم DLQ |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| تسجيل الفشل | `accounting-engine.ts` يلتقط الـ exception ويكتب row | `posting_failures` | ✅ |
+| عرض queue | GET `/admin/posting-failures` | ORDER BY createdAt | ✅ |
+| Retry يدوي | POST `/admin/posting-failures/:id/retry` | يعيد محاولة `postJournal()` | ✅ |
+| Resolve manually | PATCH (سبب الحل + المراجع) | `failure.resolvedAt` | ✅ |
+| إشعار للـ Finance Manager | event=`posting_failure_critical` | `notifications` | ✅ critical |
+| Auto-retry policy | cron retries up to 3× | ✅ |
+| تأثير على فترة الإقفال | يجب صفر failures قبل closing الفترة | guard | ✅ |
+| Audit log إجباري | كل retry/resolve يُسجَّل | `audit_logs` | ✅ critical |
+
+تحقق يدوي:
+- [ ] هل وجود فشل > 24h يطلق إشعار escalation لـ CFO؟
+- [ ] هل auto-retry يتجنب نفس النوع من الفشل (smart backoff)؟
+- [ ] هل DLQ events قابلة لإعادة المعالجة بعد إصلاح السبب الجذري؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `posting-failures` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
