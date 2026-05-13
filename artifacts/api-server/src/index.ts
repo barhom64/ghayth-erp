@@ -81,6 +81,15 @@ async function start() {
   registerRulesEngineListener();
   logger.info("Event listeners and rules engine registered");
 
+  if (!isDev && process.env.PERSIST_ALL_EVENTS !== "true") {
+    logger.warn(
+      "PERSIST_ALL_EVENTS is unset/false in a non-development environment. " +
+      "Only events flagged `critical: true` in the catalog will land in event_logs; " +
+      "non-critical events stay in-memory only. PDPL audit-trail completeness " +
+      "requires PERSIST_ALL_EVENTS=true. Set it once event_logs growth has been sized."
+    );
+  }
+
   const server = http.createServer(app);
 
   server.on("error", (err: NodeJS.ErrnoException) => {
