@@ -48,6 +48,16 @@ interface NavItem {
   module?: ModuleType;
   subKey?: string;
   minRoleLevel?: number;
+  /**
+   * Fine-grained backend permission required to see this menu entry.
+   * Accepts a single `module:action` string (e.g. "finance:create") or an
+   * array of them. When provided, the item is hidden for users whose
+   * permission set doesn't satisfy the check — preferred over relying on
+   * the server to 403 after the click.
+   */
+  perm?: string | string[];
+  /** "all" (default) — must hold every perm; "any" — hold at least one. */
+  permMode?: "all" | "any";
   children?: NavItem[];
 }
 
@@ -366,24 +376,24 @@ const allNavSections: NavSection[] = [
         { label: "لوحة الذكاء", path: "/intelligence", icon: Brain },
       ]},
       { label: "مدير النظام", path: "/admin", icon: Shield, module: "admin", minRoleLevel: 90, children: [
-        { label: "المستخدمين", path: "/admin/users", icon: Users },
-        { label: "الأدوار والصلاحيات (v2)", path: "/admin", icon: KeyRound },
-        { label: "مصفوفة الأدوار", path: "/admin/rbac-matrix", icon: Shield },
-        { label: "الأدوار (الكلاسيكي)", path: "/admin/roles", icon: KeyRound },
-        { label: "مركز التكاملات", path: "/admin/integrations", icon: Mail },
-        { label: "مركز المراقبة", path: "/admin/monitoring", icon: Activity },
-        { label: "تقرير المخالفات", path: "/admin/violations-report", icon: AlertTriangle },
-        { label: "سجل المراجعة", path: "/admin/logs", icon: ScrollText },
+        { label: "المستخدمين", path: "/admin/users", icon: Users, perm: ["admin:list", "admin:update"], permMode: "any" },
+        { label: "الأدوار والصلاحيات (v2)", path: "/admin", icon: KeyRound, perm: ["admin.roles:view", "admin.roles:update"], permMode: "any" },
+        { label: "مصفوفة الأدوار", path: "/admin/rbac-matrix", icon: Shield, perm: "admin.roles:view" },
+        { label: "الأدوار (الكلاسيكي)", path: "/admin/roles", icon: KeyRound, perm: ["admin.roles:view", "admin.roles:update"], permMode: "any" },
+        { label: "مركز التكاملات", path: "/admin/integrations", icon: Mail, perm: "admin:update" },
+        { label: "مركز المراقبة", path: "/admin/monitoring", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+        { label: "تقرير المخالفات", path: "/admin/violations-report", icon: AlertTriangle, perm: ["hr:approve", "admin:view"], permMode: "any" },
+        { label: "سجل المراجعة", path: "/admin/logs", icon: ScrollText, perm: ["audit:read", "admin:read"], permMode: "any" },
         { label: "سجل الحركات", path: "/activity-log", icon: Activity },
         { label: "الإشعارات", path: "/notifications", icon: Bell },
       ]},
-      { label: "الأتمتة", path: "/automation", icon: Zap, module: "admin", minRoleLevel: 60 },
-      { label: "التقارير المجدولة", path: "/reports/scheduled", icon: CalendarClock, module: "bi", minRoleLevel: 40 },
+      { label: "الأتمتة", path: "/automation", icon: Zap, module: "admin", minRoleLevel: 60, perm: ["admin:update", "automation:write"], permMode: "any" },
+      { label: "التقارير المجدولة", path: "/reports/scheduled", icon: CalendarClock, module: "bi", minRoleLevel: 40, perm: ["bi:read", "reports:read"], permMode: "any" },
       { label: "الإعدادات", path: "/settings", icon: Cog, module: "settings", minRoleLevel: 70, children: [
         { label: "عام", path: "/settings", icon: Cog },
-        { label: "الفروع", path: "/settings/branches", icon: Building },
-        { label: "الشركات", path: "/settings/companies", icon: Building2 },
-        { label: "قواعد الأعمال", path: "/settings/rules", icon: Zap },
+        { label: "الفروع", path: "/settings/branches", icon: Building, perm: "settings:write" },
+        { label: "الشركات", path: "/settings/companies", icon: Building2, perm: "settings:write" },
+        { label: "قواعد الأعمال", path: "/settings/rules", icon: Zap, perm: "settings:write" },
       ]},
     ],
   },
@@ -429,6 +439,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     filteredBranches,
     canAccessModule,
     canAccessSubPage,
+    can,
     roleLevel,
     effectiveRoleLevel,
     switchToCompany,
@@ -494,21 +505,26 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
 
   usePropertyKeyboardShortcuts(navigate);
 
-  const filterItems = (items: NavItem[]): NavItem[] =>
+  const itemPermAllowed = (item: NavItem): boolean => {
+    if (!item.perm) return true;
+    const list = Array.isArray(item.perm) ? item.perm : [item.perm];
+    return item.permMode === "any" ? list.some(can) : list.every(can);
+  };
+
+  const filterItems = (items: NavItem[], parentModule?: ModuleType): NavItem[] =>
     items
-      .filter(item => (!item.module || canAccessModule(item.module)) && (!item.minRoleLevel || effectiveRoleLevel >= item.minRoleLevel))
-      .map(item => {
+      .map((item): NavItem | null => {
+        const mod = item.module ?? parentModule;
+        if (item.module && !canAccessModule(item.module)) return null;
+        if (item.minRoleLevel && effectiveRoleLevel < item.minRoleLevel) return null;
+        if (item.subKey && mod && !canAccessSubPage(mod, item.subKey)) return null;
+        if (!itemPermAllowed(item)) return null;
         if (!item.children) return item;
-        const mod = item.module;
-        if (mod) {
-          const filteredChildren = item.children.filter(
-            child => !child.subKey || canAccessSubPage(mod, child.subKey)
-          );
-          return filteredChildren.length > 0 ? { ...item, children: filteredChildren } : null;
-        }
-        return item;
+        const filteredChildren = filterItems(item.children, mod);
+        if (filteredChildren.length === 0) return null;
+        return { ...item, children: filteredChildren };
       })
-      .filter(Boolean) as NavItem[];
+      .filter((x): x is NavItem => x !== null);
 
   const filteredSections = allNavSections
     .map(section => ({
