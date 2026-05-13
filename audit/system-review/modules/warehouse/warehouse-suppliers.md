@@ -23,13 +23,32 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/warehouse.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+الموردون — central vendor master للـ procurement + AP.
+
+| العمل | API | DB | الحالة |
+|------|-----|-----|--------|
+| List suppliers | GET `/warehouse/suppliers` | `suppliers` | ✅ |
+| إنشاء supplier | راجع `warehouse-suppliers-create.md` | ✅ |
+| تحديث بيانات تجارية | PATCH | `commercialReg`, `vatNumber` | ✅ |
+| تحقق من VAT number (ZATCA lookup) | external API | راجع `admin-integrations.md` | ⚠ تحقق |
+| Bank info (للـ payment) | encrypted | `supplier_bank_accounts` | ✅ |
+| Credit terms (NET 30/60) | terms | `paymentTermsDays` | ✅ |
+| رصيد AP (للـ supplier) | aggregate | `gl_entries` WHERE account=AP-supplier | راجع `finance-ap-aging.md` |
+| Outstanding POs | aggregate | `purchase_orders` WHERE status=open | راجع `procurement.md` |
+| Invoices received | linkage | `vendor_invoices` | راجع `finance-vendor-bills.md` |
+| Payment history | linkage | `payments` WHERE party=supplier | راجع `finance-payments.md` |
+| Performance rating | manual or auto | `supplier_ratings` (on-time, quality, price) | ⚠ |
+| Blacklist | flag | `isBlacklisted` — يمنع POs جديدة | ✅ critical |
+| Contract attachments | documents | راجع `documents.md` | ✅ |
+| Audit log | كل تعديل | `audit_logs` | ✅ |
+| PDPL — لو فرد | retention rules | ⚠ |
+| Soft delete | guard إذا فيه حركات | ✅ |
+
+تحقق يدوي:
+- [ ] هل blacklist supplier يمنع كل POs الجديدة مع warning واضح؟
+- [ ] هل VAT lookup مع ZATCA يحدث live أم cached؟
+- [ ] هل bank info مشفّر at-rest؟
 
 ## 4. النمذجة
 - الجدول: `suppliers` (export: `suppliers`, 12 عمود)

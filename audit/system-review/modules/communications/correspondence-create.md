@@ -25,13 +25,41 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/communications.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+إنشاء مراسلة جديدة (صادرة/واردة) — توثيق رسمي.
+
+| الحقل | المتطلب |
+|------|---------|
+| Reference number | auto-gen — متسلسل `OUT-2026-00001` / `IN-2026-00001` | counters table |
+| Direction | enum `incoming\|outgoing\|internal` | إجباري |
+| Sender / Receiver | external party or internal | with party type |
+| Subject | RTL/LTR aware | إجباري |
+| Body / Content | rich text أو attachment | optional |
+| Attachments | documents | راجع `documents.md` |
+| Priority | low/normal/high/urgent | للـ SLA |
+| Linked entity | optional: contract, ticket, project | polymorphic |
+| Confidentiality | public/internal/confidential/secret | للـ RBAC |
+| Required action | enum (none/review/approve/reply) | للـ workflow |
+| Due date | optional | للـ reminders |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| إنشاء | POST `/correspondence` | `correspondences` | ✅ |
+| Auto-number generation | counters | per tenant per year per direction | ✅ critical |
+| Attach documents | bulk | `correspondence_attachments` | ✅ |
+| Link to entity | polymorphic FK | `entityType`, `entityId` | ⚠ تحقق |
+| Routing (assignee) | initial | `assignedTo` | ✅ |
+| Workflow start (إذا approval) | راجع `governance/workflows.md` | ⚠ |
+| Notification للمستلم | event=`correspondence_received` | راجع `notifications.md` | ✅ |
+| تكامل مع `legal.md` (لو قانوني) | flag | ✅ |
+| تكامل مع `documents-archive.md` (retention) | حسب نوع المراسلة | ✅ |
+| Audit log إجباري | كل إنشاء | `audit_logs` | ✅ |
+| RBAC | حسب الـ confidentiality | راجع `admin-rbac-matrix.md` | ✅ critical |
+
+تحقق يدوي:
+- [ ] هل reference number يضمن uniqueness حتى تحت concurrent writes؟
+- [ ] هل confidentiality=secret يقيد المشاهدة على من؟ (owner + المستلم + admin؟)
+- [ ] هل due date يطلق reminder تلقائي قبل X أيام؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `create` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

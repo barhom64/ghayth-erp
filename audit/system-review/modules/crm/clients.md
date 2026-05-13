@@ -23,13 +23,43 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/crm.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+العملاء — Customer master record. مركز الـ AR + المبيعات.
+
+| النوع | الوصف |
+|------|------|
+| Individual (B2C) | فرد | with national ID + PDPL applies |
+| Business (B2B) | شركة | with commercial reg + VAT |
+| Government | جهة حكومية | special invoicing terms |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| List clients | GET `/crm/clients` | `clients` | ✅ |
+| إنشاء عميل | راجع `crm-create.md` | ✅ |
+| Profile (360 view) | راجع `crm-byid.md` | ✅ |
+| Update بيانات | PATCH `/crm/clients/:id` | with audit | ✅ |
+| Verify VAT (ZATCA) | external lookup | راجع `admin-integrations.md` | ⚠ |
+| Credit limit | manager approval | راجع `crm-credit-management.md` | ✅ |
+| رصيد AR (مستحق) | aggregate | `gl_entries` WHERE account=AR-client | راجع `finance-ar-aging.md` |
+| Invoices | linkage | راجع `finance-invoices.md` | ✅ |
+| Payments received | linkage | راجع `finance-payments.md` | ✅ |
+| Opportunities | linkage | راجع `crm-pipeline.md` | ✅ |
+| Activities | linkage | راجع `crm-activities.md` | ✅ |
+| Contracts/agreements | linkage | راجع `documents.md` | ✅ |
+| Statement of account | report | راجع `bi-reports.md` | ✅ |
+| Blacklist | flag | يمنع sales orders جديدة | ✅ critical |
+| Merge duplicates | admin action | مع audit إجباري | ⚠ |
+| **PDPL** — Right to access | export | ⚠ |
+| **PDPL** — Right to erasure | حسب retention rules | ⚠ |
+| **PDPL** — Consent log | marketing/communications | `client_consents` | ⚠ |
+| Audit log | كل تعديل | `audit_logs` | ✅ |
+| Soft delete | guard إذا فيه حركات مالية | ✅ |
+
+تحقق يدوي:
+- [ ] هل blacklist يمنع كل sales orders جديدة مع warning واضح؟
+- [ ] هل merge duplicates يدمج balances + activities بشكل عرضي؟
+- [ ] هل export PDPL يشمل كل البيانات (invoices, payments, activities) في 30 يوم max؟
+- [ ] هل credit limit breach يطلب موافقة في الوقت الحقيقي؟
 
 ## 4. النمذجة
 - الجدول: `clients` (export: `clients`, 10 عمود)
