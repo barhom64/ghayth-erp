@@ -59,7 +59,7 @@ A1 / A2 / A4 — the *gating* axes — are essentially clean (0 / 0 / 1 FAIL).
 
 | Route | Reason |
 |-------|--------|
-| `/documents/:docId/versionsunresolved` | `/api/documents` returned no row |
+| `/documents/:docId/versions` | `/api/documents` returned no row |
 | `/finance/pricing-rules/:id/edit` | no id resolver registered |
 | `/requests/:id` | `/api/requests` returned no row |
 | `/store/products/:id` | `/api/store/products` returned no row |
@@ -77,5 +77,5 @@ Prior snapshot reported 363/373 A4 FAIL (97% deep-link bounce). **This run shows
 ## Honesty contract
 
 - This is a real headless-Chromium walk of every route exported from `artifacts/ghayth-erp/src/routes/*.tsx`.
-- 388 FAIL PNGs were captured under `audit/screenshots/` (A3 + A5 warn-only failures); they are kept on the local filesystem for triage, not committed.
+- 388 FAIL PNGs were captured under `audit/screenshots/` (A3 + A5 warn-only failures) and are committed alongside this report so reviewers can inspect any individual failure without re-running the harness.
 - No FAIL was silently reclassified to PASS. SKIP rows are listed above with their resolver-failure reason.
