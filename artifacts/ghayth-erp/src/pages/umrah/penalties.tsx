@@ -83,9 +83,9 @@ export default function UmrahPenalties() {
   const pendingCount = items.filter((p: any) => p.status === "pending").length;
 
   const kpiCards = [
-    { label: "إجمالي الغرامات", value: items.length, icon: AlertTriangle, color: "text-blue-600 bg-blue-50" },
-    { label: "معلقة", value: pendingCount, icon: Clock, color: "text-yellow-600 bg-yellow-50" },
-    { label: "إجمالي المبالغ (ريال)", value: formatCurrency(totalAmount), icon: DollarSign, color: "text-red-600 bg-red-50" },
+    { label: "إجمالي الغرامات", value: items.length, icon: AlertTriangle, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "معلقة", value: pendingCount, icon: Clock, color: "text-status-warning-foreground bg-status-warning-surface" },
+    { label: "إجمالي المبالغ (ريال)", value: formatCurrency(totalAmount), icon: DollarSign, color: "text-status-error-foreground bg-status-error-surface" },
   ];
 
   const handleWaive = (e: React.MouseEvent, id: number) => {
@@ -99,7 +99,7 @@ export default function UmrahPenalties() {
     { key: "agentName", header: "الوكيل" },
     { key: "type", header: "النوع", render: (p) => p.type === "overstay" ? "تجاوز مدة" : p.type },
     { key: "daysOverstayed", header: "أيام التأخر" },
-    { key: "amount", header: "المبلغ (ريال)", render: (p) => <span className="font-bold text-red-600">{formatCurrency(Number(p.amount))}</span> },
+    { key: "amount", header: "المبلغ (ريال)", render: (p) => <span className="font-bold text-status-error-foreground">{formatCurrency(Number(p.amount))}</span> },
     { key: "status", header: "الحالة", render: (p) => <PageStatusBadge status={p.status} /> },
     {
       key: "actions" as any,
@@ -168,7 +168,7 @@ export default function UmrahPenalties() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{c.value}</p>
-                <p className="text-xs text-gray-500">{c.label}</p>
+                <p className="text-xs text-muted-foreground">{c.label}</p>
               </div>
             </CardContent>
           </Card>
@@ -217,7 +217,7 @@ export default function UmrahPenalties() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-2 py-2">
-            <Label htmlFor="bulk-waive-reason">سبب الإعفاء <span className="text-red-600">*</span></Label>
+            <Label htmlFor="bulk-waive-reason">سبب الإعفاء <span className="text-status-error-foreground">*</span></Label>
             <Input
               id="bulk-waive-reason"
               value={bulkReason}

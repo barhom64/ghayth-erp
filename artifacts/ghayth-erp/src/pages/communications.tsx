@@ -49,7 +49,7 @@ function StatsCards() {
     <div className="grid gap-4 md:grid-cols-5">
       <Card><CardHeader className="pb-2"><CardTitle className="text-sm">إجمالي الاتصالات</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats?.total || 0}</div></CardContent></Card>
       <Card className="bg-emerald-600 text-white"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">واتساب</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats?.whatsapp || 0}</div>{stats?.pendingWhatsApp > 0 && <div className="text-xs opacity-80">{stats.pendingWhatsApp} في الانتظار</div>}</CardContent></Card>
-      <Card><CardHeader className="pb-2"><CardTitle className="text-sm">رسائل نصية</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats?.sms || 0}</div>{stats?.pendingSms > 0 && <div className="text-xs text-amber-600">{stats.pendingSms} في الانتظار</div>}</CardContent></Card>
+      <Card><CardHeader className="pb-2"><CardTitle className="text-sm">رسائل نصية</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats?.sms || 0}</div>{stats?.pendingSms > 0 && <div className="text-xs text-status-warning-foreground">{stats.pendingSms} في الانتظار</div>}</CardContent></Card>
       <Card><CardHeader className="pb-2"><CardTitle className="text-sm">البريد</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats?.email || 0}</div></CardContent></Card>
       <Card><CardHeader className="pb-2"><CardTitle className="text-sm">المكالمات</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats?.pbx || 0}</div></CardContent></Card>
     </div>
@@ -60,12 +60,12 @@ function QueueStatusBar({ sent = 0, failed = 0, pending = 0, total = 0 }: { sent
   const safeTotal = total || sent + failed + pending || 1;
   return (
     <div className="space-y-1.5">
-      <div className="flex h-2 rounded-full overflow-hidden bg-gray-100">
+      <div className="flex h-2 rounded-full overflow-hidden bg-surface-subtle">
         {sent > 0 && <div className="bg-green-500" style={{ width: `${(sent / safeTotal) * 100}%` }} title={`مرسل: ${sent}`} />}
         {failed > 0 && <div className="bg-red-500" style={{ width: `${(failed / safeTotal) * 100}%` }} title={`فاشل: ${failed}`} />}
         {pending > 0 && <div className="bg-amber-400" style={{ width: `${(pending / safeTotal) * 100}%` }} title={`في الانتظار: ${pending}`} />}
       </div>
-      <div className="flex gap-3 text-xs text-gray-500">
+      <div className="flex gap-3 text-xs text-muted-foreground">
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />مرسل: {sent}</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />فاشل: {failed}</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />انتظار: {pending}</span>
@@ -99,37 +99,37 @@ function PushNotificationsCard() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-sm flex items-center gap-2">
-            <BellOff className="h-4 w-4 text-gray-400" />
+            <BellOff className="h-4 w-4 text-muted-foreground" />
             إشعارات المتصفح الفورية
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-gray-500">متصفحك لا يدعم إشعارات المتصفح</p>
+          <p className="text-sm text-muted-foreground">متصفحك لا يدعم إشعارات المتصفح</p>
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card className={cn(isSubscribed ? "border-green-200 bg-green-50/30" : "")}>
+    <Card className={cn(isSubscribed ? "border-status-success-surface bg-status-success-surface" : "")}>
       <CardHeader className="pb-3">
         <CardTitle className="text-sm flex items-center gap-2">
-          {isSubscribed ? <BellRing className="h-4 w-4 text-green-600" /> : <Bell className="h-4 w-4 text-gray-500" />}
+          {isSubscribed ? <BellRing className="h-4 w-4 text-status-success-foreground" /> : <Bell className="h-4 w-4 text-muted-foreground" />}
           إشعارات المتصفح الفورية
-          {isSubscribed && <Badge variant="outline" className="text-green-700 border-green-300 bg-green-50 text-xs">مفعّل</Badge>}
+          {isSubscribed && <Badge variant="outline" className="text-status-success-foreground border-status-success-surface bg-status-success-surface text-xs">مفعّل</Badge>}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         {permission === "denied" ? (
-          <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 rounded-md p-3">
+          <div className="flex items-start gap-2 text-sm text-status-error-foreground bg-status-error-surface rounded-md p-3">
             <XCircle className="h-4 w-4 shrink-0 mt-0.5" />
             <div>
               <p className="font-medium">تم رفض الإذن</p>
-              <p className="text-xs text-red-500 mt-0.5">يجب السماح بالإشعارات من إعدادات المتصفح</p>
+              <p className="text-xs text-status-error mt-0.5">يجب السماح بالإشعارات من إعدادات المتصفح</p>
             </div>
           </div>
         ) : (
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-muted-foreground">
             {isSubscribed
               ? "أنت مشترك في إشعارات المتصفح. ستصلك الإشعارات حتى لو لم يكن التطبيق مفتوحاً."
               : "فعّل الإشعارات لتصلك تنبيهات المهام والعمليات المهمة حتى بدون فتح التطبيق."}
@@ -154,7 +154,7 @@ function PushNotificationsCard() {
             </>
           )}
         </div>
-        {error && <p className="text-xs text-red-500">{error}</p>}
+        {error && <p className="text-xs text-status-error">{error}</p>}
       </CardContent>
     </Card>
   );
@@ -199,7 +199,7 @@ function MonitorTab() {
     { key: "recipient", header: "المستلم", ltr: true, render: (r: any) => <span className="max-w-[100px] truncate inline-block">{r.recipient}</span> },
     { key: "status", header: "الحالة", render: (r: any) => <PageStatusBadge status={r.status} /> },
     { key: "attemptCount", header: "المحاولات", align: "center", render: (r: any) => r.attemptCount ?? 0 },
-    { key: "createdAt", header: "التاريخ", ltr: true, render: (r: any) => <span className="text-gray-400">{formatDateAr(r.createdAt)}</span> },
+    { key: "createdAt", header: "التاريخ", ltr: true, render: (r: any) => <span className="text-muted-foreground">{formatDateAr(r.createdAt)}</span> },
   ];
 
   return (
@@ -208,7 +208,7 @@ function MonitorTab() {
         <h2 className="text-lg font-semibold">لوحة مراقبة قنوات الاتصال</h2>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1">
-            <label className="text-xs text-gray-500">من:</label>
+            <label className="text-xs text-muted-foreground">من:</label>
             <UnifiedDateInput
               value={dateFrom}
               onChange={(iso) => setDateFrom(iso)}
@@ -217,7 +217,7 @@ function MonitorTab() {
             />
           </div>
           <div className="flex items-center gap-1">
-            <label className="text-xs text-gray-500">إلى:</label>
+            <label className="text-xs text-muted-foreground">إلى:</label>
             <UnifiedDateInput
               value={dateTo}
               onChange={(iso) => setDateTo(iso)}
@@ -245,7 +245,7 @@ function MonitorTab() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Mail className="h-4 w-4 text-blue-500" />
+              <Mail className="h-4 w-4 text-status-info" />
               الرسائل النصية
             </CardTitle>
           </CardHeader>
@@ -253,7 +253,7 @@ function MonitorTab() {
             <div className="text-2xl font-bold">{smsTotal}</div>
             <QueueStatusBar sent={smsSent} failed={smsFailed} pending={smsPending} total={smsTotal} />
             {smsPending > 0 && (
-              <div className="flex items-center gap-1.5 text-xs text-amber-600">
+              <div className="flex items-center gap-1.5 text-xs text-status-warning-foreground">
                 <Clock className="h-3 w-3" />
                 {smsPending} رسالة في الانتظار — يعالجها المعالج الآلي كل دقيقة
               </div>
@@ -272,7 +272,7 @@ function MonitorTab() {
             <div className="text-2xl font-bold">{waTotal}</div>
             <QueueStatusBar sent={waSent} failed={waFailed} pending={waPending} total={waTotal} />
             {waPending > 0 && (
-              <div className="flex items-center gap-1.5 text-xs text-amber-600">
+              <div className="flex items-center gap-1.5 text-xs text-status-warning-foreground">
                 <Clock className="h-3 w-3" />
                 {waPending} رسالة في الانتظار — يعالجها المعالج الآلي كل دقيقة
               </div>
@@ -291,7 +291,7 @@ function MonitorTab() {
             <div className="text-2xl font-bold">{emailTotal}</div>
             <QueueStatusBar sent={emailSent} failed={emailFailed} pending={emailPending} total={emailTotal} />
             {emailPending > 0 && (
-              <div className="flex items-center gap-1.5 text-xs text-amber-600">
+              <div className="flex items-center gap-1.5 text-xs text-status-warning-foreground">
                 <Clock className="h-3 w-3" />
                 {emailPending} رسالة في الانتظار
               </div>
@@ -306,7 +306,7 @@ function MonitorTab() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Activity className="h-4 w-4 text-blue-500" />
+              <Activity className="h-4 w-4 text-status-info" />
               حالة خدمات المعالجة التشغيلية
             </CardTitle>
           </CardHeader>
@@ -317,14 +317,14 @@ function MonitorTab() {
               { name: "معالج البريد الإلكتروني", desc: "يعالج قائمة انتظار البريد كل دقيقة", active: true },
             ].map((w) => (
               <div key={w.name} className="flex items-start gap-2 py-1.5">
-                <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-4 w-4 text-status-success shrink-0 mt-0.5" />
                 <div>
                   <p className="text-sm font-medium">{w.name}</p>
-                  <p className="text-xs text-gray-500">{w.desc}</p>
+                  <p className="text-xs text-muted-foreground">{w.desc}</p>
                 </div>
               </div>
             ))}
-            <p className="text-xs text-gray-400 pt-2 border-t">
+            <p className="text-xs text-muted-foreground pt-2 border-t">
               للتكوين: اذهب إلى الإعدادات → قنوات الاتصال
             </p>
           </CardContent>
@@ -378,7 +378,7 @@ function ConvertCommButton({ logEntry, onSuccess }: { logEntry: any; onSuccess: 
   const [converting, setConverting] = useState(false);
 
   const options = [
-    { key: "task", label: "طلب متابعة", icon: ClipboardList, color: "text-blue-600 border-blue-200 hover:bg-blue-50" },
+    { key: "task", label: "طلب متابعة", icon: ClipboardList, color: "text-status-info-foreground border-status-info-surface hover:bg-status-info-surface" },
     { key: "ticket", label: "طلب دعم", icon: Headphones, color: "text-orange-600 border-orange-200 hover:bg-orange-50" },
     { key: "request", label: "طلب داخلي", icon: FileText, color: "text-purple-600 border-purple-200 hover:bg-purple-50" },
   ];
@@ -442,7 +442,7 @@ function CommLogTab() {
   const filtered = logs.filter((l: any) => !search || l.fromNumber?.includes(search) || l.toNumber?.includes(search) || l.subject?.includes(search));
 
   const columns: DataTableColumn<any>[] = [
-    { key: "channel", header: "القناة", sortable: true, render: (l) => <span className={`px-2 py-1 rounded text-xs font-medium ${l.channel === 'whatsapp' ? 'bg-emerald-100 text-emerald-700' : l.channel === 'sms' ? 'bg-blue-100 text-blue-700' : l.channel === 'email' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100'}`}>{l.channel}</span> },
+    { key: "channel", header: "القناة", sortable: true, render: (l) => <span className={`px-2 py-1 rounded text-xs font-medium ${l.channel === 'whatsapp' ? 'bg-emerald-100 text-emerald-700' : l.channel === 'sms' ? 'bg-status-info-surface text-status-info-foreground' : l.channel === 'email' ? 'bg-purple-100 text-purple-700' : 'bg-surface-subtle'}`}>{l.channel}</span> },
     { key: "direction", header: "الاتجاه", sortable: true, render: (l) => l.direction === 'inbound' ? 'وارد' : 'صادر' },
     { key: "fromNumber", header: "من", sortable: true, ltr: true, render: (l) => l.fromNumber || "-" },
     { key: "toNumber", header: "إلى", sortable: true, ltr: true, render: (l) => l.toNumber || "-" },
@@ -457,7 +457,7 @@ function CommLogTab() {
       <CardHeader><CardTitle>سجل الاتصالات</CardTitle></CardHeader>
       <CardContent className="space-y-4">
         <div className="relative">
-          <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input className="ps-9" placeholder="بحث بالرقم أو الموضوع..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <DataTable
@@ -498,7 +498,7 @@ function WhatsAppTab() {
     { key: "recipientName", header: "المستلم", sortable: true, render: (m) => m.recipientName || "-" },
     { key: "message", header: "الرسالة", sortable: true, render: (m) => <span className="max-w-[300px] truncate inline-block">{m.message}</span> },
     { key: "status", header: "الحالة", sortable: true, render: (m) => <PageStatusBadge status={m.status} /> },
-    { key: "externalId", header: "معرف خارجي", render: (m) => <span className="text-xs text-gray-400">{m.externalId || "-"}</span> },
+    { key: "externalId", header: "معرف خارجي", render: (m) => <span className="text-xs text-muted-foreground">{m.externalId || "-"}</span> },
     { key: "createdAt", header: "التاريخ", sortable: true, render: (m) => formatDateAr(m.createdAt) },
   ];
 
@@ -508,7 +508,7 @@ function WhatsAppTab() {
       <CardContent className="space-y-4">
         <div className="flex gap-2">
           <div className="relative flex-1">
-            <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input className="ps-9" placeholder="بحث بالرقم أو الرسالة..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <Select value={statusFilter || "_none"} onValueChange={(v) => setStatusFilter(v === "_none" ? "" : v)}>
@@ -558,7 +558,7 @@ function SMSTab() {
     { key: "recipientPhone", header: "الرقم", sortable: true, ltr: true, render: (m) => m.recipientPhone || "-" },
     { key: "message", header: "الرسالة", sortable: true, render: (m) => <span className="max-w-[300px] truncate inline-block">{m.message}</span> },
     { key: "status", header: "الحالة", sortable: true, render: (m) => <PageStatusBadge status={m.status} /> },
-    { key: "externalId", header: "معرف خارجي", render: (m) => <span className="text-xs text-gray-400">{m.externalId || "-"}</span> },
+    { key: "externalId", header: "معرف خارجي", render: (m) => <span className="text-xs text-muted-foreground">{m.externalId || "-"}</span> },
     { key: "attemptCount", header: "عدد المحاولات", align: "center", render: (m) => m.attemptCount ?? 0 },
     { key: "createdAt", header: "التاريخ", sortable: true, render: (m) => formatDateAr(m.createdAt) },
   ];
@@ -569,7 +569,7 @@ function SMSTab() {
       <CardContent className="space-y-4">
         <div className="flex gap-2">
           <div className="relative flex-1">
-            <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input className="ps-9" placeholder="بحث بالرقم أو الرسالة..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <Select value={statusFilter || "_none"} onValueChange={(v) => setStatusFilter(v === "_none" ? "" : v)}>
@@ -625,7 +625,7 @@ function PBXTab() {
       <CardHeader><CardTitle>سجل المكالمات</CardTitle></CardHeader>
       <CardContent className="space-y-4">
         <div className="relative">
-          <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input className="ps-9" placeholder="بحث برقم المتصل أو المستقبل..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <DataTable

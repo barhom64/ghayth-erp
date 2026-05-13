@@ -85,17 +85,17 @@ const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
 const priorityMap: Record<string, string> = { low: "منخفض", medium: "متوسط", high: "عالي", critical: "حرج" };
 
 const STATUS_EFFECTS: Record<string, { icon: string; text: string; color: string }> = {
-  pending: { icon: "⏳", text: "الطلب بانتظار المراجعة", color: "text-yellow-600" },
-  in_review: { icon: "🔍", text: "قيد المراجعة من المعتمد", color: "text-blue-600" },
-  approved: { icon: "✅", text: "الطلب معتمد — يمكن تحويله لإجراء فعلي", color: "text-green-600" },
-  rejected: { icon: "❌", text: "مرفوض — لا يمكن اتخاذ إجراء", color: "text-red-600" },
+  pending: { icon: "⏳", text: "الطلب بانتظار المراجعة", color: "text-status-warning-foreground" },
+  in_review: { icon: "🔍", text: "قيد المراجعة من المعتمد", color: "text-status-info-foreground" },
+  approved: { icon: "✅", text: "الطلب معتمد — يمكن تحويله لإجراء فعلي", color: "text-status-success-foreground" },
+  rejected: { icon: "❌", text: "مرفوض — لا يمكن اتخاذ إجراء", color: "text-status-error-foreground" },
   returned: { icon: "↩️", text: "مُرجع للتعديل من مقدم الطلب", color: "text-orange-600" },
-  closed: { icon: "🔒", text: "مغلق — محوّل لإجراء أو منتهي", color: "text-gray-500" },
+  closed: { icon: "🔒", text: "مغلق — محوّل لإجراء أو منتهي", color: "text-muted-foreground" },
 };
 
 const CONVERT_OPTIONS = [
   { key: "maintenance", label: "تذكرة صيانة", icon: Wrench, path: "/support", color: "text-orange-600 border-orange-200 hover:bg-orange-50" },
-  { key: "purchase", label: "أمر شراء", icon: ShoppingCart, path: "/finance/purchase-orders", color: "text-blue-600 border-blue-200 hover:bg-blue-50" },
+  { key: "purchase", label: "أمر شراء", icon: ShoppingCart, path: "/finance/purchase-orders", color: "text-status-info-foreground border-status-info-surface hover:bg-status-info-surface" },
   { key: "case", label: "قضية قانونية", icon: Scale, path: "/legal/cases", color: "text-purple-600 border-purple-200 hover:bg-purple-50" },
 ];
 
@@ -125,10 +125,10 @@ function ConvertRequestPanel({ requestId, onSuccess }: { requestId: number; onSu
   };
 
   return (
-    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+    <div className="p-3 bg-status-success-surface border border-status-success-surface rounded-lg">
       <div className="flex items-center gap-2 mb-2">
-        <ArrowRightLeft className="h-4 w-4 text-green-600" />
-        <span className="text-sm font-medium text-green-800">تحويل إلى إجراء فعلي</span>
+        <ArrowRightLeft className="h-4 w-4 text-status-success-foreground" />
+        <span className="text-sm font-medium text-status-success-foreground">تحويل إلى إجراء فعلي</span>
       </div>
       <div className="flex flex-wrap gap-2">
         {CONVERT_OPTIONS.map((opt) => (
@@ -145,7 +145,7 @@ function ConvertRequestPanel({ requestId, onSuccess }: { requestId: number; onSu
           </Button>
         ))}
       </div>
-      <p className="text-xs text-gray-500 mt-2">سيتم نقل بيانات الطلب تلقائياً بدون إعادة إدخال</p>
+      <p className="text-xs text-muted-foreground mt-2">سيتم نقل بيانات الطلب تلقائياً بدون إعادة إدخال</p>
     </div>
   );
 }
@@ -180,7 +180,7 @@ function RequestCatalog() {
       )}
       {Object.entries(grouped).map(([category, items]) => (
         <div key={category}>
-          <h4 className="text-sm font-semibold text-gray-500 mb-3">
+          <h4 className="text-sm font-semibold text-muted-foreground mb-3">
             {categoryLabels[category] || category}
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -193,12 +193,12 @@ function RequestCatalog() {
                   onClick={() => setLocation(item.path)}
                 >
                   <CardContent className="p-4 flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-100 transition-colors">
-                      <Icon className="w-5 h-5 text-blue-600" />
+                    <div className="w-10 h-10 rounded-lg bg-status-info-surface flex items-center justify-center flex-shrink-0 group-hover:bg-status-info-surface transition-colors">
+                      <Icon className="w-5 h-5 text-status-info-foreground" />
                     </div>
                     <div className="min-w-0">
                       <p className="font-medium text-sm">{item.name}</p>
-                      <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{item.description}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{item.description}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -208,7 +208,7 @@ function RequestCatalog() {
         </div>
       ))}
       {catalog.length === 0 && (
-        <div className="text-center py-12 text-gray-400">
+        <div className="text-center py-12 text-muted-foreground">
           <ClipboardCheck className="h-12 w-12 mx-auto mb-3 opacity-50" />
           <p>لا توجد أنواع طلبات متاحة لك</p>
         </div>
@@ -296,7 +296,7 @@ function RequestsList() {
       key: "ref",
       header: "رقم المرجع",
       render: (r: any) => (
-        <span className="font-mono text-sm font-semibold text-blue-700 tracking-wide">
+        <span className="font-mono text-sm font-semibold text-status-info-foreground tracking-wide">
           {r.ref || "—"}
         </span>
       ),
@@ -321,7 +321,7 @@ function RequestsList() {
       key: "requesterName",
       header: "مقدم الطلب",
       searchable: true,
-      render: (r: any) => <span className="text-gray-500">{r.requesterName || "-"}</span>,
+      render: (r: any) => <span className="text-muted-foreground">{r.requesterName || "-"}</span>,
     },
     {
       key: "priority",
@@ -335,8 +335,8 @@ function RequestsList() {
         const atts = parseAttachments(r.attachments);
         return atts.length > 0 ? (
           <div className="flex items-center gap-1">
-            <Paperclip className="h-3.5 w-3.5 text-blue-500" />
-            <span className="text-xs text-blue-600">{atts.length} ملف</span>
+            <Paperclip className="h-3.5 w-3.5 text-status-info" />
+            <span className="text-xs text-status-info-foreground">{atts.length} ملف</span>
           </div>
         ) : (
           <span className="text-xs text-gray-300">&mdash;</span>
@@ -373,7 +373,7 @@ function RequestsList() {
             onDelete={() => startDelete(r.id)}
             deletePerm="requests:delete"
           />
-          <button onClick={() => setExpandedId(expandedId === r.id ? null : r.id)} className="text-gray-400 hover:text-gray-600 p-1">
+          <button onClick={() => setExpandedId(expandedId === r.id ? null : r.id)} className="text-muted-foreground hover:text-muted-foreground p-1">
             {expandedId === r.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
         </div>
@@ -385,7 +385,7 @@ function RequestsList() {
     const extras: React.ReactNode[] = [];
     if (expandedId === r.id) {
       extras.push(
-        <div key="expanded" className="p-3 bg-gray-50/50">
+        <div key="expanded" className="p-3 bg-surface-subtle/50">
           <div className="space-y-3">
             {r.status === "approved" && (
               <ConvertRequestPanel
@@ -434,7 +434,7 @@ function RequestsList() {
 
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute end-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Search className="absolute end-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="بحث في الطلبات..."
             value={searchText}
@@ -467,7 +467,7 @@ function RequestsList() {
             className="w-36"
             placeholder="من تاريخ"
           />
-          <span className="text-gray-400 text-xs">—</span>
+          <span className="text-muted-foreground text-xs">—</span>
           <DatePicker
             value={filterDateTo}
             onChange={setFilterDateTo}
@@ -481,7 +481,7 @@ function RequestsList() {
             variant="ghost"
             size="sm"
             onClick={() => { setFilterStatus(""); setFilterType(""); setFilterDateFrom(""); setFilterDateTo(""); setSearchText(""); setSelectedTag(""); }}
-            className="text-xs text-gray-500"
+            className="text-xs text-muted-foreground"
           >
             <X className="h-3 w-3 me-1" />
             مسح
@@ -545,7 +545,7 @@ function RequestsList() {
         emptyMessage="لا توجد طلبات"
         emptyIcon={<ClipboardCheck className="h-10 w-10 text-gray-300" />}
         onRowClick={(r: any) => navigate(`/requests/${r.id}`)}
-        rowClassName={(r: any) => selectedIds.has(r.id) ? "bg-blue-50/50" : undefined}
+        rowClassName={(r: any) => selectedIds.has(r.id) ? "bg-status-info-surface" : undefined}
         renderRowExtras={renderRowExtras}
       />
     </div>
@@ -593,8 +593,8 @@ function TypesTab() {
       <DataTable
         columns={[
           { key: "name", header: "الاسم", searchable: true, render: (t: any) => <span className="font-medium">{t.name}</span> },
-          { key: "category", header: "التصنيف", render: (t: any) => <span className="text-gray-500">{t.category || "-"}</span> },
-          { key: "status", header: "الحالة", render: () => <Badge className="bg-green-100 text-green-700">نشط</Badge> },
+          { key: "category", header: "التصنيف", render: (t: any) => <span className="text-muted-foreground">{t.category || "-"}</span> },
+          { key: "status", header: "الحالة", render: () => <Badge className="bg-status-success-surface text-status-success-foreground">نشط</Badge> },
         ]}
         data={items}
         noToolbar
@@ -652,7 +652,7 @@ function WorkflowsTab() {
       <DataTable
         columns={[
           { key: "name", header: "الاسم", searchable: true, render: (w: any) => <span className="font-medium">{w.name}</span> },
-          { key: "description", header: "الوصف", render: (w: any) => <span className="text-gray-500">{w.description || "-"}</span> },
+          { key: "description", header: "الوصف", render: (w: any) => <span className="text-muted-foreground">{w.description || "-"}</span> },
         ]}
         data={items}
         noToolbar
@@ -676,9 +676,9 @@ export default function RequestsPage() {
     <PageShell title="طلبات المشتريات" breadcrumbs={[{ label: "المشتريات" }]}>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "إجمالي الطلبات", value: s.totalRequests || 0, icon: ClipboardCheck, color: "text-blue-600 bg-blue-50" },
-          { label: "معلقة", value: s.pendingRequests || 0, icon: Clock, color: "text-yellow-600 bg-yellow-50" },
-          { label: "موافق عليها", value: s.approvedRequests || 0, icon: CheckCircle, color: "text-green-600 bg-green-50" },
+          { label: "إجمالي الطلبات", value: s.totalRequests || 0, icon: ClipboardCheck, color: "text-status-info-foreground bg-status-info-surface" },
+          { label: "معلقة", value: s.pendingRequests || 0, icon: Clock, color: "text-status-warning-foreground bg-status-warning-surface" },
+          { label: "موافق عليها", value: s.approvedRequests || 0, icon: CheckCircle, color: "text-status-success-foreground bg-status-success-surface" },
           { label: "أنواع الطلبات", value: s.activeTypes || 0, icon: ListTodo, color: "text-purple-600 bg-purple-50" },
         ].map((c) => (
           <Card key={c.label} className="border-0 shadow-sm">
@@ -686,7 +686,7 @@ export default function RequestsPage() {
               <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", c.color.split(" ")[1])}>
                 <c.icon className={cn("w-5 h-5", c.color.split(" ")[0])} />
               </div>
-              <div><p className="text-xl font-bold">{c.value}</p><p className="text-xs text-gray-500">{c.label}</p></div>
+              <div><p className="text-xl font-bold">{c.value}</p><p className="text-xs text-muted-foreground">{c.label}</p></div>
             </CardContent>
           </Card>
         ))}

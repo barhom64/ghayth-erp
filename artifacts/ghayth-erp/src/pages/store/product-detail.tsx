@@ -91,8 +91,8 @@ export default function ProductDetailPage() {
         </div>
         {product?.description && (
           <div className="pt-4 border-t">
-            <p className="text-xs text-gray-500 mb-1">الوصف</p>
-            <p className="text-sm text-gray-700 whitespace-pre-wrap">{product.description}</p>
+            <p className="text-xs text-muted-foreground mb-1">الوصف</p>
+            <p className="text-sm text-status-neutral-foreground whitespace-pre-wrap">{product.description}</p>
           </div>
         )}
       </CardContent>
@@ -101,7 +101,7 @@ export default function ProductDetailPage() {
 
   const emptyMsg = (msg: string) => (
     <Card className="border-0 shadow-sm">
-      <CardContent className="p-10 text-center text-sm text-gray-500">{msg}</CardContent>
+      <CardContent className="p-10 text-center text-sm text-muted-foreground">{msg}</CardContent>
     </Card>
   );
 
@@ -179,7 +179,7 @@ export default function ProductDetailPage() {
     <>
       {product?.price != null && <Badge variant="outline">{formatCurrency(Number(product.price))}</Badge>}
       {product?.quantity != null && (
-        <Badge className={currentStock > 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}>
+        <Badge className={currentStock > 0 ? "bg-status-success-surface text-status-success-foreground" : "bg-status-error-surface text-status-error-foreground"}>
           {currentStock > 0 ? `متوفر: ${currentStock}` : "نفد المخزون"}
         </Badge>
       )}
@@ -222,7 +222,7 @@ export default function ProductDetailPage() {
           label: "المخزون الحالي",
           value: currentStock,
           icon: Warehouse,
-          color: "text-blue-600 bg-blue-50",
+          color: "text-status-info-foreground bg-status-info-surface",
         },
         {
           label: "محجوز",
@@ -240,7 +240,7 @@ export default function ProductDetailPage() {
           label: "إيرادات 30 يوم",
           value: formatCurrency(revenue30d),
           icon: DollarSign,
-          color: "text-green-600 bg-green-50",
+          color: "text-status-success-foreground bg-status-success-surface",
         },
       ]}
       tabs={tabs}
@@ -252,8 +252,8 @@ export default function ProductDetailPage() {
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
   return (
     <div>
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="text-sm font-medium text-gray-800 mt-0.5">{value || "—"}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-sm font-medium text-status-neutral-foreground mt-0.5">{value || "—"}</p>
     </div>
   );
 }

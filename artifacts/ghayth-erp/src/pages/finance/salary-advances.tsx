@@ -71,7 +71,7 @@ export default function SalaryAdvancesPage() {
       key: "ref",
       header: "المرجع",
       sortable: true,
-      render: (s) => <span className="font-mono text-blue-600 text-sm">{s.ref}</span>,
+      render: (s) => <span className="font-mono text-status-info-foreground text-sm">{s.ref}</span>,
     },
     {
       key: "employeeName",
@@ -155,9 +155,9 @@ export default function SalaryAdvancesPage() {
       }
     >
       <KpiGrid items={[
-        { label: "عدد السلف", value: formatNumber(summary.total || 0), icon: Banknote, color: "text-blue-600 bg-blue-50" },
-        { label: "قيد الانتظار", value: formatNumber(items.filter((s: any) => s.status === "pending").length), icon: Clock, color: "text-amber-600 bg-amber-50" },
-        { label: "معتمدة", value: formatNumber(items.filter((s: any) => s.status === "approved").length), icon: CheckCircle, color: "text-green-600 bg-green-50" },
+        { label: "عدد السلف", value: formatNumber(summary.total || 0), icon: Banknote, color: "text-status-info-foreground bg-status-info-surface" },
+        { label: "قيد الانتظار", value: formatNumber(items.filter((s: any) => s.status === "pending").length), icon: Clock, color: "text-status-warning-foreground bg-status-warning-surface" },
+        { label: "معتمدة", value: formatNumber(items.filter((s: any) => s.status === "approved").length), icon: CheckCircle, color: "text-status-success-foreground bg-status-success-surface" },
         { label: "إجمالي المبالغ", value: formatCurrency(Number(summary.totalAmount || 0)), icon: DollarSign, color: "text-emerald-600 bg-emerald-50" },
       ]} />
 

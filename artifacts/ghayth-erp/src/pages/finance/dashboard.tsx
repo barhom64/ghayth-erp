@@ -77,10 +77,10 @@ interface KpiTileProps {
 
 const TONE_CLASS: Record<NonNullable<KpiTileProps["tone"]>, string> = {
   neutral: "text-slate-600 bg-slate-50 border-slate-100",
-  info:    "text-blue-600 bg-blue-50 border-blue-100",
+  info:    "text-status-info-foreground bg-status-info-surface border-status-info-surface",
   success: "text-emerald-600 bg-emerald-50 border-emerald-100",
-  warning: "text-amber-700 bg-amber-50 border-amber-100",
-  danger:  "text-red-600 bg-red-50 border-red-100",
+  warning: "text-status-warning-foreground bg-status-warning-surface border-status-warning-surface",
+  danger:  "text-status-error-foreground bg-status-error-surface border-status-error-surface",
 };
 
 function KpiTile({ label, value, hint, icon: Icon, tone = "neutral", href }: KpiTileProps) {
@@ -111,16 +111,16 @@ function KpiTile({ label, value, hint, icon: Icon, tone = "neutral", href }: Kpi
 
 const ACTIVITY_MAP: Record<string, { icon: typeof Clock; tone: string; label: string }> = {
   "create":                      { icon: Plus,          tone: "text-emerald-600 bg-emerald-50", label: "إنشاء" },
-  "update":                      { icon: Edit,          tone: "text-blue-600 bg-blue-50",       label: "تحديث" },
-  "delete":                      { icon: Trash,         tone: "text-red-600 bg-red-50",         label: "حذف" },
+  "update":                      { icon: Edit,          tone: "text-status-info-foreground bg-status-info-surface",       label: "تحديث" },
+  "delete":                      { icon: Trash,         tone: "text-status-error-foreground bg-status-error-surface",         label: "حذف" },
   "approve":                     { icon: CheckCircle,   tone: "text-emerald-600 bg-emerald-50", label: "اعتماد" },
-  "reject":                      { icon: XCircle,       tone: "text-red-600 bg-red-50",         label: "رفض" },
-  "submit":                      { icon: Send,          tone: "text-blue-600 bg-blue-50",       label: "تقديم" },
+  "reject":                      { icon: XCircle,       tone: "text-status-error-foreground bg-status-error-surface",         label: "رفض" },
+  "submit":                      { icon: Send,          tone: "text-status-info-foreground bg-status-info-surface",       label: "تقديم" },
   "review":                      { icon: CheckCircle,   tone: "text-indigo-600 bg-indigo-50",   label: "مراجعة" },
   "fiscal_period.close":         { icon: ShieldCheck,   tone: "text-slate-700 bg-slate-50",     label: "إقفال فترة" },
-  "fiscal_period.reopen":        { icon: Clock,         tone: "text-amber-700 bg-amber-50",     label: "فتح فترة" },
+  "fiscal_period.reopen":        { icon: Clock,         tone: "text-status-warning-foreground bg-status-warning-surface",     label: "فتح فترة" },
   "journal.posted":              { icon: CheckCircle,   tone: "text-emerald-600 bg-emerald-50", label: "ترحيل قيد" },
-  "bank_guarantee.cancelled":    { icon: XCircle,       tone: "text-red-600 bg-red-50",         label: "إلغاء ضمان" },
+  "bank_guarantee.cancelled":    { icon: XCircle,       tone: "text-status-error-foreground bg-status-error-surface",         label: "إلغاء ضمان" },
   "bank_guarantee.released":     { icon: CheckCircle,   tone: "text-emerald-600 bg-emerald-50", label: "تحرير ضمان" },
 };
 
@@ -475,10 +475,10 @@ export default function FinanceDashboard() {
                     >
                       <Icon className="w-3 h-3" />
                     </div>
-                    <div className="flex-1 min-w-0 bg-gray-50/60 rounded-lg p-2.5">
+                    <div className="flex-1 min-w-0 bg-surface-subtle/60 rounded-lg p-2.5">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-sm font-medium text-gray-800 truncate">{style.label}</span>
+                          <span className="text-sm font-medium text-status-neutral-foreground truncate">{style.label}</span>
                           <span className="text-xs text-muted-foreground truncate">
                             {row.entity} · #{row.entityId}
                           </span>

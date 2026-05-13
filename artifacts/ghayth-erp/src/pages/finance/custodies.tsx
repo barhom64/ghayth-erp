@@ -103,7 +103,7 @@ export default function CustodiesPage() {
       key: "ref",
       header: "المرجع",
       sortable: true,
-      render: (c) => <span className="font-mono text-blue-600 text-sm">{c.ref}</span>,
+      render: (c) => <span className="font-mono text-status-info-foreground text-sm">{c.ref}</span>,
     },
     {
       key: "employeeName",
@@ -116,9 +116,9 @@ export default function CustodiesPage() {
       header: "الوصف",
       sortable: true,
       render: (c) => (
-        <div className="text-gray-600">
+        <div className="text-muted-foreground">
           {c.description || "-"}
-          {c.purpose && <div className="text-xs text-gray-400 mt-0.5">{c.purpose}</div>}
+          {c.purpose && <div className="text-xs text-muted-foreground mt-0.5">{c.purpose}</div>}
         </div>
       ),
     },
@@ -146,7 +146,7 @@ export default function CustodiesPage() {
         <div className="flex flex-col items-start gap-0.5">
           <PageStatusBadge status={c.status} domain="custody" />
           {c.daysOverdue > 0 && (
-            <span className="text-xs text-red-500">{c.daysOverdue} يوم تأخير</span>
+            <span className="text-xs text-status-error">{c.daysOverdue} يوم تأخير</span>
           )}
         </div>
       ),
@@ -156,7 +156,7 @@ export default function CustodiesPage() {
       header: "تاريخ الإرجاع",
       sortable: true,
       render: (c) => (
-        <span className="text-gray-500 text-sm">
+        <span className="text-muted-foreground text-sm">
           {c.expectedReturnDate ? formatDateAr(c.expectedReturnDate) : "-"}
         </span>
       ),
@@ -166,7 +166,7 @@ export default function CustodiesPage() {
       header: "التاريخ",
       sortable: true,
       render: (c) => (
-        <span className="text-gray-500 text-sm">{c.date ? formatDateAr(c.date) : "-"}</span>
+        <span className="text-muted-foreground text-sm">{c.date ? formatDateAr(c.date) : "-"}</span>
       ),
     },
     {
@@ -186,7 +186,7 @@ export default function CustodiesPage() {
           )}
           <button
             onClick={() => setExpandedId(expandedId === c.id ? null : c.id)}
-            className="text-gray-400 hover:text-gray-600 p-1"
+            className="text-muted-foreground hover:text-muted-foreground p-1"
             title="عرض إجراءات الاعتماد"
           >
             {expandedId === c.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -227,9 +227,9 @@ export default function CustodiesPage() {
       }
     >
       <KpiGrid items={[
-        { label: "عدد العهد", value: summary.total || 0, icon: KeyRound, color: "text-blue-600 bg-blue-50" },
-        { label: "المتبقي (قائمة)", value: formatCurrency(Number(summary.totalRemaining || 0)), icon: AlertCircle, color: "text-amber-600 bg-amber-50" },
-        { label: "المسوّاة", value: items.filter((c: any) => c.status === "settled").length, icon: CheckCircle, color: "text-green-600 bg-green-50" },
+        { label: "عدد العهد", value: summary.total || 0, icon: KeyRound, color: "text-status-info-foreground bg-status-info-surface" },
+        { label: "المتبقي (قائمة)", value: formatCurrency(Number(summary.totalRemaining || 0)), icon: AlertCircle, color: "text-status-warning-foreground bg-status-warning-surface" },
+        { label: "المسوّاة", value: items.filter((c: any) => c.status === "settled").length, icon: CheckCircle, color: "text-status-success-foreground bg-status-success-surface" },
         { label: "إجمالي المبالغ", value: formatCurrency(Number(summary.totalAmount || 0)), icon: DollarSign, color: "text-emerald-600 bg-emerald-50" },
       ]} />
 
@@ -285,13 +285,13 @@ export default function CustodiesPage() {
         onRetry={() => refetch()}
         emptyMessage="لا توجد عهد"
         emptyIcon={<KeyRound className="h-6 w-6 text-slate-400" />}
-        rowClassName={(c) => (c.status === "overdue" ? "bg-red-50/30" : undefined)}
+        rowClassName={(c) => (c.status === "overdue" ? "bg-status-error-surface" : undefined)}
         onRowClick={(c) => navigate(`/finance/custodies/${c.id}`)}
         noToolbar
         renderRowExtras={(c) => {
           if (expandedId !== c.id) return null;
           return (
-            <div className="p-3 bg-gray-50/50">
+            <div className="p-3 bg-surface-subtle/50">
               {(c.approvalStatus === "draft" ||
                 c.approvalStatus === "returned" ||
                 c.approvalStatus === "pending_approval") && (
@@ -465,19 +465,19 @@ function SettleCustodyForm({ custody, onDone }: { custody: any; onDone: () => vo
   type SettleForm = z.infer<typeof schema>;
 
   return (
-    <Card className="border-amber-200">
+    <Card className="border-status-warning-surface">
       <CardHeader>
         <CardTitle className="text-base">تسوية عهدة: {custody.ref}</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-          <div className="bg-gray-50 p-3 rounded-lg">
+          <div className="bg-surface-subtle p-3 rounded-lg">
             <p className="text-xs text-muted-foreground">المبلغ الأصلي</p>
             <p className="text-lg font-bold">{formatCurrency(custody.amount)}</p>
           </div>
-          <div className="bg-amber-50 p-3 rounded-lg">
+          <div className="bg-status-warning-surface p-3 rounded-lg">
             <p className="text-xs text-muted-foreground">المتبقي</p>
-            <p className="text-lg font-bold text-amber-700">
+            <p className="text-lg font-bold text-status-warning-foreground">
               {formatCurrency(custody.remainingAmount)}
             </p>
           </div>

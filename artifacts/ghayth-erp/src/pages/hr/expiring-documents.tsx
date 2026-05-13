@@ -17,11 +17,11 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 const DOC_STATUS_OPTIONS = Object.entries(DOCUMENT_TYPES).map(([value, label]) => ({ value, label }));
 
 function getSeverityBadge(daysLeft: number) {
-  if (daysLeft <= 0) return { label: "منتهي", color: "bg-red-100 text-red-700 border-red-300" };
-  if (daysLeft <= 14) return { label: `${daysLeft} يوم`, color: "bg-red-100 text-red-700 border-red-300" };
+  if (daysLeft <= 0) return { label: "منتهي", color: "bg-status-error-surface text-status-error-foreground border-status-error-surface" };
+  if (daysLeft <= 14) return { label: `${daysLeft} يوم`, color: "bg-status-error-surface text-status-error-foreground border-status-error-surface" };
   if (daysLeft <= 30) return { label: `${daysLeft} يوم`, color: "bg-orange-100 text-orange-700 border-orange-300" };
-  if (daysLeft <= 60) return { label: `${daysLeft} يوم`, color: "bg-yellow-100 text-yellow-700 border-yellow-300" };
-  return { label: `${daysLeft} يوم`, color: "bg-gray-100 text-gray-600 border-gray-200" };
+  if (daysLeft <= 60) return { label: `${daysLeft} يوم`, color: "bg-status-warning-surface text-status-warning-foreground border-yellow-300" };
+  return { label: `${daysLeft} يوم`, color: "bg-surface-subtle text-muted-foreground border-border" };
 }
 
 export default function ExpiringDocumentsPage() {
@@ -45,14 +45,14 @@ export default function ExpiringDocumentsPage() {
   const expiredCount = allDocs.filter((d: any) => Number(d.daysLeft) <= 0).length;
 
   const kpis = [
-    { label: "إجمالي الوثائق", value: allDocs.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
-    { label: "منتهية", value: expiredCount, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
+    { label: "إجمالي الوثائق", value: allDocs.length, icon: FileText, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "منتهية", value: expiredCount, icon: AlertTriangle, color: "text-status-error-foreground bg-status-error-surface" },
     { label: "حرجة (≤14 يوم)", value: criticalCount, icon: Clock, color: "text-orange-600 bg-orange-50" },
-    { label: "قريبة الانتهاء", value: allDocs.length - expiredCount - criticalCount, icon: Shield, color: "text-amber-600 bg-amber-50" },
+    { label: "قريبة الانتهاء", value: allDocs.length - expiredCount - criticalCount, icon: Shield, color: "text-status-warning-foreground bg-status-warning-surface" },
   ];
 
   const ENTITY_ICONS: Record<string, { Icon: typeof User; color: string; label: string }> = {
-    employee: { Icon: User, color: "text-blue-600 bg-blue-50", label: "موظف" },
+    employee: { Icon: User, color: "text-status-info-foreground bg-status-info-surface", label: "موظف" },
     driver: { Icon: User, color: "text-cyan-600 bg-cyan-50", label: "سائق" },
     vehicle: { Icon: Car, color: "text-teal-600 bg-teal-50", label: "مركبة" },
     company: { Icon: Building2, color: "text-rose-600 bg-rose-50", label: "منشأة" },
@@ -73,7 +73,7 @@ export default function ExpiringDocumentsPage() {
             </div>
             <div>
               <span className="font-medium text-sm block">{name}</span>
-              <span className="text-xs text-gray-400">{ent?.label}</span>
+              <span className="text-xs text-muted-foreground">{ent?.label}</span>
             </div>
           </div>
         );
@@ -94,7 +94,7 @@ export default function ExpiringDocumentsPage() {
       header: "تاريخ الانتهاء",
       sortable: true,
       render: (v) => (
-        <span className="text-sm text-gray-600">
+        <span className="text-sm text-muted-foreground">
           {formatDateAr(v.expiryDate)}
         </span>
       ),
@@ -141,7 +141,7 @@ export default function ExpiringDocumentsPage() {
 
       {/* Expired alert */}
       {expiredCount > 0 && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center gap-2">
+        <div className="p-3 bg-status-error-surface border border-status-error-surface rounded-lg text-sm text-status-error-foreground flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
           تحذير: {expiredCount} وثيقة منتهية الصلاحية — يجب التجديد فوراً
         </div>

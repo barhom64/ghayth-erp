@@ -18,12 +18,12 @@ export function OverviewTab() {
   const chartRef = useRef<HTMLDivElement>(null);
   const { exportChart } = useChartExport();
   const stats = [
-    { label: "الموظفين", value: d.employees || 0, icon: Users, color: "text-blue-600 bg-blue-50" },
-    { label: "العملاء", value: d.clients || 0, icon: Building2, color: "text-green-600 bg-green-50" },
+    { label: "الموظفين", value: d.employees || 0, icon: Users, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "العملاء", value: d.clients || 0, icon: Building2, color: "text-status-success-foreground bg-status-success-surface" },
     { label: "الفواتير", value: d.invoices || 0, icon: CreditCard, color: "text-purple-600 bg-purple-50" },
     { label: "المشاريع", value: d.projects || 0, icon: FolderKanban, color: "text-orange-600 bg-orange-50" },
     { label: "المركبات", value: d.vehicles || 0, icon: Car, color: "text-teal-600 bg-teal-50" },
-    { label: "تذاكر مفتوحة", value: d.openTickets || 0, icon: Headphones, color: "text-red-600 bg-red-50" },
+    { label: "تذاكر مفتوحة", value: d.openTickets || 0, icon: Headphones, color: "text-status-error-foreground bg-status-error-surface" },
     { label: "الإيرادات", value: `${formatNumber(((d.totalRevenue || 0) / 1000))}K`, icon: DollarSign, color: "text-indigo-600 bg-indigo-50" },
   ];
   if (isLoading) return <LoadingSpinner />;
@@ -47,7 +47,7 @@ export function OverviewTab() {
               </div>
               <div>
                 <p className="text-xl font-bold">{s.value}</p>
-                <p className="text-xs text-gray-500">{s.label}</p>
+                <p className="text-xs text-muted-foreground">{s.label}</p>
               </div>
             </CardContent>
           </Card>

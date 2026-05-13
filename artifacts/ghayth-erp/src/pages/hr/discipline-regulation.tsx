@@ -30,10 +30,10 @@ const SECTION_LABELS: Record<string, string> = {
 };
 
 const SEVERITY_STYLES: Record<string, string> = {
-  low: "bg-green-100 text-green-700",
-  medium: "bg-yellow-100 text-yellow-700",
+  low: "bg-status-success-surface text-status-success-foreground",
+  medium: "bg-status-warning-surface text-status-warning-foreground",
   high: "bg-orange-100 text-orange-700",
-  critical: "bg-red-100 text-red-700",
+  critical: "bg-status-error-surface text-status-error-foreground",
 };
 
 interface Article {
@@ -118,7 +118,7 @@ export default function DisciplineRegulationPage() {
   };
 
   const renderArticle = (a: Article) => (
-    <div key={a.id} className="border rounded-lg p-4 hover:bg-gray-50 transition">
+    <div key={a.id} className="border rounded-lg p-4 hover:bg-surface-subtle transition">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -135,19 +135,19 @@ export default function DisciplineRegulationPage() {
             <p className="text-xs text-muted-foreground mt-1">📖 {a.legalReference}</p>
           )}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3 text-xs">
-            <div className="bg-gray-50 rounded p-2">
+            <div className="bg-surface-subtle rounded p-2">
               <div className="text-muted-foreground mb-0.5">أول مرة</div>
               <div className="font-medium">{a.penalty1 || "—"}</div>
             </div>
-            <div className="bg-gray-50 rounded p-2">
+            <div className="bg-surface-subtle rounded p-2">
               <div className="text-muted-foreground mb-0.5">ثاني مرة</div>
               <div className="font-medium">{a.penalty2 || "—"}</div>
             </div>
-            <div className="bg-gray-50 rounded p-2">
+            <div className="bg-surface-subtle rounded p-2">
               <div className="text-muted-foreground mb-0.5">ثالث مرة</div>
               <div className="font-medium">{a.penalty3 || "—"}</div>
             </div>
-            <div className="bg-gray-50 rounded p-2">
+            <div className="bg-surface-subtle rounded p-2">
               <div className="text-muted-foreground mb-0.5">رابع مرة</div>
               <div className="font-medium">{a.penalty4 || "—"}</div>
             </div>

@@ -139,7 +139,7 @@ function DocumentsList() {
         <Link href="/documents/create"><GuardedButton perm="documents:create" variant="outline" className="gap-2"><FilePlus className="h-4 w-4" /> إنشاء مستند</GuardedButton></Link>
         <div className="flex-1" />
         <div className="relative w-64">
-          <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input placeholder="بحث..." value={search} onChange={(e) => setSearch(e.target.value)} className="ps-10" />
         </div>
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
@@ -168,8 +168,8 @@ function DocumentsList() {
         <Card>
           <CardContent className="p-12 text-center">
             <FileText className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500 text-lg">لا توجد مستندات</p>
-            <p className="text-gray-400 text-sm mt-1">ابدأ برفع مستند جديد</p>
+            <p className="text-muted-foreground text-lg">لا توجد مستندات</p>
+            <p className="text-muted-foreground text-sm mt-1">ابدأ برفع مستند جديد</p>
           </CardContent>
         </Card>
       ) : (
@@ -179,18 +179,18 @@ function DocumentsList() {
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                      <FileText className="h-5 w-5 text-blue-600" />
+                    <div className="w-10 h-10 rounded-lg bg-status-info-surface flex items-center justify-center flex-shrink-0">
+                      <FileText className="h-5 w-5 text-status-info-foreground" />
                     </div>
                     <div className="min-w-0">
                       <p className="font-semibold truncate">{d.title}</p>
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        {d.fileName && <span className="text-xs text-gray-500">{d.fileName}</span>}
-                        {d.fileSize && <span className="text-xs text-gray-400">({formatSize(d.fileSize)})</span>}
-                        {d.createdAt && <span className="text-xs text-gray-400">{formatDateAr(d.createdAt)}</span>}
+                        {d.fileName && <span className="text-xs text-muted-foreground">{d.fileName}</span>}
+                        {d.fileSize && <span className="text-xs text-muted-foreground">({formatSize(d.fileSize)})</span>}
+                        {d.createdAt && <span className="text-xs text-muted-foreground">{formatDateAr(d.createdAt)}</span>}
                         {d.currentVersion > 1 && <Badge variant="secondary" className="text-[10px]">v{d.currentVersion}</Badge>}
                       </div>
-                      {d.description && <p className="text-xs text-gray-400 mt-1 truncate">{d.description}</p>}
+                      {d.description && <p className="text-xs text-muted-foreground mt-1 truncate">{d.description}</p>}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
@@ -208,7 +208,7 @@ function DocumentsList() {
                         </Button>
                       </Link>
                       {d.status !== "approved" && (
-                        <GuardedButton perm="documents:approve" variant="ghost" size="sm" className="gap-1 text-xs text-green-600" onClick={() => handleStatusChange(d.id, "approved")}>
+                        <GuardedButton perm="documents:approve" variant="ghost" size="sm" className="gap-1 text-xs text-status-success-foreground" onClick={() => handleStatusChange(d.id, "approved")}>
                           <CheckCircle2 className="h-3.5 w-3.5" /> اعتماد
                         </GuardedButton>
                       )}
@@ -218,7 +218,7 @@ function DocumentsList() {
                         </GuardedButton>
                       )}
                       {d.status === "cancelled" && (
-                        <Button variant="ghost" size="sm" className="gap-1 text-xs text-gray-600" onClick={() => handleStatusChange(d.id, "draft")}>
+                        <Button variant="ghost" size="sm" className="gap-1 text-xs text-muted-foreground" onClick={() => handleStatusChange(d.id, "draft")}>
                           <Clock className="h-3.5 w-3.5" /> مسودة
                         </Button>
                       )}
@@ -229,8 +229,8 @@ function DocumentsList() {
                   <div className={cn(
                     "mt-2 pt-2 border-t text-xs flex items-center gap-2",
                     d.status === "approved"
-                      ? (CATEGORY_EFFECTS[d.category].severity === "warning" ? "text-amber-600" : "text-blue-600")
-                      : "text-gray-400"
+                      ? (CATEGORY_EFFECTS[d.category].severity === "warning" ? "text-status-warning-foreground" : "text-status-info-foreground")
+                      : "text-muted-foreground"
                   )}>
                     <span>{CATEGORY_EFFECTS[d.category].icon}</span>
                     <span>
@@ -397,9 +397,9 @@ export default function DocumentsPage() {
     <PageShell title="إدارة المستندات">
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {[
-          { label: "إجمالي المستندات", value: s.totalDocuments || 0, icon: FileText, color: "text-blue-600 bg-blue-50" },
-          { label: "مسودات", value: s.draftDocuments || 0, icon: Clock, color: "text-gray-600 bg-gray-50" },
-          { label: "معتمدة", value: s.approvedDocuments || 0, icon: CheckCircle2, color: "text-green-600 bg-green-50" },
+          { label: "إجمالي المستندات", value: s.totalDocuments || 0, icon: FileText, color: "text-status-info-foreground bg-status-info-surface" },
+          { label: "مسودات", value: s.draftDocuments || 0, icon: Clock, color: "text-muted-foreground bg-surface-subtle" },
+          { label: "معتمدة", value: s.approvedDocuments || 0, icon: CheckCircle2, color: "text-status-success-foreground bg-status-success-surface" },
           { label: "المجلدات", value: s.totalFolders || 0, icon: FolderOpen, color: "text-orange-600 bg-orange-50" },
           { label: "القوالب", value: s.totalTemplates || 0, icon: FilePlus, color: "text-purple-600 bg-purple-50" },
         ].map((c) => (
@@ -408,7 +408,7 @@ export default function DocumentsPage() {
               <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", c.color.split(" ")[1])}>
                 <c.icon className={cn("w-5 h-5", c.color.split(" ")[0])} />
               </div>
-              <div><p className="text-xl font-bold">{c.value}</p><p className="text-xs text-gray-500">{c.label}</p></div>
+              <div><p className="text-xl font-bold">{c.value}</p><p className="text-xs text-muted-foreground">{c.label}</p></div>
             </CardContent>
           </Card>
         ))}

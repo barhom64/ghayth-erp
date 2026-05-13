@@ -72,25 +72,25 @@ export default function LoansPage() {
       label: "إجمالي السلف",
       value: stats.total ?? items.length,
       icon: FileText,
-      color: "text-blue-600 bg-blue-50",
+      color: "text-status-info-foreground bg-status-info-surface",
     },
     {
       label: "بانتظار الموافقة",
       value: stats.pending ?? 0,
       icon: Clock,
-      color: "text-amber-600 bg-amber-50",
+      color: "text-status-warning-foreground bg-status-warning-surface",
     },
     {
       label: "إجمالي المبالغ",
       value: formatCurrency(Number(stats.totalAmount ?? 0)),
       icon: DollarSign,
-      color: "text-red-600 bg-red-50",
+      color: "text-status-error-foreground bg-status-error-surface",
     },
     {
       label: "المسدّد",
       value: formatCurrency(Number(stats.totalPaid ?? 0)),
       icon: CheckCircle,
-      color: "text-green-600 bg-green-50",
+      color: "text-status-success-foreground bg-status-success-surface",
     },
   ];
 
@@ -110,7 +110,7 @@ export default function LoansPage() {
       header: "رقم السلفة",
       sortable: true,
       render: (v) => (
-        <span className="font-mono text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-1 rounded">
+        <span className="font-mono text-xs font-semibold text-status-info-foreground bg-status-info-surface px-2 py-1 rounded">
           {v.loanNumber}
         </span>
       ),
@@ -125,7 +125,7 @@ export default function LoansPage() {
           <div>
             <span className="font-medium text-sm block">{v.employeeName}</span>
             {v.empNumber && (
-              <span className="text-xs text-gray-400">#{v.empNumber}</span>
+              <span className="text-xs text-muted-foreground">#{v.empNumber}</span>
             )}
           </div>
         </div>
@@ -144,7 +144,7 @@ export default function LoansPage() {
       header: "المبلغ",
       sortable: true,
       render: (v) => (
-        <span className="text-sm font-semibold text-blue-700">
+        <span className="text-sm font-semibold text-status-info-foreground">
           {formatCurrency(Number(v.amount || 0))}
         </span>
       ),
@@ -158,7 +158,7 @@ export default function LoansPage() {
           <Badge variant="outline" className="text-xs">
             {v.installmentCount} قسط
           </Badge>
-          <div className="text-xs text-gray-400 mt-0.5">
+          <div className="text-xs text-muted-foreground mt-0.5">
             {formatCurrency(Number(v.installmentAmount || 0))} / شهر
           </div>
         </div>
@@ -174,7 +174,7 @@ export default function LoansPage() {
         const pct = total > 0 ? Math.round(((total - remaining) / total) * 100) : 0;
         return (
           <div>
-            <span className={cn("text-sm font-semibold", remaining > 0 ? "text-red-600" : "text-green-600")}>
+            <span className={cn("text-sm font-semibold", remaining > 0 ? "text-status-error-foreground" : "text-status-success-foreground")}>
               {formatCurrency(remaining)}
             </span>
             {v.status === "active" && (
@@ -194,7 +194,7 @@ export default function LoansPage() {
       header: "بدء الخصم",
       sortable: true,
       render: (v) => (
-        <span className="text-sm text-gray-600">
+        <span className="text-sm text-muted-foreground">
           {v.startDeductionPeriod || "-"}
         </span>
       ),
@@ -204,7 +204,7 @@ export default function LoansPage() {
       header: "الحالة",
       sortable: true,
       render: (v) => {
-        const st = LOAN_STATUS[v.status] || { label: v.status, color: "bg-gray-100 text-gray-600" };
+        const st = LOAN_STATUS[v.status] || { label: v.status, color: "bg-surface-subtle text-muted-foreground" };
         return (
           <Badge variant="outline" className={cn("text-xs", st.color)}>
             {st.label}
@@ -223,7 +223,7 @@ export default function LoansPage() {
               perm="hr:approve"
               size="sm"
               variant="ghost"
-              className="h-7 px-2 text-green-700 hover:bg-green-50"
+              className="h-7 px-2 text-status-success-foreground hover:bg-status-success-surface"
               onClick={() => handleApprove(v.id)}
               disabled={approveMut.isPending}
             >
@@ -234,7 +234,7 @@ export default function LoansPage() {
               perm="hr:approve"
               size="sm"
               variant="ghost"
-              className="h-7 px-2 text-red-700 hover:bg-red-50"
+              className="h-7 px-2 text-status-error-foreground hover:bg-status-error-surface"
               onClick={() => handleReject(v.id)}
               disabled={rejectMut.isPending}
             >
@@ -268,7 +268,7 @@ export default function LoansPage() {
 
       {/* Pending alert */}
       {Number(stats.pending) > 0 && (
-        <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+        <div className="flex items-center gap-2 p-3 bg-status-warning-surface border border-status-warning-surface rounded-lg text-sm text-status-warning-foreground">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span>
             يوجد <strong>{stats.pending}</strong> طلب سلفة بانتظار الموافقة

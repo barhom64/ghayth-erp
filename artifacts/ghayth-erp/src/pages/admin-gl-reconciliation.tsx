@@ -30,7 +30,7 @@ export default function AdminGlReconciliation() {
     { key: "stored_balance", header: "الرصيد المخزن", render: (r: any) => <span className="text-xs font-mono">{formatAmount(r.stored_balance)}</span> },
     { key: "computed_balance", header: "الرصيد المحسوب", render: (r: any) => <span className="text-xs font-mono">{formatAmount(r.computed_balance)}</span> },
     { key: "drift", header: "الانحراف", sortable: true, render: (r: any) => (
-      <Badge className={Number(r.drift) > 0 ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}>
+      <Badge className={Number(r.drift) > 0 ? "bg-status-error-surface text-status-error-foreground" : "bg-status-warning-surface text-status-warning-foreground"}>
         {formatAmount(r.drift)}
       </Badge>
     )},
@@ -49,12 +49,12 @@ export default function AdminGlReconciliation() {
     >
       <PageStateWrapper isLoading={isLoading && !data} error={error} onRetry={refetch}>
         <div className="space-y-6">
-          <Card className={healthy ? "border-green-200 bg-green-50/30" : "border-red-200 bg-red-50/30"}>
+          <Card className={healthy ? "border-status-success-surface bg-status-success-surface" : "border-status-error-surface bg-status-error-surface"}>
             <CardContent className="p-6 flex items-center gap-4">
               {healthy ? (
-                <CheckCircle className="w-12 h-12 text-green-600" />
+                <CheckCircle className="w-12 h-12 text-status-success-foreground" />
               ) : (
-                <AlertTriangle className="w-12 h-12 text-red-600" />
+                <AlertTriangle className="w-12 h-12 text-status-error-foreground" />
               )}
               <div>
                 <p className="text-lg font-bold">
@@ -62,7 +62,7 @@ export default function AdminGlReconciliation() {
                     ? "جميع الحسابات متطابقة — لا يوجد انحراف"
                     : `${driftCount} حساب بانحراف في الرصيد`}
                 </p>
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="text-sm text-muted-foreground mt-1">
                   يقارن الرصيد الحالي (currentBalance) بمجموع قيود اليومية (مدين − دائن) لكل حساب
                 </p>
               </div>
@@ -72,7 +72,7 @@ export default function AdminGlReconciliation() {
           {mismatches.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm flex items-center gap-2 text-red-700">
+                <CardTitle className="text-sm flex items-center gap-2 text-status-error-foreground">
                   <Scale className="w-4 h-4" />
                   حسابات بانحراف ({mismatches.length})
                 </CardTitle>
@@ -89,11 +89,11 @@ export default function AdminGlReconciliation() {
           )}
 
           {healthy && data && (
-            <Card className="border-green-200">
+            <Card className="border-status-success-surface">
               <CardContent className="p-8 text-center">
-                <Scale className="w-12 h-12 mx-auto mb-3 text-green-500" />
-                <p className="text-lg font-bold text-green-700">مطابقة تامة</p>
-                <p className="text-sm text-gray-500 mt-1">
+                <Scale className="w-12 h-12 mx-auto mb-3 text-status-success" />
+                <p className="text-lg font-bold text-status-success-foreground">مطابقة تامة</p>
+                <p className="text-sm text-muted-foreground mt-1">
                   جميع الأرصدة المخزنة تتطابق مع مجاميع قيود اليومية بفارق أقل من 0.01
                 </p>
               </CardContent>

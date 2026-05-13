@@ -155,12 +155,12 @@ export default function UmrahPricing() {
       <UmrahTabsNav />
 
       {hasAnyGap && activeSeason && (
-        <Card className="border-amber-300 bg-amber-50">
+        <Card className="border-amber-300 bg-status-warning-surface">
           <CardContent className="p-4 flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+            <AlertTriangle className="h-5 w-5 text-status-warning-foreground shrink-0 mt-0.5" />
             <div className="text-sm">
               <p className="font-semibold text-amber-900">فجوات في تغطية التسعيرة للموسم النشط: {activeSeason.title}</p>
-              <p className="text-amber-700 mt-1">
+              <p className="text-status-warning-foreground mt-1">
                 يوجد {Object.keys(gapsByAgent).length} وكيل/وكيل فرعي بدون تغطية كاملة للموسم الحالي — قد يؤدي إلى فواتير بأسعار افتراضية.
               </p>
             </div>
@@ -182,7 +182,7 @@ export default function UmrahPricing() {
               <CardContent className="p-4 space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-base font-bold flex items-center gap-2">
-                    <Tag className="h-4 w-4 text-blue-600" />
+                    <Tag className="h-4 w-4 text-status-info-foreground" />
                     {agentName}
                   </h3>
                 </div>
@@ -196,7 +196,7 @@ export default function UmrahPricing() {
                       <div className="flex items-center justify-between px-3 py-2 border-b">
                         <p className="text-sm font-medium">{subName}</p>
                         {hasGap && (
-                          <Badge className="bg-amber-50 text-amber-700 border-amber-200" variant="outline">
+                          <Badge className="bg-status-warning-surface text-status-warning-foreground border-status-warning-surface" variant="outline">
                             فجوة زمنية
                           </Badge>
                         )}
@@ -205,7 +205,7 @@ export default function UmrahPricing() {
                         {list.map((r) => (
                           <div
                             key={r.id}
-                            className={`p-3 flex flex-wrap items-center gap-3 text-sm ${overlapIds.has(r.id) ? "bg-red-50" : ""}`}
+                            className={`p-3 flex flex-wrap items-center gap-3 text-sm ${overlapIds.has(r.id) ? "bg-status-error-surface" : ""}`}
                           >
                             <div className="flex-1 min-w-[180px]">
                               <div className="flex items-center gap-2">
@@ -224,7 +224,7 @@ export default function UmrahPricing() {
                                 <Badge variant="outline" className="gap-1"><Bus className="h-3 w-3" /> نقل</Badge>
                               )}
                               {overlapIds.has(r.id) && (
-                                <Badge className="bg-red-100 text-red-700 border-red-200" variant="outline">
+                                <Badge className="bg-status-error-surface text-status-error-foreground border-status-error-surface" variant="outline">
                                   تداخل
                                 </Badge>
                               )}
@@ -247,7 +247,7 @@ export default function UmrahPricing() {
                                 variant="ghost"
                                 onClick={() => setDeleteId(r.id)}
                               >
-                                <Trash2 className="h-3.5 w-3.5 text-red-600" />
+                                <Trash2 className="h-3.5 w-3.5 text-status-error-foreground" />
                               </GuardedButton>
                             </div>
                           </div>

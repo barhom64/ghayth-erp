@@ -68,7 +68,7 @@ export default function SalaryComponentsPage() {
       header: "التصنيف",
       sortable: true,
       render: (c) => (
-        <Badge className={c.type === "deduction" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}>
+        <Badge className={c.type === "deduction" ? "bg-status-error-surface text-status-error-foreground" : "bg-status-success-surface text-status-success-foreground"}>
           {SALARY_CATEGORIES[c.type] || c.type || "استحقاق"}
         </Badge>
       ),
@@ -103,9 +103,9 @@ export default function SalaryComponentsPage() {
       }
     >
       <KpiGrid items={[
-        { label: "إجمالي المكونات", value: items.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
-        { label: "البدلات", value: allowances.length, icon: TrendingUp, color: "text-green-600 bg-green-50" },
-        { label: "الخصومات", value: deductions.length, icon: DollarSign, color: "text-red-600 bg-red-50" },
+        { label: "إجمالي المكونات", value: items.length, icon: FileText, color: "text-status-info-foreground bg-status-info-surface" },
+        { label: "البدلات", value: allowances.length, icon: TrendingUp, color: "text-status-success-foreground bg-status-success-surface" },
+        { label: "الخصومات", value: deductions.length, icon: DollarSign, color: "text-status-error-foreground bg-status-error-surface" },
         { label: "نسبية", value: items.filter((c: any) => c.calculationType === "percentage").length, icon: Percent, color: "text-purple-600 bg-purple-50" },
       ]} />
 
@@ -123,7 +123,7 @@ export default function SalaryComponentsPage() {
       />
 
       {showForm && (
-        <Card className="border-blue-200 bg-blue-50/30">
+        <Card className="border-status-info-surface bg-status-info-surface">
           <CardContent className="p-4">
             <FormShell
               schema={salaryComponentSchema}

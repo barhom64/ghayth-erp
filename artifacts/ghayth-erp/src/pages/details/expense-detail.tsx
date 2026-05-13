@@ -249,7 +249,7 @@ export default function ExpenseDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Wallet className="h-4 w-4 text-gray-500" />
+            <Wallet className="h-4 w-4 text-muted-foreground" />
             بيانات المصروف
           </CardTitle>
         </CardHeader>
@@ -259,13 +259,13 @@ export default function ExpenseDetail() {
             <span className="text-3xl font-bold text-gray-900">
               {formatCurrency(amount)}
             </span>
-            <span className="text-xs text-gray-500">ر.س</span>
+            <span className="text-xs text-muted-foreground">ر.س</span>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             {expense?.operationType && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">نوع العملية</p>
+                <p className="text-xs text-muted-foreground mb-0.5">نوع العملية</p>
                 <Badge variant="outline">
                   {OPERATION_LABELS[expense.operationType] || expense.operationType}
                 </Badge>
@@ -273,49 +273,49 @@ export default function ExpenseDetail() {
             )}
             {expense?.expenseType && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تصنيف المصروف</p>
-                <span className="text-gray-800">{expense.expenseType}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تصنيف المصروف</p>
+                <span className="text-status-neutral-foreground">{expense.expenseType}</span>
               </div>
             )}
             {paymentMethodLabel && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">طريقة الدفع</p>
+                <p className="text-xs text-muted-foreground mb-0.5">طريقة الدفع</p>
                 <Badge variant="secondary">{paymentMethodLabel}</Badge>
               </div>
             )}
             {expense?.createdAt && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ المصروف</p>
-                <span className="text-gray-800">{formatDateAr(expense.createdAt)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ المصروف</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(expense.createdAt)}</span>
               </div>
             )}
             {expense?.supplierName && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">المورد</p>
-                <span className="text-gray-800">{expense.supplierName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">المورد</p>
+                <span className="text-status-neutral-foreground">{expense.supplierName}</span>
               </div>
             )}
             {costCenterDisplay && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">مخصوم على</p>
+                <p className="text-xs text-muted-foreground mb-0.5">مخصوم على</p>
                 <div className="flex items-center gap-2">
                   <Badge variant="outline">{costCenterDisplay.label}</Badge>
-                  <span className="text-gray-800">{costCenterDisplay.value}</span>
+                  <span className="text-status-neutral-foreground">{costCenterDisplay.value}</span>
                 </div>
               </div>
             )}
             {expense?.reference && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">المرجع الخارجي</p>
-                <span className="text-gray-800 font-mono text-xs">{expense.reference}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">المرجع الخارجي</p>
+                <span className="text-status-neutral-foreground font-mono text-xs">{expense.reference}</span>
               </div>
             )}
           </div>
 
           {expense?.description && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">الوصف</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{expense.description}</p>
+              <p className="text-xs text-muted-foreground mb-1">الوصف</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{expense.description}</p>
             </div>
           )}
         </CardContent>
@@ -327,12 +327,12 @@ export default function ExpenseDetail() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                <Paperclip className="h-4 w-4 text-gray-500" />
+                <Paperclip className="h-4 w-4 text-muted-foreground" />
                 المرفق
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-1.5">
-              <div className="flex items-center justify-between gap-2 p-2 rounded border text-xs hover:bg-gray-50">
+              <div className="flex items-center justify-between gap-2 p-2 rounded border text-xs hover:bg-surface-subtle">
                 <span className="truncate min-w-0">
                   {expense.attachmentType || "مستند المصروف"}
                 </span>
@@ -340,7 +340,7 @@ export default function ExpenseDetail() {
                   href={expense.attachmentUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-blue-600 hover:text-blue-700 shrink-0"
+                  className="text-status-info-foreground hover:text-status-info-foreground shrink-0"
                   title="فتح"
                 >
                   <Eye className="h-3.5 w-3.5" />

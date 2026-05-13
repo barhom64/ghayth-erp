@@ -103,7 +103,7 @@ export default function SalaryAdvanceDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Wallet className="h-4 w-4 text-gray-500" />
+            <Wallet className="h-4 w-4 text-muted-foreground" />
             بيانات السلفة
           </CardTitle>
         </CardHeader>
@@ -111,9 +111,9 @@ export default function SalaryAdvanceDetail() {
           <div className="border-b pb-3">
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-bold text-gray-900">{formatCurrency(amount)}</span>
-              <span className="text-xs text-gray-500">ر.س</span>
+              <span className="text-xs text-muted-foreground">ر.س</span>
             </div>
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               مُسدد: {formatCurrency(repaid)} — متبقي: {formatCurrency(remaining)}
             </p>
           </div>
@@ -121,10 +121,10 @@ export default function SalaryAdvanceDetail() {
           {amount > 0 && (
             <div>
               <div className="flex justify-between text-xs mb-1">
-                <span className="text-gray-500">نسبة السداد</span>
+                <span className="text-muted-foreground">نسبة السداد</span>
                 <span className="font-medium">{repaymentPct.toFixed(1)}%</span>
               </div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-2 bg-surface-subtle rounded-full overflow-hidden">
                 <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, repaymentPct)}%` }} />
               </div>
             </div>
@@ -133,27 +133,27 @@ export default function SalaryAdvanceDetail() {
           <div className="grid grid-cols-2 gap-3">
             {item?.employeeName && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">الموظف</p>
-                <span className="text-gray-800 font-medium">{item.employeeName}</span>
-                {item.employeeNumber && <span className="text-xs text-gray-500 ms-2 font-mono">#{item.employeeNumber}</span>}
+                <p className="text-xs text-muted-foreground mb-0.5">الموظف</p>
+                <span className="text-status-neutral-foreground font-medium">{item.employeeName}</span>
+                {item.employeeNumber && <span className="text-xs text-muted-foreground ms-2 font-mono">#{item.employeeNumber}</span>}
               </div>
             )}
             {item?.installments && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">عدد الأقساط</p>
-                <span className="text-gray-800">{item.installments} قسط</span>
+                <p className="text-xs text-muted-foreground mb-0.5">عدد الأقساط</p>
+                <span className="text-status-neutral-foreground">{item.installments} قسط</span>
               </div>
             )}
             {item?.monthlyDeduction && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">قسط شهري</p>
-                <span className="text-gray-800 font-medium">{formatCurrency(item.monthlyDeduction)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">قسط شهري</p>
+                <span className="text-status-neutral-foreground font-medium">{formatCurrency(item.monthlyDeduction)}</span>
               </div>
             )}
             {item?.reason && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">السبب</p>
-                <p className="text-gray-800 whitespace-pre-wrap">{item.reason}</p>
+                <p className="text-xs text-muted-foreground mb-0.5">السبب</p>
+                <p className="text-status-neutral-foreground whitespace-pre-wrap">{item.reason}</p>
               </div>
             )}
           </div>
@@ -167,16 +167,16 @@ export default function SalaryAdvanceDetail() {
           </CardHeader>
           <CardContent className="space-y-2 text-xs">
             <div className="flex justify-between">
-              <span className="text-gray-500">إجمالي السلفة</span>
+              <span className="text-muted-foreground">إجمالي السلفة</span>
               <span className="font-medium">{formatCurrency(amount)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-500">مسدد</span>
+              <span className="text-muted-foreground">مسدد</span>
               <span className="font-medium text-emerald-600">{formatCurrency(repaid)}</span>
             </div>
             <div className="flex justify-between pt-2 border-t">
-              <span className="text-gray-500">متبقي</span>
-              <span className="font-bold text-red-600">{formatCurrency(remaining)}</span>
+              <span className="text-muted-foreground">متبقي</span>
+              <span className="font-bold text-status-error-foreground">{formatCurrency(remaining)}</span>
             </div>
           </CardContent>
         </Card>

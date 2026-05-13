@@ -114,9 +114,9 @@ export default function AdminUsersPage() {
       render: (r: any) => r.employeeName ? (
         <div>
           <p className="text-sm font-medium">{r.employeeName}</p>
-          <p className="text-xs text-gray-400">{r.empNumber}</p>
+          <p className="text-xs text-muted-foreground">{r.empNumber}</p>
         </div>
-      ) : <span className="text-gray-400 text-xs">—</span>,
+      ) : <span className="text-muted-foreground text-xs">—</span>,
     },
     {
       key: "role",
@@ -138,7 +138,7 @@ export default function AdminUsersPage() {
       key: "lastLoginAt",
       header: "آخر دخول",
       sortable: true,
-      render: (r: any) => <span className="text-xs text-gray-400">{r.lastLoginAt ? formatDateAr(r.lastLoginAt) : "لم يسجل بعد"}</span>,
+      render: (r: any) => <span className="text-xs text-muted-foreground">{r.lastLoginAt ? formatDateAr(r.lastLoginAt) : "لم يسجل بعد"}</span>,
     },
     {
       key: "failedAttempts7d",
@@ -147,8 +147,8 @@ export default function AdminUsersPage() {
         const failedCount = Number(r.failedAttempts7d) || 0;
         return failedCount > 0 ? (
           <div className="flex items-center gap-1">
-            <ShieldAlert className={cn("h-4 w-4", failedCount > 3 ? "text-red-500" : "text-amber-500")} />
-            <span className={cn("text-xs font-medium", failedCount > 3 ? "text-red-600" : "text-amber-600")}>{failedCount}</span>
+            <ShieldAlert className={cn("h-4 w-4", failedCount > 3 ? "text-status-error" : "text-status-warning")} />
+            <span className={cn("text-xs font-medium", failedCount > 3 ? "text-status-error-foreground" : "text-status-warning-foreground")}>{failedCount}</span>
           </div>
         ) : <span className="text-xs text-gray-300">—</span>;
       },
@@ -159,9 +159,9 @@ export default function AdminUsersPage() {
       render: (r: any) => (
         <div className="flex gap-1">
           <GuardedButton perm="admin:delete" variant="ghost" size="sm" className="h-7 text-xs gap-1" title={r.isActive ? "تعليق الحساب" : "تفعيل الحساب"} onClick={() => toggleActive(r)}>
-            {r.isActive ? <ToggleRight className="h-4 w-4 text-green-500" /> : <ToggleLeft className="h-4 w-4 text-gray-400" />}
+            {r.isActive ? <ToggleRight className="h-4 w-4 text-status-success" /> : <ToggleLeft className="h-4 w-4 text-muted-foreground" />}
           </GuardedButton>
-          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-blue-600" title="تعديل" onClick={() => startEditUser(r)}>
+          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-status-info-foreground" title="تعديل" onClick={() => startEditUser(r)}>
             <Edit2 className="h-3.5 w-3.5" />
           </Button>
           <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-orange-600" title="إعادة تعيين كلمة المرور" onClick={() => { setResetUserId(r.id); setResetPassword(""); setCreatedUser(null); setShowForm(false); setEditUser(null); setDeleteConfirmId(null); }}>
@@ -270,7 +270,7 @@ export default function AdminUsersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <Users className="w-8 h-8 text-blue-600" />
+            <Users className="w-8 h-8 text-status-info-foreground" />
             إدارة المستخدمين
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">إنشاء وإدارة وحذف حسابات المستخدمين في النظام</p>
@@ -282,10 +282,10 @@ export default function AdminUsersPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "إجمالي المستخدمين", value: items.length, color: "bg-blue-50 text-blue-700" },
-          { label: "نشط", value: activeCount, color: "bg-green-50 text-green-700" },
-          { label: "معلق", value: inactiveCount, color: "bg-red-50 text-red-700" },
-          { label: "محاولات مشبوهة (7 أيام)", value: suspiciousCount, color: suspiciousCount > 0 ? "bg-orange-50 text-orange-700" : "bg-gray-50 text-gray-500" },
+          { label: "إجمالي المستخدمين", value: items.length, color: "bg-status-info-surface text-status-info-foreground" },
+          { label: "نشط", value: activeCount, color: "bg-status-success-surface text-status-success-foreground" },
+          { label: "معلق", value: inactiveCount, color: "bg-status-error-surface text-status-error-foreground" },
+          { label: "محاولات مشبوهة (7 أيام)", value: suspiciousCount, color: suspiciousCount > 0 ? "bg-orange-50 text-orange-700" : "bg-surface-subtle text-muted-foreground" },
         ].map(c => (
           <Card key={c.label} className="border-0 shadow-sm">
             <CardContent className={cn("p-4 rounded-lg", c.color)}>
@@ -331,33 +331,33 @@ export default function AdminUsersPage() {
       )}
 
       {createdUser && (
-        <Card className="border-green-200 bg-green-50">
+        <Card className="border-status-success-surface bg-status-success-surface">
           <CardContent className="p-4 space-y-3">
-            <h4 className="font-semibold text-green-800 flex items-center gap-2">
+            <h4 className="font-semibold text-status-success-foreground flex items-center gap-2">
               <CheckCircle className="h-5 w-5" />تم إنشاء الحساب بنجاح — بيانات الدخول
             </h4>
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-white rounded-lg p-3 border">
-                <p className="text-xs text-gray-500 mb-1">البريد الإلكتروني</p>
+                <p className="text-xs text-muted-foreground mb-1">البريد الإلكتروني</p>
                 <p className="font-mono text-sm font-medium">{createdUser.email}</p>
               </div>
               {createdUser.tempPassword && (
                 <div className="bg-white rounded-lg p-3 border">
-                  <p className="text-xs text-gray-500 mb-1">كلمة المرور المؤقتة</p>
-                  <p className="font-mono text-sm font-bold text-blue-700">{createdUser.tempPassword}</p>
+                  <p className="text-xs text-muted-foreground mb-1">كلمة المرور المؤقتة</p>
+                  <p className="font-mono text-sm font-bold text-status-info-foreground">{createdUser.tempPassword}</p>
                 </div>
               )}
             </div>
-            <p className="text-xs text-green-700">احفظ هذه البيانات وأرسلها للمستخدم. يُنصح بتغيير كلمة المرور بعد أول تسجيل دخول.</p>
+            <p className="text-xs text-status-success-foreground">احفظ هذه البيانات وأرسلها للمستخدم. يُنصح بتغيير كلمة المرور بعد أول تسجيل دخول.</p>
             <Button size="sm" variant="outline" onClick={() => { setCreatedUser(null); setShowForm(false); }}>إغلاق</Button>
           </CardContent>
         </Card>
       )}
 
       {editUser && (
-        <Card className="border-blue-200 bg-blue-50">
+        <Card className="border-status-info-surface bg-status-info-surface">
           <CardContent className="p-4 space-y-4">
-            <h4 className="font-semibold text-blue-800 flex items-center gap-2">
+            <h4 className="font-semibold text-status-info-foreground flex items-center gap-2">
               <Edit2 className="h-5 w-5" />تعديل بيانات المستخدم — {editUser.email}
             </h4>
             <FormShell
@@ -394,12 +394,12 @@ export default function AdminUsersPage() {
       )}
 
       {deleteConfirmId && (
-        <Card className="border-red-200 bg-red-50">
+        <Card className="border-status-error-surface bg-status-error-surface">
           <CardContent className="p-4 space-y-3">
-            <h4 className="font-semibold text-red-800 flex items-center gap-2">
+            <h4 className="font-semibold text-status-error-foreground flex items-center gap-2">
               <AlertCircle className="h-5 w-5" />تأكيد تعطيل المستخدم
             </h4>
-            <p className="text-sm text-red-700">سيتم تعطيل هذا المستخدم وإلغاء صلاحياته في شركتك. يمكن إعادة تفعيله لاحقاً.</p>
+            <p className="text-sm text-status-error-foreground">سيتم تعطيل هذا المستخدم وإلغاء صلاحياته في شركتك. يمكن إعادة تفعيله لاحقاً.</p>
             <div className="flex gap-2">
               <GuardedButton perm="admin:delete" size="sm" variant="destructive" onClick={() => deleteUser(deleteConfirmId)}>تعطيل</GuardedButton>
               <Button size="sm" variant="outline" onClick={() => setDeleteConfirmId(null)}>إلغاء</Button>
@@ -418,7 +418,7 @@ export default function AdminUsersPage() {
               <div className="relative flex-1">
                 <Input type={showResetPw ? "text" : "password"} dir="ltr" value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} placeholder="كلمة المرور الجديدة (6 أحرف على الأقل)" />
                 <button className="absolute end-2 top-1/2 -translate-y-1/2" onClick={() => setShowResetPw(!showResetPw)}>
-                  {showResetPw ? <EyeOff className="h-4 w-4 text-gray-400" /> : <Eye className="h-4 w-4 text-gray-400" />}
+                  {showResetPw ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
                 </button>
               </div>
               <Button onClick={resetUserPassword} disabled={resetPassword.length < 6}>تأكيد</Button>
@@ -460,7 +460,7 @@ export default function AdminUsersPage() {
 
       <Card>
         <CardContent className="p-4">
-          <h3 className="font-semibold text-sm mb-4 flex items-center gap-2"><Shield className="h-4 w-4 text-blue-500" />تعيين الأدوار للمستخدمين</h3>
+          <h3 className="font-semibold text-sm mb-4 flex items-center gap-2"><Shield className="h-4 w-4 text-status-info" />تعيين الأدوار للمستخدمين</h3>
           <RoleAssignmentSection users={filtered} />
         </CardContent>
       </Card>
@@ -516,27 +516,27 @@ function RoleAssignmentSection({ users }: { users: any[] }) {
       {selectedUserId && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <p className="text-xs font-medium text-gray-600 mb-2">الأدوار المسندة</p>
-            {loading ? <p className="text-xs text-gray-400">جاري التحميل...</p> :
-              userRoles.length === 0 ? <p className="text-xs text-gray-400">لا توجد أدوار</p> :
+            <p className="text-xs font-medium text-muted-foreground mb-2">الأدوار المسندة</p>
+            {loading ? <p className="text-xs text-muted-foreground">جاري التحميل...</p> :
+              userRoles.length === 0 ? <p className="text-xs text-muted-foreground">لا توجد أدوار</p> :
               <div className="space-y-1">
                 {userRoles.map((role) => (
-                  <div key={role.id} className="flex items-center justify-between p-2 rounded-lg bg-gray-50 text-xs">
+                  <div key={role.id} className="flex items-center justify-between p-2 rounded-lg bg-surface-subtle text-xs">
                     <span className="font-medium">{role.label}</span>
-                    <button onClick={() => removeRole(role.id)} className="text-red-500 hover:text-red-700 text-xs">حذف</button>
+                    <button onClick={() => removeRole(role.id)} className="text-status-error hover:text-status-error-foreground text-xs">حذف</button>
                   </div>
                 ))}
               </div>
             }
           </div>
           <div>
-            <p className="text-xs font-medium text-gray-600 mb-2">إضافة دور</p>
+            <p className="text-xs font-medium text-muted-foreground mb-2">إضافة دور</p>
             <div className="space-y-1">
               {predefinedRoles.filter(r => !assignedKeys.includes(r.roleKey)).slice(0, 8).map((role) => (
                 <button key={role.roleKey} onClick={() => assignRole(role.roleKey)}
-                  className="w-full text-start flex items-center gap-2 p-2 rounded-lg border border-dashed hover:border-blue-400 hover:bg-blue-50 text-xs transition-all">
+                  className="w-full text-start flex items-center gap-2 p-2 rounded-lg border border-dashed hover:border-blue-400 hover:bg-status-info-surface text-xs transition-all">
                   <span className="font-medium">{role.label}</span>
-                  <span className="text-gray-400">مستوى {role.level}</span>
+                  <span className="text-muted-foreground">مستوى {role.level}</span>
                 </button>
               ))}
             </div>

@@ -37,9 +37,9 @@ interface CommissionPlan {
 
 const STATUS_LABEL: Record<PlanStatus, { label: string; cls: string }> = {
   active: { label: "مفعّل", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  suspended: { label: "موقوف", cls: "bg-red-100 text-red-700 border-red-200" },
+  suspended: { label: "موقوف", cls: "bg-status-error-surface text-status-error-foreground border-status-error-surface" },
   expired: { label: "منتهي", cls: "bg-slate-100 text-slate-700 border-slate-200" },
-  pending: { label: "بانتظار الاعتماد", cls: "bg-amber-100 text-amber-700 border-amber-200" },
+  pending: { label: "بانتظار الاعتماد", cls: "bg-status-warning-surface text-status-warning-foreground border-status-warning-surface" },
 };
 
 const TYPE_LABEL: Record<CommissionType, string> = {
@@ -169,7 +169,7 @@ export default function UmrahCommissionPlans() {
               perm="umrah:write"
               size="sm"
               variant="outline"
-              className="text-red-700"
+              className="text-status-error-foreground"
               onClick={() => setConfirmAction({ type: "suspend", plan: p })}
             >
               <Ban className="h-3.5 w-3.5 ms-1" />
@@ -199,8 +199,8 @@ export default function UmrahCommissionPlans() {
 
       <div className="grid gap-3 md:grid-cols-3">
         <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center">
-            <Briefcase className="w-5 h-5 text-blue-600" />
+          <div className="w-11 h-11 rounded-xl bg-status-info-surface flex items-center justify-center">
+            <Briefcase className="w-5 h-5 text-status-info-foreground" />
           </div>
           <div>
             <p className="text-2xl font-bold">{formatNumber(counts.total)}</p>
@@ -217,11 +217,11 @@ export default function UmrahCommissionPlans() {
           </div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-amber-50 flex items-center justify-center">
-            <CheckCircle2 className="w-5 h-5 text-amber-600" />
+          <div className="w-11 h-11 rounded-xl bg-status-warning-surface flex items-center justify-center">
+            <CheckCircle2 className="w-5 h-5 text-status-warning-foreground" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-amber-700">{formatNumber(counts.pending)}</p>
+            <p className="text-2xl font-bold text-status-warning-foreground">{formatNumber(counts.pending)}</p>
             <p className="text-xs text-muted-foreground">بانتظار الاعتماد</p>
           </div>
         </CardContent></Card>

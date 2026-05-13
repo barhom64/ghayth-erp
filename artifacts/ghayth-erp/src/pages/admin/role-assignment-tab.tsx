@@ -82,17 +82,17 @@ export function RoleAssignmentTab() {
           <Card>
             <CardContent className="p-4">
               <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-500" />
+                <CheckCircle className="h-4 w-4 text-status-success" />
                 الأدوار المسندة حالياً
               </h4>
               {loading ? (
-                <p className="text-gray-400 text-sm">جاري التحميل...</p>
+                <p className="text-muted-foreground text-sm">جاري التحميل...</p>
               ) : userRoles.length === 0 ? (
-                <p className="text-gray-400 text-sm">لا توجد أدوار مسندة لهذا المستخدم</p>
+                <p className="text-muted-foreground text-sm">لا توجد أدوار مسندة لهذا المستخدم</p>
               ) : (
                 <div className="space-y-2">
                   {userRoles.map((role) => (
-                    <div key={role.id} className="flex items-center justify-between p-3 rounded-lg border bg-gray-50">
+                    <div key={role.id} className="flex items-center justify-between p-3 rounded-lg border bg-surface-subtle">
                       <div className="flex items-center gap-3">
                         <div
                           className="w-8 h-8 rounded-lg flex items-center justify-center"
@@ -116,7 +116,7 @@ export function RoleAssignmentTab() {
                           </div>
                         </div>
                       </div>
-                      <GuardedButton perm="admin:create" variant="ghost" size="sm" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => removeRole(role.id)}>
+                      <GuardedButton perm="admin:create" variant="ghost" size="sm" className="text-status-error hover:text-status-error-foreground hover:bg-status-error-surface" onClick={() => removeRole(role.id)}>
                         <Trash2 className="h-4 w-4" />
                       </GuardedButton>
                     </div>
@@ -129,7 +129,7 @@ export function RoleAssignmentTab() {
           <Card>
             <CardContent className="p-4">
               <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                <Plus className="h-4 w-4 text-blue-500" />
+                <Plus className="h-4 w-4 text-status-info" />
                 إضافة دور جديد
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -137,7 +137,7 @@ export function RoleAssignmentTab() {
                   <button
                     key={role.roleKey}
                     onClick={() => assignRole(role.roleKey)}
-                    className="flex items-center gap-3 p-3 rounded-lg border border-dashed hover:border-solid hover:bg-gray-50 transition-all text-start"
+                    className="flex items-center gap-3 p-3 rounded-lg border border-dashed hover:border-solid hover:bg-surface-subtle transition-all text-start"
                   >
                     <div
                       className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
@@ -147,7 +147,7 @@ export function RoleAssignmentTab() {
                     </div>
                     <div className="min-w-0">
                       <span className="text-sm font-medium block">{role.label}</span>
-                      <span className="text-[10px] text-gray-400">
+                      <span className="text-[10px] text-muted-foreground">
                         {role.modules.slice(0, 4).map(m => MODULE_LABELS[m] || m).join("، ")}
                         {role.modules.length > 4 && ` +${role.modules.length - 4}`}
                       </span>
@@ -156,7 +156,7 @@ export function RoleAssignmentTab() {
                 ))}
               </div>
               {predefinedRoles.filter(r => !assignedKeys.includes(r.roleKey)).length === 0 && (
-                <p className="text-gray-400 text-sm text-center py-4">تم إسناد جميع الأدوار المتاحة</p>
+                <p className="text-muted-foreground text-sm text-center py-4">تم إسناد جميع الأدوار المتاحة</p>
               )}
             </CardContent>
           </Card>

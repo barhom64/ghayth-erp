@@ -101,22 +101,22 @@ export function ZatcaSettingsTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold flex items-center gap-2">
-          <Zap className="h-5 w-5 text-green-600" />
+          <Zap className="h-5 w-5 text-status-success-foreground" />
           ربط هيئة الزكاة والضريبة والجمارك
         </h3>
         {connectionStatus && (
-          <Badge className={connectionStatus === "connected" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}>
+          <Badge className={connectionStatus === "connected" ? "bg-status-success-surface text-status-success-foreground" : "bg-status-error-surface text-status-error-foreground"}>
             {connectionStatus === "connected" ? "متصل" : "غير متصل"}
           </Badge>
         )}
       </div>
 
       {settings?.lastConnectionTest && (
-        <div className={cn("flex items-start gap-3 p-3 rounded-md border", connectionStatus === "connected" ? "bg-green-50 border-green-200" : "bg-yellow-50 border-yellow-200")}>
-          <AlertCircle className={cn("h-4 w-4 mt-0.5 shrink-0", connectionStatus === "connected" ? "text-green-600" : "text-yellow-600")} />
+        <div className={cn("flex items-start gap-3 p-3 rounded-md border", connectionStatus === "connected" ? "bg-status-success-surface border-status-success-surface" : "bg-status-warning-surface border-status-warning-surface")}>
+          <AlertCircle className={cn("h-4 w-4 mt-0.5 shrink-0", connectionStatus === "connected" ? "text-status-success-foreground" : "text-status-warning-foreground")} />
           <div>
             <p className="text-sm font-medium">{settings.connectionTestMessage}</p>
-            <p className="text-xs text-gray-500 mt-0.5">آخر اختبار: {formatDateAr(settings.lastConnectionTest)}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">آخر اختبار: {formatDateAr(settings.lastConnectionTest)}</p>
           </div>
         </div>
       )}
@@ -181,7 +181,7 @@ export function ZatcaSettingsTab() {
               <FormTextField name="csid" label="معرّف الختم التشفيري" placeholder="معرّف الختم التشفيري" />
               <FormTextField name="pihKey" label="بصمة الفاتورة السابقة" placeholder="بصمة الفاتورة السابقة" />
             </FormGrid>
-            <p className="text-xs text-gray-500 mt-3">المفاتيح التقنية تُوفّر من بوابة هيئة الزكاة والضريبة بعد التسجيل وإكمال عملية الاعتماد. هذه الإعدادات تُستخدم للتوقيع الرقمي وإرسال الفواتير.</p>
+            <p className="text-xs text-muted-foreground mt-3">المفاتيح التقنية تُوفّر من بوابة هيئة الزكاة والضريبة بعد التسجيل وإكمال عملية الاعتماد. هذه الإعدادات تُستخدم للتوقيع الرقمي وإرسال الفواتير.</p>
           </CardContent>
         </Card>
       </FormShell>

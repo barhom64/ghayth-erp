@@ -51,7 +51,7 @@ export function ChangePasswordSection() {
       </CardHeader>
       <CardContent className="space-y-3">
         {success ? (
-          <div className="flex items-center gap-3 p-3 rounded-xl bg-green-50 text-green-700">
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-status-success-surface text-status-success-foreground">
             <CheckCircle2 className="w-5 h-5 shrink-0" />
             <p className="text-sm font-medium">تم تغيير كلمة المرور بنجاح</p>
             <Button size="sm" variant="ghost" className="ms-auto" onClick={() => setSuccess(false)}>تغيير مجدداً</Button>
@@ -59,7 +59,7 @@ export function ChangePasswordSection() {
         ) : (
           <>
             <div>
-              <Label className="text-xs text-gray-500 mb-1 block">كلمة المرور الحالية</Label>
+              <Label className="text-xs text-muted-foreground mb-1 block">كلمة المرور الحالية</Label>
               <div className="relative">
                 <Input
                   type={showCurrent ? "text" : "password"}
@@ -68,12 +68,12 @@ export function ChangePasswordSection() {
                   onChange={(e) => setCurrent(e.target.value)}
                 />
                 <button className="absolute end-2 top-1/2 -translate-y-1/2" onClick={() => setShowCurrent(!showCurrent)}>
-                  {showCurrent ? <EyeOff className="w-4 h-4 text-gray-400" /> : <Eye className="w-4 h-4 text-gray-400" />}
+                  {showCurrent ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
                 </button>
               </div>
             </div>
             <div>
-              <Label className="text-xs text-gray-500 mb-1 block">كلمة المرور الجديدة</Label>
+              <Label className="text-xs text-muted-foreground mb-1 block">كلمة المرور الجديدة</Label>
               <div className="relative">
                 <Input
                   type={showNew ? "text" : "password"}
@@ -82,12 +82,12 @@ export function ChangePasswordSection() {
                   onChange={(e) => setNewPw(e.target.value)}
                 />
                 <button className="absolute end-2 top-1/2 -translate-y-1/2" onClick={() => setShowNew(!showNew)}>
-                  {showNew ? <EyeOff className="w-4 h-4 text-gray-400" /> : <Eye className="w-4 h-4 text-gray-400" />}
+                  {showNew ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
                 </button>
               </div>
             </div>
             <div>
-              <Label className="text-xs text-gray-500 mb-1 block">تأكيد كلمة المرور الجديدة</Label>
+              <Label className="text-xs text-muted-foreground mb-1 block">تأكيد كلمة المرور الجديدة</Label>
               <Input
                 type="password"
                 dir="ltr"

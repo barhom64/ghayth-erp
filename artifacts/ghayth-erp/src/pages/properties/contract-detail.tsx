@@ -102,7 +102,7 @@ export default function ContractDetailPage() {
 
   const emptyMsg = (msg: string) => (
     <Card className="border-0 shadow-sm">
-      <CardContent className="p-10 text-center text-sm text-gray-500">{msg}</CardContent>
+      <CardContent className="p-10 text-center text-sm text-muted-foreground">{msg}</CardContent>
     </Card>
   );
 
@@ -163,23 +163,23 @@ export default function ContractDetailPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center text-blue-600 bg-blue-50">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center text-status-info-foreground bg-status-info-surface">
               <DollarSign className="h-5 w-5" />
             </div>
             <div className="min-w-0">
               <p className="text-xl font-bold truncate">{formatCurrency(monthlyRent)}</p>
-              <p className="text-xs text-gray-500 truncate">الإيجار الشهري</p>
+              <p className="text-xs text-muted-foreground truncate">الإيجار الشهري</p>
             </div>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center text-green-600 bg-green-50">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center text-status-success-foreground bg-status-success-surface">
               <CheckCircle2 className="h-5 w-5" />
             </div>
             <div className="min-w-0">
               <p className="text-xl font-bold truncate">{formatCurrency(totalPaid)}</p>
-              <p className="text-xs text-gray-500 truncate">إجمالي المدفوع</p>
+              <p className="text-xs text-muted-foreground truncate">إجمالي المدفوع</p>
             </div>
           </CardContent>
         </Card>
@@ -190,7 +190,7 @@ export default function ContractDetailPage() {
             </div>
             <div className="min-w-0">
               <p className="text-xl font-bold truncate">{formatCurrency(outstanding)}</p>
-              <p className="text-xs text-gray-500 truncate">الرصيد المستحق</p>
+              <p className="text-xs text-muted-foreground truncate">الرصيد المستحق</p>
             </div>
           </CardContent>
         </Card>
@@ -201,7 +201,7 @@ export default function ContractDetailPage() {
             </div>
             <div className="min-w-0">
               <p className="text-xl font-bold truncate">{daysRemaining}</p>
-              <p className="text-xs text-gray-500 truncate">أيام متبقية</p>
+              <p className="text-xs text-muted-foreground truncate">أيام متبقية</p>
             </div>
           </CardContent>
         </Card>
@@ -223,8 +223,8 @@ export default function ContractDetailPage() {
           </div>
           {contract?.notes && (
             <div className="pt-4 border-t">
-              <p className="text-xs text-gray-500 mb-1">ملاحظات</p>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">{contract.notes}</p>
+              <p className="text-xs text-muted-foreground mb-1">ملاحظات</p>
+              <p className="text-sm text-status-neutral-foreground whitespace-pre-wrap">{contract.notes}</p>
             </div>
           )}
         </CardContent>
@@ -319,8 +319,8 @@ export default function ContractDetailPage() {
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
   return (
     <div>
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="text-sm font-medium text-gray-800 mt-0.5">{value || "—"}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-sm font-medium text-status-neutral-foreground mt-0.5">{value || "—"}</p>
     </div>
   );
 }

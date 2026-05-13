@@ -36,10 +36,10 @@ const categoryLabels: Record<string, string> = {
 };
 
 const categoryColors: Record<string, string> = {
-  hr: "bg-blue-100 text-blue-700",
-  general: "bg-gray-100 text-gray-700",
-  sales: "bg-green-100 text-green-700",
-  finance: "bg-amber-100 text-amber-700",
+  hr: "bg-status-info-surface text-status-info-foreground",
+  general: "bg-surface-subtle text-status-neutral-foreground",
+  sales: "bg-status-success-surface text-status-success-foreground",
+  finance: "bg-status-warning-surface text-status-warning-foreground",
 };
 
 type ViewMode = "list" | "editor" | "preview";
@@ -93,8 +93,8 @@ export default function DocumentsTemplates() {
   const branches = asList<any>(branchesResp);
 
   const statCards = [
-    { label: "إجمالي القوالب", value: templates.length, icon: Layout, color: "text-blue-600 bg-blue-50" },
-    { label: "قوالب جاهزة", value: templates.filter((t: any) => t.isDefault).length, icon: Copy, color: "text-green-600 bg-green-50" },
+    { label: "إجمالي القوالب", value: templates.length, icon: Layout, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "قوالب جاهزة", value: templates.filter((t: any) => t.isDefault).length, icon: Copy, color: "text-status-success-foreground bg-status-success-surface" },
     { label: "قوالب نشطة", value: templates.filter((t: any) => t.isActive !== false).length, icon: FileText, color: "text-purple-600 bg-purple-50" },
   ];
 
@@ -321,7 +321,7 @@ export default function DocumentsTemplates() {
                   onChange={(e) => setForm({ ...form, htmlContent: e.target.value })}
                   placeholder='<div style="line-height:2">&#10;  <p>السيد/ة: <strong>{{employee.name}}</strong></p>&#10;</div>'
                 />
-                <p className="text-xs text-gray-400 mt-2">استخدم {"{{variable.name}}"} لإدراج المتغيرات الديناميكية</p>
+                <p className="text-xs text-muted-foreground mt-2">استخدم {"{{variable.name}}"} لإدراج المتغيرات الديناميكية</p>
               </CardContent>
             </Card>
           </div>
@@ -332,16 +332,16 @@ export default function DocumentsTemplates() {
               <CardContent className="space-y-3">
                 <div className="space-y-2 max-h-[300px] overflow-y-auto">
                   {form.variables.map((v, i) => (
-                    <div key={i} className="flex items-center justify-between gap-2 p-2 rounded border bg-gray-50 text-sm">
+                    <div key={i} className="flex items-center justify-between gap-2 p-2 rounded border bg-surface-subtle text-sm">
                       <div className="flex-1 min-w-0">
                         <button
-                          className="font-mono text-xs text-blue-600 hover:underline cursor-pointer"
+                          className="font-mono text-xs text-status-info-foreground hover:underline cursor-pointer"
                           onClick={() => insertVariable(v.key)}
                           title="إدراج في المحتوى"
                         >
                           {`{{${v.key}}}`}
                         </button>
-                        <span className="text-gray-500 text-xs block">{v.label}</span>
+                        <span className="text-muted-foreground text-xs block">{v.label}</span>
                       </div>
                       <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-400 hover:text-red-600" onClick={() => removeVariable(i)}>
                         <X className="h-3 w-3" />
@@ -375,7 +375,7 @@ export default function DocumentsTemplates() {
                   ].map((v) => (
                     <button
                       key={v.key}
-                      className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors"
+                      className="text-xs px-2 py-1 bg-status-info-surface text-status-info-foreground rounded hover:bg-status-info-surface transition-colors"
                       onClick={() => {
                         insertVariable(v.key);
                         if (!form.variables.find((fv) => fv.key === v.key)) {
@@ -429,7 +429,7 @@ export default function DocumentsTemplates() {
                 <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", c.color.split(" ")[1])}>
                   <Icon className={cn("w-5 h-5", c.color.split(" ")[0])} />
                 </div>
-                <div><p className="text-xl font-bold">{c.value}</p><p className="text-xs text-gray-500">{c.label}</p></div>
+                <div><p className="text-xl font-bold">{c.value}</p><p className="text-xs text-muted-foreground">{c.label}</p></div>
               </CardContent>
             </Card>
           );
@@ -438,7 +438,7 @@ export default function DocumentsTemplates() {
 
       <div className="flex gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input placeholder="بحث في القوالب..." value={search} onChange={(e) => setSearch(e.target.value)} className="ps-10" />
         </div>
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
@@ -458,19 +458,19 @@ export default function DocumentsTemplates() {
             <CardContent className="p-5">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
-                    <FileText className="w-5 h-5 text-blue-600" />
+                  <div className="w-10 h-10 rounded-lg bg-status-info-surface flex items-center justify-center">
+                    <FileText className="w-5 h-5 text-status-info-foreground" />
                   </div>
                   <div>
                     <h3 className="font-semibold text-sm">{t.name || "-"}</h3>
-                    <p className="text-xs text-gray-400">{typeLabels[t.type] || t.type || "-"}</p>
+                    <p className="text-xs text-muted-foreground">{typeLabels[t.type] || t.type || "-"}</p>
                   </div>
                 </div>
-                {t.isDefault && <Badge className="bg-amber-100 text-amber-700 text-[10px]">مسبق</Badge>}
+                {t.isDefault && <Badge className="bg-status-warning-surface text-status-warning-foreground text-[10px]">مسبق</Badge>}
               </div>
-              {t.description && <p className="text-xs text-gray-500 mb-3 line-clamp-2">{t.description}</p>}
+              {t.description && <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{t.description}</p>}
               <div className="flex items-center justify-between">
-                <Badge className={cn("text-[10px]", categoryColors[t.category] || "bg-gray-100 text-gray-700")}>
+                <Badge className={cn("text-[10px]", categoryColors[t.category] || "bg-surface-subtle text-status-neutral-foreground")}>
                   {categoryLabels[t.category] || t.category || "-"}
                 </Badge>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -491,7 +491,7 @@ export default function DocumentsTemplates() {
           </Card>
         ))}
         {filtered.length === 0 && (
-          <div className="col-span-full text-center py-12 text-gray-400">
+          <div className="col-span-full text-center py-12 text-muted-foreground">
             <FileText className="h-12 w-12 mx-auto mb-3 opacity-30" />
             <p>لا توجد قوالب</p>
           </div>

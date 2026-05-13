@@ -10,7 +10,7 @@ import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 function ScoreDot({ score }: { score: number | null | undefined }) {
-  if (score == null) return <span className="text-gray-400">-</span>;
+  if (score == null) return <span className="text-muted-foreground">-</span>;
   const color = score >= 80 ? "bg-green-500" : score >= 60 ? "bg-yellow-500" : "bg-red-500";
   return (
     <div className="flex items-center gap-2">
@@ -54,7 +54,7 @@ export default function Evaluation360HistoryPage() {
 
       {!isLoading && history.length === 0 && (
         <Card>
-          <CardContent className="p-8 text-center text-gray-400">
+          <CardContent className="p-8 text-center text-muted-foreground">
             لا توجد دورات تقييم لهذا الموظف بعد
           </CardContent>
         </Card>
@@ -72,7 +72,7 @@ export default function Evaluation360HistoryPage() {
                   Number(h.finalScore) >= 60 ? "bg-yellow-500" : "bg-red-500";
                 return (
                   <div key={h.id} className="flex flex-col items-center gap-1 flex-1">
-                    <span className={cn("text-xs font-bold", Number(h.finalScore) >= 80 ? "text-green-600" : Number(h.finalScore) >= 60 ? "text-yellow-600" : "text-red-600")}>
+                    <span className={cn("text-xs font-bold", Number(h.finalScore) >= 80 ? "text-status-success-foreground" : Number(h.finalScore) >= 60 ? "text-status-warning-foreground" : "text-status-error-foreground")}>
                       {h.finalScore}%
                     </span>
                     <div className="w-full flex items-end" style={{ height: "120px" }}>
@@ -81,7 +81,7 @@ export default function Evaluation360HistoryPage() {
                         style={{ height: `${pct}%` }}
                       />
                     </div>
-                    <span className="text-xs text-gray-400 text-center truncate w-full">{h.period}</span>
+                    <span className="text-xs text-muted-foreground text-center truncate w-full">{h.period}</span>
                   </div>
                 );
               })}
@@ -94,7 +94,7 @@ export default function Evaluation360HistoryPage() {
       <DataTable
         columns={[
           { key: "period", header: "الفترة", sortable: true, render: (v) => <span className="font-medium">{v.period}</span> },
-          { key: "startDate", header: "تاريخ البدء", sortable: true, render: (v) => <span className="text-gray-500">{formatDateAr(v.startDate)}</span> },
+          { key: "startDate", header: "تاريخ البدء", sortable: true, render: (v) => <span className="text-muted-foreground">{formatDateAr(v.startDate)}</span> },
           { key: "systemScore", header: "النظام", sortable: true, render: (v) => <ScoreDot score={v.systemScore} /> },
           { key: "managerScore", header: "المدير", sortable: true, render: (v) => <ScoreDot score={v.managerScore} /> },
           { key: "peerScore", header: "الزملاء", sortable: true, render: (v) => <ScoreDot score={v.peerScore} /> },

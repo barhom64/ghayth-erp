@@ -86,7 +86,7 @@ export default function UmrahSeasonDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-gray-500" />
+            <Calendar className="h-4 w-4 text-muted-foreground" />
             بيانات الموسم
           </CardTitle>
         </CardHeader>
@@ -97,34 +97,34 @@ export default function UmrahSeasonDetail() {
               <span className="text-3xl font-bold text-gray-900">
                 {formatCurrency(Number(season.revenue))}
               </span>
-              <span className="text-xs text-gray-500">إيرادات الموسم</span>
+              <span className="text-xs text-muted-foreground">إيرادات الموسم</span>
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">اسم الموسم</p>
-              <span className="text-gray-800 font-medium">{season?.name || season?.title || "-"}</span>
+              <p className="text-xs text-muted-foreground mb-0.5">اسم الموسم</p>
+              <span className="text-status-neutral-foreground font-medium">{season?.name || season?.title || "-"}</span>
             </div>
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">السنة</p>
-              <span className="text-gray-800">{season?.year || "-"}</span>
+              <p className="text-xs text-muted-foreground mb-0.5">السنة</p>
+              <span className="text-status-neutral-foreground">{season?.year || "-"}</span>
             </div>
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">تاريخ البداية</p>
-              <span className="text-gray-800">{season?.startDate ? formatDateAr(season.startDate) : "-"}</span>
+              <p className="text-xs text-muted-foreground mb-0.5">تاريخ البداية</p>
+              <span className="text-status-neutral-foreground">{season?.startDate ? formatDateAr(season.startDate) : "-"}</span>
             </div>
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">تاريخ النهاية</p>
-              <span className="text-gray-800">{season?.endDate ? formatDateAr(season.endDate) : "-"}</span>
+              <p className="text-xs text-muted-foreground mb-0.5">تاريخ النهاية</p>
+              <span className="text-status-neutral-foreground">{season?.endDate ? formatDateAr(season.endDate) : "-"}</span>
             </div>
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">السعة</p>
-              <span className="text-gray-800">{season?.capacity ?? "-"}</span>
+              <p className="text-xs text-muted-foreground mb-0.5">السعة</p>
+              <span className="text-status-neutral-foreground">{season?.capacity ?? "-"}</span>
             </div>
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">المعتمرون المسجلون</p>
-              <span className="text-gray-800 font-semibold">
+              <p className="text-xs text-muted-foreground mb-0.5">المعتمرون المسجلون</p>
+              <span className="text-status-neutral-foreground font-semibold">
                 {season?.registeredPilgrims ?? season?.pilgrimsCount ?? 0}
               </span>
             </div>
@@ -132,8 +132,8 @@ export default function UmrahSeasonDetail() {
 
           {season?.notes && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">ملاحظات</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{season.notes}</p>
+              <p className="text-xs text-muted-foreground mb-1">ملاحظات</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{season.notes}</p>
             </div>
           )}
         </CardContent>
@@ -143,22 +143,22 @@ export default function UmrahSeasonDetail() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Users className="h-4 w-4 text-gray-500" />
+              <Users className="h-4 w-4 text-muted-foreground" />
               الإشغال
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">المسجلون</span>
+                <span className="text-muted-foreground">المسجلون</span>
                 <span className="font-semibold">{season?.registeredPilgrims ?? season?.pilgrimsCount ?? 0}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">السعة</span>
+                <span className="text-muted-foreground">السعة</span>
                 <span className="font-semibold">{season?.capacity ?? "-"}</span>
               </div>
               {season?.capacity && (
-                <div className="w-full bg-gray-100 rounded-full h-2 mt-2">
+                <div className="w-full bg-surface-subtle rounded-full h-2 mt-2">
                   <div
                     className="bg-blue-500 h-2 rounded-full"
                     style={{
@@ -174,7 +174,7 @@ export default function UmrahSeasonDetail() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-gray-500" />
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
               الحالة
             </CardTitle>
           </CardHeader>

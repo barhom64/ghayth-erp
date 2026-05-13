@@ -236,35 +236,35 @@ export default function InvoiceDetailPage() {
 
       <div className="grid md:grid-cols-3 gap-4">
         <Card><CardContent className="p-4">
-          <div className="flex items-center gap-2 mb-3 text-gray-500"><DollarSign className="h-4 w-4" /><span className="text-sm">ملخص مالي</span></div>
+          <div className="flex items-center gap-2 mb-3 text-muted-foreground"><DollarSign className="h-4 w-4" /><span className="text-sm">ملخص مالي</span></div>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between"><span>المبلغ قبل الضريبة</span><span className="font-medium">{formatCurrency(Number(invoice.subtotal || 0))}</span></div>
             <div className="flex justify-between"><span>ضريبة ({invoice.vatRate || 15}%)</span><span className="font-medium">{formatCurrency(Number(invoice.vatAmount || 0))}</span></div>
             <div className="flex justify-between border-t pt-2 font-bold text-base"><span>الإجمالي</span><span className="text-primary">{formatCurrency(Number(invoice.total))}</span></div>
-            <div className="flex justify-between text-green-600"><span>المدفوع</span><span>{formatCurrency(Number(invoice.paidAmount || 0))}</span></div>
-            <div className="flex justify-between text-red-600 font-bold"><span>المتبقي</span><span>{formatCurrency(remaining)}</span></div>
+            <div className="flex justify-between text-status-success-foreground"><span>المدفوع</span><span>{formatCurrency(Number(invoice.paidAmount || 0))}</span></div>
+            <div className="flex justify-between text-status-error-foreground font-bold"><span>المتبقي</span><span>{formatCurrency(remaining)}</span></div>
           </div>
           <div className="mt-3">
             <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
               <div className="h-full bg-green-500 rounded-full" style={{ width: `${Math.min(100, (Number(invoice.paidAmount || 0) / Number(invoice.total)) * 100)}%` }} />
             </div>
-            <p className="text-xs text-gray-400 mt-1 text-start">{Math.round((Number(invoice.paidAmount || 0) / Number(invoice.total)) * 100)}% مدفوع</p>
+            <p className="text-xs text-muted-foreground mt-1 text-start">{Math.round((Number(invoice.paidAmount || 0) / Number(invoice.total)) * 100)}% مدفوع</p>
           </div>
         </CardContent></Card>
 
         <Card><CardContent className="p-4">
-          <div className="flex items-center gap-2 mb-3 text-gray-500"><User className="h-4 w-4" /><span className="text-sm">العميل</span></div>
+          <div className="flex items-center gap-2 mb-3 text-muted-foreground"><User className="h-4 w-4" /><span className="text-sm">العميل</span></div>
           <p className="font-bold text-lg">{invoice.clientName || "-"}</p>
-          {invoice.clientPhone && <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><Phone className="h-3 w-3" />{invoice.clientPhone}</p>}
-          {invoice.clientEmail && <p className="text-sm text-gray-500 flex items-center gap-1"><Mail className="h-3 w-3" />{invoice.clientEmail}</p>}
+          {invoice.clientPhone && <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1"><Phone className="h-3 w-3" />{invoice.clientPhone}</p>}
+          {invoice.clientEmail && <p className="text-sm text-muted-foreground flex items-center gap-1"><Mail className="h-3 w-3" />{invoice.clientEmail}</p>}
         </CardContent></Card>
 
         <Card><CardContent className="p-4">
-          <div className="flex items-center gap-2 mb-3 text-gray-500"><Calendar className="h-4 w-4" /><span className="text-sm">التواريخ</span></div>
+          <div className="flex items-center gap-2 mb-3 text-muted-foreground"><Calendar className="h-4 w-4" /><span className="text-sm">التواريخ</span></div>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between"><span>تاريخ الإنشاء</span><span>{invoice.createdAt ? formatDateAr(invoice.createdAt) : "-"}</span></div>
             <div className="flex justify-between"><span>تاريخ الاستحقاق</span><span className="font-medium">{invoice.dueDate ? formatDateAr(invoice.dueDate) : "-"}</span></div>
-            {invoice.paidAt && <div className="flex justify-between text-green-600"><span>تاريخ السداد</span><span>{formatDateAr(invoice.paidAt)}</span></div>}
+            {invoice.paidAt && <div className="flex justify-between text-status-success-foreground"><span>تاريخ السداد</span><span>{formatDateAr(invoice.paidAt)}</span></div>}
           </div>
         </CardContent></Card>
       </div>
@@ -340,7 +340,7 @@ export default function InvoiceDetailPage() {
               <div className="flex-1">
                 <label className="text-sm font-medium">المبلغ</label>
                 <Input name="amount" type="number" step="0.01" max={remaining} required dir="ltr" className="text-start mt-1" />
-                <p className="text-xs text-gray-400 mt-1">المتبقي: {formatCurrency(remaining)}</p>
+                <p className="text-xs text-muted-foreground mt-1">المتبقي: {formatCurrency(remaining)}</p>
               </div>
               <div className="w-48">
                 <label className="text-sm font-medium">طريقة الدفع</label>
@@ -370,12 +370,12 @@ export default function InvoiceDetailPage() {
         <CardContent className="p-0">
           <DataTable
             columns={[
-              { key: "_index", header: "#", render: (_r, i) => <span className="text-gray-400">{i + 1}</span> },
+              { key: "_index", header: "#", render: (_r, i) => <span className="text-muted-foreground">{i + 1}</span> },
               { key: "description", header: "الوصف", render: (r) => <span className="font-medium">{r.description || "-"}</span> },
               { key: "quantity", header: "الكمية", sortable: true },
               { key: "unitPrice", header: "سعر الوحدة", sortable: true, render: (r) => formatCurrency(Number(r.unitPrice)) },
               { key: "lineTotal", header: "الإجمالي", sortable: true, render: (r) => formatCurrency(Number(r.lineTotal)) },
-              { key: "vatAmount", header: "الضريبة", sortable: true, render: (r) => <span className="text-gray-500">{formatCurrency(Number(r.vatAmount || 0))}</span> },
+              { key: "vatAmount", header: "الضريبة", sortable: true, render: (r) => <span className="text-muted-foreground">{formatCurrency(Number(r.vatAmount || 0))}</span> },
               { key: "lineGross", header: "الصافي", sortable: true, render: (r) => <span className="font-bold">{formatCurrency(Number(r.lineGross || r.lineTotal))}</span> },
             ] satisfies DataTableColumn<any>[]}
             data={lines}
@@ -392,10 +392,10 @@ export default function InvoiceDetailPage() {
         <CardContent className="p-0">
           <DataTable
             columns={[
-              { key: "ref", header: "المرجع", render: (r) => <span className="font-mono text-sm text-blue-600">{r.ref}</span> },
+              { key: "ref", header: "المرجع", render: (r) => <span className="font-mono text-sm text-status-info-foreground">{r.ref}</span> },
               { key: "description", header: "الوصف", render: (r) => r.description || "-" },
-              { key: "amount", header: "المبلغ", sortable: true, render: (r) => <span className="font-bold text-green-600">{formatCurrency(Number(r.amount))}</span> },
-              { key: "date", header: "التاريخ", render: (r) => <span className="text-gray-500 text-sm">{r.date ? formatDateAr(r.date) : "-"}</span> },
+              { key: "amount", header: "المبلغ", sortable: true, render: (r) => <span className="font-bold text-status-success-foreground">{formatCurrency(Number(r.amount))}</span> },
+              { key: "date", header: "التاريخ", render: (r) => <span className="text-muted-foreground text-sm">{r.date ? formatDateAr(r.date) : "-"}</span> },
             ] satisfies DataTableColumn<any>[]}
             data={payments}
             pageSize={0}
@@ -418,7 +418,7 @@ export default function InvoiceDetailPage() {
             columns={[
               { key: "ref", header: "المرجع", render: (r) => <span className="font-mono text-sm text-purple-600">{r.ref}</span> },
               { key: "description", header: "الوصف", render: (r) => r.description || "-" },
-              { key: "date", header: "التاريخ", render: (r) => <span className="text-gray-500 text-sm">{r.date ? formatDateAr(r.date) : "-"}</span> },
+              { key: "date", header: "التاريخ", render: (r) => <span className="text-muted-foreground text-sm">{r.date ? formatDateAr(r.date) : "-"}</span> },
             ] satisfies DataTableColumn<any>[]}
             data={journalEntries}
             pageSize={0}
@@ -461,7 +461,7 @@ export default function InvoiceDetailPage() {
       {invoice.description && (
         <Card>
           <CardHeader><CardTitle>ملاحظات</CardTitle></CardHeader>
-          <CardContent><p className="text-gray-600">{invoice.description}</p></CardContent>
+          <CardContent><p className="text-muted-foreground">{invoice.description}</p></CardContent>
         </Card>
       )}
 

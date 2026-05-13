@@ -81,10 +81,10 @@ export default function UmrahTransportDetail() {
     <div className="space-y-4">
       <InlineEditCard hook={editDelete} />
       <KpiGrid items={[
-        { label: "من", value: item.fromLocation || "—", icon: MapPin, color: "text-blue-600 bg-blue-50", size: "sm" },
-        { label: "إلى", value: item.toLocation || "—", icon: MapPin, color: "text-green-600 bg-green-50", size: "sm" },
+        { label: "من", value: item.fromLocation || "—", icon: MapPin, color: "text-status-info-foreground bg-status-info-surface", size: "sm" },
+        { label: "إلى", value: item.toLocation || "—", icon: MapPin, color: "text-status-success-foreground bg-status-success-surface", size: "sm" },
         { label: "السعة", value: `${item.pilgrimCount || 0} / ${item.capacity || 45}`, icon: Users, color: "text-purple-600 bg-purple-50", size: "sm" },
-        { label: "التكلفة", value: formatCurrency(Number(item.cost || 0)), icon: DollarSign, color: "text-amber-600 bg-amber-50", size: "sm" },
+        { label: "التكلفة", value: formatCurrency(Number(item.cost || 0)), icon: DollarSign, color: "text-status-warning-foreground bg-status-warning-surface", size: "sm" },
       ]} />
 
       <Card className="border-0 shadow-sm">
@@ -98,13 +98,13 @@ export default function UmrahTransportDetail() {
         <CardHeader className="pb-2"><CardTitle className="text-base">تفاصيل الرحلة</CardTitle></CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-            <div><p className="text-gray-500">تاريخ الرحلة</p><p className="font-medium">{item.tripDate ? formatDateAr(item.tripDate) : "—"}</p></div>
-            <div><p className="text-gray-500">من</p><p className="font-medium">{item.fromLocation || "—"}</p></div>
-            <div><p className="text-gray-500">إلى</p><p className="font-medium">{item.toLocation || "—"}</p></div>
-            <div><p className="text-gray-500">المركبة</p><p className="font-medium">{item.vehiclePlate ? `${item.vehicleMake || ""} ${item.vehicleModel || ""} — ${item.vehiclePlate}` : "—"}</p></div>
-            <div><p className="text-gray-500">السائق</p><p className="font-medium">{item.driverName || "—"}</p>{item.driverPhone && <p className="text-xs text-gray-400">{item.driverPhone}</p>}</div>
-            <div><p className="text-gray-500">التكلفة</p><p className="font-medium text-green-700">{formatCurrency(Number(item.cost || 0))}</p></div>
-            {item.notes && <div className="col-span-full"><p className="text-gray-500">ملاحظات</p><p className="font-medium">{item.notes}</p></div>}
+            <div><p className="text-muted-foreground">تاريخ الرحلة</p><p className="font-medium">{item.tripDate ? formatDateAr(item.tripDate) : "—"}</p></div>
+            <div><p className="text-muted-foreground">من</p><p className="font-medium">{item.fromLocation || "—"}</p></div>
+            <div><p className="text-muted-foreground">إلى</p><p className="font-medium">{item.toLocation || "—"}</p></div>
+            <div><p className="text-muted-foreground">المركبة</p><p className="font-medium">{item.vehiclePlate ? `${item.vehicleMake || ""} ${item.vehicleModel || ""} — ${item.vehiclePlate}` : "—"}</p></div>
+            <div><p className="text-muted-foreground">السائق</p><p className="font-medium">{item.driverName || "—"}</p>{item.driverPhone && <p className="text-xs text-muted-foreground">{item.driverPhone}</p>}</div>
+            <div><p className="text-muted-foreground">التكلفة</p><p className="font-medium text-status-success-foreground">{formatCurrency(Number(item.cost || 0))}</p></div>
+            {item.notes && <div className="col-span-full"><p className="text-muted-foreground">ملاحظات</p><p className="font-medium">{item.notes}</p></div>}
           </div>
         </CardContent>
       </Card>

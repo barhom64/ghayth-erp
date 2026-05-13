@@ -89,7 +89,7 @@ export default function LeadDetailPage() {
 
   const emptyMsg = (msg: string) => (
     <Card className="border-0 shadow-sm">
-      <CardContent className="p-10 text-center text-sm text-gray-500">{msg}</CardContent>
+      <CardContent className="p-10 text-center text-sm text-muted-foreground">{msg}</CardContent>
     </Card>
   );
 
@@ -126,12 +126,12 @@ export default function LeadDetailPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center text-blue-600 bg-blue-50">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center text-status-info-foreground bg-status-info-surface">
               <Target className="h-5 w-5" />
             </div>
             <div className="min-w-0">
               <p className="text-xl font-bold truncate">{totalContacts}</p>
-              <p className="text-xs text-gray-500 truncate">إجمالي الأنشطة</p>
+              <p className="text-xs text-muted-foreground truncate">إجمالي الأنشطة</p>
             </div>
           </CardContent>
         </Card>
@@ -142,7 +142,7 @@ export default function LeadDetailPage() {
             </div>
             <div className="min-w-0">
               <p className="text-xl font-bold truncate">{lastActivity ? formatDateAr(lastActivity) : "—"}</p>
-              <p className="text-xs text-gray-500 truncate">آخر نشاط</p>
+              <p className="text-xs text-muted-foreground truncate">آخر نشاط</p>
             </div>
           </CardContent>
         </Card>
@@ -153,18 +153,18 @@ export default function LeadDetailPage() {
             </div>
             <div className="min-w-0">
               <p className="text-xl font-bold truncate">{daysInPipeline}</p>
-              <p className="text-xs text-gray-500 truncate">أيام في الخط</p>
+              <p className="text-xs text-muted-foreground truncate">أيام في الخط</p>
             </div>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center text-green-600 bg-green-50">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center text-status-success-foreground bg-status-success-surface">
               <DollarSign className="h-5 w-5" />
             </div>
             <div className="min-w-0">
               <p className="text-xl font-bold truncate">{formatCurrency(dealValue)}</p>
-              <p className="text-xs text-gray-500 truncate">قيمة الصفقة</p>
+              <p className="text-xs text-muted-foreground truncate">قيمة الصفقة</p>
             </div>
           </CardContent>
         </Card>
@@ -184,8 +184,8 @@ export default function LeadDetailPage() {
           </div>
           {lead?.notes && (
             <div className="pt-4 border-t">
-              <p className="text-xs text-gray-500 mb-1">ملاحظات</p>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">{lead.notes}</p>
+              <p className="text-xs text-muted-foreground mb-1">ملاحظات</p>
+              <p className="text-sm text-status-neutral-foreground whitespace-pre-wrap">{lead.notes}</p>
             </div>
           )}
         </CardContent>
@@ -254,8 +254,8 @@ export default function LeadDetailPage() {
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
   return (
     <div>
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="text-sm font-medium text-gray-800 mt-0.5">{value || "—"}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-sm font-medium text-status-neutral-foreground mt-0.5">{value || "—"}</p>
     </div>
   );
 }

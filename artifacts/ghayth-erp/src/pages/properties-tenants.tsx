@@ -45,7 +45,7 @@ export default function PropertiesTenants() {
           </div>
           <div>
             <p className="font-medium text-sm">{t.name}</p>
-            {t.email && <p className="text-xs text-gray-400">{t.email}</p>}
+            {t.email && <p className="text-xs text-muted-foreground">{t.email}</p>}
           </div>
         </div>
       ),
@@ -56,7 +56,7 @@ export default function PropertiesTenants() {
       sortable: true,
       render: (t) =>
         t.phone ? (
-          <a href={`tel:${t.phone}`} className="text-sm text-blue-600 hover:underline flex items-center gap-1">
+          <a href={`tel:${t.phone}`} className="text-sm text-status-info-foreground hover:underline flex items-center gap-1">
             <Phone className="h-3 w-3" /> {t.phone}
           </a>
         ) : (
@@ -116,7 +116,7 @@ export default function PropertiesTenants() {
                 e.stopPropagation();
                 setExpandedId(expandedId === key ? null : key);
               }}
-              className="text-gray-400 hover:text-gray-600 p-1"
+              className="text-muted-foreground hover:text-muted-foreground p-1"
             >
               {expandedId === key ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </button>
@@ -182,24 +182,24 @@ export default function PropertiesTenants() {
                 <div className="bg-violet-50/30">
                   <div className="p-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                     <div>
-                      <p className="text-xs font-semibold text-gray-500 mb-1">معلومات التواصل</p>
-                      {t.phone && <p className="flex items-center gap-1"><Phone className="h-3 w-3 text-gray-400" /> {t.phone}</p>}
-                      {t.email && <p className="flex items-center gap-1"><Mail className="h-3 w-3 text-gray-400" /> {t.email}</p>}
-                      {t.nationality && <p className="text-xs text-gray-500">الجنسية: {t.nationality}</p>}
+                      <p className="text-xs font-semibold text-muted-foreground mb-1">معلومات التواصل</p>
+                      {t.phone && <p className="flex items-center gap-1"><Phone className="h-3 w-3 text-muted-foreground" /> {t.phone}</p>}
+                      {t.email && <p className="flex items-center gap-1"><Mail className="h-3 w-3 text-muted-foreground" /> {t.email}</p>}
+                      {t.nationality && <p className="text-xs text-muted-foreground">الجنسية: {t.nationality}</p>}
                     </div>
                     <div>
-                      <p className="text-xs font-semibold text-gray-500 mb-1">العقود</p>
+                      <p className="text-xs font-semibold text-muted-foreground mb-1">العقود</p>
                       {t.contracts?.slice(0, 3).map((c: any, i: number) => (
-                        <p key={i} className="text-xs text-gray-600">
+                        <p key={i} className="text-xs text-muted-foreground">
                           {c.unitNumber} — {formatDateAr(c.startDate)} ← {formatDateAr(c.endDate)}
                           <PageStatusBadge status={c.status} />
                         </p>
                       ))}
                     </div>
                     <div>
-                      <p className="text-xs font-semibold text-gray-500 mb-1">المالي</p>
+                      <p className="text-xs font-semibold text-muted-foreground mb-1">المالي</p>
                       <p className="text-xs">إجمالي المدفوعات: <span className="font-bold text-emerald-600">{formatCurrency(t.totalPaid || 0)}</span></p>
-                      <p className="text-xs">المتأخرات: <span className="font-bold text-red-600">{formatCurrency(t.overdueAmount || 0)}</span></p>
+                      <p className="text-xs">المتأخرات: <span className="font-bold text-status-error-foreground">{formatCurrency(t.overdueAmount || 0)}</span></p>
                     </div>
                   </div>
                 </div>

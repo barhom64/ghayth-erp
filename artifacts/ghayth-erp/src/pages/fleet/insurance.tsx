@@ -54,10 +54,10 @@ export default function InsurancePage() {
         const expired = items.filter((i: any) => i.endDate && new Date(i.endDate) < now).length;
         const expiringSoon = items.filter((i: any) => { const end = i.endDate ? new Date(i.endDate) : null; return end && end >= now && end <= soon; }).length;
         return [
-          { label: "إجمالي الوثائق", value: items.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
-          { label: "سارية", value: active, icon: CheckCircle, color: "text-green-600 bg-green-50" },
-          { label: "منتهية", value: expired, icon: XCircle, color: "text-red-600 bg-red-50" },
-          { label: "تنتهي قريباً", value: expiringSoon, icon: AlertTriangle, color: "text-amber-600 bg-amber-50" },
+          { label: "إجمالي الوثائق", value: items.length, icon: FileText, color: "text-status-info-foreground bg-status-info-surface" },
+          { label: "سارية", value: active, icon: CheckCircle, color: "text-status-success-foreground bg-status-success-surface" },
+          { label: "منتهية", value: expired, icon: XCircle, color: "text-status-error-foreground bg-status-error-surface" },
+          { label: "تنتهي قريباً", value: expiringSoon, icon: AlertTriangle, color: "text-status-warning-foreground bg-status-warning-surface" },
         ];
       })()} />
 

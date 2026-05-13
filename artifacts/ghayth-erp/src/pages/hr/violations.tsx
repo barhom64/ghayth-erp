@@ -39,11 +39,11 @@ import {
 const STATUS_OPTIONS = Object.entries(VIOLATION_STATUS).map(([value, { label }]) => ({ value, label }));
 
 const INCIDENT_LABELS: Record<string, { label: string; Icon: typeof Clock; color: string }> = {
-  late:             { label: "تأخر",         Icon: Clock,      color: "text-amber-600 bg-amber-50"   },
+  late:             { label: "تأخر",         Icon: Clock,      color: "text-status-warning-foreground bg-status-warning-surface"   },
   early_leave:      { label: "مغادرة مبكرة", Icon: DoorOpen,   color: "text-orange-600 bg-orange-50" },
-  absence:          { label: "غياب",         Icon: Ban,        color: "text-red-600 bg-red-50"       },
+  absence:          { label: "غياب",         Icon: Ban,        color: "text-status-error-foreground bg-status-error-surface"       },
   behavior:         { label: "سلوك",         Icon: Gavel,      color: "text-purple-600 bg-purple-50" },
-  organization:     { label: "تنظيم",        Icon: ScrollText, color: "text-blue-600 bg-blue-50"     },
+  organization:     { label: "تنظيم",        Icon: ScrollText, color: "text-status-info-foreground bg-status-info-surface"     },
   gps_out_of_range: { label: "خروج GPS",     Icon: MapPin,     color: "text-emerald-600 bg-emerald-50" },
   custom:           { label: "مخصّص",        Icon: PenLine,    color: "text-slate-600 bg-slate-50"   },
 };
@@ -94,10 +94,10 @@ export default function ViolationsPage() {
       0,
     ));
     return [
-      { label: "إجمالي المحاضر", value: total, icon: FileText, color: "text-blue-600 bg-blue-50" },
-      { label: "بانتظار الإجراء", value: pending, icon: AlertTriangle, color: "text-amber-600 bg-amber-50" },
-      { label: "إجمالي الخصومات", value: formatCurrency(totalDeductions), icon: DollarSign, color: "text-red-600 bg-red-50" },
-      { label: "محاضر منفذة", value: approved, icon: Shield, color: "text-green-600 bg-green-50" },
+      { label: "إجمالي المحاضر", value: total, icon: FileText, color: "text-status-info-foreground bg-status-info-surface" },
+      { label: "بانتظار الإجراء", value: pending, icon: AlertTriangle, color: "text-status-warning-foreground bg-status-warning-surface" },
+      { label: "إجمالي الخصومات", value: formatCurrency(totalDeductions), icon: DollarSign, color: "text-status-error-foreground bg-status-error-surface" },
+      { label: "محاضر منفذة", value: approved, icon: Shield, color: "text-status-success-foreground bg-status-success-surface" },
     ];
   }, [stats, memos]);
 
@@ -181,18 +181,18 @@ function OverviewTab({ memos, stats }: { memos: any[]; stats: any }) {
   const terminationCount = memos.filter((m: any) => m.terminationDecided).length;
 
   const byStage = [
-    { label: "مسوّدات", value: Number(memos.filter((m: any) => m.status === "draft").length), color: "bg-gray-200 text-gray-700" },
-    { label: "بانتظار الموظف", value: Number(stats?.pendingEmployee ?? 0), color: "bg-blue-100 text-blue-700" },
-    { label: "بانتظار المدير", value: Number(stats?.pendingManager ?? 0), color: "bg-amber-100 text-amber-700" },
+    { label: "مسوّدات", value: Number(memos.filter((m: any) => m.status === "draft").length), color: "bg-gray-200 text-status-neutral-foreground" },
+    { label: "بانتظار الموظف", value: Number(stats?.pendingEmployee ?? 0), color: "bg-status-info-surface text-status-info-foreground" },
+    { label: "بانتظار المدير", value: Number(stats?.pendingManager ?? 0), color: "bg-status-warning-surface text-status-warning-foreground" },
     { label: "بانتظار المدير العام", value: Number(stats?.pendingGm ?? 0), color: "bg-purple-100 text-purple-700" },
-    { label: "معتمد", value: Number(stats?.approved ?? 0), color: "bg-green-100 text-green-700" },
-    { label: "مرفوض", value: Number(stats?.rejected ?? 0), color: "bg-red-100 text-red-700" },
+    { label: "معتمد", value: Number(stats?.approved ?? 0), color: "bg-status-success-surface text-status-success-foreground" },
+    { label: "مرفوض", value: Number(stats?.rejected ?? 0), color: "bg-status-error-surface text-status-error-foreground" },
   ];
 
   return (
     <div className="space-y-4">
       {terminationCount > 0 && (
-        <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+        <div className="flex items-center gap-2 p-3 bg-status-error-surface border border-status-error-surface rounded-lg text-sm text-status-error-foreground">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span>
             يوجد <strong>{terminationCount}</strong> محضر يتضمن قرار فصل — يرجى المراجعة
@@ -204,7 +204,7 @@ function OverviewTab({ memos, stats }: { memos: any[]; stats: any }) {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-blue-500" />
+              <TrendingUp className="h-4 w-4 text-status-info" />
               توزيع المحاضر حسب المرحلة
             </CardTitle>
           </CardHeader>
@@ -212,7 +212,7 @@ function OverviewTab({ memos, stats }: { memos: any[]; stats: any }) {
             <div className="space-y-2">
               {byStage.map((s) => (
                 <div key={s.label} className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-gray-600">{s.label}</span>
+                  <span className="text-sm text-muted-foreground">{s.label}</span>
                   <Badge variant="secondary" className={cn("font-bold text-sm px-3", s.color)}>
                     {s.value}
                   </Badge>
@@ -225,7 +225,7 @@ function OverviewTab({ memos, stats }: { memos: any[]; stats: any }) {
         <Card>
           <CardHeader className="pb-2 flex-row items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              <AlertTriangle className="h-4 w-4 text-status-warning" />
               محاضر تحتاج إجراءً عاجلًا
             </CardTitle>
             <Link href="/hr/violations?tab=memos">
@@ -236,16 +236,16 @@ function OverviewTab({ memos, stats }: { memos: any[]; stats: any }) {
           </CardHeader>
           <CardContent>
             {pendingMemos.length === 0 ? (
-              <p className="text-sm text-gray-400 py-6 text-center">لا توجد محاضر معلقة</p>
+              <p className="text-sm text-muted-foreground py-6 text-center">لا توجد محاضر معلقة</p>
             ) : (
               <div className="space-y-2">
                 {pendingMemos.map((m: any) => (
                   <Link key={m.id} href={`/hr/discipline/memos/${m.id}`}>
-                    <div className="flex items-center gap-2 p-2 rounded-lg border hover:bg-gray-50 cursor-pointer transition-colors">
+                    <div className="flex items-center gap-2 p-2 rounded-lg border hover:bg-surface-subtle cursor-pointer transition-colors">
                       <AvatarInitial name={m.employeeName} color="red" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{m.employeeName}</p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-muted-foreground">
                           {INCIDENT_LABELS[m.incidentType]?.label || m.incidentType} • {formatDateAr(m.incidentDate)}
                         </p>
                       </div>
@@ -268,10 +268,10 @@ function OverviewTab({ memos, stats }: { memos: any[]; stats: any }) {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <QuickLink href="/hr/violations/create" icon={Plus} label="تسجيل مخالفة جديدة" color="text-red-600 bg-red-50" />
+            <QuickLink href="/hr/violations/create" icon={Plus} label="تسجيل مخالفة جديدة" color="text-status-error-foreground bg-status-error-surface" />
             <QuickLink href="/hr/violations/auto-detection" icon={Radar} label="إعدادات الرصد التلقائي" color="text-emerald-600 bg-emerald-50" />
-            <QuickLink href="/hr/violations/penalty-escalation" icon={TrendingUp} label="سلم تصعيد العقوبات" color="text-amber-600 bg-amber-50" />
-            <QuickLink href="/hr/discipline/regulation" icon={BookOpen} label="لائحة الانضباط الكاملة" color="text-blue-600 bg-blue-50" />
+            <QuickLink href="/hr/violations/penalty-escalation" icon={TrendingUp} label="سلم تصعيد العقوبات" color="text-status-warning-foreground bg-status-warning-surface" />
+            <QuickLink href="/hr/discipline/regulation" icon={BookOpen} label="لائحة الانضباط الكاملة" color="text-status-info-foreground bg-status-info-surface" />
           </div>
         </CardContent>
       </Card>
@@ -282,7 +282,7 @@ function OverviewTab({ memos, stats }: { memos: any[]; stats: any }) {
 function QuickLink({ href, icon: Icon, label, color }: { href: string; icon: any; label: string; color: string }) {
   return (
     <Link href={href}>
-      <div className="flex items-center gap-3 p-3 rounded-lg border hover:border-blue-300 hover:shadow-sm cursor-pointer transition-all">
+      <div className="flex items-center gap-3 p-3 rounded-lg border hover:border-status-info-surface hover:shadow-sm cursor-pointer transition-all">
         <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", color.split(" ")[1])}>
           <Icon className={cn("w-5 h-5", color.split(" ")[0])} />
         </div>
@@ -321,7 +321,7 @@ function MemosTab({ memos }: { memos: any[] }) {
       header: "رقم المحضر",
       sortable: true,
       render: (v) => (
-        <span className="font-mono text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-1 rounded">
+        <span className="font-mono text-xs font-semibold text-status-info-foreground bg-status-info-surface px-2 py-1 rounded">
           {v.memoNumber || `#${v.id}`}
         </span>
       ),
@@ -335,7 +335,7 @@ function MemosTab({ memos }: { memos: any[] }) {
           <AvatarInitial name={v.employeeName} color="red" />
           <div>
             <span className="font-medium text-sm block">{v.employeeName}</span>
-            {v.empNumber && <span className="text-xs text-gray-400">#{v.empNumber}</span>}
+            {v.empNumber && <span className="text-xs text-muted-foreground">#{v.empNumber}</span>}
           </div>
         </div>
       ),
@@ -346,7 +346,7 @@ function MemosTab({ memos }: { memos: any[] }) {
       sortable: true,
       render: (v) => {
         const inc = INCIDENT_LABELS[v.incidentType];
-        if (!inc) return <span className="text-gray-400">{v.incidentType || "-"}</span>;
+        if (!inc) return <span className="text-muted-foreground">{v.incidentType || "-"}</span>;
         return (
           <div className="flex items-center gap-1.5">
             <div className={cn("w-6 h-6 rounded flex items-center justify-center", inc.color.split(" ")[1])}>
@@ -361,7 +361,7 @@ function MemosTab({ memos }: { memos: any[] }) {
       key: "incidentDate",
       header: "تاريخ الواقعة",
       sortable: true,
-      render: (v) => <span className="text-sm text-gray-600">{formatDateAr(v.incidentDate)}</span>,
+      render: (v) => <span className="text-sm text-muted-foreground">{formatDateAr(v.incidentDate)}</span>,
     },
     {
       key: "occurrenceCount",
@@ -374,10 +374,10 @@ function MemosTab({ memos }: { memos: any[] }) {
             variant="outline"
             className={cn(
               "text-xs",
-              count >= 4 ? "border-red-300 text-red-700 bg-red-50" :
+              count >= 4 ? "border-status-error-surface text-status-error-foreground bg-status-error-surface" :
               count >= 3 ? "border-orange-300 text-orange-700 bg-orange-50" :
-              count >= 2 ? "border-amber-300 text-amber-700 bg-amber-50" :
-              "border-gray-200",
+              count >= 2 ? "border-amber-300 text-status-warning-foreground bg-status-warning-surface" :
+              "border-border",
             )}
           >
             المرة {count}
@@ -402,8 +402,8 @@ function MemosTab({ memos }: { memos: any[] }) {
       sortable: true,
       render: (v) => {
         const total = Number(v.appliedDeductionAmount || 0) + Number(v.appliedExtraDeduction || 0);
-        if (!total) return <span className="text-gray-400">-</span>;
-        return <span className="text-sm font-semibold text-red-600">{formatCurrency(total)}</span>;
+        if (!total) return <span className="text-muted-foreground">-</span>;
+        return <span className="text-sm font-semibold text-status-error-foreground">{formatCurrency(total)}</span>;
       },
     },
     {
@@ -467,7 +467,7 @@ function AutoDetectionLink() {
       <CardContent className="py-12 text-center">
         <Radar className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
         <p className="font-medium mb-1">إعدادات الرصد التلقائي</p>
-        <p className="text-sm text-gray-500 mb-4">
+        <p className="text-sm text-muted-foreground mb-4">
           تشغيل/إيقاف الرصد، ضبط حدود التأخر، عرض سجل عمليات الرصد
         </p>
         <Link href="/hr/violations/auto-detection">
@@ -485,9 +485,9 @@ function RegulationLink() {
   return (
     <Card>
       <CardContent className="py-12 text-center">
-        <BookOpen className="w-10 h-10 text-blue-500 mx-auto mb-3" />
+        <BookOpen className="w-10 h-10 text-status-info mx-auto mb-3" />
         <p className="font-medium mb-1">لائحة الانضباط الكاملة</p>
-        <p className="text-sm text-gray-500 mb-4">
+        <p className="text-sm text-muted-foreground mb-4">
           ٤٩ مادة موزعة على ثلاثة أبواب: مواعيد العمل، تنظيم العمل، السلوك العام
         </p>
         <Link href="/hr/discipline/regulation">

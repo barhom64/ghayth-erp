@@ -64,34 +64,34 @@ export default function UmrahDashboard() {
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-blue-50">
-              <Users className="w-6 h-6 text-blue-600" />
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-status-info-surface">
+              <Users className="w-6 h-6 text-status-info-foreground" />
             </div>
             <div>
               <p className="text-2xl font-bold">{p.total || 0}</p>
-              <p className="text-xs text-gray-500">إجمالي المعتمرين</p>
+              <p className="text-xs text-muted-foreground">إجمالي المعتمرين</p>
             </div>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-green-50">
-              <Plane className="w-6 h-6 text-green-600" />
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-status-success-surface">
+              <Plane className="w-6 h-6 text-status-success-foreground" />
             </div>
             <div>
               <p className="text-2xl font-bold">{Number(p.arrived || 0) + Number(p.active || 0)}</p>
-              <p className="text-xs text-gray-500">داخل المملكة</p>
+              <p className="text-xs text-muted-foreground">داخل المملكة</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-sm border-red-100">
+        <Card className="border-0 shadow-sm border-status-error-surface">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-red-50">
-              <AlertTriangle className="w-6 h-6 text-red-600" />
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-status-error-surface">
+              <AlertTriangle className="w-6 h-6 text-status-error-foreground" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-red-600">{p.overstayed || 0}</p>
-              <p className="text-xs text-gray-500">متأخرين</p>
+              <p className="text-2xl font-bold text-status-error-foreground">{p.overstayed || 0}</p>
+              <p className="text-xs text-muted-foreground">متأخرين</p>
             </div>
           </CardContent>
         </Card>
@@ -102,7 +102,7 @@ export default function UmrahDashboard() {
             </div>
             <div>
               <p className="text-2xl font-bold">{p.departed || 0}</p>
-              <p className="text-xs text-gray-500">غادروا</p>
+              <p className="text-xs text-muted-foreground">غادروا</p>
             </div>
           </CardContent>
         </Card>
@@ -113,7 +113,7 @@ export default function UmrahDashboard() {
             </div>
             <div>
               <p className="text-2xl font-bold text-orange-600">{p.unassigned || 0}</p>
-              <p className="text-xs text-gray-500">بدون وكيل</p>
+              <p className="text-xs text-muted-foreground">بدون وكيل</p>
             </div>
           </CardContent>
         </Card>
@@ -124,7 +124,7 @@ export default function UmrahDashboard() {
           <CardHeader><CardTitle className="text-base">الغرامات</CardTitle></CardHeader>
           <CardContent>
             <div className="flex justify-between items-center">
-              <div><span className="text-2xl font-bold text-red-600">{formatNumber(Number(pen.totalAmount || 0))}</span> <span className="text-sm">ريال</span></div>
+              <div><span className="text-2xl font-bold text-status-error-foreground">{formatNumber(Number(pen.totalAmount || 0))}</span> <span className="text-sm">ريال</span></div>
               <Badge variant="outline">{pen.pending || 0} معلقة</Badge>
             </div>
           </CardContent>

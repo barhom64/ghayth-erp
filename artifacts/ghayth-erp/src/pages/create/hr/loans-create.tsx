@@ -107,7 +107,7 @@ export default function LoansCreate() {
       <form onSubmit={handleSubmit} className="space-y-6">
         <CreationDateField />
         {hasDraft && (
-          <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+          <div className="flex items-center gap-2 p-3 bg-status-info-surface border border-status-info-surface rounded-lg text-sm text-status-info-foreground">
             <Info className="h-4 w-4 shrink-0" />
             <span>تم استعادة مسودة سابقة — يمكنك متابعة التعبئة أو مسحها</span>
             <Button type="button" size="sm" variant="ghost" onClick={clearDraft} className="mr-auto text-xs">
@@ -159,7 +159,7 @@ export default function LoansCreate() {
             error={fieldErrors.amount || (exceedsMax ? `يتجاوز الحد الأقصى (${formatCurrency(maxLoan)})` : undefined)}
           />
           {exceedsMax && (
-            <div className="-mt-2 md:col-span-3 md:-mt-0 text-xs text-red-600 flex items-center gap-1">
+            <div className="-mt-2 md:col-span-3 md:-mt-0 text-xs text-status-error-foreground flex items-center gap-1">
               <AlertTriangle className="h-3 w-3" />
               {`يتجاوز الحد الأقصى (${formatCurrency(maxLoan)} — 3 أضعاف الراتب)`}
             </div>
@@ -186,24 +186,24 @@ export default function LoansCreate() {
 
         {/* ملخص الأقساط */}
         {amount > 0 && installmentCount > 0 && (
-          <Card className="border-blue-200 bg-blue-50/50">
+          <Card className="border-status-info-surface bg-status-info-surface">
             <CardContent className="p-4">
               <div className="flex items-center gap-2 mb-3">
-                <Calculator className="h-4 w-4 text-blue-600" />
-                <span className="text-sm font-semibold text-blue-700">ملخص الأقساط</span>
+                <Calculator className="h-4 w-4 text-status-info-foreground" />
+                <span className="text-sm font-semibold text-status-info-foreground">ملخص الأقساط</span>
               </div>
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div>
-                  <p className="text-lg font-bold text-blue-700">{formatCurrency(amount)}</p>
-                  <p className="text-xs text-gray-500">إجمالي السلفة</p>
+                  <p className="text-lg font-bold text-status-info-foreground">{formatCurrency(amount)}</p>
+                  <p className="text-xs text-muted-foreground">إجمالي السلفة</p>
                 </div>
                 <div>
-                  <p className="text-lg font-bold text-blue-700">{installmentCount}</p>
-                  <p className="text-xs text-gray-500">عدد الأقساط</p>
+                  <p className="text-lg font-bold text-status-info-foreground">{installmentCount}</p>
+                  <p className="text-xs text-muted-foreground">عدد الأقساط</p>
                 </div>
                 <div>
-                  <p className="text-lg font-bold text-green-700">{formatCurrency(installmentAmount)}</p>
-                  <p className="text-xs text-gray-500">القسط الشهري</p>
+                  <p className="text-lg font-bold text-status-success-foreground">{formatCurrency(installmentAmount)}</p>
+                  <p className="text-xs text-muted-foreground">القسط الشهري</p>
                 </div>
               </div>
             </CardContent>

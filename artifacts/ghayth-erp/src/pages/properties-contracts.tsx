@@ -40,8 +40,8 @@ function PaymentSchedulePanel({ contractId }: { contractId: number }) {
   const schedule = asList(schedResp);
 
 
-  if (isLoading) return <div className="text-center text-sm text-gray-400 py-4">جاري التحميل...</div>;
-  if (!schedule.length) return <div className="text-center text-sm text-gray-400 py-4">لا يوجد جدول دفعات لهذا العقد</div>;
+  if (isLoading) return <div className="text-center text-sm text-muted-foreground py-4">جاري التحميل...</div>;
+  if (!schedule.length) return <div className="text-center text-sm text-muted-foreground py-4">لا يوجد جدول دفعات لهذا العقد</div>;
 
   const totalDue = schedule.reduce((s: number, i: any) => s + Number(i.amount || 0), 0);
   const totalPaid = schedule.reduce((s: number, i: any) => s + Number(i.paidAmount || 0), 0);
@@ -56,10 +56,10 @@ function PaymentSchedulePanel({ contractId }: { contractId: number }) {
         <Badge className="bg-emerald-100 text-emerald-700 gap-1">
           <CheckCircle2 className="h-3 w-3" /> المدفوع: {formatCurrency(totalPaid)}
         </Badge>
-        <Badge className="bg-amber-100 text-amber-700 gap-1">
+        <Badge className="bg-status-warning-surface text-status-warning-foreground gap-1">
           <Clock className="h-3 w-3" /> المتبقي: {formatCurrency(totalDue - totalPaid)}
         </Badge>
-        <span className="text-gray-400">{paidCount} / {schedule.length} دفعة</span>
+        <span className="text-muted-foreground">{paidCount} / {schedule.length} دفعة</span>
       </div>
 
       <DataTable
@@ -70,7 +70,7 @@ function PaymentSchedulePanel({ contractId }: { contractId: number }) {
         rowClassName={(inst) => {
           const isPaid = inst.status === "paid";
           const isOverdue = !isPaid && new Date(inst.dueDate) < new Date();
-          return isPaid ? "bg-emerald-50/30" : isOverdue ? "bg-red-50/30" : undefined;
+          return isPaid ? "bg-emerald-50/30" : isOverdue ? "bg-status-error-surface" : undefined;
         }}
         columns={[
           { key: "installmentNumber", header: "#", className: "text-xs font-mono", render: (inst) => inst.installmentNumber },
@@ -88,7 +88,7 @@ function PaymentSchedulePanel({ contractId }: { contractId: number }) {
               return isPaid ? (
                 <Badge className="bg-emerald-100 text-emerald-700 text-[10px] gap-1 px-1"><CheckCircle2 className="h-2.5 w-2.5" /> مدفوعة</Badge>
               ) : isOverdue ? (
-                <Badge className="bg-red-100 text-red-700 text-[10px] gap-1 px-1"><AlertTriangle className="h-2.5 w-2.5" /> متأخرة</Badge>
+                <Badge className="bg-status-error-surface text-status-error-foreground text-[10px] gap-1 px-1"><AlertTriangle className="h-2.5 w-2.5" /> متأخرة</Badge>
               ) : (
                 <Badge variant="outline" className="text-[10px] gap-1 px-1"><Clock className="h-2.5 w-2.5" /> معلقة</Badge>
               );
@@ -110,7 +110,7 @@ function PaymentSchedulePanel({ contractId }: { contractId: number }) {
               }
               if (inst.receiptNumber) {
                 return (
-                  <span className="text-[10px] text-gray-400 flex items-center gap-1"><Receipt className="h-3 w-3" />{inst.receiptNumber}</span>
+                  <span className="text-[10px] text-muted-foreground flex items-center gap-1"><Receipt className="h-3 w-3" />{inst.receiptNumber}</span>
                 );
               }
               return null;
@@ -130,49 +130,49 @@ function ContractDetailPanel({ contract }: { contract: any }) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
         {c.ejarNumber && (
           <div className="bg-white border rounded-lg p-3">
-            <p className="text-[10px] text-gray-400 mb-0.5">رقم إيجار</p>
-            <p className="font-bold font-mono text-blue-700">{c.ejarNumber}</p>
+            <p className="text-[10px] text-muted-foreground mb-0.5">رقم إيجار</p>
+            <p className="font-bold font-mono text-status-info-foreground">{c.ejarNumber}</p>
           </div>
         )}
         {c.contractType && (
           <div className="bg-white border rounded-lg p-3">
-            <p className="text-[10px] text-gray-400 mb-0.5">نوع العقد</p>
+            <p className="text-[10px] text-muted-foreground mb-0.5">نوع العقد</p>
             <p className="font-medium">{CONTRACT_TYPE_LABELS[c.contractType] || c.contractType}</p>
           </div>
         )}
         {c.paymentFrequency && (
           <div className="bg-white border rounded-lg p-3">
-            <p className="text-[10px] text-gray-400 mb-0.5">دورة السداد</p>
+            <p className="text-[10px] text-muted-foreground mb-0.5">دورة السداد</p>
             <p className="font-medium">{FREQ_LABELS[c.paymentFrequency] || c.paymentFrequency}</p>
           </div>
         )}
         {c.yearlyRent && (
           <div className="bg-white border rounded-lg p-3">
-            <p className="text-[10px] text-gray-400 mb-0.5">الإيجار السنوي</p>
+            <p className="text-[10px] text-muted-foreground mb-0.5">الإيجار السنوي</p>
             <p className="font-bold text-emerald-700">{formatCurrency(c.yearlyRent)}</p>
           </div>
         )}
         {c.depositAmount && Number(c.depositAmount) > 0 && (
           <div className="bg-white border rounded-lg p-3">
-            <p className="text-[10px] text-gray-400 mb-0.5">التأمين</p>
+            <p className="text-[10px] text-muted-foreground mb-0.5">التأمين</p>
             <p className="font-medium">{formatCurrency(c.depositAmount)}</p>
           </div>
         )}
         {c.latePenaltyValue && Number(c.latePenaltyValue) > 0 && (
           <div className="bg-white border rounded-lg p-3">
-            <p className="text-[10px] text-gray-400 mb-0.5">غرامة التأخير</p>
-            <p className="font-medium text-red-600">{c.latePenaltyValue}%</p>
+            <p className="text-[10px] text-muted-foreground mb-0.5">غرامة التأخير</p>
+            <p className="font-medium text-status-error-foreground">{c.latePenaltyValue}%</p>
           </div>
         )}
         {c.gracePeriodDays && Number(c.gracePeriodDays) > 0 && (
           <div className="bg-white border rounded-lg p-3">
-            <p className="text-[10px] text-gray-400 mb-0.5">فترة السماح</p>
+            <p className="text-[10px] text-muted-foreground mb-0.5">فترة السماح</p>
             <p className="font-medium">{c.gracePeriodDays} يوم</p>
           </div>
         )}
         {c.brokerageFee && Number(c.brokerageFee) > 0 && (
           <div className="bg-white border rounded-lg p-3">
-            <p className="text-[10px] text-gray-400 mb-0.5">عمولة السعي</p>
+            <p className="text-[10px] text-muted-foreground mb-0.5">عمولة السعي</p>
             <p className="font-medium">{formatCurrency(c.brokerageFee)}</p>
           </div>
         )}
@@ -181,10 +181,10 @@ function ContractDetailPanel({ contract }: { contract: any }) {
       {(c.electricityResponsibility || c.waterResponsibility || c.gasResponsibility) && (
         <div className="flex flex-wrap gap-3">
           {c.electricityResponsibility && (
-            <Badge variant="outline" className="gap-1 text-xs"><Zap className="h-3 w-3 text-yellow-500" /> الكهرباء: {UTILITY_LABELS[c.electricityResponsibility] || c.electricityResponsibility}</Badge>
+            <Badge variant="outline" className="gap-1 text-xs"><Zap className="h-3 w-3 text-status-warning" /> الكهرباء: {UTILITY_LABELS[c.electricityResponsibility] || c.electricityResponsibility}</Badge>
           )}
           {c.waterResponsibility && (
-            <Badge variant="outline" className="gap-1 text-xs"><Droplets className="h-3 w-3 text-blue-500" /> المياه: {UTILITY_LABELS[c.waterResponsibility] || c.waterResponsibility}</Badge>
+            <Badge variant="outline" className="gap-1 text-xs"><Droplets className="h-3 w-3 text-status-info" /> المياه: {UTILITY_LABELS[c.waterResponsibility] || c.waterResponsibility}</Badge>
           )}
           {c.gasResponsibility && (
             <Badge variant="outline" className="gap-1 text-xs">الغاز: {UTILITY_LABELS[c.gasResponsibility] || c.gasResponsibility}</Badge>
@@ -197,30 +197,30 @@ function ContractDetailPanel({ contract }: { contract: any }) {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
         <div className="flex items-center gap-2">
-          <RefreshCw className="h-4 w-4 text-gray-400" />
-          <span className="text-xs text-gray-500">التجديد التلقائي:</span>
-          <Badge className={c.autoRenewal ? "bg-emerald-100 text-emerald-700 text-[10px]" : "bg-gray-100 text-gray-500 text-[10px]"}>
+          <RefreshCw className="h-4 w-4 text-muted-foreground" />
+          <span className="text-xs text-muted-foreground">التجديد التلقائي:</span>
+          <Badge className={c.autoRenewal ? "bg-emerald-100 text-emerald-700 text-[10px]" : "bg-surface-subtle text-muted-foreground text-[10px]"}>
             {c.autoRenewal ? "مفعّل" : "غير مفعّل"}
           </Badge>
         </div>
         {c.insuranceRequired && (
           <div className="flex items-center gap-2">
-            <Shield className="h-4 w-4 text-gray-400" />
-            <span className="text-xs text-gray-500">تأمين مطلوب</span>
+            <Shield className="h-4 w-4 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">تأمين مطلوب</span>
           </div>
         )}
         {c.earlyTerminationFee && Number(c.earlyTerminationFee) > 0 && (
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 text-red-400" />
-            <span className="text-xs text-gray-500">غرامة إنهاء مبكر:</span>
-            <span className="text-xs font-bold text-red-600">{formatCurrency(c.earlyTerminationFee)}</span>
+            <span className="text-xs text-muted-foreground">غرامة إنهاء مبكر:</span>
+            <span className="text-xs font-bold text-status-error-foreground">{formatCurrency(c.earlyTerminationFee)}</span>
           </div>
         )}
       </div>
 
       {c.specialConditions && (
-        <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
-          <p className="text-xs font-bold text-amber-700 mb-1">شروط خاصة</p>
+        <div className="bg-status-warning-surface border border-status-warning-surface rounded-md p-3">
+          <p className="text-xs font-bold text-status-warning-foreground mb-1">شروط خاصة</p>
           <p className="text-xs text-amber-900 whitespace-pre-wrap">{c.specialConditions}</p>
         </div>
       )}
@@ -264,7 +264,7 @@ export default function PropertiesContracts() {
   const filtered = tagFilteredIds ? preFiltered.filter((c: any) => tagFilteredIds.has(c.id)) : preFiltered;
 
   const columns: DataTableColumn<any>[] = [
-    { key: "ejarNumber", header: "رقم إيجار", sortable: true, className: "font-mono text-xs text-blue-700", render: (c) => c.ejarNumber || "—" },
+    { key: "ejarNumber", header: "رقم إيجار", sortable: true, className: "font-mono text-xs text-status-info-foreground", render: (c) => c.ejarNumber || "—" },
     { key: "unitNumber", header: "الوحدة", sortable: true, render: (c) => `${c.unitNumber}${c.buildingName ? ` - ${c.buildingName}` : ""}` },
     { key: "tenantName", header: "المستأجر", sortable: true, className: "font-medium" },
     { key: "startDate", header: "من", sortable: true, className: "text-xs", render: (c) => formatDateAr(c.startDate) },
@@ -277,7 +277,7 @@ export default function PropertiesContracts() {
       header: "تفاصيل",
       render: (c) => (
         <button
-          className="text-gray-400 hover:text-gray-600 p-1"
+          className="text-muted-foreground hover:text-muted-foreground p-1"
           onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === c.id ? null : c.id); }}
         >
           {expandedId === c.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -325,7 +325,7 @@ export default function PropertiesContracts() {
       <TagFilterSelect tagsList={tagsList} selectedTag={selectedTag} onSelect={setSelectedTag} />
 
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5 text-blue-500" /> قائمة العقود</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5 text-status-info" /> قائمة العقود</CardTitle></CardHeader>
         <CardContent className="p-0">
           <DataTable
             columns={columns}
@@ -338,10 +338,10 @@ export default function PropertiesContracts() {
             emptyIcon={<FileText className="h-6 w-6 text-slate-400" />}
             noToolbar
             onRowClick={(c) => navigate(`/properties/contracts/${c.id}`)}
-            rowClassName={(c) => expandedId === c.id ? "bg-blue-50/40" : undefined}
+            rowClassName={(c) => expandedId === c.id ? "bg-status-info-surface/40" : undefined}
             renderRowExtras={(c) =>
               expandedId === c.id ? (
-                <div className="p-4 bg-gray-50/50">
+                <div className="p-4 bg-surface-subtle/50">
                   <Tabs defaultValue="details" dir="rtl">
                     <TabsList className="mb-3">
                       <TabsTrigger value="details" className="gap-1 text-xs"><CalendarDays className="h-3 w-3" /> تفاصيل العقد</TabsTrigger>

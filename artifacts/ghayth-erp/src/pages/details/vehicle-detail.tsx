@@ -54,9 +54,9 @@ const IMPACT_ICONS = {
 };
 
 const SEVERITY_COLORS = {
-  info: "bg-blue-50 border-blue-200 text-blue-800",
-  warning: "bg-amber-50 border-amber-200 text-amber-800",
-  critical: "bg-red-50 border-red-200 text-red-800",
+  info: "bg-status-info-surface border-status-info-surface text-status-info-foreground",
+  warning: "bg-status-warning-surface border-status-warning-surface text-status-warning-foreground",
+  critical: "bg-status-error-surface border-status-error-surface text-status-error-foreground",
 };
 
 const SEVERITY_ICON = {
@@ -254,20 +254,20 @@ export default function VehicleDetail() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border-0 shadow-sm"><CardContent className="p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-blue-50"><Gauge className="w-5 h-5 text-blue-600" /></div>
-          <div><p className="text-xl font-bold">{formatNumber(Number(vehicle.currentMileage || 0))}</p><p className="text-xs text-gray-500">كم</p></div>
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-status-info-surface"><Gauge className="w-5 h-5 text-status-info-foreground" /></div>
+          <div><p className="text-xl font-bold">{formatNumber(Number(vehicle.currentMileage || 0))}</p><p className="text-xs text-muted-foreground">كم</p></div>
         </CardContent></Card>
         <Card className="border-0 shadow-sm"><CardContent className="p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-green-50"><Fuel className="w-5 h-5 text-green-600" /></div>
-          <div><p className="text-xl font-bold">{formatCurrency(totalFuelCost)}</p><p className="text-xs text-gray-500">تكلفة الوقود</p></div>
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-status-success-surface"><Fuel className="w-5 h-5 text-status-success-foreground" /></div>
+          <div><p className="text-xl font-bold">{formatCurrency(totalFuelCost)}</p><p className="text-xs text-muted-foreground">تكلفة الوقود</p></div>
         </CardContent></Card>
         <Card className="border-0 shadow-sm"><CardContent className="p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-orange-50"><Wrench className="w-5 h-5 text-orange-600" /></div>
-          <div><p className="text-xl font-bold">{formatCurrency(totalMaintenanceCost)}</p><p className="text-xs text-gray-500">تكلفة الصيانة</p></div>
+          <div><p className="text-xl font-bold">{formatCurrency(totalMaintenanceCost)}</p><p className="text-xs text-muted-foreground">تكلفة الصيانة</p></div>
         </CardContent></Card>
         <Card className="border-0 shadow-sm"><CardContent className="p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-purple-50"><MapPin className="w-5 h-5 text-purple-600" /></div>
-          <div><p className="text-xl font-bold">{trips.length}</p><p className="text-xs text-gray-500">الرحلات</p></div>
+          <div><p className="text-xl font-bold">{trips.length}</p><p className="text-xs text-muted-foreground">الرحلات</p></div>
         </CardContent></Card>
       </div>
 
@@ -280,30 +280,30 @@ export default function VehicleDetail() {
         return (
           <Card className="border-0 shadow-sm bg-gradient-to-l from-blue-50/30 to-white">
             <CardContent className="p-4">
-              <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                <Gauge className="w-4 h-4 text-blue-600" />
+              <p className="text-sm font-semibold text-status-neutral-foreground mb-3 flex items-center gap-2">
+                <Gauge className="w-4 h-4 text-status-info-foreground" />
                 ملخص التشغيل
               </p>
               <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                 <div className="text-center p-2 bg-white rounded-lg border">
-                  <p className="text-lg font-bold text-blue-600">{formatNumber(totalDistance)} كم</p>
-                  <p className="text-[10px] text-gray-500">إجمالي المسافة</p>
+                  <p className="text-lg font-bold text-status-info-foreground">{formatNumber(totalDistance)} كم</p>
+                  <p className="text-[10px] text-muted-foreground">إجمالي المسافة</p>
                 </div>
                 <div className="text-center p-2 bg-white rounded-lg border">
-                  <p className="text-lg font-bold text-green-600">{totalLiters.toFixed(0)} لتر</p>
-                  <p className="text-[10px] text-gray-500">إجمالي الوقود</p>
+                  <p className="text-lg font-bold text-status-success-foreground">{totalLiters.toFixed(0)} لتر</p>
+                  <p className="text-[10px] text-muted-foreground">إجمالي الوقود</p>
                 </div>
                 <div className="text-center p-2 bg-white rounded-lg border">
                   <p className="text-lg font-bold text-teal-600">{fuelEfficiency} كم/لتر</p>
-                  <p className="text-[10px] text-gray-500">كفاءة الوقود</p>
+                  <p className="text-[10px] text-muted-foreground">كفاءة الوقود</p>
                 </div>
                 <div className="text-center p-2 bg-white rounded-lg border">
-                  <p className="text-lg font-bold text-amber-600">{formatCurrency(totalOperatingCost)}</p>
-                  <p className="text-[10px] text-gray-500">تكلفة التشغيل الكلية</p>
+                  <p className="text-lg font-bold text-status-warning-foreground">{formatCurrency(totalOperatingCost)}</p>
+                  <p className="text-[10px] text-muted-foreground">تكلفة التشغيل الكلية</p>
                 </div>
                 <div className="text-center p-2 bg-white rounded-lg border">
                   <p className="text-lg font-bold text-purple-600">{maintenance.filter((m: any) => m.status !== "completed").length}</p>
-                  <p className="text-[10px] text-gray-500">صيانة قيد التنفيذ</p>
+                  <p className="text-[10px] text-muted-foreground">صيانة قيد التنفيذ</p>
                 </div>
               </div>
             </CardContent>
@@ -341,17 +341,17 @@ export default function VehicleDetail() {
       {activeTab === "overview" && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="border-0 shadow-sm bg-blue-50/50">
+            <Card className="border-0 shadow-sm bg-status-info-surface">
               <CardContent className="p-4 text-center">
-                <p className="text-xs text-blue-600 mb-1">المسافة المقطوعة</p>
-                <p className="text-xl font-bold text-blue-700">{formatNumber(Number(vehicle.currentMileage || 0))} كم</p>
+                <p className="text-xs text-status-info-foreground mb-1">المسافة المقطوعة</p>
+                <p className="text-xl font-bold text-status-info-foreground">{formatNumber(Number(vehicle.currentMileage || 0))} كم</p>
               </CardContent>
             </Card>
-            <Card className="border-0 shadow-sm bg-green-50/50">
+            <Card className="border-0 shadow-sm bg-status-success-surface">
               <CardContent className="p-4 text-center">
-                <p className="text-xs text-green-600 mb-1">تكلفة الوقود</p>
-                <p className="text-xl font-bold text-green-700">{formatCurrency(totalFuelCost)}</p>
-                <p className="text-[10px] text-green-500">{fuelLogs.length} تعبئة</p>
+                <p className="text-xs text-status-success-foreground mb-1">تكلفة الوقود</p>
+                <p className="text-xl font-bold text-status-success-foreground">{formatCurrency(totalFuelCost)}</p>
+                <p className="text-[10px] text-status-success">{fuelLogs.length} تعبئة</p>
               </CardContent>
             </Card>
             <Card className="border-0 shadow-sm bg-orange-50/50">
@@ -374,33 +374,33 @@ export default function VehicleDetail() {
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <Car className="w-4 h-4 text-blue-500" /> معلومات أساسية
+                  <Car className="w-4 h-4 text-status-info" /> معلومات أساسية
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
-                    <p className="text-xs text-gray-500">الصانع / الموديل</p>
+                    <p className="text-xs text-muted-foreground">الصانع / الموديل</p>
                     <p className="font-medium">{vehicle.make} {vehicle.model}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">السنة</p>
+                    <p className="text-xs text-muted-foreground">السنة</p>
                     <p className="font-medium">{vehicle.year || "-"}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">رقم اللوحة</p>
+                    <p className="text-xs text-muted-foreground">رقم اللوحة</p>
                     <p className="font-medium font-mono">{vehicle.plateNumber}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">اللون</p>
+                    <p className="text-xs text-muted-foreground">اللون</p>
                     <p className="font-medium">{vehicle.color || "-"}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">السائق</p>
+                    <p className="text-xs text-muted-foreground">السائق</p>
                     <p className="font-medium">{vehicle.driverName || "غير معين"}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">نوع الوقود</p>
+                    <p className="text-xs text-muted-foreground">نوع الوقود</p>
                     <p className="font-medium">{fuelTypeLabel(vehicle.fuelType)}</p>
                   </div>
                 </div>
@@ -417,19 +417,19 @@ export default function VehicleDetail() {
                 <CardContent>
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
-                      <p className="text-xs text-gray-500">الشركة</p>
+                      <p className="text-xs text-muted-foreground">الشركة</p>
                       <p className="font-medium">{insuranceList[0].provider || "-"}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500">رقم البوليصة</p>
+                      <p className="text-xs text-muted-foreground">رقم البوليصة</p>
                       <p className="font-medium font-mono">{insuranceList[0].policyNumber || "-"}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500">بداية التأمين</p>
+                      <p className="text-xs text-muted-foreground">بداية التأمين</p>
                       <p className="font-medium">{formatDateAr(insuranceList[0].startDate)}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500">نهاية التأمين</p>
+                      <p className="text-xs text-muted-foreground">نهاية التأمين</p>
                       <p className="font-medium">{formatDateAr(insuranceList[0].endDate)}</p>
                     </div>
                   </div>
@@ -466,7 +466,7 @@ export default function VehicleDetail() {
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <Fuel className="w-4 h-4 text-green-500" /> سجل استهلاك الوقود
+                  <Fuel className="w-4 h-4 text-status-success" /> سجل استهلاك الوقود
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -485,8 +485,8 @@ export default function VehicleDetail() {
                     <div className="space-y-2">
                       {months.map(([month, data]) => (
                         <div key={month} className="flex items-center gap-3">
-                          <span className="text-xs text-gray-500 w-16 text-left font-mono">{month}</span>
-                          <div className="flex-1 bg-gray-100 rounded-full h-5 relative overflow-hidden">
+                          <span className="text-xs text-muted-foreground w-16 text-left font-mono">{month}</span>
+                          <div className="flex-1 bg-surface-subtle rounded-full h-5 relative overflow-hidden">
                             <div
                               className="bg-green-400 h-full rounded-full transition-all"
                               style={{ width: `${(data.cost / maxCost) * 100}%` }}
@@ -495,7 +495,7 @@ export default function VehicleDetail() {
                               {formatCurrency(data.cost)} ({data.liters.toFixed(0)} لتر)
                             </span>
                           </div>
-                          <span className="text-[10px] text-gray-400 w-10">{data.count} مرة</span>
+                          <span className="text-[10px] text-muted-foreground w-10">{data.count} مرة</span>
                         </div>
                       ))}
                     </div>
@@ -515,12 +515,12 @@ export default function VehicleDetail() {
               <CardContent>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {maintenance.slice(0, 8).map((m: any, idx: number) => (
-                    <div key={m.id || idx} className="flex items-center justify-between p-2 rounded-lg border border-gray-100 text-sm">
+                    <div key={m.id || idx} className="flex items-center justify-between p-2 rounded-lg border border-border text-sm">
                       <div className="flex items-center gap-2">
                         <div className={cn("w-2 h-2 rounded-full", m.status === "completed" ? "bg-green-500" : m.status === "in_progress" ? "bg-orange-500" : "bg-gray-400")} />
                         <div>
                           <p className="text-xs font-medium">{m.type || m.description || "صيانة"}</p>
-                          <p className="text-[10px] text-gray-500">{formatDateAr(m.scheduledDate || m.createdAt)}</p>
+                          <p className="text-[10px] text-muted-foreground">{formatDateAr(m.scheduledDate || m.createdAt)}</p>
                         </div>
                       </div>
                       <div className="text-right flex items-center gap-2">
@@ -541,12 +541,12 @@ export default function VehicleDetail() {
           <Card>
             <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Car className="w-5 h-5" /> المعلومات الأساسية</CardTitle></CardHeader>
             <CardContent className="space-y-3 text-sm">
-              <div className="grid grid-cols-3 py-2 border-b"><span className="text-gray-500">رقم اللوحة</span><span className="col-span-2 font-mono">{vehicle.plateNumber}</span></div>
-              {vehicle.vinNumber && <div className="grid grid-cols-3 py-2 border-b"><span className="text-gray-500">الشاصي</span><span className="col-span-2 font-mono text-xs" dir="ltr">{vehicle.vinNumber}</span></div>}
-              <div className="grid grid-cols-3 py-2 border-b"><span className="text-gray-500">اللون</span><span className="col-span-2">{vehicle.color || "-"}</span></div>
-              <div className="grid grid-cols-3 py-2 border-b"><span className="text-gray-500">نوع الوقود</span><span className="col-span-2">{fuelTypeLabel(vehicle.fuelType)}</span></div>
-              <div className="grid grid-cols-3 py-2 border-b"><span className="text-gray-500">السائق</span><span className="col-span-2">{vehicle.driverName || "-"}</span></div>
-              {vehicle.driverPhone && <div className="grid grid-cols-3 py-2"><span className="text-gray-500">هاتف السائق</span><span className="col-span-2" dir="ltr">{vehicle.driverPhone}</span></div>}
+              <div className="grid grid-cols-3 py-2 border-b"><span className="text-muted-foreground">رقم اللوحة</span><span className="col-span-2 font-mono">{vehicle.plateNumber}</span></div>
+              {vehicle.vinNumber && <div className="grid grid-cols-3 py-2 border-b"><span className="text-muted-foreground">الشاصي</span><span className="col-span-2 font-mono text-xs" dir="ltr">{vehicle.vinNumber}</span></div>}
+              <div className="grid grid-cols-3 py-2 border-b"><span className="text-muted-foreground">اللون</span><span className="col-span-2">{vehicle.color || "-"}</span></div>
+              <div className="grid grid-cols-3 py-2 border-b"><span className="text-muted-foreground">نوع الوقود</span><span className="col-span-2">{fuelTypeLabel(vehicle.fuelType)}</span></div>
+              <div className="grid grid-cols-3 py-2 border-b"><span className="text-muted-foreground">السائق</span><span className="col-span-2">{vehicle.driverName || "-"}</span></div>
+              {vehicle.driverPhone && <div className="grid grid-cols-3 py-2"><span className="text-muted-foreground">هاتف السائق</span><span className="col-span-2" dir="ltr">{vehicle.driverPhone}</span></div>}
             </CardContent>
           </Card>
 
@@ -554,25 +554,25 @@ export default function VehicleDetail() {
             <Card>
               <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Shield className="w-5 h-5" /> التأمين الحالي</CardTitle></CardHeader>
               <CardContent className="space-y-3 text-sm">
-                <div className="grid grid-cols-3 py-2 border-b"><span className="text-gray-500">الشركة</span><span className="col-span-2">{insuranceList[0].provider || "-"}</span></div>
-                <div className="grid grid-cols-3 py-2 border-b"><span className="text-gray-500">رقم البوليصة</span><span className="col-span-2 font-mono">{insuranceList[0].policyNumber || "-"}</span></div>
-                <div className="grid grid-cols-3 py-2 border-b"><span className="text-gray-500">النوع</span><span className="col-span-2">{insuranceTypeLabel(insuranceList[0].type)}</span></div>
-                <div className="grid grid-cols-3 py-2 border-b"><span className="text-gray-500">الفترة</span><span className="col-span-2">{insuranceList[0].startDate ? formatDateAr(insuranceList[0].startDate) : "-"} - {insuranceList[0].endDate ? formatDateAr(insuranceList[0].endDate) : "-"}</span></div>
-                <div className="grid grid-cols-3 py-2"><span className="text-gray-500">القسط</span><span className="col-span-2">{formatCurrency(Number(insuranceList[0].premium || 0))}</span></div>
+                <div className="grid grid-cols-3 py-2 border-b"><span className="text-muted-foreground">الشركة</span><span className="col-span-2">{insuranceList[0].provider || "-"}</span></div>
+                <div className="grid grid-cols-3 py-2 border-b"><span className="text-muted-foreground">رقم البوليصة</span><span className="col-span-2 font-mono">{insuranceList[0].policyNumber || "-"}</span></div>
+                <div className="grid grid-cols-3 py-2 border-b"><span className="text-muted-foreground">النوع</span><span className="col-span-2">{insuranceTypeLabel(insuranceList[0].type)}</span></div>
+                <div className="grid grid-cols-3 py-2 border-b"><span className="text-muted-foreground">الفترة</span><span className="col-span-2">{insuranceList[0].startDate ? formatDateAr(insuranceList[0].startDate) : "-"} - {insuranceList[0].endDate ? formatDateAr(insuranceList[0].endDate) : "-"}</span></div>
+                <div className="grid grid-cols-3 py-2"><span className="text-muted-foreground">القسط</span><span className="col-span-2">{formatCurrency(Number(insuranceList[0].premium || 0))}</span></div>
               </CardContent>
             </Card>
           )}
           {insuranceList.length === 0 && (
             <Card>
               <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Shield className="w-5 h-5" /> التأمين</CardTitle></CardHeader>
-              <CardContent><p className="text-center text-gray-400 py-4">لا توجد بيانات تأمين</p></CardContent>
+              <CardContent><p className="text-center text-muted-foreground py-4">لا توجد بيانات تأمين</p></CardContent>
             </Card>
           )}
 
           <Card className="lg:col-span-2">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
-                <FileText className="w-5 h-5 text-blue-500" />
+                <FileText className="w-5 h-5 text-status-info" />
                 بيانات التسجيل والفحص — الربط الحكومي (تم)
               </CardTitle>
             </CardHeader>
@@ -603,7 +603,7 @@ export default function VehicleDetail() {
                   { key: "toLocation", header: "إلى", render: (t) => t.toLocation || "-" },
                   { key: "distance", header: "المسافة", ltr: true, render: (t) => <span className="font-mono">{Number(t.distance || 0).toFixed(1)} km</span> },
                   { key: "cost", header: "التكلفة", render: (t) => formatCurrency(Number(t.cost || 0)) },
-                  { key: "driverName", header: "السائق", render: (t) => <span className="text-gray-500">{t.driverName || "-"}</span> },
+                  { key: "driverName", header: "السائق", render: (t) => <span className="text-muted-foreground">{t.driverName || "-"}</span> },
                   { key: "status", header: "الحالة", render: (t) => <PageStatusBadge status={t.status} /> },
                 ]}
                 data={trips}
@@ -621,13 +621,13 @@ export default function VehicleDetail() {
           <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Wrench className="w-5 h-5" /> سجل الصيانة ({maintenance.length})</CardTitle></CardHeader>
           <CardContent className="p-0">
             {maintenance.length === 0 ? (
-              <p className="text-center text-gray-400 py-8">لا توجد سجلات صيانة</p>
+              <p className="text-center text-muted-foreground py-8">لا توجد سجلات صيانة</p>
             ) : (
               <DataTable
                 columns={[
                   { key: "type", header: "النوع", render: (m) => <span className="font-medium">{maintenanceTypeLabel(m.type)}</span> },
-                  { key: "description", header: "الوصف", render: (m) => <span className="text-gray-500">{m.description || "-"}</span> },
-                  { key: "serviceDate", header: "التاريخ", render: (m) => <span className="text-gray-500">{m.serviceDate ? formatDateAr(m.serviceDate) : "-"}</span> },
+                  { key: "description", header: "الوصف", render: (m) => <span className="text-muted-foreground">{m.description || "-"}</span> },
+                  { key: "serviceDate", header: "التاريخ", render: (m) => <span className="text-muted-foreground">{m.serviceDate ? formatDateAr(m.serviceDate) : "-"}</span> },
                   { key: "cost", header: "التكلفة", render: (m) => Number(m.cost) > 0 ? formatCurrency(Number(m.cost)) : "-" },
                   { key: "mileageAtService", header: "العداد", ltr: true, render: (m) => <span className="font-mono">{m.mileageAtService ? `${formatNumber(Number(m.mileageAtService))} km` : "-"}</span> },
                   { key: "status", header: "الحالة", render: (m) => <PageStatusBadge status={m.status} /> },
@@ -647,15 +647,15 @@ export default function VehicleDetail() {
           <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Fuel className="w-5 h-5" /> سجل الوقود ({fuelLogs.length})</CardTitle></CardHeader>
           <CardContent className="p-0">
             {fuelLogs.length === 0 ? (
-              <p className="text-center text-gray-400 py-8">لا توجد سجلات وقود</p>
+              <p className="text-center text-muted-foreground py-8">لا توجد سجلات وقود</p>
             ) : (
               <DataTable
                 columns={[
-                  { key: "fuelDate", header: "التاريخ", render: (f) => <span className="text-gray-500">{f.fuelDate ? formatDateAr(f.fuelDate) : "-"}</span> },
+                  { key: "fuelDate", header: "التاريخ", render: (f) => <span className="text-muted-foreground">{f.fuelDate ? formatDateAr(f.fuelDate) : "-"}</span> },
                   { key: "liters", header: "الكمية", render: (f) => `${Number(f.liters || 0).toFixed(1)} لتر` },
                   { key: "totalCost", header: "التكلفة", render: (f) => formatCurrency(Number(f.totalCost || 0)) },
                   { key: "mileageAtFuel", header: "العداد", ltr: true, render: (f) => <span className="font-mono">{f.mileageAtFuel ? `${formatNumber(Number(f.mileageAtFuel))} km` : "-"}</span> },
-                  { key: "stationName", header: "المحطة", render: (f) => <span className="text-gray-500">{f.stationName || "-"}</span> },
+                  { key: "stationName", header: "المحطة", render: (f) => <span className="text-muted-foreground">{f.stationName || "-"}</span> },
                 ]}
                 data={fuelLogs}
                 noToolbar
@@ -712,17 +712,17 @@ export default function VehicleDetail() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                  <div className="text-center p-3 bg-blue-50 rounded-lg border border-blue-100">
-                    <p className="text-lg font-bold text-blue-700">{formatCurrency(Number(tco.totalCost || 0))}</p>
-                    <p className="text-[10px] text-blue-600">التكلفة الإجمالية</p>
+                  <div className="text-center p-3 bg-status-info-surface rounded-lg border border-status-info-surface">
+                    <p className="text-lg font-bold text-status-info-foreground">{formatCurrency(Number(tco.totalCost || 0))}</p>
+                    <p className="text-[10px] text-status-info-foreground">التكلفة الإجمالية</p>
                   </div>
                   <div className="text-center p-3 bg-orange-50 rounded-lg border border-orange-100">
                     <p className="text-lg font-bold text-orange-700">{formatCurrency(Number(tco.costPerKm || 0))}</p>
                     <p className="text-[10px] text-orange-600">تكلفة/كم</p>
                   </div>
-                  <div className="text-center p-3 bg-gray-50 rounded-lg border">
+                  <div className="text-center p-3 bg-surface-subtle rounded-lg border">
                     <p className="text-lg font-bold">{Number(tco.totalKm || 0).toLocaleString("ar-SA")}</p>
-                    <p className="text-[10px] text-gray-500">إجمالي الكيلومترات</p>
+                    <p className="text-[10px] text-muted-foreground">إجمالي الكيلومترات</p>
                   </div>
                   <div className="text-center p-3 bg-purple-50 rounded-lg border border-purple-100">
                     <p className="text-lg font-bold text-purple-700">{Number(tco.totalTrips || 0)}</p>
@@ -731,7 +731,7 @@ export default function VehicleDetail() {
                 </div>
                 {tco.breakdown && (
                   <div className="space-y-2">
-                    <p className="text-xs font-semibold text-gray-500 mb-2">تفصيل التكاليف</p>
+                    <p className="text-xs font-semibold text-muted-foreground mb-2">تفصيل التكاليف</p>
                     {[
                       { label: "سعر الشراء", value: tco.breakdown.purchase, color: "bg-blue-500" },
                       { label: "الاستهلاك", value: tco.breakdown.depreciation, color: "bg-gray-500" },
@@ -743,12 +743,12 @@ export default function VehicleDetail() {
                       const pct = tco.totalCost > 0 ? Math.round((Number(item.value) / tco.totalCost) * 100) : 0;
                       return (
                         <div key={item.label} className="flex items-center gap-3 text-sm">
-                          <span className="w-20 text-xs text-gray-500">{item.label}</span>
-                          <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+                          <span className="w-20 text-xs text-muted-foreground">{item.label}</span>
+                          <div className="flex-1 h-3 bg-surface-subtle rounded-full overflow-hidden">
                             <div className={cn("h-full rounded-full", item.color)} style={{ width: `${pct}%` }} />
                           </div>
                           <span className="w-24 text-xs font-bold text-left">{formatCurrency(Number(item.value))}</span>
-                          <span className="w-10 text-[10px] text-gray-400 text-left">{pct}%</span>
+                          <span className="w-10 text-[10px] text-muted-foreground text-left">{pct}%</span>
                         </div>
                       );
                     })}
@@ -758,7 +758,7 @@ export default function VehicleDetail() {
             </Card>
           )}
           <Card>
-            <CardHeader><CardTitle className="text-lg flex items-center gap-2"><BookOpen className="h-5 w-5 text-blue-600" /> الملف المالي الشامل</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-lg flex items-center gap-2"><BookOpen className="h-5 w-5 text-status-info-foreground" /> الملف المالي الشامل</CardTitle></CardHeader>
             <CardContent>
               <EntityFinancialProfile entityType="vehicle" entityId={id} />
             </CardContent>

@@ -59,7 +59,7 @@ const severityLevels = [
   {
     value: "low",
     label: "منخفضة",
-    color: "bg-yellow-50 text-yellow-700 border-yellow-300",
+    color: "bg-status-warning-surface text-status-warning-foreground border-yellow-300",
     icon: "🟡",
   },
   {
@@ -71,7 +71,7 @@ const severityLevels = [
   {
     value: "high",
     label: "عالية",
-    color: "bg-red-50 text-red-700 border-red-300",
+    color: "bg-status-error-surface text-status-error-foreground border-status-error-surface",
     icon: "🔴",
   },
 ];
@@ -157,13 +157,13 @@ function DraftManager({ defaults }: { defaults: ViolationForm }) {
   if (!visible) return null;
 
   return (
-    <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+    <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
       <span>تم استعادة مسودة محفوظة سابقاً</span>
       <Button
         type="button"
         variant="ghost"
         size="sm"
-        className="text-amber-600 h-7 px-2"
+        className="text-status-warning-foreground h-7 px-2"
         onClick={() => {
           localStorage.removeItem(STORAGE_KEY);
           form.reset(defaults);
@@ -189,9 +189,9 @@ function ViolationTypeSelector() {
 
   return (
     <div>
-      <h3 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
+      <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
         <AlertTriangle className="h-4 w-4" /> نوع المخالفة{" "}
-        <span className="text-red-500">*</span>
+        <span className="text-status-error">*</span>
       </h3>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         {violationTypes.map((vt) => (
@@ -204,19 +204,19 @@ function ViolationTypeSelector() {
             className={cn(
               "p-3 rounded-xl border-2 text-right transition-all",
               currentType === vt.value
-                ? "border-red-300 bg-red-50 ring-2 ring-red-200 ring-offset-1"
-                : "border-gray-200 hover:border-gray-300",
+                ? "border-status-error-surface bg-status-error-surface ring-2 ring-red-200 ring-offset-1"
+                : "border-border hover:border-border",
             )}
           >
             <div className="flex items-center gap-2 mb-1">
               <span className="text-lg">{vt.icon}</span>
               <span className="text-sm font-medium">{vt.label}</span>
             </div>
-            <p className="text-xs text-gray-500">{vt.desc}</p>
+            <p className="text-xs text-muted-foreground">{vt.desc}</p>
           </button>
         ))}
       </div>
-      {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+      {error && <p className="text-xs text-status-error-foreground mt-1">{error}</p>}
     </div>
   );
 }
@@ -227,7 +227,7 @@ function SeveritySelector() {
 
   return (
     <div>
-      <h3 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
+      <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
         <Shield className="h-4 w-4" /> مستوى الخطورة
       </h3>
       <div className="grid grid-cols-3 gap-3">
@@ -244,7 +244,7 @@ function SeveritySelector() {
               "p-4 rounded-xl border-2 text-center transition-all",
               currentSeverity === sl.value
                 ? sl.color + " ring-2 ring-offset-1"
-                : "border-gray-200 hover:border-gray-300",
+                : "border-border hover:border-border",
             )}
           >
             <span className="text-2xl block mb-1">{sl.icon}</span>
@@ -265,13 +265,13 @@ function SelectedEmployeeCard({ employees }: { employees: any[] }) {
   if (!emp) return null;
 
   return (
-    <div className="p-3 bg-gray-50 rounded-lg border flex items-center gap-3">
-      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm">
+    <div className="p-3 bg-surface-subtle rounded-lg border flex items-center gap-3">
+      <div className="w-10 h-10 rounded-full bg-status-info-surface flex items-center justify-center text-status-info-foreground font-bold text-sm">
         {(emp.name || "؟").charAt(0)}
       </div>
       <div>
         <p className="font-medium text-sm">{emp.name}</p>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-muted-foreground">
           {emp.jobTitle || emp.departmentName || "—"}
         </p>
       </div>
@@ -298,10 +298,10 @@ function ViolationSummary({ employees }: { employees: any[] }) {
       className={cn(
         "p-4 rounded-xl border",
         severity === "high"
-          ? "bg-red-50 border-red-200"
+          ? "bg-status-error-surface border-status-error-surface"
           : severity === "medium"
             ? "bg-orange-50 border-orange-200"
-            : "bg-yellow-50 border-yellow-200",
+            : "bg-status-warning-surface border-status-warning-surface",
       )}
     >
       <h4 className="text-sm font-semibold mb-2">ملخص المخالفة</h4>

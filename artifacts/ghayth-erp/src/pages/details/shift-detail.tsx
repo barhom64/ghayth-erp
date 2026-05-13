@@ -47,18 +47,18 @@ export default function ShiftDetail() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Clock className="h-4 w-4 text-gray-500" />
+            <Clock className="h-4 w-4 text-muted-foreground" />
             بيانات الوردية
           </CardTitle>
         </CardHeader>
         <CardContent className="text-sm space-y-2">
           <div className="grid grid-cols-2 gap-3">
-            <div><span className="text-gray-500">الاسم:</span> {shift?.name || "—"}</div>
-            <div><span className="text-gray-500">من:</span> {shift?.startTime || "—"}</div>
-            <div><span className="text-gray-500">إلى:</span> {shift?.endTime || "—"}</div>
-            <div><span className="text-gray-500">أنشئت:</span> {shift?.createdAt ? formatDateAr(shift.createdAt) : "—"}</div>
+            <div><span className="text-muted-foreground">الاسم:</span> {shift?.name || "—"}</div>
+            <div><span className="text-muted-foreground">من:</span> {shift?.startTime || "—"}</div>
+            <div><span className="text-muted-foreground">إلى:</span> {shift?.endTime || "—"}</div>
+            <div><span className="text-muted-foreground">أنشئت:</span> {shift?.createdAt ? formatDateAr(shift.createdAt) : "—"}</div>
           </div>
-          {shift?.notes && <div className="pt-2 border-t"><span className="text-gray-500">ملاحظات:</span> {shift.notes}</div>}
+          {shift?.notes && <div className="pt-2 border-t"><span className="text-muted-foreground">ملاحظات:</span> {shift.notes}</div>}
         </CardContent>
       </Card>
     </div>

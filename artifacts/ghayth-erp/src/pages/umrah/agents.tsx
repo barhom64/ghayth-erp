@@ -103,9 +103,9 @@ export default function UmrahAgents() {
 
   const activeCount = items.filter((a: any) => a.status === "active").length;
   const kpiCards = [
-    { label: "إجمالي الوكلاء", value: items.length, icon: Building2, color: "text-blue-600 bg-blue-50" },
-    { label: "وكلاء نشطون", value: activeCount, icon: Users, color: "text-green-600 bg-green-50" },
-    { label: "وكلاء موقوفون", value: items.length - activeCount, icon: Building2, color: "text-red-600 bg-red-50" },
+    { label: "إجمالي الوكلاء", value: items.length, icon: Building2, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "وكلاء نشطون", value: activeCount, icon: Users, color: "text-status-success-foreground bg-status-success-surface" },
+    { label: "وكلاء موقوفون", value: items.length - activeCount, icon: Building2, color: "text-status-error-foreground bg-status-error-surface" },
   ];
 
   const columns: DataTableColumn<any>[] = [
@@ -120,7 +120,7 @@ export default function UmrahAgents() {
       key: "id" as any, header: "", render: (a) => (
         <div className="flex gap-1">
           <Button variant="ghost" size="icon" onClick={() => openEdit(a)}><Pencil className="h-4 w-4" /></Button>
-          <Button variant="ghost" size="icon" onClick={() => setDeleteId(a.id)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
+          <Button variant="ghost" size="icon" onClick={() => setDeleteId(a.id)}><Trash2 className="h-4 w-4 text-status-error" /></Button>
         </div>
       ),
     },
@@ -143,7 +143,7 @@ export default function UmrahAgents() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{c.value}</p>
-                <p className="text-xs text-gray-500">{c.label}</p>
+                <p className="text-xs text-muted-foreground">{c.label}</p>
               </div>
             </CardContent>
           </Card>

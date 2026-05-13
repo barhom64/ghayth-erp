@@ -63,7 +63,7 @@ describe("hr/shifts-management — assign-shift form on FormShell + zod (fixes h
   it("stays inline Card — CONTRIBUTING.md §3.4 (no modal)", () => {
     expect(SRC).not.toMatch(/<Dialog\b/);
     // The Card wraps the inline form section.
-    expect(SRC).toContain('Card className="mb-4 border-blue-200"');
+    expect(SRC).toContain('Card className="mb-4 border-status-info-surface"');
   });
 
   it("removes the old useState({assignmentId, shiftId, startDate}) shape", () => {

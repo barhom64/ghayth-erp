@@ -96,7 +96,7 @@ export default function WarehouseSupplierDetail() {
           className={`h-4 w-4 ${s <= Math.round(rating) ? "text-amber-400 fill-amber-400" : "text-gray-300"}`}
         />
       ))}
-      {rating > 0 && <span className="ms-1 text-xs text-gray-500">{rating.toFixed(1)}</span>}
+      {rating > 0 && <span className="ms-1 text-xs text-muted-foreground">{rating.toFixed(1)}</span>}
     </div>
   );
 
@@ -105,7 +105,7 @@ export default function WarehouseSupplierDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Truck className="h-4 w-4 text-gray-500" />
+            <Truck className="h-4 w-4 text-muted-foreground" />
             بيانات المورد
           </CardTitle>
         </CardHeader>
@@ -113,54 +113,54 @@ export default function WarehouseSupplierDetail() {
           <div className="flex items-baseline gap-2 border-b pb-3">
             <span className="text-2xl font-bold text-gray-900">{supplier?.name || "-"}</span>
             {supplier?.contactPerson && (
-              <span className="text-xs text-gray-500">— {supplier.contactPerson}</span>
+              <span className="text-xs text-muted-foreground">— {supplier.contactPerson}</span>
             )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             {supplier?.phone && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+                <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
                   <Phone className="h-3 w-3" /> الهاتف
                 </p>
-                <span className="text-gray-800 font-mono" dir="ltr">
+                <span className="text-status-neutral-foreground font-mono" dir="ltr">
                   {supplier.phone}
                 </span>
               </div>
             )}
             {supplier?.email && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+                <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
                   <Mail className="h-3 w-3" /> البريد
                 </p>
-                <span className="text-gray-800" dir="ltr">
+                <span className="text-status-neutral-foreground" dir="ltr">
                   {supplier.email}
                 </span>
               </div>
             )}
             {supplier?.taxNumber && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الرقم الضريبي</p>
-                <span className="text-gray-800 font-mono">{supplier.taxNumber}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">الرقم الضريبي</p>
+                <span className="text-status-neutral-foreground font-mono">{supplier.taxNumber}</span>
               </div>
             )}
             {supplier?.paymentTerms && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">شروط الدفع</p>
+                <p className="text-xs text-muted-foreground mb-0.5">شروط الدفع</p>
                 <Badge variant="outline">{supplier.paymentTerms}</Badge>
               </div>
             )}
             {supplier?.address && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+                <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
                   <MapPin className="h-3 w-3" /> العنوان
                 </p>
-                <span className="text-gray-800">{supplier.address}</span>
+                <span className="text-status-neutral-foreground">{supplier.address}</span>
               </div>
             )}
             {rating > 0 && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">التقييم</p>
+                <p className="text-xs text-muted-foreground mb-0.5">التقييم</p>
                 {ratingStars}
               </div>
             )}
@@ -168,8 +168,8 @@ export default function WarehouseSupplierDetail() {
 
           {supplier?.notes && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">ملاحظات</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{supplier.notes}</p>
+              <p className="text-xs text-muted-foreground mb-1">ملاحظات</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{supplier.notes}</p>
             </div>
           )}
         </CardContent>
@@ -182,11 +182,11 @@ export default function WarehouseSupplierDetail() {
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div className="flex justify-between">
-              <span className="text-xs text-gray-500">عدد الأصناف الموردة</span>
+              <span className="text-xs text-muted-foreground">عدد الأصناف الموردة</span>
               <span className="font-semibold">{productsCount}</span>
             </div>
             <div className="flex justify-between border-t pt-2">
-              <span className="text-xs text-gray-500">إجمالي المشتريات</span>
+              <span className="text-xs text-muted-foreground">إجمالي المشتريات</span>
               <span className="font-semibold text-gray-900">{formatCurrency(totalPurchased)}</span>
             </div>
           </CardContent>

@@ -245,20 +245,20 @@ function CrudSection({ title, endpoint, queryKey, fields }: {
       )}
       <Card><CardContent className="p-0">
         <table className="w-full text-sm">
-          <thead><tr className="border-b bg-gray-50">{fields.map((f) => <th key={f.name} className="p-3 text-right">{f.label}</th>)}<th className="p-3 text-start w-24">إجراءات</th></tr></thead>
+          <thead><tr className="border-b bg-surface-subtle">{fields.map((f) => <th key={f.name} className="p-3 text-right">{f.label}</th>)}<th className="p-3 text-start w-24">إجراءات</th></tr></thead>
           <tbody>
             {(Array.isArray(items) ? items : []).map((item: any, idx: number) => (
-              <tr key={item.id || idx} className="border-b hover:bg-gray-50">
+              <tr key={item.id || idx} className="border-b hover:bg-surface-subtle">
                 {fields.map((f) => <td key={f.name} className="p-3">{item[f.name] || "-"}</td>)}
                 <td className="p-3">
                   <div className="flex gap-1">
                     <Button variant="ghost" size="sm" onClick={() => handleEdit(item)} title="تعديل"><Pencil className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="sm" onClick={() => setDeletingItem({ id: item.id, label: (fields[0] && item[fields[0].name]) || "—" })} disabled={deleting === item.id} title="حذف" className="text-red-500 hover:text-red-700"><Trash2 className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="sm" onClick={() => setDeletingItem({ id: item.id, label: (fields[0] && item[fields[0].name]) || "—" })} disabled={deleting === item.id} title="حذف" className="text-status-error hover:text-status-error-foreground"><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 </td>
               </tr>
             ))}
-            {(!Array.isArray(items) || items.length === 0) && <tr><td colSpan={fields.length + 1} className="p-8 text-center text-gray-400">لا توجد بيانات</td></tr>}
+            {(!Array.isArray(items) || items.length === 0) && <tr><td colSpan={fields.length + 1} className="p-8 text-center text-muted-foreground">لا توجد بيانات</td></tr>}
           </tbody>
         </table>
       </CardContent></Card>
@@ -333,9 +333,9 @@ export default function SettingsPage() {
 }
 
 const SOURCE_LABELS: Record<string, { label: string; color: string; bg: string }> = {
-  system: { label: "نظام", color: "text-gray-700", bg: "bg-gray-100" },
-  company: { label: "شركة", color: "text-blue-700", bg: "bg-blue-100" },
-  branch: { label: "فرع", color: "text-green-700", bg: "bg-green-100" },
+  system: { label: "نظام", color: "text-status-neutral-foreground", bg: "bg-surface-subtle" },
+  company: { label: "شركة", color: "text-status-info-foreground", bg: "bg-status-info-surface" },
+  branch: { label: "فرع", color: "text-status-success-foreground", bg: "bg-status-success-surface" },
 };
 
 function ResolvedSettingsTab() {
@@ -346,25 +346,25 @@ function ResolvedSettingsTab() {
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold flex items-center gap-2">
-        <GitBranch className="w-5 h-5 text-blue-500" />
+        <GitBranch className="w-5 h-5 text-status-info" />
         وراثة الإعدادات (نظام ← شركة ← فرع)
       </h3>
-      <p className="text-sm text-gray-500">يعرض القيمة الفعلية لكل إعداد ومصدرها — القيم الأقرب (فرع) تتغلب على القيم الأعلى (شركة/نظام)</p>
+      <p className="text-sm text-muted-foreground">يعرض القيمة الفعلية لكل إعداد ومصدرها — القيم الأقرب (فرع) تتغلب على القيم الأعلى (شركة/نظام)</p>
       <Card><CardContent className="p-0">
         <table className="w-full text-sm">
-          <thead><tr className="border-b bg-gray-50"><th className="p-3 text-start">المفتاح</th><th className="p-3 text-start">القيمة</th><th className="p-3 text-start">المصدر</th></tr></thead>
+          <thead><tr className="border-b bg-surface-subtle"><th className="p-3 text-start">المفتاح</th><th className="p-3 text-start">القيمة</th><th className="p-3 text-start">المصدر</th></tr></thead>
           <tbody>
             {items.map((s: any) => {
               const src = SOURCE_LABELS[s.source] || SOURCE_LABELS.system;
               return (
-                <tr key={s.key} className="border-b hover:bg-gray-50">
+                <tr key={s.key} className="border-b hover:bg-surface-subtle">
                   <td className="p-3 font-medium font-mono text-xs">{s.key}</td>
-                  <td className="p-3 text-gray-600 max-w-xs truncate">{typeof s.value === "object" ? JSON.stringify(s.value) : String(s.value ?? "-")}</td>
+                  <td className="p-3 text-muted-foreground max-w-xs truncate">{typeof s.value === "object" ? JSON.stringify(s.value) : String(s.value ?? "-")}</td>
                   <td className="p-3"><Badge className={cn(src.bg, src.color, "text-xs")}>{src.label}</Badge></td>
                 </tr>
               );
             })}
-            {items.length === 0 && <tr><td colSpan={3} className="p-8 text-center text-gray-400">لا توجد إعدادات</td></tr>}
+            {items.length === 0 && <tr><td colSpan={3} className="p-8 text-center text-muted-foreground">لا توجد إعدادات</td></tr>}
           </tbody>
         </table>
       </CardContent></Card>
@@ -382,17 +382,17 @@ function AuditLogTab() {
       <h3 className="text-lg font-semibold">سجل التدقيق</h3>
       <Card><CardContent className="p-0">
         <table className="w-full text-sm">
-          <thead><tr className="border-b bg-gray-50"><th className="p-3 text-start">المستخدم</th><th className="p-3 text-start">الإجراء</th><th className="p-3 text-start">الوحدة</th><th className="p-3 text-start">التاريخ</th></tr></thead>
+          <thead><tr className="border-b bg-surface-subtle"><th className="p-3 text-start">المستخدم</th><th className="p-3 text-start">الإجراء</th><th className="p-3 text-start">الوحدة</th><th className="p-3 text-start">التاريخ</th></tr></thead>
           <tbody>
             {items.map((log: any) => (
-              <tr key={log.id} className="border-b hover:bg-gray-50">
+              <tr key={log.id} className="border-b hover:bg-surface-subtle">
                 <td className="p-3 font-medium">{log.userName || "-"}</td>
                 <td className="p-3">{log.action || "-"}</td>
-                <td className="p-3 text-gray-500">{log.module || "-"}</td>
-                <td className="p-3 text-xs text-gray-400">{log.createdAt ? formatDateAr(log.createdAt) : "-"}</td>
+                <td className="p-3 text-muted-foreground">{log.module || "-"}</td>
+                <td className="p-3 text-xs text-muted-foreground">{log.createdAt ? formatDateAr(log.createdAt) : "-"}</td>
               </tr>
             ))}
-            {items.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-gray-400">لا توجد سجلات</td></tr>}
+            {items.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-muted-foreground">لا توجد سجلات</td></tr>}
           </tbody>
         </table>
       </CardContent></Card>

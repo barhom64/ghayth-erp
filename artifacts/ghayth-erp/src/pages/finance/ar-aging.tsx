@@ -33,11 +33,11 @@ function exportCSV(data: any[], filename: string) {
 }
 
 const BUCKETS = [
-  { key: "current", label: "حالي", color: "bg-green-100 text-green-700" },
-  { key: "1_30", label: "1-30 يوم", color: "bg-yellow-100 text-yellow-700" },
+  { key: "current", label: "حالي", color: "bg-status-success-surface text-status-success-foreground" },
+  { key: "1_30", label: "1-30 يوم", color: "bg-status-warning-surface text-status-warning-foreground" },
   { key: "31_60", label: "31-60 يوم", color: "bg-orange-100 text-orange-700" },
-  { key: "61_90", label: "61-90 يوم", color: "bg-red-100 text-red-700" },
-  { key: "over90", label: "+90 يوم", color: "bg-red-200 text-red-800" },
+  { key: "61_90", label: "61-90 يوم", color: "bg-status-error-surface text-status-error-foreground" },
+  { key: "over90", label: "+90 يوم", color: "bg-red-200 text-status-error-foreground" },
 ];
 
 export default function ArAgingPage() {
@@ -64,15 +64,15 @@ export default function ArAgingPage() {
       render: (c) => (
         <div>
           <p className="font-semibold text-sm">{c.clientName}</p>
-          <p className="text-xs text-gray-500">{c.invoices?.length ?? 0} فاتورة</p>
+          <p className="text-xs text-muted-foreground">{c.invoices?.length ?? 0} فاتورة</p>
         </div>
       ),
     },
-    { key: "current", header: "حالي", sortable: true, render: (c) => c.current > 0 ? <Badge className="bg-green-100 text-green-700">{formatCurrency(c.current)}</Badge> : "—" },
-    { key: "1_30", header: "1-30 يوم", sortable: true, render: (c) => c["1_30"] > 0 ? <Badge className="bg-yellow-100 text-yellow-700">{formatCurrency(c["1_30"])}</Badge> : "—" },
+    { key: "current", header: "حالي", sortable: true, render: (c) => c.current > 0 ? <Badge className="bg-status-success-surface text-status-success-foreground">{formatCurrency(c.current)}</Badge> : "—" },
+    { key: "1_30", header: "1-30 يوم", sortable: true, render: (c) => c["1_30"] > 0 ? <Badge className="bg-status-warning-surface text-status-warning-foreground">{formatCurrency(c["1_30"])}</Badge> : "—" },
     { key: "31_60", header: "31-60 يوم", sortable: true, render: (c) => c["31_60"] > 0 ? <Badge className="bg-orange-100 text-orange-700">{formatCurrency(c["31_60"])}</Badge> : "—" },
-    { key: "61_90", header: "61-90 يوم", sortable: true, render: (c) => c["61_90"] > 0 ? <Badge className="bg-red-100 text-red-700">{formatCurrency(c["61_90"])}</Badge> : "—" },
-    { key: "over90", header: "+90 يوم", sortable: true, render: (c) => c.over90 > 0 ? <Badge className="bg-red-200 text-red-800">{formatCurrency(c.over90)}</Badge> : "—" },
+    { key: "61_90", header: "61-90 يوم", sortable: true, render: (c) => c["61_90"] > 0 ? <Badge className="bg-status-error-surface text-status-error-foreground">{formatCurrency(c["61_90"])}</Badge> : "—" },
+    { key: "over90", header: "+90 يوم", sortable: true, render: (c) => c.over90 > 0 ? <Badge className="bg-red-200 text-status-error-foreground">{formatCurrency(c.over90)}</Badge> : "—" },
     { key: "total", header: "الإجمالي", sortable: true, className: "font-bold text-orange-600", render: (c) => formatCurrency(c.total) },
   ];
 
@@ -94,7 +94,7 @@ export default function ArAgingPage() {
         {BUCKETS.map(b => (
           <Card key={b.key}>
             <CardContent className="p-4 text-center">
-              <p className="text-xs text-gray-500 mb-1">{b.label}</p>
+              <p className="text-xs text-muted-foreground mb-1">{b.label}</p>
               <p className="text-lg font-bold">{formatCurrency(Number(summary[b.key] ?? 0))}</p>
             </CardContent>
           </Card>
@@ -104,12 +104,12 @@ export default function ArAgingPage() {
         <CardContent className="p-4 flex items-center gap-3">
           <AlertTriangle className="h-5 w-5 text-orange-600" />
           <div>
-            <p className="text-sm text-gray-500">إجمالي الذمم المدينة المستحقة</p>
+            <p className="text-sm text-muted-foreground">إجمالي الذمم المدينة المستحقة</p>
             <p className="text-2xl font-bold text-orange-600">{formatCurrency(Number(summary.grandTotal ?? 0))}</p>
           </div>
           <div className="ms-auto text-end">
-            <p className="text-xs text-gray-500">عدد العملاء</p>
-            <p className="text-xl font-bold text-gray-700">{clients.length}</p>
+            <p className="text-xs text-muted-foreground">عدد العملاء</p>
+            <p className="text-xl font-bold text-status-neutral-foreground">{clients.length}</p>
           </div>
         </CardContent>
       </Card>
@@ -130,7 +130,7 @@ export default function ArAgingPage() {
         renderRowExtras={(c) => {
           if (expanded !== c.clientId || !c.invoices?.length) return null;
           return (
-            <div className="border-t bg-gray-50/30 p-3">
+            <div className="border-t bg-surface-subtle/30 p-3">
               <DataTable
                 noToolbar
                 pageSize={0}
@@ -138,8 +138,8 @@ export default function ArAgingPage() {
                 rowKey={(inv) => inv.id}
                 emptyMessage="لا توجد فواتير"
                 columns={[
-                  { key: "ref", header: "المرجع", className: "font-mono text-blue-600 text-xs", render: (inv: any) => inv.ref },
-                  { key: "dueDate", header: "تاريخ الاستحقاق", className: "text-xs text-gray-500", render: (inv: any) => inv.dueDate ? formatDateAr(inv.dueDate) : "-" },
+                  { key: "ref", header: "المرجع", className: "font-mono text-status-info-foreground text-xs", render: (inv: any) => inv.ref },
+                  { key: "dueDate", header: "تاريخ الاستحقاق", className: "text-xs text-muted-foreground", render: (inv: any) => inv.dueDate ? formatDateAr(inv.dueDate) : "-" },
                   { key: "outstanding", header: "المستحق", className: "font-semibold", render: (inv: any) => formatCurrency(inv.outstanding) },
                   {
                     key: "bucket",
@@ -157,7 +157,7 @@ export default function ArAgingPage() {
       />
 
       {clients.length > 0 && (
-        <Card className="bg-gray-50">
+        <Card className="bg-surface-subtle">
           <CardContent className="p-4">
             <div className="grid grid-cols-7 gap-4 text-sm font-bold">
               <div>المجموع</div>

@@ -31,10 +31,10 @@ export default function TicketDetail() {
   const { data: ticket, isLoading, isError, error, refetch } = useApiQuery<any>(["ticket-detail", id || ""], `/support/tickets/${id}`, !!id);
 
   const priorityMap: Record<string, { label: string; color: string }> = {
-    critical: { label: "حرجة", color: "bg-red-200 text-red-800" },
-    high: { label: "عالية", color: "bg-red-100 text-red-700" },
-    medium: { label: "متوسطة", color: "bg-yellow-100 text-yellow-700" },
-    low: { label: "منخفضة", color: "bg-green-100 text-green-700" },
+    critical: { label: "حرجة", color: "bg-red-200 text-status-error-foreground" },
+    high: { label: "عالية", color: "bg-status-error-surface text-status-error-foreground" },
+    medium: { label: "متوسطة", color: "bg-status-warning-surface text-status-warning-foreground" },
+    low: { label: "منخفضة", color: "bg-status-success-surface text-status-success-foreground" },
   };
 
   const statusTone = (s: string) =>
@@ -98,23 +98,23 @@ export default function TicketDetail() {
         <Card>
           <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Headphones className="w-5 h-5" /> تفاصيل التذكرة</CardTitle></CardHeader>
           <CardContent>
-            <p className="text-sm text-gray-600 leading-relaxed">{ticket.description || "-"}</p>
+            <p className="text-sm text-muted-foreground leading-relaxed">{ticket.description || "-"}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader><CardTitle className="text-lg flex items-center gap-2"><MessageSquare className="w-5 h-5" /> الردود ({replies.length})</CardTitle></CardHeader>
           <CardContent className="space-y-4">
-            {replies.length === 0 && <p className="text-center text-gray-400 py-4">لا توجد ردود</p>}
+            {replies.length === 0 && <p className="text-center text-muted-foreground py-4">لا توجد ردود</p>}
             {replies.map((r: any) => (
-              <div key={r.id} className={`p-4 rounded-lg border ${r.isInternal ? "bg-yellow-50 border-yellow-100" : r.authorId ? "bg-blue-50 border-blue-100" : "bg-gray-50 border-gray-100"}`}>
+              <div key={r.id} className={`p-4 rounded-lg border ${r.isInternal ? "bg-status-warning-surface border-yellow-100" : r.authorId ? "bg-status-info-surface border-status-info-surface" : "bg-surface-subtle border-border"}`}>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium flex items-center gap-1">
                     <User className="w-3 h-3" /> {r.authorName || "مجهول"}
                   </span>
-                  <span className="text-xs text-gray-500">{r.createdAt ? `${formatDateAr(r.createdAt)} ${formatTimeAr(r.createdAt)}` : "-"}</span>
+                  <span className="text-xs text-muted-foreground">{r.createdAt ? `${formatDateAr(r.createdAt)} ${formatTimeAr(r.createdAt)}` : "-"}</span>
                 </div>
-                <p className="text-sm text-gray-700">{r.message}</p>
+                <p className="text-sm text-status-neutral-foreground">{r.message}</p>
               </div>
             ))}
 
@@ -132,7 +132,7 @@ export default function TicketDetail() {
         <Card>
           <CardHeader><CardTitle className="text-base">معلومات التذكرة</CardTitle></CardHeader>
           <CardContent className="space-y-3 text-sm">
-            <div className="flex justify-between py-2 border-b"><span className="text-gray-500">الحالة</span>
+            <div className="flex justify-between py-2 border-b"><span className="text-muted-foreground">الحالة</span>
               <Select value={ticket.status} onValueChange={(v) => handleStatusChange(v)}>
                 <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -143,13 +143,13 @@ export default function TicketDetail() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex justify-between py-2 border-b"><span className="text-gray-500">الأولوية</span><Badge className={priorityMap[ticket.priority]?.color || "bg-gray-100 text-gray-700"}>{priorityMap[ticket.priority]?.label || ticket.priority}</Badge></div>
-            <div className="flex justify-between py-2 border-b"><span className="text-gray-500">الفئة</span><span>{ticket.category || "-"}</span></div>
-            <div className="flex justify-between py-2 border-b"><span className="text-gray-500">العميل</span><span>{ticket.clientName || "-"}</span></div>
-            <div className="flex justify-between py-2 border-b"><span className="text-gray-500">تاريخ الإنشاء</span><span className="text-xs">{ticket.createdAt ? `${formatDateAr(ticket.createdAt)} ${formatTimeAr(ticket.createdAt)}` : "-"}</span></div>
-            <div className="flex justify-between py-2"><span className="text-gray-500">آخر تحديث</span><span className="text-xs">{ticket.updatedAt ? `${formatDateAr(ticket.updatedAt)} ${formatTimeAr(ticket.updatedAt)}` : "-"}</span></div>
+            <div className="flex justify-between py-2 border-b"><span className="text-muted-foreground">الأولوية</span><Badge className={priorityMap[ticket.priority]?.color || "bg-surface-subtle text-status-neutral-foreground"}>{priorityMap[ticket.priority]?.label || ticket.priority}</Badge></div>
+            <div className="flex justify-between py-2 border-b"><span className="text-muted-foreground">الفئة</span><span>{ticket.category || "-"}</span></div>
+            <div className="flex justify-between py-2 border-b"><span className="text-muted-foreground">العميل</span><span>{ticket.clientName || "-"}</span></div>
+            <div className="flex justify-between py-2 border-b"><span className="text-muted-foreground">تاريخ الإنشاء</span><span className="text-xs">{ticket.createdAt ? `${formatDateAr(ticket.createdAt)} ${formatTimeAr(ticket.createdAt)}` : "-"}</span></div>
+            <div className="flex justify-between py-2"><span className="text-muted-foreground">آخر تحديث</span><span className="text-xs">{ticket.updatedAt ? `${formatDateAr(ticket.updatedAt)} ${formatTimeAr(ticket.updatedAt)}` : "-"}</span></div>
             {ticket.isSlaBreached && (
-              <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs text-center">
+              <div className="mt-2 p-2 bg-status-error-surface border border-status-error-surface rounded-lg text-status-error-foreground text-xs text-center">
                 تم تجاوز اتفاقية مستوى الخدمة
               </div>
             )}

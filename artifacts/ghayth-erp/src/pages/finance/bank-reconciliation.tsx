@@ -153,10 +153,10 @@ export default function BankReconciliationPage() {
                   {importing ? "جارٍ الاستيراد..." : "اختر ملف جدولي"}
                 </GuardedButton>
               </div>
-              <p className="text-xs text-gray-400 mt-1">الأعمدة المتوقعة: date, description, debit, credit (أو amount)</p>
+              <p className="text-xs text-muted-foreground mt-1">الأعمدة المتوقعة: date, description, debit, credit (أو amount)</p>
             </div>
-            {importError && <p className="text-red-600 text-sm">{importError}</p>}
-            {importSuccess && <p className="text-green-600 text-sm">{importSuccess}</p>}
+            {importError && <p className="text-status-error-foreground text-sm">{importError}</p>}
+            {importSuccess && <p className="text-status-success-foreground text-sm">{importSuccess}</p>}
           </CardContent>
         </Card>
 
@@ -164,23 +164,23 @@ export default function BankReconciliationPage() {
           <CardHeader><CardTitle className="text-base">الدفعات المستوردة</CardTitle></CardHeader>
           <CardContent>
             {batches.length === 0 ? (
-              <p className="text-gray-400 text-sm text-center py-4">لا توجد دفعات</p>
+              <p className="text-muted-foreground text-sm text-center py-4">لا توجد دفعات</p>
             ) : (
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {batches.map((b: any) => (
                   <button
                     key={b.batchId}
                     onClick={() => setActiveBatch(b.batchId)}
-                    className={`w-full text-right p-2 rounded border hover:bg-gray-50 transition-colors ${activeBatch === b.batchId ? "border-blue-400 bg-blue-50" : "border-gray-200"}`}
+                    className={`w-full text-right p-2 rounded border hover:bg-surface-subtle transition-colors ${activeBatch === b.batchId ? "border-blue-400 bg-status-info-surface" : "border-border"}`}
                   >
                     <div className="flex justify-between items-center">
-                      <span className="font-mono text-xs text-blue-600">{b.batchId}</span>
+                      <span className="font-mono text-xs text-status-info-foreground">{b.batchId}</span>
                       <Badge variant="outline">{b.accountCode}</Badge>
                     </div>
                     <div className="flex justify-between mt-1">
-                      <span className="text-xs text-gray-500">{b.fromDate} → {b.toDate}</span>
+                      <span className="text-xs text-muted-foreground">{b.fromDate} → {b.toDate}</span>
                       <span className="text-xs">
-                        <span className="text-green-600">{b.matched}</span>/{b.total} متطابق
+                        <span className="text-status-success-foreground">{b.matched}</span>/{b.total} متطابق
                       </span>
                     </div>
                   </button>
@@ -196,16 +196,16 @@ export default function BankReconciliationPage() {
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex gap-3">
               <Card><CardContent className="p-3 text-center">
-                <p className="text-xs text-gray-500">الإجمالي</p>
+                <p className="text-xs text-muted-foreground">الإجمالي</p>
                 <p className="text-xl font-bold">{detail?.summary?.total ?? 0}</p>
               </CardContent></Card>
-              <Card className="border-green-200 bg-green-50"><CardContent className="p-3 text-center">
-                <p className="text-xs text-gray-500">متطابق</p>
-                <p className="text-xl font-bold text-green-600">{detail?.summary?.matchedCount ?? 0}</p>
+              <Card className="border-status-success-surface bg-status-success-surface"><CardContent className="p-3 text-center">
+                <p className="text-xs text-muted-foreground">متطابق</p>
+                <p className="text-xl font-bold text-status-success-foreground">{detail?.summary?.matchedCount ?? 0}</p>
               </CardContent></Card>
-              <Card className="border-red-200 bg-red-50"><CardContent className="p-3 text-center">
-                <p className="text-xs text-gray-500">غير متطابق</p>
-                <p className="text-xl font-bold text-red-600">{detail?.summary?.unmatchedCount ?? 0}</p>
+              <Card className="border-status-error-surface bg-status-error-surface"><CardContent className="p-3 text-center">
+                <p className="text-xs text-muted-foreground">غير متطابق</p>
+                <p className="text-xl font-bold text-status-error-foreground">{detail?.summary?.unmatchedCount ?? 0}</p>
               </CardContent></Card>
             </div>
             <GuardedButton perm="finance:approve" onClick={handleAutoMatch} disabled={autoMatching} className="bg-blue-600 hover:bg-blue-700">
@@ -217,22 +217,22 @@ export default function BankReconciliationPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <XCircle className="h-4 w-4 text-red-500" />
+                <XCircle className="h-4 w-4 text-status-error" />
                 بنود غير متطابقة ({unmatchedRows.length})
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               {unmatchedRows.length === 0 ? (
                 <div className="p-6 text-center">
-                  <CheckCircle className="h-8 w-8 text-green-500 mx-auto mb-2" />
-                  <p className="text-green-600 font-semibold">جميع البنود متطابقة!</p>
+                  <CheckCircle className="h-8 w-8 text-status-success mx-auto mb-2" />
+                  <p className="text-status-success-foreground font-semibold">جميع البنود متطابقة!</p>
                 </div>
               ) : (
                 <DataTable
                   columns={[
-                    { key: "statementDate", header: "التاريخ", render: (r: any) => <span className="text-xs text-gray-500">{r.statementDate ? formatDateAr(r.statementDate) : "-"}</span> },
+                    { key: "statementDate", header: "التاريخ", render: (r: any) => <span className="text-xs text-muted-foreground">{r.statementDate ? formatDateAr(r.statementDate) : "-"}</span> },
                     { key: "description", header: "الوصف", render: (r: any) => <span className="text-sm">{r.description || "-"}</span> },
-                    { key: "reference", header: "المرجع", render: (r: any) => <span className="font-mono text-xs text-gray-500">{r.reference || "-"}</span> },
+                    { key: "reference", header: "المرجع", render: (r: any) => <span className="font-mono text-xs text-muted-foreground">{r.reference || "-"}</span> },
                     { key: "type", header: "النوع", render: (r: any) => (
                       <Badge variant={r.type === "debit" ? "default" : "secondary"}>
                         {r.type === "debit" ? "مدين" : "دائن"}
@@ -242,13 +242,13 @@ export default function BankReconciliationPage() {
                     { key: "actions", header: "مطابقة يدوية", render: (r: any) => (
                       <Link href={`/finance/bank-reconciliation/manual-match/${activeBatch}/${r.id}`}>
                         <Button variant="ghost" size="sm">
-                          <Link2 className="h-4 w-4 text-blue-500" />
+                          <Link2 className="h-4 w-4 text-status-info" />
                         </Button>
                       </Link>
                     ) },
                   ] as DataTableColumn<any>[]}
                   data={unmatchedRows}
-                  rowClassName={() => "bg-red-50/30"}
+                  rowClassName={() => "bg-status-error-surface"}
                   searchPlaceholder={null}
                   emptyMessage="لا توجد بنود غير متطابقة"
                 />
@@ -259,21 +259,21 @@ export default function BankReconciliationPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-500" />
+                <CheckCircle className="h-4 w-4 text-status-success" />
                 بنود متطابقة ({matchedRows.length})
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <DataTable
                 columns={[
-                  { key: "statementDate", header: "التاريخ", render: (r: any) => <span className="text-xs text-gray-500">{r.statementDate ? formatDateAr(r.statementDate) : "-"}</span> },
+                  { key: "statementDate", header: "التاريخ", render: (r: any) => <span className="text-xs text-muted-foreground">{r.statementDate ? formatDateAr(r.statementDate) : "-"}</span> },
                   { key: "description", header: "وصف الكشف", render: (r: any) => <span className="text-sm">{r.description || "-"}</span> },
-                  { key: "amount", header: "المبلغ", render: (r: any) => <span className="font-semibold text-green-600">{formatCurrency(Number(r.amount))}</span> },
-                  { key: "jeRef", header: "قيد يومية", render: (r: any) => <span className="font-mono text-xs text-blue-600">{r.jeRef || "-"}</span> },
-                  { key: "jeDate", header: "تاريخ القيد", render: (r: any) => <span className="text-xs text-gray-500">{r.jeDate ? formatDateAr(r.jeDate) : "-"}</span> },
+                  { key: "amount", header: "المبلغ", render: (r: any) => <span className="font-semibold text-status-success-foreground">{formatCurrency(Number(r.amount))}</span> },
+                  { key: "jeRef", header: "قيد يومية", render: (r: any) => <span className="font-mono text-xs text-status-info-foreground">{r.jeRef || "-"}</span> },
+                  { key: "jeDate", header: "تاريخ القيد", render: (r: any) => <span className="text-xs text-muted-foreground">{r.jeDate ? formatDateAr(r.jeDate) : "-"}</span> },
                 ] as DataTableColumn<any>[]}
                 data={matchedRows}
-                rowClassName={() => "bg-green-50/20"}
+                rowClassName={() => "bg-status-success-surface/20"}
                 searchPlaceholder={null}
                 emptyMessage="لا توجد بنود متطابقة بعد"
               />

@@ -14,11 +14,11 @@ import { Link, useLocation } from "wouter";
 import { GuardedButton } from "@/components/shared/permission-gate";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
-  pending: { label: "معلق", color: "text-yellow-600 bg-yellow-50" },
-  approved: { label: "معتمد", color: "text-blue-600 bg-blue-50" },
-  active: { label: "نشط", color: "text-green-600 bg-green-50" },
-  completed: { label: "مسدد", color: "text-gray-600 bg-gray-50" },
-  rejected: { label: "مرفوض", color: "text-red-600 bg-red-50" },
+  pending: { label: "معلق", color: "text-status-warning-foreground bg-status-warning-surface" },
+  approved: { label: "معتمد", color: "text-status-info-foreground bg-status-info-surface" },
+  active: { label: "نشط", color: "text-status-success-foreground bg-status-success-surface" },
+  completed: { label: "مسدد", color: "text-muted-foreground bg-surface-subtle" },
+  rejected: { label: "مرفوض", color: "text-status-error-foreground bg-status-error-surface" },
 };
 
 const loanTypeLabels: Record<string, string> = {
@@ -46,8 +46,8 @@ const loanColumns: DataTableColumn<any>[] = [
   {
     key: "remainingAmount", header: "المتبقي", sortable: true,
     render: (r) => r.status === "active"
-      ? <span className="text-red-600 font-medium">{formatCurrency(r.remainingAmount ?? r.amount)}</span>
-      : <span className="text-gray-400">—</span>,
+      ? <span className="text-status-error-foreground font-medium">{formatCurrency(r.remainingAmount ?? r.amount)}</span>
+      : <span className="text-muted-foreground">—</span>,
   },
   { key: "createdAt", header: "تاريخ الطلب", sortable: true, render: (r) => formatDateAr(r.createdAt) },
   {
@@ -87,10 +87,10 @@ export default function MyLoans() {
     >
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         {[
-          { label: "سلف نشطة", value: activeCount, icon: CheckCircle2, color: "text-green-600 bg-green-50" },
-          { label: "طلبات معلقة", value: pendingCount, icon: Clock, color: "text-yellow-600 bg-yellow-50" },
-          { label: "إجمالي السلف", value: formatCurrency(totalAmount), icon: DollarSign, color: "text-blue-600 bg-blue-50" },
-          { label: "المتبقي", value: formatCurrency(remainingAmount), icon: TrendingDown, color: "text-red-600 bg-red-50" },
+          { label: "سلف نشطة", value: activeCount, icon: CheckCircle2, color: "text-status-success-foreground bg-status-success-surface" },
+          { label: "طلبات معلقة", value: pendingCount, icon: Clock, color: "text-status-warning-foreground bg-status-warning-surface" },
+          { label: "إجمالي السلف", value: formatCurrency(totalAmount), icon: DollarSign, color: "text-status-info-foreground bg-status-info-surface" },
+          { label: "المتبقي", value: formatCurrency(remainingAmount), icon: TrendingDown, color: "text-status-error-foreground bg-status-error-surface" },
         ].map((stat) => {
           const Icon = stat.icon;
           return (
@@ -100,7 +100,7 @@ export default function MyLoans() {
                   <Icon size={20} />
                 </div>
                 <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{stat.label}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{stat.label}</p>
               </CardContent>
             </Card>
           );

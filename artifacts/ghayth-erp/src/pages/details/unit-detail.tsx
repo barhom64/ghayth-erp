@@ -48,11 +48,11 @@ const STATUS_OPTIONS = [
 
 const STATUS_COLORS: Record<string, string> = {
   available: "bg-emerald-100 text-emerald-700 border-emerald-200",
-  rented: "bg-blue-100 text-blue-700 border-blue-200",
-  maintenance: "bg-amber-100 text-amber-700 border-amber-200",
+  rented: "bg-status-info-surface text-status-info-foreground border-status-info-surface",
+  maintenance: "bg-status-warning-surface text-status-warning-foreground border-status-warning-surface",
   reserved: "bg-purple-100 text-purple-700 border-purple-200",
-  under_maintenance: "bg-amber-100 text-amber-700 border-amber-200",
-  out_of_service: "bg-red-100 text-red-700 border-red-200",
+  under_maintenance: "bg-status-warning-surface text-status-warning-foreground border-status-warning-surface",
+  out_of_service: "bg-status-error-surface text-status-error-foreground border-status-error-surface",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -83,9 +83,9 @@ const IMPACT_ICONS = {
 };
 
 const SEVERITY_COLORS = {
-  info: "bg-blue-50 border-blue-200 text-blue-800",
-  warning: "bg-amber-50 border-amber-200 text-amber-800",
-  critical: "bg-red-50 border-red-200 text-red-800",
+  info: "bg-status-info-surface border-status-info-surface text-status-info-foreground",
+  warning: "bg-status-warning-surface border-status-warning-surface text-status-warning-foreground",
+  critical: "bg-status-error-surface border-status-error-surface text-status-error-foreground",
 };
 
 const SEVERITY_ICON = {
@@ -119,7 +119,7 @@ export default function UnitDetail() {
 
   const actions = unit ? (
     <div className="flex items-center gap-2">
-      <Badge className={cn("border", STATUS_COLORS[unit.status] || "bg-gray-100 text-gray-700")}>
+      <Badge className={cn("border", STATUS_COLORS[unit.status] || "bg-surface-subtle text-status-neutral-foreground")}>
         {STATUS_LABELS[unit.status] || unit.status}
       </Badge>
       <Link href={`/properties/${id}/status`}>
@@ -135,60 +135,60 @@ export default function UnitDetail() {
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <Building className="h-4 w-4 text-blue-500" /> هوية الوحدة
+            <Building className="h-4 w-4 text-status-info" /> هوية الوحدة
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
             <div className="flex items-start gap-2">
-              <Maximize2 className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
+              <Maximize2 className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
               <div>
-                <p className="text-xs text-gray-400">المساحة</p>
+                <p className="text-xs text-muted-foreground">المساحة</p>
                 <p className="font-medium">{unit.area ? `${unit.area} م²` : "—"}</p>
               </div>
             </div>
             <div className="flex items-start gap-2">
-              <BedDouble className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
+              <BedDouble className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
               <div>
-                <p className="text-xs text-gray-400">غرف / حمامات</p>
+                <p className="text-xs text-muted-foreground">غرف / حمامات</p>
                 <p className="font-medium">{unit.bedrooms || 0} غرف · {unit.bathrooms || 0} حمام</p>
               </div>
             </div>
             <div className="flex items-start gap-2">
-              <Compass className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
+              <Compass className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
               <div>
-                <p className="text-xs text-gray-400">الاتجاه</p>
+                <p className="text-xs text-muted-foreground">الاتجاه</p>
                 <p className="font-medium">{unit.direction ? DIRECTION_LABELS[unit.direction] || unit.direction : "—"}</p>
               </div>
             </div>
             <div className="flex items-start gap-2">
-              <Paintbrush className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
+              <Paintbrush className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
               <div>
-                <p className="text-xs text-gray-400">التشطيب</p>
+                <p className="text-xs text-muted-foreground">التشطيب</p>
                 <p className="font-medium">{unit.finishing ? FINISHING_LABELS[unit.finishing] || unit.finishing : "—"}</p>
               </div>
             </div>
             <div className="flex items-start gap-2">
-              <MapPin className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
+              <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
               <div>
-                <p className="text-xs text-gray-400">الطابق</p>
+                <p className="text-xs text-muted-foreground">الطابق</p>
                 <p className="font-medium">{unit.floor !== undefined && unit.floor !== null ? `الطابق ${unit.floor}` : "—"}</p>
               </div>
             </div>
             {unit.buildingName && (
               <div className="flex items-start gap-2">
-                <Building className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
+                <Building className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-xs text-gray-400">المبنى</p>
+                  <p className="text-xs text-muted-foreground">المبنى</p>
                   <p className="font-medium">{unit.buildingName}</p>
                 </div>
               </div>
             )}
             {unit.address && (
               <div className="col-span-2 flex items-start gap-2">
-                <MapPin className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
+                <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-xs text-gray-400">العنوان</p>
+                  <p className="text-xs text-muted-foreground">العنوان</p>
                   <p className="font-medium">{unit.address}</p>
                 </div>
               </div>
@@ -200,10 +200,10 @@ export default function UnitDetail() {
               : [];
             return amenities.length > 0 ? (
               <div>
-                <p className="text-xs text-gray-400 mb-2 flex items-center gap-1"><Star className="h-3.5 w-3.5" /> المرافق والمميزات</p>
+                <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1"><Star className="h-3.5 w-3.5" /> المرافق والمميزات</p>
                 <div className="flex flex-wrap gap-1.5">
                   {amenities.map((a: string) => (
-                    <span key={a} className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-100 rounded-full text-xs">{a}</span>
+                    <span key={a} className="px-2 py-0.5 bg-status-info-surface text-status-info-foreground border border-status-info-surface rounded-full text-xs">{a}</span>
                   ))}
                 </div>
               </div>
@@ -216,7 +216,7 @@ export default function UnitDetail() {
             const images = attachments.filter((a: any) => a?.mimeType?.startsWith("image/") || a?.url?.match(/\.(jpg|jpeg|png|webp|gif)/i));
             return images.length > 0 ? (
               <div className="mt-4">
-                <p className="text-xs text-gray-400 mb-2 flex items-center gap-1"><ImageIcon className="h-3.5 w-3.5" /> صور الوحدة</p>
+                <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1"><ImageIcon className="h-3.5 w-3.5" /> صور الوحدة</p>
                 <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
                   {images.slice(0, 10).map((img: any, i: number) => (
                     <a key={i} href={img.url || img.fileUrl} target="_blank" rel="noopener noreferrer" className="block aspect-square rounded overflow-hidden border hover:opacity-90 transition-opacity">
@@ -233,30 +233,30 @@ export default function UnitDetail() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
-            <p className="text-xs text-gray-500 mb-1">النوع</p>
+            <p className="text-xs text-muted-foreground mb-1">النوع</p>
             <p className="text-lg font-bold">{typeLabel(unit.type)}</p>
-            <p className="text-xs text-gray-400">{unit.area ? `${unit.area} م²` : ""} {unit.floor ? `— الطابق ${unit.floor}` : ""}</p>
+            <p className="text-xs text-muted-foreground">{unit.area ? `${unit.area} م²` : ""} {unit.floor ? `— الطابق ${unit.floor}` : ""}</p>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
-            <p className="text-xs text-gray-500 mb-1">الإيجار الشهري</p>
+            <p className="text-xs text-muted-foreground mb-1">الإيجار الشهري</p>
             <p className="text-lg font-bold text-emerald-600">{formatCurrency(unit.monthlyRent || 0)}</p>
-            {activeContract && <p className="text-xs text-gray-400">مستأجر: {activeContract.tenantName}</p>}
+            {activeContract && <p className="text-xs text-muted-foreground">مستأجر: {activeContract.tenantName}</p>}
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
-            <p className="text-xs text-gray-500 mb-1">إجمالي التحصيل</p>
+            <p className="text-xs text-muted-foreground mb-1">إجمالي التحصيل</p>
             <p className="text-lg font-bold">{formatCurrency(totalCollected)}</p>
             {overduePayments.length > 0 && (
-              <p className="text-xs text-red-500">{overduePayments.length} دفعة متأخرة</p>
+              <p className="text-xs text-status-error">{overduePayments.length} دفعة متأخرة</p>
             )}
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
-            <p className="text-xs text-gray-500 mb-1">العقود</p>
+            <p className="text-xs text-muted-foreground mb-1">العقود</p>
             <p className="text-lg font-bold">{contracts.length}</p>
             {activeContract && <p className="text-xs text-emerald-500">عقد ساري حتى {formatDateAr(activeContract.endDate)}</p>}
           </CardContent>
@@ -271,39 +271,39 @@ export default function UnitDetail() {
         return (
           <Card className="border-0 shadow-sm bg-gradient-to-l from-emerald-50/30 to-white">
             <CardContent className="p-4">
-              <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+              <p className="text-sm font-semibold text-status-neutral-foreground mb-3 flex items-center gap-2">
                 <Banknote className="w-4 h-4 text-emerald-600" />
                 ملخص الإيرادات
               </p>
               <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                 <div className="text-center p-2 bg-white rounded-lg border">
-                  <p className="text-lg font-bold text-blue-600">{formatCurrency(totalExpected)}</p>
-                  <p className="text-[10px] text-gray-500">المتوقع تحصيله</p>
+                  <p className="text-lg font-bold text-status-info-foreground">{formatCurrency(totalExpected)}</p>
+                  <p className="text-[10px] text-muted-foreground">المتوقع تحصيله</p>
                 </div>
                 <div className="text-center p-2 bg-white rounded-lg border">
                   <p className="text-lg font-bold text-emerald-600">{formatCurrency(totalCollected)}</p>
-                  <p className="text-[10px] text-gray-500">المحصل فعليا</p>
+                  <p className="text-[10px] text-muted-foreground">المحصل فعليا</p>
                 </div>
                 <div className="text-center p-2 bg-white rounded-lg border">
-                  <p className="text-lg font-bold text-red-600">{formatCurrency(totalExpected - totalCollected)}</p>
-                  <p className="text-[10px] text-gray-500">المتبقي</p>
+                  <p className="text-lg font-bold text-status-error-foreground">{formatCurrency(totalExpected - totalCollected)}</p>
+                  <p className="text-[10px] text-muted-foreground">المتبقي</p>
                 </div>
                 <div className="text-center p-2 bg-white rounded-lg border">
-                  <p className="text-lg font-bold text-amber-600">{formatCurrency(totalMaintCost)}</p>
-                  <p className="text-[10px] text-gray-500">تكلفة الصيانة</p>
+                  <p className="text-lg font-bold text-status-warning-foreground">{formatCurrency(totalMaintCost)}</p>
+                  <p className="text-[10px] text-muted-foreground">تكلفة الصيانة</p>
                 </div>
                 <div className="text-center p-2 bg-white rounded-lg border">
-                  <p className={cn("text-lg font-bold", netRevenue >= 0 ? "text-emerald-600" : "text-red-600")}>{formatCurrency(netRevenue)}</p>
-                  <p className="text-[10px] text-gray-500">صافي الإيرادات</p>
+                  <p className={cn("text-lg font-bold", netRevenue >= 0 ? "text-emerald-600" : "text-status-error-foreground")}>{formatCurrency(netRevenue)}</p>
+                  <p className="text-[10px] text-muted-foreground">صافي الإيرادات</p>
                 </div>
               </div>
               {collectionRate > 0 && (
                 <div className="mt-3">
-                  <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
                     <span>نسبة التحصيل</span>
                     <span className="font-bold">{collectionRate}%</span>
                   </div>
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-2 bg-surface-subtle rounded-full overflow-hidden">
                     <div className={cn("h-full rounded-full transition-all", collectionRate >= 80 ? "bg-emerald-500" : collectionRate >= 50 ? "bg-amber-500" : "bg-red-500")} style={{ width: `${Math.min(collectionRate, 100)}%` }} />
                   </div>
                 </div>
@@ -348,11 +348,11 @@ export default function UnitDetail() {
                 <p className="text-xl font-bold text-emerald-700">{formatCurrency(totalCollected)}</p>
               </CardContent>
             </Card>
-            <Card className="border-0 shadow-sm bg-red-50/50">
+            <Card className="border-0 shadow-sm bg-status-error-surface">
               <CardContent className="p-4 text-center">
-                <p className="text-xs text-red-600 mb-1">المتأخرات</p>
-                <p className="text-xl font-bold text-red-700">{formatCurrency(overduePayments.reduce((s: number, p: any) => s + Number(p.amount || 0) - Number(p.paidAmount || 0), 0))}</p>
-                <p className="text-[10px] text-red-500">{overduePayments.length} دفعة</p>
+                <p className="text-xs text-status-error-foreground mb-1">المتأخرات</p>
+                <p className="text-xl font-bold text-status-error-foreground">{formatCurrency(overduePayments.reduce((s: number, p: any) => s + Number(p.amount || 0) - Number(p.paidAmount || 0), 0))}</p>
+                <p className="text-[10px] text-status-error">{overduePayments.length} دفعة</p>
               </CardContent>
             </Card>
             <Card className="border-0 shadow-sm bg-orange-50/50">
@@ -362,13 +362,13 @@ export default function UnitDetail() {
                 <p className="text-[10px] text-orange-500">{maintenance.length} طلب</p>
               </CardContent>
             </Card>
-            <Card className="border-0 shadow-sm bg-blue-50/50">
+            <Card className="border-0 shadow-sm bg-status-info-surface">
               <CardContent className="p-4 text-center">
-                <p className="text-xs text-blue-600 mb-1">نسبة الإشغال</p>
-                <p className="text-xl font-bold text-blue-700">
+                <p className="text-xs text-status-info-foreground mb-1">نسبة الإشغال</p>
+                <p className="text-xl font-bold text-status-info-foreground">
                   {activeContract ? "100%" : "0%"}
                 </p>
-                <p className="text-[10px] text-blue-500">{activeContract ? "مؤجرة حالياً" : "شاغرة"}</p>
+                <p className="text-[10px] text-status-info">{activeContract ? "مؤجرة حالياً" : "شاغرة"}</p>
               </CardContent>
             </Card>
           </div>
@@ -377,25 +377,25 @@ export default function UnitDetail() {
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <Users className="w-4 h-4 text-blue-500" /> المستأجر الحالي
+                  <Users className="w-4 h-4 text-status-info" /> المستأجر الحالي
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
                   <div>
-                    <p className="text-xs text-gray-500">الاسم</p>
+                    <p className="text-xs text-muted-foreground">الاسم</p>
                     <p className="font-medium">{activeContract.tenantName}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">بداية العقد</p>
+                    <p className="text-xs text-muted-foreground">بداية العقد</p>
                     <p className="font-medium">{formatDateAr(activeContract.startDate)}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">نهاية العقد</p>
+                    <p className="text-xs text-muted-foreground">نهاية العقد</p>
                     <p className="font-medium">{formatDateAr(activeContract.endDate)}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">الإيجار الشهري</p>
+                    <p className="text-xs text-muted-foreground">الإيجار الشهري</p>
                     <p className="font-medium text-emerald-600">{formatCurrency(Number(activeContract.monthlyRent || 0))}</p>
                   </div>
                 </div>
@@ -404,9 +404,9 @@ export default function UnitDetail() {
           )}
 
           {overduePayments.length > 0 && (
-            <Card className="border-red-200 bg-red-50/30">
+            <Card className="border-status-error-surface bg-status-error-surface">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2 text-red-700">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2 text-status-error-foreground">
                   <AlertTriangle className="w-4 h-4" /> دفعات متأخرة ({overduePayments.length})
                 </CardTitle>
               </CardHeader>
@@ -414,7 +414,7 @@ export default function UnitDetail() {
                 <DataTable
                   columns={[
                     { key: "tenantName", header: "المستأجر" },
-                    { key: "dueDate", header: "الاستحقاق", render: (p) => <span className="text-red-600">{formatDateAr(p.dueDate)}</span> },
+                    { key: "dueDate", header: "الاستحقاق", render: (p) => <span className="text-status-error-foreground">{formatDateAr(p.dueDate)}</span> },
                     { key: "amount", header: "المبلغ", render: (p) => <span className="font-bold">{formatCurrency(Number(p.amount || 0))}</span> },
                   ]}
                   data={overduePayments.slice(0, 3)}
@@ -438,16 +438,16 @@ export default function UnitDetail() {
                   {payments.slice(0, 10).map((p: any, idx: number) => {
                     const paid = p.status === "paid";
                     return (
-                      <div key={p.id || idx} className={cn("flex items-center justify-between p-2 rounded-lg border text-sm", paid ? "border-green-100 bg-green-50/30" : "border-gray-100")}>
+                      <div key={p.id || idx} className={cn("flex items-center justify-between p-2 rounded-lg border text-sm", paid ? "border-status-success-surface bg-status-success-surface" : "border-border")}>
                         <div className="flex items-center gap-2">
                           <div className={cn("w-2 h-2 rounded-full", paid ? "bg-green-500" : "bg-gray-400")} />
                           <div>
                             <p className="text-xs">{p.tenantName || "مستأجر"}</p>
-                            <p className="text-[10px] text-gray-500">{formatDateAr(p.dueDate)}</p>
+                            <p className="text-[10px] text-muted-foreground">{formatDateAr(p.dueDate)}</p>
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className={cn("font-bold text-xs", paid ? "text-green-700" : "text-gray-700")}>{formatCurrency(Number(p.amount || 0))}</p>
+                          <p className={cn("font-bold text-xs", paid ? "text-status-success-foreground" : "text-status-neutral-foreground")}>{formatCurrency(Number(p.amount || 0))}</p>
                           <PageStatusBadge status={p.status} />
                         </div>
                       </div>
@@ -462,7 +462,7 @@ export default function UnitDetail() {
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-blue-500" /> تاريخ العقود
+                  <FileText className="w-4 h-4 text-status-info" /> تاريخ العقود
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -474,7 +474,7 @@ export default function UnitDetail() {
                       <div className="mr-4 flex-1 flex items-center justify-between">
                         <div>
                           <p className="text-sm font-medium">{c.tenantName}</p>
-                          <p className="text-xs text-gray-500">{formatDateAr(c.startDate)} → {formatDateAr(c.endDate)}</p>
+                          <p className="text-xs text-muted-foreground">{formatDateAr(c.startDate)} → {formatDateAr(c.endDate)}</p>
                         </div>
                         <PageStatusBadge status={c.status} />
                       </div>
@@ -496,19 +496,19 @@ export default function UnitDetail() {
           </CardHeader>
           <CardContent className="p-0">
             {contracts.length === 0 ? (
-              <p className="text-center text-gray-400 py-8">لا توجد عقود</p>
+              <p className="text-center text-muted-foreground py-8">لا توجد عقود</p>
             ) : (
               <DataTable
                 columns={[
                   { key: "tenantName", header: "المستأجر", render: (c) => <span className="font-medium">{c.tenantName}</span> },
-                  { key: "startDate", header: "من", render: (c) => <span className="text-gray-500">{formatDateAr(c.startDate)}</span> },
-                  { key: "endDate", header: "إلى", render: (c) => <span className="text-gray-500">{formatDateAr(c.endDate)}</span> },
+                  { key: "startDate", header: "من", render: (c) => <span className="text-muted-foreground">{formatDateAr(c.startDate)}</span> },
+                  { key: "endDate", header: "إلى", render: (c) => <span className="text-muted-foreground">{formatDateAr(c.endDate)}</span> },
                   { key: "monthlyRent", header: "الإيجار", render: (c) => <span className="font-bold">{formatCurrency(Number(c.monthlyRent || 0))}</span> },
                   { key: "totalPaid", header: "المحصل", render: (c) => <span className="text-emerald-600">{formatCurrency(Number(c.totalPaid || 0))}</span> },
                   { key: "status", header: "الحالة", render: (c) => <PageStatusBadge status={c.status} /> },
                 ]}
                 data={contracts}
-                rowClassName={(c) => cn(c.status === "active" && "bg-blue-50/30")}
+                rowClassName={(c) => cn(c.status === "active" && "bg-status-info-surface")}
                 noToolbar
                 pageSize={0}
                 searchPlaceholder={null}
@@ -521,9 +521,9 @@ export default function UnitDetail() {
       {activeTab === "payments" && (
         <div className="space-y-4">
           {overduePayments.length > 0 && (
-            <Card className="border-red-200 bg-red-50/30">
+            <Card className="border-status-error-surface bg-status-error-surface">
               <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2 text-red-700">
+                <CardTitle className="text-base flex items-center gap-2 text-status-error-foreground">
                   <AlertTriangle className="w-4 w-4" /> دفعات متأخرة ({overduePayments.length})
                 </CardTitle>
               </CardHeader>
@@ -531,7 +531,7 @@ export default function UnitDetail() {
                 <DataTable
                   columns={[
                     { key: "tenantName", header: "المستأجر" },
-                    { key: "dueDate", header: "تاريخ الاستحقاق", render: (p) => <span className="text-red-600">{formatDateAr(p.dueDate)}</span> },
+                    { key: "dueDate", header: "تاريخ الاستحقاق", render: (p) => <span className="text-status-error-foreground">{formatDateAr(p.dueDate)}</span> },
                     { key: "amount", header: "المبلغ", render: (p) => <span className="font-bold">{formatCurrency(Number(p.amount || 0))}</span> },
                     { key: "paidAmount", header: "المدفوع", render: (p) => <span className="text-emerald-600">{formatCurrency(Number(p.paidAmount || 0))}</span> },
                     { key: "status", header: "الحالة", render: (p) => <PageStatusBadge status={p.status} /> },
@@ -552,18 +552,18 @@ export default function UnitDetail() {
             </CardHeader>
             <CardContent className="p-0">
               {payments.length === 0 ? (
-                <p className="text-center text-gray-400 py-8">لا توجد مدفوعات</p>
+                <p className="text-center text-muted-foreground py-8">لا توجد مدفوعات</p>
               ) : (
                 <DataTable
                   columns={[
                     { key: "tenantName", header: "المستأجر" },
-                    { key: "dueDate", header: "تاريخ الاستحقاق", render: (p) => <span className="text-gray-500">{formatDateAr(p.dueDate)}</span> },
+                    { key: "dueDate", header: "تاريخ الاستحقاق", render: (p) => <span className="text-muted-foreground">{formatDateAr(p.dueDate)}</span> },
                     { key: "amount", header: "المبلغ", render: (p) => <span className="font-bold">{formatCurrency(Number(p.amount || 0))}</span> },
                     { key: "paidAmount", header: "المدفوع", render: (p) => <span className="text-emerald-600">{formatCurrency(Number(p.paidAmount || 0))}</span> },
                     { key: "status", header: "الحالة", render: (p) => <PageStatusBadge status={p.status} /> },
                   ]}
                   data={payments}
-                  rowClassName={(p) => cn(p.status !== "paid" && new Date(p.dueDate) < new Date() && "bg-red-50/30")}
+                  rowClassName={(p) => cn(p.status !== "paid" && new Date(p.dueDate) < new Date() && "bg-status-error-surface")}
                   noToolbar
                   pageSize={0}
                   searchPlaceholder={null}
@@ -583,19 +583,19 @@ export default function UnitDetail() {
           </CardHeader>
           <CardContent className="p-0">
             {maintenance.length === 0 ? (
-              <p className="text-center text-gray-400 py-8">لا توجد سجلات صيانة</p>
+              <p className="text-center text-muted-foreground py-8">لا توجد سجلات صيانة</p>
             ) : (
               <DataTable
                 columns={[
                   { key: "category", header: "الفئة", render: (m) => <span className="font-medium">{m.category || "-"}</span> },
-                  { key: "description", header: "الوصف", render: (m) => <span className="text-gray-500 max-w-xs truncate block">{m.description || "-"}</span> },
+                  { key: "description", header: "الوصف", render: (m) => <span className="text-muted-foreground max-w-xs truncate block">{m.description || "-"}</span> },
                   { key: "priority", header: "الأولوية", render: (m) => <PageStatusBadge status={m.priority} /> },
                   { key: "status", header: "الحالة", render: (m) => <PageStatusBadge status={m.status} /> },
-                  { key: "actualCost", header: "التكلفة", render: (m) => <span className="text-gray-500">{m.actualCost != null ? formatCurrency(Number(m.actualCost)) : "-"}</span> },
+                  { key: "actualCost", header: "التكلفة", render: (m) => <span className="text-muted-foreground">{m.actualCost != null ? formatCurrency(Number(m.actualCost)) : "-"}</span> },
                   { key: "materialsUsed", header: "المواد المستخدمة", render: (m) => {
                     const materials = m.materialsUsed ? (typeof m.materialsUsed === "string" ? JSON.parse(m.materialsUsed) : m.materialsUsed) : [];
                     return materials.length > 0 ? (
-                      <ul className="list-disc list-inside text-xs text-gray-500">
+                      <ul className="list-disc list-inside text-xs text-muted-foreground">
                         {materials.map((mat: any, idx: number) => (
                           <li key={idx}>{mat.name}{mat.quantity ? ` × ${mat.quantity}` : ""}{mat.cost ? ` (${formatCurrency(Number(mat.cost))})` : ""}</li>
                         ))}
@@ -618,7 +618,7 @@ export default function UnitDetail() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
-                <BookOpen className="h-4 w-4 text-blue-600" />
+                <BookOpen className="h-4 w-4 text-status-info-foreground" />
                 الملف المالي الشامل للوحدة
               </CardTitle>
             </CardHeader>
