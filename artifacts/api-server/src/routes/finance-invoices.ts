@@ -751,17 +751,23 @@ invoicesRouter.post("/invoices/:id/payment", authorize({ feature: "finance.invoi
     // Create the payment journal entry via the centralized helper (handles
     // balance validation, rounding-difference auto-correction,
     // updateAccountBalances, and event bus emission).
+    //
+    // sourceKey is anchored to the invoice + cumulative paidAmount so two
+    // payments of the same magnitude on the same invoice each produce a
+    // unique-but-stable key (paid amount is strictly monotonic per payment),
+    // and a duplicated request is idempotent against the same journal.
     const paymentAmount = Number(amount);
+    const paidScaled = Math.round(newPaid * 100);
     const { journalId } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
       createdBy: scope.activeAssignmentId,
-      ref: `PAY-${invoiceRef}-${Date.now()}`,
+      ref: `PAY-${invoiceRef}-${paidScaled}`,
       description: `سداد فاتورة ${invoiceRef}`,
       type: "payment",
       sourceType: "invoice",
       sourceId: id,
-      sourceKey: `finance:payment:${id}:${Date.now()}`,
+      sourceKey: `finance:payment:${id}:${paidScaled}`,
       lines: [
         { accountCode: cashAccountCode, debit: paymentAmount, credit: 0 },
         { accountCode: arAccountCode, debit: 0, credit: paymentAmount },

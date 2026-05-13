@@ -25,6 +25,7 @@ import {
   toDateISO,
   roundTo2,
 } from "../lib/businessHelpers.js";
+import { requestIdempotencyToken } from "../lib/requestIdempotency.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -470,7 +471,8 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
       finalDescription = generateAutoDescription({ operationType: operationType || expenseType || "expense", relatedEntityName, period: targetPeriod, amount: baseAmount, expenseType });
     }
 
-    const ref = `EXP-${Date.now()}`;
+    const idempotencyToken = requestIdempotencyToken(req);
+    const ref = `EXP-${idempotencyToken}`;
     const entityLink: Record<string, any> = {};
     if (relatedEntityType === "employee" && relatedEntityId) entityLink.employeeId = Number(relatedEntityId);
     if (relatedEntityType === "vehicle" && relatedEntityId) entityLink.vehicleId = Number(relatedEntityId);
@@ -488,7 +490,7 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     journalLines.push({ accountCode: sourceAcct, debit: 0, credit: totalWithVat });
     if (subAccountCode && subAccountCode !== accountCode) { journalLines[0].accountCode = subAccountCode; }
 
-    const { journalId } = await financialEngine.postJournalEntry({ companyId: effectiveCompanyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, type: "expense", sourceType: operationType || "expense", sourceId: 0, sourceKey: `finance:expense:${Date.now()}`, lines: journalLines });
+    const { journalId } = await financialEngine.postJournalEntry({ companyId: effectiveCompanyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, type: "expense", sourceType: operationType || "expense", sourceId: 0, sourceKey: `finance:expense:${idempotencyToken}`, lines: journalLines });
 
     await rawExecute(
       `UPDATE journal_entries SET "costCenter" = $1, "departmentId" = $2, "relatedEntityType" = $3, "relatedEntityId" = $4, "paymentMethod" = $5, reference = $6, "isPaid" = $7, "attachmentUrl" = $8, "attachmentType" = $9, "expenseType" = $10, "operationType" = $11, "projectId" = $12, "taxCategory" = $13, "govSyncEnabled" = $14, "govIntegrationId" = $15, "govEntityType" = $16, "govEntityId" = $17 WHERE id = $18 AND "companyId" = $19 AND "deletedAt" IS NULL`,
@@ -755,7 +757,8 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
 
     const isReceipt = type === "receipt";
     const prefix = isReceipt ? "RV" : "PV";
-    const ref = `${prefix}-${Date.now()}`;
+    const idempotencyToken = requestIdempotencyToken(req);
+    const ref = `${prefix}-${idempotencyToken}`;
 
     let finalDescription = description;
     if (!finalDescription || autoDescription) {
@@ -778,7 +781,7 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
           { accountCode: cashAcct, debit: 0, credit: totalWithVat },
         ];
 
-    const { journalId } = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, sourceType: "voucher", sourceId: 0, sourceKey: `finance:voucher:${Date.now()}`, lines: journalLines });
+    const { journalId } = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, sourceType: "voucher", sourceId: 0, sourceKey: `finance:voucher:${idempotencyToken}`, lines: journalLines });
 
     await rawExecute(
       `UPDATE journal_entries SET "paymentMethod" = $1, reference = $2, "attachmentUrl" = $3, "attachmentType" = $4, "relatedEntityType" = $5, "relatedEntityId" = $6, "operationType" = $7, "departmentId" = $8 WHERE id = $9 AND "companyId" = $10 AND "deletedAt" IS NULL`,
@@ -864,7 +867,8 @@ journalRouter.post("/salary-advances", authorize({ feature: "finance.journal", a
     const { employeeName, amount, description, deductMonths, sourceAccountCode, employeeId } = zodParse(createSalaryAdvanceSchema.safeParse(req.body ?? {}));
     if (!amount || !employeeName) { throw new ValidationError("اسم الموظف والمبلغ مطلوبان"); return; }
     const sourceAcct = sourceAccountCode || "1100";
-    const ref = `SALARY-ADV-${Date.now()}`;
+    const idempotencyToken = requestIdempotencyToken(req);
+    const ref = `SALARY-ADV-${idempotencyToken}`;
 
     const { financialEngine } = await import("../lib/engines/index.js");
     let advanceAccountCode = await financialEngine.resolveAccountCode(scope.companyId, "salary_advance_receivable", "debit", "1410");
@@ -877,7 +881,7 @@ journalRouter.post("/salary-advances", authorize({ feature: "finance.journal", a
       if (subAcc) advanceAccountCode = subAcc.code as string;
     }
 
-    const { journalId } = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId, ref, description: description ?? `سلفة راتب ${employeeName} – خصم على ${deductMonths} شهر`, type: "salary_advance", sourceType: "salary_advance", sourceId: 0, sourceKey: `finance:salary_advance:${Date.now()}`, lines: [{ accountCode: advanceAccountCode, debit: Number(amount), credit: 0, employeeId: employeeId ? Number(employeeId) : undefined }, { accountCode: sourceAcct, debit: 0, credit: Number(amount) }] });
+    const { journalId } = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId, ref, description: description ?? `سلفة راتب ${employeeName} – خصم على ${deductMonths} شهر`, type: "salary_advance", sourceType: "salary_advance", sourceId: 0, sourceKey: `finance:salary_advance:${idempotencyToken}`, lines: [{ accountCode: advanceAccountCode, debit: Number(amount), credit: 0, employeeId: employeeId ? Number(employeeId) : undefined }, { accountCode: sourceAcct, debit: 0, credit: Number(amount) }] });
     const approvalResult = await initiateApprovalChain({ companyId: scope.companyId, branchId: scope.branchId, chainType: "advances", refType: "salary_advance", refId: journalId, amount: Number(amount) });
     if (approvalResult.requiresApproval) { const { affectedRows } = await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft' AND "deletedAt" IS NULL`, [journalId, scope.companyId]); if (!affectedRows) throw new NotFoundError("القيد غير موجود"); }
     const [createdAdvance] = await rawQuery<Record<string, unknown>>(
@@ -987,24 +991,35 @@ journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "
     const totalCredit = roundTo2(lines.reduce((s: number, l) => s + l.credit, 0));
     if (Math.abs(totalDebit - totalCredit) > 0.01) throw new ValidationError(`القيد غير متوازن: مدين ${totalDebit.toFixed(2)} ≠ دائن ${totalCredit.toFixed(2)}`, { field: "lines", fix: "تأكد من تساوي المدين والدائن" });
 
-    await checkFinancialPeriodOpen(scope.companyId, date || new Date().toISOString());
+    const postingDate = date ? toDateISO(date) : toDateISO(new Date());
 
     const [seqRow] = await rawQuery<{ seq: string | number }>(`SELECT nextval('journal_number_seq') AS seq`).catch((e) => { logger.error(e, "finance journal query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
     const ref = generateRef("JE", seqRow.seq, 5);
+    const idempotencyToken = requestIdempotencyToken(req);
 
-    const insertId = await withTransaction(async (client) => {
-      const headerResult = await client.query(
-        `INSERT INTO journal_entries ("companyId","branchId",ref,description,status,"createdAt") VALUES ($1,$2,$3,$4,'posted',$5) RETURNING id`,
-        [scope.companyId, scope.branchId, ref, description, date || new Date().toISOString()]
-      );
-      const jId = headerResult.rows[0].id as number;
-      for (const l of lines) {
-        await client.query(
-          `INSERT INTO journal_lines ("journalId","accountCode",description,debit,credit,"costCenter","departmentId","projectId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-          [jId, l.accountCode, l.description || null, l.debit, l.credit, l.costCenter || null, l.departmentId || null, l.projectId || null]
-        );
-      }
-      return jId;
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const { journalId: insertId } = await financialEngine.postJournalEntry({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      createdBy: scope.activeAssignmentId,
+      ref,
+      description,
+      type: "manual",
+      sourceType: "manual_journal",
+      sourceId: 0,
+      sourceKey: `finance:manual_je:${ref}:${idempotencyToken}`,
+      lines: lines.map((l) => ({
+        accountCode: l.accountCode,
+        debit: l.debit,
+        credit: l.credit,
+        description: l.description,
+        costCenter: l.costCenter,
+        departmentId: l.departmentId != null ? Number(l.departmentId) : undefined,
+        projectId: l.projectId != null ? Number(l.projectId) : undefined,
+        employeeId: l.employeeId != null ? Number(l.employeeId) : undefined,
+      })),
+      status: "posted",
+      postingDate,
     });
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "journal_entries", entityId: insertId, after: { ref, description, totalDebit } }).catch((e) => logger.error(e, "finance-journal background task failed"));

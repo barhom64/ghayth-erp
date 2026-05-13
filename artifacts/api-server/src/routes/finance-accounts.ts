@@ -13,6 +13,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { checkFinancialPeriodOpen, emitEvent, createAuditLog, todayISO, toDateISO } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { requestIdempotencyToken } from "../lib/requestIdempotency.js";
 
 import { pushToDLQ } from "../lib/eventBus.js";
 import { logger } from "../lib/logger.js";
@@ -364,16 +365,19 @@ accountsRouter.post("/journal", authorize({ feature: "finance.accounts", action:
       );
     }
     const { financialEngine } = await import("../lib/engines/index.js");
+    const idempotencyToken = requestIdempotencyToken(req);
+    const journalRef = ref ?? `JE-${idempotencyToken}`;
     const { journalId } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
       createdBy: scope.activeAssignmentId,
-      ref: ref ?? `JE-${Date.now()}`,
+      ref: journalRef,
       description: description ?? "",
       sourceType: "manual_journal",
       sourceId: 0,
-      sourceKey: `finance:manual_je:${Date.now()}`,
+      sourceKey: `finance:manual_je:${journalRef}:${idempotencyToken}`,
       lines,
+      postingDate: journalDate,
     });
 
     emitEvent({

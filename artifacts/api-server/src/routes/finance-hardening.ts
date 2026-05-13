@@ -17,6 +17,7 @@ import {
   emitEvent,
   todayISO,
 } from "../lib/businessHelpers.js";
+import { requestIdempotencyToken } from "../lib/requestIdempotency.js";
 
 import { pushToDLQ } from "../lib/eventBus.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -323,7 +324,8 @@ financeHardeningRouter.post("/journal-manual", authorize({ feature: "finance.har
       );
     }
 
-    const ref = `MJE-${Date.now()}`;
+    const idempotencyToken = requestIdempotencyToken(req);
+    const ref = `MJE-${idempotencyToken}`;
     const { financialEngine } = await import("../lib/engines/index.js");
     const { journalId } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
@@ -333,14 +335,14 @@ financeHardeningRouter.post("/journal-manual", authorize({ feature: "finance.har
       description: description ?? "قيد يدوي",
       sourceType: "manual_journal",
       sourceId: 0,
-      sourceKey: `finance:manual:${Date.now()}`,
+      sourceKey: `finance:manual:${ref}`,
       lines,
+      headerMeta: {
+        approvalStatus: "draft",
+        isManual: true,
+        costCenter: costCenter ?? null,
+      },
     });
-
-    await rawExecute(
-      `UPDATE journal_entries SET "approvalStatus"='draft', "isManual"=TRUE, "costCenter"=$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
-      [costCenter ?? null, journalId, scope.companyId]
-    );
 
     emitEvent({
       companyId: scope.companyId,
