@@ -33,13 +33,32 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/admin.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+إدارة المستخدمين (Users) — حسابات الدخول. تختلف عن `employees`:
+- **user**: حساب نظام (login credentials)
+- **employee**: ملف موظف (HR data)
+- الربط: `users.employeeId → employees.id` (optional)
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| إنشاء مستخدم | `admin.ts` POST `/admin/users` | `users` | ✅ |
+| ربط بـ employee | optional | `users.employeeId` | للـ self-service | ✅ |
+| إسناد role | راجع `admin-roles.md` | `user_roles` | ✅ |
+| Reset password | POST `/admin/users/:id/reset-password` | email + temporary token | ✅ |
+| Enable/disable 2FA | auth | `users.tfaSecret` | ⚠ تحقق |
+| Force logout (revoke sessions) | POST `/admin/users/:id/logout` | invalidate `sessions` | ✅ |
+| Lock/unlock | brute-force protection | `users.lockedAt` | راجع `admin-violations-report.md` | ✅ |
+| Soft delete | `users.deletedAt` | لا حذف فعلي | للـ audit trail | ✅ |
+| Transfer ownership (entities) | للـ user المحذوف | منع orphan entities | ⚠ يدوي |
+| إشعار welcome + reset | comms | event=`user_created\|password_reset` | `notifications` + email | ✅ |
+| Audit log إجباري | كل تعديل | `audit_logs` | ✅ critical |
+| PDPL exports (data subject access) | راجع `documents-archive.md` | per user request | ⚠ |
+| تأثير على HR (لو موظف) | hr/employees | تعديل user info يحدث sync لـ employee | ⚠ تحقق |
+
+تحقق يدوي:
+- [ ] هل user بدون employeeId له صلاحيات أقل (مثلاً external contractor)؟
+- [ ] هل تغيير role من employee → admin يطلق تنبيه + 2FA verification؟
+- [ ] هل deleted users يبقون في audit_logs بشكل دائم؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `users` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

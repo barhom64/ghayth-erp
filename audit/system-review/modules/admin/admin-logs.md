@@ -23,13 +23,36 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/admin.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+Admin Logs — مركزي للسجلات (audit + events + activity).
+
+| النوع | المصدر | الوصف |
+|------|--------|------|
+| Audit logs | `audit_logs` | كل تغيير DB (via `auditMiddleware`) |
+| Event logs | `event_logs` | business events |
+| Activity logs | `activity_log` | clicks + navigation |
+| HTTP access logs | `pino-http` | كل request |
+| Error logs | `pino-http` | exceptions + 5xx |
+| Auth failures | `auth_failures` | brute force protection |
+| Posting failures | راجع `admin-posting-failures.md` | finance |
+| CRON logs | `cron_logs` | scheduled task results |
+| Integration logs | `integration_logs` | راجع `admin-integrations.md` |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| Unified search | `auditLogs.ts` GET `/admin/logs` | aggregations + filters | ✅ |
+| Drill-down per entry | full payload | ✅ |
+| Export CSV (for forensics) | `export.ts` | ✅ |
+| Retention policy | older than X year → cold storage | ⚠ |
+| PDPL: data subject access | filter per user | ⚠ |
+| Anomaly detection | راجع `admin-violations-report.md` | ✅ |
+| إشعار للـ admin عند spike | event=`log_anomaly` | ⚠ |
+| Append-only enforced | لا UPDATE/DELETE على audit_logs | guard | ✅ critical |
+
+تحقق يدوي:
+- [ ] هل audit_logs append-only فعلاً (DB-level constraint)?
+- [ ] هل البحث عن logs قديمة (>90 يوم) يفعّل cold storage retrieval؟
+- [ ] هل PII في logs محصور بـ RBAC level 90+?
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `logs` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

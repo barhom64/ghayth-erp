@@ -24,13 +24,40 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/admin.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+التكاملات الخارجية (External Integrations) — إدارة API keys + endpoints.
+
+| التكامل | الوحدة | الحالة |
+|---------|--------|--------|
+| ZATCA Phase 2 | finance-zatca | ✅ موجود |
+| GOSI | hr/gov-integrations | ⚠ |
+| Mudad (WPS portal) | hr | ✅ موجود في `lib/saudi-compliance/mudad` |
+| WPS (banks) | hr | ✅ `lib/saudi-compliance/wps` |
+| Ejar (المرَكَز العقاري) | properties | ⚠ اختياري |
+| Najz (المحاكم) | legal | ⚠ يدوي حالياً |
+| Twilio / STC SMS | communications | ⚠ |
+| Meta WhatsApp Cloud | communications | ⚠ |
+| SendGrid/SMTP email | communications | ⚠ |
+| STC Pay / mada | finance/payments | ⚠ بوابات دفع |
+| Web push (VAPID) | communications | ⚠ |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| إعداد integration جديد | admin | POST `/admin/integrations` | `integrations` | ✅ |
+| API keys + secrets | admin | encrypted storage (`__configured__` sentinel) | ✅ راجع `settings-communication-channels` |
+| Test connection | admin | POST `/admin/integrations/:id/test` | ⚠ تحقق |
+| Enable/disable | admin | PATCH `/admin/integrations/:id` | `integrations.enabled` | ✅ |
+| Logs (per integration) | admin | `integration_logs` | لـ debugging | ✅ |
+| Rate limit per integration | rate-limit | per provider quota | ⚠ |
+| Webhook receivers | admin | `webhook_endpoints` (incoming) | ⚠ تحقق |
+| إشعار عند failure metric breach | comms | event=`integration_error_rate_high` | `notifications` | ✅ critical |
+| Audit log إجباري | كل تعديل في key/secret | `audit_logs` | ✅ critical |
+| Rotation of secrets | راجع `docs/SECRETS_ROTATION.md` | scheduled | ✅ |
+
+تحقق يدوي:
+- [ ] هل secrets في DB مشفّرة فعلاً (vs plain text)?
+- [ ] هل cycle rotation للـ secrets كل 90 يوم تلقائي؟
+- [ ] هل integration معطّل يخفي إعداداته من users غير admin؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `integrations` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

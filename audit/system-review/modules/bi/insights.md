@@ -24,13 +24,33 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/bi.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+Insights — AI-powered insights + recommendations + anomaly detection.
+
+| النوع | المثال |
+|------|--------|
+| Anomaly detection | sudden drop in sales / spike in expenses |
+| Predictive | likely churn customers, cash shortage in 30 days |
+| Pattern recognition | seasonal trends, repeated complaints |
+| Recommendations | best time to send promotions, optimal inventory levels |
+| Benchmarks | comparison vs industry standards (إن متاح) |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| تجميع insights من المصادر | `intelligence.ts` GET `/intelligence/insights` | aggregations + ML | ✅ |
+| Subscribe (للموظف) | per-user preferences | `user_insight_subscriptions` | ⚠ |
+| Action على insight (dismiss/snooze/escalate) | POST `/insights/:id/action` | ⚠ |
+| Linked to events (auto-generated) | event listeners | راجع `lib/eventListeners.ts` | ✅ |
+| Severity (info/warning/critical) | priority sorting | ✅ |
+| RBAC على insights المالية | CFO/MD only | ✅ |
+| Export | للـ review meetings | ✅ |
+| Audit log | core | لـ tracking acted-upon vs dismissed | ⚠ |
+| تأثير على exec dashboard | راجع `misc/exec-dashboard.md` | ✅ |
+
+تحقق يدوي:
+- [ ] هل ML predictions موضّحة (explainable AI)?
+- [ ] هل insight متكرر بدون action يطلق escalation للمدير؟
+- [ ] هل false-positive rate مرصود لتحسين النموذج؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `insights` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
