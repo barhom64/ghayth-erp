@@ -111,6 +111,7 @@ export default function RecruitmentPage() {
             canEdit={canManage}
             onEdit={() => jobActions.startEdit(j.id, { title: j.title, department: j.department || "", location: j.location || "", type: j.type || "", status: j.status || "open" })}
             onDelete={() => jobActions.startDelete(j.id)}
+            deletePerm="hr:delete"
           />
         </div>
       ),
@@ -148,6 +149,7 @@ export default function RecruitmentPage() {
             canEdit={canManage}
             onEdit={() => appActions.startEdit(a.id, { status: a.status || a.stage || "new", rating: a.rating || 0 })}
             onDelete={() => appActions.startDelete(a.id)}
+            deletePerm="hr:delete"
           />
         </div>
       ),

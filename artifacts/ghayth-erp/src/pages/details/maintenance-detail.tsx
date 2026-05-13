@@ -296,7 +296,7 @@ export default function MaintenanceDetail() {
               sections={printSections}
             />
           )}
-          <DetailActionButtons hook={editDelete} />
+          <DetailActionButtons hook={editDelete} editPerm="fleet:update" deletePerm="fleet:delete" />
         </>
       }
     />

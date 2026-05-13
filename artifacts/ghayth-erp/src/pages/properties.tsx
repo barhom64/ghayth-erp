@@ -78,6 +78,7 @@ export default function Properties() {
               canEdit={canManage}
               onEdit={() => startEdit(u.id, { unitNumber: u.unitNumber || "", buildingName: u.buildingName || "", type: u.type || "apartment", area: u.area || 0, monthlyRent: u.monthlyRent || 0, status: u.status || "available" })}
               onDelete={() => startDelete(u.id)}
+              deletePerm="properties:delete"
             />
           )}
         </div>

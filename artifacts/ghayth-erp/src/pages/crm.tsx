@@ -135,6 +135,7 @@ function OpportunitiesTab() {
             canEdit={canManage}
             onEdit={() => startEdit(o.id, { title: o.title, stage: o.stage, value: o.value || 0, probability: o.probability || 0, status: o.status || "open" })}
             onDelete={() => startDelete(o.id)}
+            deletePerm="crm:delete"
           />
         </div>
       ),

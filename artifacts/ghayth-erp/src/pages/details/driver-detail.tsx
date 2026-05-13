@@ -308,7 +308,7 @@ export default function DriverDetail() {
             date={formatDateAr(new Date().toISOString())}
             sections={printSections}
           />
-          <DetailActionButtons hook={editDelete} />
+          <DetailActionButtons hook={editDelete} editPerm="fleet:update" deletePerm="fleet:delete" />
         </>
       }
     />

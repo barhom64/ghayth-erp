@@ -725,7 +725,7 @@ router.get("/onboarding-tasks", authorize({ feature: "hr.employees", action: "li
        ORDER BY ot."createdAt" DESC LIMIT 200`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { logger.error(err, "Onboarding tasks error:"); res.json({ data: [], total: 0 }); }
 });
 
@@ -761,7 +761,7 @@ router.patch("/onboarding-tasks/:id", authorize({ feature: "hr.employees", actio
       action: "update", entity: "onboarding_tasks", entityId: id,
       after: { status },
     }).catch((e) => logger.error(e, "employees background task failed"));
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
@@ -777,7 +777,7 @@ router.get("/job-titles", authorize({ feature: "hr.employees", action: "list" })
       `SELECT * FROM job_titles WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY name LIMIT 500`,
       [scope.companyId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { logger.error(err, "job-titles query failed"); res.json({ data: [], total: 0 }); }
 });
 
@@ -801,7 +801,7 @@ router.get("/documents", authorize({ feature: "hr.employees", action: "list" }),
        LIMIT 100`,
       [scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) {
     handleRouteError(err, res, "Get employee documents error:");
   }
@@ -1222,7 +1222,7 @@ router.patch("/:id", authorize({ feature: "hr.employees", action: "update", reso
       details: JSON.stringify({ changedFields }),
     }).catch((e) => logger.error(e, "employees background task failed"));
 
-    res.json(after);
+    res.json(maskFields(req, after));
   } catch (err) {
     handleRouteError(err, res, "Update employee error:");
   }

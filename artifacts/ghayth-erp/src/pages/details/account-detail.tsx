@@ -76,7 +76,7 @@ export default function AccountDetail() {
       onRetry={refetch}
       extraTabs={extraTabs}
       hideTabs={hideTabs}
-      actions={<DetailActionButtons hook={editDelete} />}
+      actions={<DetailActionButtons hook={editDelete} editPerm="finance:update" deletePerm="finance:delete" />}
     />
   );
 }

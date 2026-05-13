@@ -106,7 +106,7 @@ function parseModules(raw: unknown, roleKey?: string): string[] {
   return [];
 }
 
-router.get("/my", async (req, res) => {
+router.get("/my", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const roleRows = await rawQuery<RoleSummaryRow>(

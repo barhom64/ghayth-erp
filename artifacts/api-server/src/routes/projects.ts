@@ -668,7 +668,7 @@ router.patch("/:id", authorize({ feature: "projects.list", action: "update" }), 
       before[f] = existing[f];
       after[f] = b[f];
     }
-    if (Object.keys(after).length === 0) { res.json(existing); return; }
+    if (Object.keys(after).length === 0) { res.json(maskFields(req, existing)); return; }
     params.push(id); params.push(scope.companyId);
     const { affectedRows } = await rawExecute(`UPDATE projects SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     if (!affectedRows) throw new NotFoundError("المشروع غير موجود");
@@ -696,7 +696,7 @@ router.patch("/:id", authorize({ feature: "projects.list", action: "update" }), 
       after,
     }).catch((e) => logger.error(e, "projects background task failed"));
 
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Update project error:"); }
 });
 
@@ -1051,7 +1051,7 @@ router.patch("/tasks/:taskId", authorize({ feature: "projects.tasks", action: "u
       before.actualHours = existingTask.actualHours; after.actualHours = b.actualHours;
     }
     if (b.status === 'done') sets.push(`"completedAt"=NOW()`);
-    if (sets.length === 0) { res.json(existingTask); return; }
+    if (sets.length === 0) { res.json(maskFields(req, existingTask)); return; }
     params.push(taskId);
     let taskWhere = `id=$${params.length}`;
     if (b.status !== undefined && b.status !== existingTask.status) {
@@ -1208,7 +1208,7 @@ router.patch("/tasks/:taskId", authorize({ feature: "projects.tasks", action: "u
       }
     }
 
-    res.json({ ...task, unlockedTasks: unlockedTasks.length > 0 ? unlockedTasks : undefined });
+    res.json(maskFields(req, { ...task, unlockedTasks: unlockedTasks.length > 0 ? unlockedTasks : undefined }));
   } catch (err) { handleRouteError(err, res, "Update project task error:"); }
 });
 
@@ -1510,7 +1510,7 @@ router.patch("/milestones/:milestoneId", authorize({ feature: "projects.tasks", 
     if (b.targetDate !== undefined) { params.push(b.targetDate); sets.push(`"targetDate"=$${params.length}`); }
     if (b.completedDate !== undefined) { params.push(b.completedDate); sets.push(`"completedDate"=$${params.length}`); }
     if (b.status === 'completed' && !b.completedDate) sets.push(`"completedDate"=NOW()`);
-    if (sets.length === 0) { res.json(existing); return; }
+    if (sets.length === 0) { res.json(maskFields(req, existing)); return; }
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<Record<string, unknown>>(
       `UPDATE project_milestones SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} RETURNING *`,
@@ -1542,7 +1542,7 @@ router.patch("/milestones/:milestoneId", authorize({ feature: "projects.tasks", 
       details: JSON.stringify({ title: b.title, status: b.status, targetDate: b.targetDate }),
     }).catch((e) => logger.error(e, "projects background task failed"));
 
-    res.json(rows[0]);
+    res.json(maskFields(req, rows[0]));
   } catch (err) { handleRouteError(err, res, "Update milestone error:"); }
 });
 
@@ -1698,7 +1698,7 @@ router.patch("/risks/:riskId", authorize({ feature: "projects.tasks", action: "u
       details: JSON.stringify({ title: b.title, status: b.status, probability: b.probability, impact: b.impact }),
     }).catch((e) => logger.error(e, "projects background task failed"));
 
-    res.json(rows[0]);
+    res.json(maskFields(req, rows[0]));
   } catch (err) { handleRouteError(err, res, "Update risk error:"); }
 });
 

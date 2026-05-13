@@ -25,13 +25,27 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/properties.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+تسجيل دفعة لقسط إيجار محدد (مكمّل لـ `properties-payments.md`).
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| POST `/properties/payments/:id/pay` | properties | يحدّث `property_payments.paidAt`, `paidAmount` | ✅ |
+| طريقة دفع (نقد/بنك/شيك) | finance | يحدّد `voucher.paymentMethod` | راجع `finance-payments.md` | ✅ |
+| **قيد محاسبي** | finance/GL | DR Cash/Bank / CR Rental Revenue (+ VAT إن تجاري) | راجع `properties-payments.md` | ✅ |
+| تحديث رصيد المستأجر | properties | aggregate after | ✅ |
+| تحديث رصيد المالك (بعد العمولة) | properties | راجع `properties-owners.md` | ✅ |
+| دفعة جزئية | properties | `payment.status='partial'` يبقى مفتوحاً للباقي | ✅ |
+| دفعة مع رسوم تأخير | properties | لو متأخر — `late_fee_lines` يُضاف للقيد | ⚠ تحقق |
+| إيصال دفع للمستأجر | comms | event=`payment_received` | راجع `notifications` | ✅ |
+| فاتورة ZATCA (للوحدات التجارية) | finance-zatca | إن مفعّل | ⚠ |
+| تكامل بوابة دفع (STC Pay / mada) | gov-integrations | اختياري | ⚠ |
+| تأثير على AR aging | راجع `properties-payments.md` و `finance-ar-aging.md` | ✅ |
+| Audit log | core | `auditMiddleware` (`/properties`) | ✅ |
+
+تحقق يدوي:
+- [ ] هل تسجيل دفعة بقيمة أكبر من المستحق ممكن؟ هل يتحوّل الزائد لرصيد العميل؟
+- [ ] هل دفعة مكرّرة بطريق الخطأ تطلق تنبيه قبل الحفظ؟
+- [ ] هل receipt PDF يُولَّد آلياً بعد POST؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `pay` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

@@ -571,7 +571,7 @@ router.get("/admin-reports/weekly", authorize({ feature: "bi", action: "list" })
       buildWeekStats(fmt(lastWeekStart), fmt(lastWeekEnd)),
     ]);
 
-    res.json({
+    res.json(maskFields(req, {
       period: { from: fmt(thisWeekStart), to: fmt(thisWeekEnd) },
       previousPeriod: { from: fmt(lastWeekStart), to: fmt(lastWeekEnd) },
       current: thisWeek,
@@ -582,7 +582,7 @@ router.get("/admin-reports/weekly", authorize({ feature: "bi", action: "list" })
         revenueChange: lastWeek.revenue > 0 ? Math.round(((thisWeek.revenue - lastWeek.revenue) / lastWeek.revenue) * 100) : 0,
         ticketsResolved: thisWeek.tickets.resolved - lastWeek.tickets.resolved,
       },
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Weekly report"); }
 });
 
@@ -700,7 +700,7 @@ router.get("/admin-reports/monthly", authorize({ feature: "bi", action: "list" }
       buildMonthStats(fmt(lastMonthStart), fmt(lastMonthEnd)),
     ]);
 
-    res.json({
+    res.json(maskFields(req, {
       period: { from: fmt(thisMonthStart), to: fmt(now) },
       previousPeriod: { from: fmt(lastMonthStart), to: fmt(lastMonthEnd) },
       current,
@@ -712,7 +712,7 @@ router.get("/admin-reports/monthly", authorize({ feature: "bi", action: "list" }
         revenueChange: previous.financial.revenue > 0 ? Math.round(((current.financial.revenue - previous.financial.revenue) / previous.financial.revenue) * 100) : 0,
         ticketsResolved: current.tickets.resolved - previous.tickets.resolved,
       },
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Monthly report"); }
 });
 
@@ -805,7 +805,7 @@ router.get("/ceo-dashboard", authorize({ feature: "bi", action: "list" }), async
     const netProfitThisMonth = revenueThisMonth - expensesThisMonth;
     const netProfitLastMonth = revenueLastMonth - expensesLastMonth;
 
-    res.json({
+    res.json(maskFields(req, {
       financial: {
         revenueThisMonth,
         revenueLastMonth,
@@ -839,7 +839,7 @@ router.get("/ceo-dashboard", authorize({ feature: "bi", action: "list" }), async
         expiringDocs: Number(docs?.expiringDocs ?? 0),
         overdueInvoices: Number(financial?.overdueInvoices ?? 0),
       },
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "CEO dashboard"); }
 });
 
@@ -928,7 +928,7 @@ router.get("/reports/branch-performance", authorize({ feature: "bi", action: "li
     result.sort((a: any, b: any) => b.revenue - a.revenue);
     result.forEach((r: any, i: number) => { r.rank = i + 1; });
 
-    res.json({ data: result, period: { from: dateFrom, to: dateTo } });
+    res.json(maskFields(req, { data: result, period: { from: dateFrom, to: dateTo } }));
   } catch (err) { handleRouteError(err, res, "Branch performance report"); }
 });
 
@@ -978,7 +978,7 @@ router.get("/reports/vendor-performance", authorize({ feature: "bi", action: "li
       };
     });
 
-    res.json({ data, period: { from: dateFrom, to: dateTo } });
+    res.json(maskFields(req, { data, period: { from: dateFrom, to: dateTo } }));
   } catch (err) { handleRouteError(err, res, "Vendor performance report"); }
 });
 
@@ -1046,7 +1046,7 @@ router.get("/reports/fleet-tco", authorize({ feature: "bi", action: "list" }), a
       };
     });
 
-    res.json({ data });
+    res.json(maskFields(req, { data }));
   } catch (err) { handleRouteError(err, res, "Fleet TCO report"); }
 });
 
@@ -1100,7 +1100,7 @@ router.get("/reports/department-leave-balance", authorize({ feature: "bi", actio
       };
     });
 
-    res.json({ data, year });
+    res.json(maskFields(req, { data, year }));
   } catch (err) { handleRouteError(err, res, "Department leave balance"); }
 });
 
@@ -1146,7 +1146,7 @@ router.get("/reports/property-occupancy", authorize({ feature: "bi", action: "li
       };
     });
 
-    res.json({ data });
+    res.json(maskFields(req, { data }));
   } catch (err) { handleRouteError(err, res, "Property occupancy report"); }
 });
 
@@ -1190,7 +1190,7 @@ router.get("/reports/training-roi", authorize({ feature: "bi", action: "list" })
       [cid, dateFrom, dateTo]
     ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
-    res.json({
+    res.json(maskFields(req, {
       summary: {
         trainedEmployees: Number(summary?.trainedEmployees ?? 0),
         totalSessions: Number(summary?.totalSessions ?? 0),
@@ -1202,7 +1202,7 @@ router.get("/reports/training-roi", authorize({ feature: "bi", action: "list" })
       },
       byProgram,
       period: { from: dateFrom, to: dateTo },
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Training ROI report"); }
 });
 
@@ -1254,7 +1254,7 @@ router.get("/ai-insights", authorize({ feature: "bi", action: "list" }), async (
       [cid]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{} as Record<string, unknown>]; });
 
-    res.json({
+    res.json(maskFields(req, {
       alerts,
       proactiveActions: proactive,
       counts: {
@@ -1263,7 +1263,7 @@ router.get("/ai-insights", authorize({ feature: "bi", action: "list" }), async (
         info: Number(counts?.info ?? 0),
         total: Number(counts?.total ?? 0),
       },
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "AI insights"); }
 });
 
@@ -1302,7 +1302,7 @@ router.get("/alert-fatigue/settings", authorize({ feature: "bi", action: "list" 
       `SELECT * FROM alert_fatigue_settings WHERE "assignmentId" = $1`,
       [scope.activeAssignmentId]
     ).catch((e) => { logger.error(e, "bi query failed"); return []; });
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "Alert fatigue settings"); }
 });
 
@@ -1349,7 +1349,7 @@ router.get("/alert-fatigue/daily-count", authorize({ feature: "bi", action: "lis
     ).catch((e) => { logger.error(e, "bi query failed"); return [{ today_count: 0 }]; });
     const limit = 50;
     const count = Number(row?.today_count ?? 0);
-    res.json({ todayCount: count, dailyLimit: limit, isOverLimit: count >= limit });
+    res.json(maskFields(req, { todayCount: count, dailyLimit: limit, isOverLimit: count >= limit }));
   } catch (err) { handleRouteError(err, res, "Alert fatigue daily count"); }
 });
 
@@ -1365,11 +1365,17 @@ router.get("/reports/umrah-season-summary", authorize({ feature: "bi", action: "
     const scope = req.scope!;
     const cid = scope.companyId;
 
+    // NOTE: umrah_seasons has no "hijriYear" or "isCurrent" columns in the
+    // live schema — the previous version of this query referenced them and
+    // failed at runtime (ghost-column drift caught by check:schema-drift,
+    // task #212). We sort by startDate desc instead and omit those fields
+    // from the response. If/when those columns are added by migration,
+    // restore them here and to the response mapping below.
     const seasons = await rawQuery<Record<string, unknown>>(
-      `SELECT id, title, "hijriYear", "startDate", "endDate", status, "isCurrent"
+      `SELECT id, title, "startDate", "endDate", status
          FROM umrah_seasons
         WHERE "companyId" = $1 AND "deletedAt" IS NULL
-        ORDER BY "hijriYear" DESC, "startDate" DESC NULLS LAST
+        ORDER BY "startDate" DESC NULLS LAST
         LIMIT 50`,
       [cid]
     ).catch((e) => { logger.error(e, "bi umrah seasons query failed"); return []; });
@@ -1438,11 +1444,9 @@ router.get("/reports/umrah-season-summary", authorize({ feature: "bi", action: "
       return {
         seasonId: s.id,
         title: s.title,
-        hijriYear: s.hijriYear,
         startDate: s.startDate,
         endDate: s.endDate,
         status: s.status,
-        isCurrent: s.isCurrent,
         pilgrims:  { total: Number(p.total), active: Number(p.active), departed: Number(p.departed), overstay: Number(p.overstay), violated: Number(p.violated) },
         groups:    { total: Number(g.total), invoiced: Number(g.invoiced) },
         sales:     { invoiced: Number(sa.invoiced), paid: Number(sa.paid), outstanding: Number(sa.invoiced) - Number(sa.paid), pendingCount: Number(sa.pendingCount) },
@@ -1459,7 +1463,7 @@ router.get("/reports/umrah-season-summary", authorize({ feature: "bi", action: "
       totalOverstay: data.reduce((s: number, r: any) => s + r.pilgrims.overstay, 0),
     };
 
-    res.json({ data, summary });
+    res.json(maskFields(req, { data, summary }));
   } catch (err) { handleRouteError(err, res, "BI umrah season summary"); }
 });
 

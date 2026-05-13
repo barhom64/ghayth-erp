@@ -23,13 +23,37 @@ _لم تُلتقط أزرار._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/governance.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+Compliance Center — تتبّع الالتزام بالمعايير + الجهات التنظيمية.
+
+| المعيار | الوحدة المتأثرة | المتطلب |
+|---------|------------------|---------|
+| ZATCA Phase 2 | finance | E-invoice مع QR + UUID + signing | راجع `finance-tax.md` |
+| GOSI | hr | شهري — submission من payroll | راجع `hr-payroll.md` |
+| WPS | hr | شهري — bank file | راجع `lib/saudi-compliance/wps` |
+| Mudad | hr | اختياري | راجع `lib/saudi-compliance/mudad` |
+| PDPL (Saudi Personal Data Protection Law) | core | retention + masking | راجع `documents-archive.md` |
+| Ejar (Real Estate) | properties | تسجيل عقود الإيجار | راجع `properties-contracts.md` |
+| Saudi Labor Law | hr | gratuity, leaves, overtime | متعدد |
+| IFRS | finance/reports | accounting standards | متعدد |
+| ISO 27001 (إن مطبق) | admin/security | controls + audits | راجع `governance-audits.md` |
+| Najz (المحاكم) | legal | session updates | راجع `legal-sessions.md` |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| Compliance dashboard | `governance.ts` GET `/governance/compliance` | aggregations | ✅ |
+| متطلب per standard | each standard linked to controls | `compliance_controls` | ✅ |
+| Compliance score per standard | aggregate | views | ✅ |
+| Auto-checks (للـ tech standards) | داخل validations | ✅ |
+| Manual review (للـ procedural) | governance/audits | راجع `governance-audits.md` | ✅ |
+| Findings → CAPA | راجع `governance-capa.md` | ✅ |
+| تقرير دوري للـ regulators | gov-integrations | متى متطلب | ⚠ |
+| Critical alert عند non-compliance | comms | event=`compliance_breach` | `notifications` | ✅ critical |
+| Audit log إجباري | core | كل تغيير في الـ control state | ✅ |
+
+تحقق يدوي:
+- [ ] هل non-compliance يطلق notification فوري (critical)؟
+- [ ] هل compliance score يأخذ weights لكل standard؟
+- [ ] هل التقارير الدورية (شهري/سنوي) لـ ZATCA/GOSI تُصدر تلقائياً؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `compliance` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

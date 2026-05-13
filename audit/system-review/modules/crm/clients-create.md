@@ -25,13 +25,26 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/crm.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+إنشاء عميل جديد (Create Client).
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| التحقق من duplicate (CR/tax_id/email/phone) | crm | unique constraints + soft check | ✅ |
+| إنشاء العميل | `clients.ts` POST `/clients` | `clients` | ✅ |
+| **ZATCA buyer info validation** | finance-zatca | tax_id format check, vat_number check | required لـ B2B invoicing | ⚠ تحقق |
+| تخصيص portfolio (للـ sales rep) | hr | `clients.salespersonId` → `employees` | ✅ |
+| Initial credit limit | finance | default per category أو manual | ⚠ |
+| ربط بـ chart of accounts (AR sub-ledger) | finance | تلقائي per new client | ⚠ تحقق |
+| إضافة لـ marketing audience | marketing | بناءً على opt-in | ⚠ |
+| ربط بـ lead (لو من lead) | crm | `clients.linkedLeadId` → `crm_leads` | ✅ راجع `crm-leads-byid.md` |
+| الترحيب welcome notification | comms | event=`client_created` | `notifications` | ⚠ |
+| Audit log | core | `auditMiddleware` (`/clients`) | ✅ |
+| RBAC: المسؤول عن خلق العملاء | RBAC level 30+ | ✅ |
+
+تحقق يدوي:
+- [ ] هل CR number unique على مستوى الـ tenant أم system-wide؟
+- [ ] هل العميل المُنشَأ بدون اعتماد VAT صالح للفوترة فوراً أم يحتاج verification؟
+- [ ] هل dedupe service يبحث عبر الـ phone numbers بمختلف الصياغات؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `create` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

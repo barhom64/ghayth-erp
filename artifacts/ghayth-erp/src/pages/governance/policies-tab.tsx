@@ -96,6 +96,7 @@ export function PoliciesTab() {
           <RowActions
             onEdit={() => startEdit(p.id, { title: p.title, category: p.category || "", description: p.description || "", effectiveDate: p.effectiveDate || "", status: p.status || "draft" })}
             onDelete={() => startDelete(p.id)}
+            deletePerm="governance:delete"
           />
         </div>
       ),
