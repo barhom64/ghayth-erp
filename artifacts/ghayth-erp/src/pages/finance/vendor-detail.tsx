@@ -208,7 +208,7 @@ export default function VendorDetailPage() {
     },
   ];
 
-  const actions = <DetailActionButtons hook={editDelete} />;
+  const actions = <DetailActionButtons hook={editDelete} editPerm="finance:update" deletePerm="finance:delete" />;
 
   return (
     <DetailPageLayout

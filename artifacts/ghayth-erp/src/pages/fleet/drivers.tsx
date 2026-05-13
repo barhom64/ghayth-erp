@@ -74,6 +74,7 @@ export default function DriversPage() {
           <RowActions
             onEdit={() => startEdit(d.id, { name: d.name, phone: d.phone || "", licenseNumber: d.licenseNumber || "", status: d.status || "active" })}
             onDelete={() => startDelete(d.id)}
+            deletePerm="fleet:delete"
           />
         </div>
       ),

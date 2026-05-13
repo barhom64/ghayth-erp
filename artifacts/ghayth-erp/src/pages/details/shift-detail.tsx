@@ -77,7 +77,7 @@ export default function ShiftDetail() {
       isLoading={isLoading}
       error={error}
       onRetry={refetch}
-      actions={<DetailActionButtons hook={editDelete} />}
+      actions={<DetailActionButtons hook={editDelete} editPerm="hr:update" deletePerm="hr:delete" />}
     />
   );
 }

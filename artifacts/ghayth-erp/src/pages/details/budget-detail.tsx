@@ -320,7 +320,7 @@ export default function BudgetDetail() {
             date={formatDateAr(item?.createdAt)}
             sections={printSections}
           />
-          <DetailActionButtons hook={editDelete} />
+          <DetailActionButtons hook={editDelete} editPerm="finance:update" deletePerm="finance:delete" />
         </>
       }
     />

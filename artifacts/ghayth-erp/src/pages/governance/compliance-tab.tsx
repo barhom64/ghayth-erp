@@ -57,6 +57,7 @@ export function ComplianceTab() {
           <RowActions
             onEdit={() => startEdit(i.id, { regulation: i.regulation, responsiblePerson: i.responsiblePerson || "", description: i.description || "", status: i.status || "compliant" })}
             onDelete={() => startDelete(i.id)}
+            deletePerm="governance:delete"
           />
         </div>
       ),

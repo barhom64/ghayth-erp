@@ -57,6 +57,7 @@ export function AuditsTab() {
           <RowActions
             onEdit={() => startEdit(a.id, { title: a.title, auditorName: a.auditorName || "", scope: a.scope || "", status: a.status || "planned" })}
             onDelete={() => startDelete(a.id)}
+            deletePerm="governance:delete"
           />
         </div>
       ),

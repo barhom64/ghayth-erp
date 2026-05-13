@@ -230,7 +230,7 @@ export default function FuelDetail() {
             date={formatDateAr(item?.date || item?.createdAt)}
             sections={printSections}
           />
-          <DetailActionButtons hook={editDelete} />
+          <DetailActionButtons hook={editDelete} editPerm="fleet:update" deletePerm="fleet:delete" />
         </>
       }
     />

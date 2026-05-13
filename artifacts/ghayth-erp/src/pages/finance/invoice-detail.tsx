@@ -188,7 +188,7 @@ export default function InvoiceDetailPage() {
   // --- Action buttons for the header ---
   const actions = (
     <div className="flex items-center gap-2">
-      <DetailActionButtons hook={editDelete} />
+      <DetailActionButtons hook={editDelete} editPerm="finance:update" deletePerm="finance:delete" />
       <Link href={`/finance/invoices/create?copyFrom=${id}`}>
         <Button variant="outline" size="sm" className="gap-1">
           <Copy className="h-4 w-4" />
