@@ -210,6 +210,22 @@ export interface ImportScope {
   branchId: number;
   userId: number;
   seasonId: number;
+  /**
+   * Optional treasury (cash-box) the NUSK AP journal entry will reference
+   * via the `treasuryId` column on the JE row. Used by the import wizard
+   * dropdown so the operator can pick which cash box this batch ties to
+   * — otherwise the JE is unlinked and downstream payment routing has to
+   * guess.
+   */
+  treasuryId?: number | null;
+  /**
+   * Optional override for the umrah-nusk-cost (DR) account code. When
+   * unset the engine falls back to the `account_mappings` row for
+   * `umrah_nusk_cost`/debit, then to the hard default `5201`. Lets the
+   * operator route a specific batch to a different cost account (e.g.
+   * to separate Umrah hotels vs. transport accounting).
+   */
+  purchaseAccountCode?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -631,8 +647,8 @@ export async function confirmVouchersImport(
               "mutamerCount","groundServices","electronicFees","visaFees","insuranceFees",
               "enrichmentServices","additionalServices","transportTotal","hotelTotal",
               "refundAmount","netCost","totalAmount","nuskStatus","issueDate","expiryDate",
-              "programDuration","createdBy","createdAt","updatedAt")
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,NOW(),NOW())
+              "programDuration","treasuryId","createdBy","createdAt","updatedAt")
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,NOW(),NOW())
              RETURNING id`,
             [
               scope.companyId, scope.branchId, row.nuskInvoiceNumber,
@@ -644,7 +660,9 @@ export async function confirmVouchersImport(
               row.netCost ?? 0, row.totalAmount ?? 0,
               row.nuskStatus || "pending",
               row.issueDate || null, row.expiryDate || null,
-              row.programDuration ?? null, scope.userId,
+              row.programDuration ?? null,
+              scope.treasuryId ?? null,
+              scope.userId,
             ]
           );
           await logChange(client, batchId, "nusk_invoice", res.rows[0].id, "created");
@@ -775,7 +793,8 @@ async function postNuskJournalEntries(
 
   if (totalAmount > 0 && nuskStatus !== "cancelled" && !existingApJeId) {
     try {
-      const expCode = await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "debit", "5201");
+      const expCode = scope.purchaseAccountCode
+        || await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "debit", "5201");
       const apCode = await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "credit", "2101");
       const apJeId = await createGuardedJournalEntry({
         companyId: scope.companyId,
@@ -805,7 +824,8 @@ async function postNuskJournalEntries(
 
   if (nuskStatus === "refunded" && refundAmount > 0 && !existingRefundJeId) {
     try {
-      const expCode = await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "debit", "5201");
+      const expCode = scope.purchaseAccountCode
+        || await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "debit", "5201");
       const apCode = await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "credit", "2101");
       const refundJeId = await createGuardedJournalEntry({
         companyId: scope.companyId,
