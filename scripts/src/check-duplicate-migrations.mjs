@@ -68,12 +68,25 @@ async function main() {
   let identicalCount = 0;
   console.log(`[check-duplicate-migrations] found ${duplicates.length} basename collisions:`);
 
+  // Normalise contents before diffing: every "divergent" pair in the
+  // 2026-05-13 baseline turned out to differ *only* in a self-
+  // referencing header comment line. Three flavours observed:
+  //   `-- 034_hr_discipline_regulation.sql`   (filename echo)
+  //   `-- 035: Seed COA accounts ...`         (number-colon-description)
+  //   `-- Migration 140: add missing ...`     (Migration-number-colon)
+  // None of those affect what the DDL does. Strip them before comparing
+  // so the script reports actual behavioural divergence, not the leftover
+  // from a copy-rename.
+  const HEADER_SELF_REF = /^--\s*(?:Migration\s+)?\d{2,4}[:_].+$/gm;
+  const normalise = (s) => s.replace(HEADER_SELF_REF, "-- <header-self-ref-stripped>");
+
   for (const [base, files] of duplicates) {
     const sorted = files.slice().sort();
     const contents = await Promise.all(
       sorted.map((f) => readFile(join(MIGRATIONS_DIR, f), "utf8")),
     );
-    const allIdentical = contents.every((c) => c === contents[0]);
+    const normalised = contents.map(normalise);
+    const allIdentical = normalised.every((c) => c === normalised[0]);
     if (allIdentical) {
       identicalCount++;
       console.log(`  • ${base}: IDENTICAL across ${files.length} files (${sorted.join(", ")})`);
@@ -96,30 +109,21 @@ async function main() {
     "  the prefixes (check the migration tracking table).",
   );
 
-  // After the 2026-05-13 cleanup the identical baseline is at 0. Any
-  // *new* identical pair must fail CI immediately — those are always a
-  // pure mistake (rename without delete) and there's no excuse to merge
-  // one. The divergent baseline is still 9 (pre-existing tech debt: see
-  // docs/KNOWN_ISSUES.md Phase 10) and is gated only when ENFORCE=1 so
-  // the cleanup PR can land incrementally.
-  if (identicalCount > 0) {
+  // After the 2026-05-13 cleanup both baselines are at 0. Any *new*
+  // collision (identical OR divergent) must fail CI immediately. There
+  // is no excuse for shipping one once the baseline is clean.
+  if (identicalCount > 0 || divergentCount > 0) {
     console.error(
-      `[check-duplicate-migrations] FAIL — ${identicalCount} identical duplicate(s). ` +
-      `Identical baseline is supposed to be 0; either you re-numbered a migration without ` +
-      `deleting the original, or you copied the contents from an earlier migration. Resolve before merging.`,
+      `[check-duplicate-migrations] FAIL — ${identicalCount} identical + ${divergentCount} divergent duplicate(s). ` +
+      `Baseline is supposed to be 0/0. Either you re-numbered a migration without ` +
+      `deleting the original, copied DDL from an earlier migration, or two migrations claim ` +
+      `the same logical change while doing different things. Resolve before merging.`,
     );
     process.exit(1);
   }
-  const enforce = process.env.ENFORCE === "1";
-  if (enforce && divergentCount > 0) {
-    console.error(
-      `[check-duplicate-migrations] FAIL (ENFORCE=1) — ${divergentCount} divergent duplicate(s). Resolve before merging.`,
-    );
-    process.exit(1);
-  }
-  console.log(
-    `[check-duplicate-migrations] PASS — ${divergentCount} divergent duplicate(s) remain (informational; set ENFORCE=1 to gate).`,
-  );
+  // unreachable in the no-duplicates path (early-return above), but kept
+  // for completeness if a future rule adds a non-failing category.
+  console.log(`[check-duplicate-migrations] PASS — 0/0`);
 }
 
 main().catch((err) => {
