@@ -2,7 +2,7 @@ import { Router } from "express";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 import { rawQuery } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { logger } from "../lib/logger.js";
 
 export const calendarRouter = Router();
@@ -336,7 +336,7 @@ calendarRouter.get("/upcoming", authorize({ feature: "projects", action: "list" 
       umrahGroupArrivals: umrahGroupArrivals.length,
     };
 
-    res.json({ events, summary });
+    res.json(maskFields(req, { events, summary }));
   } catch (err) {
     handleRouteError(err, res, "Calendar upcoming error:");
   }

@@ -11,7 +11,7 @@ import {
   zodParse,
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
 import { emitEvent, createAuditLog, currentPeriod, currentYear, toDateISO, roundTo2, validateBudget } from "../lib/businessHelpers.js";
@@ -124,7 +124,7 @@ budgetRouter.get("/budget", authorize({ feature: "finance.budget", action: "list
        ORDER BY b.period DESC, b."accountCode"`,
       params
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (_e) { logger.error(_e, "budget list query failed");
     res.json({ data: [], total: 0, page: 1, pageSize: 0 });
   }
@@ -167,7 +167,7 @@ budgetRouter.get("/budget-vs-actual", authorize({ feature: "finance.budget", act
        ORDER BY b."accountCode"`,
       [scope.companyId, startDate.slice(0, 7), endDate.slice(0, 7)]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (_e) { logger.error(_e, "budget-vs-actual query failed");
     res.json({ data: [], total: 0 });
   }
@@ -482,7 +482,7 @@ budgetRouter.get("/budget/approval-requests", authorize({ feature: "finance.budg
        ORDER BY ar."requestedAt" DESC LIMIT 200`,
       [scope.companyId, status]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) {
     handleRouteError(err, res, "List budget approvals error:");
   }
@@ -634,13 +634,13 @@ budgetRouter.get("/budget/variance", authorize({ feature: "finance.budget", acti
       };
     });
 
-    res.json({
+    res.json(maskFields(req, {
       period,
       totalBudget: roundTo2(totalBudget),
       totalActual: roundTo2(totalActual),
       totalVariance: roundTo2(totalBudget - totalActual),
       lines,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Budget variance report error:");
   }
@@ -658,7 +658,7 @@ budgetRouter.get("/budget/:id", authorize({ feature: "finance.budget", action: "
       [id, scope.companyId]
     );
     if (!item) throw new NotFoundError("الميزانية غير موجودة");
-    res.json(item);
+    res.json(maskFields(req, item));
   } catch (err) { handleRouteError(err, res, "Get budget detail error:"); }
 });
 
@@ -694,7 +694,7 @@ budgetRouter.get("/fiscal-periods", authorize({ feature: "finance.budget", actio
       });
     }
 
-    res.json({ data: periods });
+    res.json(maskFields(req, { data: periods }));
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
   }

@@ -1,7 +1,7 @@
 import { handleRouteError } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { buildScopedWhere } from "../lib/scopedQuery.js";
 
 const router = Router();
@@ -137,7 +137,7 @@ router.get("/", authorize({ feature: "admin.audit", action: "view" }), async (re
         ? encodeCursor({ t: String(last.createdAt), i: last.id })
         : null;
 
-      res.json({ data, pageSize: perPage, cursor: nextCursor, hasMore });
+      res.json(maskFields(req, { data, pageSize: perPage, cursor: nextCursor, hasMore }));
       return;
     }
 
@@ -172,7 +172,7 @@ router.get("/", authorize({ feature: "admin.audit", action: "view" }), async (re
       countParams
     );
 
-    res.json({ data: rows, total: Number(countRow?.total ?? 0), page: pageNum, pageSize: perPage });
+    res.json(maskFields(req, { data: rows, total: Number(countRow?.total ?? 0), page: pageNum, pageSize: perPage }));
   } catch (err) {
     handleRouteError(err, res, "Get audit logs error:");
   }
@@ -186,7 +186,7 @@ router.get("/entities", authorize({ feature: "admin.audit", action: "view" }), a
       [scope.companyId]
     );
     const entities = rows.map((r) => r.entity);
-    res.json({ data: entities, total: entities.length, page: 1, pageSize: entities.length });
+    res.json(maskFields(req, { data: entities, total: entities.length, page: 1, pageSize: entities.length }));
   } catch (err) {
     handleRouteError(err, res, "Get audit log entities error");
   }
@@ -208,7 +208,7 @@ router.get("/:entityType/:entityId", authorize({ feature: "admin.audit", action:
       [scope.companyId, entityType, String(entityId)]
     );
 
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "Get entity audit logs error:");
   }

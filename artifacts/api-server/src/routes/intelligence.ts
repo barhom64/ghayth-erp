@@ -2,7 +2,7 @@ import { handleRouteError, NotFoundError, parseId, zodParse } from "../lib/error
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { requireRole } from "../middlewares/roleGuard.js";
 import { aiEngine } from "../lib/aiEngine.js";
 import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
@@ -88,7 +88,7 @@ router.get("/alerts", authorize({ feature: "admin", action: "list" }), async (re
     if (severity) { params.push(severity); conditions.push(`severity = $${params.length}`); }
     if (isRead !== undefined) { params.push(isRead === 'true'); conditions.push(`"isRead" = $${params.length}`); }
     const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM smart_alerts WHERE ${conditions.join(" AND ")} ORDER BY "createdAt" DESC LIMIT 100`, params);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Alerts error:"); }
 });
 
@@ -141,7 +141,7 @@ router.get("/kpis", authorize({ feature: "admin", action: "list" }), async (req,
     if (employeeId) { params.push(Number(employeeId) || 0); conditions.push(`"employeeId" = $${params.length}`); }
     if (metricName) { params.push(metricName); conditions.push(`"metricName" = $${params.length}`); }
     const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM kpi_snapshots WHERE ${conditions.join(" AND ")} ORDER BY "snapshotDate" DESC LIMIT 200`, params);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "KPIs error:"); }
 });
 
@@ -151,7 +151,7 @@ router.get("/kpis/employee/:employeeId", authorize({ feature: "admin", action: "
     const employeeId = parseId(req.params.employeeId, "employeeId");
     const date = (req.query.date as string) ?? todayISO();
     const metrics = await calculateEmployeeKPIs(scope.companyId, employeeId, date);
-    res.json({ employeeId, date, metrics });
+    res.json(maskFields(req, { employeeId, date, metrics }));
   } catch (err) { handleRouteError(err, res, "Employee KPI error:"); }
 });
 
@@ -161,7 +161,7 @@ router.get("/daily-schedule", authorize({ feature: "admin", action: "list" }), a
     const cid = scope.companyId;
     const date = (req.query.date as string) ?? todayISO();
     const schedules = await buildAllSchedules(cid, date);
-    res.json({ date, schedules });
+    res.json(maskFields(req, { date, schedules }));
   } catch (err) { handleRouteError(err, res, "Daily schedule error:"); }
 });
 
@@ -171,7 +171,7 @@ router.get("/daily-schedule/employee/:employeeId", authorize({ feature: "admin",
     const employeeId = parseId(req.params.employeeId, "employeeId");
     const date = (req.query.date as string) ?? todayISO();
     const schedule = await buildEmployeeSchedule(scope.companyId, employeeId, date);
-    res.json(schedule);
+    res.json(maskFields(req, schedule));
   } catch (err) { handleRouteError(err, res, "Employee schedule error:"); }
 });
 
@@ -190,7 +190,7 @@ router.get("/overview", authorize({ feature: "admin", action: "list" }), async (
       rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as unread FROM smart_alerts WHERE "companyId"=$1 AND "isRead"=false`, [cid]),
     ]);
 
-    res.json({
+    res.json(maskFields(req, {
       totalEmployees: Number(employees?.total ?? 0),
       totalVehicles: Number(vehicles?.total ?? 0),
       totalProperties: Number(properties?.total ?? 0),
@@ -198,7 +198,7 @@ router.get("/overview", authorize({ feature: "admin", action: "list" }), async (
       openTickets: Number(tickets?.open ?? 0),
       monthlyRevenue: Number(revenue?.total ?? 0),
       unreadAlerts: Number(alerts?.unread ?? 0),
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Intelligence overview error:"); }
 });
 
@@ -383,7 +383,7 @@ router.get("/suggestions", requireRole("branch_manager", "general_manager", "hr_
       });
     }
 
-    res.json({ data: suggestions, total: suggestions.length });
+    res.json(maskFields(req, { data: suggestions, total: suggestions.length }));
   } catch (err) { handleRouteError(err, res, "Smart suggestions"); }
 });
 
@@ -582,7 +582,7 @@ router.get("/activity/stats", requireRole("branch_manager", "general_manager", "
     const scope = req.scope!;
     const days = Number(req.query.days) || 30;
     const stats = await getUsageStats(scope.companyId, days);
-    res.json(stats);
+    res.json(maskFields(req, stats));
   } catch (err) { handleRouteError(err, res, "Activity stats error:"); }
 });
 
@@ -592,7 +592,7 @@ router.get("/clients/analytics", requireRole("branch_manager", "general_manager"
   try {
     const scope = req.scope!;
     const summary = await getClientAnalyticsSummary(scope.companyId);
-    res.json(summary);
+    res.json(maskFields(req, summary));
   } catch (err) { handleRouteError(err, res, "Client analytics error:"); }
 });
 
@@ -600,7 +600,7 @@ router.get("/clients/analytics/recalculate", requireRole("branch_manager", "gene
   try {
     const scope = req.scope!;
     const count = await calculateAllClientsRFM(scope.companyId);
-    res.json({ message: `تم تحديث تحليل ${count} عميل`, count });
+    res.json(maskFields(req, { message: `تم تحديث تحليل ${count} عميل`, count }));
   } catch (err) { handleRouteError(err, res, "RFM recalculate error:"); }
 });
 
@@ -611,7 +611,7 @@ router.get("/clients/:clientId/rfm", requireRole("branch_manager", "general_mana
     const rfm = await calculateClientRFM(scope.companyId, clientId);
     if (!rfm) throw new NotFoundError("العميل غير موجود");
     const contactTime = await getBestContactTime(scope.companyId, clientId);
-    res.json({ ...rfm, bestContactTime: contactTime });
+    res.json(maskFields(req, { ...rfm, bestContactTime: contactTime }));
   } catch (err) { handleRouteError(err, res, "Client RFM error:"); }
 });
 
@@ -619,7 +619,7 @@ router.get("/seasonal-patterns", requireRole("branch_manager", "general_manager"
   try {
     const scope = req.scope!;
     const patterns = await detectSeasonalPatterns(scope.companyId);
-    res.json({ data: patterns });
+    res.json(maskFields(req, { data: patterns }));
   } catch (err) { handleRouteError(err, res, "Seasonal patterns error:"); }
 });
 
@@ -631,7 +631,7 @@ router.get("/recommendations", authorize({ feature: "admin", action: "list" }), 
     const recs = await getPersonalizedRecommendations(
       scope.companyId, scope.userId, scope.activeAssignmentId, scope.role
     );
-    res.json({ data: recs, total: recs.length });
+    res.json(maskFields(req, { data: recs, total: recs.length }));
   } catch (err) { handleRouteError(err, res, "Recommendations error:"); }
 });
 
@@ -641,7 +641,7 @@ router.get("/company-kpis", requireRole("branch_manager", "general_manager", "ow
   try {
     const scope = req.scope!;
     const kpis = await getCompanyKPIs(scope.companyId);
-    res.json(kpis);
+    res.json(maskFields(req, kpis));
   } catch (err) { handleRouteError(err, res, "Company KPIs error:"); }
 });
 
@@ -719,7 +719,7 @@ router.get("/insights-summary", requireRole("branch_manager", "general_manager",
     const prevRev = Number(prevMonthRevenue?.total ?? 0);
     const revenueChange = prevRev > 0 ? Math.round(((monthRev - prevRev) / prevRev) * 100) : 0;
 
-    res.json({
+    res.json(maskFields(req, {
       overview: {
         totalEmployees: Number(totalEmployees?.count ?? 0),
         totalClients: Number(totalClients?.count ?? 0),
@@ -738,7 +738,7 @@ router.get("/insights-summary", requireRole("branch_manager", "general_manager",
       companyKpis,
       recommendations: recs.slice(0, 10),
       seasonalPatterns,
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Insights summary error:"); }
 });
 

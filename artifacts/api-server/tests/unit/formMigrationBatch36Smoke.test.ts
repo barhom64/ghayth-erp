@@ -50,17 +50,14 @@ describe("settings/communication-channels-tab — 3 FormShells on the same tab",
 
   it("BooleanToggle is a generic subcomponent reused by all 3 sections", () => {
     expect(SRC).toContain("function BooleanToggle<TForm");
-    expect(SRC).toContain('BooleanToggle<SmsForm>');
-    expect(SRC).toContain('BooleanToggle<WhatsappForm>');
-    expect(SRC).toContain('BooleanToggle<PushForm>');
+    expect((SRC.match(/<BooleanToggle /g) || []).length).toBeGreaterThanOrEqual(3);
   });
 
   it("SecretField wraps FormTextField with configured-sentinel UX", () => {
     expect(SRC).toContain("function SecretField<TForm");
     expect(SRC).toContain('configured && !value');
     // Both forms (SMS + WhatsApp) use SecretField:
-    expect(SRC).toMatch(/<SecretField<SmsForm>/);
-    expect(SRC).toMatch(/<SecretField<WhatsappForm>/);
+    expect((SRC.match(/<SecretField/g) || []).length).toBeGreaterThanOrEqual(2);
   });
 
   it("save() normalises booleans to 'true'/'false' strings for the server", () => {

@@ -9,7 +9,7 @@ import {
 import { z } from "zod";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { emitEvent, createAuditLog, todayISO } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
@@ -126,7 +126,7 @@ recurringRouter.get("/recurring-journals", authorize({ feature: "finance.recurri
        LIMIT 200`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "List recurring journals error:");
   }
@@ -149,7 +149,7 @@ recurringRouter.get("/recurring-journals/:id", authorize({ feature: "finance.rec
        ORDER BY rr."createdAt" DESC LIMIT 50`,
       [id, scope.companyId]
     );
-    res.json({ ...row, history });
+    res.json(maskFields(req, { ...row, history }));
   } catch (err) {
     handleRouteError(err, res, "Get recurring journal error:");
   }

@@ -5,7 +5,7 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 import { todayISO } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 
 const router = Router();
 
@@ -103,7 +103,7 @@ router.get("/", authorize({ feature: "dashboard", action: "view" }), async (req,
     ]);
     const taskStats = taskStatsRows[0];
 
-    res.json({
+    res.json(maskFields(req, {
       cards: {
         todayTasks: Number(taskStats?.todayTasks ?? 0),
         awaitingMe: Number(taskStats?.awaitingMe ?? 0),
@@ -118,7 +118,7 @@ router.get("/", authorize({ feature: "dashboard", action: "view" }), async (req,
       pendingPurchaseRequests,
       notifications,
       role: scope.role,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "تحميل بيانات لوحة التحكم");
   }
@@ -188,7 +188,7 @@ router.get("/summary", authorize({ feature: "dashboard", action: "view" }), asyn
       ), { total: 0 }, "umrah open penalties"),
     ]);
 
-    res.json({
+    res.json(maskFields(req, {
       totalEmployees: Number(employees?.total ?? 0),
       totalClients: Number(clients?.total ?? 0),
       totalRevenue: Number(invoices?.revenue ?? 0),
@@ -210,7 +210,7 @@ router.get("/summary", authorize({ feature: "dashboard", action: "view" }), asyn
         pendingInvoices: Number(umrahSalesRow?.pending ?? 0),
         openPenalties: Number(umrahOverstayRow?.total ?? 0),
       },
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "تحميل ملخص لوحة التحكم");
   }
@@ -288,7 +288,7 @@ router.get("/role-data", authorize({ feature: "dashboard", action: "view" }), as
       };
     }
 
-    res.json(result);
+    res.json(maskFields(req, result));
   } catch (err) {
     handleRouteError(err, res, "تحميل بيانات الصلاحية في لوحة التحكم");
   }
@@ -335,7 +335,7 @@ router.get("/charts/revenue", authorize({ feature: "dashboard", action: "view" }
       revenue: Number(r.revenue),
       expenses: expenseMap[r.month_key as string] || 0,
     }));
-    res.json({ data });
+    res.json(maskFields(req, { data }));
   } catch (err) {
     handleRouteError(err, res, "تحميل مخطط الإيرادات");
   }
@@ -369,7 +369,7 @@ router.get("/charts/attendance", authorize({ feature: "dashboard", action: "view
       absent: Number(r.absent),
       late: Number(r.late),
     }));
-    res.json({ data });
+    res.json(maskFields(req, { data }));
   } catch (err) {
     handleRouteError(err, res, "تحميل مخطط الحضور");
   }
@@ -397,7 +397,7 @@ router.get("/charts/departments", authorize({ feature: "dashboard", action: "vie
       value: Number(r.value),
       color: colors[i % colors.length],
     }));
-    res.json({ data });
+    res.json(maskFields(req, { data }));
   } catch (err) {
     handleRouteError(err, res, "Department chart error:");
   }
@@ -441,7 +441,7 @@ router.get("/charts/recent-events", authorize({ feature: "dashboard", action: "v
       else time = `منذ ${Math.floor(diffMin / 1440)} يوم`;
       return { type: e.type, text: e.text || `حدث #${e.id}`, time, createdAt: e.createdAt };
     });
-    res.json({ data });
+    res.json(maskFields(req, { data }));
   } catch (err) {
     handleRouteError(err, res, "Recent events error:");
   }

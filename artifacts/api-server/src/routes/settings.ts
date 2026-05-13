@@ -4,7 +4,7 @@ import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import {
   resolveSettings,
   getSettingsByScope,
@@ -265,10 +265,10 @@ router.delete("/", authorize({ feature: "settings", action: "update" }), async (
   }
 });
 
-router.get("/general", authorize({ feature: "settings", action: "view" }), async (_req, res) => {
+router.get("/general", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const rows = await rawQuery(`SELECT * FROM system_settings WHERE "companyId" IS NULL AND "branchId" IS NULL ORDER BY key LIMIT 500`);
-    res.json({ data: maskSecretSettings(rows) });
+    res.json(maskFields(req, { data: maskSecretSettings(rows) }));
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
@@ -307,7 +307,7 @@ router.get("/resolved", authorize({ feature: "settings", action: "view" }), asyn
     for (const item of resolved) {
       if (SETTINGS_SECRET_KEYS.has(item.key) && item.value) item.value = "__configured__";
     }
-    res.json({ data: resolved });
+    res.json(maskFields(req, { data: resolved }));
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
@@ -345,7 +345,7 @@ router.get("/branches", authorize({ feature: "settings", action: "view" }), asyn
       `SELECT * FROM branches WHERE "companyId" = ANY($1) ORDER BY name`,
       [scope.allowedCompanies]
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
@@ -358,7 +358,7 @@ router.get("/branches/:id", authorize({ feature: "settings", action: "view" }), 
       [id, scope.allowedCompanies]
     );
     if (!row) { throw new NotFoundError("الفرع غير موجود"); }
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
@@ -369,7 +369,7 @@ router.get("/departments", authorize({ feature: "settings", action: "view" }), a
       `SELECT * FROM departments WHERE "companyId" = ANY($1) ORDER BY name`,
       [scope.allowedCompanies]
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
@@ -380,7 +380,7 @@ router.get("/companies", authorize({ feature: "settings", action: "view" }), asy
       `SELECT * FROM companies WHERE id = ANY($1) ORDER BY name`,
       [scope.allowedCompanies]
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
@@ -391,7 +391,7 @@ router.get("/audit-log", authorize({ feature: "settings", action: "view" }), asy
       `SELECT * FROM audit_logs WHERE "companyId" = ANY($1) ORDER BY "createdAt" DESC LIMIT 100`,
       [scope.allowedCompanies]
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
@@ -676,7 +676,7 @@ router.get("/system-controls", authorize({ feature: "settings", action: "view" }
     for (const r of rows) {
       try { controls[r.key] = JSON.parse(r.value as string); } catch (e) { logger.warn(e, `failed to parse system control JSON for key ${r.key}`); controls[r.key] = r.value; }
     }
-    res.json({ data: controls });
+    res.json(maskFields(req, { data: controls }));
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
@@ -722,7 +722,7 @@ router.get("/role-modules", authorize({ feature: "settings", action: "view" }), 
       `SELECT DISTINCT "roleKey", label, modules, level FROM user_roles WHERE "companyId" = $1 ORDER BY level DESC`,
       [scope.companyId]
     );
-    res.json({ data: roles });
+    res.json(maskFields(req, { data: roles }));
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
@@ -753,7 +753,7 @@ router.get("/approval-config", authorize({ feature: "settings", action: "view" }
       `SELECT * FROM approval_chains WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "chainType", "name"`,
       [scope.companyId]
     );
-    res.json({ data: chains });
+    res.json(maskFields(req, { data: chains }));
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
@@ -830,7 +830,7 @@ router.get("/channels", authorize({ feature: "settings", action: "view" }), asyn
       }
     }
 
-    res.json({ data: result });
+    res.json(maskFields(req, { data: result }));
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 

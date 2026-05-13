@@ -1,7 +1,7 @@
 import { handleRouteError, NotFoundError, parseId } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { triggerJobByName } from "../lib/cronScheduler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
@@ -12,7 +12,7 @@ router.get("/cron-jobs", authorize({ feature: "admin", action: "list" }), async 
   try {
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM cron_jobs ORDER BY name LIMIT 500`, []);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Cron jobs error:"); }
 });
 
@@ -57,7 +57,7 @@ router.get("/cron-logs", authorize({ feature: "admin", action: "list" }), async 
     if (jobId) { params.push(Number(jobId) || 0); conditions.push(`"jobId" = $${params.length}`); }
     const where = conditions.join(" AND ");
     const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM cron_logs WHERE ${where} ORDER BY "createdAt" DESC LIMIT 100`, params);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Cron logs error:"); }
 });
 
@@ -70,7 +70,7 @@ router.get("/notification-stats", authorize({ feature: "admin", action: "list" }
       [cid]
     );
     const [total] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as total FROM notification_log WHERE "companyId"=$1`, [cid]);
-    res.json({ breakdown: rows, total: Number(total?.total || 0) });
+    res.json(maskFields(req, { breakdown: rows, total: Number(total?.total || 0) }));
   } catch (err) { handleRouteError(err, res, "Notification stats error:"); }
 });
 
@@ -87,7 +87,7 @@ router.get("/event-logs", authorize({ feature: "admin", action: "list" }), async
     const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM event_logs WHERE ${where}`, params);
     params.push(pageLimit, pageOffset);
     const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM event_logs WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
-    res.json({ data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset });
+    res.json(maskFields(req, { data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset }));
   } catch (err) { handleRouteError(err, res, "Event logs error:"); }
 });
 
@@ -98,7 +98,7 @@ router.get("/proactive-rules", authorize({ feature: "admin", action: "list" }), 
       `SELECT * FROM proactive_rules WHERE "companyId" = $1 ORDER BY module, name LIMIT 500`,
       [scope.companyId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "Proactive rules error:"); }
 });
 
@@ -139,7 +139,7 @@ router.get("/automation-logs", authorize({ feature: "admin", action: "list" }), 
       `SELECT * FROM automation_logs WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
     );
-    res.json({ data: rows, total, page, pageSize: limit });
+    res.json(maskFields(req, { data: rows, total, page, pageSize: limit }));
   } catch (err) { handleRouteError(err, res, "Automation logs error:"); }
 });
 
@@ -178,14 +178,14 @@ router.get("/automation-stats", authorize({ feature: "admin", action: "list" }),
         [cid]
       ),
     ]);
-    res.json({
+    res.json(maskFields(req, {
       total: Number(totalRow?.total || 0),
       today: Number(todayRow?.total || 0),
       thisWeek: Number(weekRow?.total || 0),
       byType,
       byModule,
       recent,
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Automation stats error:"); }
 });
 
