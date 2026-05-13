@@ -16,6 +16,7 @@ A comprehensive, full-stack Arabic enterprise resource planning system centraliz
 -   **Runtime audit (separate CI workflow `audit-runtime.yml`)**: `pnpm run audit:runtime` — boots the full stack and walks every frontend route in headless Chromium across 5 axes (render / data fetch / primary CTA / navigation / runtime smoke). 30-40 min run, uploads `audit/screenshots/` and `/tmp/runtime-audit/all.json` as build artifacts. Locally, register as a Replit workflow — bash sessions get SIGKILL'd before it finishes. See `audit/RUNTIME_AUDIT_README.md`.
 -   **DB Migrations**: applied automatically by `api-server` on startup. Files in `artifacts/api-server/src/migrations/`. Migration runner detects `CREATE INDEX CONCURRENTLY` and runs that file un-wrapped.
 -   **Required env vars**: `REPLIT_DEV_DOMAIN`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` (for screenshot generation), `DATABASE_URL`.
+-   **C27 overstay smoke**: `artifacts/api-server/scripts/smoke-umrah-c27-overstay.mjs` (and matching `tests/integration/umrahC27Overstay.dynamic.test.ts` auto-run by guard step 4) seeds an overstayed pilgrim still inside KSA, invokes the bundled `umrah_daily_overstay_scan` cron handler via `triggerJobByName`, and asserts: 1 `umrah_violations` row of type=`overstay` scoped to the test company, a manager notification of type=`umrah` enqueued, and idempotency on a second run. Cleans up its seeded rows on pass and fail.
 
 ## Stack
 
