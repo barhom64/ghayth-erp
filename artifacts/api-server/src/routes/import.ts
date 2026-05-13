@@ -33,6 +33,7 @@ import {
   type ParsedRow,
 } from "../lib/genericImportEngine.js";
 import { ADAPTERS, type ImportEntity } from "../lib/importAdapters.js";
+import { createAuditLog } from "../lib/businessHelpers.js";
 
 const router: IRouter = Router();
 
@@ -75,6 +76,8 @@ async function rowsFromBody(
   if (buf.length > 25 * 1024 * 1024) {
     throw new ValidationError("حجم الملف يتجاوز 25 ميجابايت");
   }
+  // parseSpreadsheet is async since the xlsx → exceljs migration (Task #269);
+  // the surrounding rowsFromBody is already async + returns Promise<ParsedRow[]>.
   return parseSpreadsheet(buf, entity);
 }
 
@@ -155,6 +158,15 @@ router.post(
       const scope = scopeFromReq(req);
       const rows = await rowsFromBody(body, entity);
       const diff = await previewImport(scope, entity, rows);
+      createAuditLog({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? undefined,
+        userId: scope.userId,
+        action: "preview",
+        entity: ADAPTERS[entity].table,
+        entityId: 0,
+        after: { entity, rows: rows.length, fileName: body.fileName ?? null },
+      }).catch((e) => logger.error(e, "import preview audit failed"));
       res.json(diff);
     } catch (err) {
       handleRouteError(err, res, "Import preview error");
@@ -175,6 +187,15 @@ router.post(
         ? { fileName: body.fileName, fileSize: body.fileBase64?.length }
         : undefined;
       const result = await confirmImport(scope, entity, rows, fileMeta);
+      createAuditLog({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? undefined,
+        userId: scope.userId,
+        action: "import",
+        entity: ADAPTERS[entity].table,
+        entityId: (result as { batchId?: number })?.batchId ?? 0,
+        after: { entity, rows: rows.length, fileName: body.fileName ?? null, result },
+      }).catch((e) => logger.error(e, "import confirm audit failed"));
       res.json({ success: true, ...result });
     } catch (err) {
       handleRouteError(err, res, "Import confirm error");
