@@ -172,6 +172,7 @@ interface AppContextType {
   scopeQueryString: string;
   refreshFilters: () => void;
   switchToCompany: (companyId: number) => Promise<void>;
+  switchToBranch: (branchId: number) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -379,6 +380,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [assignments, notifyTokenRefreshed, queryClient]);
 
+  // Switching the *active assignment* — needed so that POST/PUT handlers,
+  // which key off `req.scope.branchId` from the JWT, stamp the user's
+  // current pick onto newly-created rows. Without this, the branch picker
+  // is read-only: it filters lists but never moves where new records land.
+  const switchToBranch = useCallback(async (branchId: number) => {
+    const match = assignments.find((a) => a.branchId === branchId);
+    if (!match) return; // user is not assigned to that branch — no-op
+    try {
+      await apiFetch("/auth/switch-assignment", {
+        method: "POST",
+        body: JSON.stringify({ assignmentId: match.id }),
+      });
+      notifyTokenRefreshed();
+      queryClient.clear();
+      setRefreshKey((k) => k + 1);
+      setPermRefreshKey((k) => k + 1);
+    } catch {
+      // Token refresh failures bubble through notifyTokenRefreshed in the
+      // 401 path; here we just stay on the old assignment.
+    }
+  }, [assignments, notifyTokenRefreshed, queryClient]);
+
+  // Auto-sync the active assignment with the branch picker: when exactly
+  // one branch is selected and the current JWT assignment is on a
+  // different branch, fire the switch. Multi-select stays purely as a
+  // read filter (no meaningful "active branch" for inserts when you've
+  // picked several).
+  useEffect(() => {
+    if (selectedBranchIds.length !== 1) return;
+    const picked = selectedBranchIds[0];
+    if (user?.branchId === picked) return;
+    void switchToBranch(picked);
+  }, [selectedBranchIds, user?.branchId, switchToBranch]);
+
   const hasPermission = (permission: PermissionKey) => permissions[permission];
   const canAccessModule = (module: ModuleType) => allowedModules.includes(module);
 
@@ -443,6 +478,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       scopeQueryString,
       refreshFilters,
       switchToCompany,
+      switchToBranch,
     }}>
       {children}
     </AppContext.Provider>
