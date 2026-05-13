@@ -6,6 +6,7 @@ import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { Pencil, Trash2, Check, X, Loader2 } from "lucide-react";
 import { apiPatch, apiDelete } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { usePermission } from "@/components/shared/permission-gate";
 import { toast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { DeleteConfirmImpact } from "@/components/delete-confirm-impact";
@@ -47,14 +48,18 @@ export function RowActions({
   onDelete,
   canEdit = true,
   canDelete = true,
+  deletePerm,
 }: {
   onEdit?: () => void;
   onDelete?: () => void;
   canEdit?: boolean;
   canDelete?: boolean;
+  deletePerm?: string;
 }) {
   const { user } = useAuth();
   const isAdminOrOwner = user?.role === "owner" || user?.role === "admin";
+  const hasDeletePerm = usePermission(deletePerm ?? "");
+  const showDelete = deletePerm ? hasDeletePerm : isAdminOrOwner;
 
   return (
     <div className="flex items-center gap-1">
@@ -63,7 +68,7 @@ export function RowActions({
           <Pencil className="h-4 w-4 text-muted-foreground" />
         </Button>
       )}
-      {onDelete && canDelete && isAdminOrOwner && (
+      {onDelete && canDelete && showDelete && (
         <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onDelete(); }} title="حذف">
           <Trash2 className="h-4 w-4 text-destructive" />
         </Button>
