@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { PageShell } from "@/components/page-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -72,6 +73,7 @@ function KPIGauge({ label, value, suffix = "%", color = "blue" }: { label: strin
 
 export default function Insights() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [recalculating, setRecalculating] = useState(false);
 
   const { data: summary, isLoading: loadingSummary, refetch: refetchSummary } = useApiQuery<any>(
@@ -491,7 +493,7 @@ export default function Insights() {
                           size="sm"
                           variant="outline"
                           className="flex-shrink-0"
-                          onClick={() => window.location.href = rec.actionLink}
+                          onClick={() => navigate(rec.actionLink)}
                         >
                           {rec.action}
                         </Button>
