@@ -269,7 +269,7 @@ router.get("/regulation", authorize({ feature: "hr.discipline", action: "list" }
       if (!grouped[row.section]) grouped[row.section] = [];
       grouped[row.section].push(row);
     }
-    res.json({
+    res.json(maskFields(req, {
       data: rows,
       grouped,
       sections: {
@@ -279,7 +279,7 @@ router.get("/regulation", authorize({ feature: "hr.discipline", action: "list" }
       },
       effectiveFrom: "2024-10-01",
       total: rows.length,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Get regulation error:");
   }
@@ -1252,7 +1252,7 @@ router.get("/employee/:employeeId/summary", authorize({ feature: "hr.discipline"
         LIMIT 5`,
       [scope.companyId, employeeId]
     );
-    res.json({ stats: stats ?? {}, recent });
+    res.json(maskFields(req, { stats: stats ?? {}, recent }));
   } catch (err) {
     handleRouteError(err, res, "Employee discipline summary error:");
   }
@@ -1275,7 +1275,7 @@ router.get("/stats", authorize({ feature: "hr.discipline", action: "list" }), as
        WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [scope.companyId]
     );
-    res.json(totals ?? {});
+    res.json(maskFields(req, totals ?? {}));
   } catch (err) {
     handleRouteError(err, res, "Memo stats error:");
   }
@@ -1290,7 +1290,7 @@ router.get("/auto-detection/settings", authorize({ feature: "hr.discipline", act
   try {
     const scope = req.scope!;
     const settings = await getAutoDetectionSettings(scope.companyId);
-    res.json(settings);
+    res.json(maskFields(req, settings));
   } catch (err) {
     handleRouteError(err, res, "خطأ في قراءة إعدادات الرصد التلقائي");
   }
@@ -1367,7 +1367,7 @@ router.get("/auto-detection/log", authorize({ feature: "hr.discipline", action: 
       fromDate,
       toDate,
     });
-    res.json(result);
+    res.json(maskFields(req, result));
   } catch (err) {
     handleRouteError(err, res, "خطأ في قراءة سجل الرصد التلقائي");
   }
@@ -1413,14 +1413,14 @@ router.get("/auto-detection/summary", authorize({ feature: "hr.discipline", acti
       gps_out_of_range: "خروج GPS",
     };
 
-    res.json({
+    res.json(maskFields(req, {
       ...(stats[0] ?? {}),
       byType: byType.map((r) => ({
         type: r.type,
         label: typeLabels[r.type ?? ""] ?? r.type,
         count: Number(r.count),
       })),
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "خطأ في ملخص الرصد التلقائي");
   }

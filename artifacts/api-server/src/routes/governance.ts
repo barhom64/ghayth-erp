@@ -698,7 +698,7 @@ router.get("/stats", authorize({ feature: "governance", action: "list" }), async
       rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS count FROM governance_capa WHERE status IN ('open','in_progress') AND "companyId"=$1`, [cid]).catch((e) => { logger.error(e, "governance query failed"); return [{ count: 0 }]; }),
     ]);
     const implementedPct = Number(complianceActions?.total) > 0 ? Math.round(Number(complianceActions?.implemented) / Number(complianceActions?.total) * 100) : 100;
-    res.json({
+    res.json(maskFields(req, {
       totalPolicies: Number(policies.count),
       openRisks: Number(risks.count),
       activeAudits: Number(audits.count),
@@ -709,7 +709,7 @@ router.get("/stats", authorize({ feature: "governance", action: "list" }), async
       complianceActions: Number(complianceActions?.total || 0),
       openCapas: Number(openCapas?.count || 0),
       risksNoTreatment: Number(risksNoTreatment?.count || 0),
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 

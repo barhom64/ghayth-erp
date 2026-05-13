@@ -654,11 +654,11 @@ router.delete("/companies/:id", authorize({ feature: "settings", action: "update
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
-router.get("/timezone", authorize({ feature: "settings", action: "view" }), async (_req, res) => {
+router.get("/timezone", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const rows = await rawQuery(`SELECT value FROM system_settings WHERE key='timezone' AND "companyId" IS NULL AND "branchId" IS NULL`);
     const timezone = rows.length > 0 ? rows[0].value : "Asia/Riyadh";
-    res.json({ timezone });
+    res.json(maskFields(req, { timezone }));
   } catch (e) {
     logger.warn(e, "failed to load timezone setting, using default");
     res.json({ timezone: "Asia/Riyadh" });
