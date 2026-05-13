@@ -310,6 +310,9 @@ export default function DriverDetail() {
             ref={`DRV-${id}`}
             date={formatDateAr(new Date().toISOString())}
             sections={printSections}
+            entityType="driver"
+            entityId={id ?? 0}
+            formats={["a4"]}
           />
           <DetailActionButtons hook={editDelete} editPerm="fleet:update" deletePerm="fleet:delete" />
         </>

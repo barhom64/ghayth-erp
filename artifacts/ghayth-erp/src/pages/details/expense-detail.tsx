@@ -449,6 +449,9 @@ export default function ExpenseDetail() {
                 ref={expense.ref || `EXP-${id}`}
                 date={formatDateAr(expense.createdAt)}
                 sections={printSections}
+                entityType="expense"
+                entityId={id ?? 0}
+                formats={["a4"]}
               />
             )}
             <GuardedButton

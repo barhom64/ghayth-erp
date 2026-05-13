@@ -271,6 +271,9 @@ export default function UmrahPackageDetail() {
               ref={`PKG-${id}`}
               date={formatDateAr(new Date().toISOString())}
               sections={printSections}
+              entityType="umrah_package"
+              entityId={id ?? 0}
+              formats={["a4"]}
             />
           }
         />

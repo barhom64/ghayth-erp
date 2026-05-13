@@ -1381,10 +1381,17 @@ export function getEntityPrintProfile(entityType: string): Required<Pick<EntityP
     };
   }
   // Permissive fallback for documents not yet wired into the registry.
+  // We deliberately use the generic `print:create` permission (not
+  // `print:<entity>:create`) here: the synthesized per-entity permission
+  // wouldn't exist in role_permissions for un-seeded entities, so every
+  // unregistered print would 403. Falling back to the broad `print:create`
+  // matches the user-facing intent ("anyone who can print can print this")
+  // while still gating non-printers out. Once the entity is added to the
+  // registry with an explicit `permission`, that explicit value wins.
   return {
     formats: ["a4"] as PrintFormat[],
     defaultFormat: "a4",
-    permission: `print:${entityType}:create`,
+    permission: "print:create",
     requiresApprovalForReprint: false,
     templateKey: undefined,
     registered: false,
