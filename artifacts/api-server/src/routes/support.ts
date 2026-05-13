@@ -182,7 +182,11 @@ router.get("/tickets", authorize({ feature: "support.tickets", action: "list" })
     const scope = req.scope!;
     const { status, priority } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 't."companyId"', disableBranchScope: true });
+    // Migration 171 added `support_tickets.branchId`. Drop the legacy
+    // `disableBranchScope: true` so the header picker filters tickets
+    // per-branch and a support agent assigned to one branch stops
+    // seeing tickets routed to another.
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 't."companyId"', branchColumn: 't."branchId"' });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (status) { where += ` AND t.status = $${paramIdx}`; params.push(status); paramIdx++; }
@@ -280,9 +284,12 @@ router.post("/tickets", authorize({ feature: "support.tickets", action: "create"
         }
     }
 
+    // Stamp branchId from the active JWT assignment (migration 171 added
+    // the column). Tickets created via the picker now isolate per-branch
+    // instead of being visible to every agent in the company.
     const { insertId } = await rawExecute(
-      `INSERT INTO support_tickets ("companyId",ref,title,description,category,priority,status,"clientId","assigneeId","slaDeadline") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [scope.companyId, ref, title, b.description, b.category, priority, 'open', b.clientId ?? null, assigneeId, slaResolutionDeadline]
+      `INSERT INTO support_tickets ("companyId","branchId",ref,title,description,category,priority,status,"clientId","assigneeId","slaDeadline") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [scope.companyId, scope.branchId, ref, title, b.description, b.category, priority, 'open', b.clientId ?? null, assigneeId, slaResolutionDeadline]
     );
     assertInsert(insertId, "support_tickets");
     const [row] = await rawQuery<SupportTicketRow>(`SELECT * FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
