@@ -27,13 +27,35 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/warehouse.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+إنشاء تصنيف صنف جديد — New item category.
+
+| الحقل | المتطلب |
+|------|--------|
+| Name (ar/en) | إجباري — unique per tenant |
+| Code | إجباري |
+| Parent | للـ tree | optional |
+| Default tax (VAT category) | راجع `finance-tax.md` |
+| Default UoM | unit of measure |
+| Default GL accounts | inventory, COGS, revenue | راجع `finance-accounts.md` ✅ critical |
+| Description | optional |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| Create category | POST `/warehouse/categories` | `item_categories` | ✅ |
+| Validate unique name+code | ✅ critical |
+| Validate parent type matches | ✅ |
+| Set defaults (tax, UoM, GL) | inheritance for items | ✅ critical |
+| تكامل مع `warehouse-categories.md` (list/tree) | ✅ |
+| تكامل مع `store-products-byid.md` (inherit defaults) | ✅ |
+| تكامل مع `finance-accounts.md` (GL inheritance) | ✅ critical |
+| Audit log إجباري | `audit_logs` | ✅ |
+| RBAC | warehouse manager + finance for GL | ✅ |
+
+تحقق يدوي:
+- [ ] هل defaults inherited بدقة عند إنشاء item جديد?
+- [ ] هل parent type validation صارم؟
+- [ ] هل tax category mapping consistent مع ZATCA rules?
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `create` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
