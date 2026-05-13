@@ -23,13 +23,35 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/bi.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+BI Operations Dashboard — تركيز على الـ operational metrics.
+
+| Pillar | KPIs |
+|--------|------|
+| Sales Operations | Pipeline value, Win rate, Avg sales cycle, Top deals |
+| Fleet Operations | Vehicle utilization, Fuel cost/km, Maintenance ratio |
+| Property Operations | Occupancy rate, Avg rent, Maintenance per unit |
+| Warehouse Operations | Inventory turnover, Stockout rate, Cycle count variance |
+| Service Operations | Ticket volume, SLA compliance, CSAT, MTTR |
+| Project Operations | Schedule variance, Budget variance, Risk count |
+| Umrah Operations | Pilgrim count per season, Revenue per package |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| Aggregate operational data | `bi.ts` GET `/bi/operations` | aggregations | ✅ |
+| Filter per branch/department | scope-aware | ✅ |
+| Comparative (this month vs last) | aggregate per period | ✅ |
+| Drill-down per pillar | navigate to source | ✅ |
+| Real-time refresh | client polls every 1 min | ✅ |
+| Alerts on KPI breach | راجع `bi-kpis.md` | ⚠ |
+| تصدير | CSV/PDF | راجع `bi-reports.md` | ✅ |
+| تكامل مع `operations-center.md` (COO view) | ✅ |
+| RBAC: operations managers + above | ✅ |
+| Audit log | read-only | ✅ |
+
+تحقق يدوي:
+- [ ] هل scope للـ branch manager محصور تلقائياً؟
+- [ ] هل ‏حدد العمليات لكل وحدة (warehouse/fleet/etc.) في مكان واحد أم متعدد؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `operations` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
