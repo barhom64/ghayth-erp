@@ -7,6 +7,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@/components/print-layout";
+import { PrintButton } from "@/components/shared/print-button";
 import { extractBranchFromResponse } from "@/lib/branch-utils";
 import {
   Banknote,
@@ -208,6 +209,12 @@ export default function InvoiceDetailPage() {
             filename={`invoice-${id}.pdf`}
             type="pdf"
             label="ملف طباعي"
+          />
+          <PrintButton
+            entityType="invoice"
+            entityId={invoice.id ?? id}
+            formats={["a4", "thermal_80", "excel"]}
+            label="طباعة"
           />
           <PrintActions
             onPreview={() => setShowPreview(true)}
