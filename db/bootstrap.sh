@@ -92,8 +92,25 @@ DSN="postgres://$DB_USER:$DB_PASSWORD@$DB_HOST:$DB_PORT/$DB_NAME"
 
 # 5. load the schema. The dump is generated with --clean so it can also
 # be applied to a non-empty DB; on a fresh DB the DROPs are no-ops.
-echo "  Loading schema from db/schema.sql..."
-PGPASSWORD="$DB_PASSWORD" psql "$DSN" -v ON_ERROR_STOP=1 -q -f "$SCHEMA_FILE"
+#
+# Load schema_pre + schema_post directly instead of going through the
+# `db/schema.sql` wrapper. The wrapper uses `\ir` which is rejected by
+# pg_dump's `\restrict` token that sits at the top of schema_pre.sql in
+# psql 16.10+: once schema_pre.sql sets restricted mode, every backslash
+# command in the parent script (including the `\ir schema_post.sql`
+# that should fire next) is blocked, killing the load mid-way.
+SCHEMA_PRE_FILE="$REPO_ROOT/db/schema_pre.sql"
+SCHEMA_POST_FILE="$REPO_ROOT/db/schema_post.sql"
+echo "  Loading schema from db/schema_pre.sql + db/schema_post.sql..."
+# schema_pre.sql starts with `\restrict <token>` which auto-unsets when
+# the file ends. The trailing `\unrestrict <token>` in schema_post.sql is
+# left over from when both halves loaded in one session; since we now
+# load them as two separate psql calls, it triggers "not currently in
+# restricted mode" which `-v ON_ERROR_STOP=1` upgrades to a fatal error.
+# Strip the lone `\unrestrict` lines on stdin to keep the load atomic.
+PGPASSWORD="$DB_PASSWORD" psql "$DSN" -v ON_ERROR_STOP=1 -q -f "$SCHEMA_PRE_FILE"
+grep -v '^\\unrestrict ' "$SCHEMA_POST_FILE" | \
+  PGPASSWORD="$DB_PASSWORD" psql "$DSN" -v ON_ERROR_STOP=1 -q
 
 # 6. load the reference seed (companies/branches/permissions/...).
 if [ -f "$SEED_FILE" ]; then
