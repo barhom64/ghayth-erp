@@ -8,7 +8,7 @@ import {
   zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
-import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { haversineKm } from "../lib/algorithms.js";
@@ -333,6 +333,7 @@ router.post("/vehicles", authorize({ feature: "fleet.vehicles", action: "create"
       `INSERT INTO fleet_vehicles ("companyId","plateNumber",make,model,year,color,"vinNumber","fuelType","currentMileage",status,"branchId",notes,"registrationNumber","registrationExpiry","inspectionDate","nextInspectionDate","plateType","sequenceNumber","insuranceExpiry","fuelCapacity") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
       [scope.companyId, plateNumber, b.make.trim(), b.model.trim(), b.year ? Number(b.year) : null, b.color, b.vinNumber, b.fuelType || 'gasoline', b.currentMileage || 0, 'available', b.branchId || scope.branchId, b.notes, b.registrationNumber || null, b.registrationExpiry || null, b.inspectionDate || null, b.nextInspectionDate || null, b.plateType || null, b.sequenceNumber || null, b.insuranceExpiry || null, b.fuelCapacity ? Number(b.fuelCapacity) : null]
     );
+    assertInsert(insertId, "fleet_vehicles");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -452,6 +453,7 @@ router.post("/drivers", authorize({ feature: "fleet.vehicles", action: "create" 
       `INSERT INTO fleet_drivers ("companyId",name,phone,"licenseNumber","licenseExpiry","licenseType","employeeId",status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [scope.companyId, name, phone, licenseNumber, b.licenseExpiry || null, b.licenseType || null, b.employeeId || null, b.status || 'available']
     );
+    assertInsert(insertId, "fleet_drivers");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     createSubsidiaryAccountsForEntity(scope.companyId, "driver", insertId, name).catch((e) => logger.error(e, "fleet background task failed"));
@@ -1300,6 +1302,7 @@ router.post("/trips/:id/waypoints", authorize({ feature: "fleet.trips", action: 
       `INSERT INTO fleet_gps_tracking ("vehicleId","driverId",latitude,longitude,speed,"recordedAt","companyId") VALUES ($1,$2,$3,$4,$5,NOW(),$6)`,
       [trip.vehicleId, trip.driverId, lat, lon, b.speed || 0, scope.companyId]
     );
+    assertInsert(insertId, "fleet_gps_tracking");
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fleet.trip.waypoint_added", entity: "fleet_gps_tracking", entityId: insertId,
@@ -1845,6 +1848,7 @@ router.post("/fuel-logs", authorize({ feature: "fleet.trips", action: "create" }
       `INSERT INTO fleet_fuel_logs ("companyId","vehicleId","driverId","fuelDate",liters,"costPerLiter","totalCost","mileageAtFuel","stationName") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
       [scope.companyId, resolvedVehicleId, b.driverId, fuelDate, liters, costPerLiter, totalCost, mileageAtFuel, stationName]
     );
+    assertInsert(insertId, "fleet_fuel_logs");
 
     // Auto journal entry for fuel cost
     if (totalCost > 0) {
@@ -1937,6 +1941,7 @@ router.post("/insurance", authorize({ feature: "fleet.vehicles", action: "create
       `INSERT INTO fleet_insurance ("companyId","vehicleId",type,provider,"policyNumber","startDate","endDate",premium,"coverageAmount",notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [scope.companyId, b.vehicleId, b.type || b.insuranceType || 'comprehensive', b.provider.trim(), b.policyNumber, b.startDate, b.endDate, premium, b.coverageAmount ? Number(b.coverageAmount) : null, b.notes || null]
     );
+    assertInsert(insertId, "fleet_insurance");
 
     // Auto journal entry for insurance premium
     if (premium > 0) {
@@ -2595,6 +2600,7 @@ router.post("/preventive-plans", authorize({ feature: "fleet.maintenance", actio
        nextServiceDate, nextServiceMileage,
        b.estimatedCost || 0, b.notes || null]
     );
+    assertInsert(insertId, "fleet_preventive_plans");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_preventive_plans WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -2777,6 +2783,7 @@ router.post("/traffic-violations", authorize({ feature: "fleet.vehicles", action
        fineAmount, b.location || null, b.violationNumber || null,
        b.notes || null, null]
     );
+    assertInsert(insertId, "fleet_traffic_violations");
 
     // GL posting — company-borne fines hit expense account immediately. If
     // the GL fails we roll back the violation row so we never have a visible

@@ -7,7 +7,7 @@
 import { Router } from "express";
 import { HR_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import {
   handleRouteError,
@@ -432,6 +432,7 @@ router.post("/regulation", authorize({ feature: "hr.discipline", action: "create
         legalReference ?? null,
       ]
     );
+    assertInsert(insertId, "hr_discipline_regulation");
     await createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "hr.discipline.regulation.create",
