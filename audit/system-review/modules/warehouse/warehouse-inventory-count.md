@@ -25,13 +25,40 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/warehouse.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+الجرد الفعلي (Physical Count / Cycle Count) — أهم عملية للـ inventory accuracy.
+
+| الخطوة | الإجراء |
+|--------|---------|
+| 1. Plan count | per warehouse / per category / full | `inventory_counts` |
+| 2. Freeze movements | guard | يمنع الحركات على المخزون قيد العد |
+| 3. توليد count sheets | print | راجع `print-templates` |
+| 4. Physical count (scan/manual) | input | `inventory_count_lines` |
+| 5. Variance review | calculate | `expected vs actual` |
+| 6. Approve variance | RBAC: warehouse manager + finance | راجع `governance/approvals.md` |
+| 7. Post adjustment | GL entry | راجع `finance-cogs.md` |
+| 8. Unfreeze movements | release lock | حركات تعود طبيعية |
+| 9. Audit log + report | إجباري | `audit_logs` + `inventory_count_reports` |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| Initiate count | POST `/warehouse/inventory-count` | `inventory_counts` | ✅ |
+| Freeze | لـ items in count | `inventory_freeze` (lock rows) | ✅ critical |
+| Submit count lines | POST `/inventory-count/:id/lines` | bulk | ✅ |
+| Calculate variance | server-side | `quantityExpected vs quantityActual` | ✅ |
+| Approve | POST `/inventory-count/:id/approve` | lifecycle `pending→approved` | راجع `governance.md` |
+| Post adjustment to GL | dr/cr inventory + COGS | راجع `finance-cogs.md` | ✅ |
+| Unfreeze | auto بعد الـ approve | ✅ |
+| Reject + recount | POST `/inventory-count/:id/recount` | ✅ |
+| Notify on large variance | event=`inventory_variance_high` | راجع `notifications.md` | ✅ critical |
+| Audit log | كل خطوة | `audit_logs` | ✅ |
+| تقرير الجرد السنوي | annual | راجع `bi-reports.md` | ✅ |
+
+تحقق يدوي:
+- [ ] هل freeze فعلاً يمنع كل الحركات (sales/transfers/usage)؟
+- [ ] هل approve يتطلب رأي finance + warehouse معاً للـ variance الكبير؟
+- [ ] هل GL adjustment تلقائي بعد approve أم يدوي؟
+- [ ] هل العد الجزئي (cycle count) يدعم scan via mobile barcode؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `inventory-count` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

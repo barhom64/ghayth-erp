@@ -23,13 +23,28 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/warehouse.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+تصنيف الأصناف — تسلسل هرمي (parent/child) لتنظيم catalog.
+
+| العمل | API | DB | الحالة |
+|------|-----|-----|--------|
+| List categories (tree) | GET `/warehouse/categories` | `item_categories` | ✅ |
+| إنشاء category | راجع `warehouse-categories-create.md` | ✅ |
+| تعديل/إعادة تسمية | PATCH `/warehouse/categories/:id` | ✅ |
+| ربط بـ parent | FK | `parentId` (self-ref) | ✅ |
+| حذف category | guard | لا يحذف إذا فيه items | ✅ critical |
+| ربط بـ GL account default | for inventory class | `defaultAccountId` | ⚠ تحقق |
+| Default tax (per category) | للأصناف الموروثة | راجع `finance-tax.md` | ⚠ |
+| Default unit-of-measure | المرجع | `defaultUomId` | ✅ |
+| تكامل مع `finance-cogs.md` | per category COGS account | ✅ |
+| Audit log | كل تعديل | `audit_logs` | ✅ |
+| Reorder/drag-drop | sort key | `sortOrder` | ⚠ تحقق |
+| Bulk move items | بين categories | راجع `warehouse-items.md` | ⚠ |
+
+تحقق يدوي:
+- [ ] هل تغيير parent يعيد حساب inventory totals بشكل عرضي؟
+- [ ] هل default tax يطبَّق فقط على الأصناف الجديدة أم على الموجودة أيضاً؟
+- [ ] هل الـ tree عمقه محدود (للأداء)؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `categories` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

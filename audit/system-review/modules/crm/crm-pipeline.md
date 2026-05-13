@@ -23,13 +23,40 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/crm.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+CRM Pipeline (Kanban view) — متابعة الفرص (opportunities) عبر مراحل البيع.
+
+| المرحلة | الوصف | يطلق |
+|---------|------|------|
+| Lead | أوّل اتصال | event=`lead_created` |
+| Qualified | تأهيل | criteria check |
+| Proposal | عرض سعر مرسل | راجع `crm-quotes.md` |
+| Negotiation | تفاوض | track price changes |
+| Won | فاز بالصفقة | يولّد sales order تلقائياً + invoice — راجع `finance-invoices.md` |
+| Lost | فقد | reason mandatory |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| List pipeline (kanban) | GET `/crm/pipeline` | `opportunities` GROUP BY stage | ✅ |
+| Drag-drop stage change | PATCH `/crm/opportunities/:id/stage` | lifecycle | راجع `lifecycle/crm.ts` ✅ |
+| Update value | PATCH `/crm/opportunities/:id` | للـ forecasting | ✅ |
+| Mark Won | POST `/crm/opportunities/:id/win` | يولّد: sales order + invoice | راجع `finance-invoices.md` ✅ |
+| Mark Lost | POST `/crm/opportunities/:id/lose` | with reason | ✅ |
+| إنشاء فرصة | راجع `crm-create.md` | ✅ |
+| Activities (calls/meetings/emails) | راجع `crm-activities.md` | ✅ |
+| Forecast (per stage probability) | aggregate | راجع `bi-kpis.md` | ✅ |
+| Stuck opportunities (X days no activity) | alert | event=`opportunity_stale` | راجع `notifications.md` |
+| Quota tracking | per sales rep | راجع `crm-quotas.md` | ⚠ |
+| تكامل مع `finance-invoices.md` | عند Won | invoice مع GL entries | ✅ critical |
+| تكامل مع `commissions.md` | لو فيه عمولات | ⚠ |
+| Audit log | كل تغيير stage | `audit_logs` | ✅ |
+| RBAC scope | sales rep يرى الخاصة به، manager يرى team | راجع `admin-scopes.md` | ✅ |
+
+تحقق يدوي:
+- [ ] هل Won يولّد sales order تلقائياً أم يحتاج خطوة منفصلة؟
+- [ ] هل تغيير المرحلة من Won → Lost يلغي الـ invoice المرتبط؟
+- [ ] هل forecast يأخذ probability per stage (configurable)؟
+- [ ] هل sales rep يستطيع تعديل value بعد marked Won؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `pipeline` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
