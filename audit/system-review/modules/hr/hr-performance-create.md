@@ -27,13 +27,62 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/hr.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+إنشاء تقييم أداء جديد — Performance review creation.
+
+| نوع التقييم | الوصف |
+|------------|------|
+| Probation | end-of-probation | mandatory pre-permanent |
+| Quarterly | كل 3 أشهر | for high-performance roles |
+| Mid-year | منتصف السنة | check-in |
+| Annual | السنوي | comprehensive |
+| 360° | راجع `hr-evaluation-360.md` | peer review |
+| Project-based | post-project | per project |
+| Pulse | sporadic | continuous |
+
+| الحقل | المتطلب |
+|------|--------|
+| Employee | FK | إجباري |
+| Cycle | enum | إجباري |
+| Period (from / to) | إجباري |
+| Reviewer (manager) | FK | إجباري |
+| KPIs / objectives | per role | from `hr-evaluation-cycles.md` |
+| Weights per KPI | sum to 100% | ✅ |
+| Self-assessment? | flag | optional but recommended |
+| Manager assessment | scores per KPI |
+| Comments | qualitative | ✅ |
+| Development plan | for next cycle | ⚠ |
+| Final score | weighted average | calculated |
+| Rating | enum (Exceeds, Meets, Below) |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| Create review | POST `/hr/performance` | `performance_reviews` (status=draft) | ✅ |
+| Validate period (no overlap) | server-side | ✅ |
+| Send to employee for self-assessment | event=`performance_review_assigned` | راجع `notifications.md` | ✅ |
+| Submit (manager) | finalize | راجع `governance/approvals.md` | ✅ |
+| Calibration (manager's manager review) | for consistency | ⚠ |
+| Approval (HR final review) | راجع `governance/approvals.md` | ✅ critical |
+| Employee acknowledgment | with signature | ✅ critical |
+| Append development goals | راجع `hr-development-plans.md` | ⚠ |
+| Salary/bonus impact (post-cycle) | راجع `hr-payroll-salary-components.md` | ✅ critical |
+| Career progression (promotion) | راجع `hr-transfers.md` | ⚠ |
+| Termination trigger (لو chronic underperformance) | راجع `hr-exit.md` | ⚠ critical |
+| Training recommendations | راجع `hr-training.md` | ⚠ |
+| تكامل مع `hr-evaluation-cycles.md` (cycle config) | ✅ |
+| تكامل مع `hr-evaluation-360.md` (360° linkage) | ✅ |
+| تكامل مع `hr-payroll-salary-components.md` (raises/bonuses) | ✅ critical |
+| تكامل مع `bi-kpis.md` (performance KPIs aggregate) | ✅ |
+| Audit log إجباري | `audit_logs` | ✅ critical |
+| **PDPL** — performance data highly sensitive | restricted | ✅ critical |
+| RBAC | manager + HR + employee (own only) | ✅ critical |
+
+تحقق يدوي:
+- [ ] هل calibration step prevents rating inflation/deflation per manager?
+- [ ] هل employee acknowledgment mandatory before HR approval?
+- [ ] هل salary impact requires CFO approval (not auto)?
+- [ ] هل chronic underperformance trigger documented process (لا surprise termination)?
+- [ ] هل 360° data anonymous appropriately?
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `create` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
