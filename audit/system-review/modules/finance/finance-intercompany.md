@@ -24,13 +24,33 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/finance.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+Intercompany Transactions — تحويلات/خدمات بين الشركات داخل نفس المجموعة (الـ holding).
+
+| النوع | المثال |
+|------|--------|
+| Transfer of cash | شركة أ تقرض شركة ب |
+| Sale of inventory | شركة أ تبيع لشركة ب (markup أو at-cost) |
+| Service rendered | شركة أ تقدّم خدمة لشركة ب |
+| Allocation of overhead | حصة كل شركة من costs المركزية |
+| Loan + interest | قروض داخلية مع فوائد |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| إنشاء transaction | POST `/finance/intercompany` | `intercompany_transactions` | ✅ |
+| **قيد مزدوج** (matching DR/CR) | finance/GL | شركة أ: AR-IC / شركة ب: AP-IC | atomic across companies | ⚠ تحقق |
+| Markup للضرائب (transfer pricing) | finance | لـ tax compliance | ⚠ |
+| **إلغاء (elimination) عند consolidation** | finance/reports | عند توليد القوائم المُجمَّعة | aggregate per group | ✅ |
+| Reconciliation شهري | راجع `admin-gl-reconciliation.md` | sum company A IC = sum company B IC inverted | ✅ critical |
+| WHT بين الشركات (إن جنسيات مختلفة) | finance | تطبيق المعاهدات | ⚠ |
+| Approval workflow (للمبالغ الكبيرة) | governance | يحتاج CFO من الطرفين | `approval_chains` | ⚠ |
+| Audit log إجباري | كل transaction | `audit_logs` | ✅ critical |
+| Variance reporting | bi | الفروقات بين المسجَّل والمتوقَّع | ⚠ |
+| تكامل مع consolidation | finance/reports | لتقارير IFRS group | ✅ |
+
+تحقق يدوي:
+- [ ] هل القيد ينشأ في الشركتين بنفس الوقت atomically (نفس rec ID)?
+- [ ] هل اختلاف الـ FX rate بين العمليتين يُحلّ بـ FX gain/loss account؟
+- [ ] هل elimination تلقائي عند generation الـ consolidated report؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `intercompany` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
