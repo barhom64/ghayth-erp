@@ -23,11 +23,11 @@ const CATEGORY_ICONS: Record<string, any> = {
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  "موظفين": "text-blue-600 bg-blue-50",
-  "عملاء": "text-green-600 bg-green-50",
+  "موظفين": "text-status-info-foreground bg-status-info-surface",
+  "عملاء": "text-status-success-foreground bg-status-success-surface",
   "فواتير": "text-indigo-600 bg-indigo-50",
   "مشاريع": "text-orange-600 bg-orange-50",
-  "تذاكر دعم": "text-red-600 bg-red-50",
+  "تذاكر دعم": "text-status-error-foreground bg-status-error-surface",
   "وحدات عقارية": "text-emerald-600 bg-emerald-50",
   "مباني عقارية": "text-slate-600 bg-slate-50",
   "مستأجرون": "text-violet-600 bg-violet-50",
@@ -176,7 +176,7 @@ export function GlobalSearch() {
   return (
     <div ref={containerRef} className="relative" data-global-search>
       <div className="relative">
-        <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <input
           ref={inputRef}
           type="text"
@@ -184,21 +184,21 @@ export function GlobalSearch() {
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => results.length > 0 && setIsOpen(true)}
           placeholder="بحث في الصفحات والموظفين والعملاء..."
-          className="w-full sm:w-72 h-9 ps-9 pe-8 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:border-blue-300 focus:ring-1 focus:ring-blue-200 outline-none transition-all"
+          className="w-full sm:w-72 h-9 ps-9 pe-8 text-sm border border-border rounded-lg bg-surface-subtle focus:bg-white focus:border-status-info-surface focus:ring-1 focus:ring-blue-200 outline-none transition-all"
         />
-        {isLoading && <Loader2 className="absolute end-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 animate-spin" />}
+        {isLoading && <Loader2 className="absolute end-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground animate-spin" />}
         {query && !isLoading && (
           <button
             onClick={() => { setQuery(""); setResults([]); setIsOpen(false); setActiveTab("all"); }}
             className="absolute end-3 top-1/2 -translate-y-1/2"
           >
-            <X className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+            <X className="h-4 w-4 text-muted-foreground hover:text-muted-foreground" />
           </button>
         )}
       </div>
 
       {isOpen && (
-        <div className="absolute top-full mt-2 start-0 end-0 sm:start-auto sm:end-auto sm:w-[420px] bg-white rounded-xl shadow-xl border border-gray-200 z-50 max-h-[480px] overflow-hidden flex flex-col">
+        <div className="absolute top-full mt-2 start-0 end-0 sm:start-auto sm:end-auto sm:w-[420px] bg-white rounded-xl shadow-xl border border-border z-50 max-h-[480px] overflow-hidden flex flex-col">
           <div className="flex gap-1 px-2 pt-2 pb-1 border-b overflow-x-auto shrink-0">
             {ENTITY_TABS.map(tab => (
               <button
@@ -208,7 +208,7 @@ export function GlobalSearch() {
                   "px-2.5 py-1 text-xs font-medium rounded-md whitespace-nowrap transition-colors",
                   activeTab === tab.key
                     ? "bg-primary text-primary-foreground"
-                    : "text-gray-500 hover:bg-gray-100"
+                    : "text-muted-foreground hover:bg-gray-100"
                 )}
               >
                 {tab.label}
@@ -218,7 +218,7 @@ export function GlobalSearch() {
 
           <div className="overflow-y-auto flex-1">
             {results.length === 0 ? (
-              <div className="p-6 text-center text-sm text-gray-500">
+              <div className="p-6 text-center text-sm text-muted-foreground">
                 لا توجد نتائج لـ "{query}"
               </div>
             ) : (
@@ -229,10 +229,10 @@ export function GlobalSearch() {
                   return 0;
                 }).map(([category, items]) => {
                   const Icon = CATEGORY_ICONS[category] || Search;
-                  const colorClass = CATEGORY_COLORS[category] || "text-gray-600 bg-gray-50";
+                  const colorClass = CATEGORY_COLORS[category] || "text-muted-foreground bg-surface-subtle";
                   return (
                     <div key={category}>
-                      <div className="px-3 py-1.5 text-xs font-semibold text-gray-500 flex items-center gap-2 sticky top-0 bg-white">
+                      <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground flex items-center gap-2 sticky top-0 bg-white">
                         <div className={cn("w-5 h-5 rounded flex items-center justify-center", colorClass)}>
                           <Icon className="w-3 h-3" />
                         </div>
@@ -243,7 +243,7 @@ export function GlobalSearch() {
                         <button
                           key={`${category}-${idx}`}
                           onClick={() => handleSelect(item)}
-                          className="w-full text-right px-4 py-2 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                          className="w-full text-right px-4 py-2 hover:bg-surface-subtle flex items-center gap-3 transition-colors"
                         >
                           <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shrink-0", colorClass)}>
                             <Icon className="w-4 h-4" />
@@ -252,7 +252,7 @@ export function GlobalSearch() {
                             <p className="text-sm font-medium text-gray-900 truncate">
                               {item.name || item.title || item.ref || "-"}
                             </p>
-                            <p className="text-xs text-gray-500 truncate">
+                            <p className="text-xs text-muted-foreground truncate">
                               {getSubtitle(item)}
                             </p>
                           </div>
@@ -269,7 +269,7 @@ export function GlobalSearch() {
               </div>
             )}
           </div>
-          <div className="border-t px-3 py-1.5 text-[10px] text-gray-400 text-center shrink-0">
+          <div className="border-t px-3 py-1.5 text-[10px] text-muted-foreground text-center shrink-0">
             {results.length} نتيجة — اضغط Ctrl+K للبحث السريع
           </div>
         </div>

@@ -53,7 +53,7 @@ function Callout({ marker, isActive, onClick }: {
   const colors: Record<string, string> = {
     blue: "bg-blue-600 border-blue-700",
     emerald: "bg-emerald-600 border-emerald-700",
-    amber: "bg-amber-500 border-amber-600",
+    amber: "bg-status-warning-surface0 border-amber-600",
     red: "bg-red-600 border-red-700",
     violet: "bg-violet-600 border-violet-700",
     indigo: "bg-indigo-600 border-indigo-700",
@@ -146,7 +146,7 @@ function CalloutDetails({ callouts, activeId }: { callouts: CalloutMarker[]; act
               "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 mt-0.5",
               m.color === "blue" ? "bg-blue-600" :
               m.color === "emerald" ? "bg-emerald-600" :
-              m.color === "amber" ? "bg-amber-500" :
+              m.color === "amber" ? "bg-status-warning-surface0" :
               m.color === "red" ? "bg-red-600" :
               m.color === "violet" ? "bg-violet-600" :
               m.color === "indigo" ? "bg-indigo-600" :
@@ -218,7 +218,7 @@ function DashboardMockScreen() {
           <div className="text-xl font-bold">125,000</div>
           <div className="text-[9px] opacity-70">من 150,000 ر.س</div>
         </div>
-        <div className="bg-red-500 text-white rounded-lg p-3">
+        <div className="bg-status-error-surface0 text-white rounded-lg p-3">
           <div className="text-[10px] opacity-80">المتأخرات</div>
           <div className="text-xl font-bold">18,500</div>
           <div className="text-[9px] opacity-70">4 دفعات متأخرة</div>
@@ -790,7 +790,7 @@ function OccupancyMockScreen() {
             </div>
             <div className="space-y-2">
               <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500" /><span className="text-[9px]">مؤجرة: 40</span></div>
-              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-blue-500" /><span className="text-[9px]">متاحة: 8</span></div>
+              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-status-info-surface0" /><span className="text-[9px]">متاحة: 8</span></div>
               <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-orange-400" /><span className="text-[9px]">صيانة: 0</span></div>
             </div>
           </div>
@@ -809,7 +809,7 @@ function OccupancyMockScreen() {
                   <span className="text-muted-foreground">{b.occ}/{b.total} ({b.rate}%)</span>
                 </div>
                 <div className="h-1.5 bg-surface-subtle rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500 rounded-full" style={{ width: `${b.rate}%` }} />
+                  <div className="h-full bg-status-info-surface0 rounded-full" style={{ width: `${b.rate}%` }} />
                 </div>
               </div>
             ))}

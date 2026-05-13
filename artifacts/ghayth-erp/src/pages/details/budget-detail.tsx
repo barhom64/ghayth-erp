@@ -170,7 +170,7 @@ export default function BudgetDetail() {
             </div>
             <div className="h-2 bg-surface-subtle rounded-full overflow-hidden">
               <div
-                className={`h-full rounded-full ${isExceeded ? "bg-red-500" : isWarning ? "bg-amber-500" : "bg-emerald-500"}`}
+                className={`h-full rounded-full ${isExceeded ? "bg-status-error-surface0" : isWarning ? "bg-status-warning-surface0" : "bg-emerald-500"}`}
                 style={{ width: `${Math.min(100, utilizationPct)}%` }}
               />
             </div>

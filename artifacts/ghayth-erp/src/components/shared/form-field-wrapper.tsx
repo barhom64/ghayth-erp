@@ -46,7 +46,7 @@ export function FormFieldWrapper({
       </Label>
       <div className="mt-1">{children}</div>
       {error ? (
-        <p className="text-xs text-red-600 mt-1">{error}</p>
+        <p className="text-xs text-status-error-foreground mt-1">{error}</p>
       ) : hint ? (
         <p className="text-xs text-muted-foreground mt-1">{hint}</p>
       ) : null}

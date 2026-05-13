@@ -77,15 +77,15 @@ export function FileDropZone({ files, onFilesChange, label = "المرفقات",
         className={cn(
           "border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all",
           isDragging
-            ? "border-blue-400 bg-blue-50"
-            : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+            ? "border-blue-400 bg-status-info-surface"
+            : "border-border hover:border-border hover:bg-surface-subtle"
         )}
       >
         <Upload className={cn("h-8 w-8 mx-auto mb-2", isDragging ? "text-blue-500" : "text-gray-300")} />
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-muted-foreground">
           {isDragging ? "أفلت الملفات هنا" : "اسحب الملفات هنا أو انقر للاختيار"}
         </p>
-        <p className="text-xs text-gray-400 mt-1">الحد الأقصى {maxSizeMB} ميجابايت لكل ملف</p>
+        <p className="text-xs text-muted-foreground mt-1">الحد الأقصى {maxSizeMB} ميجابايت لكل ملف</p>
         <input
           ref={inputRef}
           type="file"
@@ -101,11 +101,11 @@ export function FileDropZone({ files, onFilesChange, label = "المرفقات",
       {files.length > 0 && (
         <div className="space-y-1.5">
           {files.map((file, i) => (
-            <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50 border text-sm">
+            <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-surface-subtle border text-sm">
               <FileIcon className="h-4 w-4 text-blue-500 flex-shrink-0" />
               <span className="flex-1 truncate">{file.name}</span>
-              <span className="text-xs text-gray-400 flex-shrink-0">{formatSize(file.size)}</span>
-              <button onClick={(e) => { e.stopPropagation(); removeFile(i); }} className="text-red-400 hover:text-red-600">
+              <span className="text-xs text-muted-foreground flex-shrink-0">{formatSize(file.size)}</span>
+              <button onClick={(e) => { e.stopPropagation(); removeFile(i); }} className="text-red-400 hover:text-status-error-foreground">
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
             </div>

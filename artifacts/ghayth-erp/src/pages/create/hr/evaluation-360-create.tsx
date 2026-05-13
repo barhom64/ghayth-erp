@@ -198,7 +198,7 @@ export default function Evaluation360Create() {
                         <Badge variant="outline" className="text-xs">
                           {p.evaluatorRole === "manager" ? "مدير" : "زميل"}
                         </Badge>
-                        <button type="button" onClick={() => removeParticipant(p.evaluatorId)} className="text-red-400 hover:text-red-600">
+                        <button type="button" onClick={() => removeParticipant(p.evaluatorId)} className="text-red-400 hover:text-status-error-foreground">
                           <X className="h-4 w-4" />
                         </button>
                       </div>

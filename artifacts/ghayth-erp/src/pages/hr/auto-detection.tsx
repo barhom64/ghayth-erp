@@ -173,7 +173,7 @@ export default function AutoDetectionPage() {
       render: (row) => (
         <Badge variant="outline" className={cn(
           "text-xs",
-          row.detected > 0 ? "border-amber-300 text-status-warning-foreground bg-status-warning-surface" : "border-border"
+          row.detected > 0 ? "border-status-warning-surface text-status-warning-foreground bg-status-warning-surface" : "border-border"
         )}>
           {row.detected} واقعة
         </Badge>

@@ -213,7 +213,7 @@ function DocumentsList() {
                         </GuardedButton>
                       )}
                       {d.status !== "cancelled" && d.status !== "draft" && (
-                        <GuardedButton perm="documents:delete" variant="ghost" size="sm" className="gap-1 text-xs text-red-600" onClick={() => handleStatusChange(d.id, "cancelled")}>
+                        <GuardedButton perm="documents:delete" variant="ghost" size="sm" className="gap-1 text-xs text-status-error-foreground" onClick={() => handleStatusChange(d.id, "cancelled")}>
                           <XCircle className="h-3.5 w-3.5" /> إلغاء
                         </GuardedButton>
                       )}

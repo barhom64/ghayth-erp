@@ -56,12 +56,12 @@ interface UnitDetail {
 }
 
 const STATUS_LABELS: Record<string, { label: string; className: string }> = {
-  available: { label: "متاحة", className: "bg-green-50 text-green-700 border-green-200" },
-  rented: { label: "مؤجَّرة", className: "bg-blue-50 text-blue-700 border-blue-200" },
-  reserved: { label: "محجوزة", className: "bg-amber-50 text-amber-700 border-amber-200" },
+  available: { label: "متاحة", className: "bg-status-success-surface text-status-success-foreground border-status-success-surface" },
+  rented: { label: "مؤجَّرة", className: "bg-status-info-surface text-status-info-foreground border-status-info-surface" },
+  reserved: { label: "محجوزة", className: "bg-status-warning-surface text-status-warning-foreground border-status-warning-surface" },
   maintenance: { label: "تحت الصيانة", className: "bg-orange-50 text-orange-700 border-orange-200" },
   under_maintenance: { label: "تحت الصيانة", className: "bg-orange-50 text-orange-700 border-orange-200" },
-  out_of_service: { label: "خارج الخدمة", className: "bg-red-50 text-red-700 border-red-200" },
+  out_of_service: { label: "خارج الخدمة", className: "bg-status-error-surface text-status-error-foreground border-status-error-surface" },
 };
 
 /**
@@ -85,7 +85,7 @@ export function PropertyUnitContextCard({
 
   if (isLoading) {
     return (
-      <Card className={cn("border-gray-200 bg-gray-50/50 animate-pulse", className)}>
+      <Card className={cn("border-border bg-surface-subtle/50 animate-pulse", className)}>
         <CardContent className="p-4">
           <div className="h-4 w-32 bg-gray-200 rounded mb-3" />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -140,7 +140,7 @@ export function PropertyUnitContextCard({
 
         {/* Availability warning */}
         {notAvailable && (
-          <div className="flex items-center gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 rounded p-1.5">
+          <div className="flex items-center gap-1.5 text-xs text-status-error-foreground bg-status-error-surface border border-status-error-surface rounded p-1.5">
             <AlertTriangle className="h-3 w-3" />
             <span>
               {data.status === "rented" && "هذه الوحدة مؤجَّرة حاليًا — لا يمكن إنشاء عقد إيجار جديد"}
@@ -157,20 +157,20 @@ export function PropertyUnitContextCard({
               <FileText className="h-3.5 w-3.5" />
               <span>العقد النشط</span>
             </div>
-            <div className="bg-white rounded p-2 border border-gray-200 text-xs space-y-1">
+            <div className="bg-white rounded p-2 border border-border text-xs space-y-1">
               <div className="flex items-center justify-between">
-                <span className="text-gray-600">المستأجر</span>
+                <span className="text-muted-foreground">المستأجر</span>
                 <span className="font-semibold">{activeContract.tenantName || "—"}</span>
               </div>
               {activeContract.monthlyAmount && (
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-600">الإيجار</span>
+                  <span className="text-muted-foreground">الإيجار</span>
                   <span className="font-semibold">{formatCurrency(Number(activeContract.monthlyAmount))}</span>
                 </div>
               )}
               {activeContract.endDate && (
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-600">ينتهي</span>
+                  <span className="text-muted-foreground">ينتهي</span>
                   <span className="font-semibold">{new Date(activeContract.endDate).toLocaleDateString("ar-SA")}</span>
                 </div>
               )}
@@ -186,12 +186,12 @@ export function PropertyUnitContextCard({
               <span>مستحقات مفتوحة</span>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <div className="bg-white rounded p-2 border border-red-200">
-                <p className="text-xs text-gray-500">المتأخر الكلي</p>
-                <p className="text-sm font-semibold text-red-700">{formatCurrency(totalDue)}</p>
+              <div className="bg-white rounded p-2 border border-status-error-surface">
+                <p className="text-xs text-muted-foreground">المتأخر الكلي</p>
+                <p className="text-sm font-semibold text-status-error-foreground">{formatCurrency(totalDue)}</p>
               </div>
-              <div className="bg-white rounded p-2 border border-gray-200">
-                <p className="text-xs text-gray-500">عدد المستحقات</p>
+              <div className="bg-white rounded p-2 border border-border">
+                <p className="text-xs text-muted-foreground">عدد المستحقات</p>
                 <p className="text-sm font-semibold">{unpaidPayments.length}</p>
               </div>
             </div>
@@ -205,17 +205,17 @@ export function PropertyUnitContextCard({
               <span>طلبات الصيانة</span>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <div className="bg-white rounded p-2 border border-amber-200">
-                <p className="text-xs text-gray-500">مفتوحة</p>
-                <p className="text-sm font-semibold text-amber-700">{openMaintenance.length}</p>
+              <div className="bg-white rounded p-2 border border-status-warning-surface">
+                <p className="text-xs text-muted-foreground">مفتوحة</p>
+                <p className="text-sm font-semibold text-status-warning-foreground">{openMaintenance.length}</p>
               </div>
-              <div className="bg-white rounded p-2 border border-gray-200">
-                <p className="text-xs text-gray-500">الإجمالي</p>
+              <div className="bg-white rounded p-2 border border-border">
+                <p className="text-xs text-muted-foreground">الإجمالي</p>
                 <p className="text-sm font-semibold">{(data.maintenance || []).length}</p>
               </div>
             </div>
             {openMaintenance.length > 0 && (
-              <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-1.5">
+              <div className="flex items-center gap-1.5 text-xs text-status-warning-foreground bg-status-warning-surface border border-status-warning-surface rounded p-1.5">
                 <AlertTriangle className="h-3 w-3" />
                 <span>يوجد {openMaintenance.length} طلب صيانة مفتوح — راجع قبل إضافة طلب جديد</span>
               </div>
@@ -229,8 +229,8 @@ export function PropertyUnitContextCard({
 
 function InfoTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-white rounded p-2 border border-gray-200">
-      <p className="text-xs text-gray-500 mb-0.5">{label}</p>
+    <div className="bg-white rounded p-2 border border-border">
+      <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
       <p className="text-sm font-semibold text-gray-800">{value}</p>
     </div>
   );

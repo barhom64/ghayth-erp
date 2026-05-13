@@ -43,7 +43,7 @@ export function SupplierContextCard({
 
   if (isLoading) {
     return (
-      <Card className={cn("border-gray-200 bg-gray-50/50 animate-pulse", className)}>
+      <Card className={cn("border-border bg-surface-subtle/50 animate-pulse", className)}>
         <CardContent className="p-4">
           <div className="h-4 w-32 bg-gray-200 rounded mb-3" />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -78,8 +78,8 @@ export function SupplierContextCard({
             variant="outline"
             className={cn(
               "text-xs",
-              supplier.status === "active" ? "bg-green-50 text-green-700 border-green-200" :
-              "bg-gray-50 text-gray-700 border-gray-200"
+              supplier.status === "active" ? "bg-status-success-surface text-status-success-foreground border-status-success-surface" :
+              "bg-surface-subtle text-gray-700 border-border"
             )}
           >
             {supplier.status === "active" ? "نشط" : supplier.status || "—"}
@@ -88,8 +88,8 @@ export function SupplierContextCard({
 
         {/* Info grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          <div className="bg-white rounded p-2 border border-gray-200">
-            <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+          <div className="bg-white rounded p-2 border border-border">
+            <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
               <Phone className="h-3 w-3" />
               <span>جهة الاتصال</span>
             </p>
@@ -97,20 +97,20 @@ export function SupplierContextCard({
               {supplier.contactPerson || "—"}
             </p>
           </div>
-          <div className="bg-white rounded p-2 border border-gray-200">
-            <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+          <div className="bg-white rounded p-2 border border-border">
+            <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
               <ShoppingCart className="h-3 w-3" />
               <span>طلبات نشطة</span>
             </p>
             <p className={cn(
               "text-sm font-semibold",
-              activeOrders > 0 ? "text-blue-700" : "text-gray-800"
+              activeOrders > 0 ? "text-status-info-foreground" : "text-gray-800"
             )}>
               {activeOrders}
             </p>
           </div>
-          <div className="bg-white rounded p-2 border border-gray-200">
-            <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+          <div className="bg-white rounded p-2 border border-border">
+            <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
               <FileText className="h-3 w-3" />
               <span>إجمالي المشتريات</span>
             </p>
@@ -118,8 +118,8 @@ export function SupplierContextCard({
               {totalPurchases > 0 ? formatCurrency(totalPurchases) : "—"}
             </p>
           </div>
-          <div className="bg-white rounded p-2 border border-gray-200">
-            <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+          <div className="bg-white rounded p-2 border border-border">
+            <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
               <Calendar className="h-3 w-3" />
               <span>آخر طلب</span>
             </p>
@@ -133,7 +133,7 @@ export function SupplierContextCard({
 
         {/* Contact row */}
         {(supplier.phone || supplier.email) && (
-          <div className="flex flex-wrap gap-3 text-xs text-gray-600">
+          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
             {supplier.phone && (
               <span className="flex items-center gap-1">
                 <Phone className="h-3 w-3" />
@@ -154,7 +154,7 @@ export function SupplierContextCard({
 
         {/* Warnings */}
         {inactive && (
-          <div className="flex items-center gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 rounded p-1.5">
+          <div className="flex items-center gap-1.5 text-xs text-status-error-foreground bg-status-error-surface border border-status-error-surface rounded p-1.5">
             <AlertTriangle className="h-3 w-3" />
             <span>المورد غير نشط — لا يمكن إنشاء طلبات شراء جديدة</span>
           </div>
