@@ -27,13 +27,42 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/hr.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+طلب استئذان — Excuse request (short-term absence).
+
+| نوع الاستئذان | المدة | الراتب |
+|--------------|-------|--------|
+| Hourly (ساعي) | بضع ساعات | بدون خصم لو within policy |
+| Half-day | نصف يوم | حسب policy |
+| Full-day (non-leave) | يوم كامل | يخصم لو > monthly allowance |
+| Medical visit (مراجعة طبية) | hours | with medical certificate |
+| Personal emergency | hours | with approval |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| Create excuse request | POST `/hr/excuse-requests` | `excuse_requests` (status=pending) | ✅ |
+| Validate within monthly allowance | per policy | راجع `hr-leave-balances.md` | ⚠ |
+| Approval workflow | direct manager | راجع `governance/approvals.md` | ✅ |
+| Approve | POST `/excuse-requests/:id/approve` | ✅ |
+| Reject | with reason | ✅ |
+| Update attendance record | راجع `hr-attendance.md` | flag the day | ✅ |
+| Deduct from leave balance | لو policy applicable | راجع `hr-leave-balances.md` | ⚠ |
+| Deduct from salary | لو exceeds free allowance | راجع `hr-payroll.md` + salary deduction | ✅ critical |
+| Attach medical certificate (لو طبي) | راجع `documents.md` | ✅ |
+| Notification chain | event=`excuse_request_pending/approved/rejected` | راجع `notifications.md` | ✅ |
+| تكامل مع `hr-attendance.md` (reflected in monthly summary) | ✅ |
+| تكامل مع `hr-leave-balances.md` (لو counted) | ⚠ |
+| تكامل مع `hr-payroll.md` (لو deduction needed) | ✅ |
+| تكامل مع `hr-violations.md` (لو frequent abuse) | ⚠ |
+| Audit log إجباري | كل خطوة | `audit_logs` | ✅ |
+| RBAC | employee self-create + manager approve | ✅ |
+
+تحقق يدوي:
+- [ ] هل monthly allowance per Saudi Labor Law respected (typically 16 hours/year)?
+- [ ] هل medical certificate mandatory for medical excuse > X hours?
+- [ ] هل manager approval enforced (no self-approval)?
+- [ ] هل frequent abusers flagged (auto-detection)?
+- [ ] هل integration with attendance بدقة (لا duplicate violations)?
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `create` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
