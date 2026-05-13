@@ -14,7 +14,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
   zodParse,
@@ -329,7 +329,7 @@ router.get("/seasons", authorize({ feature: "umrah", action: "list" }), async (r
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM umrah_seasons WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "startDate" DESC LIMIT 100`, [scope.companyId]);
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "List seasons error"); }
 });
 
@@ -342,7 +342,7 @@ router.get("/seasons/:id", authorize({ feature: "umrah", action: "view" }), asyn
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("الموسم غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Season detail error"); }
 });
 
@@ -423,7 +423,7 @@ router.get("/agents", authorize({ feature: "umrah", action: "list" }), async (re
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM umrah_agents WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "List agents error"); }
 });
 
@@ -439,7 +439,7 @@ router.get("/agents/:id", authorize({ feature: "umrah", action: "view" }), async
        FROM umrah_pilgrims WHERE "agentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
-    res.json({ ...row, ...(stats[0] || {}) });
+    res.json(maskFields(req, { ...row, ...(stats[0] || {}) }));
   } catch (err) { handleRouteError(err, res, "Get agent error"); }
 });
 
@@ -517,7 +517,7 @@ router.get("/packages", authorize({ feature: "umrah", action: "list" }), async (
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT p.*, s.title as "seasonTitle" FROM umrah_packages p LEFT JOIN umrah_seasons s ON p."seasonId"=s.id AND s."deletedAt" IS NULL WHERE p."companyId"=$1 AND p."deletedAt" IS NULL ORDER BY p.name LIMIT 500`, [scope.companyId]);
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "List packages error"); }
 });
 
@@ -552,7 +552,7 @@ router.get("/packages/:id", authorize({ feature: "umrah", action: "view" }), asy
       `SELECT COUNT(*)::int AS c FROM umrah_pilgrims WHERE "packageId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
-    res.json({ ...row, pilgrimCount: pilgrims[0]?.c || 0 });
+    res.json(maskFields(req, { ...row, pilgrimCount: pilgrims[0]?.c || 0 }));
   } catch (err) { handleRouteError(err, res, "Get package error"); }
 });
 
@@ -632,7 +632,7 @@ router.get("/pilgrims", authorize({ feature: "umrah", action: "list" }), async (
       params
     );
     logSensitiveAccess({ companyId: scope.companyId, userId: scope.userId, action: "list", entity: "umrah_pilgrims", ipAddress: req.ip, userAgent: req.headers["user-agent"], details: { count: rows.length, search: search || null } });
-    res.json({ data: rows.map(decryptPilgrimRow), total: Number(countQ[0]?.c || 0), page: pageNum, pageSize: perPage });
+    res.json(maskFields(req, { data: rows.map(decryptPilgrimRow), total: Number(countQ[0]?.c || 0), page: pageNum, pageSize: perPage }));
   } catch (err) { handleRouteError(err, res, "List pilgrims error"); }
 });
 
@@ -809,7 +809,7 @@ router.get("/pilgrims/:id", authorize({ feature: "umrah", action: "view" }), asy
     if (!row) { throw new NotFoundError("المعتمر غير موجود"); }
     logSensitiveAccess({ companyId: scope.companyId, userId: scope.userId, action: "read", entity: "umrah_pilgrims", entityId: id, ipAddress: req.ip, userAgent: req.headers["user-agent"] });
     const penalties = await rawQuery(`SELECT * FROM umrah_penalties WHERE "pilgrimId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [id, scope.companyId]);
-    res.json({ ...decryptPilgrimRow(row), penalties });
+    res.json(maskFields(req, { ...decryptPilgrimRow(row), penalties }));
   } catch (err) { handleRouteError(err, res, "Get pilgrim error"); }
 });
 
@@ -1013,12 +1013,12 @@ router.get("/dashboard", authorize({ feature: "umrah", action: "list" }), async 
         ORDER BY "actualArrival" DESC LIMIT 10
       `, params),
     ]);
-    res.json({
+    res.json(maskFields(req, {
       pilgrims: stats[0],
       penalties: penaltyStats[0],
       topAgents: agentStats,
       recentArrivals: recentArrivals.map(decryptPilgrimRow)
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Dashboard error"); }
 });
 
@@ -1151,7 +1151,7 @@ router.get("/penalties", authorize({ feature: "umrah", action: "list" }), async 
        LEFT JOIN umrah_agents a ON pen."agentId"=a.id
        WHERE ${where} ORDER BY pen."createdAt" DESC LIMIT 500`, params
     );
-    res.json({ data: rows.map(decryptPilgrimRow) });
+    res.json(maskFields(req, { data: rows.map(decryptPilgrimRow) }));
   } catch (err) { handleRouteError(err, res, "List penalties error"); }
 });
 
@@ -1168,7 +1168,7 @@ router.get("/penalties/:id", authorize({ feature: "umrah", action: "view" }), as
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("العقوبة غير موجودة");
-    res.json(decryptPilgrimRow(row));
+    res.json(maskFields(req, decryptPilgrimRow(row)));
   } catch (err) { handleRouteError(err, res, "Penalty detail error"); }
 });
 
@@ -1415,7 +1415,7 @@ router.get("/agent-invoices", authorize({ feature: "umrah", action: "list" }), a
        LEFT JOIN umrah_seasons s ON i."seasonId"=s.id AND s."deletedAt" IS NULL
        WHERE ${where} AND i."deletedAt" IS NULL ORDER BY i."createdAt" DESC LIMIT 500`, params
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "List agent invoices error"); }
 });
 
@@ -1436,7 +1436,7 @@ router.get("/agent-invoices/:id", authorize({ feature: "umrah", action: "view" }
       `SELECT * FROM umrah_penalties WHERE "invoiceId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`,
       [id, scope.companyId]
     );
-    res.json({ ...row, penalties });
+    res.json(maskFields(req, { ...row, penalties }));
   } catch (err) { handleRouteError(err, res, "Get invoice error"); }
 });
 
@@ -1456,7 +1456,7 @@ router.get("/transport", authorize({ feature: "umrah", action: "list" }), async 
        WHERE t."companyId"=$1 AND t."deletedAt" IS NULL ORDER BY t."tripDate" DESC LIMIT 500`,
       [scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "List transport error"); }
 });
 
@@ -1478,7 +1478,7 @@ router.get("/transport/:id", authorize({ feature: "umrah", action: "view" }), as
       `SELECT id, "fullName", "passportNumber", nationality, status FROM umrah_pilgrims WHERE "companyId"=$1 AND "transportAssigned"=true AND "deletedAt" IS NULL ORDER BY "fullName"`,
       [scope.companyId]
     );
-    res.json({ ...row, pilgrims });
+    res.json(maskFields(req, { ...row, pilgrims }));
   } catch (err) { handleRouteError(err, res, "Get transport error"); }
 });
 
@@ -1647,7 +1647,7 @@ router.get("/import-logs", authorize({ feature: "umrah", action: "list" }), asyn
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM umrah_import_logs WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 50`, [scope.companyId]);
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "List import logs error"); }
 });
 
@@ -1659,7 +1659,7 @@ router.get("/unassigned", authorize({ feature: "umrah", action: "list" }), async
     const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND "seasonId"=$${params.length}`; }
     const rows = await rawQuery(`SELECT * FROM umrah_pilgrims WHERE ${where} ORDER BY "createdAt" DESC LIMIT 1000`, params);
-    res.json({ data: rows.map(decryptPilgrimRow) });
+    res.json(maskFields(req, { data: rows.map(decryptPilgrimRow) }));
   } catch (err) { handleRouteError(err, res, "List unassigned error"); }
 });
 
@@ -1698,7 +1698,7 @@ router.get("/violations", authorize({ feature: "umrah", action: "list" }), async
        ORDER BY v."detectedAt" DESC LIMIT 500`,
       [scope.companyId]
     );
-    res.json({ data: rows.map(decryptPilgrimRow), total: rows.length });
+    res.json(maskFields(req, { data: rows.map(decryptPilgrimRow), total: rows.length }));
   } catch (err) { handleRouteError(err, res, "List violations error"); }
 });
 
@@ -1719,7 +1719,7 @@ router.get("/violations/:id", authorize({ feature: "umrah", action: "view" }), a
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("المخالفة غير موجودة");
-    res.json(decryptPilgrimRow(row));
+    res.json(maskFields(req, decryptPilgrimRow(row)));
   } catch (err) { handleRouteError(err, res, "Get violation error"); }
 });
 

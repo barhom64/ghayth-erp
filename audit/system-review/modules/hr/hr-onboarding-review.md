@@ -24,13 +24,34 @@ _لم تُلتقط أزرار._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/hr.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+مراجعة Onboarding للموظف الجديد — تأكيد إنهاء كل المهام قبل التفعيل.
+
+| المرحلة | الوحدة الهدف | المهام المتوقعة |
+|---------|--------------|------------------|
+| Pre-arrival | hr | عقد عمل موقّع، تأشيرة، تذكرة سفر (للأجانب) |
+| Day 1 | hr | بطاقة دخول، sim card، laptop، email account |
+| Setup | auth | إنشاء `users.employeeId`، تخصيص role |
+| Training | hr/training | برامج توجيه (orientation) إلزامية |
+| Documentation | documents | صور الهوية، شهادات الخبرة، شهادات صحية |
+| GOSI | gov-integrations | تسجيل في التأمينات الاجتماعية |
+| Banking | finance | حساب بنكي + IBAN في `employee_assignments.iban` |
+| Probation review | hr/performance | تقييم بعد 3 شهور |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| فتح checklist | تلقائي عند `employees.status='hired'` | `hr_onboarding_checklists` | ✅ |
+| تمييز مهمة منتهية | PATCH `/hr/onboarding/:id/items/:item` | `checklist_items.completed=true` | ✅ |
+| **تفعيل الموظف** (employee activation) | عند 100% checklist → ينقل `status='active'` | راجع `hr/employee-activation.md` | ✅ |
+| نقطة تكامل مع payroll | عند التفعيل → يظهر في `payroll_runs` | ✅ |
+| إشعارات لكل خطوة | comms | event=`onboarding_step_completed\|stalled` | `notifications` | ✅ |
+| تذكير IT للمعدات | comms | اختياري | ⚠ |
+| تأثير على GOSI/قوى registration | gov-integrations | إلزامي للموظف السعودي/المقيم | ⚠ |
+| Audit log | core | `auditMiddleware` لـ `/hr/onboarding` لو مضاف | `audit_logs` | ⚠ |
+
+تحقق يدوي:
+- [ ] هل تأخّر بند في checklist > N يوم يطلق escalation لمسؤول HR؟
+- [ ] هل الموظف يستطيع check-in قبل اكتمال onboarding أم محظور؟
+- [ ] هل تقييم نهاية فترة التجربة (3 months) يفتح في `evaluation_cycles` آلياً؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `onboarding-review` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

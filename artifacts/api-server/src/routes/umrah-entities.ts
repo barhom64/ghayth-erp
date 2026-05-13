@@ -15,7 +15,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
   zodParse,
@@ -211,7 +211,7 @@ router.get("/sub-agents", authorize({ feature: "umrah", action: "list" }), async
        LIMIT 500`,
       [scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "List sub-agents"); }
 });
 
@@ -253,7 +253,7 @@ router.get("/sub-agents/:id", authorize({ feature: "umrah", action: "view" }), a
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("الوكيل الفرعي غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Get sub-agent"); }
 });
 
@@ -283,7 +283,7 @@ router.get("/sub-agents/unlinked", authorize({ feature: "umrah", action: "list" 
        ORDER BY sa.name`,
       params
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "List unlinked sub-agents"); }
 });
 
@@ -438,7 +438,7 @@ router.get("/pricing", authorize({ feature: "umrah", action: "list" }), async (r
        LIMIT 500`,
       [scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "List pricing"); }
 });
 
@@ -554,7 +554,7 @@ router.get("/groups", authorize({ feature: "umrah", action: "list" }), async (re
        LIMIT 500`,
       params
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "List groups"); }
 });
 
@@ -595,7 +595,7 @@ router.get("/groups/:id", authorize({ feature: "umrah", action: "view" }), async
       `SELECT id, "fullName", nationality, status FROM umrah_pilgrims WHERE "groupId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL ORDER BY "fullName"`,
       [id, scope.companyId]
     );
-    res.json({ ...row, pilgrims });
+    res.json(maskFields(req, { ...row, pilgrims }));
   } catch (err) { handleRouteError(err, res, "Get group"); }
 });
 
@@ -866,7 +866,7 @@ router.get("/nusk-invoices", authorize({ feature: "umrah", action: "list" }), as
        LIMIT 500`,
       params
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "List nusk invoices"); }
 });
 
@@ -884,7 +884,7 @@ router.get("/nusk-invoices/:id", authorize({ feature: "umrah", action: "view" })
       [id, scope.companyId]
     );
     if (!row) { res.status(404).json({ error: "فاتورة نسك غير موجودة" }); return; }
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Get nusk invoice"); }
 });
 
@@ -1015,7 +1015,7 @@ router.get("/employees/:employeeId/assignments", authorize({ feature: "umrah", a
        ORDER BY ea.id DESC LIMIT 50`,
       [employeeId, scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "Employee assignments error"); }
 });
 
@@ -1036,7 +1036,7 @@ router.get("/commission-plans", authorize({ feature: "umrah", action: "list" }),
        ORDER BY cp."createdAt" DESC`,
       [scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "List commission plans"); }
 });
 
@@ -1063,7 +1063,7 @@ router.get("/commission-plans/:id", authorize({ feature: "umrah", action: "view"
       ),
     ]);
     if (!plan) { throw new NotFoundError("الخطة غير موجودة"); }
-    res.json({ ...plan, tiers, calculations });
+    res.json(maskFields(req, { ...plan, tiers, calculations }));
   } catch (err) { handleRouteError(err, res, "Get commission plan"); }
 });
 
@@ -1233,7 +1233,7 @@ router.get("/commission-calculations", authorize({ feature: "umrah", action: "li
        ORDER BY cc.year DESC, cc.month DESC LIMIT 500`,
       params
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "List commission calculations"); }
 });
 
@@ -1252,7 +1252,7 @@ router.get("/import/batches", authorize({ feature: "umrah", action: "list" }), a
       `SELECT b.* FROM umrah_import_batches b WHERE ${where} ORDER BY b."createdAt" DESC LIMIT 500`,
       params
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "List import batches"); }
 });
 
@@ -1269,7 +1269,7 @@ router.get("/import/batches/:id/changes", authorize({ feature: "umrah", action: 
       `SELECT * FROM umrah_import_changes WHERE "batchId" = $1 ORDER BY id LIMIT 1000`,
       [id]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "List batch changes"); }
 });
 
@@ -1296,7 +1296,7 @@ router.get("/invoices", authorize({ feature: "umrah", action: "list" }), async (
        LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "List umrah invoices"); }
 });
 
@@ -1364,7 +1364,7 @@ router.get("/payments", authorize({ feature: "umrah", action: "list" }), async (
        LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "List umrah payments"); }
 });
 
@@ -1407,7 +1407,7 @@ router.get("/statements/:subAgentId", authorize({ feature: "umrah", action: "vie
       stmtType,
       from, to
     );
-    res.json(result);
+    res.json(maskFields(req, result));
   } catch (err) { handleRouteError(err, res, "Generate statement"); }
 });
 
@@ -1559,7 +1559,7 @@ router.get("/reports/daily-runsheet", authorize({ feature: "umrah", action: "vie
     const scope = req.scope!;
     const date = String((req.query.date as string) || new Date().toISOString().slice(0, 10));
     const data = await fetchDailyRunsheet(scope.companyId, date);
-    res.json({ date, ...data });
+    res.json(maskFields(req, { date, ...data }));
   } catch (err) { handleRouteError(err, res, "Daily run-sheet"); }
 });
 
@@ -1637,7 +1637,7 @@ router.get("/attachments", authorize({ feature: "umrah", action: "list" }), asyn
         LIMIT 500`,
       params
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "List attachments"); }
 });
 
@@ -1797,7 +1797,7 @@ router.get("/reports/reconciliation", authorize({ feature: "umrah", action: "vie
       [scope.companyId]
     );
 
-    res.json({
+    res.json(maskFields(req, {
       summary: {
         amountDiffs: amountDiffs.length,
         countDiffs: countDiffs.length,
@@ -1806,7 +1806,7 @@ router.get("/reports/reconciliation", authorize({ feature: "umrah", action: "vie
       amountDiffs,
       countDiffs,
       overstayGaps,
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Reconciliation report"); }
 });
 

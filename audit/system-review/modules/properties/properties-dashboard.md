@@ -27,13 +27,35 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/properties.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+لوحة العقارات الرئيسية. KPIs + إجراءات سريعة.
+
+| البيانات | المصدر |
+|---------|--------|
+| Occupancy rate | راجع `properties-occupancy-report.md` |
+| Total units / buildings | `property_units`, `property_buildings` |
+| Active contracts | `property_contracts WHERE status='active'` |
+| Expiring contracts (60 يوم) | cron alert |
+| Total rent expected (monthly) | aggregate `contracts.monthlyRent` |
+| Total received this month | aggregate `payments.paidAmount` |
+| Maintenance requests open | `maintenance_requests WHERE status!='closed'` |
+| Overdue payments | aggregate aged `payments.dueDate` |
+| Top tenants | by paid_amount desc |
+| Top owners | by units count |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| تجميع KPIs | `properties.ts` GET `/dashboard` | aggregation | ✅ |
+| فلترة per branch/building | scopeQueryString | ✅ |
+| Quick actions (مبنى جديد/عقد جديد) | Link to create pages | ✅ |
+| Drill-down للوحدات الفارغة | navigate to `properties-units.md` | ✅ |
+| إشعارات (occupancy threshold) | comms | event=`occupancy_below_X` | ⚠ |
+| RBAC (property module access) | minRoleLevel + subKey | ✅ |
+| Audit log | read-only لا تُسجّل | ✅ |
+
+تحقق يدوي:
+- [ ] هل الـ KPIs محسوبة لحظياً أم cached كل X دقيقة؟
+- [ ] هل لوحة المالك (owner portal) لها view مختلف يعرض فقط ممتلكاته؟
+- [ ] هل البيانات الحساسة (رصيد مالك) محصورة على الـ admin + المالك نفسه؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `dashboard` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

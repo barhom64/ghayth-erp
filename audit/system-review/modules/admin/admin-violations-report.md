@@ -23,13 +23,32 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/admin.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+تقرير المخالفات (Admin Violations Report) — security incidents + RBAC breaches.
+
+| النوع | الوصف | المصدر |
+|------|------|--------|
+| Permission denied (UI bypass) | محاولة استدعاء API بدون role | `audit_logs WHERE outcome='denied'` |
+| Direct URL navigation to blocked page | `AccessDenied` page hit | `event_logs.action='access_denied'` |
+| Failed login attempts | brute-force محتمل | `auth_failures` per IP |
+| Suspicious data access pattern | مستخدم يقرأ بيانات كثيرة في فترة قصيرة | `audit_logs` aggregate |
+| Tenant scope violation محاولة | حاول قراءة data خارج companyId | الـ middleware يرفض ويسجل | 
+| Field-level access bypass | عبر `maskFields()` (PR #481) | `event_logs.action='field_mask_attempt'` |
+| HR violations (للموظفين العاديين) | راجع `hr-violations.md` | منفصل عن security |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| Aggregate per type/user/date | GET `/admin/violations-report` | aggregations | ✅ |
+| Detail per violation | drill-down للـ event | full payload | ✅ |
+| Block IP (anti-abuse) | POST `/admin/block-ip` | `blocked_ips` | ⚠ |
+| Reset user lockout | POST `/admin/users/:id/unlock` | `users.lockedAt=null` | ✅ |
+| تنبيه للـ admin | event=`security_violation_critical` | `notifications` | ✅ |
+| تقرير شهري للـ governance | export PDF | ✅ |
+| Audit log إجباري | لكل تعديل في الـ violations | ✅ |
+
+تحقق يدوي:
+- [ ] هل نمط متكرر لنفس المستخدم يطلق lockout تلقائي + إشعار HR؟
+- [ ] هل البيانات الشخصية في الـ report محمية بـ RBAC level 90+؟
+- [ ] هل التقرير الشهري يحفظ snapshot للأرشيف لـ compliance؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `violations-report` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

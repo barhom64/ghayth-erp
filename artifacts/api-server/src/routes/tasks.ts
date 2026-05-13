@@ -5,7 +5,7 @@ import { handleRouteError, ValidationError, NotFoundError, ConflictError,
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { loadBalanceAssign } from "../lib/algorithms.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
@@ -220,7 +220,7 @@ router.get("/", authorize({ feature: "tasks", action: "list" }), async (req, res
       }
     }
 
-    res.json(tasks);
+    res.json(maskFields(req, tasks));
   } catch (err) {
     handleRouteError(err, res, "List tasks error:");
   }
@@ -246,7 +246,7 @@ router.get("/entity-search", authorize({ feature: "tasks", action: "list" }), as
     if (!query) { res.json({ data: [], total: 0 }); return; }
     const searchTerm = `%${q || ""}%`;
     const results = await rawQuery<EntitySearchRow>(query, [scope.companyId, searchTerm]);
-    res.json(results);
+    res.json(maskFields(req, results));
   } catch (err) {
     handleRouteError(err, res, "Entity search error:");
   }
@@ -273,7 +273,7 @@ router.get("/:id", authorize({ feature: "tasks", action: "view", resource: { tab
       params
     );
     if (rows.length === 0) { throw new NotFoundError("المهمة غير موجودة"); }
-    res.json(rows[0]);
+    res.json(maskFields(req, rows[0]));
   } catch (err) {
     handleRouteError(err, res, "Get task error:");
   }

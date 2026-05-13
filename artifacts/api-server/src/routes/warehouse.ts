@@ -10,7 +10,7 @@ import {
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { movingAverage } from "../lib/algorithms.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import {
@@ -293,7 +293,7 @@ router.get("/products", authorize({ feature: "warehouse.inventory", action: "lis
       `SELECT p.*, c.name AS "categoryName" FROM warehouse_products p LEFT JOIN warehouse_categories c ON c.id=p."categoryId" WHERE ${where} AND p."deletedAt" IS NULL ORDER BY p.name LIMIT $${limitParam} OFFSET $${offsetParam}`,
       params
     );
-    res.json({ data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage });
+    res.json(maskFields(req, { data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage }));
   } catch (err) { handleRouteError(err, res, "Warehouse products error:"); }
 });
 
@@ -364,7 +364,7 @@ router.get("/products/:id", authorize({ feature: "warehouse.inventory", action: 
     const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT p.*, c.name AS "categoryName" FROM warehouse_products p LEFT JOIN warehouse_categories c ON c.id=p."categoryId" WHERE p.id=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المنتج غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Get product error:"); }
 });
 
@@ -559,7 +559,7 @@ router.get("/movements", authorize({ feature: "warehouse.transfers", action: "li
       `SELECT m.*, p.name AS "productName", p.sku FROM warehouse_movements m LEFT JOIN warehouse_products p ON p.id=m."productId" WHERE ${where} ORDER BY m.id DESC LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Warehouse movements error:"); }
 });
 
@@ -576,7 +576,7 @@ router.get("/movements/:id", authorize({ feature: "warehouse.transfers", action:
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("حركة المخزن غير موجودة");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Warehouse movement detail error:"); }
 });
 
@@ -949,7 +949,7 @@ router.get("/categories", authorize({ feature: "warehouse.inventory", action: "l
       `SELECT * FROM warehouse_categories WHERE ${where} ORDER BY name LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
       [...params, perPage, offset]
     );
-    res.json({ data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage });
+    res.json(maskFields(req, { data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage }));
   } catch (err) { handleRouteError(err, res, "Warehouse categories error:"); }
 });
 
@@ -962,7 +962,7 @@ router.get("/categories/:id", authorize({ feature: "warehouse.inventory", action
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("الفئة غير موجودة");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Warehouse category detail error:"); }
 });
 
@@ -1024,7 +1024,7 @@ router.get("/suppliers", authorize({ feature: "warehouse.inventory", action: "li
       `SELECT * FROM suppliers WHERE ${where} ORDER BY name LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
       [...params, perPage, offset]
     );
-    res.json({ data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage });
+    res.json(maskFields(req, { data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage }));
   } catch (err) { handleRouteError(err, res, "Suppliers error:"); }
 });
 
@@ -1037,7 +1037,7 @@ router.get("/suppliers/:id", authorize({ feature: "warehouse.inventory", action:
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("المورد غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Supplier detail error:"); }
 });
 
@@ -1232,7 +1232,7 @@ router.get("/stats", authorize({ feature: "warehouse.inventory", action: "list" 
       rawQuery<Record<string, unknown>>(`SELECT COALESCE(SUM("currentStock" * "costPrice"),0) as "totalValue" FROM warehouse_products WHERE "companyId"=$1 AND status='active' AND "deletedAt" IS NULL`, [cid]),
       rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as "todayMovements" FROM warehouse_movements WHERE "companyId"=$1 AND "createdAt"::date = CURRENT_DATE`, [cid]),
     ]);
-    res.json({ totalProducts: Number(products.total), lowStock: Number(products.lowStock), totalValue: Number(value.totalValue), todayMovements: Number(movements.todayMovements) });
+    res.json(maskFields(req, { totalProducts: Number(products.total), lowStock: Number(products.lowStock), totalValue: Number(value.totalValue), todayMovements: Number(movements.todayMovements) }));
   } catch (err) { handleRouteError(err, res, "Warehouse stats error:"); }
 });
 
@@ -1255,7 +1255,7 @@ router.get("/inventory-counts", authorize({ feature: "warehouse.inventory", acti
        ORDER BY ic."countDate" DESC LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "Inventory counts error:"); }
 });
 
@@ -1331,7 +1331,7 @@ router.get("/inventory-counts/:id/items", authorize({ feature: "warehouse.invent
       item.batches = batchesByProduct.get(Number(item.productId)) ?? [];
     }
 
-    res.json({ data: items, total: items.length });
+    res.json(maskFields(req, { data: items, total: items.length }));
   } catch (err) { handleRouteError(err, res, "Count items error:"); }
 });
 

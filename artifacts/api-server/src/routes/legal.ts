@@ -170,7 +170,7 @@ router.get("/contracts", authorize({ feature: "legal.contracts", action: "list" 
     if (status) { params.push(status); conditions.push(`status = $${params.length}`); }
     conditions.push(`"deletedAt" IS NULL`);
     const rows = await rawQuery<Record<string, unknown>>(`SELECT *, ("endDate"::date - CURRENT_DATE) AS "daysToExpiry" FROM legal_contracts WHERE ${conditions.join(" AND ")} ORDER BY id DESC LIMIT 500`, params);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Legal contracts error:"); }
 });
 
@@ -278,7 +278,7 @@ router.get("/contracts/renewal-alerts", authorize({ feature: "legal.contracts", 
       };
     });
 
-    res.json({ data: all, total: all.length, page: 1, pageSize: all.length });
+    res.json(maskFields(req, { data: all, total: all.length, page: 1, pageSize: all.length }));
   } catch (err) { handleRouteError(err, res, "Renewal alerts error:"); }
 });
 
@@ -288,7 +288,7 @@ router.get("/contracts/:id", authorize({ feature: "legal.contracts", action: "vi
     const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT *, ("endDate"::date - CURRENT_DATE) AS "daysToExpiry" FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("العقد غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Get contract error:"); }
 });
 
@@ -561,7 +561,7 @@ router.get("/cases", authorize({ feature: "legal.cases", action: "list" }), asyn
     if (status) { params.push(status); conditions.push(`status = $${params.length}`); }
     conditions.push(`"deletedAt" IS NULL`);
     const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_cases WHERE ${conditions.join(" AND ")} ORDER BY id DESC LIMIT 500`, params);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Legal cases error:"); }
 });
 
@@ -647,7 +647,7 @@ router.get("/cases/:id", authorize({ feature: "legal.cases", action: "view", res
 
     const sessions = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 AND "deletedAt" IS NULL ORDER BY "sessionDate" DESC LIMIT 500`, [row.id]);
 
-    res.json({ ...row, sessions, allowedTransitions: VALID_CASE_TRANSITIONS[row.status as string] || [] });
+    res.json(maskFields(req, { ...row, sessions, allowedTransitions: VALID_CASE_TRANSITIONS[row.status as string] || [] }));
   } catch (err) { handleRouteError(err, res, "Get case error:"); }
 });
 
@@ -807,7 +807,7 @@ router.get("/cases/:caseId/sessions", authorize({ feature: "legal.cases", action
     const [legalCase] = await rawQuery<Record<string, unknown>>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!legalCase) throw new NotFoundError("القضية غير موجودة");
     const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 AND "deletedAt" IS NULL ORDER BY "sessionDate" DESC LIMIT 500`, [caseId]);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Legal sessions error:"); }
 });
 
@@ -993,12 +993,12 @@ router.get("/stats", authorize({ feature: "legal.cases", action: "list" }), asyn
       rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as upcoming FROM legal_sessions ls JOIN legal_cases lc ON lc.id=ls."caseId" WHERE lc."companyId"=$1 AND lc."deletedAt" IS NULL AND ls."deletedAt" IS NULL AND ls."sessionDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'`, [cid]),
       rawQuery<Record<string, unknown>>(`SELECT COALESCE(SUM("financialRisk"),0) as total FROM legal_cases WHERE "companyId"=$1 AND status NOT IN ('closed') AND "deletedAt" IS NULL`, [cid]).catch((e) => { logger.error(e, "legal query failed"); return [{ total: 0 }]; }),
     ]);
-    res.json({
+    res.json(maskFields(req, {
       totalContracts: Number(contracts.total), activeContracts: Number(contracts.active),
       totalCases: Number(cases.total), openCases: Number(cases.open), inProgressCases: Number(cases.inProgress),
       expiringContracts: Number(expiring.count), upcomingSessions: Number(sessions.upcoming),
       contingentLiabilities: Number(contingent?.total || 0),
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Legal stats error:"); }
 });
 
@@ -1009,7 +1009,7 @@ router.get("/cases/:caseId/correspondence", authorize({ feature: "legal.cases", 
     const [lc] = await rawQuery<Record<string, unknown>>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!lc) throw new NotFoundError("القضية غير موجودة");
     const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_correspondence WHERE "caseId"=$1 ORDER BY "correspondenceDate" DESC LIMIT 500`, [caseId]);
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "Legal correspondence error:"); }
 });
 

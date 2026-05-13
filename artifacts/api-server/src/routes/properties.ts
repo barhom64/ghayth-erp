@@ -529,7 +529,7 @@ router.get("/units", authorize({ feature: "properties.units", action: "list" }),
       ),
       rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as total FROM property_units u WHERE ${conditions.join(" AND ")}`, countParams),
     ]);
-    res.json({ data: rows, total: Number(countRow?.total || rows.length), page, pageSize: limit });
+    res.json(maskFields(req, { data: rows, total: Number(countRow?.total || rows.length), page, pageSize: limit }));
   } catch (err) { handleRouteError(err, res, "Property units error:"); }
 });
 
@@ -641,7 +641,7 @@ router.get("/units/:id", authorize({ feature: "properties.units", action: "view"
       ),
     ]);
 
-    res.json({ ...row, contracts, payments, maintenance, timeline });
+    res.json(maskFields(req, { ...row, contracts, payments, maintenance, timeline }));
   } catch (err) { handleRouteError(err, res, "Get unit error:"); }
 });
 
@@ -654,7 +654,7 @@ router.get("/units/:id/impact-preview", authorize({ feature: "properties.units",
       throw new ValidationError("الحالة المطلوبة", { field: "status", fix: "أرسل معامل status في الرابط" });
     }
     const preview = await getPropertyUnitStatusImpact(id, scope.companyId, status);
-    res.json(preview);
+    res.json(maskFields(req, preview));
   } catch (err) { handleRouteError(err, res, "Impact preview error:"); }
 });
 
@@ -993,7 +993,7 @@ router.get("/contracts", authorize({ feature: "properties.contracts", action: "l
       `SELECT c.*, u."unitNumber", u."buildingName" FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId" AND u."deletedAt" IS NULL WHERE ${conditions.join(" AND ")} ORDER BY c.id DESC LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Rental contracts error:"); }
 });
 
@@ -1010,7 +1010,7 @@ router.get("/contracts/:id", authorize({ feature: "properties.contracts", action
       [contractId, scope.companyId]
     );
     if (!row) throw new NotFoundError("العقد غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Get contract error:"); }
 });
 
@@ -1697,7 +1697,7 @@ router.get("/tenants/list", authorize({ feature: "properties.tenants", action: "
     ]);
 
     const allRows = [...standaloneRows, ...contractRows];
-    res.json({ data: allRows, total: allRows.length });
+    res.json(maskFields(req, { data: allRows, total: allRows.length }));
   } catch (err) { handleRouteError(err, res, "Tenants list error:"); }
 });
 
@@ -1851,7 +1851,7 @@ router.get("/payments", authorize({ feature: "properties.payments", action: "lis
       `SELECT rp.*, c."tenantName", u."unitNumber" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" AND c."deletedAt" IS NULL LEFT JOIN property_units u ON u.id=c."unitId" AND u."deletedAt" IS NULL WHERE ${conditions.join(" AND ")} ORDER BY rp."dueDate" DESC LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Rent payments error:"); }
 });
 
@@ -1868,7 +1868,7 @@ router.get("/payments/:id", authorize({ feature: "properties.payments", action: 
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("الدفعة غير موجودة");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Property payment detail error:"); }
 });
 
@@ -2117,7 +2117,7 @@ router.get("/maintenance-requests", authorize({ feature: "properties.maintenance
       `SELECT mr.*, u."unitNumber", u."buildingName", t.name AS "technicianName" FROM maintenance_requests mr LEFT JOIN property_units u ON u.id=mr."unitId" LEFT JOIN technicians t ON t.id=mr."assignedTo" WHERE ${conditions.join(" AND ")} ORDER BY mr.id DESC LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Maintenance requests error:"); }
 });
 
@@ -2136,7 +2136,7 @@ router.get("/maintenance/:id", authorize({ feature: "properties.maintenance", ac
       [id, scope.companyId]
     );
     if (!item) throw new NotFoundError("طلب الصيانة غير موجود");
-    res.json(item);
+    res.json(maskFields(req, item));
   } catch (err) { handleRouteError(err, res, "Get maintenance request detail error:"); }
 });
 
@@ -2554,7 +2554,7 @@ router.get("/technicians", authorize({ feature: "properties.maintenance", action
   try {
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM technicians WHERE "companyId"=$1 ORDER BY name LIMIT 500`, [scope.companyId]);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Technicians error:"); }
 });
 
@@ -2670,7 +2670,7 @@ router.get("/tenants/:id", authorize({ feature: "properties.tenants", action: "v
     const email = tenantRecord?.email ?? contracts[0]?.tenantEmail;
     const nationalId = tenantRecord?.nationalId ?? contracts[0]?.tenantIdNumber;
 
-    res.json({
+    res.json(maskFields(req, {
       id: tenantRecord?.id ?? rawId,
       name,
       phone,
@@ -2683,7 +2683,7 @@ router.get("/tenants/:id", authorize({ feature: "properties.tenants", action: "v
       payments,
       totalPaid,
       overdueAmount: overduePayments.reduce((s: number, p) => s + Number(p.amount || 0) - Number(p.paidAmount || 0), 0),
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Tenant detail error:"); }
 });
 
@@ -2711,7 +2711,7 @@ router.get("/buildings", authorize({ feature: "properties.buildings", action: "l
        LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "Buildings list error:"); }
 });
 
@@ -2731,7 +2731,7 @@ router.get("/buildings/:id", authorize({ feature: "properties.buildings", action
       [id, scope.companyId]
     );
     if (!building) throw new NotFoundError("المبنى غير موجود");
-    res.json(building);
+    res.json(maskFields(req, building));
   } catch (err) { handleRouteError(err, res, "Building detail error:"); }
 });
 
@@ -2946,7 +2946,7 @@ router.get("/maintenance", authorize({ feature: "properties.maintenance", action
       `SELECT mr.*, u."unitNumber", u."buildingName" FROM maintenance_requests mr LEFT JOIN property_units u ON u.id=mr."unitId" WHERE ${conditions.join(" AND ")} ORDER BY mr.id DESC LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Property maintenance error:"); }
 });
 
@@ -3036,7 +3036,7 @@ router.get("/stats", authorize({ feature: "properties.units", action: "list" }),
     ]);
     const occupancyRate = Number(units.total) > 0 ? Math.round((Number(units.rented) / Number(units.total)) * 100) : 0;
     const collectionRate = Number(revenue.totalExpected) > 0 ? Math.round((Number(revenue.totalCollected) / Number(revenue.totalExpected)) * 100) : 0;
-    res.json({
+    res.json(maskFields(req, {
       totalUnits: Number(units.total),
       available: Number(units.available),
       rented: Number(units.rented),
@@ -3066,7 +3066,7 @@ router.get("/stats", authorize({ feature: "properties.units", action: "list" }),
         totalExpected: Number(b.totalExpected),
         occupancyRate: Number(b.totalUnits) > 0 ? Math.round((Number(b.rentedUnits) / Number(b.totalUnits)) * 100) : 0,
       })),
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Properties stats error:"); }
 });
 
@@ -3252,7 +3252,7 @@ router.get("/operations-dashboard", authorize({ feature: "properties.units", act
            AND rp."dueDate" < date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'`, [cid]
       ),
     ]);
-    res.json({
+    res.json(maskFields(req, {
       units: unitStats,
       expiringContracts,
       overduePayments,
@@ -3261,7 +3261,7 @@ router.get("/operations-dashboard", authorize({ feature: "properties.units", act
         expected: Number(collectionSummary?.expected || 0),
         collected: Number(collectionSummary?.collected || 0),
       },
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Operations dashboard error:"); }
 });
 
@@ -3280,7 +3280,7 @@ router.get("/owners", authorize({ feature: "properties.owners", action: "list" }
        FROM property_owners o WHERE ${conditions.join(" AND ")} AND o."deletedAt" IS NULL ORDER BY o.name LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "Property owners error:"); }
 });
 
@@ -3295,7 +3295,7 @@ router.get("/owners/:id", authorize({ feature: "properties.owners", action: "vie
       rawQuery<Record<string, unknown>>(`SELECT * FROM property_units WHERE "ownerId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 500`, [id, scope.companyId]),
       rawQuery<Record<string, unknown>>(`SELECT c.*, u."unitNumber", u."buildingName" FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId" WHERE c."ownerId"=$1 AND c."companyId"=$2 AND c."deletedAt" IS NULL ORDER BY c.id DESC LIMIT 500`, [id, scope.companyId]),
     ]);
-    res.json({ ...owner, buildings, units, contracts });
+    res.json(maskFields(req, { ...owner, buildings, units, contracts }));
   } catch (err) { handleRouteError(err, res, "Owner detail error:"); }
 });
 
@@ -3472,7 +3472,7 @@ router.get("/contracts/:id/schedule", authorize({ feature: "properties.contracts
       `SELECT * FROM contract_payment_schedule WHERE "contractId"=$1 ORDER BY "installmentNumber" LIMIT 500`,
       [contractId]
     );
-    res.json({ data: schedule, total: schedule.length });
+    res.json(maskFields(req, { data: schedule, total: schedule.length }));
   } catch (err) { handleRouteError(err, res, "Payment schedule error:"); }
 });
 
@@ -3558,7 +3558,7 @@ router.get("/inspections", authorize({ feature: "properties.maintenance", action
        LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "Inspections error:"); }
 });
 
@@ -3727,7 +3727,7 @@ router.get("/deposits", authorize({ feature: "properties.payments", action: "lis
        LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "Security deposits error:"); }
 });
 
@@ -3910,13 +3910,13 @@ router.get("/occupancy-report", authorize({ feature: "properties.units", action:
       if (u.status === 'available') byBuilding[b].available++;
     });
 
-    res.json({
+    res.json(maskFields(req, {
       total, occupied, available, maintenance,
       occupancyRate,
       totalMonthlyRent: Math.round(totalMonthlyRent),
       byBuilding: Object.values(byBuilding),
       units,
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Occupancy report error:"); }
 });
 
@@ -3936,7 +3936,7 @@ router.get("/tenants/:id/letters", authorize({ feature: "properties.tenants", ac
        LIMIT 50`,
       [scope.companyId, tenantId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "Tenant letters error:"); }
 });
 

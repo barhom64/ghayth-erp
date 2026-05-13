@@ -26,13 +26,33 @@ _لم تُلتقط أزرار._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/hr.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+لوحة إدارة الإجازات (admin view) — تجميع لكل الإجازات في القسم/الشركة.
+
+| البيانات | المصدر | الغرض |
+|---------|--------|-------|
+| Active leaves now | `leave_requests WHERE status='approved' AND now BETWEEN start/end` | مشاهدة من على إجازة الآن |
+| Pending approvals | `leave_requests WHERE status='pending'` | للموافقات السريعة |
+| Balance per employee | `hr_leave_balances` | المستحق المتبقي |
+| Leave history | aggregate per employee/period | تحليل الأنماط |
+| Public holidays | `public_holidays` | اعتبارها في الحسابات |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| عرض الإجازات | GET `/hr/leaves` + filters | aggregation | ✅ |
+| موافقة جماعية (bulk approve) | POST `/hr/leaves/bulk-approve` | atomic | ⚠ تحقق |
+| تعديل رصيد إجازة (HR admin) | PATCH `/hr/leave-balances/:id` | `hr_leave_balances` | ✅ |
+| ترحيل رصيد (carry-over) | cron نهاية السنة | يحدّث `year+1` | ⚠ |
+| تقرير ageing الإجازات المعلّقة | bi | aggregation | ✅ |
+| تأثير على Calendar الموحّد | misc/calendar | راجع `misc/calendar.md` | ✅ |
+| تأثير على Payroll (lo unpaid) | hr/payroll | راجع `hr-payroll.md` | ✅ |
+| سياسة بلوكات (peak season block) | hr | `business_rules.leave_blackout_dates` | ⚠ |
+| إشعارات للمديرين | comms | event=`leave_balance_low\|carryover_due` | ✅ |
+| Audit log | core | `auditMiddleware` (`/hr/leaves`) | `audit_logs` (entity=`leave_request`) | ✅ |
+
+تحقق يدوي:
+- [ ] هل bulk approve يحترم الـ approval_chain لكل طلب أم يتجاوزه؟
+- [ ] هل تعديل رصيد إجازة من HR يتطلب موافقة + audit log إجباري؟
+- [ ] هل carry-over policy مرنة (cap, expiry, cashout)؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `management` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

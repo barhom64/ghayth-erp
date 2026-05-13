@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { handleRouteError, ValidationError, NotFoundError,
   parseId,
   zodParse,
@@ -180,7 +180,7 @@ router.get("/policies", authorize({ feature: "governance", action: "list" }), as
       `SELECT * FROM governance_policies WHERE ${conditions.join(" AND ")} ORDER BY "createdAt" DESC LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
@@ -238,7 +238,7 @@ router.get("/policies/:id", authorize({ feature: "governance", action: "view" })
       [row.id]
     );
     row.versions = versions;
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
@@ -371,7 +371,7 @@ router.get("/policies/:id/module-links", authorize({ feature: "governance", acti
       `SELECT * FROM policy_module_links WHERE "policyId"=$1 LIMIT 500`,
       [policyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
@@ -390,7 +390,7 @@ router.get("/module-policies/:module", authorize({ feature: "governance", action
        ORDER BY gp."createdAt" DESC LIMIT 500`,
       [mod, scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
@@ -417,7 +417,7 @@ router.get("/risks", authorize({ feature: "governance", action: "list" }), async
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM governance_risks WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
@@ -453,7 +453,7 @@ router.get("/risks/:id", authorize({ feature: "governance", action: "view" }), a
     const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM governance_risks WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المخاطرة غير موجودة");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
@@ -511,7 +511,7 @@ router.get("/audits", authorize({ feature: "governance", action: "list" }), asyn
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM governance_audits WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
@@ -543,7 +543,7 @@ router.get("/audits/:id", authorize({ feature: "governance", action: "view" }), 
     const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM governance_audits WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المراجعة غير موجودة");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
@@ -599,7 +599,7 @@ router.get("/compliance", authorize({ feature: "governance", action: "list" }), 
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM governance_compliance WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
@@ -631,7 +631,7 @@ router.get("/compliance/:id", authorize({ feature: "governance", action: "view" 
     const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM governance_compliance WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("بند الامتثال غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
@@ -727,7 +727,7 @@ router.get("/compliance-dashboard", authorize({ feature: "governance", action: "
       rawQuery<Record<string, unknown>>(`SELECT * FROM governance_capa WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 20`, [cid]).catch((e) => { logger.error(e, "governance query failed"); return []; }),
     ]);
     const rate = Number(actions?.total) > 0 ? Math.round(Number(actions?.implemented) / Number(actions?.total) * 100) : 100;
-    res.json({
+    res.json(maskFields(req, {
       complianceRate: rate,
       actionsTotal: Number(actions?.total || 0),
       actionsImplemented: Number(actions?.implemented || 0),
@@ -737,7 +737,7 @@ router.get("/compliance-dashboard", authorize({ feature: "governance", action: "
       risksWithoutTreatment: Number(risks?.withoutTreatment || 0),
       policiesNoActions: Number(policiesNoActions?.count || 0),
       recentCapas: capas,
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
@@ -745,7 +745,7 @@ router.get("/compliance-actions", authorize({ feature: "governance", action: "li
   try {
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM policy_compliance_actions WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "dueDate" ASC NULLS LAST, "createdAt" DESC LIMIT 500`, [scope.companyId]);
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
@@ -825,7 +825,7 @@ router.get("/policies/:id/compliance-actions", authorize({ feature: "governance"
     const scope = req.scope!;
     const policyId = parseId(req.params.id, "id");
     const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM policy_compliance_actions WHERE "policyId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL ORDER BY "createdAt" LIMIT 500`, [policyId, scope.companyId]);
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 
@@ -884,7 +884,7 @@ router.get("/capa", authorize({ feature: "governance", action: "list" }), async 
   try {
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM governance_capa WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "governance"); }
 });
 

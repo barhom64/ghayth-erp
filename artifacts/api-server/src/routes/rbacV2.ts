@@ -29,7 +29,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { bumpCacheVersion, checkAccess } from "../lib/rbac/authzEngine.js";
 import { invalidateSodCache } from "../lib/rbac/sodEnforcement.js";
 import { createNotification } from "../lib/businessHelpers.js";
@@ -74,7 +74,7 @@ router.get("/features", async (req, res) => {
          FROM feature_catalog
         ORDER BY display_order, feature_key`
     );
-    res.json({ features: rows.length ? rows : FEATURE_CATALOG });
+    res.json(maskFields(req, { features: rows.length ? rows : FEATURE_CATALOG }));
   } catch (err) {
     handleRouteError(err, res, "list features");
   }
@@ -95,7 +95,7 @@ router.get("/roles", authorize({ feature: "admin.roles", action: "list" }), asyn
         ORDER BY r.level DESC, r.role_key`,
       [scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) {
     handleRouteError(err, res, "list roles");
   }
@@ -202,7 +202,7 @@ router.get("/roles/:id/grants", authorize({ feature: "admin.roles", action: "vie
       `SELECT feature_key, actions, scope, conditions FROM rbac_role_grants WHERE role_id = $1 ORDER BY feature_key`,
       [id]
     );
-    res.json({ grants });
+    res.json(maskFields(req, { grants }));
   } catch (err) {
     handleRouteError(err, res, "list grants");
   }
@@ -276,7 +276,7 @@ router.get("/roles/:id/field-policies", authorize({ feature: "admin.roles", acti
       `SELECT feature_key, field_name, mode FROM rbac_field_policies WHERE role_id = $1 ORDER BY feature_key, field_name`,
       [id]
     );
-    res.json({ policies });
+    res.json(maskFields(req, { policies }));
   } catch (err) {
     handleRouteError(err, res, "list field policies");
   }
@@ -336,7 +336,7 @@ router.get("/roles/:id/approval-limits", authorize({ feature: "admin.roles", act
          FROM rbac_approval_limits WHERE role_id = $1 ORDER BY feature_key, action`,
       [id]
     );
-    res.json({ limits });
+    res.json(maskFields(req, { limits }));
   } catch (err) {
     handleRouteError(err, res, "list approval limits");
   }
@@ -499,7 +499,7 @@ router.get("/users", authorize({ feature: "admin.users", action: "list" }), asyn
         ORDER BY e.name LIMIT 200`,
       params
     );
-    res.json({ users: rows });
+    res.json(maskFields(req, { users: rows }));
   } catch (err) {
     handleRouteError(err, res, "list users");
   }
@@ -567,7 +567,7 @@ router.get("/templates", async (req, res) => {
          FROM rbac_roles r WHERE is_template = TRUE
          ORDER BY level DESC, role_key`
     );
-    res.json({ templates: rows });
+    res.json(maskFields(req, { templates: rows }));
   } catch (err) {
     handleRouteError(err, res, "list templates");
   }
@@ -640,7 +640,7 @@ router.get("/roles/:id/history", authorize({ feature: "admin.roles", action: "vi
         ORDER BY h."createdAt" DESC LIMIT 100`,
       [id, scope.companyId]
     );
-    res.json({ history: rows });
+    res.json(maskFields(req, { history: rows }));
   } catch (err) {
     handleRouteError(err, res, "list history");
   }
@@ -672,7 +672,7 @@ router.get("/sod", authorize({ feature: "admin.roles", action: "view" }), async 
         violations.push({ rule: r, offenders });
       }
     }
-    res.json({ rules, violations });
+    res.json(maskFields(req, { rules, violations }));
   } catch (err) {
     handleRouteError(err, res, "sod report");
   }
@@ -792,7 +792,7 @@ router.get("/users/:userId/effective", authorize({ feature: "admin.roles", actio
       [userId, scope.companyId]
     );
 
-    res.json({ target, roles, grants, fields, limits, overrides });
+    res.json(maskFields(req, { target, roles, grants, fields, limits, overrides }));
   } catch (err) {
     handleRouteError(err, res, "effective grants");
   }
@@ -811,7 +811,7 @@ router.get("/users/:userId/roles", authorize({ feature: "admin.roles", action: "
         WHERE ur."userId" = $1 AND ur."companyId" = $2`,
       [userId, scope.companyId]
     );
-    res.json({ roles: rows });
+    res.json(maskFields(req, { roles: rows }));
   } catch (err) {
     handleRouteError(err, res, "list user roles");
   }
@@ -986,7 +986,7 @@ router.get("/jit/my", async (req, res) => {
         ORDER BY "createdAt" DESC LIMIT 100`,
       [scope.userId, scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) {
     handleRouteError(err, res, "list my JIT requests");
   }
@@ -1005,7 +1005,7 @@ router.get("/jit/pending", authorize({ feature: "admin.roles", action: "list" })
         ORDER BY j."createdAt" ASC LIMIT 200`,
       [scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) {
     handleRouteError(err, res, "list pending JIT");
   }

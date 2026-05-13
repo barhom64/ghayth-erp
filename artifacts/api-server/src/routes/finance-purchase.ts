@@ -12,7 +12,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import {
   emitEvent,
   createAuditLog,
@@ -242,7 +242,7 @@ purchaseRouter.get("/purchase-requests", authorize({ feature: "finance.purchase"
     const countParams = params.slice(0, params.length - 2);
     const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM purchase_requests pr WHERE ${where}${extraWhere}`, countParams);
 
-    res.json({ data: rows, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) });
+    res.json(maskFields(req, { data: rows, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) }));
   } catch (err) {
     handleRouteError(err, res, "List purchase requests error:");
   }
@@ -526,7 +526,7 @@ purchaseRouter.get("/purchase-orders", authorize({ feature: "finance.purchase", 
 
     const countParams = params.slice(0, params.length - 2);
     const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM purchase_orders po WHERE ${where}${extraWhere}`, countParams);
-    res.json({ data: rows, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) });
+    res.json(maskFields(req, { data: rows, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) }));
   } catch (err) {
     handleRouteError(err, res, "List purchase orders error:");
   }
@@ -871,7 +871,7 @@ purchaseRouter.get("/purchase-orders/:id/receipts", authorize({ feature: "financ
        ORDER BY gr."receivedAt" DESC LIMIT 500`,
       [poId, scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) {
     handleRouteError(err, res, "List GRNs error:");
   }
@@ -913,11 +913,11 @@ purchaseRouter.get("/purchase-orders/:id/match", authorize({ feature: "finance.p
       };
     });
 
-    res.json({
+    res.json(maskFields(req, {
       po,
       lines,
       canInvoiceTotal: roundTo2(canInvoiceTotal),
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Three-way match error:");
   }
@@ -964,11 +964,11 @@ purchaseRouter.get("/payment-run/pending", authorize({ feature: "finance.purchas
       cur.count += 1;
       byVendor.set(sid, cur);
     }
-    res.json({
+    res.json(maskFields(req, {
       data: rows,
       totalDue: roundTo2(totalDue),
       byVendor: Array.from(byVendor.values()),
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Payment run pending error:");
   }
@@ -1153,7 +1153,7 @@ purchaseRouter.get("/payment-run", authorize({ feature: "finance.purchase", acti
         [scope.companyId]
       );
     } catch (e) { logger.warn(e, "payment_runs table not created yet"); }
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) {
     handleRouteError(err, res, "List payment runs error:");
   }
@@ -1282,7 +1282,7 @@ purchaseRouter.get("/purchase-orders/pending-grn", authorize({ feature: "finance
        ORDER BY po."createdAt" DESC LIMIT 500`,
       [scope.companyId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "PO pending GRN error:"); }
 });
 
@@ -1312,7 +1312,7 @@ purchaseRouter.get("/purchase-orders/:id", authorize({ feature: "finance.purchas
       );
     } catch (e) { logger.error(e, "PO lines fetch error"); }
 
-    res.json({ ...po, lines });
+    res.json(maskFields(req, { ...po, lines }));
   } catch (err) {
     handleRouteError(err, res, "PO detail error:");
   }

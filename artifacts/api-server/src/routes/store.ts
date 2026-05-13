@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { handleRouteError, NotFoundError, ConflictError,
   parseId,
   zodParse,
@@ -160,7 +160,7 @@ router.get("/products", authorize({ feature: "store", action: "list" }), async (
       `SELECT * FROM store_products WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT $2 OFFSET $3`,
       [scope.companyId, perPage, offset]
     );
-    res.json({ data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage });
+    res.json(maskFields(req, { data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage }));
   } catch (err) { handleRouteError(err, res, "List store products"); }
 });
 
@@ -189,7 +189,7 @@ router.get("/products/:id", authorize({ feature: "store", action: "view" }), asy
         WHERE soi."productId" = sp.id AND so.status IN ('pending','processing')), 0) AS "reservedQuantity"
       FROM store_products sp WHERE sp.id=$1 AND sp."companyId"=$2 AND sp."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المنتج غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Get store product"); }
 });
 
@@ -251,7 +251,7 @@ router.get("/orders", authorize({ feature: "store", action: "list" }), async (re
       where += ` AND o.status=$${params.length}`;
     }
     const rows = await rawQuery(`SELECT o.* FROM store_orders o WHERE ${where} ORDER BY o."createdAt" DESC LIMIT 500`, params);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "List store orders"); }
 });
 
@@ -328,7 +328,7 @@ router.get("/orders/:id", authorize({ feature: "store", action: "view" }), async
     let parsedItems: unknown[] = [];
     try { parsedItems = typeof row.items === 'string' ? JSON.parse(row.items) : (Array.isArray(row.items) ? row.items : []); } catch (e) { logger.warn(e, "store order items JSON parse fallback"); }
     row.items = orderItems.length > 0 ? orderItems : parsedItems;
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Get store order"); }
 });
 
@@ -428,12 +428,12 @@ router.get("/stats", authorize({ feature: "store", action: "list" }), async (req
       rawQuery(`SELECT COUNT(*) as count FROM store_orders WHERE status='pending' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
       rawQuery(`SELECT COALESCE(SUM("totalAmount"),0) as total FROM store_orders WHERE status='completed' AND "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
     ]);
-    res.json({
+    res.json(maskFields(req, {
       activeProducts: Number(products.count),
       totalOrders: Number(orders.count),
       pendingOrders: Number(pendingOrders.count),
       totalRevenue: Number(revenue.total),
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Get store stats"); }
 });
 

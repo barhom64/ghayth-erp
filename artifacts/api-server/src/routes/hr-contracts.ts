@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import {
   handleRouteError,
   ValidationError,
@@ -81,7 +81,7 @@ contractsRouter.get("/", authorize({ feature: "hr.contracts", action: "list" }),
        LIMIT 200`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "خطأ في جلب العقود");
   }
@@ -107,7 +107,7 @@ contractsRouter.get("/:id", authorize({ feature: "hr.contracts", action: "list" 
       [id, scope.companyId]
     );
     if (!contract) throw new NotFoundError("العق�� غير موجود");
-    res.json(contract);
+    res.json(maskFields(req, contract));
   } catch (err) {
     handleRouteError(err, res, "خطأ في جلب العقد");
   }

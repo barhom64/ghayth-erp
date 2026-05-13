@@ -23,13 +23,34 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/admin.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+GL Reconciliation — مطابقة الأستاذ العام مع الـ sub-ledgers (AR, AP, Inventory, ...).
+
+| Sub-ledger | الكنترول | المصدر |
+|-----------|---------|--------|
+| AR | sum(`invoices.balance`) = sum(`gl_lines WHERE account_type='AR'`) | finance/invoices + GL |
+| AP | sum(`vendors.balance`) = sum(`gl_lines WHERE account_type='AP'`) | finance/vendors + GL |
+| Inventory | sum(`inventory_layers.value`) = sum(`gl_lines WHERE account='Inventory'`) | warehouse + GL |
+| Custodies | sum(`custodies.balance`) = `gl_lines.Employee_Custody_account` | finance/custodies |
+| Bank | sum(`bank_statements.balance`) = `gl_lines.Bank_account` | finance/bank-reconciliation |
+| Fixed Assets | sum(`fixed_assets.netBookValue`) = `gl_lines.Net_FA_account` | finance/fixed-assets |
+| Tenant Deposits | sum(`property_deposits.balance`) = `gl_lines.Deposits_Liability` | properties |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| Run reconciliation | POST `/admin/gl-reconciliation/run` | aggregate + compare | ✅ |
+| كشف فروقات (variances) | كل sub-ledger له expected vs actual | `reconciliation_variances` | ✅ |
+| Drill-down للفروقات | كل variance يقود لـ transactions | للـ root cause | ✅ |
+| Auto-fix لو فرق صغير (< ## 3. الحركات ذات الصلة (Cross-Module Transactions)
+) | rounding adjustments | يولّد قيد تسوية | ⚠ تحقق |
+| Manual journal للتسوية الكبيرة | راجع `finance-journal-create.md` | يحتاج موافقة | ✅ |
+| تقرير شهري قبل الإقفال | إجباري قبل closing الفترة | ✅ |
+| إشعار للـ CFO عند variance > 0 | event=`gl_reconciliation_variance` | `notifications` | ✅ critical |
+| Audit log إجباري | لكل run + كل tuning | `audit_logs` | ✅ |
+
+تحقق يدوي:
+- [ ] هل reconciliation يُشغّل تلقائياً قبل closing الفترة (guard)?
+- [ ] هل الفروقات > حد معيّن تمنع الإقفال؟
+- [ ] هل audit trail يحفظ الـ matched IDs للتدقيق اللاحق؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `gl-reconciliation` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

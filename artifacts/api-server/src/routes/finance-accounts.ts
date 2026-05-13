@@ -10,7 +10,7 @@ import {
   zodParse,
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { checkFinancialPeriodOpen, emitEvent, createAuditLog, todayISO, toDateISO } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
@@ -138,7 +138,7 @@ accountsRouter.get("/chart-of-accounts", authorize({ feature: "finance.accounts"
        ORDER BY code ASC`,
       params
     );
-    res.json(accounts);
+    res.json(maskFields(req, accounts));
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
   }
@@ -168,7 +168,7 @@ accountsRouter.get("/accounts", authorize({ feature: "finance.accounts", action:
       `SELECT c.*, (SELECT p.id FROM chart_of_accounts p WHERE p.code = c."parentCode" AND p."companyId" = c."companyId" AND p."deletedAt" IS NULL LIMIT 1) AS "parentId" FROM chart_of_accounts c WHERE ${where} AND c."deletedAt" IS NULL${extraWhere} ORDER BY c.code LIMIT 5000`,
       params
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (_e) { logger.error(_e, "accounts list query failed");
     res.json({ data: [], total: 0, page: 1, pageSize: 0 });
   }
@@ -338,7 +338,7 @@ accountsRouter.get("/journal", authorize({ feature: "finance.accounts", action: 
        ORDER BY je."createdAt" DESC LIMIT 100`,
       params
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (_e) { logger.error(_e, "journal list query failed");
     res.json({ data: [], total: 0, page: 1, pageSize: 0 });
   }
@@ -443,11 +443,11 @@ accountsRouter.get("/ledger/:accountCode", authorize({ feature: "finance.account
     const totalDebit = rows.reduce((s: number, r) => s + Number(r.debit), 0);
     const totalCredit = rows.reduce((s: number, r) => s + Number(r.credit), 0);
 
-    res.json({
+    res.json(maskFields(req, {
       account: { code: accountCode, name: accountRow?.name, type: accountRow?.type },
       entries: movements,
       summary: { totalDebit, totalCredit, balance: totalDebit - totalCredit, count: movements.length }
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Ledger error:");
   }
@@ -464,7 +464,7 @@ accountsRouter.get("/stats", authorize({ feature: "finance.accounts", action: "l
        FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
       [scope.companyId]
     );
-    res.json(inv || { totalRevenue: 0, paidThisMonth: 0, pendingAmount: 0, overdueAmount: 0 });
+    res.json(maskFields(req, inv || { totalRevenue: 0, paidThisMonth: 0, pendingAmount: 0, overdueAmount: 0 }));
   } catch (err) { handleRouteError(err, res, "finance stats error"); }
 });
 
@@ -484,14 +484,14 @@ accountsRouter.get("/summary", authorize({ feature: "finance.accounts", action: 
        WHERE je."companyId" = $1 AND jl."accountCode" LIKE '5%' AND je."deletedAt" IS NULL AND je.status = 'posted'`,
       [scope.companyId]
     );
-    res.json({
+    res.json(maskFields(req, {
       invoicesCount: Number(inv?.count ?? 0),
       totalRevenue: Number(inv?.total ?? 0),
       totalPaid: Number(inv?.paid ?? 0),
       outstanding: Number(inv?.outstanding ?? 0),
       expensesCount: Number(exp?.count ?? 0),
       totalExpenses: Number(exp?.total ?? 0),
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
   }
