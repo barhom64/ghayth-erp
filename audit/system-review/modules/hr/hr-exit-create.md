@@ -27,13 +27,46 @@
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/hr.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+إنشاء طلب إنهاء خدمة (Exit / Termination) — العملية الأكثر حساسية في HR.
+
+| نوع الإنهاء | الوصف | gratuity policy |
+|------------|------|-----------------|
+| Resignation | استقالة | حسب Saudi Labor Law (2/3 بعد سنتين+) |
+| Termination (Cause) | فصل لسبب | بدون gratuity إن خرق MA 80 |
+| Termination (No Cause) | فصل بدون سبب | full gratuity + compensation |
+| End of contract | انتهاء عقد محدد | full gratuity |
+| Death | وفاة | full gratuity للورثة |
+| Retirement | تقاعد | full gratuity + GOSI pension |
+| Mutual agreement | تراضي | حسب الاتفاق |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| إنشاء طلب إنهاء | POST `/hr/exit` | `employee_exits` (status=pending) | ✅ |
+| Auto-calculate gratuity | server-side | based on tenure + last salary | راجع `hr-gratuity.md` ✅ |
+| Auto-calculate end-of-service settlement | unused leaves + bonuses + loans | راجع `hr-final-settlement.md` ✅ |
+| Outstanding loans deduction | linkage | راجع `hr-loans.md` | ✅ critical |
+| Outstanding tickets/violations | resolution check | راجع `hr-violations.md` | ⚠ |
+| Approval workflow | manager → HR → finance | راجع `governance/approvals.md` | ✅ critical |
+| Clearance checklist | IT (access), Finance (cash), Warehouse (items), Documents | راجع `hr-exit-clearance.md` | ✅ |
+| Generate end-of-service letter | PDF | راجع `print-templates` | ✅ |
+| GL entry — settlement | Dr Salary Expense + Cr Cash/Bank | راجع `finance-payroll-posting.md` | ✅ critical |
+| GOSI termination | external API | راجع `admin-integrations.md` | ✅ |
+| Qiwa termination | external | ⚠ |
+| Deactivate user account (post-clearance) | راجع `admin-users.md` | ✅ critical |
+| Archive employee profile | move to inactive | preserve for retention | ✅ |
+| Notification chain | event=`exit_initiated` → manager, HR, finance | راجع `notifications.md` | ✅ |
+| Exit interview | optional | راجع `hr-exit-interview.md` | ⚠ |
+| Audit log إجباري | كل خطوة | `audit_logs` | ✅ critical |
+| **PDPL** — retention 5 سنوات بعد الإنهاء | regulation | ✅ |
+| RBAC | hr-manager + finance approval | ✅ critical |
+
+تحقق يدوي:
+- [ ] هل gratuity calculation يطبّق Saudi Labor Law بدقة (1/2 first 5 years, full after)?
+- [ ] هل clearance checklist تحجب الـ final settlement حتى الإكمال؟
+- [ ] هل GOSI termination تلقائي بعد approval أم يدوي؟
+- [ ] هل في حالة Death — gratuity تذهب للورثة (heirs management)؟
+- [ ] هل audit log يحتفظ بكل الـ approvals + reasons + clearance items؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `create` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
