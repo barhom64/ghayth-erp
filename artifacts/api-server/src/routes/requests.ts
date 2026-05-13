@@ -567,7 +567,7 @@ router.patch("/:id", authorize({ feature: "requests", action: "update", resource
         },
       });
       const [row] = await rawQuery<RequestRow>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL`, [id, scope.companyId]);
-      res.json(row ?? updated);
+      res.json(maskFields(req, row ?? updated));
     } else {
       // No status change — simple field update
       if (Object.keys(extras).length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
@@ -583,7 +583,7 @@ router.patch("/:id", authorize({ feature: "requests", action: "update", resource
       if (result.affectedRows === 0) throw new NotFoundError("الطلب غير موجود");
       const [row] = await rawQuery<RequestRow>(`SELECT r.*, rt.name as "typeName" FROM requests r LEFT JOIN request_types rt ON r."typeId"=rt.id WHERE r.id=$1 AND (r."companyId"=$2 OR r."companyId" IS NULL) AND r."deletedAt" IS NULL`, [id, scope.companyId]);
       emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "request.updated", entity: "approval_requests", entityId: id }).catch((e) => logger.error(e, "requests background task failed"));
-      res.json(row);
+      res.json(maskFields(req, row));
     }
   } catch (err) {
     const mapped = lifecycleErrorResponse(err);
@@ -649,7 +649,7 @@ router.post("/:id/approve", authorize({ feature: "requests", action: "approve", 
         refId: id,
       }] : [],
     });
-    res.json({ ...updated, actualImpact: { statusChange: { from: request.status, to: "approved" }, notifications: ["إشعار لمقدم الطلب بالاعتماد"], overrideLogged: isOverride } });
+    res.json(maskFields(req, { ...updated, actualImpact: { statusChange: { from: request.status, to: "approved" }, notifications: ["إشعار لمقدم الطلب بالاعتماد"], overrideLogged: isOverride } }));
   } catch (err) {
     const mapped = lifecycleErrorResponse(err);
     if (mapped) { res.status(mapped.status).json(mapped.body); return; }
@@ -710,7 +710,7 @@ router.post("/:id/reject", authorize({ feature: "requests", action: "create" }),
         refId: id,
       }] : [],
     });
-    res.json({ ...updated, actualImpact: { statusChange: { from: request.status, to: "rejected" }, notifications: ["إشعار لمقدم الطلب بالرفض"], overrideLogged: isOverride } });
+    res.json(maskFields(req, { ...updated, actualImpact: { statusChange: { from: request.status, to: "rejected" }, notifications: ["إشعار لمقدم الطلب بالرفض"], overrideLogged: isOverride } }));
   } catch (err) {
     const mapped = lifecycleErrorResponse(err);
     if (mapped) { res.status(mapped.status).json(mapped.body); return; }
@@ -772,7 +772,7 @@ router.post("/:id/return", authorize({ feature: "requests", action: "create" }),
         refId: id,
       }] : [],
     });
-    res.json({ ...updated, actualImpact: { statusChange: { from: request.status, to: "returned" }, notifications: ["إشعار لمقدم الطلب بالإرجاع"], overrideLogged: isOverride } });
+    res.json(maskFields(req, { ...updated, actualImpact: { statusChange: { from: request.status, to: "returned" }, notifications: ["إشعار لمقدم الطلب بالإرجاع"], overrideLogged: isOverride } }));
   } catch (err) {
     const mapped = lifecycleErrorResponse(err);
     if (mapped) { res.status(mapped.status).json(mapped.body); return; }

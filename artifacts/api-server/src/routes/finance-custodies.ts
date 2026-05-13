@@ -352,7 +352,7 @@ custodiesRouter.get("/custodies/report", authorize({ feature: "finance.custodies
     const totalOutstanding = employees.reduce((s, e) => s + e.totalOutstanding, 0);
     const totalOverdue = employees.reduce((s, e) => s + e.overdueAmount, 0);
 
-    res.json({
+    res.json(maskFields(req, {
       data: employees,
       summary: {
         totalOutstanding, totalOverdue,
@@ -360,7 +360,7 @@ custodiesRouter.get("/custodies/report", authorize({ feature: "finance.custodies
         totalCustodies: employees.reduce((s, e) => s + e.custodyCount, 0),
         overdueCustodies: employees.reduce((s, e) => s + e.overdueCount, 0),
       },
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Custody aging report error:");
   }
@@ -403,10 +403,10 @@ custodiesRouter.get("/custodies/summary", authorize({ feature: "finance.custodie
       else activeCount++;
     }
 
-    res.json({
+    res.json(maskFields(req, {
       total: rows.length, totalAmount, totalRemaining,
       activeCount, overdueCount, settledCount,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Custody summary error:");
   }

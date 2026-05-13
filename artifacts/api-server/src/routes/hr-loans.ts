@@ -248,7 +248,7 @@ router.get("/loans/my", authorize({ feature: "hr.loans.my", action: "list" }), a
        ORDER BY l."createdAt" DESC`,
       [scope.activeAssignmentId, scope.companyId]
     );
-    res.json({ data });
+    res.json(maskFields(req, { data }));
   } catch (err) {
     handleRouteError(err, res, "خطأ في قراءة سلفك");
   }

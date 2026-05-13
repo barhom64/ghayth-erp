@@ -1106,7 +1106,7 @@ router.get("/cases/:caseId/judgments", authorize({ feature: "legal.cases", actio
     const [lc] = await rawQuery<Record<string, unknown>>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!lc) throw new NotFoundError("القضية غير موجودة");
     const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_judgments WHERE "caseId"=$1 AND "companyId"=$2 ORDER BY "judgmentDate" DESC LIMIT 500`, [caseId, scope.companyId]);
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "Legal judgments error:"); }
 });
 
@@ -1338,7 +1338,7 @@ router.get("/sessions/:id", authorize({ feature: "legal.cases", action: "view" }
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("الجلسة غير موجودة");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Legal session detail error:"); }
 });
 
@@ -1354,7 +1354,7 @@ router.get("/judgments/:id", authorize({ feature: "legal.cases", action: "view" 
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("الحكم غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Legal judgment detail error:"); }
 });
 
@@ -1370,7 +1370,7 @@ router.get("/correspondence/:id", authorize({ feature: "legal.cases", action: "v
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("المراسلة غير موجودة");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Legal correspondence detail error:"); }
 });
 
@@ -1391,7 +1391,7 @@ router.get("/sessions/upcoming", authorize({ feature: "legal.cases", action: "li
       ...r,
       alertLevel: Number(r.daysUntil) <= 1 ? 'critical' : Number(r.daysUntil) <= 7 ? 'high' : 'medium',
     }));
-    res.json({ data: alerts, total: alerts.length });
+    res.json(maskFields(req, { data: alerts, total: alerts.length }));
   } catch (err) { handleRouteError(err, res, "Upcoming sessions error:"); }
 });
 
@@ -1415,13 +1415,13 @@ router.get("/judgments/financial-report", authorize({ feature: "legal.cases", ac
       `SELECT COALESCE(SUM("financialRisk"),0) AS total FROM legal_cases WHERE "companyId"=$1 AND status NOT IN ('closed') AND "deletedAt" IS NULL`,
       [scope.companyId]
     ).catch((e) => { logger.error(e, "legal query failed"); return [{ total: 0 }]; });
-    res.json({
+    res.json(maskFields(req, {
       data: rows,
       totalAmount: Number(totals?.totalAmount || 0),
       totalPaid: Number(totals?.totalPaid || 0),
       outstanding: Number(totals?.totalAmount || 0) - Number(totals?.totalPaid || 0),
       contingentLiabilities: Number(contingent?.total || 0),
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Judgments financial report error:"); }
 });
 
@@ -1445,7 +1445,7 @@ router.get("/financial-report", authorize({ feature: "legal.cases", action: "lis
        FROM legal_judgments WHERE "companyId"=$1`,
       [scope.companyId]
     ).catch((e) => { logger.error(e, "legal query failed"); return [{ totalJudgments: 0, totalPaid: 0 }]; });
-    res.json({
+    res.json(maskFields(req, {
       data: {
         byStatus: cases,
         totalCases: Number(totals?.totalCases || 0),
@@ -1454,7 +1454,7 @@ router.get("/financial-report", authorize({ feature: "legal.cases", action: "lis
         totalPaid: Number(judgments?.totalPaid || 0),
         outstanding: Number(judgments?.totalJudgments || 0) - Number(judgments?.totalPaid || 0),
       }
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Legal financial report error:"); }
 });
 
