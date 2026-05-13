@@ -1,7 +1,7 @@
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, formatNumber } from "@/lib/formatters";
 import {
   Package, AlertTriangle, TrendingDown, TrendingUp, DollarSign, Box,
 } from "lucide-react";
@@ -136,13 +136,13 @@ export function ProductContextCard({
               "text-sm font-semibold",
               outOfStock ? "text-red-700" : lowStock ? "text-amber-700" : "text-gray-800"
             )}>
-              {current.toLocaleString()} {product.unit || ""}
+              {formatNumber(current)} {product.unit || ""}
             </p>
           </div>
           <div className="bg-white rounded p-2 border border-gray-200">
             <p className="text-xs text-gray-500 mb-0.5">الحد الأدنى</p>
             <p className="text-sm font-semibold text-gray-800">
-              {min.toLocaleString()} {product.unit || ""}
+              {formatNumber(min)} {product.unit || ""}
             </p>
           </div>
           <div className="bg-white rounded p-2 border border-gray-200">
@@ -209,7 +209,7 @@ export function ProductContextCard({
                       {m.type === "in" ? "وارد" : "صادر"}
                     </Badge>
                     <span className="font-semibold">
-                      {m.type === "in" ? "+" : "-"}{Number(m.quantity).toLocaleString()} {product.unit || ""}
+                      {m.type === "in" ? "+" : "-"}{formatNumber(Number(m.quantity))} {product.unit || ""}
                     </span>
                   </div>
                 </div>

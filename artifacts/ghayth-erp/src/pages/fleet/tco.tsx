@@ -8,7 +8,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, formatNumber } from "@/lib/formatters";
 
 const COLORS = ["#6366f1", "#f59e0b", "#10b981", "#ef4444", "#3b82f6", "#ec4899"];
 
@@ -82,7 +82,7 @@ export default function TCOPage() {
             </Card>
             <Card>
               <CardContent className="pt-4 text-center">
-                <div className="text-xl font-bold">{tco.totalKm?.toLocaleString()}</div>
+                <div className="text-xl font-bold">{formatNumber(tco.totalKm)}</div>
                 <div className="text-xs text-gray-500">إجمالي الكيلومترات</div>
               </CardContent>
             </Card>

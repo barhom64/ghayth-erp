@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import { formatNumber } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
 import { PageShell } from "@/components/page-shell";
 import {
@@ -166,7 +167,7 @@ export default function OperationsCenter() {
                     <div key={card.key} className={cn("rounded-xl p-4 border-2 relative", style.bg, style.border)}>
                       <div className="flex items-start justify-between mb-2">
                         <div className={cn("w-2.5 h-2.5 rounded-full mt-1", style.dot)} />
-                        <span className={cn("text-3xl font-black", style.text)}>{typeof card.value === "number" && Math.abs(card.value) >= 1000 ? card.value.toLocaleString() : card.value}</span>
+                        <span className={cn("text-3xl font-black", style.text)}>{typeof card.value === "number" && Math.abs(card.value) >= 1000 ? formatNumber(card.value) : card.value}</span>
                       </div>
                       <p className="text-sm font-medium text-gray-800 mb-1">{card.label}</p>
                       {card.extra && <p className="text-xs text-gray-500 mb-2">{card.extra}</p>}

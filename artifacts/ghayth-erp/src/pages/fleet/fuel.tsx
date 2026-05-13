@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, formatNumber } from "@/lib/formatters";
 import { useApiQuery, asList } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Plus, Fuel, Droplets, DollarSign, CalendarDays } from "lucide-react";
@@ -44,7 +44,7 @@ export default function FuelPage() {
       <FleetTabsNav />
       <KpiGrid items={[
         { label: "إجمالي السجلات", value: items.length, icon: Fuel, color: "text-blue-600 bg-blue-50" },
-        { label: "إجمالي اللترات", value: items.reduce((s: number, f: any) => s + (Number(f.liters) || 0), 0).toLocaleString(), icon: Droplets, color: "text-cyan-600 bg-cyan-50" },
+        { label: "إجمالي اللترات", value: formatNumber(items.reduce((s: number, f: any) => s + (Number(f.liters) || 0), 0)), icon: Droplets, color: "text-cyan-600 bg-cyan-50" },
         { label: "إجمالي التكلفة", value: formatCurrency(items.reduce((s: number, f: any) => s + (Number(f.cost) || 0), 0)), icon: DollarSign, color: "text-red-600 bg-red-50" },
         { label: "هذا الشهر", value: items.filter((f: any) => { const d = f.date ? new Date(f.date) : null; const now = new Date(); return d && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); }).length, icon: CalendarDays, color: "text-green-600 bg-green-50" },
       ]} />

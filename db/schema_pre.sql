@@ -12949,6 +12949,49 @@ ALTER SEQUENCE public.suppliers_id_seq OWNED BY public.suppliers.id;
 
 
 --
+-- Name: vendor_contracts; Type: TABLE; Schema: public; Owner: -
+-- Source: artifacts/api-server/src/migrations/170_vendor_contracts.sql
+--
+
+CREATE TABLE public.vendor_contracts (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "vendorId" integer NOT NULL,
+    title text NOT NULL,
+    "startDate" date,
+    "endDate" date NOT NULL,
+    status character varying(20) DEFAULT 'active'::character varying NOT NULL,
+    "contractValue" numeric(15,2),
+    currency character varying(3) DEFAULT 'SAR'::character varying,
+    notes text,
+    "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp without time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp without time zone,
+    CONSTRAINT vendor_contracts_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'expired'::character varying, 'terminated'::character varying, 'pending'::character varying])::text[])))
+);
+
+
+--
+-- Name: vendor_contracts_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.vendor_contracts_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: vendor_contracts_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.vendor_contracts_id_seq OWNED BY public.vendor_contracts.id;
+
+
+--
 -- Name: support_tickets; Type: TABLE; Schema: public; Owner: -
 --
 

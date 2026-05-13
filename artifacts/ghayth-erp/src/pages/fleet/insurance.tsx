@@ -80,7 +80,7 @@ export default function InsurancePage() {
         onRetry={() => refetch()}
         emptyMessage="لا توجد وثائق تأمين"
         emptyIcon={<Shield className="h-6 w-6 text-slate-400" />}
-        emptyAction={{ label: "إضافة تأمين", onClick: () => { window.location.href = "/fleet/insurance/create"; } }}
+        emptyAction={{ label: "إضافة تأمين", onClick: () => navigate("/fleet/insurance/create") }}
         noToolbar
         onRowClick={(row) => navigate(`/fleet/insurance/${row.id}`)}
       />

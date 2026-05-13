@@ -23,13 +23,38 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/warehouse.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+تفاصيل حركة مخزنية واحدة (in/out/transfer/adjustment) — read-only بعد الترحيل.
+
+| نوع الحركة | يولّد GL | يؤثر على المخزون |
+|-----------|---------|------------------|
+| Receive (PO) | Dr Inventory / Cr GR-IR | + quantity | راجع `finance-cogs.md` |
+| Issue (sale) | Dr COGS / Cr Inventory | - quantity | راجع `store-sales.md` |
+| Transfer | لا (داخلي بنفس التكلفة) | move بين warehouses | ✅ |
+| Adjustment + | Dr Inventory / Cr Inv-Variance | + quantity | راجع `warehouse-inventory-count.md` |
+| Adjustment - | Dr Inv-Variance / Cr Inventory | - quantity | راجع `warehouse-inventory-count.md` |
+| Return (sales return) | reverse of sale | + quantity back | راجع `store-returns.md` |
+| Scrap/Write-off | Dr Loss / Cr Inventory | - quantity | requires approval |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| View movement details | GET `/warehouse/movements/:id` | `inventory_movements` + lines | ✅ |
+| Verify GL linkage | derived | `gl_entries.reference` = movement | ✅ critical |
+| Cancel/reverse | POST `/movements/:id/reverse` | يولّد عكس + GL عكس | راجع `governance/approvals.md` |
+| Print delivery note / GRN | POST `/movements/:id/print` | راجع `print-templates` | ✅ |
+| Verify lot/serial | per line | `inventory_lots` / `serials` | ⚠ |
+| Verify cost layer (FIFO/WAVG) | derived | `inventory_layers` | ✅ |
+| تكامل مع `finance-cogs.md` | للـ COGS posting | ✅ critical |
+| تكامل مع `posting-failures.md` | لو GL failed | ✅ |
+| Audit log إجباري | كل تعديل/إلغاء | `audit_logs` | ✅ |
+| Lifecycle | `draft → posted → reversed` | راجع `lifecycle/movements.ts` | ✅ |
+| Immutable after posted | guard | إلا via reverse | ✅ critical |
+| RBAC | warehouse manager + above | ✅ |
+
+تحقق يدوي:
+- [ ] هل reverse يحافظ على audit trail (لا يمحي الأصلي)؟
+- [ ] هل lot/serial mandatory للأصناف القابلة للتعقّب؟
+- [ ] هل GL entry يولّد دائماً مع الحركة أم async (مع risk posting-failure)؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `:id` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

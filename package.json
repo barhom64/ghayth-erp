@@ -14,6 +14,7 @@
     "audit:schema": "node scripts/src/audit-schema-drift.mjs",
     "check:schema-drift": "node scripts/src/check-schema-drift.mjs",
     "check:ghost-rows": "node scripts/src/check-ghost-rows.mjs",
+    "check:duplicate-migrations": "node scripts/src/check-duplicate-migrations.mjs",
     "audit:boundaries": "node scripts/src/audit-domain-boundaries.mjs",
     "audit:domain-routes": "node scripts/src/audit-domain-routes.mjs",
     "audit:system-review": "node audit/system-review/tooling/run-all.mjs",

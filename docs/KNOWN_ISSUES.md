@@ -176,6 +176,73 @@ A two-week freeze (`docs/freeze/freeze-14-day.md`) was opened on 9 May 2026 to c
 
 ---
 
+## Phase 10 — Library + consistency cleanup (May 2026)
+
+Triggered by `docs/LIBRARIES_AND_CONSISTENCY_AUDIT_2026-05-13.md`. The audit
+confirmed ~80% of an outstanding plan's claimed P1 issues were already
+resolved on `main`; this phase ships the four real gaps that remained,
+plus the discovery + cleanup of duplicate-named migration files.
+
+### Landed in this phase
+
+- [x] **`vendor_contracts` table.** Migration `170_vendor_contracts.sql`
+  + `db/schema_pre.sql` sync. The weekly cron `vendorContractExpiryAlerts`
+  in `lib/cronScheduler.ts:2403` had been silently failing against a
+  non-existent table since launch (error swallowed in `.catch`).
+- [x] **`assertInsert` helper.** `lib/rawdb.ts` exports a small guard for
+  the `ON CONFLICT DO NOTHING` + read-back pattern: `rawExecute` returns
+  `insertId=0` when no row was inserted, which used to cascade into a
+  confusing `NotFound` from the next SELECT. Wired into the two
+  `clients.ts` sites the security audit flagged. +7 unit tests.
+- [x] **3 stray `window.location` calls** in `pages/insights.tsx`,
+  `pages/store/order-detail.tsx`, `pages/fleet/insurance.tsx` swapped
+  for wouter `navigate()` / React-Query `refetch()`. Remaining 5
+  `window.location` sites are all justified auth/error-recovery paths
+  (full reload required to re-bootstrap auth + layout).
+- [x] **16 unlocalized `.toLocaleString()` calls** across 11 files
+  swapped for `formatNumber()` from `lib/formatters.ts` (Arabic-Indic
+  digits with en-US grouping). New `lint:patterns` rule
+  `unlocalized-toLocaleString` blocks future regressions.
+- [x] **Identical migration duplicates removed (10 files).** The 2026-05-13
+  audit found 10 byte-identical migration pairs (e.g. `021_… ` and `028_…`
+  with the same DDL). Higher-numbered file deleted in each case so any
+  DB whose tracking table records the lower number stays consistent.
+- [x] **`check:duplicate-migrations` script.** `scripts/src/check-duplicate-migrations.mjs`
+  groups files by basename-after-prefix and reports collisions. After
+  the cleanup, the identical baseline is at 0 and the script fails CI
+  on any new identical pair (unconditionally) and on divergent pairs
+  (when `ENFORCE=1`).
+
+### Open in this phase
+
+- [ ] **9 divergent migration pairs.** Same basename, different DDL —
+  the more dangerous form because two files claim the same logical
+  change but actually do different things. Each pair needs a manual
+  reading to determine which file is authoritative and what the other
+  was trying to do (then either merge or rename one):
+  | basename | files |
+  | --- | --- |
+  | `hr_discipline_regulation.sql` | `034_…`, `066_…` |
+  | `inventory_projects_gl_accounts.sql` | `035_…`, `066_…` |
+  | `three_way_match.sql` | `036_…`, `067_…` |
+  | `rbac_v2_role_templates.sql` | `110_…`, `161_…` |
+  | `multi_currency_foundations.sql` | `140_…`, `162_…` |
+  | `rbac_jit_elevation.sql` | `140_…`, `163_…` |
+  | `system_settings_createdAt.sql` | `140_…`, `164_…` |
+  | `drop_unused_legacy_tables.sql` | `141_…`, `165_…` |
+  | `inventory_advanced_foundations.sql` | `141_…`, `166_…` |
+
+  Once resolved, set `ENFORCE=1` on `check:duplicate-migrations` so
+  the next divergent pair fails CI immediately.
+
+- [ ] **`PERSIST_ALL_EVENTS=true`** in production: still defaults off
+  (`businessHelpers.ts:144-150`). PDPL audit-trail completeness benefits
+  from flipping this on, but it adds an INSERT to every `emitEvent`
+  hot path so the call needs sizing against `event_logs` growth rate
+  first. Tracked here so it's not lost.
+
+---
+
 ## Deeper operational gaps — status
 
 The first audit flagged 12 structural gaps. Current completion status:
