@@ -442,7 +442,7 @@ export default function PerformanceDetail() {
               sections={printSections}
             />
           )}
-          <DetailActionButtons hook={editDelete} />
+          <DetailActionButtons hook={editDelete} editPerm="hr:update" deletePerm="hr:delete" />
         </>
       }
     />

@@ -86,6 +86,7 @@ function ProductsTab() {
         <RowActions
           onEdit={() => startEdit(p.id, { name: p.name, sku: p.sku || "", price: Number(p.price) || 0, quantity: p.quantity || 0, status: p.status || "active" })}
           onDelete={() => startDelete(p.id)}
+          deletePerm="store:delete"
         />
       ),
     },
@@ -217,6 +218,7 @@ function OrdersTab() {
           <RowActions
             onEdit={() => startEdit(o.id, { customerName: o.customerName || "", totalAmount: Number(o.totalAmount) || 0, status: o.status || "pending", notes: o.notes || "" })}
             onDelete={() => startDelete(o.id)}
+            deletePerm="store:delete"
           />
         </div>
       ),

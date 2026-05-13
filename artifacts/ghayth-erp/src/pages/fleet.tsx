@@ -143,6 +143,7 @@ function VehiclesTab() {
             canEdit={canManage}
             onEdit={() => startEdit(v.id, { plateNumber: v.plateNumber, make: v.make || "", model: v.model || "", color: v.color || "", status: v.status || "available" })}
             onDelete={() => startDelete(v.id)}
+            deletePerm="fleet:delete"
           />
         </div>
       ),
@@ -263,6 +264,7 @@ function DriversTab() {
             canEdit={canManage}
             onEdit={() => startEdit(d.id, { name: d.name, phone: d.phone || "", licenseNumber: d.licenseNumber || "", status: d.status || "available" })}
             onDelete={() => startDelete(d.id)}
+            deletePerm="fleet:delete"
           />
         </div>
       ),

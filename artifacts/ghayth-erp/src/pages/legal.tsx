@@ -100,6 +100,7 @@ function ContractsTab() {
             canEdit={canManage}
             onEdit={() => startEdit(c.id, { title: c.title, contractType: c.contractType || "", partyName: c.partyName || "", value: Number(c.value) || 0, status: c.status || "draft" })}
             onDelete={() => startDelete(c.id)}
+            deletePerm="legal:delete"
           />
           <Link href={`/legal/create?copyFrom=${c.id}`}>
             <Button variant="ghost" size="sm" className="h-7 px-2" title="نسخ العقد">
@@ -231,6 +232,7 @@ function CasesTab() {
           canEdit={canManage}
           onEdit={() => startEdit(c.id, { title: c.title, court: c.court || "", opposingParty: c.opposingParty || "", lawyerName: c.lawyerName || "", status: c.status || "open", priority: c.priority || "medium" })}
           onDelete={() => startDelete(c.id)}
+          deletePerm="legal:delete"
         />
       ),
     },

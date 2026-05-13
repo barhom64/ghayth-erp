@@ -301,6 +301,8 @@ export default function OwnerDetail() {
         actions={
           <DetailActionButtons
             hook={editDelete}
+            editPerm="properties:update"
+            deletePerm="properties:delete"
             extra={
               owner ? (
                 <EntityPrintButton

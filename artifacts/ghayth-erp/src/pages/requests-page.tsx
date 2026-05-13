@@ -371,6 +371,7 @@ function RequestsList() {
           <RowActions
             onEdit={() => startEdit(r.id, { title: r.title, description: r.description || "", priority: r.priority || "medium", status: r.status || "pending" })}
             onDelete={() => startDelete(r.id)}
+            deletePerm="requests:delete"
           />
           <button onClick={() => setExpandedId(expandedId === r.id ? null : r.id)} className="text-gray-400 hover:text-gray-600 p-1">
             {expandedId === r.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
