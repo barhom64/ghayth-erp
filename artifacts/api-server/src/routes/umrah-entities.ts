@@ -244,7 +244,7 @@ router.get("/sub-agents/:id", authorize({ feature: "umrah", action: "view" }), a
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<any>(
+    const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT sa.*, a.name AS "agentName", c.name AS "clientName"
          FROM umrah_sub_agents sa
          LEFT JOIN umrah_agents a ON sa."agentId" = a.id
