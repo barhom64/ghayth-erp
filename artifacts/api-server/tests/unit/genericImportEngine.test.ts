@@ -6,15 +6,16 @@
 // against the in-memory test schema.
 
 import { describe, it, expect } from "vitest";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { parseSpreadsheet, listSupportedEntities } from "../../src/lib/genericImportEngine.js";
 import { ADAPTERS, type ImportEntity } from "../../src/lib/importAdapters.js";
 
-function makeWorkbook(rows: (string | number | boolean)[][]): Buffer {
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-  return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+async function makeWorkbook(rows: (string | number | boolean)[][]): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Sheet1");
+  for (const r of rows) ws.addRow(r);
+  const ab = await wb.xlsx.writeBuffer();
+  return Buffer.from(ab as ArrayBuffer);
 }
 
 describe("listSupportedEntities", () => {
@@ -60,60 +61,60 @@ describe("ADAPTERS — schema integrity", () => {
 });
 
 describe("parseSpreadsheet — clients", () => {
-  it("parses a minimal Arabic-headered sheet", () => {
-    const buf = makeWorkbook([
+  it("parses a minimal Arabic-headered sheet", async () => {
+    const buf = await makeWorkbook([
       ["الاسم", "الهاتف", "البريد"],
       ["شركة الدور", "0500000000", "info@aldoor.sa"],
       ["عميل تجريبي", "0500000001", "test@x.com"],
     ]);
-    const rows = parseSpreadsheet(buf, "clients");
+    const rows = await parseSpreadsheet(buf, "clients");
     expect(rows).toHaveLength(2);
     expect(rows[0]?.name).toBe("شركة الدور");
     expect(rows[0]?.phone).toBe("0500000000");
     expect(rows[1]?.email).toBe("test@x.com");
   });
 
-  it("maps Arabic enum labels to DB values", () => {
-    const buf = makeWorkbook([
+  it("maps Arabic enum labels to DB values", async () => {
+    const buf = await makeWorkbook([
       ["الاسم", "النوع", "التصنيف"],
       ["x", "شركة", "VIP"],
     ]);
-    const rows = parseSpreadsheet(buf, "clients");
+    const rows = await parseSpreadsheet(buf, "clients");
     expect(rows[0]?.type).toBe("company");
     expect(rows[0]?.classification).toBe("vip");
   });
 
-  it("skips empty rows entirely", () => {
-    const buf = makeWorkbook([
+  it("skips empty rows entirely", async () => {
+    const buf = await makeWorkbook([
       ["الاسم", "الهاتف"],
       ["a", "1"],
       ["", ""],
       ["b", "2"],
     ]);
-    const rows = parseSpreadsheet(buf, "clients");
+    const rows = await parseSpreadsheet(buf, "clients");
     expect(rows).toHaveLength(2);
     expect(rows.map((r) => r.name)).toEqual(["a", "b"]);
   });
 
-  it("accepts both Arabic and English column headers (alias)", () => {
-    const buf = makeWorkbook([
+  it("accepts both Arabic and English column headers (alias)", async () => {
+    const buf = await makeWorkbook([
       ["name", "phone"],
       ["TestCo", "111"],
     ]);
-    const rows = parseSpreadsheet(buf, "clients");
+    const rows = await parseSpreadsheet(buf, "clients");
     expect(rows[0]?.name).toBe("TestCo");
     expect(rows[0]?.phone).toBe("111");
   });
 });
 
 describe("parseSpreadsheet — products numerics", () => {
-  it("coerces numeric columns and falls back to null on garbage", () => {
-    const buf = makeWorkbook([
+  it("coerces numeric columns and falls back to null on garbage", async () => {
+    const buf = await makeWorkbook([
       ["اسم الصنف", "تكلفة الشراء", "سعر البيع", "الحد الأدنى"],
       ["Item A", 12.5, 25, 3],
       ["Item B", "not-a-number", "", 0],
     ]);
-    const rows = parseSpreadsheet(buf, "products");
+    const rows = await parseSpreadsheet(buf, "products");
     expect(rows[0]?.costPrice).toBe(12.5);
     expect(rows[0]?.sellPrice).toBe(25);
     expect(rows[0]?.minStock).toBe(3);
@@ -124,12 +125,12 @@ describe("parseSpreadsheet — products numerics", () => {
 });
 
 describe("parseSpreadsheet — employees", () => {
-  it("parses employee rows including dates", () => {
-    const buf = makeWorkbook([
+  it("parses employee rows including dates", async () => {
+    const buf = await makeWorkbook([
       ["الرقم الوطني", "الاسم", "تاريخ الميلاد", "الجنس"],
       ["1234567890", "أحمد علي", "1990-05-15", "ذكر"],
     ]);
-    const rows = parseSpreadsheet(buf, "employees");
+    const rows = await parseSpreadsheet(buf, "employees");
     expect(rows[0]?.nationalId).toBe("1234567890");
     expect(rows[0]?.name).toBe("أحمد علي");
     expect(rows[0]?.gender).toBe("male");
@@ -139,34 +140,34 @@ describe("parseSpreadsheet — employees", () => {
 });
 
 describe("parseSpreadsheet — error paths", () => {
-  it("throws when no recognized columns are found", () => {
-    const buf = makeWorkbook([
+  it("throws when no recognized columns are found", async () => {
+    const buf = await makeWorkbook([
       ["unknown_col_a", "unknown_col_b"],
       ["x", "y"],
     ]);
-    expect(() => parseSpreadsheet(buf, "clients")).toThrow();
+    await expect(parseSpreadsheet(buf, "clients")).rejects.toThrow();
   });
 
-  it("throws for an unknown entity key", () => {
-    const buf = makeWorkbook([["name"], ["x"]]);
-    expect(() => parseSpreadsheet(buf, "ghosts" as ImportEntity)).toThrow();
+  it("throws for an unknown entity key", async () => {
+    const buf = await makeWorkbook([["name"], ["x"]]);
+    await expect(parseSpreadsheet(buf, "ghosts" as ImportEntity)).rejects.toThrow();
   });
 
-  it("throws when the workbook has only a header row", () => {
-    const buf = makeWorkbook([["الاسم"]]);
-    expect(() => parseSpreadsheet(buf, "clients")).toThrow();
+  it("throws when the workbook has only a header row", async () => {
+    const buf = await makeWorkbook([["الاسم"]]);
+    await expect(parseSpreadsheet(buf, "clients")).rejects.toThrow();
   });
 });
 
 describe("parseSpreadsheet — Arabic header normalization", () => {
-  it("matches headers regardless of ى/ي and trailing whitespace", () => {
-    const buf = makeWorkbook([
+  it("matches headers regardless of ى/ي and trailing whitespace", async () => {
+    const buf = await makeWorkbook([
       ["  الاسم  ", " الهاتـف "],  // padded
       ["x", "1"],
     ]);
     // Padded header should still match. Phone has tatweel — won't match.
     // We only assert the name column resolves.
-    const rows = parseSpreadsheet(buf, "clients");
+    const rows = await parseSpreadsheet(buf, "clients");
     expect(rows[0]?.name).toBe("x");
   });
 });
