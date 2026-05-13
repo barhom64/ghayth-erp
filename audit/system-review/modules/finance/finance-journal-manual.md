@@ -23,13 +23,44 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/finance.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+قيد محاسبي يدوي — تسجيل قيود غير متولّدة آلياً.
+
+| الحقل | المتطلب |
+|------|--------|
+| Posting date | إجباري — يجب أن يكون في فترة مفتوحة |
+| Description | إجباري لكل قيد |
+| Reference | optional (invoice, payment, etc.) |
+| Lines (Dr/Cr) | min 2 lines، Dr total = Cr total | balanced |
+| Account | per line | from chart of accounts |
+| Tax (لو لازم) | راجع `finance-tax.md` |
+| Cost center | optional | للـ allocation |
+| Project | optional | راجع `projects.md` |
+| Attachments | supporting documents | راجع `documents.md` |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| Create draft | POST `/finance/journal-manual` | `gl_entries` status=draft | ✅ |
+| Validate balance | server-side | Dr = Cr exact match | ✅ critical |
+| Validate period | open period check | راجع `finance-period-close.md` | ✅ critical |
+| Validate account active | per line | لا يسمح بحسابات معطّلة | ✅ |
+| Submit for approval | لو > threshold | راجع `governance/approvals.md` | ✅ |
+| Approve | POST `/finance/journal-manual/:id/approve` | lifecycle | ✅ |
+| Post (commit to GL) | POST `/finance/journal-manual/:id/post` | يحدّث balances | ✅ critical |
+| Reverse | POST `/finance/journal-manual/:id/reverse` | يولّد قيد عكسي | راجع `governance/approvals.md` ✅ |
+| Recurring journals | راجع `finance-recurring-journals.md` | ✅ |
+| Print | راجع `print-templates` | ✅ |
+| تكامل مع `finance-trial-balance.md` | post → reflected immediately | ✅ |
+| تكامل مع `finance-financial-statements.md` | بعد الترحيل | ✅ |
+| Audit log إجباري | كل create/edit/post/reverse | `audit_logs` | ✅ critical |
+| Immutable after posted | guard | إلا via reverse | ✅ critical |
+| RBAC | accountant + finance manager | high-value requires manager | ✅ |
+
+تحقق يدوي:
+- [ ] هل validate Dr=Cr صارم (لا فرق حتى لو 0.001)؟
+- [ ] هل posting إلى فترة مقفلة ممنوع تماماً؟
+- [ ] هل reverse يحافظ على الأصلي + ينشئ عكسي بـ reference clear؟
+- [ ] هل أكثر من approval level لـ high-value journals؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `journal-manual` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
