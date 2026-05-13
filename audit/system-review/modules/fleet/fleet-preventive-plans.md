@@ -23,13 +23,44 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/fleet.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+خطط الصيانة الوقائية — schedules per vehicle class.
+
+| المعيار | المثال |
+|---------|--------|
+| Time-based | كل 6 أشهر oil change |
+| Mileage-based | كل 10,000 km |
+| Combined | أيهما أسبق |
+| Manufacturer recommended | per OEM | مرتبط بضمان |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| List preventive plans | GET `/fleet/preventive-plans` | `vehicle_maintenance_plans` | ✅ |
+| Create plan template | POST | per vehicle class/model | ✅ |
+| Assign plan to vehicles | bulk | ✅ |
+| Auto-generate work orders (upcoming) | cron | راجع `fleet-maintenance.md` | ✅ critical |
+| Calculate due date | from last service + interval | per vehicle | ✅ |
+| Calculate due km | from current odometer | per vehicle | ✅ |
+| Trigger (whichever first: km or date) | ✅ critical |
+| Reminder before due (7/3/1 day) | cron | راجع `notifications.md` | ✅ |
+| Reminder before due km (500/100 km) | based on usage rate | ⚠ |
+| Block dispatch if overdue beyond grace | guard | optional | ⚠ |
+| Track compliance rate per vehicle | KPI | راجع `bi-kpis.md` | ✅ |
+| Estimate parts inventory needed | bulk plan | راجع `warehouse-movements.md` | ⚠ |
+| Cost forecasting per plan | budget input | راجع `finance-budget.md` | ⚠ |
+| تكامل مع `fleet-maintenance.md` (execution) | ✅ critical |
+| تكامل مع `warehouse.md` (parts pre-allocation) | ⚠ |
+| تكامل مع `finance-budget.md` (annual maintenance budget) | ✅ |
+| تكامل مع `bi-kpis.md` (preventive vs reactive ratio) | ✅ |
+| Audit log إجباري | كل تعديل/تنفيذ | `audit_logs` | ✅ |
+| RBAC | fleet manager + workshop | ✅ |
+
+تحقق يدوي:
+- [ ] هل auto-generation للـ work orders تشتغل بدقة قبل due (لا miss)?
+- [ ] هل compliance rate مرئية في dashboard للـ exec?
+- [ ] هل دائماً يأخذ "whichever first" (km or date)?
+- [ ] هل block dispatch لو overdue يعمل كـ guard للسلامة?
+- [ ] هل cost forecasting يساعد annual budget planning?
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `preventive-plans` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
