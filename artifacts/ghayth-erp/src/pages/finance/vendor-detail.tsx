@@ -116,12 +116,12 @@ export default function VendorDetailPage() {
     { key: "id", header: "#", sortable: true, render: (r) => <span className="font-mono text-xs">{r.id}</span> },
     { key: "date", header: "التاريخ", sortable: true, render: (r) => formatDateAr(r.date || r.paymentDate || r.createdAt) },
     { key: "method", header: "الطريقة", sortable: true, render: (r) => r.method || r.paymentMethod || "-" },
-    { key: "amount", header: "المبلغ", sortable: true, render: (r) => <span className="font-semibold text-green-600">{formatCurrency(Number(r.amount) || 0)}</span> },
+    { key: "amount", header: "المبلغ", sortable: true, render: (r) => <span className="font-semibold text-status-success-foreground">{formatCurrency(Number(r.amount) || 0)}</span> },
   ];
 
   const emptyMsg = (msg: string) => (
     <Card className="border-0 shadow-sm">
-      <CardContent className="p-10 text-center text-sm text-gray-500">{msg}</CardContent>
+      <CardContent className="p-10 text-center text-sm text-muted-foreground">{msg}</CardContent>
     </Card>
   );
 
@@ -129,10 +129,10 @@ export default function VendorDetailPage() {
     <>
       <InlineEditCard hook={editDelete} />
       <div className="grid gap-4 md:grid-cols-4">
-        <KpiCard icon={DollarSign} label="إجمالي المشتريات" value={formatCurrency(totalPurchases)} color="text-blue-600 bg-blue-50" />
+        <KpiCard icon={DollarSign} label="إجمالي المشتريات" value={formatCurrency(totalPurchases)} color="text-status-info-foreground bg-status-info-surface" />
         <KpiCard icon={CreditCard} label="مدفوعات معلقة" value={formatCurrency(pendingPayments)} color="text-orange-600 bg-orange-50" />
         <KpiCard icon={ShoppingCart} label="أوامر شراء نشطة" value={String(activePos)} color="text-purple-600 bg-purple-50" />
-        <KpiCard icon={Clock} label="آخر فاتورة" value={lastInvoiceDate ? formatDateAr(lastInvoiceDate) : "—"} color="text-green-600 bg-green-50" />
+        <KpiCard icon={Clock} label="آخر فاتورة" value={lastInvoiceDate ? formatDateAr(lastInvoiceDate) : "—"} color="text-status-success-foreground bg-status-success-surface" />
       </div>
 
       <Card className="border-0 shadow-sm">
@@ -149,8 +149,8 @@ export default function VendorDetailPage() {
           </div>
           {vendor?.notes && (
             <div className="pt-4 border-t">
-              <p className="text-xs text-gray-500 mb-1">ملاحظات</p>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">{vendor.notes}</p>
+              <p className="text-xs text-muted-foreground mb-1">ملاحظات</p>
+              <p className="text-sm text-status-neutral-foreground whitespace-pre-wrap">{vendor.notes}</p>
             </div>
           )}
         </CardContent>
@@ -249,8 +249,8 @@ function KpiCard({ icon: Icon, label, value, color }: { icon: any; label: string
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
   return (
     <div>
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="text-sm font-medium text-gray-800 mt-0.5">{value || "—"}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-sm font-medium text-status-neutral-foreground mt-0.5">{value || "—"}</p>
     </div>
   );
 }

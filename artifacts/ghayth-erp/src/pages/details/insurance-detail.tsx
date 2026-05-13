@@ -129,7 +129,7 @@ export default function InsuranceDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Shield className="h-4 w-4 text-gray-500" />
+            <Shield className="h-4 w-4 text-muted-foreground" />
             بيانات التأمين
           </CardTitle>
         </CardHeader>
@@ -139,31 +139,31 @@ export default function InsuranceDetail() {
             <span className="text-3xl font-bold text-gray-900">
               {formatCurrency(premium)}
             </span>
-            <span className="text-xs text-gray-500">ر.س</span>
+            <span className="text-xs text-muted-foreground">ر.س</span>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             {(insurance?.vehiclePlateNumber || insurance?.plateNumber) && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">رقم اللوحة</p>
-                <span className="text-gray-800 font-mono">{insurance.vehiclePlateNumber || insurance.plateNumber}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">رقم اللوحة</p>
+                <span className="text-status-neutral-foreground font-mono">{insurance.vehiclePlateNumber || insurance.plateNumber}</span>
               </div>
             )}
             {(insurance?.insuranceCompany || insurance?.company) && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">شركة التأمين</p>
-                <span className="text-gray-800">{insurance.insuranceCompany || insurance.company}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">شركة التأمين</p>
+                <span className="text-status-neutral-foreground">{insurance.insuranceCompany || insurance.company}</span>
               </div>
             )}
             {insurance?.policyNumber && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">رقم الوثيقة</p>
-                <span className="text-gray-800 font-mono">{insurance.policyNumber}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">رقم الوثيقة</p>
+                <span className="text-status-neutral-foreground font-mono">{insurance.policyNumber}</span>
               </div>
             )}
             {(insurance?.insuranceType || insurance?.type) && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">نوع التأمين</p>
+                <p className="text-xs text-muted-foreground mb-0.5">نوع التأمين</p>
                 <Badge variant="outline">
                   {INSURANCE_TYPE_LABELS[insurance.insuranceType || insurance.type] || insurance.insuranceType || insurance.type}
                 </Badge>
@@ -171,22 +171,22 @@ export default function InsuranceDetail() {
             )}
             {insurance?.startDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ البداية</p>
-                <span className="text-gray-800">{formatDateAr(insurance.startDate)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ البداية</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(insurance.startDate)}</span>
               </div>
             )}
             {(insurance?.endDate || insurance?.expiryDate) && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ الانتهاء</p>
-                <span className="text-gray-800">{formatDateAr(insurance.endDate || insurance.expiryDate)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ الانتهاء</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(insurance.endDate || insurance.expiryDate)}</span>
               </div>
             )}
           </div>
 
           {(insurance?.coverageDetails || insurance?.coverage) && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">تفاصيل التغطية</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{insurance.coverageDetails || insurance.coverage}</p>
+              <p className="text-xs text-muted-foreground mb-1">تفاصيل التغطية</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{insurance.coverageDetails || insurance.coverage}</p>
             </div>
           )}
 
@@ -194,7 +194,7 @@ export default function InsuranceDetail() {
           {(insurance?.endDate || insurance?.expiryDate) && (
             <div className="mt-2">
               {isExpired && (
-                <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-red-800">
+                <div className="flex items-start gap-2 rounded-md border border-status-error-surface bg-status-error-surface p-3 text-status-error-foreground">
                   <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                   <div className="text-xs">
                     <p className="font-semibold">التأمين منتهي</p>
@@ -203,7 +203,7 @@ export default function InsuranceDetail() {
                 </div>
               )}
               {!isExpired && isExpiringSoon && (
-                <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-800">
+                <div className="flex items-start gap-2 rounded-md border border-status-warning-surface bg-status-warning-surface p-3 text-status-warning-foreground">
                   <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                   <div className="text-xs">
                     <p className="font-semibold">التأمين على وشك الانتهاء</p>
@@ -212,7 +212,7 @@ export default function InsuranceDetail() {
                 </div>
               )}
               {!isExpired && !isExpiringSoon && expiryDaysLeft !== null && (
-                <div className="flex items-start gap-2 rounded-md border border-green-100 bg-green-50 p-3 text-green-800">
+                <div className="flex items-start gap-2 rounded-md border border-status-success-surface bg-status-success-surface p-3 text-status-success-foreground">
                   <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
                   <div className="text-xs">
                     <p className="font-semibold">التأمين ساري</p>
@@ -229,7 +229,7 @@ export default function InsuranceDetail() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Car className="h-4 w-4 text-gray-500" />
+              <Car className="h-4 w-4 text-muted-foreground" />
               المركبة
             </CardTitle>
           </CardHeader>
@@ -238,13 +238,13 @@ export default function InsuranceDetail() {
               <div className="space-y-1">
                 <p className="font-semibold font-mono">{insurance.vehiclePlateNumber || insurance.plateNumber || `#${insurance.vehicleId}`}</p>
                 {(insurance.vehicleMake || insurance.vehicleModel) && (
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-muted-foreground">
                     {[insurance.vehicleMake, insurance.vehicleModel].filter(Boolean).join(" ")}
                   </p>
                 )}
               </div>
             ) : (
-              <p className="text-xs text-gray-500">لا توجد مركبة مرتبطة</p>
+              <p className="text-xs text-muted-foreground">لا توجد مركبة مرتبطة</p>
             )}
           </CardContent>
         </Card>

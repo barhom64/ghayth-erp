@@ -101,7 +101,7 @@ export default function UmrahPackageDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Package className="h-4 w-4 text-gray-500" />
+            <Package className="h-4 w-4 text-muted-foreground" />
             بيانات الباقة
           </CardTitle>
         </CardHeader>
@@ -111,72 +111,72 @@ export default function UmrahPackageDetail() {
             <span className="text-3xl font-bold text-gray-900">
               {formatCurrency(Number(pkg?.price ?? 0))}
             </span>
-            <span className="text-xs text-gray-500">سعر الباقة</span>
+            <span className="text-xs text-muted-foreground">سعر الباقة</span>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">اسم الباقة</p>
-              <span className="text-gray-800 font-medium">{pkg?.name || "-"}</span>
+              <p className="text-xs text-muted-foreground mb-0.5">اسم الباقة</p>
+              <span className="text-status-neutral-foreground font-medium">{pkg?.name || "-"}</span>
             </div>
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">المدة</p>
-              <span className="text-gray-800">{pkg?.duration ? `${pkg.duration} يوم` : "-"}</span>
+              <p className="text-xs text-muted-foreground mb-0.5">المدة</p>
+              <span className="text-status-neutral-foreground">{pkg?.duration ? `${pkg.duration} يوم` : "-"}</span>
             </div>
             {pkg?.hotelName && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الفندق</p>
-                <span className="text-gray-800">{pkg.hotelName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">الفندق</p>
+                <span className="text-status-neutral-foreground">{pkg.hotelName}</span>
               </div>
             )}
             {pkg?.hotelStars && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تصنيف الفندق</p>
-                <span className="text-gray-800 flex items-center gap-1">
-                  <Star className="h-3 w-3 text-yellow-500" />
+                <p className="text-xs text-muted-foreground mb-0.5">تصنيف الفندق</p>
+                <span className="text-status-neutral-foreground flex items-center gap-1">
+                  <Star className="h-3 w-3 text-status-warning" />
                   {pkg.hotelStars} نجوم
                 </span>
               </div>
             )}
             {pkg?.transportType && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">النقل</p>
-                <span className="text-gray-800 flex items-center gap-1">
-                  <Bus className="h-3 w-3 text-gray-400" />
+                <p className="text-xs text-muted-foreground mb-0.5">النقل</p>
+                <span className="text-status-neutral-foreground flex items-center gap-1">
+                  <Bus className="h-3 w-3 text-muted-foreground" />
                   {pkg.transportType}
                 </span>
               </div>
             )}
             {pkg?.mealsIncluded && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الوجبات</p>
-                <span className="text-gray-800 flex items-center gap-1">
-                  <Utensils className="h-3 w-3 text-gray-400" />
+                <p className="text-xs text-muted-foreground mb-0.5">الوجبات</p>
+                <span className="text-status-neutral-foreground flex items-center gap-1">
+                  <Utensils className="h-3 w-3 text-muted-foreground" />
                   {pkg.mealsIncluded}
                 </span>
               </div>
             )}
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">السعة</p>
-              <span className="text-gray-800">{pkg?.capacity ?? "-"}</span>
+              <p className="text-xs text-muted-foreground mb-0.5">السعة</p>
+              <span className="text-status-neutral-foreground">{pkg?.capacity ?? "-"}</span>
             </div>
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">المحجوز</p>
-              <span className="text-gray-800 font-semibold">{pkg?.bookedCount ?? 0}</span>
+              <p className="text-xs text-muted-foreground mb-0.5">المحجوز</p>
+              <span className="text-status-neutral-foreground font-semibold">{pkg?.bookedCount ?? 0}</span>
             </div>
           </div>
 
           {pkg?.description && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">الوصف</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{pkg.description}</p>
+              <p className="text-xs text-muted-foreground mb-1">الوصف</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{pkg.description}</p>
             </div>
           )}
 
           {pkg?.inclusions && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">يشمل</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{pkg.inclusions}</p>
+              <p className="text-xs text-muted-foreground mb-1">يشمل</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{pkg.inclusions}</p>
             </div>
           )}
         </CardContent>
@@ -190,15 +190,15 @@ export default function UmrahPackageDetail() {
           <CardContent>
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">المحجوز</span>
+                <span className="text-muted-foreground">المحجوز</span>
                 <span className="font-semibold">{pkg?.bookedCount ?? 0}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">السعة</span>
+                <span className="text-muted-foreground">السعة</span>
                 <span className="font-semibold">{pkg?.capacity ?? "-"}</span>
               </div>
               {pkg?.capacity && (
-                <div className="w-full bg-gray-100 rounded-full h-2 mt-2">
+                <div className="w-full bg-surface-subtle rounded-full h-2 mt-2">
                   <div
                     className="bg-blue-500 h-2 rounded-full"
                     style={{
@@ -215,7 +215,7 @@ export default function UmrahPackageDetail() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-gray-500" />
+                <Calendar className="h-4 w-4 text-muted-foreground" />
                 الموسم
               </CardTitle>
             </CardHeader>

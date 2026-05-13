@@ -26,25 +26,25 @@ export function RecentActionsAndPerformanceSection({ recentActions, performanceR
           {recentActions.length === 0 ? (
             <div className="text-center py-4">
               <Activity className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-              <p className="text-sm text-gray-400">لا توجد إجراءات حديثة</p>
+              <p className="text-sm text-muted-foreground">لا توجد إجراءات حديثة</p>
             </div>
           ) : (
             <div className="space-y-2">
               {recentActions.map((a: any) => {
                 return (
-                  <div key={a.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-gray-50">
+                  <div key={a.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-surface-subtle">
                     <div className="w-8 h-8 rounded-full bg-violet-50 flex items-center justify-center shrink-0">
                       <Activity className="w-4 h-4 text-violet-500" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">
+                      <p className="text-sm font-medium text-status-neutral-foreground truncate">
                         {actionLabel(a.action)} — {a.entityType}
                       </p>
                       {a.description && (
-                        <p className="text-xs text-gray-500 truncate">{a.description}</p>
+                        <p className="text-xs text-muted-foreground truncate">{a.description}</p>
                       )}
                     </div>
-                    <span className="text-xs text-gray-400 shrink-0">
+                    <span className="text-xs text-muted-foreground shrink-0">
                       {a.createdAt ? formatTimeAgo(a.createdAt) : ""}
                     </span>
                   </div>
@@ -58,7 +58,7 @@ export function RecentActionsAndPerformanceSection({ recentActions, performanceR
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-3 flex flex-row items-center justify-between">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
-            <Target className="w-5 h-5 text-amber-500" />
+            <Target className="w-5 h-5 text-status-warning" />
             تقييمات الأداء
           </CardTitle>
           <Link href="/hr/performance">
@@ -71,19 +71,19 @@ export function RecentActionsAndPerformanceSection({ recentActions, performanceR
           {performanceReviews.length === 0 ? (
             <div className="text-center py-4">
               <Target className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-              <p className="text-sm text-gray-400">لا توجد تقييمات أداء</p>
+              <p className="text-sm text-muted-foreground">لا توجد تقييمات أداء</p>
             </div>
           ) : (
             <div className="space-y-2">
               {performanceReviews.map((r: any) => {
                 const score = Number(r.overallScore) || 0;
-                const scoreColor = score >= 4 ? "text-green-600" : score >= 3 ? "text-yellow-600" : "text-red-600";
-                const scoreBg = score >= 4 ? "bg-green-50" : score >= 3 ? "bg-yellow-50" : "bg-red-50";
+                const scoreColor = score >= 4 ? "text-status-success-foreground" : score >= 3 ? "text-status-warning-foreground" : "text-status-error-foreground";
+                const scoreBg = score >= 4 ? "bg-status-success-surface" : score >= 3 ? "bg-status-warning-surface" : "bg-status-error-surface";
                 return (
-                  <div key={r.id} className="flex items-center justify-between p-2.5 rounded-lg bg-gray-50">
+                  <div key={r.id} className="flex items-center justify-between p-2.5 rounded-lg bg-surface-subtle">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800">{r.period || "تقييم"}</p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-sm font-medium text-status-neutral-foreground">{r.period || "تقييم"}</p>
+                      <p className="text-xs text-muted-foreground">
                         {r.reviewerName ? `بواسطة: ${r.reviewerName}` : ""}
                       </p>
                     </div>

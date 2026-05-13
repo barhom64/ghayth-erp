@@ -55,7 +55,7 @@ export function DashboardsTab() {
             <Card key={item.id} className="hover:shadow-md transition-shadow cursor-pointer">
               <CardHeader className="pb-2"><CardTitle className="text-base">{item.title}</CardTitle></CardHeader>
               <CardContent>
-                <p className="text-sm text-gray-500">{item.description || "بدون وصف"}</p>
+                <p className="text-sm text-muted-foreground">{item.description || "بدون وصف"}</p>
                 <p className="text-xs text-muted-foreground mt-2">{formatDateAr(item.createdAt)}</p>
               </CardContent>
             </Card>

@@ -14,23 +14,23 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
-  present: { label: "حاضر", color: "text-green-600 bg-green-50" },
+  present: { label: "حاضر", color: "text-status-success-foreground bg-status-success-surface" },
   present_out_of_range: { label: "خارج النطاق", color: "text-orange-600 bg-orange-50" },
   present_off_day: { label: "حضور يوم عطلة", color: "text-purple-600 bg-purple-50" },
   present_holiday: { label: "حضور عطلة رسمية", color: "text-purple-600 bg-purple-50" },
-  absent: { label: "غائب", color: "text-red-600 bg-red-50" },
+  absent: { label: "غائب", color: "text-status-error-foreground bg-status-error-surface" },
   late: { label: "متأخر", color: "text-orange-600 bg-orange-50" },
-  leave: { label: "إجازة", color: "text-blue-600 bg-blue-50" },
-  on_leave: { label: "في إجازة", color: "text-blue-600 bg-blue-50" },
+  leave: { label: "إجازة", color: "text-status-info-foreground bg-status-info-surface" },
+  on_leave: { label: "في إجازة", color: "text-status-info-foreground bg-status-info-surface" },
   holiday: { label: "عطلة", color: "text-purple-600 bg-purple-50" },
   remote: { label: "عن بُعد", color: "text-cyan-600 bg-cyan-50" },
 };
 
 const severityConfig: Record<string, { label: string; color: string }> = {
-  low: { label: "منخفض", color: "bg-yellow-100 text-yellow-700" },
+  low: { label: "منخفض", color: "bg-status-warning-surface text-status-warning-foreground" },
   medium: { label: "متوسط", color: "bg-orange-100 text-orange-700" },
-  high: { label: "مرتفع", color: "bg-red-100 text-red-700" },
-  critical: { label: "حرج", color: "bg-red-200 text-red-800" },
+  high: { label: "مرتفع", color: "bg-status-error-surface text-status-error-foreground" },
+  critical: { label: "حرج", color: "bg-red-200 text-status-error-foreground" },
 };
 
 const attendanceColumns: DataTableColumn<any>[] = [
@@ -41,13 +41,13 @@ const attendanceColumns: DataTableColumn<any>[] = [
     key: "lateMinutes", header: "التأخير", sortable: true,
     render: (r) => r.lateMinutes > 0
       ? <span className="text-orange-600 font-medium">{r.lateMinutes} د</span>
-      : <span className="text-gray-400">—</span>,
+      : <span className="text-muted-foreground">—</span>,
   },
   {
     key: "overtimeMinutes", header: "وقت إضافي", sortable: true,
     render: (r) => r.overtimeMinutes > 0
       ? <span className="text-emerald-600 font-medium">{r.overtimeMinutes} د</span>
-      : <span className="text-gray-400">—</span>,
+      : <span className="text-muted-foreground">—</span>,
   },
   {
     key: "totalDeductions", header: "خصم", sortable: true,
@@ -55,14 +55,14 @@ const attendanceColumns: DataTableColumn<any>[] = [
       const sev = r.violationSeverity && r.violationCount > 0 ? severityConfig[r.violationSeverity] : null;
       return Number(r.totalDeductions) > 0 ? (
         <div className="flex items-center gap-1">
-          <span className="text-red-600 font-medium">{formatCurrency(Number(r.totalDeductions))}</span>
+          <span className="text-status-error-foreground font-medium">{formatCurrency(Number(r.totalDeductions))}</span>
           {sev && (
             <Badge className={cn("text-[10px] px-1 py-0", sev.color)}>
               <AlertTriangle className="w-2.5 h-2.5 me-0.5 inline" />{sev.label}
             </Badge>
           )}
         </div>
-      ) : <span className="text-gray-400">—</span>;
+      ) : <span className="text-muted-foreground">—</span>;
     },
   },
   {
@@ -96,23 +96,23 @@ export default function MyAttendance() {
   return (
     <PageShell title="حضوري وانصرافي" subtitle="سجل الحضور والانصراف الشهري">
       <div className="flex items-center gap-3 mb-6">
-        <label className="text-sm font-medium text-gray-700">الشهر:</label>
+        <label className="text-sm font-medium text-status-neutral-foreground">الشهر:</label>
         <input
           type="month"
           value={month}
           onChange={(e) => setMonth(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none"
+          className="border border-border rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none"
         />
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
         {[
-          { label: "أيام الحضور", value: presentDays, icon: CheckCircle2, color: "text-green-600 bg-green-50" },
-          { label: "أيام الغياب", value: absentDays, icon: XCircle, color: "text-red-600 bg-red-50" },
+          { label: "أيام الحضور", value: presentDays, icon: CheckCircle2, color: "text-status-success-foreground bg-status-success-surface" },
+          { label: "أيام الغياب", value: absentDays, icon: XCircle, color: "text-status-error-foreground bg-status-error-surface" },
           { label: "أيام التأخير", value: lateDays, icon: AlertCircle, color: "text-orange-600 bg-orange-50" },
-          { label: "دقائق التأخير", value: totalLateMinutes, icon: Clock, color: "text-blue-600 bg-blue-50" },
+          { label: "دقائق التأخير", value: totalLateMinutes, icon: Clock, color: "text-status-info-foreground bg-status-info-surface" },
           { label: "الوقت الإضافي (د)", value: totalOvertimeMinutes, icon: TrendingUp, color: "text-emerald-600 bg-emerald-50" },
-          { label: "إجمالي الخصومات", value: formatCurrency(Number(totalDeduction)), icon: DollarSign, color: "text-red-600 bg-red-50" },
+          { label: "إجمالي الخصومات", value: formatCurrency(Number(totalDeduction)), icon: DollarSign, color: "text-status-error-foreground bg-status-error-surface" },
         ].map((stat) => {
           const Icon = stat.icon;
           return (
@@ -122,7 +122,7 @@ export default function MyAttendance() {
                   <Icon size={20} />
                 </div>
                 <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{stat.label}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{stat.label}</p>
               </CardContent>
             </Card>
           );

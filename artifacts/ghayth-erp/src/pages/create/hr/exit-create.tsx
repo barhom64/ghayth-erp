@@ -117,7 +117,7 @@ export default function ExitCreate() {
       <form onSubmit={handleSubmit} className="space-y-6">
         <CreationDateField />
         {hasDraft && (
-          <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+          <div className="flex items-center gap-2 p-3 bg-status-info-surface border border-status-info-surface rounded-lg text-sm text-status-info-foreground">
             <Info className="h-4 w-4 shrink-0" />
             <span>تم استعادة مسودة سابقة — يمكنك متابعة التعبئة أو مسحها</span>
             <Button type="button" size="sm" variant="ghost" onClick={clearDraft} className="mr-auto text-xs">
@@ -169,31 +169,31 @@ export default function ExitCreate() {
 
         {/* تقدير المستحقات */}
         {selectedEmployee && salary > 0 && (
-          <Card className="border-red-200 bg-red-50/30">
+          <Card className="border-status-error-surface bg-status-error-surface">
             <CardContent className="p-4">
               <div className="flex items-center gap-2 mb-3">
-                <DollarSign className="h-4 w-4 text-red-600" />
-                <span className="text-sm font-semibold text-red-700">تقدير مبدئي للمستحقات</span>
+                <DollarSign className="h-4 w-4 text-status-error-foreground" />
+                <span className="text-sm font-semibold text-status-error-foreground">تقدير مبدئي للمستحقات</span>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
                 <div>
-                  <p className="text-lg font-bold text-green-700">{formatCurrency(estimatedGratuity)}</p>
-                  <p className="text-xs text-gray-500">مكافأة نهاية الخدمة</p>
+                  <p className="text-lg font-bold text-status-success-foreground">{formatCurrency(estimatedGratuity)}</p>
+                  <p className="text-xs text-muted-foreground">مكافأة نهاية الخدمة</p>
                 </div>
                 <div>
-                  <p className="text-lg font-bold text-blue-700">{yearsOfService.toFixed(1)}</p>
-                  <p className="text-xs text-gray-500">سنوات الخدمة</p>
+                  <p className="text-lg font-bold text-status-info-foreground">{yearsOfService.toFixed(1)}</p>
+                  <p className="text-xs text-muted-foreground">سنوات الخدمة</p>
                 </div>
                 <div>
-                  <p className="text-lg font-bold text-amber-700">{EXIT_TYPES[form.exitType] || form.exitType}</p>
-                  <p className="text-xs text-gray-500">نوع الإنهاء</p>
+                  <p className="text-lg font-bold text-status-warning-foreground">{EXIT_TYPES[form.exitType] || form.exitType}</p>
+                  <p className="text-xs text-muted-foreground">نوع الإنهاء</p>
                 </div>
                 <div>
-                  <p className="text-lg font-bold text-red-700">{formatCurrency(Number(form.otherDeductions || 0))}</p>
-                  <p className="text-xs text-gray-500">خصومات أخرى</p>
+                  <p className="text-lg font-bold text-status-error-foreground">{formatCurrency(Number(form.otherDeductions || 0))}</p>
+                  <p className="text-xs text-muted-foreground">خصومات أخرى</p>
                 </div>
               </div>
-              <p className="text-xs text-gray-400 mt-3 flex items-center gap-1">
+              <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1">
                 <Info className="h-3 w-3" />
                 هذا تقدير مبدئي — الحساب الدقيق يشمل رصيد الإجازات وخصم السلف المتبقية
               </p>
@@ -202,7 +202,7 @@ export default function ExitCreate() {
         )}
 
         {form.exitType === "termination" && (
-          <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+          <div className="flex items-center gap-2 p-3 bg-status-error-surface border border-status-error-surface rounded-lg text-sm text-status-error-foreground">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             <span>حالة فصل — يرجى التأكد من استكمال الإجراءات التأديبية قبل المتابعة</span>
           </div>

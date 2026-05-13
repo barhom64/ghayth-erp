@@ -31,8 +31,8 @@ export default function FleetMaintenancePage() {
     { key: "vehiclePlate", header: "المركبة", sortable: true, searchable: true, render: (m) => <span className="font-medium">{m.vehiclePlate}</span> },
     { key: "type", header: "النوع", sortable: true, searchable: true, render: (m) => m.type || "-" },
     { key: "cost", header: "التكلفة", sortable: true, render: (m) => <span className="font-semibold">{formatCurrency(Number(m.cost))}</span> },
-    { key: "workshop", header: "الورشة", sortable: true, searchable: true, render: (m) => <span className="text-gray-500">{m.workshop || "-"}</span> },
-    { key: "date", header: "التاريخ", sortable: true, render: (m) => <span className="text-gray-500">{m.date || "-"}</span> },
+    { key: "workshop", header: "الورشة", sortable: true, searchable: true, render: (m) => <span className="text-muted-foreground">{m.workshop || "-"}</span> },
+    { key: "date", header: "التاريخ", sortable: true, render: (m) => <span className="text-muted-foreground">{m.date || "-"}</span> },
   ];
 
   if (isLoading) return <LoadingSpinner />;
@@ -51,10 +51,10 @@ export default function FleetMaintenancePage() {
     >
       <FleetTabsNav />
       <KpiGrid items={[
-        { label: "إجمالي السجلات", value: items.length, icon: Wrench, color: "text-blue-600 bg-blue-50" },
-        { label: "مكتملة", value: items.filter((m: any) => m.status === "completed").length, icon: CheckCircle, color: "text-green-600 bg-green-50" },
-        { label: "قيد الانتظار", value: items.filter((m: any) => m.status !== "completed").length, icon: Clock, color: "text-amber-600 bg-amber-50" },
-        { label: "إجمالي التكلفة", value: formatCurrency(items.reduce((s: number, m: any) => s + (Number(m.cost) || 0), 0)), icon: DollarSign, color: "text-red-600 bg-red-50" },
+        { label: "إجمالي السجلات", value: items.length, icon: Wrench, color: "text-status-info-foreground bg-status-info-surface" },
+        { label: "مكتملة", value: items.filter((m: any) => m.status === "completed").length, icon: CheckCircle, color: "text-status-success-foreground bg-status-success-surface" },
+        { label: "قيد الانتظار", value: items.filter((m: any) => m.status !== "completed").length, icon: Clock, color: "text-status-warning-foreground bg-status-warning-surface" },
+        { label: "إجمالي التكلفة", value: formatCurrency(items.reduce((s: number, m: any) => s + (Number(m.cost) || 0), 0)), icon: DollarSign, color: "text-status-error-foreground bg-status-error-surface" },
       ]} />
 
       <BulkActionsBar

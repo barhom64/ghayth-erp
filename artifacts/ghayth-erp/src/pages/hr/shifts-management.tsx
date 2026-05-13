@@ -71,8 +71,8 @@ export default function ShiftsManagementPage() {
     >
       <HrTabsNav />
       <KpiGrid items={[
-        { label: "الورديات", value: shifts.length, icon: CalendarClock, color: "text-blue-600 bg-blue-50" },
-        { label: "نشطة", value: shifts.filter((s: any) => s.status === "active").length, icon: Clock, color: "text-green-600 bg-green-50" },
+        { label: "الورديات", value: shifts.length, icon: CalendarClock, color: "text-status-info-foreground bg-status-info-surface" },
+        { label: "نشطة", value: shifts.filter((s: any) => s.status === "active").length, icon: Clock, color: "text-status-success-foreground bg-status-success-surface" },
         { label: "التعيينات", value: assignments.length, icon: Users, color: "text-purple-600 bg-purple-50" },
         { label: "الموظفين", value: employees.length, icon: Users, color: "text-orange-600 bg-orange-50" },
       ]} />
@@ -92,21 +92,21 @@ export default function ShiftsManagementPage() {
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
-                        {isNight ? <Moon className="w-5 h-5 text-indigo-500" /> : <Sun className="w-5 h-5 text-yellow-500" />}
+                        {isNight ? <Moon className="w-5 h-5 text-indigo-500" /> : <Sun className="w-5 h-5 text-status-warning" />}
                         <span className="font-semibold">{s.name}</span>
                       </div>
-                      {s.isDefault && <Badge className="bg-blue-100 text-blue-700 text-xs">افتراضية</Badge>}
+                      {s.isDefault && <Badge className="bg-status-info-surface text-status-info-foreground text-xs">افتراضية</Badge>}
                     </div>
                     <div className="space-y-2 text-sm">
-                      <div className="flex justify-between p-2 bg-gray-50 rounded"><span>البداية</span><span className="font-mono text-green-600">{s.startTime}</span></div>
-                      <div className="flex justify-between p-2 bg-gray-50 rounded"><span>النهاية</span><span className="font-mono text-red-600">{s.endTime}</span></div>
-                      <div className="flex justify-between p-2 bg-gray-50 rounded"><span>الموظفين</span><span className="font-medium">{assignedCount}</span></div>
+                      <div className="flex justify-between p-2 bg-surface-subtle rounded"><span>البداية</span><span className="font-mono text-status-success-foreground">{s.startTime}</span></div>
+                      <div className="flex justify-between p-2 bg-surface-subtle rounded"><span>النهاية</span><span className="font-mono text-status-error-foreground">{s.endTime}</span></div>
+                      <div className="flex justify-between p-2 bg-surface-subtle rounded"><span>الموظفين</span><span className="font-medium">{assignedCount}</span></div>
                     </div>
                   </CardContent>
                 </Card>
               );
             })}
-            {shifts.length === 0 && <p className="col-span-3 text-center text-gray-400 py-8">لا توجد ورديات</p>}
+            {shifts.length === 0 && <p className="col-span-3 text-center text-muted-foreground py-8">لا توجد ورديات</p>}
           </div>
         </TabsContent>
         <TabsContent value="assign">
@@ -116,7 +116,7 @@ export default function ShiftsManagementPage() {
             </GuardedButton>
           </div>
           {showAssignForm && (
-            <Card className="mb-4 border-blue-200">
+            <Card className="mb-4 border-status-info-surface">
               <CardContent className="p-4">
                 <FormShell
                   schema={shiftAssignSchema}
@@ -171,8 +171,8 @@ export default function ShiftsManagementPage() {
               { key: "employeeName", header: "الموظف", sortable: true, render: (v) => <span className="font-medium">{v.employeeName || "-"}</span> },
               { key: "shiftName", header: "الوردية", sortable: true, render: (v) => <span>{v.shiftName || "-"}</span> },
               { key: "startTime", header: "الوقت", sortable: true, render: (v) => <span className="font-mono">{v.startTime} - {v.endTime}</span> },
-              { key: "startDate", header: "من", sortable: true, render: (v) => <span className="text-gray-500">{v.startDate || "-"}</span> },
-              { key: "endDate", header: "إلى", sortable: true, render: (v) => <span className="text-gray-500">{v.endDate || "مستمر"}</span> },
+              { key: "startDate", header: "من", sortable: true, render: (v) => <span className="text-muted-foreground">{v.startDate || "-"}</span> },
+              { key: "endDate", header: "إلى", sortable: true, render: (v) => <span className="text-muted-foreground">{v.endDate || "مستمر"}</span> },
             ] as DataTableColumn<any>[]}
             data={assignments}
             noToolbar

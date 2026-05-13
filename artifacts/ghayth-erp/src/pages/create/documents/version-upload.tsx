@@ -101,30 +101,30 @@ export default function VersionUploadPage() {
       backPath="/documents"
     >
       {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="space-y-6">
         <div>
           <h3 className="flex items-center gap-2 text-lg font-semibold mb-3">
-            <Upload className="h-5 w-5 text-blue-500" /> رفع إصدار جديد
+            <Upload className="h-5 w-5 text-status-info" /> رفع إصدار جديد
           </h3>
           <div className="space-y-4">
             <div
               onClick={() => inputRef.current?.click()}
               className={cn(
                 "border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-all",
-                file ? "border-green-400 bg-green-50" : "border-gray-200 hover:border-gray-300"
+                file ? "border-green-400 bg-status-success-surface" : "border-border hover:border-border"
               )}
             >
               {file ? (
-                <span className="text-green-700 font-medium">{file.name} ({formatSize(file.size)})</span>
+                <span className="text-status-success-foreground font-medium">{file.name} ({formatSize(file.size)})</span>
               ) : (
                 <div className="space-y-2">
-                  <Upload className="h-8 w-8 mx-auto text-gray-400" />
-                  <span className="text-gray-400">اضغط لاختيار الملف</span>
+                  <Upload className="h-8 w-8 mx-auto text-muted-foreground" />
+                  <span className="text-muted-foreground">اضغط لاختيار الملف</span>
                 </div>
               )}
               <input ref={inputRef} type="file" className="hidden" onChange={(e) => { if (e.target.files?.[0]) setFile(e.target.files[0]); e.target.value = ""; }} />
@@ -138,7 +138,7 @@ export default function VersionUploadPage() {
 
         <div className="border-t pt-4">
           <h3 className="flex items-center gap-2 text-lg font-semibold mb-3">
-            <FileText className="h-5 w-5 text-gray-500" /> الإصدارات السابقة
+            <FileText className="h-5 w-5 text-muted-foreground" /> الإصدارات السابقة
           </h3>
           {versions.length > 0 ? (
             <div className="space-y-3">
@@ -149,14 +149,14 @@ export default function VersionUploadPage() {
                       <Badge variant="outline">v{v.versionNumber}</Badge>
                       <span className="text-sm font-medium">{v.fileName}</span>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">{formatSize(v.fileSize)} — {v.createdAt ? formatDateAr(v.createdAt) : ""}</p>
-                    {v.notes && <p className="text-xs text-gray-400 mt-0.5">{v.notes}</p>}
+                    <p className="text-xs text-muted-foreground mt-1">{formatSize(v.fileSize)} — {v.createdAt ? formatDateAr(v.createdAt) : ""}</p>
+                    {v.notes && <p className="text-xs text-muted-foreground mt-0.5">{v.notes}</p>}
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-center text-gray-400 py-6">لا توجد إصدارات سابقة</p>
+            <p className="text-center text-muted-foreground py-6">لا توجد إصدارات سابقة</p>
           )}
         </div>
       </div>

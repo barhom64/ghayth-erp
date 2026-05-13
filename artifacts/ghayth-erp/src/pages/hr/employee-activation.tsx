@@ -115,10 +115,10 @@ export default function EmployeeActivationPage() {
   const suspended = employees.filter((e: any) => e.status === "suspended").length;
 
   const kpis = [
-    { label: "إجمالي الموظفين", value: employees.length, icon: Users, color: "text-blue-600 bg-blue-50" },
-    { label: "نشطين", value: active, icon: UserCheck, color: "text-green-600 bg-green-50" },
-    { label: "غير نشطين", value: inactive, icon: UserX, color: "text-red-600 bg-red-50" },
-    { label: "معلقين", value: suspended, icon: ToggleLeft, color: "text-yellow-600 bg-yellow-50" },
+    { label: "إجمالي الموظفين", value: employees.length, icon: Users, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "نشطين", value: active, icon: UserCheck, color: "text-status-success-foreground bg-status-success-surface" },
+    { label: "غير نشطين", value: inactive, icon: UserX, color: "text-status-error-foreground bg-status-error-surface" },
+    { label: "معلقين", value: suspended, icon: ToggleLeft, color: "text-status-warning-foreground bg-status-warning-surface" },
   ];
 
   const openConfirm = (action: LifecycleAction, employee: any) => {
@@ -154,7 +154,7 @@ export default function EmployeeActivationPage() {
       sortable: true,
       render: (e) => (
         <div className="flex items-center gap-2">
-          <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold", e.status === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700")}>
+          <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold", e.status === "active" ? "bg-status-success-surface text-status-success-foreground" : "bg-status-error-surface text-status-error-foreground")}>
             {(e.name || "؟").charAt(0)}
           </div>
           <span className="font-medium">{e.name}</span>
@@ -165,7 +165,7 @@ export default function EmployeeActivationPage() {
       key: "empNumber",
       header: "الرقم الوظيفي",
       sortable: true,
-      className: "text-gray-500 font-mono",
+      className: "text-muted-foreground font-mono",
       render: (e) => e.empNumber || "-",
     },
     {
@@ -178,7 +178,7 @@ export default function EmployeeActivationPage() {
       key: "branchName",
       header: "الفرع",
       sortable: true,
-      className: "text-gray-500",
+      className: "text-muted-foreground",
       render: (e) => e.branchName || "-",
     },
     {
@@ -193,10 +193,10 @@ export default function EmployeeActivationPage() {
       sortable: true,
       render: (e) => (
         <Badge className={
-          e.status === "active" ? "bg-green-100 text-green-700" :
-          e.status === "terminated" ? "bg-red-100 text-red-700" :
-          e.status === "suspended" ? "bg-yellow-100 text-yellow-700" :
-          "bg-gray-100 text-gray-700"
+          e.status === "active" ? "bg-status-success-surface text-status-success-foreground" :
+          e.status === "terminated" ? "bg-status-error-surface text-status-error-foreground" :
+          e.status === "suspended" ? "bg-status-warning-surface text-status-warning-foreground" :
+          "bg-surface-subtle text-status-neutral-foreground"
         }>
           {e.status === "active" ? "نشط" :
            e.status === "terminated" ? "منتهي" :
@@ -219,7 +219,7 @@ export default function EmployeeActivationPage() {
                 perm="hr:create"
                 size="sm"
                 variant="outline"
-                className="h-7 gap-1 text-green-700 border-green-200 hover:bg-green-50"
+                className="h-7 gap-1 text-status-success-foreground border-status-success-surface hover:bg-status-success-surface"
                 onClick={() => openConfirm("activate", e)}
               >
                 <Play className="h-3 w-3" />
@@ -231,7 +231,7 @@ export default function EmployeeActivationPage() {
                 perm="hr:create"
                 size="sm"
                 variant="outline"
-                className="h-7 gap-1 text-yellow-700 border-yellow-200 hover:bg-yellow-50"
+                className="h-7 gap-1 text-status-warning-foreground border-status-warning-surface hover:bg-status-warning-surface"
                 onClick={() => openConfirm("suspend", e)}
               >
                 <Pause className="h-3 w-3" />
@@ -243,7 +243,7 @@ export default function EmployeeActivationPage() {
                 perm="hr:delete"
                 size="sm"
                 variant="outline"
-                className="h-7 gap-1 text-red-700 border-red-200 hover:bg-red-50"
+                className="h-7 gap-1 text-status-error-foreground border-status-error-surface hover:bg-status-error-surface"
                 onClick={() => openConfirm("terminate", e)}
               >
                 <Ban className="h-3 w-3" />
@@ -299,7 +299,7 @@ export default function EmployeeActivationPage() {
           {cfg?.requiresReason && (
             <div className="space-y-2">
               <Label htmlFor="reason">
-                السبب {cfg.requiresReason && <span className="text-red-600">*</span>}
+                السبب {cfg.requiresReason && <span className="text-status-error-foreground">*</span>}
               </Label>
               <Textarea
                 id="reason"

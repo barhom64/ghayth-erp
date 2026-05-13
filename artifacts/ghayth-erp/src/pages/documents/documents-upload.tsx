@@ -175,30 +175,30 @@ export default function DocumentsUpload() {
                   onChange={(e) => updateEntityLink(idx, "entityId", e.target.value)}
                 />
                 <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeEntityLink(idx)}>
-                  <X className="h-4 w-4 text-red-500" />
+                  <X className="h-4 w-4 text-status-error" />
                 </Button>
               </div>
             ))}
           </div>
 
           <div>
-            <Label>الملف <span className="text-red-500">*</span></Label>
+            <Label>الملف <span className="text-status-error">*</span></Label>
             <div
               onClick={() => inputRef.current?.click()}
               className={cn(
                 "mt-1 border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all",
-                file ? "border-green-400 bg-green-50" : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                file ? "border-green-400 bg-status-success-surface" : "border-border hover:border-border hover:bg-surface-subtle"
               )}
             >
               {file ? (
                 <div className="flex items-center justify-center gap-2">
-                  <FileUp className="h-5 w-5 text-green-600" />
+                  <FileUp className="h-5 w-5 text-status-success-foreground" />
                   <span className="text-sm font-medium">{file.name}</span>
-                  <span className="text-xs text-gray-400">({formatSize(file.size)})</span>
+                  <span className="text-xs text-muted-foreground">({formatSize(file.size)})</span>
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setFile(null); }}
-                    className="text-red-400 hover:text-red-600"
+                    className="text-red-400 hover:text-status-error-foreground"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -206,8 +206,8 @@ export default function DocumentsUpload() {
               ) : (
                 <>
                   <Upload className="h-8 w-8 mx-auto mb-2 text-gray-300" />
-                  <p className="text-sm text-gray-500">انقر لاختيار الملف أو اسحبه هنا</p>
-                  <p className="text-xs text-gray-400 mt-1">الحد الأقصى 10 ميجابايت</p>
+                  <p className="text-sm text-muted-foreground">انقر لاختيار الملف أو اسحبه هنا</p>
+                  <p className="text-xs text-muted-foreground mt-1">الحد الأقصى 10 ميجابايت</p>
                 </>
               )}
               <input

@@ -53,20 +53,20 @@ export default function VouchersPage() {
       key: "ref",
       header: "المرجع",
       sortable: true,
-      render: (v) => <span className="font-mono text-blue-600 text-xs">{v.ref || `#${v.id}`}</span>,
+      render: (v) => <span className="font-mono text-status-info-foreground text-xs">{v.ref || `#${v.id}`}</span>,
     },
     {
       key: "date",
       header: "التاريخ",
       sortable: true,
-      render: (v) => <span className="text-gray-500 text-xs">{v.date ? formatDateAr(v.date) : "-"}</span>,
+      render: (v) => <span className="text-muted-foreground text-xs">{v.date ? formatDateAr(v.date) : "-"}</span>,
     },
     {
       key: "type",
       header: "النوع",
       sortable: true,
       render: (v) => (
-        <Badge className={v.type === "receipt" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}>
+        <Badge className={v.type === "receipt" ? "bg-status-success-surface text-status-success-foreground" : "bg-status-error-surface text-status-error-foreground"}>
           {v.type === "receipt" ? "سند قبض" : "سند صرف"}
         </Badge>
       ),
@@ -77,11 +77,11 @@ export default function VouchersPage() {
       sortable: true,
       render: (v) =>
         v.operationType ? (
-          <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-xs">
+          <span className="px-2 py-0.5 rounded bg-status-info-surface text-status-info-foreground text-xs">
             {VOUCHER_OPERATIONS[v.operationType] || v.operationType}
           </span>
         ) : (
-          <span className="text-gray-400">-</span>
+          <span className="text-muted-foreground">-</span>
         ),
     },
     {
@@ -89,7 +89,7 @@ export default function VouchersPage() {
       header: "المبلغ",
       sortable: true,
       render: (v) => (
-        <span className={`font-semibold ${v.type === "receipt" ? "text-green-600" : "text-red-600"}`}>
+        <span className={`font-semibold ${v.type === "receipt" ? "text-status-success-foreground" : "text-status-error-foreground"}`}>
           {formatCurrency(v.amount)}
         </span>
       ),
@@ -98,7 +98,7 @@ export default function VouchersPage() {
       key: "description",
       header: "الوصف",
       sortable: true,
-      render: (v) => <span className="text-gray-600 line-clamp-1 max-w-[220px]">{v.description || "-"}</span>,
+      render: (v) => <span className="text-muted-foreground line-clamp-1 max-w-[220px]">{v.description || "-"}</span>,
     },
     {
       key: "status",
@@ -111,7 +111,7 @@ export default function VouchersPage() {
       header: "",
       width: "40px",
       render: (v) => (
-        <button className="text-gray-400 hover:text-gray-600 p-1">
+        <button className="text-muted-foreground hover:text-muted-foreground p-1">
           {expandedId === v.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>
       ),
@@ -138,10 +138,10 @@ export default function VouchersPage() {
       }
     >
       <KpiGrid items={[
-        { label: "إجمالي السندات", value: formatNumber(items.length), icon: FileText, color: "text-blue-600 bg-blue-50" },
+        { label: "إجمالي السندات", value: formatNumber(items.length), icon: FileText, color: "text-status-info-foreground bg-status-info-surface" },
         { label: "هذا الشهر", value: formatNumber(items.filter((v: any) => { const d = new Date(v.date); const now = new Date(); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); }).length), icon: Calendar, color: "text-orange-600 bg-orange-50" },
-        { label: "سندات القبض", value: formatCurrency(totalReceipts), icon: ArrowDownCircle, color: "text-green-600 bg-green-50" },
-        { label: "سندات الصرف", value: formatCurrency(totalPayments), icon: ArrowUpCircle, color: "text-red-600 bg-red-50" },
+        { label: "سندات القبض", value: formatCurrency(totalReceipts), icon: ArrowDownCircle, color: "text-status-success-foreground bg-status-success-surface" },
+        { label: "سندات الصرف", value: formatCurrency(totalPayments), icon: ArrowUpCircle, color: "text-status-error-foreground bg-status-error-surface" },
       ]} />
 
       <AdvancedFilters
@@ -211,7 +211,7 @@ export default function VouchersPage() {
         renderRowExtras={(v) => {
           if (expandedId !== v.id) return null;
           return (
-            <div className="p-4 bg-gray-50/50">
+            <div className="p-4 bg-surface-subtle/50">
               <div className="bg-white p-4 rounded-lg border">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="font-semibold text-sm">تفاصيل السند</h4>
@@ -219,38 +219,38 @@ export default function VouchersPage() {
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                   <div>
-                    <span className="text-gray-500">التاريخ:</span>
+                    <span className="text-muted-foreground">التاريخ:</span>
                     <span className="block font-medium">{v.date ? formatDateAr(v.date) : "-"}</span>
                   </div>
                   {v.operationType && (
                     <div>
-                      <span className="text-gray-500">نوع العملية:</span>
+                      <span className="text-muted-foreground">نوع العملية:</span>
                       <span className="block font-medium">{VOUCHER_OPERATIONS[v.operationType] || v.operationType}</span>
                     </div>
                   )}
                   {v.paymentMethod && (
                     <div>
-                      <span className="text-gray-500">طريقة الدفع:</span>
+                      <span className="text-muted-foreground">طريقة الدفع:</span>
                       <span className="block font-medium">{PAYMENT_METHODS[v.paymentMethod] || v.paymentMethod}</span>
                     </div>
                   )}
                   {v.reference && (
                     <div>
-                      <span className="text-gray-500">رقم المرجع:</span>
+                      <span className="text-muted-foreground">رقم المرجع:</span>
                       <span className="block font-medium">{v.reference}</span>
                     </div>
                   )}
                   {v.relatedEntityType && (
                     <div>
-                      <span className="text-gray-500">الجهة المرتبطة:</span>
+                      <span className="text-muted-foreground">الجهة المرتبطة:</span>
                       <span className="block font-medium">{v.relatedEntityType} #{v.relatedEntityId}</span>
                     </div>
                   )}
                   {v.attachmentUrl && (
                     <div>
-                      <span className="text-gray-500">المرفق:</span>
+                      <span className="text-muted-foreground">المرفق:</span>
                       <a href={v.attachmentUrl} target="_blank" rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-blue-600 hover:underline mt-0.5">
+                        className="flex items-center gap-1 text-status-info-foreground hover:underline mt-0.5">
                         <Paperclip className="h-3 w-3" />
                         {v.attachmentType || "عرض المرفق"}
                         <ExternalLink className="h-3 w-3" />
@@ -258,7 +258,7 @@ export default function VouchersPage() {
                     </div>
                   )}
                   <div>
-                    <span className="text-gray-500">المبلغ:</span>
+                    <span className="text-muted-foreground">المبلغ:</span>
                     <span className="block font-medium">{formatCurrency(v.amount)}</span>
                   </div>
                 </div>

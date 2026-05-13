@@ -28,8 +28,8 @@ export default function PerformancePage() {
     : "0";
 
   const kpis = [
-    { label: "إجمالي التقييمات", value: items.length, icon: Target, color: "text-blue-600 bg-blue-50" },
-    { label: "متوسط الأداء", value: avgScore + "/5", icon: TrendingUp, color: "text-green-600 bg-green-50" },
+    { label: "إجمالي التقييمات", value: items.length, icon: Target, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "متوسط الأداء", value: avgScore + "/5", icon: TrendingUp, color: "text-status-success-foreground bg-status-success-surface" },
     { label: "مكتملة", value: items.filter((i: any) => i.status === "completed").length, icon: Award, color: "text-purple-600 bg-purple-50" },
     { label: "قيد التقييم", value: items.filter((i: any) => i.status === "draft" || i.status === "in_progress").length, icon: Users, color: "text-orange-600 bg-orange-50" },
   ];
@@ -44,7 +44,7 @@ export default function PerformancePage() {
           <AvatarInitial name={p.employeeName} color="orange" />
           <div>
             <span className="font-medium block">{p.employeeName}</span>
-            {p.empNumber && <span className="text-xs text-gray-400">{p.empNumber}</span>}
+            {p.empNumber && <span className="text-xs text-muted-foreground">{p.empNumber}</span>}
           </div>
         </div>
       ),
@@ -53,7 +53,7 @@ export default function PerformancePage() {
       key: "period",
       header: "الفترة",
       sortable: true,
-      className: "text-gray-500",
+      className: "text-muted-foreground",
       render: (p) => p.period || "-",
     },
     {
@@ -77,7 +77,7 @@ export default function PerformancePage() {
       render: (p) => {
         const score = Number(p.overallScore || 0);
         return (
-          <span className={cn("font-bold", score >= 4 ? "text-green-600" : score >= 3 ? "text-yellow-600" : "text-red-600")}>
+          <span className={cn("font-bold", score >= 4 ? "text-status-success-foreground" : score >= 3 ? "text-status-warning-foreground" : "text-status-error-foreground")}>
             {score.toFixed(1)}
           </span>
         );

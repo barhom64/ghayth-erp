@@ -123,7 +123,7 @@ export function PermissionsTab() {
   };
 
   const rolePermColumns: DataTableColumn<any>[] = [
-    { key: "label", header: "الوحدة", width: "128px", render: (r: any) => <span className="font-medium text-sm text-gray-700">{r.label}</span> },
+    { key: "label", header: "الوحدة", width: "128px", render: (r: any) => <span className="font-medium text-sm text-status-neutral-foreground">{r.label}</span> },
     ...PERM_ACTIONS.map((action) => ({
       key: action.key,
       header: action.label,
@@ -141,14 +141,14 @@ export function PermissionsTab() {
               "w-7 h-7 rounded-md transition-all mx-auto flex items-center justify-center border-2",
               hasPerm
                 ? hasWildcard
-                  ? "bg-blue-100 border-blue-200 cursor-not-allowed"
-                  : "bg-green-100 border-green-500 hover:bg-green-200"
-                : "bg-white border-gray-200 hover:border-gray-400",
+                  ? "bg-status-info-surface border-status-info-surface cursor-not-allowed"
+                  : "bg-status-success-surface border-green-500 hover:bg-green-200"
+                : "bg-white border-border hover:border-gray-400",
               isSaving && "opacity-50"
             )}
             title={hasWildcard ? "صلاحية كاملة من الدور" : hasPerm ? "انقر لإزالة" : "انقر لإضافة"}
           >
-            {hasPerm && <CheckCircle className={cn("h-4 w-4", hasWildcard ? "text-blue-500" : "text-green-600")} />}
+            {hasPerm && <CheckCircle className={cn("h-4 w-4", hasWildcard ? "text-status-info" : "text-status-success-foreground")} />}
           </button>
         );
       },
@@ -156,7 +156,7 @@ export function PermissionsTab() {
   ];
 
   const userPermColumns: DataTableColumn<any>[] = [
-    { key: "label", header: "الوحدة", width: "128px", render: (r: any) => <span className="font-medium text-sm text-gray-700">{r.label}</span> },
+    { key: "label", header: "الوحدة", width: "128px", render: (r: any) => <span className="font-medium text-sm text-status-neutral-foreground">{r.label}</span> },
     ...PERM_ACTIONS.map((action) => ({
       key: action.key,
       header: action.label,
@@ -171,14 +171,14 @@ export function PermissionsTab() {
             onClick={() => toggleUserPerm(perm, existing?.type || null)}
             className={cn(
               "w-7 h-7 rounded-md transition-all mx-auto flex items-center justify-center border-2",
-              isGranted ? "bg-green-100 border-green-500 hover:bg-green-200" :
-              isRevoked ? "bg-red-100 border-red-500 hover:bg-red-200" :
-              "bg-white border-gray-200 hover:border-gray-400"
+              isGranted ? "bg-status-success-surface border-green-500 hover:bg-green-200" :
+              isRevoked ? "bg-status-error-surface border-red-500 hover:bg-status-error-surface" :
+              "bg-white border-border hover:border-gray-400"
             )}
             title={isGranted ? "مُمنوح — انقر لإزالة" : isRevoked ? "مسحوب — انقر لإزالة" : "انقر لمنح"}
           >
-            {isGranted && <CheckCircle className="h-4 w-4 text-green-600" />}
-            {isRevoked && <X className="h-4 w-4 text-red-600" />}
+            {isGranted && <CheckCircle className="h-4 w-4 text-status-success-foreground" />}
+            {isRevoked && <X className="h-4 w-4 text-status-error-foreground" />}
           </button>
         );
       },
@@ -192,7 +192,7 @@ export function PermissionsTab() {
     <div className="space-y-6">
       <div className="space-y-4">
         <h3 className="text-lg font-semibold flex items-center gap-2">
-          <Shield className="h-5 w-5 text-blue-600" />
+          <Shield className="h-5 w-5 text-status-info-foreground" />
           مصفوفة صلاحيات الأدوار
         </h3>
         <Card>
@@ -207,7 +207,7 @@ export function PermissionsTab() {
               </Select>
             </div>
             {loading ? (
-              <p className="text-sm text-gray-400 text-center py-4">جاري التحميل...</p>
+              <p className="text-sm text-muted-foreground text-center py-4">جاري التحميل...</p>
             ) : (
               <div>
                 <DataTable
@@ -218,7 +218,7 @@ export function PermissionsTab() {
                   rowKey={(r: any) => r.key}
                 />
                 {(rolePerms.has("*")) && (
-                  <p className="text-xs text-blue-600 mt-2 flex items-center gap-1">
+                  <p className="text-xs text-status-info-foreground mt-2 flex items-center gap-1">
                     <Shield className="h-3 w-3" />
                     هذا الدور يمتلك صلاحيات كاملة (*)
                   </p>
@@ -250,7 +250,7 @@ export function PermissionsTab() {
             {selectedUserId && (
               <>
                 {userLoading ? (
-                  <p className="text-sm text-gray-400">جاري التحميل...</p>
+                  <p className="text-sm text-muted-foreground">جاري التحميل...</p>
                 ) : (
                   <div>
                     <DataTable
@@ -260,7 +260,7 @@ export function PermissionsTab() {
                       pageSize={0}
                       rowKey={(r: any) => r.key}
                     />
-                    <p className="text-xs text-gray-400 mt-2">الصلاحيات الخضراء مُضافة للمستخدم، الحمراء مسحوبة منه. الخلايا الفارغة تعتمد على صلاحيات الدور.</p>
+                    <p className="text-xs text-muted-foreground mt-2">الصلاحيات الخضراء مُضافة للمستخدم، الحمراء مسحوبة منه. الخلايا الفارغة تعتمد على صلاحيات الدور.</p>
                   </div>
                 )}
               </>

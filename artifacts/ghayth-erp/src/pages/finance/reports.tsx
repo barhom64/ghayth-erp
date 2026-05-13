@@ -102,23 +102,23 @@ function TrialBalanceNode({ node, level = 0 }: { node: any; level?: number }) {
 
   return (
     <>
-      <tr className={`border-b hover:bg-gray-50 ${isParent ? "bg-gray-50/50 font-semibold" : ""}`}>
+      <tr className={`border-b hover:bg-surface-subtle ${isParent ? "bg-surface-subtle/50 font-semibold" : ""}`}>
         <td className="p-3" style={{ paddingInlineStart: `${12 + level * 20}px` }}>
           <div className="flex items-center gap-1">
             {hasChildren ? (
-              <button onClick={() => setExpanded(!expanded)} className="text-gray-400 hover:text-gray-600">
+              <button onClick={() => setExpanded(!expanded)} className="text-muted-foreground hover:text-muted-foreground">
                 {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
               </button>
             ) : <span className="w-3.5" />}
-            <span className="font-mono text-blue-600 text-xs">{node.code}</span>
+            <span className="font-mono text-status-info-foreground text-xs">{node.code}</span>
           </div>
         </td>
         <td className="p-3">
           <span className={isParent ? "font-semibold" : ""}>{node.name}</span>
         </td>
         <td className="p-3"><Badge variant="outline" className="text-xs">{typeMap[node.type] || node.type}</Badge></td>
-        <td className="p-3 text-green-600">{formatCurrency(Number(node.totalDebit || 0))}</td>
-        <td className="p-3 text-red-600">{formatCurrency(Number(node.totalCredit || 0))}</td>
+        <td className="p-3 text-status-success-foreground">{formatCurrency(Number(node.totalDebit || 0))}</td>
+        <td className="p-3 text-status-error-foreground">{formatCurrency(Number(node.totalCredit || 0))}</td>
         <td className="p-3 font-bold" style={{ color: Number(node.balance) >= 0 ? "#16a34a" : "#dc2626" }}>
           {formatCurrency(Number(node.balance || 0))}
         </td>
@@ -127,12 +127,12 @@ function TrialBalanceNode({ node, level = 0 }: { node: any; level?: number }) {
         <TrialBalanceNode key={child.code} node={child} level={level + 1} />
       ))}
       {expanded && hasChildren && (
-        <tr className="border-b bg-gray-100/60">
-          <td colSpan={3} className="p-2 text-xs text-gray-500 font-bold" style={{ paddingInlineStart: `${12 + level * 20}px` }}>
+        <tr className="border-b bg-surface-subtle/60">
+          <td colSpan={3} className="p-2 text-xs text-muted-foreground font-bold" style={{ paddingInlineStart: `${12 + level * 20}px` }}>
             مجموع {node.name}
           </td>
-          <td className="p-2 text-green-700 text-xs font-bold">{formatCurrency(Number(node.subtotalDebit || node.totalDebit || 0))}</td>
-          <td className="p-2 text-red-700 text-xs font-bold">{formatCurrency(Number(node.subtotalCredit || node.totalCredit || 0))}</td>
+          <td className="p-2 text-status-success-foreground text-xs font-bold">{formatCurrency(Number(node.subtotalDebit || node.totalDebit || 0))}</td>
+          <td className="p-2 text-status-error-foreground text-xs font-bold">{formatCurrency(Number(node.subtotalCredit || node.totalCredit || 0))}</td>
           <td className="p-2 text-xs font-bold" style={{ color: Number(node.subtotalBalance || node.balance) >= 0 ? "#16a34a" : "#dc2626" }}>
             {formatCurrency(Number(node.subtotalBalance || node.balance || 0))}
           </td>
@@ -180,11 +180,11 @@ function TrialBalance({ dateParams, startDate, endDate }: { dateParams: string; 
   }, [rows]);
 
   const flatColumns: DataTableColumn<any>[] = [
-    { key: "code", header: "الرمز", sortable: true, searchable: true, render: (r) => <span className="font-mono text-blue-600">{r.code}</span> },
+    { key: "code", header: "الرمز", sortable: true, searchable: true, render: (r) => <span className="font-mono text-status-info-foreground">{r.code}</span> },
     { key: "name", header: "الحساب", sortable: true, searchable: true, render: (r) => <span className="font-medium">{r.name}</span> },
     { key: "type", header: "النوع", sortable: true, render: (r) => <Badge variant="outline">{typeMap[r.type] || r.type}</Badge> },
-    { key: "totalDebit", header: "مدين", sortable: true, render: (r) => <span className="text-green-600">{formatCurrency(Number(r.totalDebit || 0))}</span> },
-    { key: "totalCredit", header: "دائن", sortable: true, render: (r) => <span className="text-red-600">{formatCurrency(Number(r.totalCredit || 0))}</span> },
+    { key: "totalDebit", header: "مدين", sortable: true, render: (r) => <span className="text-status-success-foreground">{formatCurrency(Number(r.totalDebit || 0))}</span> },
+    { key: "totalCredit", header: "دائن", sortable: true, render: (r) => <span className="text-status-error-foreground">{formatCurrency(Number(r.totalCredit || 0))}</span> },
     {
       key: "balance", header: "الرصيد", sortable: true,
       render: (r) => (
@@ -218,16 +218,16 @@ function TrialBalance({ dateParams, startDate, endDate }: { dateParams: string; 
 
       <div className="grid gap-3 grid-cols-3">
         <Card><CardContent className="p-4 text-center">
-          <p className="text-xs text-gray-500">إجمالي المدين</p>
-          <p className="text-2xl font-bold text-green-600">{formatCurrency(Number(summary.totalDebit || 0))}</p>
+          <p className="text-xs text-muted-foreground">إجمالي المدين</p>
+          <p className="text-2xl font-bold text-status-success-foreground">{formatCurrency(Number(summary.totalDebit || 0))}</p>
         </CardContent></Card>
         <Card><CardContent className="p-4 text-center">
-          <p className="text-xs text-gray-500">إجمالي الدائن</p>
-          <p className="text-2xl font-bold text-red-600">{formatCurrency(Number(summary.totalCredit || 0))}</p>
+          <p className="text-xs text-muted-foreground">إجمالي الدائن</p>
+          <p className="text-2xl font-bold text-status-error-foreground">{formatCurrency(Number(summary.totalCredit || 0))}</p>
         </CardContent></Card>
         <Card><CardContent className="p-4 text-center">
-          <p className="text-xs text-gray-500">التوازن</p>
-          <Badge className={summary.isBalanced ? "bg-green-100 text-green-700 text-lg px-4 py-1" : "bg-red-100 text-red-700 text-lg px-4 py-1"}>
+          <p className="text-xs text-muted-foreground">التوازن</p>
+          <Badge className={summary.isBalanced ? "bg-status-success-surface text-status-success-foreground text-lg px-4 py-1" : "bg-status-error-surface text-status-error-foreground text-lg px-4 py-1"}>
             {summary.isBalanced ? "متوازن ✓" : "غير متوازن ✗"}
           </Badge>
         </CardContent></Card>
@@ -238,7 +238,7 @@ function TrialBalance({ dateParams, startDate, endDate }: { dateParams: string; 
           {Object.entries(byType).map(([type, vals]: any) => (
             <Card key={type} className="border-dashed">
               <CardContent className="p-3 text-center">
-                <p className="text-xs text-gray-400">{typeMap[type] || type}</p>
+                <p className="text-xs text-muted-foreground">{typeMap[type] || type}</p>
                 <p className="text-sm font-bold" style={{ color: Number(vals.balance) >= 0 ? "#16a34a" : "#dc2626" }}>
                   {formatCurrency(Number(vals.balance || 0))}
                 </p>
@@ -266,15 +266,15 @@ function TrialBalance({ dateParams, startDate, endDate }: { dateParams: string; 
                 {isLoading ? [...Array(6)].map((_, i) => (
                   <tr key={i} className="border-b"><td colSpan={6} className="p-3"><Skeleton className="h-6 w-full" /></td></tr>
                 )) : rows.length === 0 ? (
-                  <tr><td colSpan={6} className="p-8 text-center text-gray-400">لا توجد بيانات</td></tr>
+                  <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">لا توجد بيانات</td></tr>
                 ) : (
                   tree.map((node: any) => <TrialBalanceNode key={node.code} node={node} level={0} />)
                 )}
                 {rows.length > 0 && (
-                  <tr className="bg-gray-100 font-bold">
+                  <tr className="bg-surface-subtle font-bold">
                     <td colSpan={3} className="p-3">المجموع الكلي</td>
-                    <td className="p-3 text-green-700">{formatCurrency(Number(summary.totalDebit || 0))}</td>
-                    <td className="p-3 text-red-700">{formatCurrency(Number(summary.totalCredit || 0))}</td>
+                    <td className="p-3 text-status-success-foreground">{formatCurrency(Number(summary.totalDebit || 0))}</td>
+                    <td className="p-3 text-status-error-foreground">{formatCurrency(Number(summary.totalCredit || 0))}</td>
                     <td className="p-3">{formatCurrency(Number(summary.totalDebit || 0) - Number(summary.totalCredit || 0))}</td>
                   </tr>
                 )}
@@ -293,10 +293,10 @@ function TrialBalance({ dateParams, startDate, endDate }: { dateParams: string; 
               emptyMessage="لا توجد بيانات"
             />
             {rows.length > 0 && (
-              <div className="mt-2 grid grid-cols-6 gap-0 bg-gray-100 font-bold rounded-lg overflow-hidden border">
+              <div className="mt-2 grid grid-cols-6 gap-0 bg-surface-subtle font-bold rounded-lg overflow-hidden border">
                 <div className="col-span-3 p-3">المجموع الكلي</div>
-                <div className="p-3 text-green-700">{formatCurrency(Number(summary.totalDebit || 0))}</div>
-                <div className="p-3 text-red-700">{formatCurrency(Number(summary.totalCredit || 0))}</div>
+                <div className="p-3 text-status-success-foreground">{formatCurrency(Number(summary.totalDebit || 0))}</div>
+                <div className="p-3 text-status-error-foreground">{formatCurrency(Number(summary.totalCredit || 0))}</div>
                 <div className="p-3">{formatCurrency(Number(summary.totalDebit || 0) - Number(summary.totalCredit || 0))}</div>
               </div>
             )}
@@ -322,16 +322,16 @@ function IncomeStatement({ dateParams, startDate, endDate }: { dateParams: strin
   const marginPct = totalRevenue > 0 ? ((netIncome / totalRevenue) * 100).toFixed(1) : "0.0";
 
   const revenueColumns: DataTableColumn<any>[] = [
-    { key: "code", header: "الرمز", width: "4rem", render: (r) => <span className="font-mono text-sm text-gray-500">{r.code}</span> },
+    { key: "code", header: "الرمز", width: "4rem", render: (r) => <span className="font-mono text-sm text-muted-foreground">{r.code}</span> },
     { key: "name", header: "البيان", render: (r) => <span className="font-medium">{r.name}</span> },
-    { key: "amount", header: "المبلغ", render: (r) => <span className="text-green-600 font-bold">{formatCurrency(Number(r.amount || 0))}</span> },
+    { key: "amount", header: "المبلغ", render: (r) => <span className="text-status-success-foreground font-bold">{formatCurrency(Number(r.amount || 0))}</span> },
     {
       key: "pct", header: "النسبة", width: "5rem",
       render: (r) => {
         const pct = totalRevenue > 0 ? ((Number(r.amount) / totalRevenue) * 100).toFixed(1) : "0.0";
         return (
-          <div className="flex items-center gap-1 text-xs text-gray-400">
-            <div className="flex-1 bg-gray-100 rounded-full h-1.5">
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <div className="flex-1 bg-surface-subtle rounded-full h-1.5">
               <div className="bg-green-400 h-1.5 rounded-full" style={{ width: `${Math.min(100, Number(pct))}%` }} />
             </div>
             <span>{pct}%</span>
@@ -342,16 +342,16 @@ function IncomeStatement({ dateParams, startDate, endDate }: { dateParams: strin
   ];
 
   const expenseColumns: DataTableColumn<any>[] = [
-    { key: "code", header: "الرمز", width: "4rem", render: (e) => <span className="font-mono text-sm text-gray-500">{e.code}</span> },
+    { key: "code", header: "الرمز", width: "4rem", render: (e) => <span className="font-mono text-sm text-muted-foreground">{e.code}</span> },
     { key: "name", header: "البيان", render: (e) => <span className="font-medium">{e.name}</span> },
-    { key: "amount", header: "المبلغ", render: (e) => <span className="text-red-600 font-bold">{formatCurrency(Number(e.amount || 0))}</span> },
+    { key: "amount", header: "المبلغ", render: (e) => <span className="text-status-error-foreground font-bold">{formatCurrency(Number(e.amount || 0))}</span> },
     {
       key: "pct", header: "النسبة", width: "5rem",
       render: (e) => {
         const pct = totalExpenses > 0 ? ((Number(e.amount) / totalExpenses) * 100).toFixed(1) : "0.0";
         return (
-          <div className="flex items-center gap-1 text-xs text-gray-400">
-            <div className="flex-1 bg-gray-100 rounded-full h-1.5">
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <div className="flex-1 bg-surface-subtle rounded-full h-1.5">
               <div className="bg-red-400 h-1.5 rounded-full" style={{ width: `${Math.min(100, Number(pct))}%` }} />
             </div>
             <span>{pct}%</span>
@@ -375,32 +375,32 @@ function IncomeStatement({ dateParams, startDate, endDate }: { dateParams: strin
         />
       </div>
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
-        <Card className="bg-green-50"><CardContent className="p-4 text-center">
-          <TrendingUp className="h-6 w-6 text-green-600 mx-auto mb-1" />
-          <p className="text-xs text-gray-500">الإيرادات</p>
-          <p className="text-2xl font-bold text-green-600">{formatCurrency(totalRevenue)}</p>
+        <Card className="bg-status-success-surface"><CardContent className="p-4 text-center">
+          <TrendingUp className="h-6 w-6 text-status-success-foreground mx-auto mb-1" />
+          <p className="text-xs text-muted-foreground">الإيرادات</p>
+          <p className="text-2xl font-bold text-status-success-foreground">{formatCurrency(totalRevenue)}</p>
         </CardContent></Card>
-        <Card className="bg-red-50"><CardContent className="p-4 text-center">
-          <TrendingDown className="h-6 w-6 text-red-600 mx-auto mb-1" />
-          <p className="text-xs text-gray-500">المصروفات</p>
-          <p className="text-2xl font-bold text-red-600">{formatCurrency(totalExpenses)}</p>
+        <Card className="bg-status-error-surface"><CardContent className="p-4 text-center">
+          <TrendingDown className="h-6 w-6 text-status-error-foreground mx-auto mb-1" />
+          <p className="text-xs text-muted-foreground">المصروفات</p>
+          <p className="text-2xl font-bold text-status-error-foreground">{formatCurrency(totalExpenses)}</p>
         </CardContent></Card>
         <Card className={netIncome >= 0 ? "bg-emerald-50" : "bg-rose-50"}><CardContent className="p-4 text-center">
           <DollarSign className="h-6 w-6 mx-auto mb-1" style={{ color: netIncome >= 0 ? "#059669" : "#dc2626" }} />
-          <p className="text-xs text-gray-500">صافي الدخل</p>
+          <p className="text-xs text-muted-foreground">صافي الدخل</p>
           <p className="text-2xl font-bold" style={{ color: netIncome >= 0 ? "#059669" : "#dc2626" }}>
             {formatCurrency(netIncome)}
           </p>
         </CardContent></Card>
-        <Card className="bg-blue-50"><CardContent className="p-4 text-center">
-          <Scale className="h-6 w-6 text-blue-600 mx-auto mb-1" />
-          <p className="text-xs text-gray-500">هامش الربح</p>
-          <p className="text-2xl font-bold text-blue-600">{marginPct}%</p>
+        <Card className="bg-status-info-surface"><CardContent className="p-4 text-center">
+          <Scale className="h-6 w-6 text-status-info-foreground mx-auto mb-1" />
+          <p className="text-xs text-muted-foreground">هامش الربح</p>
+          <p className="text-2xl font-bold text-status-info-foreground">{marginPct}%</p>
         </CardContent></Card>
       </div>
 
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-green-700 flex items-center justify-between">
+        <CardHeader className="pb-2"><CardTitle className="text-status-success-foreground flex items-center justify-between">
           <span>الإيرادات</span>
           <span className="text-lg">{formatCurrency(totalRevenue)}</span>
         </CardTitle></CardHeader>
@@ -417,7 +417,7 @@ function IncomeStatement({ dateParams, startDate, endDate }: { dateParams: strin
       </Card>
 
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-red-700 flex items-center justify-between">
+        <CardHeader className="pb-2"><CardTitle className="text-status-error-foreground flex items-center justify-between">
           <span>المصروفات</span>
           <span className="text-lg">{formatCurrency(totalExpenses)}</span>
         </CardTitle></CardHeader>
@@ -433,7 +433,7 @@ function IncomeStatement({ dateParams, startDate, endDate }: { dateParams: strin
         </CardContent>
       </Card>
 
-      <Card className={netIncome >= 0 ? "border-green-200 bg-green-50/30" : "border-red-200 bg-red-50/30"}>
+      <Card className={netIncome >= 0 ? "border-status-success-surface bg-status-success-surface" : "border-status-error-surface bg-status-error-surface"}>
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -466,14 +466,14 @@ function BalanceSheet({ dateParams }: { dateParams: string }) {
 
   const Section = ({ title, items, color, total }: { title: string; items: any[]; color: string; total: number }) => {
     const sectionColumns: DataTableColumn<any>[] = [
-      { key: "code", header: "الرمز", width: "4rem", render: (r) => <span className="font-mono text-sm text-gray-500">{r.code}</span> },
+      { key: "code", header: "الرمز", width: "4rem", render: (r) => <span className="font-mono text-sm text-muted-foreground">{r.code}</span> },
       { key: "name", header: "البيان", render: (r) => <span className="font-medium">{r.name}</span> },
       { key: "balance", header: "الرصيد", render: (r) => <span className="font-bold" style={{ color }}>{formatCurrency(Number(r.balance || 0))}</span> },
       {
         key: "pct", header: "النسبة", width: "4rem",
         render: (r) => {
           const pct = total > 0 ? ((Number(r.balance) / total) * 100).toFixed(1) : "0.0";
-          return <span className="text-xs text-gray-400">{pct}%</span>;
+          return <span className="text-xs text-muted-foreground">{pct}%</span>;
         },
       },
     ];
@@ -509,16 +509,16 @@ function BalanceSheet({ dateParams }: { dateParams: string }) {
       </div>
 
       <div className="grid gap-3 grid-cols-3">
-        <Card className="bg-blue-50"><CardContent className="p-4 text-center">
-          <p className="text-xs text-gray-500">الأصول</p>
-          <p className="text-2xl font-bold text-blue-600">{formatCurrency(totalAssets)}</p>
+        <Card className="bg-status-info-surface"><CardContent className="p-4 text-center">
+          <p className="text-xs text-muted-foreground">الأصول</p>
+          <p className="text-2xl font-bold text-status-info-foreground">{formatCurrency(totalAssets)}</p>
         </CardContent></Card>
-        <Card className="bg-red-50"><CardContent className="p-4 text-center">
-          <p className="text-xs text-gray-500">الخصوم</p>
-          <p className="text-2xl font-bold text-red-600">{formatCurrency(totalLiabilities)}</p>
+        <Card className="bg-status-error-surface"><CardContent className="p-4 text-center">
+          <p className="text-xs text-muted-foreground">الخصوم</p>
+          <p className="text-2xl font-bold text-status-error-foreground">{formatCurrency(totalLiabilities)}</p>
         </CardContent></Card>
         <Card className="bg-purple-50"><CardContent className="p-4 text-center">
-          <p className="text-xs text-gray-500">حقوق الملكية</p>
+          <p className="text-xs text-muted-foreground">حقوق الملكية</p>
           <p className="text-2xl font-bold text-purple-600">{formatCurrency(totalEquity)}</p>
         </CardContent></Card>
       </div>
@@ -527,17 +527,17 @@ function BalanceSheet({ dateParams }: { dateParams: string }) {
       <Section title="الخصوم" items={liabilities} color="#dc2626" total={totalLiabilities} />
       <Section title="حقوق الملكية" items={equity} color="#7c3aed" total={totalEquity} />
 
-      <Card className={summary.isBalanced ? "border-green-200 bg-green-50/30" : "border-red-200 bg-red-50/30"}>
+      <Card className={summary.isBalanced ? "border-status-success-surface bg-status-success-surface" : "border-status-error-surface bg-status-error-surface"}>
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <span className="font-bold">الأصول = الخصوم + حقوق الملكية</span>
             <div className="flex items-center gap-4">
-              <span className="text-blue-600 font-bold">{formatCurrency(totalAssets)}</span>
-              <span className="text-gray-400">=</span>
-              <span className="text-red-600 font-bold">{formatCurrency(totalLiabilities)}</span>
-              <span className="text-gray-400">+</span>
+              <span className="text-status-info-foreground font-bold">{formatCurrency(totalAssets)}</span>
+              <span className="text-muted-foreground">=</span>
+              <span className="text-status-error-foreground font-bold">{formatCurrency(totalLiabilities)}</span>
+              <span className="text-muted-foreground">+</span>
               <span className="text-purple-600 font-bold">{formatCurrency(totalEquity)}</span>
-              <Badge className={summary.isBalanced ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}>
+              <Badge className={summary.isBalanced ? "bg-status-success-surface text-status-success-foreground" : "bg-status-error-surface text-status-error-foreground"}>
                 {summary.isBalanced ? "متوازن ✓" : "غير متوازن ✗"}
               </Badge>
             </div>
@@ -559,14 +559,14 @@ function CashFlow({ dateParams }: { dateParams: string }) {
 
   const inflowColumns: DataTableColumn<any>[] = [
     { key: "description", header: "البيان", render: (f) => <span className="font-medium">{f.description || "-"}</span> },
-    { key: "amount", header: "المبلغ", render: (f) => <span className="text-green-600 font-bold">{formatCurrency(Number(f.amount))}</span> },
-    { key: "date", header: "التاريخ", render: (f) => <span className="text-gray-400 text-xs">{f.date ? formatDateAr(f.date) : ""}</span> },
+    { key: "amount", header: "المبلغ", render: (f) => <span className="text-status-success-foreground font-bold">{formatCurrency(Number(f.amount))}</span> },
+    { key: "date", header: "التاريخ", render: (f) => <span className="text-muted-foreground text-xs">{f.date ? formatDateAr(f.date) : ""}</span> },
   ];
 
   const outflowColumns: DataTableColumn<any>[] = [
     { key: "description", header: "البيان", render: (f) => <span className="font-medium">{f.description || "-"}</span> },
-    { key: "amount", header: "المبلغ", render: (f) => <span className="text-red-600 font-bold">{formatCurrency(Number(f.amount))}</span> },
-    { key: "date", header: "التاريخ", render: (f) => <span className="text-gray-400 text-xs">{f.date ? formatDateAr(f.date) : ""}</span> },
+    { key: "amount", header: "المبلغ", render: (f) => <span className="text-status-error-foreground font-bold">{formatCurrency(Number(f.amount))}</span> },
+    { key: "date", header: "التاريخ", render: (f) => <span className="text-muted-foreground text-xs">{f.date ? formatDateAr(f.date) : ""}</span> },
   ];
 
   return (
@@ -578,19 +578,19 @@ function CashFlow({ dateParams }: { dateParams: string }) {
         </GuardedButton>
       </div>
       <div className="grid gap-3 grid-cols-3">
-        <Card className="bg-green-50"><CardContent className="p-4 text-center">
-          <ArrowDownCircle className="h-6 w-6 text-green-600 mx-auto mb-1" />
-          <p className="text-xs text-gray-500">التدفقات الداخلة</p>
-          <p className="text-2xl font-bold text-green-600">{formatCurrency(Number(summary.totalInflow || 0))}</p>
+        <Card className="bg-status-success-surface"><CardContent className="p-4 text-center">
+          <ArrowDownCircle className="h-6 w-6 text-status-success-foreground mx-auto mb-1" />
+          <p className="text-xs text-muted-foreground">التدفقات الداخلة</p>
+          <p className="text-2xl font-bold text-status-success-foreground">{formatCurrency(Number(summary.totalInflow || 0))}</p>
         </CardContent></Card>
-        <Card className="bg-red-50"><CardContent className="p-4 text-center">
-          <ArrowUpCircle className="h-6 w-6 text-red-600 mx-auto mb-1" />
-          <p className="text-xs text-gray-500">التدفقات الخارجة</p>
-          <p className="text-2xl font-bold text-red-600">{formatCurrency(Number(summary.totalOutflow || 0))}</p>
+        <Card className="bg-status-error-surface"><CardContent className="p-4 text-center">
+          <ArrowUpCircle className="h-6 w-6 text-status-error-foreground mx-auto mb-1" />
+          <p className="text-xs text-muted-foreground">التدفقات الخارجة</p>
+          <p className="text-2xl font-bold text-status-error-foreground">{formatCurrency(Number(summary.totalOutflow || 0))}</p>
         </CardContent></Card>
         <Card className={Number(summary.netCashFlow || 0) >= 0 ? "bg-emerald-50" : "bg-rose-50"}><CardContent className="p-4 text-center">
           <DollarSign className="h-6 w-6 mx-auto mb-1" style={{ color: Number(summary.netCashFlow || 0) >= 0 ? "#059669" : "#dc2626" }} />
-          <p className="text-xs text-gray-500">صافي التدفق</p>
+          <p className="text-xs text-muted-foreground">صافي التدفق</p>
           <p className="text-2xl font-bold" style={{ color: Number(summary.netCashFlow || 0) >= 0 ? "#059669" : "#dc2626" }}>
             {formatCurrency(Number(summary.netCashFlow || 0))}
           </p>
@@ -599,7 +599,7 @@ function CashFlow({ dateParams }: { dateParams: string }) {
 
       <div className="grid md:grid-cols-2 gap-4">
         <Card>
-          <CardHeader><CardTitle className="text-green-700">التدفقات الداخلة</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-status-success-foreground">التدفقات الداخلة</CardTitle></CardHeader>
           <CardContent className="p-0">
             <DataTable
               columns={inflowColumns}
@@ -613,7 +613,7 @@ function CashFlow({ dateParams }: { dateParams: string }) {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle className="text-red-700">التدفقات الخارجة</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-status-error-foreground">التدفقات الخارجة</CardTitle></CardHeader>
           <CardContent className="p-0">
             <DataTable
               columns={outflowColumns}
@@ -640,11 +640,11 @@ function CashBankStatement({ dateParams }: { dateParams: string }) {
   if (isError) return <ErrorState />;
 
   const cashBankColumns: DataTableColumn<any>[] = [
-    { key: "date", header: "التاريخ", render: (e) => <span className="text-xs text-gray-500">{e.date ? formatDateAr(e.date) : "-"}</span> },
-    { key: "ref", header: "المرجع", render: (e) => <span className="font-mono text-xs text-blue-600">{e.ref || "-"}</span> },
+    { key: "date", header: "التاريخ", render: (e) => <span className="text-xs text-muted-foreground">{e.date ? formatDateAr(e.date) : "-"}</span> },
+    { key: "ref", header: "المرجع", render: (e) => <span className="font-mono text-xs text-status-info-foreground">{e.ref || "-"}</span> },
     { key: "description", header: "الوصف", searchable: true, render: (e) => <span className="text-sm">{e.description || "-"}</span> },
-    { key: "debit", header: "وارد", render: (e) => <span className="text-green-600">{Number(e.debit || 0) > 0 ? formatCurrency(Number(e.debit)) : "-"}</span> },
-    { key: "credit", header: "صادر", render: (e) => <span className="text-red-600">{Number(e.credit || 0) > 0 ? formatCurrency(Number(e.credit)) : "-"}</span> },
+    { key: "debit", header: "وارد", render: (e) => <span className="text-status-success-foreground">{Number(e.debit || 0) > 0 ? formatCurrency(Number(e.debit)) : "-"}</span> },
+    { key: "credit", header: "صادر", render: (e) => <span className="text-status-error-foreground">{Number(e.credit || 0) > 0 ? formatCurrency(Number(e.credit)) : "-"}</span> },
     {
       key: "runningBalance", header: "الرصيد",
       render: (e) => (
@@ -675,16 +675,16 @@ function CashBankStatement({ dateParams }: { dateParams: string }) {
 
       <div className="grid grid-cols-3 gap-3">
         <Card><CardContent className="p-4 text-center">
-          <p className="text-xs text-gray-500">إجمالي الوارد</p>
-          <p className="text-xl font-bold text-green-600">{formatCurrency(Number(summary.totalDebit || 0))}</p>
+          <p className="text-xs text-muted-foreground">إجمالي الوارد</p>
+          <p className="text-xl font-bold text-status-success-foreground">{formatCurrency(Number(summary.totalDebit || 0))}</p>
         </CardContent></Card>
         <Card><CardContent className="p-4 text-center">
-          <p className="text-xs text-gray-500">إجمالي الصادر</p>
-          <p className="text-xl font-bold text-red-600">{formatCurrency(Number(summary.totalCredit || 0))}</p>
+          <p className="text-xs text-muted-foreground">إجمالي الصادر</p>
+          <p className="text-xl font-bold text-status-error-foreground">{formatCurrency(Number(summary.totalCredit || 0))}</p>
         </CardContent></Card>
-        <Card className={Number(summary.closingBalance) >= 0 ? "bg-green-50" : "bg-red-50"}>
+        <Card className={Number(summary.closingBalance) >= 0 ? "bg-status-success-surface" : "bg-status-error-surface"}>
           <CardContent className="p-4 text-center">
-            <p className="text-xs text-gray-500">الرصيد الختامي</p>
+            <p className="text-xs text-muted-foreground">الرصيد الختامي</p>
             <p className="text-xl font-bold" style={{ color: Number(summary.closingBalance) >= 0 ? "#16a34a" : "#dc2626" }}>
               {formatCurrency(Number(summary.closingBalance || 0))}
             </p>
@@ -715,11 +715,11 @@ function CustodyAdvances({ dateParams }: { dateParams: string }) {
   if (isError) return <ErrorState />;
 
   const custodyColumns: DataTableColumn<any>[] = [
-    { key: "ref", header: "المرجع", render: (c) => <span className="font-mono text-xs text-blue-600">{c.ref}</span> },
+    { key: "ref", header: "المرجع", render: (c) => <span className="font-mono text-xs text-status-info-foreground">{c.ref}</span> },
     { key: "description", header: "الوصف", searchable: true, render: (c) => <span className="text-sm">{c.description || "-"}</span> },
-    { key: "employeeName", header: "الموظف", render: (c) => <span className="text-xs text-gray-500">{c.employeeName || "-"}</span> },
+    { key: "employeeName", header: "الموظف", render: (c) => <span className="text-xs text-muted-foreground">{c.employeeName || "-"}</span> },
     { key: "amount", header: "المبلغ", render: (c) => <span className="font-bold">{formatCurrency(Number(c.amount || 0))}</span> },
-    { key: "date", header: "التاريخ", render: (c) => <span className="text-xs text-gray-500">{c.date ? formatDateAr(c.date) : "-"}</span> },
+    { key: "date", header: "التاريخ", render: (c) => <span className="text-xs text-muted-foreground">{c.date ? formatDateAr(c.date) : "-"}</span> },
   ];
 
   return (
@@ -733,24 +733,24 @@ function CustodyAdvances({ dateParams }: { dateParams: string }) {
 
       <div className="grid gap-3 grid-cols-3">
         <Card><CardContent className="p-4 text-center">
-          <p className="text-xs text-gray-500">إجمالي العهد</p>
-          <p className="text-xl font-bold text-blue-600">{formatCurrency(Number(summary.totalCustodies || 0))}</p>
-          <p className="text-xs text-gray-400">{summary.custodyCount || 0} عهدة</p>
+          <p className="text-xs text-muted-foreground">إجمالي العهد</p>
+          <p className="text-xl font-bold text-status-info-foreground">{formatCurrency(Number(summary.totalCustodies || 0))}</p>
+          <p className="text-xs text-muted-foreground">{summary.custodyCount || 0} عهدة</p>
         </CardContent></Card>
         <Card><CardContent className="p-4 text-center">
-          <p className="text-xs text-gray-500">إجمالي السلف</p>
+          <p className="text-xs text-muted-foreground">إجمالي السلف</p>
           <p className="text-xl font-bold text-orange-600">{formatCurrency(Number(summary.totalAdvances || 0))}</p>
-          <p className="text-xs text-gray-400">{summary.advanceCount || 0} سلفة</p>
+          <p className="text-xs text-muted-foreground">{summary.advanceCount || 0} سلفة</p>
         </CardContent></Card>
-        <Card className="bg-gray-50"><CardContent className="p-4 text-center">
-          <p className="text-xs text-gray-500">الإجمالي</p>
+        <Card className="bg-surface-subtle"><CardContent className="p-4 text-center">
+          <p className="text-xs text-muted-foreground">الإجمالي</p>
           <p className="text-xl font-bold">{formatCurrency(Number(summary.total || 0))}</p>
         </CardContent></Card>
       </div>
 
       <div className="grid md:grid-cols-2 gap-4">
         <Card>
-          <CardHeader><CardTitle className="text-blue-700 text-base">العهد ({custodies.length})</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-status-info-foreground text-base">العهد ({custodies.length})</CardTitle></CardHeader>
           <CardContent className="p-0">
             <DataTable
               columns={custodyColumns}
@@ -790,18 +790,18 @@ function ExpensesAnalysis({ dateParams }: { dateParams: string }) {
 
   const expensesColumns: DataTableColumn<any>[] = [
     { key: "label", header: groupBy === "account" ? "الحساب" : groupBy === "branch" ? "الفرع" : "الموظف", searchable: true, render: (r) => <span className="font-medium">{r.label || "-"}</span> },
-    { key: "amount", header: "المبلغ", render: (r) => <span className="text-red-600 font-bold">{formatCurrency(Number(r.amount || 0))}</span> },
-    { key: "entryCount", header: "عدد القيود", render: (r) => <span className="text-gray-500">{r.entryCount}</span> },
+    { key: "amount", header: "المبلغ", render: (r) => <span className="text-status-error-foreground font-bold">{formatCurrency(Number(r.amount || 0))}</span> },
+    { key: "entryCount", header: "عدد القيود", render: (r) => <span className="text-muted-foreground">{r.entryCount}</span> },
     {
       key: "pct", header: "النسبة",
       render: (r) => {
         const pct = summary.total > 0 ? Math.round(Number(r.amount) / summary.total * 100) : 0;
         return (
           <div className="flex items-center gap-2">
-            <div className="flex-1 bg-gray-100 rounded-full h-1.5">
+            <div className="flex-1 bg-surface-subtle rounded-full h-1.5">
               <div className="bg-red-400 h-1.5 rounded-full" style={{ width: `${pct}%` }} />
             </div>
-            <span className="text-xs text-gray-500 w-8">{pct}%</span>
+            <span className="text-xs text-muted-foreground w-8">{pct}%</span>
           </div>
         );
       },
@@ -828,8 +828,8 @@ function ExpensesAnalysis({ dateParams }: { dateParams: string }) {
       </div>
 
       <Card><CardContent className="p-4 text-center">
-        <p className="text-xs text-gray-500">إجمالي المصروفات</p>
-        <p className="text-2xl font-bold text-red-600">{formatCurrency(Number(summary.total || 0))}</p>
+        <p className="text-xs text-muted-foreground">إجمالي المصروفات</p>
+        <p className="text-2xl font-bold text-status-error-foreground">{formatCurrency(Number(summary.total || 0))}</p>
       </CardContent></Card>
 
       <DataTable
@@ -860,16 +860,16 @@ function RevenueAnalysis({ dateParams }: { dateParams: string }) {
       render: (r) => (
         <div>
           <p className="font-medium">{r.name}</p>
-          <p className="font-mono text-xs text-gray-400">{r.code}</p>
+          <p className="font-mono text-xs text-muted-foreground">{r.code}</p>
         </div>
       ),
     },
-    { key: "amount", header: "المبلغ", render: (r) => <span className="text-green-600 font-bold">{formatCurrency(Number(r.amount || 0))}</span> },
+    { key: "amount", header: "المبلغ", render: (r) => <span className="text-status-success-foreground font-bold">{formatCurrency(Number(r.amount || 0))}</span> },
     {
       key: "pct", header: "النسبة",
       render: (r) => {
         const pct = Number(summary.totalRevenue) > 0 ? ((Number(r.amount) / Number(summary.totalRevenue)) * 100).toFixed(1) : "0.0";
-        return <span className="text-xs text-gray-400">{pct}%</span>;
+        return <span className="text-xs text-muted-foreground">{pct}%</span>;
       },
     },
   ];
@@ -877,7 +877,7 @@ function RevenueAnalysis({ dateParams }: { dateParams: string }) {
   const byMonthColumns: DataTableColumn<any>[] = [
     { key: "period", header: "الشهر", render: (r) => <span className="font-mono">{r.period}</span> },
     { key: "invoiced", header: "الفواتير", render: (r) => formatCurrency(Number(r.invoiced || 0)) },
-    { key: "collected", header: "المحصّل", render: (r) => <span className="text-green-600 font-bold">{formatCurrency(Number(r.collected || 0))}</span> },
+    { key: "collected", header: "المحصّل", render: (r) => <span className="text-status-success-foreground font-bold">{formatCurrency(Number(r.collected || 0))}</span> },
   ];
 
   return (
@@ -890,8 +890,8 @@ function RevenueAnalysis({ dateParams }: { dateParams: string }) {
       </div>
 
       <Card><CardContent className="p-4 text-center">
-        <p className="text-xs text-gray-500">إجمالي الإيرادات</p>
-        <p className="text-2xl font-bold text-green-600">{formatCurrency(Number(summary.totalRevenue || 0))}</p>
+        <p className="text-xs text-muted-foreground">إجمالي الإيرادات</p>
+        <p className="text-2xl font-bold text-status-success-foreground">{formatCurrency(Number(summary.totalRevenue || 0))}</p>
       </CardContent></Card>
 
       <div className="grid md:grid-cols-2 gap-4">
@@ -944,7 +944,7 @@ function BudgetVariance() {
       render: (r) => (
         <div>
           <p className="font-medium">{r.accountName || r.accountCode}</p>
-          <p className="font-mono text-xs text-gray-400">{r.accountCode}</p>
+          <p className="font-mono text-xs text-muted-foreground">{r.accountCode}</p>
         </div>
       ),
     },
@@ -962,13 +962,13 @@ function BudgetVariance() {
       key: "usagePct", header: "نسبة الاستخدام",
       render: (r) => (
         <div className="flex items-center gap-2">
-          <div className="flex-1 bg-gray-100 rounded-full h-2">
+          <div className="flex-1 bg-surface-subtle rounded-full h-2">
             <div
               className={`h-2 rounded-full ${Number(r.usagePct) > 100 ? "bg-red-500" : Number(r.usagePct) > 80 ? "bg-orange-400" : "bg-green-400"}`}
               style={{ width: `${Math.min(100, Number(r.usagePct || 0))}%` }}
             />
           </div>
-          <span className="text-xs text-gray-500 w-10">{r.usagePct}%</span>
+          <span className="text-xs text-muted-foreground w-10">{r.usagePct}%</span>
         </div>
       ),
     },
@@ -986,16 +986,16 @@ function BudgetVariance() {
 
       <div className="grid grid-cols-3 gap-3">
         <Card><CardContent className="p-4 text-center">
-          <p className="text-xs text-gray-500">الميزانية الإجمالية</p>
-          <p className="text-xl font-bold text-blue-600">{formatCurrency(Number(summary.totalBudget || 0))}</p>
+          <p className="text-xs text-muted-foreground">الميزانية الإجمالية</p>
+          <p className="text-xl font-bold text-status-info-foreground">{formatCurrency(Number(summary.totalBudget || 0))}</p>
         </CardContent></Card>
         <Card><CardContent className="p-4 text-center">
-          <p className="text-xs text-gray-500">الفعلي</p>
+          <p className="text-xs text-muted-foreground">الفعلي</p>
           <p className="text-xl font-bold text-orange-600">{formatCurrency(Number(summary.totalActual || 0))}</p>
         </CardContent></Card>
-        <Card className={Number(summary.totalVariance) >= 0 ? "bg-green-50" : "bg-red-50"}>
+        <Card className={Number(summary.totalVariance) >= 0 ? "bg-status-success-surface" : "bg-status-error-surface"}>
           <CardContent className="p-4 text-center">
-            <p className="text-xs text-gray-500">الانحراف</p>
+            <p className="text-xs text-muted-foreground">الانحراف</p>
             <p className="text-xl font-bold" style={{ color: varianceColor(Number(summary.totalVariance)) }}>
               {formatCurrency(Number(summary.totalVariance || 0))}
             </p>
@@ -1052,11 +1052,11 @@ function EntityStatement({ startDate, endDate }: { startDate: string; endDate: s
   });
 
   const entityColumns: DataTableColumn<any>[] = [
-    { key: "date", header: "التاريخ", render: (r) => <span className="text-xs text-gray-500">{r.date ? formatDateAr(r.date) : "-"}</span> },
-    { key: "ref", header: "المرجع", render: (r) => <span className="font-mono text-xs text-blue-600">{r.ref || "-"}</span> },
+    { key: "date", header: "التاريخ", render: (r) => <span className="text-xs text-muted-foreground">{r.date ? formatDateAr(r.date) : "-"}</span> },
+    { key: "ref", header: "المرجع", render: (r) => <span className="font-mono text-xs text-status-info-foreground">{r.ref || "-"}</span> },
     { key: "description", header: "البيان", searchable: true, render: (r) => r.description || "-" },
-    { key: "debit", header: "مدين", render: (r) => <span className="text-green-600">{Number(r.debit || 0) > 0 ? formatCurrency(Number(r.debit)) : "-"}</span> },
-    { key: "credit", header: "دائن", render: (r) => <span className="text-red-600">{Number(r.credit || 0) > 0 ? formatCurrency(Number(r.credit)) : "-"}</span> },
+    { key: "debit", header: "مدين", render: (r) => <span className="text-status-success-foreground">{Number(r.debit || 0) > 0 ? formatCurrency(Number(r.debit)) : "-"}</span> },
+    { key: "credit", header: "دائن", render: (r) => <span className="text-status-error-foreground">{Number(r.credit || 0) > 0 ? formatCurrency(Number(r.credit)) : "-"}</span> },
     {
       key: "runningBalance", header: "الرصيد التراكمي",
       render: (r) => (
@@ -1108,7 +1108,7 @@ function EntityStatement({ startDate, endDate }: { startDate: string; endDate: s
       </div>
 
       {!entityId && (
-        <Card><CardContent className="p-8 text-center text-gray-400">
+        <Card><CardContent className="p-8 text-center text-muted-foreground">
           <FileText className="h-10 w-10 mx-auto mb-2 opacity-30" />
           اختر نوع الجهة ثم اختر الجهة من القائمة لعرض كشف حسابها
         </CardContent></Card>
@@ -1117,9 +1117,9 @@ function EntityStatement({ startDate, endDate }: { startDate: string; endDate: s
       {enabled && (
         <>
           {entityName && (
-            <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
-              <FileText className="h-4 w-4 text-blue-600" />
-              <span className="font-semibold text-blue-700">{entityName}</span>
+            <div className="flex items-center gap-2 p-3 bg-status-info-surface rounded-lg border border-status-info-surface">
+              <FileText className="h-4 w-4 text-status-info-foreground" />
+              <span className="font-semibold text-status-info-foreground">{entityName}</span>
               <Badge variant="outline" className="text-xs">
                 {entityType === "client" ? "عميل" : entityType === "supplier" ? "مورد" : "موظف"}
               </Badge>
@@ -1127,16 +1127,16 @@ function EntityStatement({ startDate, endDate }: { startDate: string; endDate: s
           )}
           <div className="grid grid-cols-3 gap-3">
             <Card><CardContent className="p-4 text-center">
-              <p className="text-xs text-gray-500">إجمالي المدين</p>
-              <p className="text-xl font-bold text-green-600">{formatCurrency(Number(summary.totalDebit || 0))}</p>
+              <p className="text-xs text-muted-foreground">إجمالي المدين</p>
+              <p className="text-xl font-bold text-status-success-foreground">{formatCurrency(Number(summary.totalDebit || 0))}</p>
             </CardContent></Card>
             <Card><CardContent className="p-4 text-center">
-              <p className="text-xs text-gray-500">إجمالي الدائن</p>
-              <p className="text-xl font-bold text-red-600">{formatCurrency(Number(summary.totalCredit || 0))}</p>
+              <p className="text-xs text-muted-foreground">إجمالي الدائن</p>
+              <p className="text-xl font-bold text-status-error-foreground">{formatCurrency(Number(summary.totalCredit || 0))}</p>
             </CardContent></Card>
-            <Card className={Number(summary.balance) >= 0 ? "bg-green-50" : "bg-red-50"}>
+            <Card className={Number(summary.balance) >= 0 ? "bg-status-success-surface" : "bg-status-error-surface"}>
               <CardContent className="p-4 text-center">
-                <p className="text-xs text-gray-500">الرصيد</p>
+                <p className="text-xs text-muted-foreground">الرصيد</p>
                 <p className="text-xl font-bold" style={{ color: Number(summary.balance) >= 0 ? "#16a34a" : "#dc2626" }}>
                   {formatCurrency(Number(summary.balance || 0))}
                 </p>
@@ -1154,10 +1154,10 @@ function EntityStatement({ startDate, endDate }: { startDate: string; endDate: s
             emptyMessage="لا توجد حركات للجهة المحددة"
           />
           {rowsWithBalance.length > 0 && (
-            <div className="grid grid-cols-7 gap-0 bg-gray-100 font-bold rounded-lg overflow-hidden border">
+            <div className="grid grid-cols-7 gap-0 bg-surface-subtle font-bold rounded-lg overflow-hidden border">
               <div className="col-span-3 p-3">المجموع</div>
-              <div className="p-3 text-green-700">{formatCurrency(Number(summary.totalDebit || 0))}</div>
-              <div className="p-3 text-red-700">{formatCurrency(Number(summary.totalCredit || 0))}</div>
+              <div className="p-3 text-status-success-foreground">{formatCurrency(Number(summary.totalDebit || 0))}</div>
+              <div className="p-3 text-status-error-foreground">{formatCurrency(Number(summary.totalCredit || 0))}</div>
               <div className="p-3 font-bold" style={{ color: Number(summary.balance) >= 0 ? "#16a34a" : "#dc2626" }}>
                 {formatCurrency(Number(summary.balance || 0))}
               </div>

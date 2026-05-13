@@ -330,7 +330,7 @@ export default function BankGuaranteesPage() {
       key: "ref",
       header: "رقم الضمان",
       sortable: true,
-      render: (row) => <span className="font-mono text-blue-600 text-xs">{row.ref}</span>,
+      render: (row) => <span className="font-mono text-status-info-foreground text-xs">{row.ref}</span>,
     },
     {
       key: "issueDate",
@@ -388,11 +388,11 @@ export default function BankGuaranteesPage() {
         <span
           className={cn(
             row.daysToExpiry < 0
-              ? "text-red-600 font-bold"
+              ? "text-status-error-foreground font-bold"
               : row.daysToExpiry <= 7
-                ? "text-red-500 font-semibold"
+                ? "text-status-error font-semibold"
                 : row.daysToExpiry <= 30
-                  ? "text-amber-700"
+                  ? "text-status-warning-foreground"
                   : "text-muted-foreground",
           )}
         >
@@ -411,7 +411,7 @@ export default function BankGuaranteesPage() {
             <>
               <button
                 onClick={() => openEdit(row)}
-                className="text-blue-600 hover:underline text-xs"
+                className="text-status-info-foreground hover:underline text-xs"
               >
                 تعديل
               </button>
@@ -423,7 +423,7 @@ export default function BankGuaranteesPage() {
               </button>
               <button
                 onClick={() => openCancel(row)}
-                className="text-amber-700 hover:underline text-xs"
+                className="text-status-warning-foreground hover:underline text-xs"
               >
                 إلغاء
               </button>
@@ -432,7 +432,7 @@ export default function BankGuaranteesPage() {
           {row.status !== "active" && (
             <button
               onClick={() => setDeleting(row)}
-              className="text-red-600 hover:underline text-xs"
+              className="text-status-error-foreground hover:underline text-xs"
             >
               حذف
             </button>
@@ -475,12 +475,12 @@ export default function BankGuaranteesPage() {
           </Card>
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-blue-50 border border-blue-100">
-                <ShieldCheck className="w-5 h-5 text-blue-600" />
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-status-info-surface border border-status-info-surface">
+                <ShieldCheck className="w-5 h-5 text-status-info-foreground" />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">إجمالي المبالغ النشطة</p>
-                <p className="text-xl font-bold text-blue-700">
+                <p className="text-xl font-bold text-status-info-foreground">
                   {formatCurrency(summary.totalAmount ?? 0)}
                 </p>
               </div>
@@ -488,30 +488,30 @@ export default function BankGuaranteesPage() {
           </Card>
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-amber-50 border border-amber-100">
-                <AlertTriangle className="w-5 h-5 text-amber-700" />
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-status-warning-surface border border-status-warning-surface">
+                <AlertTriangle className="w-5 h-5 text-status-warning-foreground" />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">تنتهي خلال 30 يوم</p>
-                <p className="text-xl font-bold text-amber-700">{summary.expiring30 ?? 0}</p>
+                <p className="text-xl font-bold text-status-warning-foreground">{summary.expiring30 ?? 0}</p>
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-red-50 border border-red-100">
-                <XCircle className="w-5 h-5 text-red-600" />
+              <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-status-error-surface border border-status-error-surface">
+                <XCircle className="w-5 h-5 text-status-error-foreground" />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">منتهية الصلاحية</p>
-                <p className="text-xl font-bold text-red-600">{summary.expired ?? 0}</p>
+                <p className="text-xl font-bold text-status-error-foreground">{summary.expired ?? 0}</p>
               </div>
             </CardContent>
           </Card>
         </div>
 
         {alerts.length > 0 && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <div className="rounded-xl border border-status-warning-surface bg-status-warning-surface p-4">
             <div className="flex items-center gap-2 text-amber-900 font-semibold mb-3">
               <AlertTriangle className="h-5 w-5" />
               تنبيهات: {alerts.length} ضمان يحتاج مراجعة
@@ -678,7 +678,7 @@ export default function BankGuaranteesPage() {
             <AlertDialogTitle className="flex items-center gap-2">
               {actionModal?.type === "cancel" ? (
                 <>
-                  <XCircle className="h-5 w-5 text-amber-600" />
+                  <XCircle className="h-5 w-5 text-status-warning-foreground" />
                   إلغاء الضمان البنكي {actionModal.row.ref}
                 </>
               ) : (

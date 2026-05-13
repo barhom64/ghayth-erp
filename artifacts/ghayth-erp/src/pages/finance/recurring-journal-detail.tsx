@@ -79,8 +79,8 @@ export default function RecurringJournalDetailPage() {
             emptyMessage="لا توجد بنود في القالب"
             caption={
               templateLines.length > 0 ? (
-                <div className="flex justify-between bg-gray-50 font-semibold px-3 py-2 text-sm">
-                  <span className="text-gray-500">المجموع</span>
+                <div className="flex justify-between bg-surface-subtle font-semibold px-3 py-2 text-sm">
+                  <span className="text-muted-foreground">المجموع</span>
                   <div className="flex gap-8">
                     <span>{formatCurrency(totalDebit)}</span>
                     <span>{formatCurrency(totalCredit)}</span>
@@ -104,7 +104,7 @@ export default function RecurringJournalDetailPage() {
               { key: "runDate", header: "تاريخ التنفيذ", render: (r) => r.runDate ? formatDateAr(r.runDate) : "—" },
               { key: "journalRef", header: "القيد الناتج", render: (r) => <span className="font-mono text-xs">{r.journalRef || `#${r.journalEntryId}` || "—"}</span> },
               { key: "status", header: "الحالة", render: (r) => <PageStatusBadge status={r.status} domain="recurring" /> },
-              { key: "triggeredBy", header: "الطريقة", render: (r) => <span className="text-xs text-gray-500">{r.triggeredBy === "manual" ? "يدوي" : "تلقائي"}</span> },
+              { key: "triggeredBy", header: "الطريقة", render: (r) => <span className="text-xs text-muted-foreground">{r.triggeredBy === "manual" ? "يدوي" : "تلقائي"}</span> },
             ] satisfies DataTableColumn<any>[]}
             data={rj?.history ?? []}
             pageSize={0}
@@ -152,8 +152,8 @@ export default function RecurringJournalDetailPage() {
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
   return (
     <div>
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="text-sm font-medium text-gray-800 mt-0.5">{value || "—"}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-sm font-medium text-status-neutral-foreground mt-0.5">{value || "—"}</p>
     </div>
   );
 }

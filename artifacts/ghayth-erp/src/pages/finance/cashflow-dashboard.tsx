@@ -20,10 +20,10 @@ function MiniBar({ label, value, max, color }: { label: string; value: number; m
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-xs">
-        <span className="text-gray-600">{label}</span>
+        <span className="text-muted-foreground">{label}</span>
         <span className="font-medium">{pct}%</span>
       </div>
-      <div className="w-full h-1.5 rounded-full bg-gray-100">
+      <div className="w-full h-1.5 rounded-full bg-surface-subtle">
         <div className={cn("h-full rounded-full transition-all duration-500", color)} style={{ width: `${pct}%` }} />
       </div>
     </div>
@@ -94,14 +94,14 @@ export default function CashflowDashboard() {
         {(["month", "quarter", "year"] as const).map(p => (
           <button key={p} onClick={() => setPeriod(p)}
             className={cn("px-4 py-1.5 rounded-full text-sm font-medium transition-all border",
-              period === p ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-gray-600 border-gray-200 hover:border-gray-400")}>
+              period === p ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-muted-foreground border-border hover:border-gray-400")}>
             {periodLabels[p]}
           </button>
         ))}
       </div>
 
       {summaryLoading ? (
-        <div className="text-center py-10 text-gray-400">جاري التحميل...</div>
+        <div className="text-center py-10 text-muted-foreground">جاري التحميل...</div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -115,33 +115,33 @@ export default function CashflowDashboard() {
               </CardContent>
             </Card>
             <Card className="border-0 shadow-sm">
-              <CardContent className="p-4 bg-red-50 rounded-lg">
+              <CardContent className="p-4 bg-status-error-surface rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
-                  <ArrowDownRight className="w-4 h-4 text-red-600" />
-                  <span className="text-xs text-red-600 font-medium">المصروفات</span>
+                  <ArrowDownRight className="w-4 h-4 text-status-error-foreground" />
+                  <span className="text-xs text-status-error-foreground font-medium">المصروفات</span>
                 </div>
-                <p className="text-2xl font-bold text-red-700">{formatCurrency(totalExpenses)}</p>
+                <p className="text-2xl font-bold text-status-error-foreground">{formatCurrency(totalExpenses)}</p>
               </CardContent>
             </Card>
             <Card className="border-0 shadow-sm">
-              <CardContent className={cn("p-4 rounded-lg", isPositive ? "bg-blue-50" : "bg-orange-50")}>
+              <CardContent className={cn("p-4 rounded-lg", isPositive ? "bg-status-info-surface" : "bg-orange-50")}>
                 <div className="flex items-center gap-2 mb-2">
-                  {isPositive ? <TrendingUp className="w-4 h-4 text-blue-600" /> : <TrendingDown className="w-4 h-4 text-orange-600" />}
-                  <span className={cn("text-xs font-medium", isPositive ? "text-blue-600" : "text-orange-600")}>صافي التدفق</span>
+                  {isPositive ? <TrendingUp className="w-4 h-4 text-status-info-foreground" /> : <TrendingDown className="w-4 h-4 text-orange-600" />}
+                  <span className={cn("text-xs font-medium", isPositive ? "text-status-info-foreground" : "text-orange-600")}>صافي التدفق</span>
                 </div>
-                <p className={cn("text-2xl font-bold", isPositive ? "text-blue-700" : "text-orange-700")}>
+                <p className={cn("text-2xl font-bold", isPositive ? "text-status-info-foreground" : "text-orange-700")}>
                   {isPositive ? "" : "-"}{formatCurrency(Math.abs(netCashflow))}
                 </p>
               </CardContent>
             </Card>
             <Card className="border-0 shadow-sm">
-              <CardContent className="p-4 bg-amber-50 rounded-lg">
+              <CardContent className="p-4 bg-status-warning-surface rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
-                  <Receipt className="w-4 h-4 text-amber-600" />
-                  <span className="text-xs text-amber-600 font-medium">فواتير معلقة</span>
+                  <Receipt className="w-4 h-4 text-status-warning-foreground" />
+                  <span className="text-xs text-status-warning-foreground font-medium">فواتير معلقة</span>
                 </div>
-                <p className="text-2xl font-bold text-amber-700">{pendingInvoices.length}</p>
-                <p className="text-xs text-amber-500 mt-0.5">فاتورة</p>
+                <p className="text-2xl font-bold text-status-warning-foreground">{pendingInvoices.length}</p>
+                <p className="text-xs text-status-warning mt-0.5">فاتورة</p>
               </CardContent>
             </Card>
           </div>
@@ -150,7 +150,7 @@ export default function CashflowDashboard() {
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-blue-500" />
+                  <Activity className="w-5 h-5 text-status-info" />
                   نسبة الإنفاق من الإيرادات
                 </CardTitle>
               </CardHeader>
@@ -163,19 +163,19 @@ export default function CashflowDashboard() {
                     return (
                       <>
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">الإنفاق مقابل الإيرادات</span>
-                          <span className={cn("font-bold text-base", isHealthy ? "text-emerald-600" : isWarning ? "text-amber-600" : "text-red-600")}>
+                          <span className="text-muted-foreground">الإنفاق مقابل الإيرادات</span>
+                          <span className={cn("font-bold text-base", isHealthy ? "text-emerald-600" : isWarning ? "text-status-warning-foreground" : "text-status-error-foreground")}>
                             {spendPct}%
                           </span>
                         </div>
-                        <div className="w-full h-3 rounded-full bg-gray-100 overflow-hidden">
+                        <div className="w-full h-3 rounded-full bg-surface-subtle overflow-hidden">
                           <div className={cn("h-full rounded-full transition-all duration-700",
                             isHealthy ? "bg-emerald-500" : isWarning ? "bg-amber-400" : "bg-red-500")}
                             style={{ width: `${spendPct}%` }} />
                         </div>
-                        <div className="flex justify-between text-xs text-gray-400">
+                        <div className="flex justify-between text-xs text-muted-foreground">
                           <span>0</span>
-                          <span className={cn("font-medium", isHealthy ? "text-emerald-600" : isWarning ? "text-amber-600" : "text-red-600")}>
+                          <span className={cn("font-medium", isHealthy ? "text-emerald-600" : isWarning ? "text-status-warning-foreground" : "text-status-error-foreground")}>
                             {spendPct <= 70 ? "نسبة صحية" : spendPct <= 90 ? "تحتاج مراقبة" : "خطر! الإنفاق مرتفع"}
                           </span>
                           <span>100%</span>
@@ -207,11 +207,11 @@ export default function CashflowDashboard() {
             {budgetAlerts.length > 0 && (
               <div className="space-y-2">
                 {criticalAlerts.length > 0 && (
-                  <Card className="border-red-200 bg-red-50 border-s-4 border-s-red-500">
+                  <Card className="border-status-error-surface bg-status-error-surface border-s-4 border-s-red-500">
                     <CardContent className="p-4">
                       <div className="flex items-center gap-2 mb-2">
-                        <AlertTriangle className="w-5 h-5 text-red-600" />
-                        <span className="font-semibold text-red-700 text-sm">تنبيه حرج — الميزانية على وشك النفاد (95%+)</span>
+                        <AlertTriangle className="w-5 h-5 text-status-error-foreground" />
+                        <span className="font-semibold text-status-error-foreground text-sm">تنبيه حرج — الميزانية على وشك النفاد (95%+)</span>
                       </div>
                       <div className="space-y-1">
                         {criticalAlerts.map((item: any, i: number) => {
@@ -219,7 +219,7 @@ export default function CashflowDashboard() {
                           const aa = Number(item.actual || item.actualAmount || 0);
                           const p = ba > 0 ? Math.round((aa / ba) * 100) : 0;
                           return (
-                            <p key={i} className="text-xs text-red-700">
+                            <p key={i} className="text-xs text-status-error-foreground">
                               <span className="font-medium">{item.category || item.name || `بند ${i + 1}`}:</span> استُنفد {p}% من الميزانية ({formatCurrency(aa)} من {formatCurrency(ba)})
                             </p>
                           );
@@ -234,11 +234,11 @@ export default function CashflowDashboard() {
                   const p = ba > 0 ? (aa / ba) * 100 : 0;
                   return p >= 80 && p < 95;
                 }).length > 0 && (
-                  <Card className="border-amber-200 bg-amber-50 border-s-4 border-s-amber-500">
+                  <Card className="border-status-warning-surface bg-status-warning-surface border-s-4 border-s-amber-500">
                     <CardContent className="p-4">
                       <div className="flex items-center gap-2 mb-2">
-                        <AlertTriangle className="w-5 h-5 text-amber-600" />
-                        <span className="font-semibold text-amber-700 text-sm">تنبيه — اقتراب من حد الميزانية (80%+)</span>
+                        <AlertTriangle className="w-5 h-5 text-status-warning-foreground" />
+                        <span className="font-semibold text-status-warning-foreground text-sm">تنبيه — اقتراب من حد الميزانية (80%+)</span>
                       </div>
                       <div className="space-y-1">
                         {budgetAlerts.filter((item: any) => {
@@ -251,7 +251,7 @@ export default function CashflowDashboard() {
                           const aa = Number(item.actual || item.actualAmount || 0);
                           const p = ba > 0 ? Math.round((aa / ba) * 100) : 0;
                           return (
-                            <p key={i} className="text-xs text-amber-700">
+                            <p key={i} className="text-xs text-status-warning-foreground">
                               <span className="font-medium">{item.category || item.name || `بند ${i + 1}`}:</span> استُنفد {p}% ({formatCurrency(aa)} من {formatCurrency(ba)}) — متبقي {formatCurrency(ba - aa)}
                             </p>
                           );
@@ -271,7 +271,7 @@ export default function CashflowDashboard() {
               </CardHeader>
               <CardContent>
                 {budgetLoading ? (
-                  <p className="text-sm text-gray-400 text-center py-4">جاري التحميل...</p>
+                  <p className="text-sm text-muted-foreground text-center py-4">جاري التحميل...</p>
                 ) : (
                   <div className="space-y-4">
                     {budgetItems.slice(0, 8).map((item: any, i: number) => {
@@ -284,24 +284,24 @@ export default function CashflowDashboard() {
                       return (
                         <div key={i} className="space-y-1.5">
                           <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-gray-700">{item.category || item.name || item.label || `بند ${i + 1}`}</span>
+                            <span className="text-sm font-medium text-status-neutral-foreground">{item.category || item.name || item.label || `بند ${i + 1}`}</span>
                             <div className="flex items-center gap-2">
-                              <span className="text-xs text-gray-400">{formatCurrency(actual_amount)} / {formatCurrency(budget_amount)}</span>
-                              {isOver && <Badge className="text-[10px] bg-red-100 text-red-700">تجاوز!</Badge>}
+                              <span className="text-xs text-muted-foreground">{formatCurrency(actual_amount)} / {formatCurrency(budget_amount)}</span>
+                              {isOver && <Badge className="text-[10px] bg-status-error-surface text-status-error-foreground">تجاوز!</Badge>}
                               {isCritical && <Badge className="text-[10px] bg-orange-100 text-orange-700">95%+ حرج</Badge>}
-                              {isHigh && <Badge className="text-[10px] bg-amber-100 text-amber-700">80%+ تنبيه</Badge>}
+                              {isHigh && <Badge className="text-[10px] bg-status-warning-surface text-status-warning-foreground">80%+ تنبيه</Badge>}
                             </div>
                           </div>
-                          <div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden">
+                          <div className="w-full h-2 rounded-full bg-surface-subtle overflow-hidden">
                             <div
                               className={cn("h-full rounded-full transition-all duration-500",
                                 isOver ? "bg-red-500" : isCritical ? "bg-orange-500" : isHigh ? "bg-amber-400" : "bg-emerald-500")}
                               style={{ width: `${Math.min(100, pct)}%` }}
                             />
                           </div>
-                          <div className="flex justify-between text-xs text-gray-400">
+                          <div className="flex justify-between text-xs text-muted-foreground">
                             <span>الفعلي: {formatCurrency(actual_amount)}</span>
-                            <span className={cn(isOver ? "text-red-600 font-medium" : isCritical ? "text-orange-600 font-medium" : isHigh ? "text-amber-600 font-medium" : "")}>{pct}% من الميزانية</span>
+                            <span className={cn(isOver ? "text-status-error-foreground font-medium" : isCritical ? "text-orange-600 font-medium" : isHigh ? "text-status-warning-foreground font-medium" : "")}>{pct}% من الميزانية</span>
                           </div>
                         </div>
                       );
@@ -318,7 +318,7 @@ export default function CashflowDashboard() {
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
-              <Receipt className="w-5 h-5 text-amber-500" />
+              <Receipt className="w-5 h-5 text-status-warning" />
               الفواتير المعلقة
             </CardTitle>
             <Link href="/finance/invoices">
@@ -327,21 +327,21 @@ export default function CashflowDashboard() {
           </CardHeader>
           <CardContent>
             {pendingInvoices.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-4">لا توجد فواتير معلقة</p>
+              <p className="text-sm text-muted-foreground text-center py-4">لا توجد فواتير معلقة</p>
             ) : (
               <div className="space-y-2">
                 {pendingInvoices.map((inv: any) => {
                   const dueDate = inv.dueDate ? new Date(inv.dueDate) : null;
                   const isOverdue = dueDate && dueDate < new Date();
                   return (
-                    <div key={inv.id} className={cn("flex items-center justify-between p-2.5 rounded-lg", isOverdue ? "bg-red-50" : "bg-gray-50")}>
+                    <div key={inv.id} className={cn("flex items-center justify-between p-2.5 rounded-lg", isOverdue ? "bg-status-error-surface" : "bg-surface-subtle")}>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-800 truncate">{inv.clientName || inv.vendor || `فاتورة #${inv.id}`}</p>
-                        <p className="text-xs text-gray-400">{dueDate ? `مستحق: ${formatDateAr(dueDate.toISOString())}` : "—"}</p>
+                        <p className="text-sm font-medium text-status-neutral-foreground truncate">{inv.clientName || inv.vendor || `فاتورة #${inv.id}`}</p>
+                        <p className="text-xs text-muted-foreground">{dueDate ? `مستحق: ${formatDateAr(dueDate.toISOString())}` : "—"}</p>
                       </div>
                       <div className="text-end">
-                        <p className={cn("text-sm font-bold", isOverdue ? "text-red-700" : "text-gray-800")}>{formatCurrency(inv.amount)}</p>
-                        {isOverdue && <Badge className="text-[10px] bg-red-100 text-red-700">متأخر</Badge>}
+                        <p className={cn("text-sm font-bold", isOverdue ? "text-status-error-foreground" : "text-status-neutral-foreground")}>{formatCurrency(inv.amount)}</p>
+                        {isOverdue && <Badge className="text-[10px] bg-status-error-surface text-status-error-foreground">متأخر</Badge>}
                       </div>
                     </div>
                   );
@@ -354,7 +354,7 @@ export default function CashflowDashboard() {
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
-              <Wallet className="w-5 h-5 text-blue-500" />
+              <Wallet className="w-5 h-5 text-status-info" />
               أحدث المصروفات
             </CardTitle>
             <Link href="/finance/expenses">
@@ -363,19 +363,19 @@ export default function CashflowDashboard() {
           </CardHeader>
           <CardContent>
             {recentExpenses.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-4">لا توجد مصروفات</p>
+              <p className="text-sm text-muted-foreground text-center py-4">لا توجد مصروفات</p>
             ) : (
               <div className="space-y-2">
                 {recentExpenses.map((exp: any) => (
-                  <div key={exp.id} className="flex items-center justify-between p-2.5 rounded-lg bg-gray-50">
+                  <div key={exp.id} className="flex items-center justify-between p-2.5 rounded-lg bg-surface-subtle">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{exp.description || exp.category || `مصروف #${exp.id}`}</p>
-                      <p className="text-xs text-gray-400">{exp.employeeName || exp.submittedBy || "—"} — {exp.date ? formatDateAr(exp.date) : ""}</p>
+                      <p className="text-sm font-medium text-status-neutral-foreground truncate">{exp.description || exp.category || `مصروف #${exp.id}`}</p>
+                      <p className="text-xs text-muted-foreground">{exp.employeeName || exp.submittedBy || "—"} — {exp.date ? formatDateAr(exp.date) : ""}</p>
                     </div>
                     <Badge className={cn("text-xs shrink-0 ms-2",
-                      exp.status === "approved" ? "bg-green-100 text-green-700" :
-                      exp.status === "rejected" ? "bg-red-100 text-red-700" :
-                      "bg-yellow-100 text-yellow-700"
+                      exp.status === "approved" ? "bg-status-success-surface text-status-success-foreground" :
+                      exp.status === "rejected" ? "bg-status-error-surface text-status-error-foreground" :
+                      "bg-status-warning-surface text-status-warning-foreground"
                     )}>
                       {formatCurrency(exp.amount)}
                     </Badge>
@@ -390,7 +390,7 @@ export default function CashflowDashboard() {
       {(summary.alerts || summary.warnings || []).length > 0 && (
         <Card className="border-0 shadow-sm border-s-4 border-s-amber-400">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold flex items-center gap-2 text-amber-700">
+            <CardTitle className="text-base font-semibold flex items-center gap-2 text-status-warning-foreground">
               <AlertTriangle className="w-5 h-5" />
               تنبيهات مالية
             </CardTitle>
@@ -398,9 +398,9 @@ export default function CashflowDashboard() {
           <CardContent>
             <div className="space-y-2">
               {(summary.alerts || summary.warnings || []).map((alert: any, i: number) => (
-                <div key={i} className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-50 text-sm">
-                  <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                  <p className="text-amber-800">{alert.message || alert}</p>
+                <div key={i} className="flex items-start gap-2 p-2.5 rounded-lg bg-status-warning-surface text-sm">
+                  <AlertTriangle className="w-4 h-4 text-status-warning shrink-0 mt-0.5" />
+                  <p className="text-status-warning-foreground">{alert.message || alert}</p>
                 </div>
               ))}
             </div>

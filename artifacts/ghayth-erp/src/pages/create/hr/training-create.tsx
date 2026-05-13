@@ -95,9 +95,9 @@ export default function TrainingCreate() {
   return (
     <CreatePageLayout title="إضافة برنامج تدريبي" backPath="/hr/training">
       {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -106,7 +106,7 @@ export default function TrainingCreate() {
 
       <div className="space-y-6">
         <div>
-          <h3 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
             <BookOpen className="h-4 w-4" /> نوع التدريب
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -117,7 +117,7 @@ export default function TrainingCreate() {
                 onClick={() => set("type", tt.value)}
                 className={cn(
                   "p-3 rounded-xl border-2 text-center transition-all",
-                  form.type === tt.value ? tt.color + " ring-2 ring-offset-1" : "border-gray-200 hover:border-gray-300"
+                  form.type === tt.value ? tt.color + " ring-2 ring-offset-1" : "border-border hover:border-border"
                 )}
               >
                 <span className="text-xl block mb-1">{tt.icon}</span>
@@ -145,7 +145,7 @@ export default function TrainingCreate() {
         </div>
 
         <div>
-          <h3 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
             <Clock className="h-4 w-4" /> المدة والتواريخ
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -179,8 +179,8 @@ export default function TrainingCreate() {
         <TextAreaField label="الوصف التفصيلي" value={form.description} onChange={(v) => set("description", v)} placeholder="وصف البرنامج التدريبي ومحتوياته..." rows={3} />
 
         {form.title && (
-          <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
-            <h4 className="text-sm font-semibold text-blue-700 mb-2">ملخص البرنامج</h4>
+          <div className="p-4 bg-status-info-surface rounded-xl border border-status-info-surface">
+            <h4 className="text-sm font-semibold text-status-info-foreground mb-2">ملخص البرنامج</h4>
             <div className="flex flex-wrap gap-2">
               <Badge variant="outline">{form.title}</Badge>
               {form.type && <Badge variant="outline">{TRAINING_TYPES.find(t => t.value === form.type)?.label}</Badge>}

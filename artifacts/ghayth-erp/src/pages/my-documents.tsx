@@ -33,7 +33,7 @@ export default function MyDocuments() {
         </div>
       ) : documents.length === 0 ? (
         <Card>
-          <CardContent className="py-16 text-center text-gray-400">
+          <CardContent className="py-16 text-center text-muted-foreground">
             <FolderOpen size={40} className="mx-auto mb-3 opacity-40" />
             <p className="font-medium">لا توجد مستندات</p>
             <p className="text-sm mt-1">المستندات المرتبطة بك ستظهر هنا</p>
@@ -46,12 +46,12 @@ export default function MyDocuments() {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <FileText size={20} className="text-blue-600" />
+                    <div className="w-10 h-10 bg-status-info-surface rounded-lg flex items-center justify-center flex-shrink-0">
+                      <FileText size={20} className="text-status-info-foreground" />
                     </div>
                     <div className="min-w-0">
                       <p className="font-medium text-gray-900 truncate">{doc.title ?? doc.name ?? "مستند"}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">
+                      <p className="text-xs text-muted-foreground mt-0.5">
                         {docTypeLabels[doc.type] ?? doc.type ?? "مستند"} • {formatDateAr(doc.createdAt)}
                       </p>
                     </div>

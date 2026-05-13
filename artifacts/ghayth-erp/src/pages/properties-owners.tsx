@@ -43,12 +43,12 @@ export default function PropertiesOwners() {
       sortable: true,
       render: (o) => (
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center text-xs font-bold shrink-0">
+          <div className="w-8 h-8 rounded-full bg-status-warning-surface text-status-warning-foreground flex items-center justify-center text-xs font-bold shrink-0">
             {(o.name || "?")[0]}
           </div>
           <div>
             <p className="font-medium text-sm">{o.name}</p>
-            {o.nationalId && <p className="text-xs text-gray-400 font-mono">{o.nationalId}</p>}
+            {o.nationalId && <p className="text-xs text-muted-foreground font-mono">{o.nationalId}</p>}
           </div>
         </div>
       ),
@@ -64,7 +64,7 @@ export default function PropertiesOwners() {
       header: "الهاتف",
       sortable: true,
       render: (o) => o.phone ? (
-        <a href={`tel:${o.phone}`} className="text-sm text-blue-600 hover:underline flex items-center gap-1">
+        <a href={`tel:${o.phone}`} className="text-sm text-status-info-foreground hover:underline flex items-center gap-1">
           <Phone className="h-3 w-3" /> {o.phone}
         </a>
       ) : "—",
@@ -74,14 +74,14 @@ export default function PropertiesOwners() {
       header: "المباني",
       sortable: true,
       align: "center",
-      render: (o) => <div className="flex items-center gap-1"><Building2 className="h-3 w-3 text-gray-400" /> {Number(o.buildingCount) || 0}</div>,
+      render: (o) => <div className="flex items-center gap-1"><Building2 className="h-3 w-3 text-muted-foreground" /> {Number(o.buildingCount) || 0}</div>,
     },
     {
       key: "unitCount",
       header: "الوحدات",
       sortable: true,
       align: "center",
-      render: (o) => <div className="flex items-center gap-1"><Home className="h-3 w-3 text-gray-400" /> {Number(o.unitCount) || 0}</div>,
+      render: (o) => <div className="flex items-center gap-1"><Home className="h-3 w-3 text-muted-foreground" /> {Number(o.unitCount) || 0}</div>,
     },
     {
       key: "activeContracts",
@@ -89,7 +89,7 @@ export default function PropertiesOwners() {
       sortable: true,
       render: (o) => Number(o.activeContracts) > 0 ? (
         <Badge className="bg-emerald-100 text-emerald-700 text-[10px] px-1">{o.activeContracts} نشط</Badge>
-      ) : <span className="text-gray-400 text-xs">—</span>,
+      ) : <span className="text-muted-foreground text-xs">—</span>,
     },
     {
       key: "actions",
@@ -103,7 +103,7 @@ export default function PropertiesOwners() {
                   <Pencil className="h-3 w-3" /> تعديل
                 </Button>
               </Link>
-              <Button variant="ghost" size="sm" className="gap-1 text-xs h-7 text-red-500 hover:text-red-700" onClick={() => setDeletingOwner({ id: o.id, name: o.name || "—" })}>
+              <Button variant="ghost" size="sm" className="gap-1 text-xs h-7 text-status-error hover:text-status-error-foreground" onClick={() => setDeletingOwner({ id: o.id, name: o.name || "—" })}>
                 <Trash2 className="h-3 w-3" />
               </Button>
             </>
@@ -144,7 +144,7 @@ export default function PropertiesOwners() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Crown className="h-5 w-5 text-amber-500" /> قائمة الملاك
+            <Crown className="h-5 w-5 text-status-warning" /> قائمة الملاك
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">

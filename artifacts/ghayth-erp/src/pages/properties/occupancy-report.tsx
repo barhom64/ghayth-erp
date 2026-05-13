@@ -10,12 +10,12 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
-  rented: { label: "مؤجرة", color: "text-green-600", bg: "bg-green-100" },
-  available: { label: "متاحة", color: "text-blue-600", bg: "bg-blue-100" },
+  rented: { label: "مؤجرة", color: "text-status-success-foreground", bg: "bg-status-success-surface" },
+  available: { label: "متاحة", color: "text-status-info-foreground", bg: "bg-status-info-surface" },
   maintenance: { label: "صيانة", color: "text-orange-600", bg: "bg-orange-100" },
   under_maintenance: { label: "تحت الصيانة", color: "text-orange-600", bg: "bg-orange-100" },
-  out_of_service: { label: "خارج الخدمة", color: "text-red-600", bg: "bg-red-100" },
-  reserved: { label: "محجوزة", color: "text-yellow-600", bg: "bg-yellow-100" },
+  out_of_service: { label: "خارج الخدمة", color: "text-status-error-foreground", bg: "bg-status-error-surface" },
+  reserved: { label: "محجوزة", color: "text-status-warning-foreground", bg: "bg-status-warning-surface" },
 };
 
 const PIE_COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#9ca3af"];
@@ -42,13 +42,13 @@ export default function OccupancyReportPage() {
     {
       key: "buildingName",
       header: "المبنى",
-      render: (u) => <span className="text-gray-500">{u.buildingName}</span>,
+      render: (u) => <span className="text-muted-foreground">{u.buildingName}</span>,
     },
     {
       key: "status",
       header: "الحالة",
       render: (u) => (
-        <Badge className={`${STATUS_LABELS[u.status]?.bg || "bg-gray-100"} ${STATUS_LABELS[u.status]?.color || "text-gray-600"} text-xs`}>
+        <Badge className={`${STATUS_LABELS[u.status]?.bg || "bg-surface-subtle"} ${STATUS_LABELS[u.status]?.color || "text-muted-foreground"} text-xs`}>
           {STATUS_LABELS[u.status]?.label || u.status}
         </Badge>
       ),
@@ -66,7 +66,7 @@ export default function OccupancyReportPage() {
     {
       key: "contractEnd",
       header: "انتهاء العقد",
-      render: (u) => <span className="text-gray-500">{u.contractEnd?.split("T")[0] || "—"}</span>,
+      render: (u) => <span className="text-muted-foreground">{u.contractEnd?.split("T")[0] || "—"}</span>,
     },
   ];
 
@@ -82,31 +82,31 @@ export default function OccupancyReportPage() {
         <Card className="border-2 border-primary/20">
           <CardContent className="pt-4 text-center">
             <div className="text-3xl font-bold text-primary">{data?.occupancyRate || 0}%</div>
-            <div className="text-xs text-gray-500 mt-1">معدل الإشغال</div>
+            <div className="text-xs text-muted-foreground mt-1">معدل الإشغال</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4 text-center">
             <div className="text-xl font-bold">{data?.total || 0}</div>
-            <div className="text-xs text-gray-500">إجمالي الوحدات</div>
+            <div className="text-xs text-muted-foreground">إجمالي الوحدات</div>
           </CardContent>
         </Card>
-        <Card className="border-green-200 bg-green-50/30">
+        <Card className="border-status-success-surface bg-status-success-surface">
           <CardContent className="pt-4 text-center">
-            <div className="text-xl font-bold text-green-600">{data?.occupied || 0}</div>
-            <div className="text-xs text-gray-500">مؤجرة</div>
+            <div className="text-xl font-bold text-status-success-foreground">{data?.occupied || 0}</div>
+            <div className="text-xs text-muted-foreground">مؤجرة</div>
           </CardContent>
         </Card>
-        <Card className="border-blue-200 bg-blue-50/30">
+        <Card className="border-status-info-surface bg-status-info-surface">
           <CardContent className="pt-4 text-center">
-            <div className="text-xl font-bold text-blue-600">{data?.available || 0}</div>
-            <div className="text-xs text-gray-500">متاحة</div>
+            <div className="text-xl font-bold text-status-info-foreground">{data?.available || 0}</div>
+            <div className="text-xs text-muted-foreground">متاحة</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4 text-center">
             <div className="text-xl font-bold">{formatCurrency(data?.totalMonthlyRent || 0)}</div>
-            <div className="text-xs text-gray-500">إيجار شهري</div>
+            <div className="text-xs text-muted-foreground">إيجار شهري</div>
           </CardContent>
         </Card>
       </div>
@@ -149,9 +149,9 @@ export default function OccupancyReportPage() {
                   <div key={i}>
                     <div className="flex justify-between text-sm mb-1">
                       <span>{b.name}</span>
-                      <span className="text-gray-500">{b.occupied}/{b.total} ({rate}%)</span>
+                      <span className="text-muted-foreground">{b.occupied}/{b.total} ({rate}%)</span>
                     </div>
-                    <div className="w-full bg-gray-100 rounded-full h-2">
+                    <div className="w-full bg-surface-subtle rounded-full h-2">
                       <div className="bg-primary rounded-full h-2 transition-all" style={{ width: `${rate}%` }} />
                     </div>
                   </div>

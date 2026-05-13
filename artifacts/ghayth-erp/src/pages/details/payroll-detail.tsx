@@ -156,22 +156,22 @@ export default function PayrollDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Wallet className="h-4 w-4 text-gray-500" />
+            <Wallet className="h-4 w-4 text-muted-foreground" />
             بيانات الراتب
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           {/* Hero net salary */}
           <div className="border-b pb-3">
-            <p className="text-xs text-gray-500 mb-1">صافي الراتب</p>
+            <p className="text-xs text-muted-foreground mb-1">صافي الراتب</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-green-700">
+              <span className="text-3xl font-bold text-status-success-foreground">
                 {formatCurrency(netSalary)}
               </span>
-              <span className="text-xs text-gray-500">ر.س</span>
+              <span className="text-xs text-muted-foreground">ر.س</span>
             </div>
             {payroll?.employeeName && (
-              <p className="mt-2 text-sm text-gray-700">
+              <p className="mt-2 text-sm text-status-neutral-foreground">
                 للموظف: <span className="font-medium">{payroll.employeeName}</span>
               </p>
             )}
@@ -179,65 +179,65 @@ export default function PayrollDetail() {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">الفترة</p>
+              <p className="text-xs text-muted-foreground mb-0.5">الفترة</p>
               <Badge variant="outline">{formatPeriod(payroll)}</Badge>
             </div>
             {payroll?.basicSalary != null && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الراتب الأساسي</p>
-                <span className="text-gray-800 font-medium">
+                <p className="text-xs text-muted-foreground mb-0.5">الراتب الأساسي</p>
+                <span className="text-status-neutral-foreground font-medium">
                   {formatCurrency(Number(payroll.basicSalary))}
                 </span>
               </div>
             )}
             {payroll?.allowances != null && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">البدلات</p>
-                <span className="text-gray-800">
+                <p className="text-xs text-muted-foreground mb-0.5">البدلات</p>
+                <span className="text-status-neutral-foreground">
                   {formatCurrency(Number(payroll.allowances))}
                 </span>
               </div>
             )}
             {payroll?.overtime != null && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">العمل الإضافي</p>
-                <span className="text-gray-800">
+                <p className="text-xs text-muted-foreground mb-0.5">العمل الإضافي</p>
+                <span className="text-status-neutral-foreground">
                   {formatCurrency(Number(payroll.overtime))}
                 </span>
               </div>
             )}
             {payroll?.bonus != null && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">المكافآت</p>
-                <span className="text-gray-800">
+                <p className="text-xs text-muted-foreground mb-0.5">المكافآت</p>
+                <span className="text-status-neutral-foreground">
                   {formatCurrency(Number(payroll.bonus))}
                 </span>
               </div>
             )}
             {payroll?.deductions != null && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الخصومات</p>
-                <span className="text-red-600">
+                <p className="text-xs text-muted-foreground mb-0.5">الخصومات</p>
+                <span className="text-status-error-foreground">
                   {formatCurrency(Number(payroll.deductions))}
                 </span>
               </div>
             )}
             {paymentMethodLabel && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">طريقة الدفع</p>
+                <p className="text-xs text-muted-foreground mb-0.5">طريقة الدفع</p>
                 <Badge variant="secondary">{paymentMethodLabel}</Badge>
               </div>
             )}
             {payroll?.paymentDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ الدفع</p>
-                <span className="text-gray-800">{formatDateAr(payroll.paymentDate)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ الدفع</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(payroll.paymentDate)}</span>
               </div>
             )}
             {payroll?.bankAccount && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">الحساب البنكي</p>
-                <span className="text-gray-800 font-mono text-xs">
+                <p className="text-xs text-muted-foreground mb-0.5">الحساب البنكي</p>
+                <span className="text-status-neutral-foreground font-mono text-xs">
                   {payroll.bankAccount}
                 </span>
               </div>
@@ -246,8 +246,8 @@ export default function PayrollDetail() {
 
           {payroll?.notes && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">ملاحظات</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{payroll.notes}</p>
+              <p className="text-xs text-muted-foreground mb-1">ملاحظات</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{payroll.notes}</p>
             </div>
           )}
         </CardContent>

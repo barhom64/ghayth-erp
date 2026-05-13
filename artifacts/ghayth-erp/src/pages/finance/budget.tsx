@@ -35,8 +35,8 @@ export default function BudgetPage() {
       sortable: true,
       render: (b) => (
         <>
-          <span className="font-mono text-blue-600 text-sm">{b.accountCode}</span>
-          <span className="text-gray-500 ms-2 text-sm">{b.accountName || ""}</span>
+          <span className="font-mono text-status-info-foreground text-sm">{b.accountCode}</span>
+          <span className="text-muted-foreground ms-2 text-sm">{b.accountName || ""}</span>
         </>
       ),
     },
@@ -56,7 +56,7 @@ export default function BudgetPage() {
       key: "used",
       header: "المنفق",
       sortable: true,
-      render: (b) => <span className="text-red-600">{formatCurrency(Number(b.used || 0))}</span>,
+      render: (b) => <span className="text-status-error-foreground">{formatCurrency(Number(b.used || 0))}</span>,
     },
     {
       key: "remaining",
@@ -86,7 +86,7 @@ export default function BudgetPage() {
             <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
               <div className={`h-full rounded-full ${barColor}`} style={{ width: `${Math.min(pct, 100)}%` }} />
             </div>
-            <span className="text-xs text-gray-500 w-10 text-start">{formatNumber(pct)}%</span>
+            <span className="text-xs text-muted-foreground w-10 text-start">{formatNumber(pct)}%</span>
           </div>
         );
       },
@@ -109,9 +109,9 @@ export default function BudgetPage() {
     >
       <FinanceTabsNav />
       <KpiGrid items={[
-        { label: "إجمالي البنود", value: formatNumber(items.length), icon: FileBarChart, color: "text-blue-600 bg-blue-50" },
-        { label: "المخصص", value: formatCurrency(totalAllocated), icon: CheckCircle, color: "text-green-600 bg-green-50" },
-        { label: "المنفق", value: formatCurrency(totalUsed), icon: TrendingUp, color: "text-red-600 bg-red-50" },
+        { label: "إجمالي البنود", value: formatNumber(items.length), icon: FileBarChart, color: "text-status-info-foreground bg-status-info-surface" },
+        { label: "المخصص", value: formatCurrency(totalAllocated), icon: CheckCircle, color: "text-status-success-foreground bg-status-success-surface" },
+        { label: "المنفق", value: formatCurrency(totalUsed), icon: TrendingUp, color: "text-status-error-foreground bg-status-error-surface" },
         { label: "نسبة الاستخدام", value: totalAllocated > 0 ? `${formatNumber(Math.round((totalUsed / totalAllocated) * 100))}%` : "0%", icon: PieChart, color: "text-purple-600 bg-purple-50" },
       ]} />
 

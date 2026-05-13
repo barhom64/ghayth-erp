@@ -38,18 +38,18 @@ export default function MyPayslip() {
       }
     >
       <div className="flex items-center gap-3 mb-6">
-        <label className="text-sm font-medium text-gray-700">الفترة:</label>
+        <label className="text-sm font-medium text-status-neutral-foreground">الفترة:</label>
         <input
           type="month"
           value={period}
           onChange={(e) => setPeriod(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none"
+          className="border border-border rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none"
         />
       </div>
 
       {!hasData ? (
         <Card>
-          <CardContent className="py-16 text-center text-gray-400">
+          <CardContent className="py-16 text-center text-muted-foreground">
             <FileText size={40} className="mx-auto mb-3 opacity-40" />
             <p className="font-medium">لا يتوفر كشف راتب لهذه الفترة</p>
             <p className="text-sm mt-1">تحقق من اختيار الشهر الصحيح</p>
@@ -59,9 +59,9 @@ export default function MyPayslip() {
         <div className="space-y-4">
           <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
             <CardContent className="p-6">
-              <p className="text-sm text-gray-500 mb-1">صافي الراتب</p>
+              <p className="text-sm text-muted-foreground mb-1">صافي الراتب</p>
               <p className="text-3xl font-bold text-primary">{formatCurrency(payslip.netSalary)}</p>
-              <p className="text-xs text-gray-400 mt-2">فترة: {period}</p>
+              <p className="text-xs text-muted-foreground mt-2">فترة: {period}</p>
             </CardContent>
           </Card>
 
@@ -69,8 +69,8 @@ export default function MyPayslip() {
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <TrendingUp size={16} className="text-green-600" />
-                  <span className="text-sm font-medium text-gray-700">الإضافات</span>
+                  <TrendingUp size={16} className="text-status-success-foreground" />
+                  <span className="text-sm font-medium text-status-neutral-foreground">الإضافات</span>
                 </div>
                 {[
                   { label: "الراتب الأساسي", value: payslip.baseSalary },
@@ -80,13 +80,13 @@ export default function MyPayslip() {
                   { label: "ساعات إضافية", value: payslip.overtimePay },
                 ].filter((item) => Number(item.value) > 0).map((item) => (
                   <div key={item.label} className="flex justify-between text-sm py-1 border-b border-gray-50 last:border-0">
-                    <span className="text-gray-500">{item.label}</span>
-                    <span className="font-medium text-green-700">{formatCurrency(item.value)}</span>
+                    <span className="text-muted-foreground">{item.label}</span>
+                    <span className="font-medium text-status-success-foreground">{formatCurrency(item.value)}</span>
                   </div>
                 ))}
                 <div className="flex justify-between text-sm pt-2 font-semibold">
-                  <span className="text-gray-700">الإجمالي</span>
-                  <span className="text-green-700">{formatCurrency(payslip.grossSalary ?? payslip.baseSalary)}</span>
+                  <span className="text-status-neutral-foreground">الإجمالي</span>
+                  <span className="text-status-success-foreground">{formatCurrency(payslip.grossSalary ?? payslip.baseSalary)}</span>
                 </div>
               </CardContent>
             </Card>
@@ -94,8 +94,8 @@ export default function MyPayslip() {
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <TrendingDown size={16} className="text-red-600" />
-                  <span className="text-sm font-medium text-gray-700">الاستقطاعات</span>
+                  <TrendingDown size={16} className="text-status-error-foreground" />
+                  <span className="text-sm font-medium text-status-neutral-foreground">الاستقطاعات</span>
                 </div>
                 {[
                   { label: "التأمينات", value: payslip.gosi },
@@ -105,13 +105,13 @@ export default function MyPayslip() {
                   { label: "مخالفات وجزاءات", value: payslip.otherDeductions },
                 ].filter((item) => Number(item.value) > 0).map((item) => (
                   <div key={item.label} className="flex justify-between text-sm py-1 border-b border-gray-50 last:border-0">
-                    <span className="text-gray-500">{item.label}</span>
-                    <span className="font-medium text-red-600">{formatCurrency(item.value)}</span>
+                    <span className="text-muted-foreground">{item.label}</span>
+                    <span className="font-medium text-status-error-foreground">{formatCurrency(item.value)}</span>
                   </div>
                 ))}
                 <div className="flex justify-between text-sm pt-2 font-semibold">
-                  <span className="text-gray-700">الإجمالي</span>
-                  <span className="text-red-600">{formatCurrency(payslip.totalDeductions)}</span>
+                  <span className="text-status-neutral-foreground">الإجمالي</span>
+                  <span className="text-status-error-foreground">{formatCurrency(payslip.totalDeductions)}</span>
                 </div>
               </CardContent>
             </Card>

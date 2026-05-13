@@ -107,7 +107,7 @@ export default function FuelDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Fuel className="h-4 w-4 text-gray-500" />
+            <Fuel className="h-4 w-4 text-muted-foreground" />
             بيانات التعبئة
           </CardTitle>
         </CardHeader>
@@ -117,10 +117,10 @@ export default function FuelDetail() {
               <span className="text-3xl font-bold text-gray-900">
                 {item?.cost ? formatCurrency(item.cost) : "-"}
               </span>
-              <span className="text-xs text-gray-500 ms-1">ر.س</span>
+              <span className="text-xs text-muted-foreground ms-1">ر.س</span>
             </div>
             {item?.quantity && (
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-muted-foreground">
                 {item.quantity} لتر
                 {costPerLiter && <span className="text-xs"> ({costPerLiter} ر.س/لتر)</span>}
               </div>
@@ -130,43 +130,43 @@ export default function FuelDetail() {
           <div className="grid grid-cols-2 gap-3">
             {item?.fuelType && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">نوع الوقود</p>
+                <p className="text-xs text-muted-foreground mb-0.5">نوع الوقود</p>
                 <Badge variant="outline">{FUEL_TYPES[item.fuelType] || item.fuelType}</Badge>
               </div>
             )}
             {item?.station && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">المحطة</p>
-                <span className="text-gray-800">{item.station}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">المحطة</p>
+                <span className="text-status-neutral-foreground">{item.station}</span>
               </div>
             )}
             {item?.odometer && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">عداد الكيلومترات</p>
+                <p className="text-xs text-muted-foreground mb-0.5">عداد الكيلومترات</p>
                 <div className="flex items-center gap-1">
-                  <Gauge className="h-3.5 w-3.5 text-gray-400" />
-                  <span className="text-gray-800 font-mono">{formatNumber(Number(item.odometer))} كم</span>
+                  <Gauge className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-status-neutral-foreground font-mono">{formatNumber(Number(item.odometer))} كم</span>
                 </div>
               </div>
             )}
             {(item?.date || item?.createdAt) && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ التعبئة</p>
-                <span className="text-gray-800">{formatDateAr(item.date || item.createdAt)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ التعبئة</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(item.date || item.createdAt)}</span>
               </div>
             )}
             {item?.receiptNumber && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">رقم الإيصال</p>
-                <span className="text-gray-800 font-mono text-xs">{item.receiptNumber}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">رقم الإيصال</p>
+                <span className="text-status-neutral-foreground font-mono text-xs">{item.receiptNumber}</span>
               </div>
             )}
           </div>
 
           {item?.notes && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">ملاحظات</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{item.notes}</p>
+              <p className="text-xs text-muted-foreground mb-1">ملاحظات</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{item.notes}</p>
             </div>
           )}
         </CardContent>
@@ -181,7 +181,7 @@ export default function FuelDetail() {
             <CardContent className="text-sm space-y-1">
               <p className="font-semibold font-mono">{item.plateNumber}</p>
               {item.vehicleMake && (
-                <p className="text-xs text-gray-500">{item.vehicleMake} {item.vehicleModel || ""}</p>
+                <p className="text-xs text-muted-foreground">{item.vehicleMake} {item.vehicleModel || ""}</p>
               )}
             </CardContent>
           </Card>

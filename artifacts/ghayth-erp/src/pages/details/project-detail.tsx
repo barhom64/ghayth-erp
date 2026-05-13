@@ -85,9 +85,9 @@ const PROJECT_TABS = [
 type ProjectTabKey = (typeof PROJECT_TABS)[number]["key"];
 
 const statusLabels: Record<string, string> = { completed: "مكتمل", done: "مكتمل", active: "نشط", in_progress: "قيد التنفيذ", planning: "تخطيط", planned: "مخطط", draft: "مسودة", on_hold: "متوقف", cancelled: "ملغى", blocked: "محظور", pending: "معلق", todo: "للتنفيذ" };
-const priorityColors: Record<string, string> = { high: "bg-red-100 text-red-700", critical: "bg-red-100 text-red-700", medium: "bg-yellow-100 text-yellow-700", low: "bg-green-100 text-green-700" };
+const priorityColors: Record<string, string> = { high: "bg-status-error-surface text-status-error-foreground", critical: "bg-status-error-surface text-status-error-foreground", medium: "bg-status-warning-surface text-status-warning-foreground", low: "bg-status-success-surface text-status-success-foreground" };
 const priorityLabels: Record<string, string> = { high: "عالية", critical: "حرجة", medium: "متوسطة", low: "منخفضة" };
-const taskStatusColors: Record<string, string> = { completed: "bg-green-100 text-green-700", done: "bg-green-100 text-green-700", active: "bg-blue-100 text-blue-700", in_progress: "bg-blue-100 text-blue-700", planning: "bg-purple-100 text-purple-700", pending: "bg-gray-100 text-gray-700", todo: "bg-gray-100 text-gray-700", on_hold: "bg-yellow-100 text-yellow-700" };
+const taskStatusColors: Record<string, string> = { completed: "bg-status-success-surface text-status-success-foreground", done: "bg-status-success-surface text-status-success-foreground", active: "bg-status-info-surface text-status-info-foreground", in_progress: "bg-status-info-surface text-status-info-foreground", planning: "bg-purple-100 text-purple-700", pending: "bg-surface-subtle text-status-neutral-foreground", todo: "bg-surface-subtle text-status-neutral-foreground", on_hold: "bg-status-warning-surface text-status-warning-foreground" };
 const taskStatusLabels: Record<string, string> = { todo: "للتنفيذ", in_progress: "جاري", done: "مكتمل", ...statusLabels };
 
 const BREADCRUMBS = [
@@ -235,7 +235,7 @@ export default function ProjectDetail() {
   const actions = project ? (
     <div className="flex items-center gap-2 flex-wrap">
       {project.isSlipping && (
-        <Badge className="bg-red-100 text-red-700 flex items-center gap-1">
+        <Badge className="bg-status-error-surface text-status-error-foreground flex items-center gap-1">
           <AlertTriangle className="h-3 w-3" /> متأخر
         </Badge>
       )}
@@ -315,8 +315,8 @@ export default function ProjectDetail() {
       )}
 
       <KpiGrid items={[
-        { label: "نسبة الإنجاز", value: `${progress}%`, icon: FolderKanban, color: "text-blue-600 bg-blue-50" },
-        { label: `الميزانية (${getCurrencySymbol()})`, value: budget > 0 ? formatCurrency(budget) : "0", icon: DollarSign, color: "text-green-600 bg-green-50" },
+        { label: "نسبة الإنجاز", value: `${progress}%`, icon: FolderKanban, color: "text-status-info-foreground bg-status-info-surface" },
+        { label: `الميزانية (${getCurrencySymbol()})`, value: budget > 0 ? formatCurrency(budget) : "0", icon: DollarSign, color: "text-status-success-foreground bg-status-success-surface" },
         { label: `المنصرف (${getCurrencySymbol()})`, value: spent > 0 ? formatCurrency(spent) : "0", icon: DollarSign, color: "text-orange-600 bg-orange-50" },
         { label: "المهام", value: tasks.length, icon: ListTodo, color: "text-purple-600 bg-purple-50" },
       ]} />
@@ -356,7 +356,7 @@ export default function ProjectDetail() {
                   <div className="grid grid-cols-3 py-2 border-b"><span className="text-muted-foreground">المسار الحرج</span><span className="col-span-2">{project.criticalPathHours} ساعة</span></div>
                 )}
                 {project.costVariance !== undefined && budget > 0 && (
-                  <div className="grid grid-cols-3 py-2"><span className="text-muted-foreground">انحراف التكلفة</span><span className={`col-span-2 font-bold ${Number(project.costVariance) >= 0 ? "text-green-600" : "text-red-600"}`}>{formatCurrency(Number(project.costVariance))}</span></div>
+                  <div className="grid grid-cols-3 py-2"><span className="text-muted-foreground">انحراف التكلفة</span><span className={`col-span-2 font-bold ${Number(project.costVariance) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground"}`}>{formatCurrency(Number(project.costVariance))}</span></div>
                 )}
               </CardContent>
             </Card>
@@ -398,12 +398,12 @@ export default function ProjectDetail() {
                     </FormShell>
                   </div>
                 )}
-                {phases.length === 0 && !showPhaseForm && <p className="text-center text-gray-400 py-4">لا توجد مراحل</p>}
+                {phases.length === 0 && !showPhaseForm && <p className="text-center text-muted-foreground py-4">لا توجد مراحل</p>}
                 {phases.map((p: any) => (
                   <div key={p.id} className="flex items-center justify-between p-3 rounded-lg border">
                     <div>
                       <span className="font-medium">{p.name}</span>
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-muted-foreground mt-1">
                         {p.startDate ? formatDateAr(p.startDate) : ""} {p.endDate ? `- ${formatDateAr(p.endDate)}` : ""}
                       </p>
                     </div>
@@ -430,7 +430,7 @@ export default function ProjectDetail() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
-                {upcomingMilestones.length === 0 && <p className="text-center text-gray-400 py-4 text-sm">لا توجد معالم قادمة</p>}
+                {upcomingMilestones.length === 0 && <p className="text-center text-muted-foreground py-4 text-sm">لا توجد معالم قادمة</p>}
                 {upcomingMilestones.slice(0, 5).map((m: any) => (
                   <div key={m.id} className="flex items-center justify-between p-2 rounded border">
                     <div className="flex items-center gap-2">
@@ -452,22 +452,22 @@ export default function ProjectDetail() {
                   <CardTitle className="text-base flex items-center gap-2">
                     <ShieldAlert className="w-4 h-4 text-orange-500" /> المخاطر ({openRisks.length})
                     {criticalRisks.length > 0 && (
-                      <Badge className="bg-red-100 text-red-700 text-[10px]">{criticalRisks.length} حرج</Badge>
+                      <Badge className="bg-status-error-surface text-status-error-foreground text-[10px]">{criticalRisks.length} حرج</Badge>
                     )}
                   </CardTitle>
                   <Link href={`/projects/risks?projectId=${id}`}><Button variant="ghost" size="sm" className="text-xs">إدارة</Button></Link>
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
-                {openRisks.length === 0 && <p className="text-center text-gray-400 py-4 text-sm">لا توجد مخاطر مفتوحة</p>}
+                {openRisks.length === 0 && <p className="text-center text-muted-foreground py-4 text-sm">لا توجد مخاطر مفتوحة</p>}
                 {openRisks.slice(0, 5).map((r: any) => (
                   <div key={r.id} className="flex items-center justify-between p-2 rounded border">
                     <span className="text-sm font-medium truncate flex-1">{r.title}</span>
                     <Badge className={
-                      r.riskLevel === "critical" ? "bg-red-100 text-red-700" :
+                      r.riskLevel === "critical" ? "bg-status-error-surface text-status-error-foreground" :
                       r.riskLevel === "high" ? "bg-orange-100 text-orange-700" :
-                      r.riskLevel === "medium" ? "bg-yellow-100 text-yellow-700" :
-                      "bg-green-100 text-green-700"
+                      r.riskLevel === "medium" ? "bg-status-warning-surface text-status-warning-foreground" :
+                      "bg-status-success-surface text-status-success-foreground"
                     }>{r.riskLevel === "critical" ? "حرج" : r.riskLevel === "high" ? "عالٍ" : r.riskLevel === "medium" ? "متوسط" : "منخفض"}</Badge>
                   </div>
                 ))}
@@ -526,15 +526,15 @@ export default function ProjectDetail() {
               </div>
             )}
             {tasks.length === 0 && !showTaskForm ? (
-              <p className="text-center text-gray-400 py-8">لا توجد مهام</p>
+              <p className="text-center text-muted-foreground py-8">لا توجد مهام</p>
             ) : tasks.length > 0 ? (
               <DataTable
                 columns={[
                   { key: "title", header: "المهمة", render: (t: any) => <span className="font-medium">{t.title}</span> },
-                  { key: "assigneeName", header: "المسؤول", render: (t: any) => <span className="text-gray-500">{t.assigneeName || "-"}</span> },
-                  { key: "priority", header: "الأولوية", render: (t: any) => <Badge className={priorityColors[t.priority] || "bg-gray-100 text-gray-700"}>{priorityLabels[t.priority] || t.priority}</Badge> },
+                  { key: "assigneeName", header: "المسؤول", render: (t: any) => <span className="text-muted-foreground">{t.assigneeName || "-"}</span> },
+                  { key: "priority", header: "الأولوية", render: (t: any) => <Badge className={priorityColors[t.priority] || "bg-surface-subtle text-status-neutral-foreground"}>{priorityLabels[t.priority] || t.priority}</Badge> },
                   { key: "status", header: "الحالة", render: (t: any) => <PageStatusBadge status={t.status} domain="project" /> },
-                  { key: "dueDate", header: "تاريخ الاستحقاق", render: (t: any) => <span className="text-gray-500">{t.dueDate ? formatDateAr(t.dueDate) : "-"}</span> },
+                  { key: "dueDate", header: "تاريخ الاستحقاق", render: (t: any) => <span className="text-muted-foreground">{t.dueDate ? formatDateAr(t.dueDate) : "-"}</span> },
                   { key: "action", header: "إجراء", render: (t: any) => t.status !== "done" ? (
                     <Select value={t.status} onValueChange={(v) => updateTaskStatus(t.id, v)}>
                       <SelectTrigger className="h-8 w-[120px] text-xs"><SelectValue /></SelectTrigger>
@@ -563,16 +563,16 @@ export default function ProjectDetail() {
           </CardHeader>
           <CardContent>
             {resources.length === 0 ? (
-              <p className="text-center text-gray-400 py-8">لم يتم تعيين أعضاء للفريق بعد</p>
+              <p className="text-center text-muted-foreground py-8">لم يتم تعيين أعضاء للفريق بعد</p>
             ) : (
               <DataTable
                 columns={[
                   { key: "employeeName", header: "الموظف", render: (r) => <span className="font-medium">{r.employeeName || `#${r.employeeId}`}</span> },
-                  { key: "employeeJobTitle", header: "المنصب", render: (r) => <span className="text-gray-500">{r.employeeJobTitle || "-"}</span> },
+                  { key: "employeeJobTitle", header: "المنصب", render: (r) => <span className="text-muted-foreground">{r.employeeJobTitle || "-"}</span> },
                   { key: "role", header: "الدور في المشروع", render: (r) => <Badge variant="outline">{r.role || "عضو"}</Badge> },
                   { key: "allocatedHours", header: "الساعات المخصصة", render: (r) => <span>{r.allocatedHours || 0} ساعة</span> },
                   { key: "budgetAllocated", header: "الميزانية المخصصة", render: (r) => <span>{r.budgetAllocated ? formatCurrency(Number(r.budgetAllocated)) : "-"}</span> },
-                  { key: "period", header: "الفترة", render: (r) => <span className="text-xs text-gray-500">{r.startDate ? formatDateAr(r.startDate) : ""}{r.endDate ? ` – ${formatDateAr(r.endDate)}` : ""}</span> },
+                  { key: "period", header: "الفترة", render: (r) => <span className="text-xs text-muted-foreground">{r.startDate ? formatDateAr(r.startDate) : ""}{r.endDate ? ` – ${formatDateAr(r.endDate)}` : ""}</span> },
                 ]}
                 data={resources}
                 noToolbar
@@ -587,9 +587,9 @@ export default function ProjectDetail() {
       {activeTab === "costs" && id && (
         <div className="space-y-4">
           <KpiGrid items={[
-            { label: "الميزانية", value: formatCurrency(budget), icon: DollarSign, color: "text-blue-600 bg-blue-50" },
+            { label: "الميزانية", value: formatCurrency(budget), icon: DollarSign, color: "text-status-info-foreground bg-status-info-surface" },
             { label: "المنصرف الفعلي", value: formatCurrency(costsTotalActual), icon: DollarSign, color: "text-orange-600 bg-orange-50" },
-            { label: "المتبقي", value: formatCurrency(costsVariance), icon: DollarSign, color: costsVariance >= 0 ? "text-green-600 bg-green-50" : "text-red-600 bg-red-50" },
+            { label: "المتبقي", value: formatCurrency(costsVariance), icon: DollarSign, color: costsVariance >= 0 ? "text-status-success-foreground bg-status-success-surface" : "text-status-error-foreground bg-status-error-surface" },
           ]} />
           <Card>
             <CardHeader>
@@ -637,15 +637,15 @@ export default function ProjectDetail() {
                 </div>
               )}
               {costs.length === 0 && !showCostForm ? (
-                <p className="text-center text-gray-400 py-8">لا توجد تكاليف مسجلة</p>
+                <p className="text-center text-muted-foreground py-8">لا توجد تكاليف مسجلة</p>
               ) : (
                 <DataTable
                   columns={[
                     { key: "description", header: "الوصف", render: (c) => <span className="font-medium">{c.description}</span> },
                     { key: "amount", header: "المبلغ", render: (c) => <span className="font-bold">{formatCurrency(Number(c.amount))}</span> },
                     { key: "category", header: "التصنيف", render: (c) => <Badge variant="outline">{c.category}</Badge> },
-                    { key: "costDate", header: "التاريخ", render: (c) => <span className="text-gray-500">{c.costDate ? formatDateAr(c.costDate) : "-"}</span> },
-                    { key: "enteredByName", header: "أدخلها", render: (c) => <span className="text-gray-500">{c.enteredByName || "-"}</span> },
+                    { key: "costDate", header: "التاريخ", render: (c) => <span className="text-muted-foreground">{c.costDate ? formatDateAr(c.costDate) : "-"}</span> },
+                    { key: "enteredByName", header: "أدخلها", render: (c) => <span className="text-muted-foreground">{c.enteredByName || "-"}</span> },
                   ]}
                   data={costs}
                   noToolbar
@@ -660,7 +660,7 @@ export default function ProjectDetail() {
       {activeTab === "finance" && id && (
         <div className="space-y-6">
           <Card>
-            <CardHeader><CardTitle className="text-lg flex items-center gap-2"><BookOpen className="w-5 h-5 text-blue-600" /> الملف المالي الشامل</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-lg flex items-center gap-2"><BookOpen className="w-5 h-5 text-status-info-foreground" /> الملف المالي الشامل</CardTitle></CardHeader>
             <CardContent>
               <EntityFinancialProfile entityType="project" entityId={id!} />
             </CardContent>
@@ -686,14 +686,14 @@ export default function ProjectDetail() {
           </CardHeader>
           <CardContent>
             {letters.length === 0 ? (
-              <p className="text-center text-gray-400 py-8">لا توجد مراسلات مرتبطة بهذا المشروع</p>
+              <p className="text-center text-muted-foreground py-8">لا توجد مراسلات مرتبطة بهذا المشروع</p>
             ) : (
               <DataTable
                 columns={[
                   { key: "subject", header: "الموضوع", render: (l) => <span className="font-medium">{l.subject}</span> },
                   { key: "direction", header: "الاتجاه", render: (l) => <Badge variant="outline">{l.direction === "outgoing" ? "صادر" : "وارد"}</Badge> },
-                  { key: "type", header: "النوع", render: (l) => <span className="text-gray-500">{l.type || "-"}</span> },
-                  { key: "letterDate", header: "التاريخ", render: (l) => <span className="text-gray-500">{l.letterDate ? formatDateAr(l.letterDate) : "-"}</span> },
+                  { key: "type", header: "النوع", render: (l) => <span className="text-muted-foreground">{l.type || "-"}</span> },
+                  { key: "letterDate", header: "التاريخ", render: (l) => <span className="text-muted-foreground">{l.letterDate ? formatDateAr(l.letterDate) : "-"}</span> },
                   { key: "status", header: "الحالة", render: (l) => <PageStatusBadge status={l.status || "draft"} /> },
                 ]}
                 data={letters}

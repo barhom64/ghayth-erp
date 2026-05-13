@@ -89,10 +89,10 @@ export default function ExpensesPage() {
       header: "المرجع",
       sortable: true,
       render: (e) => (
-        <div className="flex items-center gap-1 font-mono text-blue-600 text-xs">
+        <div className="flex items-center gap-1 font-mono text-status-info-foreground text-xs">
           {e.ref || `#${e.id}`}
           {e.govSyncEnabled && (
-            <span title="مرتبط بنظام حكومي" className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-100 text-green-600 shrink-0">
+            <span title="مرتبط بنظام حكومي" className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-status-success-surface text-status-success-foreground shrink-0">
               <Link2 className="h-2.5 w-2.5" />
             </span>
           )}
@@ -117,7 +117,7 @@ export default function ExpensesPage() {
       render: (e) => (
         <div className="text-xs">
           {e.operationType ? (
-            <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700">{OPERATION_LABELS[e.operationType] || e.operationType}</span>
+            <span className="px-2 py-0.5 rounded bg-status-info-surface text-status-info-foreground">{OPERATION_LABELS[e.operationType] || e.operationType}</span>
           ) : "-"}
         </div>
       ),
@@ -126,14 +126,14 @@ export default function ExpensesPage() {
       key: "accountName",
       header: "الحساب",
       sortable: true,
-      render: (e) => <span className="text-gray-500 text-xs">{e.accountName || "-"}</span>,
+      render: (e) => <span className="text-muted-foreground text-xs">{e.accountName || "-"}</span>,
     },
     {
       key: "amount",
       header: "المبلغ",
       sortable: true,
       render: (e) => (
-        <span className="font-semibold text-red-600">
+        <span className="font-semibold text-status-error-foreground">
           {e.amount ? formatCurrency(Number(e.amount)) : (() => {
             const lines = e.lines || [];
             const total = Array.isArray(lines) ? lines.reduce((s: number, l: any) => s + Number(l?.debit || 0), 0) : 0;
@@ -152,14 +152,14 @@ export default function ExpensesPage() {
       key: "createdAt",
       header: "التاريخ",
       sortable: true,
-      render: (e) => <span className="text-gray-500 text-xs">{e.createdAt ? formatDateAr(e.createdAt) : "-"}</span>,
+      render: (e) => <span className="text-muted-foreground text-xs">{e.createdAt ? formatDateAr(e.createdAt) : "-"}</span>,
     },
     {
       key: "expand",
       header: "",
       render: (e) => (
         <button
-          className="text-gray-400 hover:text-gray-600 p-1"
+          className="text-muted-foreground hover:text-muted-foreground p-1"
           onClick={(ev) => { ev.stopPropagation(); setExpandedId(expandedId === e.id ? null : e.id); }}
         >
           {expandedId === e.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -181,8 +181,8 @@ export default function ExpensesPage() {
     >
       <FinanceTabsNav />
       <KpiGrid items={[
-        { label: "إجمالي المصروفات", value: formatCurrency(totalExpenses), icon: TrendingDown, color: "text-red-600 bg-red-50" },
-        { label: "عدد المصروفات", value: formatNumber(items.length), icon: Wallet, color: "text-blue-600 bg-blue-50" },
+        { label: "إجمالي المصروفات", value: formatCurrency(totalExpenses), icon: TrendingDown, color: "text-status-error-foreground bg-status-error-surface" },
+        { label: "عدد المصروفات", value: formatNumber(items.length), icon: Wallet, color: "text-status-info-foreground bg-status-info-surface" },
         { label: "المتوسط", value: items.length > 0 ? formatCurrency(Math.round(totalExpenses / items.length)) : formatCurrency(0), icon: PieChart, color: "text-purple-600 bg-purple-50" },
         { label: "هذا الشهر", value: formatNumber(items.filter((e: any) => {
           const d = new Date(e.createdAt);
@@ -251,64 +251,64 @@ export default function ExpensesPage() {
         onRetry={() => refetch()}
         emptyMessage="لا توجد مصروفات"
         emptyIcon={<Wallet className="h-6 w-6 text-slate-400" />}
-        rowClassName={(e) => selectedIds.has(e.id) ? "bg-blue-50/50" : undefined}
+        rowClassName={(e) => selectedIds.has(e.id) ? "bg-status-info-surface" : undefined}
         onRowClick={(e) => navigate(`/finance/expenses/${e.id}`)}
         noToolbar
         renderRowExtras={(e) => {
           if (expandedId !== e.id) return null;
           return (
-            <div className="p-4 bg-gray-50/50 space-y-4">
+            <div className="p-4 bg-surface-subtle/50 space-y-4">
               {/* Extended details */}
               <div className="bg-white p-4 rounded-lg border">
                 <h4 className="font-semibold mb-3 text-sm">تفاصيل المصروف</h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                   {e.operationType && (
                     <div>
-                      <span className="text-gray-500">نوع العملية:</span>
+                      <span className="text-muted-foreground">نوع العملية:</span>
                       <span className="block font-medium">{OPERATION_LABELS[e.operationType] || e.operationType}</span>
                     </div>
                   )}
                   {e.expenseType && (
                     <div>
-                      <span className="text-gray-500">التصنيف:</span>
+                      <span className="text-muted-foreground">التصنيف:</span>
                       <span className="block font-medium">{e.expenseType}</span>
                     </div>
                   )}
                   {e.paymentMethod && (
                     <div>
-                      <span className="text-gray-500">طريقة الدفع:</span>
+                      <span className="text-muted-foreground">طريقة الدفع:</span>
                       <span className="block font-medium">{PAYMENT_METHODS[e.paymentMethod] || e.paymentMethod}</span>
                     </div>
                   )}
                   {e.costCenter && (
                     <div>
-                      <span className="text-gray-500">مركز التكلفة:</span>
+                      <span className="text-muted-foreground">مركز التكلفة:</span>
                       <span className="block font-medium">{e.costCenter}</span>
                     </div>
                   )}
                   {e.reference && (
                     <div>
-                      <span className="text-gray-500">رقم المرجع:</span>
+                      <span className="text-muted-foreground">رقم المرجع:</span>
                       <span className="block font-medium">{e.reference}</span>
                     </div>
                   )}
                   {e.relatedEntityType && (
                     <div>
-                      <span className="text-gray-500">الجهة المرتبطة:</span>
+                      <span className="text-muted-foreground">الجهة المرتبطة:</span>
                       <span className="block font-medium">{e.relatedEntityType} #{e.relatedEntityId}</span>
                     </div>
                   )}
                   <div>
-                    <span className="text-gray-500">حالة الدفع:</span>
-                    <span className={`block font-medium ${e.isPaid ? "text-green-600" : "text-orange-600"}`}>
+                    <span className="text-muted-foreground">حالة الدفع:</span>
+                    <span className={`block font-medium ${e.isPaid ? "text-status-success-foreground" : "text-orange-600"}`}>
                       {e.isPaid ? "مدفوع" : "غير مدفوع"}
                     </span>
                   </div>
                   {e.attachmentUrl && (
                     <div>
-                      <span className="text-gray-500">المرفق:</span>
+                      <span className="text-muted-foreground">المرفق:</span>
                       <a href={e.attachmentUrl} target="_blank" rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-blue-600 hover:underline mt-0.5">
+                        className="flex items-center gap-1 text-status-info-foreground hover:underline mt-0.5">
                         <Paperclip className="h-3 w-3" />
                         {e.attachmentType || "عرض المرفق"}
                         <ExternalLink className="h-3 w-3" />

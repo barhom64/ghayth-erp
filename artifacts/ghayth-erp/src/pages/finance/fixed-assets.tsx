@@ -116,22 +116,22 @@ export default function FixedAssetsPage() {
       }
     >
       <KpiGrid items={[
-        { label: "إجمالي الأصول", value: formatNumber(assets.length), icon: Building2, color: "text-blue-600 bg-blue-50" },
-        { label: "نشطة", value: formatNumber(assets.filter((a: any) => a.status === "active").length), icon: PackageCheck, color: "text-green-600 bg-green-50" },
-        { label: "مجمع الإهلاك", value: formatCurrency(totalAccDep), icon: TrendingDown, color: "text-red-600 bg-red-50" },
+        { label: "إجمالي الأصول", value: formatNumber(assets.length), icon: Building2, color: "text-status-info-foreground bg-status-info-surface" },
+        { label: "نشطة", value: formatNumber(assets.filter((a: any) => a.status === "active").length), icon: PackageCheck, color: "text-status-success-foreground bg-status-success-surface" },
+        { label: "مجمع الإهلاك", value: formatCurrency(totalAccDep), icon: TrendingDown, color: "text-status-error-foreground bg-status-error-surface" },
         { label: "القيمة الدفترية", value: formatCurrency(totalBookValue), icon: DollarSign, color: "text-emerald-600 bg-emerald-50" },
       ]} />
 
       <DataTable
         columns={[
-          { key: "code", header: "الكود", render: (a: any) => <span className="font-mono text-xs text-gray-500">{a.code || "-"}</span> },
+          { key: "code", header: "الكود", render: (a: any) => <span className="font-mono text-xs text-muted-foreground">{a.code || "-"}</span> },
           { key: "name", header: "الأصل", render: (a: any) => <span className="font-semibold">{a.name}</span> },
-          { key: "category", header: "الفئة", render: (a: any) => <span className="text-gray-500 text-sm">{a.category || "-"}</span> },
-          { key: "purchaseDate", header: "تاريخ الشراء", render: (a: any) => <span className="text-xs text-gray-500">{a.purchaseDate ? formatDateAr(a.purchaseDate) : "-"}</span> },
+          { key: "category", header: "الفئة", render: (a: any) => <span className="text-muted-foreground text-sm">{a.category || "-"}</span> },
+          { key: "purchaseDate", header: "تاريخ الشراء", render: (a: any) => <span className="text-xs text-muted-foreground">{a.purchaseDate ? formatDateAr(a.purchaseDate) : "-"}</span> },
           { key: "purchaseCost", header: "التكلفة", render: (a: any) => formatCurrency(Number(a.purchaseCost)) },
-          { key: "accumulatedDepreciation", header: "مجمع الإهلاك", render: (a: any) => <span className="text-red-600">{formatCurrency(Number(a.accumulatedDepreciation ?? 0))}</span> },
-          { key: "currentBookValue", header: "القيمة الدفترية", render: (a: any) => <span className="font-bold text-green-600">{formatCurrency(Number(a.currentBookValue ?? a.purchaseCost))}</span> },
-          { key: "usefulLifeYears", header: "العمر (سنة)", render: (a: any) => <span className={!a.usefulLifeYears ? "text-red-500 font-bold" : "text-gray-600"}>{a.usefulLifeYears ?? "—"}</span> },
+          { key: "accumulatedDepreciation", header: "مجمع الإهلاك", render: (a: any) => <span className="text-status-error-foreground">{formatCurrency(Number(a.accumulatedDepreciation ?? 0))}</span> },
+          { key: "currentBookValue", header: "القيمة الدفترية", render: (a: any) => <span className="font-bold text-status-success-foreground">{formatCurrency(Number(a.currentBookValue ?? a.purchaseCost))}</span> },
+          { key: "usefulLifeYears", header: "العمر (سنة)", render: (a: any) => <span className={!a.usefulLifeYears ? "text-status-error font-bold" : "text-muted-foreground"}>{a.usefulLifeYears ?? "—"}</span> },
           { key: "depreciationMethod", header: "طريقة الإهلاك", render: (a: any) => (
             <Badge variant="outline" className="text-xs">
               {a.depreciationMethod === "declining_balance" ? "القسط المتناقص" : "القسط الثابت"}
@@ -219,9 +219,9 @@ export default function FixedAssetsPage() {
               <CardTitle className="text-base">إهلاك: {selectedAsset.name}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="bg-gray-50 p-3 rounded text-sm space-y-1">
+              <div className="bg-surface-subtle p-3 rounded text-sm space-y-1">
                 <div className="flex justify-between"><span>القيمة الدفترية الحالية:</span><span className="font-bold">{formatCurrency(Number(selectedAsset.currentBookValue ?? selectedAsset.purchaseCost))}</span></div>
-                <div className="flex justify-between"><span>مجمع الإهلاك:</span><span className="text-red-600">{formatCurrency(Number(selectedAsset.accumulatedDepreciation ?? 0))}</span></div>
+                <div className="flex justify-between"><span>مجمع الإهلاك:</span><span className="text-status-error-foreground">{formatCurrency(Number(selectedAsset.accumulatedDepreciation ?? 0))}</span></div>
                 <div className="flex justify-between"><span>طريقة الإهلاك:</span><span>{selectedAsset.depreciationMethod === "declining_balance" ? "متناقص" : "ثابت"}</span></div>
               </div>
               <div>
@@ -229,8 +229,8 @@ export default function FixedAssetsPage() {
                 <Input type="month" value={depPeriod} onChange={e => setDepPeriod(e.target.value)} />
               </div>
               {depResult && (
-                <div className="bg-green-50 p-3 rounded border border-green-200">
-                  <p className="font-semibold text-green-700 flex items-center gap-1">
+                <div className="bg-status-success-surface p-3 rounded border border-status-success-surface">
+                  <p className="font-semibold text-status-success-foreground flex items-center gap-1">
                     <CheckCircle className="h-4 w-4" />تم تسجيل الإهلاك
                   </p>
                   <p className="text-sm mt-1">مبلغ الإهلاك: {formatCurrency(depResult.depreciationAmount)}</p>

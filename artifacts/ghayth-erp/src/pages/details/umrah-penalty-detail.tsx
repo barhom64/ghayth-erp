@@ -135,23 +135,23 @@ export default function UmrahPenaltyDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-red-500" />
+            <AlertTriangle className="h-4 w-4 text-status-error" />
             بيانات الغرامة
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           {/* Hero amount (red) */}
           <div className="flex items-baseline gap-2 border-b pb-3">
-            <span className="text-3xl font-bold text-red-700">
+            <span className="text-3xl font-bold text-status-error-foreground">
               {formatCurrency(amount)}
             </span>
-            <span className="text-xs text-gray-500">ر.س</span>
+            <span className="text-xs text-muted-foreground">ر.س</span>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             {penalty?.penaltyType && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">نوع الغرامة</p>
+                <p className="text-xs text-muted-foreground mb-0.5">نوع الغرامة</p>
                 <Badge variant="destructive">
                   {PENALTY_TYPE_LABELS[penalty.penaltyType] || penalty.penaltyType}
                 </Badge>
@@ -159,30 +159,30 @@ export default function UmrahPenaltyDetail() {
             )}
             {penalty?.pilgrimName && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">المعتمر</p>
-                <span className="text-gray-800 font-medium">{penalty.pilgrimName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">المعتمر</p>
+                <span className="text-status-neutral-foreground font-medium">{penalty.pilgrimName}</span>
               </div>
             )}
             {penalty?.agentName && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الوكيل</p>
-                <span className="text-gray-800 font-medium">{penalty.agentName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">الوكيل</p>
+                <span className="text-status-neutral-foreground font-medium">{penalty.agentName}</span>
               </div>
             )}
             {penalty?.appliedDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ التطبيق</p>
-                <span className="text-gray-800 flex items-center gap-1">
-                  <Calendar className="h-3 w-3 text-gray-400" />
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ التطبيق</p>
+                <span className="text-status-neutral-foreground flex items-center gap-1">
+                  <Calendar className="h-3 w-3 text-muted-foreground" />
                   {formatDateAr(penalty.appliedDate)}
                 </span>
               </div>
             )}
             {penalty?.dueDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ الاستحقاق</p>
-                <span className="text-gray-800 flex items-center gap-1">
-                  <Calendar className="h-3 w-3 text-gray-400" />
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ الاستحقاق</p>
+                <span className="text-status-neutral-foreground flex items-center gap-1">
+                  <Calendar className="h-3 w-3 text-muted-foreground" />
                   {formatDateAr(penalty.dueDate)}
                 </span>
               </div>
@@ -191,15 +191,15 @@ export default function UmrahPenaltyDetail() {
 
           {penalty?.reason && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">السبب</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{penalty.reason}</p>
+              <p className="text-xs text-muted-foreground mb-1">السبب</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{penalty.reason}</p>
             </div>
           )}
 
           {penalty?.notes && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">ملاحظات</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{penalty.notes}</p>
+              <p className="text-xs text-muted-foreground mb-1">ملاحظات</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{penalty.notes}</p>
             </div>
           )}
         </CardContent>
@@ -213,7 +213,7 @@ export default function UmrahPenaltyDetail() {
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500">الحالة</span>
+              <span className="text-xs text-muted-foreground">الحالة</span>
               <Badge
                 variant={
                   statusTone(penalty?.status) === "destructive"
@@ -226,8 +226,8 @@ export default function UmrahPenaltyDetail() {
             </div>
             {penalty?.appliedDate && (
               <div className="flex items-center justify-between pt-2 border-t">
-                <span className="text-xs text-gray-500">طُبقت في</span>
-                <span className="text-gray-800 text-xs">
+                <span className="text-xs text-muted-foreground">طُبقت في</span>
+                <span className="text-status-neutral-foreground text-xs">
                   {formatDateAr(penalty.appliedDate)}
                 </span>
               </div>

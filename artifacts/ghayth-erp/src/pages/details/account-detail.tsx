@@ -46,18 +46,18 @@ export default function AccountDetail() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <BookOpen className="h-4 w-4 text-gray-500" />
+            <BookOpen className="h-4 w-4 text-muted-foreground" />
             بيانات الحساب
           </CardTitle>
         </CardHeader>
         <CardContent className="text-sm space-y-2">
           <div className="grid grid-cols-2 gap-3">
-            <div><span className="text-gray-500">الاسم:</span> {account?.name || "—"}</div>
-            <div><span className="text-gray-500">الرمز:</span> {account?.code || "—"}</div>
-            <div><span className="text-gray-500">النوع:</span> {account?.type || "—"}</div>
-            <div><span className="text-gray-500">الرصيد:</span> {account?.balance ?? "—"}</div>
+            <div><span className="text-muted-foreground">الاسم:</span> {account?.name || "—"}</div>
+            <div><span className="text-muted-foreground">الرمز:</span> {account?.code || "—"}</div>
+            <div><span className="text-muted-foreground">النوع:</span> {account?.type || "—"}</div>
+            <div><span className="text-muted-foreground">الرصيد:</span> {account?.balance ?? "—"}</div>
           </div>
-          {account?.description && <div className="pt-2 border-t"><span className="text-gray-500">الوصف:</span> {account.description}</div>}
+          {account?.description && <div className="pt-2 border-t"><span className="text-muted-foreground">الوصف:</span> {account.description}</div>}
         </CardContent>
       </Card>
     </div>

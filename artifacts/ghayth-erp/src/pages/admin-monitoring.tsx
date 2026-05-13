@@ -53,14 +53,14 @@ export default function AdminMonitoring() {
 
   const cronJobColumns: DataTableColumn<any>[] = [
     { key: "name", header: "المهمة", searchable: true, render: (r: any) => <span className="font-medium text-xs">{r.name}</span> },
-    { key: "schedule", header: "الجدول", render: (r: any) => <span className="font-mono text-xs text-gray-500">{r.schedule}</span> },
+    { key: "schedule", header: "الجدول", render: (r: any) => <span className="font-mono text-xs text-muted-foreground">{r.schedule}</span> },
     { key: "lastRunAt", header: "آخر تشغيل", render: (r: any) => <span className="text-xs">{r.lastRunAt ? formatDateAr(r.lastRunAt) : "-"}</span> },
     { key: "lastStatus", header: "الحالة", render: (r: any) => (
       <div className="flex items-center gap-1">
         {r.isActive ? (
-          <CheckCircle className="w-3 h-3 text-green-500" />
+          <CheckCircle className="w-3 h-3 text-status-success" />
         ) : (
-          <XCircle className="w-3 h-3 text-gray-400" />
+          <XCircle className="w-3 h-3 text-muted-foreground" />
         )}
         {r.lastStatus && <PageStatusBadge status={r.lastStatus} />}
       </div>
@@ -75,7 +75,7 @@ export default function AdminMonitoring() {
   ];
 
   const errorColumns: DataTableColumn<any>[] = [
-    { key: "action", header: "الإجراء", searchable: true, render: (r: any) => <span className="font-medium text-xs text-red-600">{r.action}</span> },
+    { key: "action", header: "الإجراء", searchable: true, render: (r: any) => <span className="font-medium text-xs text-status-error-foreground">{r.action}</span> },
     { key: "entity", header: "الوحدة", render: (r: any) => <span className="text-xs">{r.entity || "-"}</span> },
     { key: "details", header: "التفاصيل", render: (r: any) => <span className="text-xs max-w-[300px] truncate block">{typeof r.details === "object" ? JSON.stringify(r.details) : r.details || "-"}</span> },
     { key: "createdAt", header: "التاريخ", render: (r: any) => <span className="text-xs">{formatDateAr(r.createdAt)}</span> },
@@ -101,13 +101,13 @@ export default function AdminMonitoring() {
         <Card className={cn(
           "border",
           redisRateLimit === "fallback-memory"
-            ? "border-amber-200 bg-amber-50/40"
-            : "border-gray-200 bg-gray-50/60",
+            ? "border-status-warning-surface bg-status-warning-surface/40"
+            : "border-border bg-surface-subtle/60",
         )}>
           <CardContent className="p-4 flex items-start gap-3">
             <AlertTriangle className={cn(
               "w-5 h-5 mt-0.5 shrink-0",
-              redisRateLimit === "fallback-memory" ? "text-amber-600" : "text-gray-500",
+              redisRateLimit === "fallback-memory" ? "text-status-warning-foreground" : "text-muted-foreground",
             )} />
             <div className="text-sm">
               <p className="font-semibold mb-0.5">
@@ -115,7 +115,7 @@ export default function AdminMonitoring() {
                   ? "تنبيه: تحديد المعدل يعمل بالذاكرة المحلية فقط"
                   : "تحديد المعدل غير مفعّل عبر Redis"}
               </p>
-              <p className="text-xs text-gray-600 leading-relaxed">
+              <p className="text-xs text-muted-foreground leading-relaxed">
                 {redisRateLimit === "fallback-memory"
                   ? "تعذّر الاتصال بخادم Redis، لذا تُفرض حدود الطلبات داخل كل نسخة من الخادم على حدة وتُمسح عند إعادة التشغيل. الحدود لا تزال تعمل، لكنها أضعف من المعتاد. يُرجى مراجعة المتغيّر REDIS_URL وحالة Upstash."
                   : "متغيّر REDIS_URL غير مضبوط، لذا تُحفظ عدّادات تحديد المعدل في ذاكرة العملية فقط. هذا مقبول في بيئة التطوير، أمّا في الإنتاج فيُفضَّل إعداد Redis مشترك."}
@@ -127,30 +127,30 @@ export default function AdminMonitoring() {
 
       {/* Failed cron jobs banner — full error text, sorted to the top */}
       {failedCronJobs.length > 0 && (
-        <Card className="border-red-200 bg-red-50/30">
+        <Card className="border-status-error-surface bg-status-error-surface">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2 text-red-700">
+            <CardTitle className="text-sm flex items-center gap-2 text-status-error-foreground">
               <AlertTriangle className="w-4 h-4" />
               مهام مجدولة فاشلة ({failedCronJobs.length})
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {failedCronJobs.map((job: any, i: number) => (
-              <div key={i} className="bg-white border border-red-100 rounded p-3 text-sm">
+              <div key={i} className="bg-white border border-status-error-surface rounded p-3 text-sm">
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-red-800">{job.name}</p>
-                    {job.description && <p className="text-xs text-gray-600 mt-0.5">{job.description}</p>}
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="font-semibold text-status-error-foreground">{job.name}</p>
+                    {job.description && <p className="text-xs text-muted-foreground mt-0.5">{job.description}</p>}
+                    <p className="text-xs text-muted-foreground mt-1">
                       الجدولة: <span className="font-mono">{job.schedule}</span>
                       {job.lastRunAt && <span className="ms-2">— آخر تشغيل: {formatDateAr(job.lastRunAt)}</span>}
                     </p>
                   </div>
                 </div>
                 {job.lastError && (
-                  <div className="mt-2 bg-red-50 border border-red-100 rounded p-2">
-                    <p className="text-[10px] font-medium text-red-700 mb-0.5">تفاصيل الخطأ:</p>
-                    <pre className="text-xs text-red-800 whitespace-pre-wrap break-words font-mono leading-relaxed">
+                  <div className="mt-2 bg-status-error-surface border border-status-error-surface rounded p-2">
+                    <p className="text-[10px] font-medium text-status-error-foreground mb-0.5">تفاصيل الخطأ:</p>
+                    <pre className="text-xs text-status-error-foreground whitespace-pre-wrap break-words font-mono leading-relaxed">
                       {job.lastError}
                     </pre>
                   </div>
@@ -162,35 +162,35 @@ export default function AdminMonitoring() {
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className={cn("border-0 shadow-sm", services.api?.status === "healthy" ? "bg-green-50/50" : "bg-red-50/50")}>
+        <Card className={cn("border-0 shadow-sm", services.api?.status === "healthy" ? "bg-status-success-surface" : "bg-status-error-surface")}>
           <CardContent className="p-4 flex items-center gap-3">
-            <Server className={cn("w-8 h-8", services.api?.status === "healthy" ? "text-green-600" : "text-red-600")} />
+            <Server className={cn("w-8 h-8", services.api?.status === "healthy" ? "text-status-success-foreground" : "text-status-error-foreground")} />
             <div>
               <p className="text-sm font-semibold">خادم الربط البرمجي</p>
-              <p className="text-xs text-gray-500">{services.api?.status === "healthy" ? "يعمل" : "متوقف"}</p>
-              <p className="text-xs text-gray-400">{formatUptime(services.api?.uptime || 0)}</p>
+              <p className="text-xs text-muted-foreground">{services.api?.status === "healthy" ? "يعمل" : "متوقف"}</p>
+              <p className="text-xs text-muted-foreground">{formatUptime(services.api?.uptime || 0)}</p>
             </div>
           </CardContent>
         </Card>
 
-        <Card className={cn("border-0 shadow-sm", services.database?.status === "healthy" ? "bg-green-50/50" : "bg-red-50/50")}>
+        <Card className={cn("border-0 shadow-sm", services.database?.status === "healthy" ? "bg-status-success-surface" : "bg-status-error-surface")}>
           <CardContent className="p-4 flex items-center gap-3">
-            <Database className={cn("w-8 h-8", services.database?.status === "healthy" ? "text-green-600" : "text-red-600")} />
+            <Database className={cn("w-8 h-8", services.database?.status === "healthy" ? "text-status-success-foreground" : "text-status-error-foreground")} />
             <div>
               <p className="text-sm font-semibold">قاعدة البيانات</p>
-              <p className="text-xs text-gray-500">{services.database?.status === "healthy" ? "متصل" : "خطأ"}</p>
-              <p className="text-xs text-gray-400">{services.database?.latency}ms | {services.database?.size}</p>
+              <p className="text-xs text-muted-foreground">{services.database?.status === "healthy" ? "متصل" : "خطأ"}</p>
+              <p className="text-xs text-muted-foreground">{services.database?.latency}ms | {services.database?.size}</p>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-sm bg-blue-50/50">
+        <Card className="border-0 shadow-sm bg-status-info-surface">
           <CardContent className="p-4 flex items-center gap-3">
-            <Clock className="w-8 h-8 text-blue-600" />
+            <Clock className="w-8 h-8 text-status-info-foreground" />
             <div>
               <p className="text-sm font-semibold">مهام مجدولة</p>
-              <p className="text-xs text-gray-500">{services.crons?.active || 0} نشطة من {services.crons?.total || 0}</p>
-              {(services.crons?.failed || 0) > 0 && <p className="text-xs text-red-500">{services.crons?.failed} فاشلة</p>}
+              <p className="text-xs text-muted-foreground">{services.crons?.active || 0} نشطة من {services.crons?.total || 0}</p>
+              {(services.crons?.failed || 0) > 0 && <p className="text-xs text-status-error">{services.crons?.failed} فاشلة</p>}
             </div>
           </CardContent>
         </Card>
@@ -200,34 +200,34 @@ export default function AdminMonitoring() {
             <Plug className="w-8 h-8 text-indigo-600" />
             <div>
               <p className="text-sm font-semibold">التكاملات</p>
-              <p className="text-xs text-gray-500">{services.integrations?.active || 0} نشطة من {services.integrations?.total || 0}</p>
-              {(services.integrations?.pendingMessages || 0) > 0 && <p className="text-xs text-amber-500">{services.integrations?.pendingMessages} رسالة معلقة</p>}
+              <p className="text-xs text-muted-foreground">{services.integrations?.active || 0} نشطة من {services.integrations?.total || 0}</p>
+              {(services.integrations?.pendingMessages || 0) > 0 && <p className="text-xs text-status-warning">{services.integrations?.pendingMessages} رسالة معلقة</p>}
             </div>
           </CardContent>
         </Card>
 
         <Card className={cn(
           "border-0 shadow-sm",
-          redisRateLimit === "connected" ? "bg-green-50/50"
-            : redisRateLimit === "fallback-memory" ? "bg-amber-50/50"
-            : "bg-gray-50/60",
+          redisRateLimit === "connected" ? "bg-status-success-surface"
+            : redisRateLimit === "fallback-memory" ? "bg-status-warning-surface/50"
+            : "bg-surface-subtle/60",
         )}>
           <CardContent className="p-4 flex items-center gap-3">
             <Gauge className={cn(
               "w-8 h-8",
-              redisRateLimit === "connected" ? "text-green-600"
-                : redisRateLimit === "fallback-memory" ? "text-amber-600"
-                : "text-gray-500",
+              redisRateLimit === "connected" ? "text-status-success-foreground"
+                : redisRateLimit === "fallback-memory" ? "text-status-warning-foreground"
+                : "text-muted-foreground",
             )} />
             <div>
               <p className="text-sm font-semibold">تحديد المعدل (Redis)</p>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted-foreground">
                 {redisRateLimit === "connected" ? "متصل ومشترك"
                   : redisRateLimit === "fallback-memory" ? "ذاكرة محلية (احتياطي)"
                   : redisRateLimit === "disabled" ? "غير مفعّل"
                   : "غير معروف"}
               </p>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-muted-foreground">
                 {redisRateLimit === "connected" ? "حدود الطلبات تُحفظ في Redis"
                   : redisRateLimit === "fallback-memory" ? "حدود تُفرض داخل النسخة فقط"
                   : "REDIS_URL غير مضبوط"}
@@ -261,7 +261,7 @@ export default function AdminMonitoring() {
           <CardContent className="space-y-2">
             <div className="flex justify-between text-sm">
               <span>محاولات دخول فاشلة (24 س)</span>
-              <span className={cn("font-semibold", security.failedLogins24h > 10 ? "text-red-600" : "text-green-600")}>
+              <span className={cn("font-semibold", security.failedLogins24h > 10 ? "text-status-error-foreground" : "text-status-success-foreground")}>
                 {security.failedLogins24h || 0}
               </span>
             </div>
@@ -302,7 +302,7 @@ export default function AdminMonitoring() {
 
       {recentErrors.length > 0 && (
         <Card>
-          <CardHeader><CardTitle className="text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-red-500" />أحدث الأخطاء</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-status-error" />أحدث الأخطاء</CardTitle></CardHeader>
           <CardContent className="p-0">
             <DataTable
               columns={errorColumns}

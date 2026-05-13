@@ -107,9 +107,9 @@ export default function LeavesCreate() {
   return (
     <CreatePageLayout title="طلب إجازة جديد" backPath="/hr/leaves">
       {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -120,13 +120,13 @@ export default function LeavesCreate() {
 
       {balances.length > 0 && (
         <div className="mb-6">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-status-neutral-foreground mb-3 flex items-center gap-2">
             <Calendar className="w-4 h-4" />
             رصيد الإجازات
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {balances.slice(0, 4).map((b: any) => (
-              <Card key={b.id || b.type} className={`border ${String(b.leaveTypeId) === form.leaveTypeId ? "border-blue-300 bg-blue-50/50 ring-1 ring-blue-200" : "border-gray-100"}`}>
+              <Card key={b.id || b.type} className={`border ${String(b.leaveTypeId) === form.leaveTypeId ? "border-status-info-surface bg-status-info-surface ring-1 ring-blue-200" : "border-border"}`}>
                 <CardContent className="p-3 text-center">
                   <p className="text-xs text-muted-foreground">{b.name || b.typeName || b.type || "إجازة"}</p>
                   <p className="text-xl font-bold mt-1">{b.remaining ?? b.balance ?? 0}</p>
@@ -140,7 +140,7 @@ export default function LeavesCreate() {
 
       <div className="space-y-6">
         <div>
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">تفاصيل الإجازة</h3>
+          <h3 className="text-sm font-semibold text-status-neutral-foreground mb-3">تفاصيل الإجازة</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormFieldWrapper label="نوع الإجازة" required error={fieldErrors.leaveTypeId}>
               <Select value={form.leaveTypeId} onValueChange={(v) => setForm((f) => ({ ...f, leaveTypeId: v }))}>
@@ -171,16 +171,16 @@ export default function LeavesCreate() {
         </div>
 
         {daysCount > 0 && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="bg-status-info-surface border border-status-info-surface rounded-lg p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-blue-600" />
-                <span className="text-sm font-medium text-blue-800">مدة الإجازة</span>
+                <Clock className="w-4 h-4 text-status-info-foreground" />
+                <span className="text-sm font-medium text-status-info-foreground">مدة الإجازة</span>
               </div>
-              <Badge className="bg-blue-100 text-blue-800 text-base px-3 py-1">{daysCount} {daysCount === 1 ? "يوم" : daysCount === 2 ? "يومان" : daysCount <= 10 ? "أيام" : "يوم"}</Badge>
+              <Badge className="bg-status-info-surface text-status-info-foreground text-base px-3 py-1">{daysCount} {daysCount === 1 ? "يوم" : daysCount === 2 ? "يومان" : daysCount <= 10 ? "أيام" : "يوم"}</Badge>
             </div>
             {selectedBalance && daysCount > (selectedBalance.remaining ?? selectedBalance.balance ?? 999) && (
-              <div className="mt-2 flex items-center gap-2 text-amber-700 text-xs">
+              <div className="mt-2 flex items-center gap-2 text-status-warning-foreground text-xs">
                 <Info className="w-3.5 h-3.5" />
                 <span>عدد الأيام المطلوبة يتجاوز رصيدك المتبقي ({selectedBalance.remaining ?? selectedBalance.balance} يوم)</span>
               </div>
@@ -189,7 +189,7 @@ export default function LeavesCreate() {
         )}
 
         <div>
-          <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-status-neutral-foreground mb-3 flex items-center gap-2">
             <User className="w-4 h-4" />
             معلومات إضافية
           </h3>

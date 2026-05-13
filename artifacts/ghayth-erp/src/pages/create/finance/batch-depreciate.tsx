@@ -43,9 +43,9 @@ export default function BatchDepreciatePage() {
       backPath="/finance/fixed-assets"
     >
       {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="space-y-4">
@@ -64,9 +64,9 @@ export default function BatchDepreciatePage() {
           {batchDepMutation.isPending ? "جارٍ الإهلاك..." : `إهلاك جميع الأصول — ${form.depPeriod}`}
         </Button>
         {batchResult && (
-          <div className="bg-green-50 p-4 rounded-lg border border-green-200 space-y-1">
-            <p className="font-semibold text-green-700">{batchResult.message}</p>
-            <p className="text-sm text-gray-600">معالج: {batchResult.processed} | تخطي: {batchResult.skipped}</p>
+          <div className="bg-status-success-surface p-4 rounded-lg border border-status-success-surface space-y-1">
+            <p className="font-semibold text-status-success-foreground">{batchResult.message}</p>
+            <p className="text-sm text-muted-foreground">معالج: {batchResult.processed} | تخطي: {batchResult.skipped}</p>
           </div>
         )}
       </div>

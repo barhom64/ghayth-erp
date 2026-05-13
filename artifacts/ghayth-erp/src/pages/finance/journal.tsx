@@ -98,7 +98,7 @@ export default function JournalPage() {
       header: "المرجع",
       sortable: true,
       render: (j) => (
-        <span className="font-mono text-blue-600 text-xs">{j.ref || `JE-${j.id}`}</span>
+        <span className="font-mono text-status-info-foreground text-xs">{j.ref || `JE-${j.id}`}</span>
       ),
     },
     {
@@ -192,7 +192,7 @@ export default function JournalPage() {
     >
       <FinanceTabsNav />
       <KpiGrid items={[
-        { label: "إجمالي القيود", value: formatNumber(totalEntries), icon: ScrollText, color: "text-blue-600 bg-blue-50" },
+        { label: "إجمالي القيود", value: formatNumber(totalEntries), icon: ScrollText, color: "text-status-info-foreground bg-status-info-surface" },
         { label: "هذا الشهر", value: formatNumber(items.filter((j: any) => { const d = new Date(j.createdAt); const now = new Date(); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); }).length), icon: Calendar, color: "text-orange-600 bg-orange-50" },
         { label: "إجمالي المدين", value: formatCurrency(totalDebit), icon: ArrowLeftRight, color: "text-emerald-600 bg-emerald-50" },
         { label: "مسودات", value: formatNumber(items.filter((j: any) => j.status === "draft").length), icon: FileEdit, color: "text-violet-600 bg-violet-50" },
@@ -254,12 +254,12 @@ export default function JournalPage() {
           const totalD = lines.reduce((s: number, l: any) => s + Number(l.debit || 0), 0);
           const totalC = lines.reduce((s: number, l: any) => s + Number(l.credit || 0), 0);
           return (
-            <div className="bg-gray-50 px-6 py-3">
+            <div className="bg-surface-subtle px-6 py-3">
               <DataTable
                 columns={[
                   { key: "accountCode", header: "الحساب", render: (r: any) => <span className="font-mono text-sm">{r.accountCode}</span> },
                   { key: "debit", header: "مدين", render: (r: any) => <span className="text-emerald-600 font-medium">{Number(r.debit || 0) > 0 ? formatCurrency(r.debit) : "-"}</span> },
-                  { key: "credit", header: "دائن", render: (r: any) => <span className="text-red-600 font-medium">{Number(r.credit || 0) > 0 ? formatCurrency(r.credit) : "-"}</span> },
+                  { key: "credit", header: "دائن", render: (r: any) => <span className="text-status-error-foreground font-medium">{Number(r.credit || 0) > 0 ? formatCurrency(r.credit) : "-"}</span> },
                 ] satisfies DataTableColumn<any>[]}
                 data={lines}
                 noToolbar
@@ -270,7 +270,7 @@ export default function JournalPage() {
                   <div className="flex gap-6 font-bold text-sm pt-1">
                     <span>المجموع</span>
                     <span className="text-emerald-700">{formatCurrency(totalD)}</span>
-                    <span className="text-red-700">{formatCurrency(totalC)}</span>
+                    <span className="text-status-error-foreground">{formatCurrency(totalC)}</span>
                   </div>
                 }
               />

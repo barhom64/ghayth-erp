@@ -111,7 +111,7 @@ function Support() {
             onDelete={() => startDelete(t.id)}
             deletePerm="support:delete"
           />
-          <button onClick={() => setExpandedId(expandedId === t.id ? null : t.id)} className="text-gray-400 hover:text-gray-600 p-1">
+          <button onClick={() => setExpandedId(expandedId === t.id ? null : t.id)} className="text-muted-foreground hover:text-muted-foreground p-1">
             {expandedId === t.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
         </div>
@@ -140,8 +140,8 @@ function Support() {
       }
     >
       <KpiGrid items={[
-        { label: "إجمالي التذاكر", value: stats?.totalTickets || 0, icon: Headphones, color: "text-blue-600 bg-blue-50" },
-        { label: "مفتوحة", value: stats?.openTickets || 0, icon: Clock, color: "text-amber-600 bg-amber-50" },
+        { label: "إجمالي التذاكر", value: stats?.totalTickets || 0, icon: Headphones, color: "text-status-info-foreground bg-status-info-surface" },
+        { label: "مفتوحة", value: stats?.openTickets || 0, icon: Clock, color: "text-status-warning-foreground bg-status-warning-surface" },
         { label: "محلولة", value: stats?.resolvedTickets || 0, icon: CheckCircle, color: "text-emerald-600 bg-emerald-50" },
         { label: "هذا الأسبوع", value: stats?.slaBreach || 0, icon: AlertTriangle, color: "text-rose-600 bg-rose-50" },
       ]} />
@@ -214,7 +214,7 @@ function Support() {
               if (editingId === t.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(t.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
               if (deletingId === t.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(t.id)} onCancel={cancelDelete} isPending={isPending} itemName={t.title} entityType="ticket" entityId={t.id} />;
               if (expandedId === t.id) return (
-                <div className="space-y-3 p-2 bg-gray-50/50">
+                <div className="space-y-3 p-2 bg-surface-subtle/50">
                   <EntityTags entityType="ticket" entityId={t.id} />
                   <EntityComments entityType="ticket" entityId={t.id} />
                 </div>
@@ -254,14 +254,14 @@ function KBManagement() {
   const kbColumns: DataTableColumn<any>[] = [
     { key: "title", header: "العنوان", sortable: true, searchable: true, render: (item) => <span className="font-medium">{item.title}</span> },
     { key: "category", header: "التصنيف", sortable: true, searchable: true, render: (item) => <span className="text-muted-foreground">{item.category || "-"}</span> },
-    { key: "views", header: "المشاهدات", sortable: true, render: (item) => <span className="flex items-center gap-1 text-sm"><Eye className="h-3 w-3 text-gray-400" />{item.views || 0}</span> },
+    { key: "views", header: "المشاهدات", sortable: true, render: (item) => <span className="flex items-center gap-1 text-sm"><Eye className="h-3 w-3 text-muted-foreground" />{item.views || 0}</span> },
     {
       key: "helpful", header: "مفيدة / غير مفيدة",
       render: (item) => (
         <span className="flex items-center gap-2 text-xs">
-          <span className="text-green-600 flex items-center gap-0.5"><ThumbsUp className="h-3 w-3" />{item.helpful || 0}</span>
-          <span className="text-red-500">/</span>
-          <span className="text-red-600">{item.notHelpful || 0}</span>
+          <span className="text-status-success-foreground flex items-center gap-0.5"><ThumbsUp className="h-3 w-3" />{item.helpful || 0}</span>
+          <span className="text-status-error">/</span>
+          <span className="text-status-error-foreground">{item.notHelpful || 0}</span>
         </span>
       ),
     },
@@ -354,7 +354,7 @@ function KBManagement() {
       )}
 
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><BookOpen className="h-5 w-5 text-blue-600" />مقالات قاعدة المعرفة</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><BookOpen className="h-5 w-5 text-status-info-foreground" />مقالات قاعدة المعرفة</CardTitle></CardHeader>
         <CardContent>
           <DataTable
             columns={kbColumns}
@@ -390,7 +390,7 @@ function CSATStats() {
     {
       key: "avg", header: "متوسط رضا العملاء",
       render: (s) => (
-        <span className={`font-bold ${Number(s.avg) >= 4 ? "text-green-600" : Number(s.avg) >= 3 ? "text-amber-600" : "text-red-600"}`}>
+        <span className={`font-bold ${Number(s.avg) >= 4 ? "text-status-success-foreground" : Number(s.avg) >= 3 ? "text-status-warning-foreground" : "text-status-error-foreground"}`}>
           {Number(s.avg).toFixed(1)} ★
         </span>
       ),
@@ -408,21 +408,21 @@ function CSATStats() {
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <Card className="border-0 shadow-sm col-span-2 md:col-span-1">
           <CardContent className="p-4 text-center">
-            <Star className="h-8 w-8 text-amber-500 mx-auto mb-2" />
-            <p className="text-3xl font-bold text-amber-600">{avg ? Number(avg).toFixed(1) : "—"}</p>
-            <p className="text-sm text-gray-500 mt-1">متوسط رضا العملاء</p>
+            <Star className="h-8 w-8 text-status-warning mx-auto mb-2" />
+            <p className="text-3xl font-bold text-status-warning-foreground">{avg ? Number(avg).toFixed(1) : "—"}</p>
+            <p className="text-sm text-muted-foreground mt-1">متوسط رضا العملاء</p>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
             <p className="text-2xl font-bold">{csatResp?.total || 0}</p>
-            <p className="text-xs text-gray-500">إجمالي التقييمات</p>
+            <p className="text-xs text-muted-foreground">إجمالي التقييمات</p>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
-            <p className="text-2xl font-bold text-green-600">{csatResp?.fiveStars || 0}</p>
-            <p className="text-xs text-gray-500">تقييمات ممتازة (5⭐)</p>
+            <p className="text-2xl font-bold text-status-success-foreground">{csatResp?.fiveStars || 0}</p>
+            <p className="text-xs text-muted-foreground">تقييمات ممتازة (5⭐)</p>
           </CardContent>
         </Card>
       </div>

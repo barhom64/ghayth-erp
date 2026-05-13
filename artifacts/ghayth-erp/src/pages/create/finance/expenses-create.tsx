@@ -323,9 +323,9 @@ export default function ExpensesCreate() {
   return (
     <CreatePageLayout title="إضافة مصروف جديد" backPath="/finance/expenses" isDirty={isDirty}>
       {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div data-form>
@@ -527,12 +527,12 @@ export default function ExpensesCreate() {
           <div className="flex items-center gap-2">
             <Paperclip className="h-4 w-4" />
             <h3 className="font-semibold text-sm text-muted-foreground">المرفقات</h3>
-            {attachmentRequired && <span className="text-xs text-red-500 font-medium">(إلزامي لهذا النوع)</span>}
+            {attachmentRequired && <span className="text-xs text-status-error font-medium">(إلزامي لهذا النوع)</span>}
           </div>
           {attachmentRequired && !form.attachmentUrl && (
-            <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-md">
-              <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
-              <p className="text-sm text-red-700">هذا النوع من العمليات يستوجب إرفاق مستند داعم (فاتورة، وصل استلام، أو إشعار تحويل) قبل الحفظ.</p>
+            <div className="flex items-start gap-2 p-3 bg-status-error-surface border border-status-error-surface rounded-md">
+              <AlertCircle className="h-4 w-4 text-status-error mt-0.5 shrink-0" />
+              <p className="text-sm text-status-error-foreground">هذا النوع من العمليات يستوجب إرفاق مستند داعم (فاتورة، وصل استلام، أو إشعار تحويل) قبل الحفظ.</p>
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -576,10 +576,10 @@ export default function ExpensesCreate() {
         </div>
 
         {GOV_LINKED_OPERATION_TYPES.includes(form.operationType) && (
-          <div className="border border-blue-200 rounded-lg p-4 mb-4 space-y-3 bg-blue-50/30">
+          <div className="border border-status-info-surface rounded-lg p-4 mb-4 space-y-3 bg-status-info-surface">
             <div className="flex items-center gap-2">
-              <Link2 className="h-4 w-4 text-blue-600" />
-              <h3 className="font-semibold text-sm text-blue-700">الربط بنظام حكومي</h3>
+              <Link2 className="h-4 w-4 text-status-info-foreground" />
+              <h3 className="font-semibold text-sm text-status-info-foreground">الربط بنظام حكومي</h3>
             </div>
             <div className="flex items-center gap-3">
               <Checkbox
@@ -649,7 +649,7 @@ export default function ExpensesCreate() {
             <h3 className="font-semibold text-sm text-muted-foreground">القيد اليومي المتوقع</h3>
             <table className="w-full text-sm border">
               <thead>
-                <tr className="bg-gray-50 border-b">
+                <tr className="bg-surface-subtle border-b">
                   <th className="p-2 text-start">الحساب</th>
                   <th className="p-2 text-start">مدين</th>
                   <th className="p-2 text-start">دائن</th>
@@ -659,14 +659,14 @@ export default function ExpensesCreate() {
                 {journalPreviewLines.map((line, idx) => (
                   <tr key={idx} className="border-b">
                     <td className="p-2 font-mono text-xs">{line.account}</td>
-                    <td className="p-2 text-red-600">{line.debit > 0 ? formatCurrency(line.debit) : ""}</td>
-                    <td className="p-2 text-green-600">{line.credit > 0 ? formatCurrency(line.credit) : ""}</td>
+                    <td className="p-2 text-status-error-foreground">{line.debit > 0 ? formatCurrency(line.debit) : ""}</td>
+                    <td className="p-2 text-status-success-foreground">{line.credit > 0 ? formatCurrency(line.credit) : ""}</td>
                   </tr>
                 ))}
-                <tr className="bg-gray-50 font-semibold">
+                <tr className="bg-surface-subtle font-semibold">
                   <td className="p-2">الإجمالي</td>
-                  <td className="p-2 text-red-600">{formatCurrency(journalPreviewLines.reduce((s, l) => s + l.debit, 0))}</td>
-                  <td className="p-2 text-green-600">{formatCurrency(journalPreviewLines.reduce((s, l) => s + l.credit, 0))}</td>
+                  <td className="p-2 text-status-error-foreground">{formatCurrency(journalPreviewLines.reduce((s, l) => s + l.debit, 0))}</td>
+                  <td className="p-2 text-status-success-foreground">{formatCurrency(journalPreviewLines.reduce((s, l) => s + l.credit, 0))}</td>
                 </tr>
               </tbody>
             </table>
@@ -692,7 +692,7 @@ export default function ExpensesCreate() {
         <div className="border rounded-lg p-4 mb-4 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-sm text-muted-foreground flex items-center gap-2">
-              <span className="text-green-600">🏛</span>
+              <span className="text-status-success-foreground">🏛</span>
               ربط مع هيئة الزكاة والضريبة والجمارك
             </h3>
             <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -728,9 +728,9 @@ export default function ExpensesCreate() {
                   onChange={(v) => setForm({ ...form, exemptionReason: v })}
                   placeholder="أدخل سبب الإعفاء..." />
               )}
-              <div className="md:col-span-3 flex items-start gap-2 p-3 bg-green-50 border border-green-200 rounded-md">
-                <span className="text-green-600 text-xs mt-0.5">✓</span>
-                <p className="text-xs text-green-700">سيتم ربط هذا المصروف مع منظومة الفوترة الإلكترونية لهيئة الزكاة والضريبة وتوليد رمز استجابة سريعة متوافق عند الإرسال للهيئة.</p>
+              <div className="md:col-span-3 flex items-start gap-2 p-3 bg-status-success-surface border border-status-success-surface rounded-md">
+                <span className="text-status-success-foreground text-xs mt-0.5">✓</span>
+                <p className="text-xs text-status-success-foreground">سيتم ربط هذا المصروف مع منظومة الفوترة الإلكترونية لهيئة الزكاة والضريبة وتوليد رمز استجابة سريعة متوافق عند الإرسال للهيئة.</p>
               </div>
             </div>
           )}

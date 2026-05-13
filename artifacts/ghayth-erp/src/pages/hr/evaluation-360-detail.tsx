@@ -20,8 +20,8 @@ function ScoreCircle({ score, label, color = "blue" }: { score: number | null; l
     purple: "stroke-purple-500",
   };
   const textMap: Record<string, string> = {
-    blue: "text-blue-600",
-    green: "text-green-600",
+    blue: "text-status-info-foreground",
+    green: "text-status-success-foreground",
     orange: "text-orange-600",
     purple: "text-purple-600",
   };
@@ -45,23 +45,23 @@ function ScoreCircle({ score, label, color = "blue" }: { score: number | null; l
         <div className="absolute inset-0 flex items-center justify-center">
           {score != null
             ? <span className={cn("text-lg font-bold", textMap[color])}>{score}%</span>
-            : <span className="text-gray-400 text-sm">-</span>
+            : <span className="text-muted-foreground text-sm">-</span>
           }
         </div>
       </div>
-      <p className="text-xs text-gray-500 text-center">{label}</p>
+      <p className="text-xs text-muted-foreground text-center">{label}</p>
     </div>
   );
 }
 
 function KpiBar({ label, score, icon: Icon }: { label: string; score: number; icon: any }) {
   const color = score >= 80 ? "bg-green-500" : score >= 60 ? "bg-yellow-500" : "bg-red-500";
-  const textColor = score >= 80 ? "text-green-600" : score >= 60 ? "text-yellow-600" : "text-red-600";
+  const textColor = score >= 80 ? "text-status-success-foreground" : score >= 60 ? "text-status-warning-foreground" : "text-status-error-foreground";
   return (
     <div className="flex items-center gap-3">
-      <Icon className="w-4 h-4 text-gray-400 shrink-0" />
+      <Icon className="w-4 h-4 text-muted-foreground shrink-0" />
       <span className="text-sm w-36 shrink-0">{label}</span>
-      <div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden">
+      <div className="flex-1 bg-surface-subtle rounded-full h-3 overflow-hidden">
         <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${score}%` }} />
       </div>
       <span className={cn("text-sm font-bold w-10 text-end", textColor)}>{score}%</span>
@@ -164,14 +164,14 @@ export default function Evaluation360DetailPage() {
 
   const overview = (
     <>
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+      <div className="flex gap-1 bg-surface-subtle rounded-lg p-1">
         {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id as any)}
             className={cn(
               "flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm font-medium transition-all",
-              tab === t.id ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"
+              tab === t.id ? "bg-white shadow-sm text-gray-900" : "text-muted-foreground hover:text-status-neutral-foreground"
             )}
           >
             <t.icon className="w-4 h-4" />{t.label}
@@ -207,9 +207,9 @@ export default function Evaluation360DetailPage() {
           {summary?.finalScore != null && (
             <Card className="border-0 shadow-sm bg-gradient-to-r from-purple-50 to-blue-50">
               <CardContent className="p-6 text-center">
-                <p className="text-sm text-gray-500 mb-2">الدرجة النهائية الموزونة (360°)</p>
+                <p className="text-sm text-muted-foreground mb-2">الدرجة النهائية الموزونة (360°)</p>
                 <p className="text-5xl font-black text-purple-600">{summary.finalScore}%</p>
-                <p className="text-sm text-gray-400 mt-2">
+                <p className="text-sm text-muted-foreground mt-2">
                   {summary.finalScore >= 85 ? "أداء ممتاز" :
                    summary.finalScore >= 70 ? "أداء جيد جداً" :
                    summary.finalScore >= 55 ? "أداء جيد" :
@@ -231,16 +231,16 @@ export default function Evaluation360DetailPage() {
                 <div className="flex items-center gap-4">
                   <div className="text-3xl font-bold text-purple-600">{upwardSummary.avgScore}%</div>
                   <div>
-                    <p className="text-sm text-gray-500">متوسط {upwardSummary.count} تقييم سري</p>
-                    <p className="text-xs text-gray-400">الهوية مجهولة — النتائج مجمّعة فقط</p>
+                    <p className="text-sm text-muted-foreground">متوسط {upwardSummary.count} تقييم سري</p>
+                    <p className="text-xs text-muted-foreground">الهوية مجهولة — النتائج مجمّعة فقط</p>
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-3 text-gray-500">
-                  <AlertCircle className="w-5 h-5 text-yellow-500" />
+                <div className="flex items-center gap-3 text-muted-foreground">
+                  <AlertCircle className="w-5 h-5 text-status-warning" />
                   <div>
                     <p className="text-sm">يتطلب عدد كافٍ من التقييمات لعرض النتائج</p>
-                    <p className="text-xs text-gray-400">الحد الأدنى 3 تقييمات لضمان السرية</p>
+                    <p className="text-xs text-muted-foreground">الحد الأدنى 3 تقييمات لضمان السرية</p>
                   </div>
                 </div>
               )}
@@ -252,13 +252,13 @@ export default function Evaluation360DetailPage() {
       {tab === "system" && (
         <div className="space-y-4">
           {!systemEval ? (
-            <Card><CardContent className="p-8 text-center text-gray-400">لم يتم توليد التقرير الآلي بعد</CardContent></Card>
+            <Card><CardContent className="p-8 text-center text-muted-foreground">لم يتم توليد التقرير الآلي بعد</CardContent></Card>
           ) : (
             <>
               <Card className="border-0 shadow-sm">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
-                    <Target className="w-4 h-4 text-blue-500" />
+                    <Target className="w-4 h-4 text-status-info" />
                     مؤشرات الأداء الآلية
                   </CardTitle>
                 </CardHeader>
@@ -271,12 +271,12 @@ export default function Evaluation360DetailPage() {
                 </CardContent>
               </Card>
 
-              <Card className="border-0 shadow-sm bg-blue-50">
+              <Card className="border-0 shadow-sm bg-status-info-surface">
                 <CardContent className="p-4 flex items-center gap-4">
-                  <div className="text-5xl font-black text-blue-600">{systemEval.overallScore}%</div>
+                  <div className="text-5xl font-black text-status-info-foreground">{systemEval.overallScore}%</div>
                   <div>
-                    <p className="font-semibold text-blue-800">الدرجة الآلية الإجمالية</p>
-                    <p className="text-sm text-blue-600">محسوبة من بيانات النظام الفعلية</p>
+                    <p className="font-semibold text-status-info-foreground">الدرجة الآلية الإجمالية</p>
+                    <p className="text-sm text-status-info-foreground">محسوبة من بيانات النظام الفعلية</p>
                   </div>
                 </CardContent>
               </Card>
@@ -284,7 +284,7 @@ export default function Evaluation360DetailPage() {
               <Card className="border-0 shadow-sm">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-blue-500" />
+                    <TrendingUp className="w-4 h-4 text-status-info" />
                     مخطط العنكبوت — مقارنة الأبعاد
                   </CardTitle>
                 </CardHeader>
@@ -322,8 +322,8 @@ export default function Evaluation360DetailPage() {
                         const val = systemEval.metrics[key];
                         if (val == null) return null;
                         return (
-                          <div key={key} className="bg-gray-50 rounded-lg p-3">
-                            <p className="text-xs text-gray-500">{label}</p>
+                          <div key={key} className="bg-surface-subtle rounded-lg p-3">
+                            <p className="text-xs text-muted-foreground">{label}</p>
                             <p className="text-lg font-bold">{Number(val).toFixed(key === 'client_satisfaction' ? 1 : 0)}{suffix}</p>
                           </div>
                         );
@@ -346,7 +346,7 @@ export default function Evaluation360DetailPage() {
           </div>
 
           {peerEvals.length === 0 ? (
-            <Card><CardContent className="p-8 text-center text-gray-400">لا يوجد تقييمات من المدير أو الزملاء حتى الآن</CardContent></Card>
+            <Card><CardContent className="p-8 text-center text-muted-foreground">لا يوجد تقييمات من المدير أو الزملاء حتى الآن</CardContent></Card>
           ) : (
             <>
               {managerEvals.length > 0 && (
@@ -359,18 +359,18 @@ export default function Evaluation360DetailPage() {
                           <div className="flex items-center justify-between mb-2">
                             <div>
                               <span className="font-semibold">{pe.evaluatorName}</span>
-                              <span className="text-xs text-gray-400 ms-2">{pe.evaluatorTitle}</span>
+                              <span className="text-xs text-muted-foreground ms-2">{pe.evaluatorTitle}</span>
                             </div>
-                            <span className={cn("text-2xl font-black", pe.overallScore >= 80 ? "text-green-600" : pe.overallScore >= 60 ? "text-yellow-600" : "text-red-600")}>
+                            <span className={cn("text-2xl font-black", pe.overallScore >= 80 ? "text-status-success-foreground" : pe.overallScore >= 60 ? "text-status-warning-foreground" : "text-status-error-foreground")}>
                               {pe.overallScore}%
                             </span>
                           </div>
-                          {pe.comments && <p className="text-sm text-gray-600 bg-gray-50 rounded p-2">{pe.comments}</p>}
+                          {pe.comments && <p className="text-sm text-muted-foreground bg-surface-subtle rounded p-2">{pe.comments}</p>}
                           {pe.scores && (
                             <div className="grid grid-cols-3 gap-2 mt-2">
                               {Object.entries(pe.scores as Record<string, number>).map(([k, v]) => (
                                 <div key={k} className="text-center bg-orange-50 rounded p-2">
-                                  <p className="text-xs text-gray-400">{k}</p>
+                                  <p className="text-xs text-muted-foreground">{k}</p>
                                   <p className="font-bold">{v}%</p>
                                 </div>
                               ))}
@@ -385,7 +385,7 @@ export default function Evaluation360DetailPage() {
 
               {peerOnlyEvals.length > 0 && (
                 <div>
-                  <h3 className="font-semibold mb-3 text-green-600">تقييمات الزملاء</h3>
+                  <h3 className="font-semibold mb-3 text-status-success-foreground">تقييمات الزملاء</h3>
                   <div className="space-y-3">
                     {peerOnlyEvals.map((pe: any) => (
                       <Card key={pe.id} className="border-0 shadow-sm border-r-4 border-r-green-400">
@@ -393,13 +393,13 @@ export default function Evaluation360DetailPage() {
                           <div className="flex items-center justify-between mb-2">
                             <div>
                               <span className="font-semibold">{pe.evaluatorName}</span>
-                              <span className="text-xs text-gray-400 ms-2">{pe.evaluatorTitle}</span>
+                              <span className="text-xs text-muted-foreground ms-2">{pe.evaluatorTitle}</span>
                             </div>
-                            <span className={cn("text-2xl font-black", pe.overallScore >= 80 ? "text-green-600" : pe.overallScore >= 60 ? "text-yellow-600" : "text-red-600")}>
+                            <span className={cn("text-2xl font-black", pe.overallScore >= 80 ? "text-status-success-foreground" : pe.overallScore >= 60 ? "text-status-warning-foreground" : "text-status-error-foreground")}>
                               {pe.overallScore}%
                             </span>
                           </div>
-                          {pe.comments && <p className="text-sm text-gray-600 bg-gray-50 rounded p-2">{pe.comments}</p>}
+                          {pe.comments && <p className="text-sm text-muted-foreground bg-surface-subtle rounded p-2">{pe.comments}</p>}
                         </CardContent>
                       </Card>
                     ))}
@@ -437,20 +437,20 @@ export default function Evaluation360DetailPage() {
               <CardContent>
                 <div className="text-center py-4">
                   <p className="text-5xl font-black text-purple-600 mb-2">{upwardSummary.avgScore}%</p>
-                  <p className="text-gray-500">متوسط {upwardSummary.count} تقييم سري</p>
-                  <p className="text-xs text-gray-400 mt-1">النتائج مجمّعة — الهويات غير مكشوفة</p>
+                  <p className="text-muted-foreground">متوسط {upwardSummary.count} تقييم سري</p>
+                  <p className="text-xs text-muted-foreground mt-1">النتائج مجمّعة — الهويات غير مكشوفة</p>
                 </div>
               </CardContent>
             </Card>
           ) : (
             <Card className="border-0 shadow-sm">
               <CardContent className="p-8 text-center">
-                <AlertCircle className="w-12 h-12 mx-auto mb-3 text-yellow-500" />
+                <AlertCircle className="w-12 h-12 mx-auto mb-3 text-status-warning" />
                 <p className="font-medium">النتائج محجوبة حتى الآن</p>
-                <p className="text-sm text-gray-400 mt-1">
+                <p className="text-sm text-muted-foreground mt-1">
                   يتطلب عدد كافٍ من التقييمات لعرض النتائج
                 </p>
-                <p className="text-xs text-gray-400 mt-1">الحد الأدنى: 3 تقييمات لضمان السرية</p>
+                <p className="text-xs text-muted-foreground mt-1">الحد الأدنى: 3 تقييمات لضمان السرية</p>
               </CardContent>
             </Card>
           )}

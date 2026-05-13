@@ -110,12 +110,12 @@ export default function JournalManualDetailPage() {
   const overview = (
     <>
       {journal?.reversedById && (
-        <div className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2">
+        <div className="text-sm text-status-warning-foreground bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2">
           هذا القيد مُعكوس — القيد العاكس: #{journal.reversedById}
         </div>
       )}
       {journal?.reversalOfId && (
-        <div className="text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
+        <div className="text-sm text-status-info-foreground bg-status-info-surface border border-status-info-surface rounded-lg px-4 py-2">
           هذا قيد عاكس للقيد الأصلي: #{journal.reversalOfId}
         </div>
       )}

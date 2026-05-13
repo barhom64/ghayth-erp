@@ -4,10 +4,10 @@ import { cn } from "@/lib/utils";
 
 export function StatsCards({ stats }: { stats: any }) {
   const cards = [
-    { label: "السياسات", value: stats?.totalPolicies || 0, icon: FileCheck, color: "text-blue-600 bg-blue-50" },
-    { label: "المخاطر المفتوحة", value: stats?.openRisks || 0, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
+    { label: "السياسات", value: stats?.totalPolicies || 0, icon: FileCheck, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "المخاطر المفتوحة", value: stats?.openRisks || 0, icon: AlertTriangle, color: "text-status-error-foreground bg-status-error-surface" },
     { label: "التدقيق النشط", value: stats?.activeAudits || 0, icon: ClipboardCheck, color: "text-purple-600 bg-purple-50" },
-    { label: "عدم الامتثال", value: stats?.nonCompliant || 0, icon: Shield, color: "text-amber-600 bg-amber-50" },
+    { label: "عدم الامتثال", value: stats?.nonCompliant || 0, icon: Shield, color: "text-status-warning-foreground bg-status-warning-surface" },
     { label: "إجراءات الامتثال", value: stats?.complianceActions || 0, icon: Activity, color: "text-indigo-600 bg-indigo-50" },
     { label: "إجراءات تصحيحية مفتوحة", value: stats?.openCapas || 0, icon: CheckCircle2, color: "text-rose-600 bg-rose-50" },
   ];
@@ -21,7 +21,7 @@ export function StatsCards({ stats }: { stats: any }) {
             </div>
             <div>
               <p className="text-2xl font-bold">{c.value}</p>
-              <p className="text-xs text-gray-500">{c.label}</p>
+              <p className="text-xs text-muted-foreground">{c.label}</p>
             </div>
           </CardContent>
         </Card>

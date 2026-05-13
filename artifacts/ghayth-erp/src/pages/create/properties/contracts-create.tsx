@@ -37,7 +37,7 @@ export default function ContractsCreate() {
 
   const { fieldErrors, validate, setApiError } = useFieldErrors();
   const errCls = (field: string) => fieldErrorClass(fieldErrors[field]);
-  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[field]}</p> : null;
+  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-status-error-foreground mt-1">{fieldErrors[field]}</p> : null;
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("properties_contracts_create", {
     unitId: "",
@@ -219,9 +219,9 @@ export default function ContractsCreate() {
   return (
     <CreatePageLayout title="عقد إيجار جديد" backPath="/properties/contracts">
       {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -231,7 +231,7 @@ export default function ContractsCreate() {
       <div className="space-y-6">
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2"><FileText className="h-4 w-4 text-blue-500" /> بيانات العقد الأساسية</CardTitle>
+            <CardTitle className="text-base flex items-center gap-2"><FileText className="h-4 w-4 text-status-info" /> بيانات العقد الأساسية</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -374,7 +374,7 @@ export default function ContractsCreate() {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2"><Shield className="h-4 w-4 text-red-500" /> الغرامات والشروط</CardTitle>
+            <CardTitle className="text-base flex items-center gap-2"><Shield className="h-4 w-4 text-status-error" /> الغرامات والشروط</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -445,7 +445,7 @@ export default function ContractsCreate() {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2"><Zap className="h-4 w-4 text-amber-500" /> مسؤولية الخدمات</CardTitle>
+            <CardTitle className="text-base flex items-center gap-2"><Zap className="h-4 w-4 text-status-warning" /> مسؤولية الخدمات</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -475,13 +475,13 @@ export default function ContractsCreate() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
-                <Banknote className="h-4 w-4 text-green-500" /> جدول الأقساط ({schedulePreview.length} قسط)
+                <Banknote className="h-4 w-4 text-status-success" /> جدول الأقساط ({schedulePreview.length} قسط)
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="max-h-64 overflow-y-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50 sticky top-0">
+                  <thead className="bg-surface-subtle sticky top-0">
                     <tr>
                       <th className="text-start p-2">#</th>
                       <th className="text-start p-2">تاريخ الاستحقاق</th>
@@ -497,7 +497,7 @@ export default function ContractsCreate() {
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot className="bg-gray-50 font-bold border-t-2">
+                  <tfoot className="bg-surface-subtle font-bold border-t-2">
                     <tr>
                       <td className="p-2" colSpan={2}>الإجمالي</td>
                       <td className="p-2 text-emerald-600">{formatCurrency(schedulePreview.reduce((s, i) => s + i.amount, 0))}</td>

@@ -61,14 +61,14 @@ export default function MyRequests() {
 
   return (
     <PageShell title="طلباتي" subtitle="تتبع حالة طلباتك المقدمة">
-      <div className="flex gap-2 mb-6 border-b border-gray-200">
+      <div className="flex gap-2 mb-6 border-b border-border">
         <button
           onClick={() => setActiveTab("workflow")}
           className={cn(
             "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
             activeTab === "workflow"
               ? "border-primary text-primary"
-              : "border-transparent text-gray-500 hover:text-gray-700"
+              : "border-transparent text-muted-foreground hover:text-status-neutral-foreground"
           )}
         >
           طلبات الموافقة ({workflowRequests.length})
@@ -79,7 +79,7 @@ export default function MyRequests() {
             "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
             activeTab === "leaves"
               ? "border-primary text-primary"
-              : "border-transparent text-gray-500 hover:text-gray-700"
+              : "border-transparent text-muted-foreground hover:text-status-neutral-foreground"
           )}
         >
           طلبات الإجازة ({leaveRequests.length})
@@ -96,7 +96,7 @@ export default function MyRequests() {
       {activeTab === "workflow" ? (
         workflowRequests.length === 0 ? (
           <Card>
-            <CardContent className="py-16 text-center text-gray-400">
+            <CardContent className="py-16 text-center text-muted-foreground">
               <ClipboardList size={40} className="mx-auto mb-3 opacity-40" />
               <p className="font-medium">لا توجد طلبات بعد</p>
               <p className="text-sm mt-1">طلباتك ستظهر هنا بمجرد تقديمها</p>
@@ -126,11 +126,11 @@ export default function MyRequests() {
                         </div>
                         <div className="min-w-0">
                           <p className="font-medium text-gray-900 truncate">{req.title}</p>
-                          <p className="text-xs text-gray-400 mt-0.5">
+                          <p className="text-xs text-muted-foreground mt-0.5">
                             {typeInfo.label} • {formatDateAr(req.createdAt)}
                           </p>
                           {req.completedAt && (
-                            <p className="text-xs text-gray-400">اكتمل: {formatDateAr(req.completedAt)}</p>
+                            <p className="text-xs text-muted-foreground">اكتمل: {formatDateAr(req.completedAt)}</p>
                           )}
                         </div>
                       </div>
@@ -151,7 +151,7 @@ export default function MyRequests() {
       ) : (
         leaveRequests.length === 0 ? (
           <Card>
-            <CardContent className="py-16 text-center text-gray-400">
+            <CardContent className="py-16 text-center text-muted-foreground">
               <Calendar size={40} className="mx-auto mb-3 opacity-40" />
               <p className="font-medium">لا توجد طلبات إجازة</p>
               <Link href="/hr/leaves">
@@ -169,15 +169,15 @@ export default function MyRequests() {
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3 min-w-0">
-                      <div className="w-9 h-9 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <Calendar size={18} className="text-green-600" />
+                      <div className="w-9 h-9 bg-status-success-surface rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Calendar size={18} className="text-status-success-foreground" />
                       </div>
                       <div className="min-w-0">
                         <p className="font-medium text-gray-900">{lr.leaveTypeName}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">
+                        <p className="text-xs text-muted-foreground mt-0.5">
                           {formatDateAr(lr.startDate)} — {formatDateAr(lr.endDate)}
                         </p>
-                        <p className="text-xs text-gray-400">{lr.days} {lr.days === 1 ? "يوم" : "أيام"}</p>
+                        <p className="text-xs text-muted-foreground">{lr.days} {lr.days === 1 ? "يوم" : "أيام"}</p>
                       </div>
                     </div>
                     <StatusBadge status={lr.status} />

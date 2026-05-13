@@ -103,15 +103,15 @@ const OPERATOR_OPTIONS = [
 
 function getModuleColor(mod: string) {
   const colors: Record<string, string> = {
-    hr: "bg-blue-100 text-blue-800",
-    finance: "bg-green-100 text-green-800",
+    hr: "bg-status-info-surface text-status-info-foreground",
+    finance: "bg-status-success-surface text-status-success-foreground",
     fleet: "bg-orange-100 text-orange-800",
     legal: "bg-purple-100 text-purple-800",
-    property: "bg-yellow-100 text-yellow-800",
+    property: "bg-status-warning-surface text-yellow-800",
     projects: "bg-cyan-100 text-cyan-800",
-    support: "bg-red-100 text-red-800",
+    support: "bg-status-error-surface text-status-error-foreground",
   };
-  return colors[mod] || "bg-gray-100 text-gray-800";
+  return colors[mod] || "bg-surface-subtle text-status-neutral-foreground";
 }
 
 function formatDate(d: string) {
@@ -123,7 +123,7 @@ function RuleCard({ rule, onToggle, onDelete }: { rule: BusinessRule; onToggle: 
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <Card className={`transition-all ${rule.isActive ? "border-green-200" : "border-gray-200 opacity-70"}`}>
+    <Card className={`transition-all ${rule.isActive ? "border-status-success-surface" : "border-border opacity-70"}`}>
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
@@ -138,13 +138,13 @@ function RuleCard({ rule, onToggle, onDelete }: { rule: BusinessRule; onToggle: 
                 {rule.isActive ? "مفعّل" : "معطّل"}
               </Badge>
               {!rule.companyId && (
-                <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700">افتراضي</Badge>
+                <Badge variant="outline" className="text-[10px] bg-status-warning-surface text-status-warning-foreground">افتراضي</Badge>
               )}
             </div>
             {rule.description && <p className="text-xs text-muted-foreground mb-2">{rule.description}</p>}
 
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <span className="font-medium text-blue-600">إذا</span>
+              <span className="font-medium text-status-info-foreground">إذا</span>
               <span>{TRIGGER_OPTIONS.find(t => t.value === rule.triggerEvent)?.label || rule.triggerEvent}</span>
               {rule.conditionField && (
                 <>
@@ -154,7 +154,7 @@ function RuleCard({ rule, onToggle, onDelete }: { rule: BusinessRule; onToggle: 
                   <span>{rule.conditionValue}</span>
                 </>
               )}
-              <span className="font-medium text-green-600">→</span>
+              <span className="font-medium text-status-success-foreground">→</span>
               <span>{ACTION_OPTIONS.find(a => a.value === rule.actionType)?.label || rule.actionType}</span>
               {rule.actionTarget && (
                 <span>({TARGET_OPTIONS.find(t => t.value === rule.actionTarget)?.label || rule.actionTarget})</span>
@@ -167,11 +167,11 @@ function RuleCard({ rule, onToggle, onDelete }: { rule: BusinessRule; onToggle: 
               {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
             </Button>
             <GuardedButton perm="settings:create" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onToggle}>
-              {rule.isActive ? <PowerOff className="h-3.5 w-3.5 text-orange-500" /> : <Power className="h-3.5 w-3.5 text-green-500" />}
+              {rule.isActive ? <PowerOff className="h-3.5 w-3.5 text-orange-500" /> : <Power className="h-3.5 w-3.5 text-status-success" />}
             </GuardedButton>
             {rule.companyId && (
               <GuardedButton perm="settings:create" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onDelete}>
-                <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                <Trash2 className="h-3.5 w-3.5 text-status-error" />
               </GuardedButton>
             )}
           </div>
@@ -269,8 +269,8 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
             <FormTextField name="description" label="الوصف" placeholder="وصف مختصر للقاعدة" />
           </FormGrid>
 
-          <div className="p-4 bg-blue-50 rounded-lg space-y-3 mt-4">
-            <div className="text-sm font-semibold text-blue-800 flex items-center gap-2">
+          <div className="p-4 bg-status-info-surface rounded-lg space-y-3 mt-4">
+            <div className="text-sm font-semibold text-status-info-foreground flex items-center gap-2">
               <Shield className="h-4 w-4" /> إذا حدث...
             </div>
             <FormGrid cols={3}>
@@ -290,8 +290,8 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
             </FormGrid>
           </div>
 
-          <div className="p-4 bg-green-50 rounded-lg space-y-3 mt-4">
-            <div className="text-sm font-semibold text-green-800 flex items-center gap-2">
+          <div className="p-4 bg-status-success-surface rounded-lg space-y-3 mt-4">
+            <div className="text-sm font-semibold text-status-success-foreground flex items-center gap-2">
               <Zap className="h-4 w-4" /> فعندها...
             </div>
             <FormGrid cols={3}>
@@ -355,9 +355,9 @@ function RuleLogsList() {
         <div key={log.id} className="flex items-center gap-3 p-3 border rounded-lg text-sm">
           <div className="shrink-0">
             {log.status === "success" ? (
-              <CheckCircle className="h-4 w-4 text-green-500" />
+              <CheckCircle className="h-4 w-4 text-status-success" />
             ) : (
-              <XCircle className="h-4 w-4 text-red-500" />
+              <XCircle className="h-4 w-4 text-status-error" />
             )}
           </div>
           <div className="flex-1 min-w-0">

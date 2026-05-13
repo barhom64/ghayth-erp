@@ -57,25 +57,25 @@ export default function ExitRequestsPage() {
       label: "إجمالي الطلبات",
       value: stats.total ?? items.length,
       icon: FileText,
-      color: "text-blue-600 bg-blue-50",
+      color: "text-status-info-foreground bg-status-info-surface",
     },
     {
       label: "بانتظار الموافقة",
       value: stats.pending ?? 0,
       icon: Clock,
-      color: "text-amber-600 bg-amber-50",
+      color: "text-status-warning-foreground bg-status-warning-surface",
     },
     {
       label: "مكتملة",
       value: stats.completed ?? 0,
       icon: CheckCircle,
-      color: "text-green-600 bg-green-50",
+      color: "text-status-success-foreground bg-status-success-surface",
     },
     {
       label: "إجمالي المستحقات",
       value: formatCurrency(Number(stats.totalSettlement ?? 0)),
       icon: DollarSign,
-      color: "text-red-600 bg-red-50",
+      color: "text-status-error-foreground bg-status-error-surface",
     },
   ];
 
@@ -85,7 +85,7 @@ export default function ExitRequestsPage() {
       header: "رقم الطلب",
       sortable: true,
       render: (v) => (
-        <span className="font-mono text-xs font-semibold text-red-700 bg-red-50 px-2 py-1 rounded">
+        <span className="font-mono text-xs font-semibold text-status-error-foreground bg-status-error-surface px-2 py-1 rounded">
           {v.exitNumber}
         </span>
       ),
@@ -100,7 +100,7 @@ export default function ExitRequestsPage() {
           <div>
             <span className="font-medium text-sm block">{v.employeeName}</span>
             {v.jobTitle && (
-              <span className="text-xs text-gray-400">{v.jobTitle}</span>
+              <span className="text-xs text-muted-foreground">{v.jobTitle}</span>
             )}
           </div>
         </div>
@@ -115,9 +115,9 @@ export default function ExitRequestsPage() {
           variant="outline"
           className={cn(
             "text-xs",
-            v.exitType === "termination" ? "border-red-300 text-red-700 bg-red-50" :
-            v.exitType === "resignation" ? "border-amber-300 text-amber-700 bg-amber-50" :
-            "border-gray-200",
+            v.exitType === "termination" ? "border-status-error-surface text-status-error-foreground bg-status-error-surface" :
+            v.exitType === "resignation" ? "border-amber-300 text-status-warning-foreground bg-status-warning-surface" :
+            "border-border",
           )}
         >
           {EXIT_TYPES[v.exitType] || v.exitType}
@@ -129,7 +129,7 @@ export default function ExitRequestsPage() {
       header: "آخر يوم عمل",
       sortable: true,
       render: (v) => (
-        <span className="text-sm text-gray-600">
+        <span className="text-sm text-muted-foreground">
           {formatDateAr(v.lastWorkingDay)}
         </span>
       ),
@@ -139,7 +139,7 @@ export default function ExitRequestsPage() {
       header: "مكافأة نهاية الخدمة",
       sortable: true,
       render: (v) => (
-        <span className="text-sm font-semibold text-green-700">
+        <span className="text-sm font-semibold text-status-success-foreground">
           {formatCurrency(Number(v.gratuityAmount || 0))}
         </span>
       ),
@@ -151,7 +151,7 @@ export default function ExitRequestsPage() {
       render: (v) => (
         <span className={cn(
           "text-sm font-bold",
-          Number(v.netSettlement || 0) >= 0 ? "text-green-700" : "text-red-700"
+          Number(v.netSettlement || 0) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground"
         )}>
           {formatCurrency(Number(v.netSettlement || 0))}
         </span>
@@ -162,8 +162,8 @@ export default function ExitRequestsPage() {
       header: "إخلاء الطرف",
       render: (v) => (
         v.clearanceCompleted
-          ? <Badge className="bg-green-100 text-green-700 text-xs">مكتمل</Badge>
-          : <Badge variant="outline" className="text-xs border-amber-300 text-amber-700">غير مكتمل</Badge>
+          ? <Badge className="bg-status-success-surface text-status-success-foreground text-xs">مكتمل</Badge>
+          : <Badge variant="outline" className="text-xs border-amber-300 text-status-warning-foreground">غير مكتمل</Badge>
       ),
     },
     {
@@ -171,7 +171,7 @@ export default function ExitRequestsPage() {
       header: "الحالة",
       sortable: true,
       render: (v) => {
-        const st = EXIT_REQUEST_STATUS[v.status] || { label: v.status, color: "bg-gray-100 text-gray-600" };
+        const st = EXIT_REQUEST_STATUS[v.status] || { label: v.status, color: "bg-surface-subtle text-muted-foreground" };
         return (
           <Badge variant="outline" className={cn("text-xs", st.color)}>
             {st.label}
@@ -189,7 +189,7 @@ export default function ExitRequestsPage() {
             perm="hr:approve"
             size="sm"
             variant="ghost"
-            className="h-7 px-2 text-green-700 hover:bg-green-50"
+            className="h-7 px-2 text-status-success-foreground hover:bg-status-success-surface"
             onClick={() => handleApprove(v.id)}
             disabled={approveMut.isPending}
           >
@@ -218,7 +218,7 @@ export default function ExitRequestsPage() {
       <KpiGrid items={kpis} />
 
       {Number(stats.pending) > 0 && (
-        <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+        <div className="flex items-center gap-2 p-3 bg-status-warning-surface border border-status-warning-surface rounded-lg text-sm text-status-warning-foreground">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span>
             يوجد <strong>{stats.pending}</strong> طلب نهاية خدمة بانتظار الموافقة

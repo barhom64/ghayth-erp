@@ -31,20 +31,20 @@ import { UpcomingEventsWidget } from "@/components/shared/upcoming-events-widget
 
 type ColorKey = "blue" | "green" | "red" | "yellow" | "purple" | "indigo" | "teal" | "orange" | "pink" | "gray";
 const COLOR_MAP: Record<ColorKey, { bg: string; icon: string; border: string; ring: string; text: string; gradient: string }> = {
-  blue:   { bg: "bg-blue-50",   icon: "text-blue-600",   border: "border-blue-100", ring: "ring-blue-500/20",   text: "text-blue-700",   gradient: "from-blue-500 to-blue-600" },
+  blue:   { bg: "bg-status-info-surface",   icon: "text-status-info-foreground",   border: "border-status-info-surface", ring: "ring-blue-500/20",   text: "text-status-info-foreground",   gradient: "from-blue-500 to-blue-600" },
   green:  { bg: "bg-emerald-50",  icon: "text-emerald-600",  border: "border-emerald-100", ring: "ring-green-500/20",  text: "text-emerald-700",  gradient: "from-emerald-500 to-emerald-600" },
-  red:    { bg: "bg-red-50",    icon: "text-red-600",    border: "border-red-100", ring: "ring-red-500/20",    text: "text-red-700",    gradient: "from-red-500 to-red-600" },
-  yellow: { bg: "bg-amber-50", icon: "text-amber-600", border: "border-amber-100", ring: "ring-yellow-500/20", text: "text-amber-700", gradient: "from-amber-500 to-amber-600" },
+  red:    { bg: "bg-status-error-surface",    icon: "text-status-error-foreground",    border: "border-status-error-surface", ring: "ring-red-500/20",    text: "text-status-error-foreground",    gradient: "from-red-500 to-red-600" },
+  yellow: { bg: "bg-status-warning-surface", icon: "text-status-warning-foreground", border: "border-status-warning-surface", ring: "ring-yellow-500/20", text: "text-status-warning-foreground", gradient: "from-amber-500 to-amber-600" },
   purple: { bg: "bg-purple-50", icon: "text-purple-600", border: "border-purple-100", ring: "ring-purple-500/20", text: "text-purple-700", gradient: "from-purple-500 to-purple-600" },
   indigo: { bg: "bg-indigo-50", icon: "text-indigo-600", border: "border-indigo-100", ring: "ring-indigo-500/20", text: "text-indigo-700", gradient: "from-indigo-500 to-indigo-600" },
   teal:   { bg: "bg-teal-50",   icon: "text-teal-600",   border: "border-teal-100", ring: "ring-teal-500/20",   text: "text-teal-700",   gradient: "from-teal-500 to-teal-600" },
   orange: { bg: "bg-orange-50", icon: "text-orange-600", border: "border-orange-100", ring: "ring-orange-500/20", text: "text-orange-700", gradient: "from-orange-500 to-orange-600" },
   pink:   { bg: "bg-pink-50",   icon: "text-pink-600",   border: "border-pink-100", ring: "ring-pink-500/20",   text: "text-pink-700",   gradient: "from-pink-500 to-pink-600" },
-  gray:   { bg: "bg-gray-50",   icon: "text-gray-600",   border: "border-gray-100", ring: "ring-gray-500/20",   text: "text-gray-700",   gradient: "from-gray-500 to-gray-600" },
+  gray:   { bg: "bg-surface-subtle",   icon: "text-muted-foreground",   border: "border-border", ring: "ring-gray-500/20",   text: "text-status-neutral-foreground",   gradient: "from-gray-500 to-gray-600" },
 };
 
 const SOURCE_STYLES: Record<string, { icon: LucideIcon; color: string; bg: string }> = {
-  audit: { icon: FileText, color: "text-blue-600", bg: "bg-blue-50" },
+  audit: { icon: FileText, color: "text-status-info-foreground", bg: "bg-status-info-surface" },
   journal: { icon: DollarSign, color: "text-emerald-600", bg: "bg-emerald-50" },
   request: { icon: ClipboardList, color: "text-orange-600", bg: "bg-orange-50" },
   communication: { icon: MessageCircle, color: "text-purple-600", bg: "bg-purple-50" },
@@ -53,10 +53,10 @@ const SOURCE_STYLES: Record<string, { icon: LucideIcon; color: string; bg: strin
 };
 
 const EVENT_ICONS: Record<string, { icon: LucideIcon; color: string }> = {
-  invoice: { icon: CreditCard, color: "text-blue-500" },
-  leave: { icon: Calendar, color: "text-yellow-500" },
-  ticket: { icon: Headphones, color: "text-red-500" },
-  task: { icon: CheckCircle2, color: "text-green-500" },
+  invoice: { icon: CreditCard, color: "text-status-info" },
+  leave: { icon: Calendar, color: "text-status-warning" },
+  ticket: { icon: Headphones, color: "text-status-error" },
+  task: { icon: CheckCircle2, color: "text-status-success" },
   attendance: { icon: Clock, color: "text-purple-500" },
 };
 
@@ -88,23 +88,23 @@ function StatCard({ title, value, sub, icon: Icon, color = "blue", link, trend }
 }) {
   const c = COLOR_MAP[color];
   const content = (
-    <div className="bg-white rounded-xl p-4 hover:shadow-md transition-all duration-300 group cursor-pointer relative overflow-hidden border border-gray-100/80">
+    <div className="bg-white rounded-xl p-4 hover:shadow-md transition-all duration-300 group cursor-pointer relative overflow-hidden border border-border/80">
       <div className={cn("absolute top-0 start-0 w-1 h-full rounded-s-xl bg-gradient-to-b opacity-80", c.gradient)} />
       <div className="flex items-center gap-3">
         <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center shrink-0", c.bg)}>
           <Icon className={cn("w-5 h-5", c.icon)} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-gray-500 mb-0.5">{title}</p>
+          <p className="text-sm text-muted-foreground mb-0.5">{title}</p>
           <p className="text-xl font-bold text-gray-900 tracking-tight">
             {typeof value === "number" ? <AnimatedNumber value={value} /> : value}
           </p>
         </div>
-        {link && <ChevronLeft className="w-4 h-4 text-gray-300 group-hover:text-gray-500 transition-colors" />}
+        {link && <ChevronLeft className="w-4 h-4 text-gray-300 group-hover:text-muted-foreground transition-colors" />}
       </div>
-      {sub && <p className="text-xs text-gray-400 mt-1.5 me-[52px]">{sub}</p>}
+      {sub && <p className="text-xs text-muted-foreground mt-1.5 me-[52px]">{sub}</p>}
       {trend !== undefined && trend !== 0 && (
-        <div className={cn("flex items-center gap-1 mt-1 me-[52px] text-xs font-medium", trend > 0 ? "text-emerald-600" : "text-red-500")}>
+        <div className={cn("flex items-center gap-1 mt-1 me-[52px] text-xs font-medium", trend > 0 ? "text-emerald-600" : "text-status-error")}>
           {trend > 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
           {Math.abs(trend)}% هذا الشهر
         </div>
@@ -118,8 +118,8 @@ interface TooltipPayloadEntry { color: string; name: string; value: number | str
 function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: TooltipPayloadEntry[]; label?: string }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white/95 backdrop-blur-sm p-3 rounded-xl shadow-lg border border-gray-100 text-xs" dir="rtl">
-      <p className="font-semibold mb-1.5 text-gray-700">{label}</p>
+    <div className="bg-white/95 backdrop-blur-sm p-3 rounded-xl shadow-lg border border-border text-xs" dir="rtl">
+      <p className="font-semibold mb-1.5 text-status-neutral-foreground">{label}</p>
       {payload.map((p: TooltipPayloadEntry, i: number) => (
         <p key={i} style={{ color: p.color }} className="flex items-center gap-1.5 py-0.5">
           <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: p.color }} />
@@ -144,13 +144,13 @@ function CommandCard({ title, value, sub, icon: Icon, color, link, pulse }: {
         <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center ring-4", c.bg, c.ring)}>
           <Icon className={cn("w-7 h-7", c.icon)} />
         </div>
-        {link && <ChevronLeft className="w-4 h-4 text-gray-300 group-hover:text-gray-500 transition-all group-hover:-translate-x-1" />}
+        {link && <ChevronLeft className="w-4 h-4 text-gray-300 group-hover:text-muted-foreground transition-all group-hover:-translate-x-1" />}
       </div>
-      <p className="text-sm font-medium text-gray-500 mb-1">{title}</p>
+      <p className="text-sm font-medium text-muted-foreground mb-1">{title}</p>
       <p className="text-4xl font-black text-gray-900 tracking-tight">
         <AnimatedNumber value={value} />
       </p>
-      {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+      {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
     </div>
   );
   return link ? <Link href={link}>{content}</Link> : content;
@@ -191,10 +191,10 @@ function formatTimeAgo(timestamp: string): string {
 }
 
 const priorityColors: Record<string, string> = {
-  high: "bg-red-100 text-red-700",
-  medium: "bg-yellow-100 text-yellow-700",
-  low: "bg-green-100 text-green-700",
-  urgent: "bg-red-200 text-red-800",
+  high: "bg-status-error-surface text-status-error-foreground",
+  medium: "bg-status-warning-surface text-status-warning-foreground",
+  low: "bg-status-success-surface text-status-success-foreground",
+  urgent: "bg-red-200 text-status-error-foreground",
 };
 
 function AttendanceWidget() {
@@ -249,16 +249,16 @@ function AttendanceWidget() {
           <div className="flex items-center gap-3">
             <div className={cn(
               "w-12 h-12 rounded-xl flex items-center justify-center",
-              hasCheckedOut ? "bg-gray-100" : hasCheckedIn ? "bg-emerald-100" : "bg-blue-100"
+              hasCheckedOut ? "bg-surface-subtle" : hasCheckedIn ? "bg-emerald-100" : "bg-status-info-surface"
             )}>
               <Clock className={cn(
                 "w-6 h-6",
-                hasCheckedOut ? "text-gray-500" : hasCheckedIn ? "text-emerald-600" : "text-blue-600"
+                hasCheckedOut ? "text-muted-foreground" : hasCheckedIn ? "text-emerald-600" : "text-status-info-foreground"
               )} />
             </div>
             <div>
-              <p className="text-sm font-semibold text-gray-800">تسجيل الحضور والانصراف</p>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-sm font-semibold text-status-neutral-foreground">تسجيل الحضور والانصراف</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
                 {hasCheckedOut
                   ? `تم الانصراف — ${attendance.checkOut?.slice(11, 16) || ""}`
                   : hasCheckedIn
@@ -283,14 +283,14 @@ function AttendanceWidget() {
                 onClick={handleCheckOut}
                 disabled={checkOutMut.isPending}
                 variant="outline"
-                className="border-red-200 text-red-600 hover:bg-red-50 gap-1.5"
+                className="border-status-error-surface text-status-error-foreground hover:bg-status-error-surface gap-1.5"
               >
                 <LogOut className="w-4 h-4" />
                 {checkOutMut.isPending ? "جاري..." : "تسجيل انصراف"}
               </Button>
             )}
             {hasCheckedOut && (
-              <Badge variant="secondary" className="text-xs bg-gray-100 text-gray-600">
+              <Badge variant="secondary" className="text-xs bg-surface-subtle text-muted-foreground">
                 <CheckCircle2 className="w-3.5 h-3.5 me-1 text-emerald-500" />
                 مكتمل
               </Badge>
@@ -419,15 +419,15 @@ export default function Dashboard() {
           link="/tasks"
           pulse
         />
-        <div className="bg-white rounded-2xl border-2 border-green-100 p-6 relative overflow-hidden">
+        <div className="bg-white rounded-2xl border-2 border-status-success-surface p-6 relative overflow-hidden">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500 mb-1">إنجاز اليوم</p>
+              <p className="text-sm font-medium text-muted-foreground mb-1">إنجاز اليوم</p>
               <p className="text-2xl font-black text-gray-900">
                 <AnimatedNumber value={cards.completedToday || 0} />
-                <span className="text-sm font-normal text-gray-400 me-1">مهمة</span>
+                <span className="text-sm font-normal text-muted-foreground me-1">مهمة</span>
               </p>
-              <p className="text-xs text-gray-400 mt-1">نسبة الإنجاز</p>
+              <p className="text-xs text-muted-foreground mt-1">نسبة الإنجاز</p>
             </div>
             <ProgressRing percent={cards.completedPct || 0} size={72} stroke={7} />
           </div>
@@ -439,27 +439,27 @@ export default function Dashboard() {
       {roleLevel < 40 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Link href="/my-space">
-            <div className="bg-white rounded-xl border border-blue-100 p-4 hover:shadow-md transition-all cursor-pointer text-center">
-              <User className="w-6 h-6 text-blue-500 mx-auto mb-2" />
-              <p className="text-sm font-medium text-gray-800">مساحتي</p>
+            <div className="bg-white rounded-xl border border-status-info-surface p-4 hover:shadow-md transition-all cursor-pointer text-center">
+              <User className="w-6 h-6 text-status-info mx-auto mb-2" />
+              <p className="text-sm font-medium text-status-neutral-foreground">مساحتي</p>
             </div>
           </Link>
           <Link href="/hr/leaves/create">
             <div className="bg-white rounded-xl border border-teal-100 p-4 hover:shadow-md transition-all cursor-pointer text-center">
               <Calendar className="w-6 h-6 text-teal-500 mx-auto mb-2" />
-              <p className="text-sm font-medium text-gray-800">طلب إجازة</p>
+              <p className="text-sm font-medium text-status-neutral-foreground">طلب إجازة</p>
             </div>
           </Link>
           <Link href="/requests">
             <div className="bg-white rounded-xl border border-orange-100 p-4 hover:shadow-md transition-all cursor-pointer text-center">
               <ClipboardList className="w-6 h-6 text-orange-500 mx-auto mb-2" />
-              <p className="text-sm font-medium text-gray-800">تقديم طلب</p>
+              <p className="text-sm font-medium text-status-neutral-foreground">تقديم طلب</p>
             </div>
           </Link>
           <Link href="/hr/attendance">
             <div className="bg-white rounded-xl border border-purple-100 p-4 hover:shadow-md transition-all cursor-pointer text-center">
               <Clock className="w-6 h-6 text-purple-500 mx-auto mb-2" />
-              <p className="text-sm font-medium text-gray-800">سجل الحضور</p>
+              <p className="text-sm font-medium text-status-neutral-foreground">سجل الحضور</p>
             </div>
           </Link>
         </div>
@@ -479,22 +479,22 @@ export default function Dashboard() {
               {allApprovals.slice(0, 8).map((approval) => {
                 const typeIcons: Record<string, { icon: LucideIcon; color: string; bg: string }> = {
                   leave: { icon: Calendar, color: "text-teal-600", bg: "bg-teal-50" },
-                  finance: { icon: DollarSign, color: "text-green-600", bg: "bg-green-50" },
-                  purchase: { icon: ShoppingCart, color: "text-blue-600", bg: "bg-blue-50" },
+                  finance: { icon: DollarSign, color: "text-status-success-foreground", bg: "bg-status-success-surface" },
+                  purchase: { icon: ShoppingCart, color: "text-status-info-foreground", bg: "bg-status-info-surface" },
                 };
                 const style = typeIcons[approval.type] || typeIcons.leave;
                 const ApprovalIcon = style.icon;
                 return (
                   <Link key={`${approval.type}-${approval.id}`} href={approval.link}>
-                    <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer border border-gray-100">
+                    <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-subtle transition-colors cursor-pointer border border-border">
                       <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center shrink-0", style.bg)}>
                         <ApprovalIcon className={cn("w-4 h-4", style.color)} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-800 truncate">{approval.title}</p>
-                        <p className="text-xs text-gray-500 truncate">{approval.subtitle}</p>
+                        <p className="text-sm font-medium text-status-neutral-foreground truncate">{approval.title}</p>
+                        <p className="text-xs text-muted-foreground truncate">{approval.subtitle}</p>
                       </div>
-                      <div className="text-xs text-gray-400 shrink-0">
+                      <div className="text-xs text-muted-foreground shrink-0">
                         {approval.date ? formatTimeAgo(approval.date) : ""}
                       </div>
                       <ChevronLeft className="w-4 h-4 text-gray-300 shrink-0" />
@@ -511,7 +511,7 @@ export default function Dashboard() {
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-blue-500" />
+              <Calendar className="w-5 h-5 text-status-info" />
               مهام اليوم
               {todayTasks.length > 0 && <Badge className="text-xs">{todayTasks.length}</Badge>}
             </CardTitle>
@@ -523,9 +523,9 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             {todayTasks.length === 0 ? (
-              <div className="text-center py-8 text-gray-400">
+              <div className="text-center py-8 text-muted-foreground">
                 <CheckCircle className="w-12 h-12 text-green-300 mx-auto mb-3" />
-                <p className="font-medium text-green-600">لا توجد مهام مجدولة لليوم</p>
+                <p className="font-medium text-status-success-foreground">لا توجد مهام مجدولة لليوم</p>
                 <p className="text-xs mt-1">يمكنك إنشاء مهمة جديدة</p>
                 <Button variant="outline" size="sm" className="mt-3" onClick={() => setLocation("/tasks")}>
                   <Plus className="w-4 h-4 me-1" /> إنشاء مهمة
@@ -535,7 +535,7 @@ export default function Dashboard() {
               <div className="space-y-2">
                 {todayTasks.slice(0, 8).map((task: any) => (
                   <Link key={task.id} href={`/tasks/${task.id}`}>
-                    <div className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer">
+                    <div className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-surface-subtle transition-colors cursor-pointer">
                       <div className={cn(
                         "w-2 h-2 rounded-full shrink-0",
                         task.status === "completed" ? "bg-green-500" :
@@ -544,12 +544,12 @@ export default function Dashboard() {
                       <div className="flex-1 min-w-0">
                         <p className={cn(
                           "text-sm font-medium truncate",
-                          task.status === "completed" ? "text-gray-400 line-through" : "text-gray-800"
+                          task.status === "completed" ? "text-muted-foreground line-through" : "text-status-neutral-foreground"
                         )}>
                           {task.title}
                         </p>
                         {task.assigneeName && (
-                          <p className="text-xs text-gray-400">{task.assigneeName}</p>
+                          <p className="text-xs text-muted-foreground">{task.assigneeName}</p>
                         )}
                       </div>
                       {task.priority && (
@@ -580,24 +580,24 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             {notifications.length === 0 ? (
-              <div className="text-center py-8 text-gray-400">
+              <div className="text-center py-8 text-muted-foreground">
                 <Bell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                 <p>لا توجد إشعارات جديدة</p>
               </div>
             ) : (
               <div className="space-y-2">
                 {notifications.slice(0, 6).map((n: any) => (
-                  <div key={n.id} className="flex items-start gap-3 p-2.5 rounded-xl hover:bg-gray-50 transition-colors">
+                  <div key={n.id} className="flex items-start gap-3 p-2.5 rounded-xl hover:bg-surface-subtle transition-colors">
                     <div className={cn(
                       "w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5",
-                      n.priority === "high" ? "bg-red-50" : "bg-blue-50"
+                      n.priority === "high" ? "bg-status-error-surface" : "bg-status-info-surface"
                     )}>
-                      <Bell className={cn("w-4 h-4", n.priority === "high" ? "text-red-500" : "text-blue-500")} />
+                      <Bell className={cn("w-4 h-4", n.priority === "high" ? "text-status-error" : "text-status-info")} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{n.title}</p>
-                      <p className="text-xs text-gray-500 truncate">{n.body}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{formatTimeAgo(n.createdAt)}</p>
+                      <p className="text-sm font-medium text-status-neutral-foreground truncate">{n.title}</p>
+                      <p className="text-xs text-muted-foreground truncate">{n.body}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{formatTimeAgo(n.createdAt)}</p>
                     </div>
                   </div>
                 ))}
@@ -647,28 +647,28 @@ export default function Dashboard() {
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
-              <DollarSign className="w-5 h-5 text-green-500" />
+              <DollarSign className="w-5 h-5 text-status-success" />
               لوحة المالية
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Link href="/finance/invoices">
-                <div className="p-3 rounded-lg bg-red-50 hover:bg-red-100 transition-colors cursor-pointer">
-                  <p className="text-2xl font-bold text-red-700">{roleData.finance.overdueCount}</p>
-                  <p className="text-xs text-red-600">فواتير متأخرة</p>
+                <div className="p-3 rounded-lg bg-status-error-surface hover:bg-status-error-surface transition-colors cursor-pointer">
+                  <p className="text-2xl font-bold text-status-error-foreground">{roleData.finance.overdueCount}</p>
+                  <p className="text-xs text-status-error-foreground">فواتير متأخرة</p>
                   {roleData.finance.overdueAmount > 0 && (
-                    <p className="text-[10px] text-red-500 mt-0.5">{formatCurrency(Number(roleData.finance.overdueAmount))}</p>
+                    <p className="text-[10px] text-status-error mt-0.5">{formatCurrency(Number(roleData.finance.overdueAmount))}</p>
                   )}
                 </div>
               </Link>
-              <div className="p-3 rounded-lg bg-yellow-50">
-                <p className="text-2xl font-bold text-yellow-700">{roleData.finance.advancedCollectionCount}</p>
-                <p className="text-xs text-yellow-600">تحصيل متقدم (مرحلة 4+)</p>
+              <div className="p-3 rounded-lg bg-status-warning-surface">
+                <p className="text-2xl font-bold text-status-warning-foreground">{roleData.finance.advancedCollectionCount}</p>
+                <p className="text-xs text-status-warning-foreground">تحصيل متقدم (مرحلة 4+)</p>
               </div>
-              <div className="p-3 rounded-lg bg-blue-50">
-                <p className="text-2xl font-bold text-blue-700">{roleData.finance.avgBudgetUsage}%</p>
-                <p className="text-xs text-blue-600">متوسط استخدام الميزانية</p>
+              <div className="p-3 rounded-lg bg-status-info-surface">
+                <p className="text-2xl font-bold text-status-info-foreground">{roleData.finance.avgBudgetUsage}%</p>
+                <p className="text-xs text-status-info-foreground">متوسط استخدام الميزانية</p>
               </div>
             </div>
           </CardContent>
@@ -686,18 +686,18 @@ export default function Dashboard() {
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Link href="/tasks">
-                <div className="p-3 rounded-lg bg-blue-50 hover:bg-blue-100 transition-colors cursor-pointer">
-                  <p className="text-2xl font-bold text-blue-700">{roleData.manager.teamTasksTotal}</p>
-                  <p className="text-xs text-blue-600">إجمالي المهام</p>
+                <div className="p-3 rounded-lg bg-status-info-surface hover:bg-status-info-surface transition-colors cursor-pointer">
+                  <p className="text-2xl font-bold text-status-info-foreground">{roleData.manager.teamTasksTotal}</p>
+                  <p className="text-xs text-status-info-foreground">إجمالي المهام</p>
                 </div>
               </Link>
-              <div className="p-3 rounded-lg bg-green-50">
-                <p className="text-2xl font-bold text-green-700">{roleData.manager.teamTasksCompleted}</p>
-                <p className="text-xs text-green-600">مهام مكتملة</p>
+              <div className="p-3 rounded-lg bg-status-success-surface">
+                <p className="text-2xl font-bold text-status-success-foreground">{roleData.manager.teamTasksCompleted}</p>
+                <p className="text-xs text-status-success-foreground">مهام مكتملة</p>
               </div>
-              <div className="p-3 rounded-lg bg-red-50">
-                <p className="text-2xl font-bold text-red-700">{roleData.manager.teamTasksOverdue}</p>
-                <p className="text-xs text-red-600">مهام متأخرة</p>
+              <div className="p-3 rounded-lg bg-status-error-surface">
+                <p className="text-2xl font-bold text-status-error-foreground">{roleData.manager.teamTasksOverdue}</p>
+                <p className="text-xs text-status-error-foreground">مهام متأخرة</p>
               </div>
             </div>
           </CardContent>
@@ -708,7 +708,7 @@ export default function Dashboard() {
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
-              <Lightbulb className="w-5 h-5 text-yellow-500" />
+              <Lightbulb className="w-5 h-5 text-status-warning" />
               اقتراحات ذكية
               <Badge variant="secondary" className="text-xs">{suggestionsResp.data.length}</Badge>
             </CardTitle>
@@ -717,17 +717,17 @@ export default function Dashboard() {
             <div className="space-y-2">
               {suggestionsResp.data.slice(0, 6).map((s: any) => {
                 const severityStyles: Record<string, { bg: string; border: string; icon: string }> = {
-                  critical: { bg: "bg-red-50", border: "border-red-200", icon: "text-red-600" },
-                  warning: { bg: "bg-amber-50", border: "border-amber-200", icon: "text-amber-600" },
-                  info: { bg: "bg-blue-50", border: "border-blue-200", icon: "text-blue-600" },
+                  critical: { bg: "bg-status-error-surface", border: "border-status-error-surface", icon: "text-status-error-foreground" },
+                  warning: { bg: "bg-status-warning-surface", border: "border-status-warning-surface", icon: "text-status-warning-foreground" },
+                  info: { bg: "bg-status-info-surface", border: "border-status-info-surface", icon: "text-status-info-foreground" },
                 };
                 const style = severityStyles[s.severity] || severityStyles.info;
                 return (
                   <div key={s.id} className={cn("p-3 rounded-xl border flex items-start gap-3", style.bg, style.border)}>
                     <Lightbulb className={cn("w-5 h-5 shrink-0 mt-0.5", style.icon)} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800">{s.title}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{s.description}</p>
+                      <p className="text-sm font-medium text-status-neutral-foreground">{s.title}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{s.description}</p>
                     </div>
                     {s.actionLink && (
                       <Link href={s.actionLink}>
@@ -791,8 +791,8 @@ export default function Dashboard() {
       {(roleLevel >= 40) && (
         <>
           <div>
-            <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <Zap className="w-5 h-5 text-yellow-500" />
+            <h2 className="text-lg font-semibold text-status-neutral-foreground mb-4 flex items-center gap-2">
+              <Zap className="w-5 h-5 text-status-warning" />
               إنشاء سريع
             </h2>
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
@@ -802,7 +802,7 @@ export default function Dashboard() {
                     <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center", COLOR_MAP[a.color].bg)}>
                       <a.icon className={cn("w-4 h-4", COLOR_MAP[a.color].icon)} />
                     </div>
-                    <span className="text-xs font-medium text-gray-700 text-center leading-tight">{a.label}</span>
+                    <span className="text-xs font-medium text-status-neutral-foreground text-center leading-tight">{a.label}</span>
                   </div>
                 </Link>
               ))}
@@ -826,13 +826,13 @@ export default function Dashboard() {
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <DollarSign className="w-5 h-5 text-green-500" />
+                  <DollarSign className="w-5 h-5 text-status-success" />
                   الإيرادات والمصروفات
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {revenueData.length === 0 ? (
-                  <div className="h-[260px] flex flex-col items-center justify-center text-gray-400 text-sm gap-3">
+                  <div className="h-[260px] flex flex-col items-center justify-center text-muted-foreground text-sm gap-3">
                     <DollarSign className="w-10 h-10 text-gray-300" />
                     <p>لا توجد بيانات مالية بعد</p>
                     <Button variant="outline" size="sm" onClick={() => setLocation("/finance/invoices/create")}>
@@ -867,13 +867,13 @@ export default function Dashboard() {
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <Users className="w-5 h-5 text-blue-500" />
+                  <Users className="w-5 h-5 text-status-info" />
                   الحضور الأسبوعي
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {attendanceData.length === 0 ? (
-                  <div className="h-[260px] flex flex-col items-center justify-center text-gray-400 text-sm gap-3">
+                  <div className="h-[260px] flex flex-col items-center justify-center text-muted-foreground text-sm gap-3">
                     <Clock className="w-10 h-10 text-gray-300" />
                     <p>لا توجد بيانات حضور بعد</p>
                     <Button variant="outline" size="sm" onClick={() => setLocation("/hr/attendance")}>
@@ -909,7 +909,7 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent className="flex items-center justify-center">
                 {departmentData.length === 0 ? (
-                  <div className="h-[220px] flex flex-col items-center justify-center text-gray-400 text-sm gap-3">
+                  <div className="h-[220px] flex flex-col items-center justify-center text-muted-foreground text-sm gap-3">
                     <Users className="w-10 h-10 text-gray-300" />
                     <p>لا توجد بيانات أقسام بعد</p>
                   </div>
@@ -947,7 +947,7 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent>
                 {recentEvents.length === 0 ? (
-                  <div className="text-center text-gray-400 py-6 text-sm">
+                  <div className="text-center text-muted-foreground py-6 text-sm">
                     <Activity className="w-8 h-8 text-gray-300 mx-auto mb-2" />
                     <p>لا توجد أحداث حديثة</p>
                   </div>
@@ -957,12 +957,12 @@ export default function Dashboard() {
                       const style = EVENT_ICONS[event.type] || EVENT_ICONS.task;
                       const EventIcon = style.icon;
                       return (
-                        <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-gray-50 transition-colors">
-                          <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center shrink-0">
+                        <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-subtle transition-colors">
+                          <div className="w-8 h-8 rounded-full bg-surface-subtle flex items-center justify-center shrink-0">
                             <EventIcon className={cn("w-4 h-4", style.color)} />
                           </div>
-                          <p className="text-sm text-gray-700 flex-1 truncate">{event.text}</p>
-                          <span className="text-xs text-gray-400 shrink-0">{event.time}</span>
+                          <p className="text-sm text-status-neutral-foreground flex-1 truncate">{event.text}</p>
+                          <span className="text-xs text-muted-foreground shrink-0">{event.time}</span>
                         </div>
                       );
                     })}

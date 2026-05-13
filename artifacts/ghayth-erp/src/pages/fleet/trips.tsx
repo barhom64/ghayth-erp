@@ -39,7 +39,7 @@ export default function TripsPage() {
     },
     { key: "driverName", header: "السائق", sortable: true, render: (t) => <span className="font-medium">{t.driverName}</span> },
     { key: "vehiclePlate", header: "المركبة", sortable: true, render: (t) => t.vehiclePlate || "-" },
-    { key: "origin", header: "من / إلى", sortable: true, render: (t) => <span className="text-gray-500">{t.origin} → {t.destination}</span> },
+    { key: "origin", header: "من / إلى", sortable: true, render: (t) => <span className="text-muted-foreground">{t.origin} → {t.destination}</span> },
     { key: "distance", header: "المسافة", sortable: true, render: (t) => `${t.distance} كم` },
     { key: "status", header: "الحالة", sortable: true, render: (t) => <PageStatusBadge status={t.status} /> },
   ];
@@ -61,9 +61,9 @@ export default function TripsPage() {
     >
       <FleetTabsNav />
       <KpiGrid items={[
-        { label: "إجمالي الرحلات", value: items.length, icon: Route, color: "text-blue-600 bg-blue-50" },
-        { label: "جارية", value: items.filter((t: any) => t.status === "in_progress").length, icon: Navigation, color: "text-amber-600 bg-amber-50" },
-        { label: "مكتملة", value: items.filter((t: any) => t.status === "completed").length, icon: CheckCircle, color: "text-green-600 bg-green-50" },
+        { label: "إجمالي الرحلات", value: items.length, icon: Route, color: "text-status-info-foreground bg-status-info-surface" },
+        { label: "جارية", value: items.filter((t: any) => t.status === "in_progress").length, icon: Navigation, color: "text-status-warning-foreground bg-status-warning-surface" },
+        { label: "مكتملة", value: items.filter((t: any) => t.status === "completed").length, icon: CheckCircle, color: "text-status-success-foreground bg-status-success-surface" },
         { label: "إجمالي المسافة", value: `${formatNumber(items.reduce((s: number, t: any) => s + (Number(t.distance) || 0), 0))} كم`, icon: MapPin, color: "text-purple-600 bg-purple-50" },
       ]} />
 

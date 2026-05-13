@@ -58,11 +58,11 @@ export default function TCOPage() {
       </div>
 
       {!vehicleId && (
-        <Card><CardContent className="py-12 text-center text-gray-400">اختر مركبة لعرض تحليل التكلفة الكلية</CardContent></Card>
+        <Card><CardContent className="py-12 text-center text-muted-foreground">اختر مركبة لعرض تحليل التكلفة الكلية</CardContent></Card>
       )}
 
       {vehicleId && isLoading && (
-        <div className="text-center py-8 text-gray-400">جاري التحليل...</div>
+        <div className="text-center py-8 text-muted-foreground">جاري التحليل...</div>
       )}
 
       {tco && (
@@ -71,25 +71,25 @@ export default function TCOPage() {
             <Card className="border-2 border-primary/20">
               <CardContent className="pt-4 text-center">
                 <div className="text-2xl font-bold text-primary">{formatCurrency(tco.totalCost)}</div>
-                <div className="text-xs text-gray-500 mt-1">إجمالي تكلفة التملك</div>
+                <div className="text-xs text-muted-foreground mt-1">إجمالي تكلفة التملك</div>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="pt-4 text-center">
                 <div className="text-xl font-bold">{formatCurrency(tco.costPerKm)}</div>
-                <div className="text-xs text-gray-500">التكلفة لكل كيلومتر</div>
+                <div className="text-xs text-muted-foreground">التكلفة لكل كيلومتر</div>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="pt-4 text-center">
                 <div className="text-xl font-bold">{formatNumber(tco.totalKm)}</div>
-                <div className="text-xs text-gray-500">إجمالي الكيلومترات</div>
+                <div className="text-xs text-muted-foreground">إجمالي الكيلومترات</div>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="pt-4 text-center">
                 <div className="text-xl font-bold">{tco.yearsSincePurchase} سنة</div>
-                <div className="text-xs text-gray-500">عمر المركبة</div>
+                <div className="text-xs text-muted-foreground">عمر المركبة</div>
               </CardContent>
             </Card>
           </div>
@@ -120,7 +120,7 @@ export default function TCOPage() {
                       ))}
                     </div>
                   </div>
-                ) : <div className="text-center py-4 text-gray-400 text-sm">لا توجد بيانات</div>}
+                ) : <div className="text-center py-4 text-muted-foreground text-sm">لا توجد بيانات</div>}
               </CardContent>
             </Card>
 
@@ -129,10 +129,10 @@ export default function TCOPage() {
               <CardContent className="space-y-2">
                 {[
                   { label: "سعر الشراء", value: tco.purchasePrice, icon: Car, color: "text-purple-500" },
-                  { label: "الوقود", value: tco.fuelCost, icon: Fuel, color: "text-blue-500" },
+                  { label: "الوقود", value: tco.fuelCost, icon: Fuel, color: "text-status-info" },
                   { label: "الصيانة", value: tco.maintenanceCost, icon: Wrench, color: "text-orange-500" },
-                  { label: "التأمين", value: tco.insuranceCost, icon: Shield, color: "text-green-500" },
-                  { label: "الاستهلاك", value: tco.totalDepreciation, icon: TrendingUp, color: "text-red-500" },
+                  { label: "التأمين", value: tco.insuranceCost, icon: Shield, color: "text-status-success" },
+                  { label: "الاستهلاك", value: tco.totalDepreciation, icon: TrendingUp, color: "text-status-error" },
                   { label: "المخالفات", value: tco.trafficFines, icon: AlertTriangle, color: "text-red-400" },
                 ].map((item, i) => (
                   <div key={i} className="flex items-center justify-between py-1 border-b last:border-0">
@@ -151,7 +151,7 @@ export default function TCOPage() {
             </Card>
           </div>
 
-          <Card className="bg-gray-50">
+          <Card className="bg-surface-subtle">
             <CardContent className="p-4">
               <div className="grid grid-cols-3 gap-4 text-sm">
                 <div><span className="font-medium">المركبة:</span> {tco.make} {tco.model} {tco.year || ""}</div>

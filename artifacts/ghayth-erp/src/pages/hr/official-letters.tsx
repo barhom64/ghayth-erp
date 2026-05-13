@@ -78,8 +78,8 @@ export default function OfficialLettersPage() {
   const columns: DataTableColumn<any>[] = [
     { key: "subject", header: "الموضوع", sortable: true, className: "font-medium", render: (l) => l.subject },
     { key: "type", header: "النوع", sortable: true, render: (l) => LETTER_TYPES[l.type] || l.type },
-    { key: "employeeName", header: "الموظف", sortable: true, className: "text-gray-500", render: (l) => l.employeeName || "-" },
-    { key: "createdAt", header: "التاريخ", sortable: true, className: "text-gray-500", render: (l) => l.createdAt ? formatDateAr(l.createdAt) : "-" },
+    { key: "employeeName", header: "الموظف", sortable: true, className: "text-muted-foreground", render: (l) => l.employeeName || "-" },
+    { key: "createdAt", header: "التاريخ", sortable: true, className: "text-muted-foreground", render: (l) => l.createdAt ? formatDateAr(l.createdAt) : "-" },
     { key: "status", header: "الحالة", sortable: true, render: (l) => <PageStatusBadge status={l.status} /> },
     {
       key: "actions",
@@ -133,10 +133,10 @@ export default function OfficialLettersPage() {
       }
     >
       <KpiGrid items={[
-        { label: "إجمالي الخطابات", value: items.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
-        { label: "مسودة", value: items.filter((l: any) => l.status === "draft").length, icon: FileSignature, color: "text-gray-600 bg-gray-50" },
-        { label: "صادر", value: items.filter((l: any) => l.status === "issued").length, icon: Send, color: "text-green-600 bg-green-50" },
-        { label: "مرسل", value: items.filter((l: any) => l.status === "sent").length, icon: Send, color: "text-blue-600 bg-blue-50" },
+        { label: "إجمالي الخطابات", value: items.length, icon: FileText, color: "text-status-info-foreground bg-status-info-surface" },
+        { label: "مسودة", value: items.filter((l: any) => l.status === "draft").length, icon: FileSignature, color: "text-muted-foreground bg-surface-subtle" },
+        { label: "صادر", value: items.filter((l: any) => l.status === "issued").length, icon: Send, color: "text-status-success-foreground bg-status-success-surface" },
+        { label: "مرسل", value: items.filter((l: any) => l.status === "sent").length, icon: Send, color: "text-status-info-foreground bg-status-info-surface" },
       ]} />
 
       <AdvancedFilters
@@ -154,7 +154,7 @@ export default function OfficialLettersPage() {
       />
 
       {showForm && (
-        <Card className="border-blue-200">
+        <Card className="border-status-info-surface">
           <CardContent className="p-4">
             <FormShell
               schema={letterFormSchema}

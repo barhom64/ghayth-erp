@@ -21,8 +21,8 @@ export default function OrganizationStructurePage() {
   const employees = empData?.data || [];
 
   const kpis = [
-    { label: "الأقسام", value: departments.length, icon: Building2, color: "text-blue-600 bg-blue-50" },
-    { label: "الموظفين", value: employees.length, icon: Users, color: "text-green-600 bg-green-50" },
+    { label: "الأقسام", value: departments.length, icon: Building2, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "الموظفين", value: employees.length, icon: Users, color: "text-status-success-foreground bg-status-success-surface" },
     { label: "المناصب", value: [...new Set(employees.map((e: any) => e.jobTitle))].length, icon: Network, color: "text-purple-600 bg-purple-50" },
   ];
 
@@ -50,12 +50,12 @@ export default function OrganizationStructurePage() {
                 <Card key={dept.id} className="hover:shadow-md transition-shadow">
                   <CardContent className="p-4">
                     <div className="flex items-center gap-2 mb-3">
-                      <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                        <Building2 className="w-5 h-5 text-blue-600" />
+                      <div className="w-10 h-10 rounded-lg bg-status-info-surface flex items-center justify-center">
+                        <Building2 className="w-5 h-5 text-status-info-foreground" />
                       </div>
                       <div>
                         <p className="font-semibold">{dept.name}</p>
-                        <p className="text-xs text-gray-400">{deptEmps.length} موظف</p>
+                        <p className="text-xs text-muted-foreground">{deptEmps.length} موظف</p>
                       </div>
                     </div>
                     {deptEmps.length > 0 && (
@@ -64,10 +64,10 @@ export default function OrganizationStructurePage() {
                           <div key={e.id} className="flex items-center gap-2 text-sm">
                             <AvatarInitial name={e.name} size="sm" />
                             <span>{e.name}</span>
-                            <span className="text-gray-400 text-xs ms-auto">{e.jobTitle}</span>
+                            <span className="text-muted-foreground text-xs ms-auto">{e.jobTitle}</span>
                           </div>
                         ))}
-                        {deptEmps.length > 5 && <p className="text-xs text-gray-400 text-center">+{deptEmps.length - 5} آخرين</p>}
+                        {deptEmps.length > 5 && <p className="text-xs text-muted-foreground text-center">+{deptEmps.length - 5} آخرين</p>}
                       </div>
                     )}
                   </CardContent>
@@ -75,7 +75,7 @@ export default function OrganizationStructurePage() {
               );
             })}
           </div>
-          {departments.length === 0 && <p className="text-gray-400 py-8">لم يتم إعداد الأقسام بعد</p>}
+          {departments.length === 0 && <p className="text-muted-foreground py-8">لم يتم إعداد الأقسام بعد</p>}
         </div>
       </div>
     </PageShell>

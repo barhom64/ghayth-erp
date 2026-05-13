@@ -70,13 +70,13 @@ export default function IntercompanyPage() {
       key: "ref",
       header: "المرجع",
       sortable: true,
-      render: (row) => <span className="font-mono text-blue-600 text-xs">{row.ref}</span>,
+      render: (row) => <span className="font-mono text-status-info-foreground text-xs">{row.ref}</span>,
     },
     {
       key: "transactionDate",
       header: "التاريخ",
       sortable: true,
-      render: (row) => <span className="text-gray-500 text-xs">{row.transactionDate ? formatDate(row.transactionDate) : "-"}</span>,
+      render: (row) => <span className="text-muted-foreground text-xs">{row.transactionDate ? formatDate(row.transactionDate) : "-"}</span>,
     },
     { key: "fromCompanyName", header: "الشركة المُرسِلة", sortable: true },
     { key: "toCompanyName", header: "الشركة المُستقبِلة", sortable: true },
@@ -98,12 +98,12 @@ export default function IntercompanyPage() {
     {
       key: "fromJournalId",
       header: "قيد الإرسال",
-      render: (row) => row.fromJournalId ? <span className="text-xs font-mono bg-gray-100 px-2 py-0.5 rounded">#{row.fromJournalId}</span> : "—",
+      render: (row) => row.fromJournalId ? <span className="text-xs font-mono bg-surface-subtle px-2 py-0.5 rounded">#{row.fromJournalId}</span> : "—",
     },
     {
       key: "toJournalId",
       header: "قيد الاستلام",
-      render: (row) => row.toJournalId ? <span className="text-xs font-mono bg-gray-100 px-2 py-0.5 rounded">#{row.toJournalId}</span> : "—",
+      render: (row) => row.toJournalId ? <span className="text-xs font-mono bg-surface-subtle px-2 py-0.5 rounded">#{row.toJournalId}</span> : "—",
     },
   ];
 
@@ -128,10 +128,10 @@ export default function IntercompanyPage() {
         </>
       }
     >
-      <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+      <div className="rounded-xl border border-status-info-surface bg-status-info-surface p-4 text-sm text-status-info-foreground">
         <div className="font-semibold mb-1">آلية العمل التلقائية</div>
         عند تسجيل معاملة بينية، يُنشئ النظام تلقائياً:
-        <ul className="mt-1 list-disc list-inside space-y-0.5 text-blue-700">
+        <ul className="mt-1 list-disc list-inside space-y-0.5 text-status-info-foreground">
           <li>قيد في الشركة المُرسِلة: <strong>ذمم مدينة شركة شقيقة (مدين) / إيراد شركة شقيقة (دائن)</strong></li>
           <li>قيد في الشركة المُستقبِلة: <strong>مصروف شركة شقيقة (مدين) / ذمم دائنة شركة شقيقة (دائن)</strong></li>
         </ul>

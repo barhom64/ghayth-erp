@@ -52,14 +52,14 @@ export default function TaxSystemPage() {
       key: "outputVat",
       header: "ضريبة المخرجات",
       sortable: true,
-      className: "text-red-600",
+      className: "text-status-error-foreground",
       render: (d: any) => formatCurrency(Number(d.outputVat)),
     },
     {
       key: "inputVat",
       header: "ضريبة المدخلات",
       sortable: true,
-      className: "text-green-600",
+      className: "text-status-success-foreground",
       render: (d: any) => formatCurrency(Number(d.inputVat)),
     },
     {
@@ -91,7 +91,7 @@ export default function TaxSystemPage() {
       actions={
         activeTab === "vat" ? (
           <>
-            <span className="text-sm text-gray-500">الفترة:</span>
+            <span className="text-sm text-muted-foreground">الفترة:</span>
             <Input type="month" className="w-44" value={period} onChange={(e) => setPeriod(e.target.value)} />
           </>
         ) : undefined
@@ -100,13 +100,13 @@ export default function TaxSystemPage() {
       <div className="flex gap-2 border-b pb-2">
         <button
           onClick={() => setActiveTab("vat")}
-          className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${activeTab === "vat" ? "bg-primary text-primary-foreground" : "text-gray-600 hover:bg-gray-100"}`}
+          className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${activeTab === "vat" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-surface-subtle"}`}
         >
           <Receipt className="h-4 w-4 inline me-1" />ضريبة القيمة المضافة
         </button>
         <button
           onClick={() => setActiveTab("zatca")}
-          className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${activeTab === "zatca" ? "bg-primary text-primary-foreground" : "text-gray-600 hover:bg-gray-100"}`}
+          className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${activeTab === "zatca" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-surface-subtle"}`}
         >
           <Zap className="h-4 w-4 inline me-1" />ربط هيئة الزكاة والضريبة
           {settings?.enabled && (
@@ -119,33 +119,33 @@ export default function TaxSystemPage() {
         <>
           <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
             <Card><CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2 bg-blue-100 rounded-lg"><Receipt className="h-5 w-5 text-blue-600" /></div>
+              <div className="p-2 bg-status-info-surface rounded-lg"><Receipt className="h-5 w-5 text-status-info-foreground" /></div>
               <div>
-                <p className="text-xs text-gray-500">نسبة الضريبة</p>
-                <p className="text-2xl font-bold text-blue-600">{summary?.vatRate || 15}%</p>
+                <p className="text-xs text-muted-foreground">نسبة الضريبة</p>
+                <p className="text-2xl font-bold text-status-info-foreground">{summary?.vatRate || 15}%</p>
               </div>
             </CardContent></Card>
             <Card><CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2 bg-red-100 rounded-lg"><TrendingUp className="h-5 w-5 text-red-600" /></div>
+              <div className="p-2 bg-status-error-surface rounded-lg"><TrendingUp className="h-5 w-5 text-status-error-foreground" /></div>
               <div>
-                <p className="text-xs text-gray-500">ضريبة المخرجات</p>
-                {summaryLoading ? <Skeleton className="h-7 w-20" /> : <p className="text-xl font-bold text-red-600">{formatCurrency(Number(summary?.outputVat || 0))}</p>}
+                <p className="text-xs text-muted-foreground">ضريبة المخرجات</p>
+                {summaryLoading ? <Skeleton className="h-7 w-20" /> : <p className="text-xl font-bold text-status-error-foreground">{formatCurrency(Number(summary?.outputVat || 0))}</p>}
               </div>
             </CardContent></Card>
             <Card><CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2 bg-green-100 rounded-lg"><TrendingDown className="h-5 w-5 text-green-600" /></div>
+              <div className="p-2 bg-status-success-surface rounded-lg"><TrendingDown className="h-5 w-5 text-status-success-foreground" /></div>
               <div>
-                <p className="text-xs text-gray-500">ضريبة المدخلات</p>
-                {summaryLoading ? <Skeleton className="h-7 w-20" /> : <p className="text-xl font-bold text-green-600">{formatCurrency(Number(summary?.inputVat || 0))}</p>}
+                <p className="text-xs text-muted-foreground">ضريبة المدخلات</p>
+                {summaryLoading ? <Skeleton className="h-7 w-20" /> : <p className="text-xl font-bold text-status-success-foreground">{formatCurrency(Number(summary?.inputVat || 0))}</p>}
               </div>
             </CardContent></Card>
-            <Card className={summary?.status === "payable" ? "border-red-200 bg-red-50" : "border-green-200 bg-green-50"}>
+            <Card className={summary?.status === "payable" ? "border-status-error-surface bg-status-error-surface" : "border-status-success-surface bg-status-success-surface"}>
               <CardContent className="p-4 flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${summary?.status === "payable" ? "bg-red-100" : "bg-green-100"}`}>
-                  <DollarSign className={`h-5 w-5 ${summary?.status === "payable" ? "text-red-600" : "text-green-600"}`} />
+                <div className={`p-2 rounded-lg ${summary?.status === "payable" ? "bg-status-error-surface" : "bg-status-success-surface"}`}>
+                  <DollarSign className={`h-5 w-5 ${summary?.status === "payable" ? "text-status-error-foreground" : "text-status-success-foreground"}`} />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">صافي الضريبة</p>
+                  <p className="text-xs text-muted-foreground">صافي الضريبة</p>
                   {summaryLoading ? <Skeleton className="h-7 w-20" /> : (
                     <p className="text-xl font-bold" style={{ color: Number(summary?.netVat || 0) >= 0 ? "#dc2626" : "#16a34a" }}>
                       {formatCurrency(Number(summary?.netVat || 0))}
@@ -167,7 +167,7 @@ export default function TaxSystemPage() {
                 data={declItems}
                 isLoading={declLoading}
                 rowKey={(d: any) => d.period}
-                rowClassName={() => "hover:bg-gray-50"}
+                rowClassName={() => "hover:bg-surface-subtle"}
                 emptyMessage="لا توجد إقرارات"
                 pageSize={20}
                 searchPlaceholder="بحث بالفترة..."
@@ -182,80 +182,80 @@ export default function TaxSystemPage() {
           <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
             <Card>
               <CardContent className="p-4 flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${settings?.enabled ? "bg-green-100" : "bg-gray-100"}`}>
-                  <Zap className={`h-5 w-5 ${settings?.enabled ? "text-green-600" : "text-gray-400"}`} />
+                <div className={`p-2 rounded-lg ${settings?.enabled ? "bg-status-success-surface" : "bg-surface-subtle"}`}>
+                  <Zap className={`h-5 w-5 ${settings?.enabled ? "text-status-success-foreground" : "text-muted-foreground"}`} />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">حالة الربط</p>
-                  <p className={`text-sm font-bold mt-0.5 ${settings?.enabled ? "text-green-600" : "text-gray-500"}`}>
+                  <p className="text-xs text-muted-foreground">حالة الربط</p>
+                  <p className={`text-sm font-bold mt-0.5 ${settings?.enabled ? "text-status-success-foreground" : "text-muted-foreground"}`}>
                     {settings?.enabled ? "مفعّل" : "غير مفعّل"}
                   </p>
                   {settings?.environment && (
-                    <p className="text-xs text-gray-400">{settings.environment === "production" ? "إنتاج" : "اختبار"}</p>
+                    <p className="text-xs text-muted-foreground">{settings.environment === "production" ? "إنتاج" : "اختبار"}</p>
                   )}
                 </div>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4 flex items-center gap-3">
-                <div className="p-2 bg-green-100 rounded-lg"><CheckCircle className="h-5 w-5 text-green-600" /></div>
+                <div className="p-2 bg-status-success-surface rounded-lg"><CheckCircle className="h-5 w-5 text-status-success-foreground" /></div>
                 <div>
-                  <p className="text-xs text-gray-500">فواتير مقبولة</p>
-                  <p className="text-2xl font-bold text-green-600">{submissionStats.accepted ?? 0}</p>
+                  <p className="text-xs text-muted-foreground">فواتير مقبولة</p>
+                  <p className="text-2xl font-bold text-status-success-foreground">{submissionStats.accepted ?? 0}</p>
                 </div>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4 flex items-center gap-3">
-                <div className="p-2 bg-yellow-100 rounded-lg"><Clock className="h-5 w-5 text-yellow-600" /></div>
+                <div className="p-2 bg-status-warning-surface rounded-lg"><Clock className="h-5 w-5 text-status-warning-foreground" /></div>
                 <div>
-                  <p className="text-xs text-gray-500">معلقة / مرسلة</p>
-                  <p className="text-2xl font-bold text-yellow-600">{submissionStats.pending ?? 0}</p>
+                  <p className="text-xs text-muted-foreground">معلقة / مرسلة</p>
+                  <p className="text-2xl font-bold text-status-warning-foreground">{submissionStats.pending ?? 0}</p>
                 </div>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4 flex items-center gap-3">
-                <div className="p-2 bg-red-100 rounded-lg"><XCircle className="h-5 w-5 text-red-600" /></div>
+                <div className="p-2 bg-status-error-surface rounded-lg"><XCircle className="h-5 w-5 text-status-error-foreground" /></div>
                 <div>
-                  <p className="text-xs text-gray-500">مرفوضة</p>
-                  <p className="text-2xl font-bold text-red-600">{submissionStats.rejected ?? 0}</p>
+                  <p className="text-xs text-muted-foreground">مرفوضة</p>
+                  <p className="text-2xl font-bold text-status-error-foreground">{submissionStats.rejected ?? 0}</p>
                 </div>
               </CardContent>
             </Card>
           </div>
 
           {settings && (
-            <Card className={`border ${settings.connectionTestStatus === "connected" ? "border-green-200 bg-green-50" : settings.connectionTestStatus === "misconfigured" ? "border-yellow-200 bg-yellow-50" : "border-gray-200"}`}>
+            <Card className={`border ${settings.connectionTestStatus === "connected" ? "border-status-success-surface bg-status-success-surface" : settings.connectionTestStatus === "misconfigured" ? "border-status-warning-surface bg-status-warning-surface" : "border-border"}`}>
               <CardContent className="p-4 flex items-center justify-between gap-4">
                 <div className="flex items-start gap-3">
                   {settings.connectionTestStatus === "connected"
-                    ? <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 shrink-0" />
-                    : <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5 shrink-0" />}
+                    ? <CheckCircle className="h-5 w-5 text-status-success-foreground mt-0.5 shrink-0" />
+                    : <AlertTriangle className="h-5 w-5 text-status-warning-foreground mt-0.5 shrink-0" />}
                   <div>
                     <p className="text-sm font-medium">{settings.connectionTestMessage || "لم يتم اختبار الاتصال بعد"}</p>
                     {settings.vatRegistrationNumber && (
-                      <p className="text-xs text-gray-500 mt-0.5">الرقم الضريبي: {settings.vatRegistrationNumber} | {settings.organizationName || ""}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">الرقم الضريبي: {settings.vatRegistrationNumber} | {settings.organizationName || ""}</p>
                     )}
                     {settings.lastConnectionTest && (
-                      <p className="text-xs text-gray-400 mt-0.5">آخر اختبار: {formatDateAr(settings.lastConnectionTest)}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">آخر اختبار: {formatDateAr(settings.lastConnectionTest)}</p>
                     )}
                   </div>
                 </div>
                 {!settings.enabled && (
-                  <Badge className="bg-gray-100 text-gray-600 shrink-0">الربط معطّل</Badge>
+                  <Badge className="bg-surface-subtle text-muted-foreground shrink-0">الربط معطّل</Badge>
                 )}
               </CardContent>
             </Card>
           )}
 
           {!settings && (
-            <Card className="border-yellow-200 bg-yellow-50">
+            <Card className="border-status-warning-surface bg-status-warning-surface">
               <CardContent className="p-4 flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5 shrink-0" />
+                <AlertTriangle className="h-5 w-5 text-status-warning-foreground mt-0.5 shrink-0" />
                 <div>
                   <p className="text-sm font-medium text-yellow-800">لم يتم تهيئة الربط مع هيئة الزكاة والضريبة بعد</p>
-                  <p className="text-xs text-yellow-700 mt-0.5">انتقل إلى الإعدادات ← هيئة الزكاة والضريبة لإعداد بيانات التسجيل والربط مع الهيئة.</p>
+                  <p className="text-xs text-status-warning-foreground mt-0.5">انتقل إلى الإعدادات ← هيئة الزكاة والضريبة لإعداد بيانات التسجيل والربط مع الهيئة.</p>
                 </div>
               </CardContent>
             </Card>
@@ -286,7 +286,7 @@ export default function TaxSystemPage() {
                 columns={[
                   { key: "invoiceRef", header: "المرجع", render: (s: any) => <span className="font-medium">{s.invoiceRef || `#${s.entityId}`}</span> },
                   { key: "entityType", header: "النوع", render: (s: any) => (
-                    <Badge className="text-xs bg-gray-100 text-gray-700">
+                    <Badge className="text-xs bg-surface-subtle text-status-neutral-foreground">
                       {s.entityType === "invoice" ? "فاتورة" : "مصروف"}
                     </Badge>
                   ) },
@@ -294,12 +294,12 @@ export default function TaxSystemPage() {
                     <PageStatusBadge status={s.status || "pending"} domain="zatca" />
                   ) },
                   { key: "environment", header: "البيئة", render: (s: any) => (
-                    <Badge className={`text-xs ${s.environment === "production" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"}`}>
+                    <Badge className={`text-xs ${s.environment === "production" ? "bg-status-info-surface text-status-info-foreground" : "bg-surface-subtle text-muted-foreground"}`}>
                       {s.environment === "production" ? "إنتاج" : "اختبار"}
                     </Badge>
                   ) },
-                  { key: "submittedAt", header: "تاريخ الإرسال", render: (s: any) => <span className="text-xs text-gray-500">{s.submittedAt ? formatDateAr(s.submittedAt) : "-"}</span> },
-                  { key: "zatcaUuid", header: "المعرف الفريد", render: (s: any) => <span className="font-mono text-xs text-gray-400 max-w-[120px] truncate block">{s.zatcaUuid || "-"}</span> },
+                  { key: "submittedAt", header: "تاريخ الإرسال", render: (s: any) => <span className="text-xs text-muted-foreground">{s.submittedAt ? formatDateAr(s.submittedAt) : "-"}</span> },
+                  { key: "zatcaUuid", header: "المعرف الفريد", render: (s: any) => <span className="font-mono text-xs text-muted-foreground max-w-[120px] truncate block">{s.zatcaUuid || "-"}</span> },
                 ] as DataTableColumn<any>[]}
                 data={submissions}
                 isLoading={submissionsLoading}

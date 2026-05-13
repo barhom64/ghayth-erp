@@ -147,7 +147,7 @@ export default function LegalSessionDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Gavel className="h-4 w-4 text-gray-500" />
+            <Gavel className="h-4 w-4 text-muted-foreground" />
             بيانات الجلسة
           </CardTitle>
         </CardHeader>
@@ -155,43 +155,43 @@ export default function LegalSessionDetail() {
           <div className="grid grid-cols-2 gap-3">
             {session?.caseNumber && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">مرجع القضية</p>
-                <span className="text-gray-800 font-mono text-xs">{session.caseNumber}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">مرجع القضية</p>
+                <span className="text-status-neutral-foreground font-mono text-xs">{session.caseNumber}</span>
               </div>
             )}
             {session?.caseTitle && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">عنوان القضية</p>
-                <span className="text-gray-800">{session.caseTitle}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">عنوان القضية</p>
+                <span className="text-status-neutral-foreground">{session.caseTitle}</span>
               </div>
             )}
             {session?.judge && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">القاضي</p>
-                <span className="text-gray-800">{session.judge}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">القاضي</p>
+                <span className="text-status-neutral-foreground">{session.judge}</span>
               </div>
             )}
             {session?.sessionDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ الجلسة</p>
-                <span className="text-gray-800">{formatDateAr(session.sessionDate)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ الجلسة</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(session.sessionDate)}</span>
               </div>
             )}
             {session?.sessionTime && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">وقت الجلسة</p>
-                <span className="text-gray-800">{session.sessionTime}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">وقت الجلسة</p>
+                <span className="text-status-neutral-foreground">{session.sessionTime}</span>
               </div>
             )}
             {session?.location && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">مكان الانعقاد</p>
-                <span className="text-gray-800">{session.location}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">مكان الانعقاد</p>
+                <span className="text-status-neutral-foreground">{session.location}</span>
               </div>
             )}
             {session?.nextSessionDate && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ الجلسة القادمة</p>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ الجلسة القادمة</p>
                 <Badge variant="secondary">{formatDateAr(session.nextSessionDate)}</Badge>
               </div>
             )}
@@ -199,15 +199,15 @@ export default function LegalSessionDetail() {
 
           {session?.subject && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">موضوع الجلسة</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{session.subject}</p>
+              <p className="text-xs text-muted-foreground mb-1">موضوع الجلسة</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{session.subject}</p>
             </div>
           )}
 
           {(session?.outcome || session?.result) && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">نتيجة الجلسة</p>
-              <p className="text-gray-800 whitespace-pre-wrap">
+              <p className="text-xs text-muted-foreground mb-1">نتيجة الجلسة</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">
                 {session.outcome || session.result}
               </p>
             </div>
@@ -215,15 +215,15 @@ export default function LegalSessionDetail() {
 
           {attendeesDisplay && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">الحضور</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{attendeesDisplay}</p>
+              <p className="text-xs text-muted-foreground mb-1">الحضور</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{attendeesDisplay}</p>
             </div>
           )}
 
           {session?.notes && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">ملاحظات</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{session.notes}</p>
+              <p className="text-xs text-muted-foreground mb-1">ملاحظات</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{session.notes}</p>
             </div>
           )}
         </CardContent>
@@ -237,14 +237,14 @@ export default function LegalSessionDetail() {
           <CardContent className="space-y-2 text-sm">
             {session?.createdAt && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ الإنشاء</p>
-                <span className="text-gray-800">{formatDateAr(session.createdAt)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ الإنشاء</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(session.createdAt)}</span>
               </div>
             )}
             {session?.createdByName && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">أنشئ بواسطة</p>
-                <span className="text-gray-800">{session.createdByName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">أنشئ بواسطة</p>
+                <span className="text-status-neutral-foreground">{session.createdByName}</span>
               </div>
             )}
           </CardContent>

@@ -80,9 +80,9 @@ export default function PayrollCreate() {
   return (
     <CreatePageLayout title="تشغيل مسير الرواتب" backPath="/hr/payroll">
       {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -90,18 +90,18 @@ export default function PayrollCreate() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        <Card className="border-blue-100 bg-blue-50/30">
+        <Card className="border-status-info-surface bg-status-info-surface">
           <CardContent className="p-3 flex items-center gap-3">
-            <Users className="w-8 h-8 text-blue-600" />
+            <Users className="w-8 h-8 text-status-info-foreground" />
             <div>
               <p className="text-xl font-bold">{activeEmployees.length}</p>
               <p className="text-xs text-muted-foreground">موظفين نشطين</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-green-100 bg-green-50/30">
+        <Card className="border-status-success-surface bg-status-success-surface">
           <CardContent className="p-3 flex items-center gap-3">
-            <DollarSign className="w-8 h-8 text-green-600" />
+            <DollarSign className="w-8 h-8 text-status-success-foreground" />
             <div>
               <p className="text-xl font-bold">{formatCurrency(totalSalaries)}</p>
               <p className="text-xs text-muted-foreground">إجمالي الرواتب (تقديري)</p>
@@ -130,7 +130,7 @@ export default function PayrollCreate() {
 
       <div className="space-y-6">
         <div>
-          <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-status-neutral-foreground mb-3 flex items-center gap-2">
             <DollarSign className="w-4 h-4" />
             بيانات المسير
           </h3>
@@ -163,10 +163,10 @@ export default function PayrollCreate() {
           rows={3}
         />
 
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+        <div className="bg-status-warning-surface border border-status-warning-surface rounded-lg p-4">
           <div className="flex items-start gap-3">
-            <Info className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-            <div className="text-sm text-amber-800 space-y-1">
+            <Info className="w-5 h-5 text-status-warning-foreground shrink-0 mt-0.5" />
+            <div className="text-sm text-status-warning-foreground space-y-1">
               <p className="font-medium">ملاحظات مهمة قبل التشغيل:</p>
               <ul className="list-disc list-inside space-y-0.5 text-xs">
                 <li>سيتم احتساب الرواتب لجميع الموظفين النشطين تلقائياً</li>

@@ -93,7 +93,7 @@ export default function JobDetailPage() {
 
   const emptyMsg = (msg: string) => (
     <Card className="border-0 shadow-sm">
-      <CardContent className="p-10 text-center text-sm text-gray-500">{msg}</CardContent>
+      <CardContent className="p-10 text-center text-sm text-muted-foreground">{msg}</CardContent>
     </Card>
   );
 
@@ -115,14 +115,14 @@ export default function JobDetailPage() {
         </div>
         {job?.description && (
           <div className="pt-4 border-t">
-            <p className="text-xs text-gray-500 mb-1">الوصف الوظيفي</p>
-            <p className="text-sm text-gray-700 whitespace-pre-wrap">{job.description}</p>
+            <p className="text-xs text-muted-foreground mb-1">الوصف الوظيفي</p>
+            <p className="text-sm text-status-neutral-foreground whitespace-pre-wrap">{job.description}</p>
           </div>
         )}
         {job?.requirements && (
           <div className="pt-4 border-t">
-            <p className="text-xs text-gray-500 mb-1">المتطلبات</p>
-            <p className="text-sm text-gray-700 whitespace-pre-wrap">{job.requirements}</p>
+            <p className="text-xs text-muted-foreground mb-1">المتطلبات</p>
+            <p className="text-sm text-status-neutral-foreground whitespace-pre-wrap">{job.requirements}</p>
           </div>
         )}
       </CardContent>
@@ -241,8 +241,8 @@ export default function JobDetailPage() {
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
   return (
     <div>
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="text-sm font-medium text-gray-800 mt-0.5">{value || "—"}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-sm font-medium text-status-neutral-foreground mt-0.5">{value || "—"}</p>
     </div>
   );
 }
