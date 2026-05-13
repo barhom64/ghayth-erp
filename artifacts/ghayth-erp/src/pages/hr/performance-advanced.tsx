@@ -22,8 +22,8 @@ export default function PerformanceAdvancedPage() {
     : "0";
 
   const kpis = [
-    { label: "إجمالي التقييمات", value: items.length, icon: Target, color: "text-blue-600 bg-blue-50" },
-    { label: "متوسط الأداء", value: avgScore, icon: TrendingUp, color: "text-green-600 bg-green-50" },
+    { label: "إجمالي التقييمات", value: items.length, icon: Target, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "متوسط الأداء", value: avgScore, icon: TrendingUp, color: "text-status-success-foreground bg-status-success-surface" },
     { label: "الأعلى أداءً", value: items.filter((p: any) => Number(p.overallScore) >= 4).length, icon: Award, color: "text-purple-600 bg-purple-50" },
     { label: "يحتاج تطوير", value: items.filter((p: any) => Number(p.overallScore) < 3).length, icon: BarChart3, color: "text-orange-600 bg-orange-50" },
   ];
@@ -52,7 +52,7 @@ export default function PerformanceAdvancedPage() {
             {distribution.map((d) => (
               <div key={d.range} className="flex items-center gap-3">
                 <span className="text-sm w-40">{d.range}</span>
-                <div className="flex-1 bg-gray-100 rounded-full h-6 overflow-hidden">
+                <div className="flex-1 bg-surface-subtle rounded-full h-6 overflow-hidden">
                   <div className={cn("h-full rounded-full", d.color)} style={{ width: `${items.length > 0 ? (d.count / items.length) * 100 : 0}%` }} />
                 </div>
                 <span className="text-sm font-medium w-8 text-start">{d.count}</span>
@@ -68,7 +68,7 @@ export default function PerformanceAdvancedPage() {
           <DataTable
             columns={[
               { key: "rank", header: "#", render: (_v, i) => {
-                return <div className={cn("w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold", i < 3 ? "bg-yellow-100 text-yellow-700" : "bg-gray-100 text-gray-700")}>{i + 1}</div>;
+                return <div className={cn("w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold", i < 3 ? "bg-status-warning-surface text-status-warning-foreground" : "bg-surface-subtle text-status-neutral-foreground")}>{i + 1}</div>;
               } },
               { key: "employeeName", header: "الموظف", sortable: true, render: (v) => <span className="font-medium">{v.employeeName}</span> },
               { key: "overallScore", header: "التقييم", sortable: true, render: (v) => (
@@ -79,7 +79,7 @@ export default function PerformanceAdvancedPage() {
                   <span className="ms-2 font-bold">{Number(v.overallScore).toFixed(1)}</span>
                 </div>
               ) },
-              { key: "period", header: "الفترة", sortable: true, render: (v) => <span className="text-gray-500">{v.period || "-"}</span> },
+              { key: "period", header: "الفترة", sortable: true, render: (v) => <span className="text-muted-foreground">{v.period || "-"}</span> },
             ] as DataTableColumn<any>[]}
             data={[...items].sort((a: any, b: any) => Number(b.overallScore || 0) - Number(a.overallScore || 0)).slice(0, 10)}
             noToolbar

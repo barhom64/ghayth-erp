@@ -46,7 +46,7 @@ export default function LoanDetail() {
   const loan = data?.data ?? data;
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("loan", id || "");
 
-  const st = LOAN_STATUS[loan?.status] ?? { label: loan?.status ?? "—", color: "bg-gray-100 text-gray-600" };
+  const st = LOAN_STATUS[loan?.status] ?? { label: loan?.status ?? "—", color: "bg-surface-subtle text-muted-foreground" };
   const statusObj: DetailStatus = {
     label: st.label,
     tone: STATUS_TONE_MAP[loan?.status] ?? "default",
@@ -62,9 +62,9 @@ export default function LoanDetail() {
     <div className="space-y-4">
       {/* ملخص السلفة */}
       <KpiGrid items={[
-        { label: "المبلغ الكلي", value: formatCurrency(Number(loan.amount)), icon: DollarSign, color: "text-blue-600 bg-blue-50", size: "sm" },
-        { label: "المسدد", value: formatCurrency(Number(loan.paidAmount ?? 0)), icon: CheckCircle, color: "text-green-600 bg-green-50", size: "sm" },
-        { label: "المتبقي", value: formatCurrency(Number(loan.remainingAmount ?? loan.amount)), icon: Wallet, color: "text-red-600 bg-red-50", size: "sm" },
+        { label: "المبلغ الكلي", value: formatCurrency(Number(loan.amount)), icon: DollarSign, color: "text-status-info-foreground bg-status-info-surface", size: "sm" },
+        { label: "المسدد", value: formatCurrency(Number(loan.paidAmount ?? 0)), icon: CheckCircle, color: "text-status-success-foreground bg-status-success-surface", size: "sm" },
+        { label: "المتبقي", value: formatCurrency(Number(loan.remainingAmount ?? loan.amount)), icon: Wallet, color: "text-status-error-foreground bg-status-error-surface", size: "sm" },
         { label: "القسط الشهري", value: formatCurrency(Number(loan.installmentAmount ?? 0)), icon: Calendar, color: "text-purple-600 bg-purple-50", size: "sm" },
       ]} />
 
@@ -81,8 +81,8 @@ export default function LoanDetail() {
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-700">نسبة السداد</span>
-              <span className="text-sm font-bold text-blue-700">{paidPct}%</span>
+              <span className="text-sm font-medium text-status-neutral-foreground">نسبة السداد</span>
+              <span className="text-sm font-bold text-status-info-foreground">{paidPct}%</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-3">
               <div
@@ -90,7 +90,7 @@ export default function LoanDetail() {
                 style={{ width: `${paidPct}%` }}
               />
             </div>
-            <div className="flex items-center justify-between mt-2 text-xs text-gray-400">
+            <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
               <span>مسدد: {formatCurrency(Number(loan.paidAmount ?? 0))}</span>
               <span>إجمالي: {formatCurrency(Number(loan.amount))}</span>
             </div>
@@ -106,34 +106,34 @@ export default function LoanDetail() {
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
             <div>
-              <p className="text-gray-500">الموظف</p>
+              <p className="text-muted-foreground">الموظف</p>
               <p className="font-medium">{loan.employeeName}</p>
             </div>
             <div>
-              <p className="text-gray-500">النوع</p>
+              <p className="text-muted-foreground">النوع</p>
               <p className="font-medium">{LOAN_TYPES[loan.loanType] ?? loan.loanType}</p>
             </div>
             <div>
-              <p className="text-gray-500">عدد الأقساط</p>
+              <p className="text-muted-foreground">عدد الأقساط</p>
               <p className="font-medium">{loan.installmentCount} قسط</p>
             </div>
             <div>
-              <p className="text-gray-500">بدء الخصم</p>
+              <p className="text-muted-foreground">بدء الخصم</p>
               <p className="font-medium">{loan.startDeductionPeriod || "—"}</p>
             </div>
             <div>
-              <p className="text-gray-500">تاريخ الطلب</p>
+              <p className="text-muted-foreground">تاريخ الطلب</p>
               <p className="font-medium">{loan.requestDate ? formatDateAr(loan.requestDate) : "—"}</p>
             </div>
             {loan.approvedAt && (
               <div>
-                <p className="text-gray-500">تاريخ الموافقة</p>
+                <p className="text-muted-foreground">تاريخ الموافقة</p>
                 <p className="font-medium">{formatDateAr(loan.approvedAt)}</p>
               </div>
             )}
             {loan.reason && (
               <div className="col-span-full">
-                <p className="text-gray-500">السبب</p>
+                <p className="text-muted-foreground">السبب</p>
                 <p className="font-medium">{loan.reason}</p>
               </div>
             )}
@@ -150,11 +150,11 @@ export default function LoanDetail() {
           <CardContent>
             <DataTable
               columns={[
-                { key: "installmentNumber", header: "#", sortable: true, render: (v) => <span className="text-gray-500">{v.installmentNumber}</span> },
-                { key: "period", header: "الفترة", sortable: true, render: (v) => <span className="text-gray-700 font-mono">{v.period}</span> },
+                { key: "installmentNumber", header: "#", sortable: true, render: (v) => <span className="text-muted-foreground">{v.installmentNumber}</span> },
+                { key: "period", header: "الفترة", sortable: true, render: (v) => <span className="text-status-neutral-foreground font-mono">{v.period}</span> },
                 { key: "amount", header: "المبلغ", sortable: true, render: (v) => <span className="font-medium">{formatCurrency(Number(v.amount))}</span> },
                 { key: "status", header: "الحالة", sortable: true, render: (v) => {
-                  const iSt = INSTALLMENT_STATUS[v.status] ?? { label: v.status, color: "text-gray-600 bg-gray-50" };
+                  const iSt = INSTALLMENT_STATUS[v.status] ?? { label: v.status, color: "text-muted-foreground bg-surface-subtle" };
                   return <span className={cn("inline-flex px-2 py-0.5 rounded-full text-xs font-medium", iSt.color)}>{iSt.label}</span>;
                 } },
               ] as DataTableColumn<any>[]}

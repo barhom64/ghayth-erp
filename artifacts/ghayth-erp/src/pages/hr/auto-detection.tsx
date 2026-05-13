@@ -71,9 +71,9 @@ interface DetectionSummary {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const TYPE_ICONS: Record<string, { label: string; Icon: typeof Clock; color: string }> = {
-  late:             { label: "تأخر",             Icon: Clock,    color: "text-amber-600 bg-amber-50" },
+  late:             { label: "تأخر",             Icon: Clock,    color: "text-status-warning-foreground bg-status-warning-surface" },
   early_leave:      { label: "مغادرة مبكرة",     Icon: DoorOpen, color: "text-orange-600 bg-orange-50" },
-  absence:          { label: "غياب",             Icon: Ban,      color: "text-red-600 bg-red-50" },
+  absence:          { label: "غياب",             Icon: Ban,      color: "text-status-error-foreground bg-status-error-surface" },
   gps_out_of_range: { label: "خروج عن النطاق",  Icon: MapPin,   color: "text-purple-600 bg-purple-50" },
 };
 
@@ -132,13 +132,13 @@ export default function AutoDetectionPage() {
       label: "إجمالي الوقائع المرصودة",
       value: summary?.totalDetected ?? 0,
       icon: Radar,
-      color: "text-blue-600 bg-blue-50",
+      color: "text-status-info-foreground bg-status-info-surface",
     },
     {
       label: "المحاضر المُنشأة تلقائياً",
       value: summary?.totalMemos ?? 0,
       icon: FileText,
-      color: "text-green-600 bg-green-50",
+      color: "text-status-success-foreground bg-status-success-surface",
     },
     {
       label: "عمليات التشغيل",
@@ -150,7 +150,7 @@ export default function AutoDetectionPage() {
       label: "الأخطاء",
       value: summary?.totalErrors ?? 0,
       icon: AlertTriangle,
-      color: summary?.totalErrors ? "text-red-600 bg-red-50" : "text-gray-400 bg-gray-50",
+      color: summary?.totalErrors ? "text-status-error-foreground bg-status-error-surface" : "text-muted-foreground bg-surface-subtle",
     },
   ];
 
@@ -173,7 +173,7 @@ export default function AutoDetectionPage() {
       render: (row) => (
         <Badge variant="outline" className={cn(
           "text-xs",
-          row.detected > 0 ? "border-amber-300 text-amber-700 bg-amber-50" : "border-gray-200"
+          row.detected > 0 ? "border-amber-300 text-status-warning-foreground bg-status-warning-surface" : "border-border"
         )}>
           {row.detected} واقعة
         </Badge>
@@ -184,7 +184,7 @@ export default function AutoDetectionPage() {
       header: "المخالفات",
       sortable: true,
       render: (row) => (
-        <span className={cn("text-sm font-semibold", row.violationsCreated > 0 ? "text-red-600" : "text-gray-400")}>
+        <span className={cn("text-sm font-semibold", row.violationsCreated > 0 ? "text-status-error-foreground" : "text-muted-foreground")}>
           {row.violationsCreated}
         </span>
       ),
@@ -194,7 +194,7 @@ export default function AutoDetectionPage() {
       header: "المحاضر",
       sortable: true,
       render: (row) => (
-        <span className={cn("text-sm font-semibold", row.memosCreated > 0 ? "text-blue-600" : "text-gray-400")}>
+        <span className={cn("text-sm font-semibold", row.memosCreated > 0 ? "text-status-info-foreground" : "text-muted-foreground")}>
           {row.memosCreated}
         </span>
       ),
@@ -204,7 +204,7 @@ export default function AutoDetectionPage() {
       header: "الأخطاء",
       sortable: true,
       render: (row) => (
-        <span className={cn("text-sm", row.errors > 0 ? "text-red-600 font-semibold" : "text-gray-400")}>
+        <span className={cn("text-sm", row.errors > 0 ? "text-status-error-foreground font-semibold" : "text-muted-foreground")}>
           {row.errors}
         </span>
       ),
@@ -214,7 +214,7 @@ export default function AutoDetectionPage() {
       header: "وقت التشغيل",
       sortable: true,
       render: (row) => (
-        <span className="text-xs text-gray-500">
+        <span className="text-xs text-muted-foreground">
           {formatDateAr(row.createdAt)}
         </span>
       ),
@@ -293,7 +293,7 @@ export default function AutoDetectionPage() {
       {summary?.byType && summary.byType.length > 0 && (
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-700 flex items-center gap-2">
+            <CardTitle className="text-sm font-medium text-status-neutral-foreground flex items-center gap-2">
               <TrendingUp className="h-4 w-4" />
               توزيع الوقائع المرصودة (آخر 30 يوم)
             </CardTitle>
@@ -303,7 +303,7 @@ export default function AutoDetectionPage() {
               {summary.byType.map((item) => {
                 const meta = TYPE_ICONS[item.type];
                 return (
-                  <div key={item.type} className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
+                  <div key={item.type} className="flex items-center gap-3 p-3 rounded-lg bg-surface-subtle">
                     {meta && (
                       <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center", meta.color.split(" ")[1])}>
                         <meta.Icon className={cn("h-4 w-4", meta.color.split(" ")[0])} />
@@ -311,7 +311,7 @@ export default function AutoDetectionPage() {
                     )}
                     <div>
                       <p className="text-lg font-bold">{item.count}</p>
-                      <p className="text-xs text-gray-500">{item.label}</p>
+                      <p className="text-xs text-muted-foreground">{item.label}</p>
                     </div>
                   </div>
                 );
@@ -325,14 +325,14 @@ export default function AutoDetectionPage() {
       {runMutation.data && (
         <Card className={cn(
           "border shadow-sm",
-          runMutation.data.detected > 0 ? "border-amber-200 bg-amber-50/50" : "border-green-200 bg-green-50/50"
+          runMutation.data.detected > 0 ? "border-status-warning-surface bg-status-warning-surface/50" : "border-status-success-surface bg-status-success-surface"
         )}>
           <CardContent className="p-4">
             <div className="flex items-start gap-3">
               {runMutation.data.detected > 0 ? (
-                <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+                <AlertTriangle className="h-5 w-5 text-status-warning-foreground mt-0.5 shrink-0" />
               ) : (
-                <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 shrink-0" />
+                <CheckCircle className="h-5 w-5 text-status-success-foreground mt-0.5 shrink-0" />
               )}
               <div className="flex-1">
                 <p className="font-semibold text-sm">
@@ -342,7 +342,7 @@ export default function AutoDetectionPage() {
                 </p>
                 {runMutation.data.detected > 0 && (
                   <div className="mt-2 space-y-1">
-                    <p className="text-xs text-gray-600">
+                    <p className="text-xs text-muted-foreground">
                       المخالفات المُنشأة: <strong>{runMutation.data.violationsCreated}</strong> —
                       المحاضر المُنشأة: <strong>{runMutation.data.memosCreated}</strong>
                     </p>
@@ -352,10 +352,10 @@ export default function AutoDetectionPage() {
                         <div key={i} className="flex items-center gap-2 text-xs p-2 bg-white/70 rounded">
                           {meta && <meta.Icon className={cn("h-3.5 w-3.5", meta.color.split(" ")[0])} />}
                           <span className="font-medium">{d.employeeName}</span>
-                          <span className="text-gray-500">—</span>
-                          <span className="text-gray-600">{d.description}</span>
+                          <span className="text-muted-foreground">—</span>
+                          <span className="text-muted-foreground">{d.description}</span>
                           {d.memoCreated && (
-                            <Badge className="bg-blue-100 text-blue-700 text-[10px] mr-auto">محضر جديد</Badge>
+                            <Badge className="bg-status-info-surface text-status-info-foreground text-[10px] mr-auto">محضر جديد</Badge>
                           )}
                         </div>
                       );
@@ -372,7 +372,7 @@ export default function AutoDetectionPage() {
       {showSettings && settings && (
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-700 flex items-center gap-2">
+            <CardTitle className="text-sm font-medium text-status-neutral-foreground flex items-center gap-2">
               <Settings2 className="h-4 w-4" />
               إعدادات الرصد التلقائي
             </CardTitle>
@@ -384,7 +384,7 @@ export default function AutoDetectionPage() {
                 label="رصد التأخر"
                 description="رصد تلقائي للموظفين المتأخرين عن بداية الدوام"
                 icon={Clock}
-                iconColor="text-amber-600"
+                iconColor="text-status-warning-foreground"
                 checked={settings.enableLateDetection}
                 onCheckedChange={(v) => handleToggleSetting("enableLateDetection", v)}
               />
@@ -400,7 +400,7 @@ export default function AutoDetectionPage() {
                 label="رصد الغياب"
                 description="رصد تلقائي للموظفين الغائبين بدون إجازة معتمدة"
                 icon={Ban}
-                iconColor="text-red-600"
+                iconColor="text-status-error-foreground"
                 checked={settings.enableAbsenceDetection}
                 onCheckedChange={(v) => handleToggleSetting("enableAbsenceDetection", v)}
               />
@@ -416,10 +416,10 @@ export default function AutoDetectionPage() {
 
             {/* الحدود */}
             <div className="border-t pt-4">
-              <h4 className="text-sm font-medium text-gray-700 mb-3">الحدود والعتبات</h4>
+              <h4 className="text-sm font-medium text-status-neutral-foreground mb-3">الحدود والعتبات</h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-gray-600">حد التأخر (دقائق)</Label>
+                  <Label className="text-xs text-muted-foreground">حد التأخر (دقائق)</Label>
                   <Input
                     type="number"
                     min={1}
@@ -428,10 +428,10 @@ export default function AutoDetectionPage() {
                     onChange={(e) => handleNumberSetting("lateThresholdMinutes", Number(e.target.value))}
                     className="h-9"
                   />
-                  <p className="text-[11px] text-gray-400">لن يُرصد تأخر أقل من هذا الحد</p>
+                  <p className="text-[11px] text-muted-foreground">لن يُرصد تأخر أقل من هذا الحد</p>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-gray-600">حد المغادرة المبكرة (دقائق)</Label>
+                  <Label className="text-xs text-muted-foreground">حد المغادرة المبكرة (دقائق)</Label>
                   <Input
                     type="number"
                     min={1}
@@ -440,10 +440,10 @@ export default function AutoDetectionPage() {
                     onChange={(e) => handleNumberSetting("earlyLeaveThresholdMinutes", Number(e.target.value))}
                     className="h-9"
                   />
-                  <p className="text-[11px] text-gray-400">لن تُرصد مغادرة مبكرة أقل من هذا الحد</p>
+                  <p className="text-[11px] text-muted-foreground">لن تُرصد مغادرة مبكرة أقل من هذا الحد</p>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-gray-600">نطاق GPS (متر)</Label>
+                  <Label className="text-xs text-muted-foreground">نطاق GPS (متر)</Label>
                   <Input
                     type="number"
                     min={50}
@@ -452,20 +452,20 @@ export default function AutoDetectionPage() {
                     onChange={(e) => handleNumberSetting("gpsRadiusMeters", Number(e.target.value))}
                     className="h-9"
                   />
-                  <p className="text-[11px] text-gray-400">المسافة القصوى المسموحة من موقع الفرع</p>
+                  <p className="text-[11px] text-muted-foreground">المسافة القصوى المسموحة من موقع الفرع</p>
                 </div>
               </div>
             </div>
 
             {/* خيارات عامة */}
             <div className="border-t pt-4">
-              <h4 className="text-sm font-medium text-gray-700 mb-3">خيارات عامة</h4>
+              <h4 className="text-sm font-medium text-status-neutral-foreground mb-3">خيارات عامة</h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <SettingToggle
                   label="إنشاء محضر تلقائي"
                   description="إنشاء محضر استفسار تلقائياً لكل مخالفة مرصودة"
                   icon={FileText}
-                  iconColor="text-blue-600"
+                  iconColor="text-status-info-foreground"
                   checked={settings.autoCreateMemo}
                   onCheckedChange={(v) => handleToggleSetting("autoCreateMemo", v)}
                 />
@@ -473,7 +473,7 @@ export default function AutoDetectionPage() {
                   label="إشعار الموظف"
                   description="إرسال إشعار للموظف عند رصد مخالفة"
                   icon={AlertTriangle}
-                  iconColor="text-amber-600"
+                  iconColor="text-status-warning-foreground"
                   checked={settings.notifyEmployee}
                   onCheckedChange={(v) => handleToggleSetting("notifyEmployee", v)}
                 />
@@ -481,7 +481,7 @@ export default function AutoDetectionPage() {
                   label="إشعار المدير"
                   description="إرسال إشعار للمدير المباشر عند رصد مخالفة"
                   icon={Shield}
-                  iconColor="text-green-600"
+                  iconColor="text-status-success-foreground"
                   checked={settings.notifyManager}
                   onCheckedChange={(v) => handleToggleSetting("notifyManager", v)}
                 />
@@ -493,7 +493,7 @@ export default function AutoDetectionPage() {
 
       {/* آخر تشغيل */}
       {summary?.lastRunAt && (
-        <div className="flex items-center gap-2 text-xs text-gray-500">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <RefreshCw className="h-3.5 w-3.5" />
           <span>
             آخر تشغيل:{" "}
@@ -516,9 +516,9 @@ export default function AutoDetectionPage() {
         const log = logs.find((l) => l.id === expandedLog);
         if (!log?.details?.length) return null;
         return (
-          <Card className="border border-blue-100 shadow-sm">
+          <Card className="border border-status-info-surface shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-blue-700 flex items-center gap-2">
+              <CardTitle className="text-sm text-status-info-foreground flex items-center gap-2">
                 <FileText className="h-4 w-4" />
                 تفاصيل الرصد —{" "}
                 {formatDateAr(log.targetDate)}
@@ -529,7 +529,7 @@ export default function AutoDetectionPage() {
                 {log.details.map((d, i) => {
                   const meta = TYPE_ICONS[d.type];
                   return (
-                    <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 text-sm">
+                    <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-surface-subtle text-sm">
                       {meta && (
                         <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0", meta.color.split(" ")[1])}>
                           <meta.Icon className={cn("h-4 w-4", meta.color.split(" ")[0])} />
@@ -542,14 +542,14 @@ export default function AutoDetectionPage() {
                             {meta?.label ?? d.type}
                           </Badge>
                         </div>
-                        <p className="text-xs text-gray-500 truncate">{d.description}</p>
+                        <p className="text-xs text-muted-foreground truncate">{d.description}</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {d.memoCreated && (
-                          <Badge className="bg-blue-100 text-blue-700 text-[10px]">محضر جديد</Badge>
+                          <Badge className="bg-status-info-surface text-status-info-foreground text-[10px]">محضر جديد</Badge>
                         )}
                         {d.violationId && (
-                          <Badge variant="outline" className="text-[10px] text-gray-500">
+                          <Badge variant="outline" className="text-[10px] text-muted-foreground">
                             #{d.violationId}
                           </Badge>
                         )}
@@ -590,7 +590,7 @@ function SettingToggle({
       <Icon className={cn("h-5 w-5 shrink-0", iconColor)} />
       <div className="flex-1 min-w-0">
         <Label className="text-sm font-medium cursor-pointer">{label}</Label>
-        <p className="text-[11px] text-gray-400 leading-tight">{description}</p>
+        <p className="text-[11px] text-muted-foreground leading-tight">{description}</p>
       </div>
       <Switch checked={checked} onCheckedChange={onCheckedChange} />
     </div>

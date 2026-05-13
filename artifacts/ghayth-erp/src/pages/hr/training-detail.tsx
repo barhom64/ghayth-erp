@@ -69,7 +69,7 @@ export default function TrainingDetailPage() {
       label: "المدرب",
       value: program?.trainer || "-",
       icon: User,
-      color: "text-blue-600 bg-blue-50",
+      color: "text-status-info-foreground bg-status-info-surface",
     },
     {
       label: "المشاركين",
@@ -81,13 +81,13 @@ export default function TrainingDetailPage() {
       label: "الموقع",
       value: program?.location || "-",
       icon: MapPin,
-      color: "text-green-600 bg-green-50",
+      color: "text-status-success-foreground bg-status-success-surface",
     },
     {
       label: "الفئة",
       value: program?.category || "-",
       icon: BookOpen,
-      color: "text-amber-600 bg-amber-50",
+      color: "text-status-warning-foreground bg-status-warning-surface",
     },
   ];
 
@@ -114,16 +114,16 @@ export default function TrainingDetailPage() {
       header: "الدرجة",
       sortable: true,
       render: (e) => {
-        if (e.score == null) return <span className="text-gray-400">-</span>;
+        if (e.score == null) return <span className="text-muted-foreground">-</span>;
         const score = Number(e.score);
         return (
           <Badge
             variant="outline"
             className={cn(
               "text-xs",
-              score >= 80 ? "border-green-300 text-green-700 bg-green-50" :
-              score >= 60 ? "border-amber-300 text-amber-700 bg-amber-50" :
-              "border-red-300 text-red-700 bg-red-50",
+              score >= 80 ? "border-status-success-surface text-status-success-foreground bg-status-success-surface" :
+              score >= 60 ? "border-amber-300 text-status-warning-foreground bg-status-warning-surface" :
+              "border-status-error-surface text-status-error-foreground bg-status-error-surface",
             )}
           >
             {score}%
@@ -135,7 +135,7 @@ export default function TrainingDetailPage() {
       key: "feedback",
       header: "الملاحظات",
       render: (e) => (
-        <span className="text-sm text-gray-500 truncate max-w-[200px] block">
+        <span className="text-sm text-muted-foreground truncate max-w-[200px] block">
           {e.feedback || "-"}
         </span>
       ),
@@ -145,7 +145,7 @@ export default function TrainingDetailPage() {
       header: "تاريخ التسجيل",
       sortable: true,
       render: (e) => (
-        <span className="text-sm text-gray-500">
+        <span className="text-sm text-muted-foreground">
           {formatDateAr(e.createdAt)}
         </span>
       ),
@@ -165,50 +165,50 @@ export default function TrainingDetailPage() {
 
       <Card className="border-0 shadow-sm">
         <CardContent className="p-6">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-status-neutral-foreground mb-4 flex items-center gap-2">
             <GraduationCap className="h-4 w-4" />
             بيانات البرنامج
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-y-4 gap-x-6 text-sm">
             <div>
-              <span className="text-gray-500">العنوان</span>
+              <span className="text-muted-foreground">العنوان</span>
               <p className="font-medium">{program.title}</p>
             </div>
             <div>
-              <span className="text-gray-500">الحالة</span>
+              <span className="text-muted-foreground">الحالة</span>
               <div className="mt-1"><PageStatusBadge status={program.status} /></div>
             </div>
             <div>
-              <span className="text-gray-500">الفئة</span>
+              <span className="text-muted-foreground">الفئة</span>
               <p className="font-medium">{program.category || "-"}</p>
             </div>
             <div>
-              <span className="text-gray-500">المدرب</span>
+              <span className="text-muted-foreground">المدرب</span>
               <p className="font-medium">{program.trainer || "-"}</p>
             </div>
             <div>
-              <span className="text-gray-500">الموقع</span>
+              <span className="text-muted-foreground">الموقع</span>
               <p className="font-medium">{program.location || "-"}</p>
             </div>
             <div>
-              <span className="text-gray-500">السعة</span>
+              <span className="text-muted-foreground">السعة</span>
               <p className="font-medium">{program.capacity || 0} مقعد</p>
             </div>
             <div>
-              <span className="text-gray-500">تاريخ البداية</span>
+              <span className="text-muted-foreground">تاريخ البداية</span>
               <p className="font-medium">
                 {formatDateAr(program.startDate)}
               </p>
             </div>
             <div>
-              <span className="text-gray-500">تاريخ النهاية</span>
+              <span className="text-muted-foreground">تاريخ النهاية</span>
               <p className="font-medium">
                 {formatDateAr(program.endDate)}
               </p>
             </div>
             {program.description && (
               <div className="col-span-full">
-                <span className="text-gray-500">الوصف</span>
+                <span className="text-muted-foreground">الوصف</span>
                 <p className="font-medium">{program.description}</p>
               </div>
             )}
@@ -218,7 +218,7 @@ export default function TrainingDetailPage() {
 
       <Card className="border-0 shadow-sm">
         <CardContent className="p-6">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-status-neutral-foreground mb-4 flex items-center gap-2">
             <Users className="h-4 w-4" />
             المشاركون ({enrollments.length})
           </h3>

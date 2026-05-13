@@ -102,7 +102,7 @@ export default function TripDetailPage() {
 
   const emptyMsg = (msg: string) => (
     <Card className="border-0 shadow-sm">
-      <CardContent className="p-10 text-center text-sm text-gray-500">{msg}</CardContent>
+      <CardContent className="p-10 text-center text-sm text-muted-foreground">{msg}</CardContent>
     </Card>
   );
 
@@ -147,12 +147,12 @@ export default function TripDetailPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center text-blue-600 bg-blue-50">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center text-status-info-foreground bg-status-info-surface">
               <Gauge className="h-5 w-5" />
             </div>
             <div className="min-w-0">
               <p className="text-xl font-bold truncate">{distance} كم</p>
-              <p className="text-xs text-gray-500 truncate">المسافة</p>
+              <p className="text-xs text-muted-foreground truncate">المسافة</p>
             </div>
           </CardContent>
         </Card>
@@ -163,7 +163,7 @@ export default function TripDetailPage() {
             </div>
             <div className="min-w-0">
               <p className="text-xl font-bold truncate">{durationHours} س</p>
-              <p className="text-xs text-gray-500 truncate">المدة</p>
+              <p className="text-xs text-muted-foreground truncate">المدة</p>
             </div>
           </CardContent>
         </Card>
@@ -174,18 +174,18 @@ export default function TripDetailPage() {
             </div>
             <div className="min-w-0">
               <p className="text-xl font-bold truncate">{fuelConsumed} ل</p>
-              <p className="text-xs text-gray-500 truncate">الوقود المستهلك</p>
+              <p className="text-xs text-muted-foreground truncate">الوقود المستهلك</p>
             </div>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center text-green-600 bg-green-50">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center text-status-success-foreground bg-status-success-surface">
               <DollarSign className="h-5 w-5" />
             </div>
             <div className="min-w-0">
               <p className="text-xl font-bold truncate">{formatCurrency(cost)}</p>
-              <p className="text-xs text-gray-500 truncate">التكلفة</p>
+              <p className="text-xs text-muted-foreground truncate">التكلفة</p>
             </div>
           </CardContent>
         </Card>
@@ -205,8 +205,8 @@ export default function TripDetailPage() {
           </div>
           {trip?.notes && (
             <div className="pt-4 border-t">
-              <p className="text-xs text-gray-500 mb-1">ملاحظات</p>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">{trip.notes}</p>
+              <p className="text-xs text-muted-foreground mb-1">ملاحظات</p>
+              <p className="text-sm text-status-neutral-foreground whitespace-pre-wrap">{trip.notes}</p>
             </div>
           )}
         </CardContent>
@@ -293,8 +293,8 @@ export default function TripDetailPage() {
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
   return (
     <div>
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="text-sm font-medium text-gray-800 mt-0.5">{value || "—"}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-sm font-medium text-status-neutral-foreground mt-0.5">{value || "—"}</p>
     </div>
   );
 }

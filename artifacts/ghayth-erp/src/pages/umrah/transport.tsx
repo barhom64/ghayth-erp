@@ -30,10 +30,10 @@ interface TransportEntry {
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  scheduled: { label: "مجدولة", color: "bg-blue-100 text-blue-800" },
-  in_progress: { label: "في الطريق", color: "bg-yellow-100 text-yellow-800" },
-  completed: { label: "مكتملة", color: "bg-green-100 text-green-800" },
-  cancelled: { label: "ملغاة", color: "bg-red-100 text-red-800" },
+  scheduled: { label: "مجدولة", color: "bg-status-info-surface text-status-info-foreground" },
+  in_progress: { label: "في الطريق", color: "bg-status-warning-surface text-yellow-800" },
+  completed: { label: "مكتملة", color: "bg-status-success-surface text-status-success-foreground" },
+  cancelled: { label: "ملغاة", color: "bg-status-error-surface text-status-error-foreground" },
 };
 
 const columns: DataTableColumn<TransportEntry>[] = [
@@ -47,7 +47,7 @@ const columns: DataTableColumn<TransportEntry>[] = [
   { key: "cost", header: "التكلفة", render: (r) => r.cost ? formatCurrency(Number(r.cost)) : "-" },
   {
     key: "status", header: "الحالة", sortable: true, render: (r) => {
-      const s = STATUS_MAP[r.status || ""] || { label: r.status || "-", color: "bg-gray-100 text-gray-800" };
+      const s = STATUS_MAP[r.status || ""] || { label: r.status || "-", color: "bg-surface-subtle text-status-neutral-foreground" };
       return <Badge className={s.color}>{s.label}</Badge>;
     }
   },

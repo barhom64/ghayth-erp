@@ -15,7 +15,7 @@ export function SmartSuggestionsCard({ suggestions }: SmartSuggestionsCardProps)
     <Card className="border-0 shadow-sm">
       <CardHeader className="pb-3">
         <CardTitle className="text-base font-semibold flex items-center gap-2">
-          <Lightbulb className="w-5 h-5 text-yellow-500" />
+          <Lightbulb className="w-5 h-5 text-status-warning" />
           اقتراحات ذكية
           <Badge variant="secondary" className="text-xs">{suggestions.length}</Badge>
         </CardTitle>
@@ -24,17 +24,17 @@ export function SmartSuggestionsCard({ suggestions }: SmartSuggestionsCardProps)
         <div className="space-y-2">
           {suggestions.slice(0, 6).map((s: any) => {
             const severityStyles: Record<string, { bg: string; border: string; icon: string }> = {
-              critical: { bg: "bg-red-50", border: "border-red-200", icon: "text-red-600" },
-              warning: { bg: "bg-amber-50", border: "border-amber-200", icon: "text-amber-600" },
-              info: { bg: "bg-blue-50", border: "border-blue-200", icon: "text-blue-600" },
+              critical: { bg: "bg-status-error-surface", border: "border-status-error-surface", icon: "text-status-error-foreground" },
+              warning: { bg: "bg-status-warning-surface", border: "border-status-warning-surface", icon: "text-status-warning-foreground" },
+              info: { bg: "bg-status-info-surface", border: "border-status-info-surface", icon: "text-status-info-foreground" },
             };
             const style = severityStyles[s.severity] || severityStyles.info;
             return (
               <div key={s.id} className={cn("p-3 rounded-xl border flex items-start gap-3", style.bg, style.border)}>
                 <Lightbulb className={cn("w-5 h-5 shrink-0 mt-0.5", style.icon)} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800">{s.title}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{s.description}</p>
+                  <p className="text-sm font-medium text-status-neutral-foreground">{s.title}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{s.description}</p>
                 </div>
                 {s.actionLink && (
                   <Link href={s.actionLink}>

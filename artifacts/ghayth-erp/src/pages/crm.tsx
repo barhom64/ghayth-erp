@@ -147,7 +147,7 @@ function OpportunitiesTab() {
   return (
     <div className="space-y-6">
       <KpiGrid items={[
-        { label: "إجمالي الفرص", value: stats?.totalOpportunities || 0, icon: Target, color: "text-blue-600 bg-blue-50" },
+        { label: "إجمالي الفرص", value: stats?.totalOpportunities || 0, icon: Target, color: "text-status-info-foreground bg-status-info-surface" },
         { label: "مفتوحة", value: stats?.openOpportunities || 0, icon: TrendingUp, color: "text-indigo-600 bg-indigo-50" },
         { label: "مكسوبة", value: stats?.wonOpportunities || 0, icon: Eye, color: "text-emerald-600 bg-emerald-50" },
         { label: "قيمة الصفقات", value: formatCurrency(stats?.pipelineValue || 0), icon: DollarSign, color: "text-purple-600 bg-purple-50" },

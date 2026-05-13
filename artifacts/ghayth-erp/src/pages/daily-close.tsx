@@ -75,27 +75,27 @@ export default function DailyClose() {
       }
     >
       {closedToday && (
-        <div className="flex items-center gap-3 p-4 rounded-xl bg-green-50 border-2 border-green-200">
-          <Lock className="w-6 h-6 text-green-600" />
+        <div className="flex items-center gap-3 p-4 rounded-xl bg-status-success-surface border-2 border-status-success-surface">
+          <Lock className="w-6 h-6 text-status-success-foreground" />
           <div>
-            <p className="font-semibold text-green-800">تم إقفال هذا اليوم</p>
-            <p className="text-sm text-green-600">تم إقفال يوم {closeDate} بنجاح</p>
+            <p className="font-semibold text-status-success-foreground">تم إقفال هذا اليوم</p>
+            <p className="text-sm text-status-success-foreground">تم إقفال يوم {closeDate} بنجاح</p>
           </div>
         </div>
       )}
 
       <div className="grid grid-cols-3 gap-4">
-        <div className="rounded-xl p-4 border-2 border-gray-100 bg-white text-center">
+        <div className="rounded-xl p-4 border-2 border-border bg-white text-center">
           <p className="text-2xl font-black text-gray-900">{items.length}</p>
-          <p className="text-sm text-gray-500">إجمالي البنود</p>
+          <p className="text-sm text-muted-foreground">إجمالي البنود</p>
         </div>
-        <div className={cn("rounded-xl p-4 border-2 text-center", passedCount === items.length ? "border-green-200 bg-green-50" : "border-gray-100 bg-white")}>
-          <p className="text-2xl font-black text-green-700">{passedCount}</p>
-          <p className="text-sm text-gray-500">ناجح</p>
+        <div className={cn("rounded-xl p-4 border-2 text-center", passedCount === items.length ? "border-status-success-surface bg-status-success-surface" : "border-border bg-white")}>
+          <p className="text-2xl font-black text-status-success-foreground">{passedCount}</p>
+          <p className="text-sm text-muted-foreground">ناجح</p>
         </div>
-        <div className={cn("rounded-xl p-4 border-2 text-center", failedCount > 0 ? "border-red-200 bg-red-50" : "border-gray-100 bg-white")}>
-          <p className="text-2xl font-black text-red-700">{failedCount}</p>
-          <p className="text-sm text-gray-500">يحتاج مراجعة</p>
+        <div className={cn("rounded-xl p-4 border-2 text-center", failedCount > 0 ? "border-status-error-surface bg-status-error-surface" : "border-border bg-white")}>
+          <p className="text-2xl font-black text-status-error-foreground">{failedCount}</p>
+          <p className="text-sm text-muted-foreground">يحتاج مراجعة</p>
         </div>
       </div>
 
@@ -108,18 +108,18 @@ export default function DailyClose() {
             {items.map((item: any) => (
               <div key={item.key} className={cn(
                 "flex items-center gap-4 p-4 rounded-xl border-2 transition-colors",
-                item.passed ? "border-green-100 bg-green-50/50" : "border-red-100 bg-red-50/50"
+                item.passed ? "border-status-success-surface bg-status-success-surface" : "border-status-error-surface bg-status-error-surface"
               )}>
                 <div className="shrink-0">
                   {item.passed ? (
-                    <CheckCircle2 className="w-6 h-6 text-green-500" />
+                    <CheckCircle2 className="w-6 h-6 text-status-success" />
                   ) : (
-                    <XCircle className="w-6 h-6 text-red-500" />
+                    <XCircle className="w-6 h-6 text-status-error" />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-800">{item.label}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{item.description}</p>
+                  <p className="text-sm font-semibold text-status-neutral-foreground">{item.label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{item.description}</p>
                 </div>
                 <Badge variant={item.passed ? "secondary" : "destructive"} className="text-xs shrink-0">
                   {item.value}
@@ -154,7 +154,7 @@ export default function DailyClose() {
             </GuardedButton>
           ) : (
             <>
-              <p className="text-sm text-amber-600 flex items-center gap-1">
+              <p className="text-sm text-status-warning-foreground flex items-center gap-1">
                 <AlertTriangle className="w-4 h-4" />
                 توجد بنود لم تكتمل — يمكن للمالك أو المدير العام أو المدير التنفيذي التجاوز القسري
               </p>

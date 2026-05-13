@@ -48,7 +48,7 @@ export default function OpeningBalancesPage() {
       header: "المرجع",
       searchable: true,
       sortable: true,
-      render: (r) => <span className="font-mono text-blue-600 text-sm">{r.ref}</span>,
+      render: (r) => <span className="font-mono text-status-info-foreground text-sm">{r.ref}</span>,
     },
     {
       key: "description",
@@ -60,13 +60,13 @@ export default function OpeningBalancesPage() {
       key: "totalDebit",
       header: "إجمالي المدين",
       sortable: true,
-      render: (r) => <span className="text-green-700 font-medium">{formatCurrency(r.totalDebit)}</span>,
+      render: (r) => <span className="text-status-success-foreground font-medium">{formatCurrency(r.totalDebit)}</span>,
     },
     {
       key: "totalCredit",
       header: "إجمالي الدائن",
       sortable: true,
-      render: (r) => <span className="text-red-700 font-medium">{formatCurrency(r.totalCredit)}</span>,
+      render: (r) => <span className="text-status-error-foreground font-medium">{formatCurrency(r.totalCredit)}</span>,
     },
     {
       key: "status",
@@ -74,7 +74,7 @@ export default function OpeningBalancesPage() {
       render: (r) => {
         const balanced = Math.abs(Number(r.totalDebit) - Number(r.totalCredit)) < 0.01;
         return (
-          <Badge className={balanced ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}>
+          <Badge className={balanced ? "bg-status-success-surface text-status-success-foreground" : "bg-status-error-surface text-status-error-foreground"}>
             {balanced ? "متوازن" : "غير متوازن"}
           </Badge>
         );
@@ -85,7 +85,7 @@ export default function OpeningBalancesPage() {
       header: "التاريخ",
       sortable: true,
       render: (r) => (
-        <span className="text-xs text-gray-500">{r.createdAt ? formatDateAr(r.createdAt) : "-"}</span>
+        <span className="text-xs text-muted-foreground">{r.createdAt ? formatDateAr(r.createdAt) : "-"}</span>
       ),
     },
   ];
@@ -111,21 +111,21 @@ export default function OpeningBalancesPage() {
               <FilePlus className="h-5 w-5 text-indigo-600" />
             </div>
             <div>
-              <p className="text-xs text-gray-500">إجمالي القيود</p>
+              <p className="text-xs text-muted-foreground">إجمالي القيود</p>
               <p className="text-xl font-bold">{items.length}</p>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-gray-500">متوازن</p>
-            <p className="text-xl font-bold text-green-600">{totalBalanced}</p>
+            <p className="text-xs text-muted-foreground">متوازن</p>
+            <p className="text-xl font-bold text-status-success-foreground">{totalBalanced}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-gray-500">غير متوازن</p>
-            <p className="text-xl font-bold text-red-600">{items.length - totalBalanced}</p>
+            <p className="text-xs text-muted-foreground">غير متوازن</p>
+            <p className="text-xl font-bold text-status-error-foreground">{items.length - totalBalanced}</p>
           </CardContent>
         </Card>
       </div>

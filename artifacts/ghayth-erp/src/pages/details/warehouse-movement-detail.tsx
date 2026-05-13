@@ -131,7 +131,7 @@ export default function WarehouseMovementDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <ArrowRightLeft className="h-4 w-4 text-gray-500" />
+            <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
             بيانات الحركة
           </CardTitle>
         </CardHeader>
@@ -139,72 +139,72 @@ export default function WarehouseMovementDetail() {
           {/* Hero: total value */}
           <div className="flex items-baseline gap-2 border-b pb-3">
             <span className="text-3xl font-bold text-gray-900">{formatCurrency(totalValue)}</span>
-            <span className="text-xs text-gray-500">إجمالي القيمة</span>
+            <span className="text-xs text-muted-foreground">إجمالي القيمة</span>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             {movement?.type && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">نوع الحركة</p>
+                <p className="text-xs text-muted-foreground mb-0.5">نوع الحركة</p>
                 <Badge variant="outline">{TYPE_LABELS[movement.type] || movement.type}</Badge>
               </div>
             )}
             {movement?.productName && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الصنف</p>
-                <span className="text-gray-800">{movement.productName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">الصنف</p>
+                <span className="text-status-neutral-foreground">{movement.productName}</span>
               </div>
             )}
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">الكمية</p>
-              <span className="text-gray-800 font-semibold">{quantity}</span>
+              <p className="text-xs text-muted-foreground mb-0.5">الكمية</p>
+              <span className="text-status-neutral-foreground font-semibold">{quantity}</span>
             </div>
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">تكلفة الوحدة</p>
-              <span className="text-gray-800">{formatCurrency(unitCost)}</span>
+              <p className="text-xs text-muted-foreground mb-0.5">تكلفة الوحدة</p>
+              <span className="text-status-neutral-foreground">{formatCurrency(unitCost)}</span>
             </div>
             {movement?.fromLocation && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">من</p>
+                <p className="text-xs text-muted-foreground mb-0.5">من</p>
                 <Badge variant="secondary">{movement.fromLocation}</Badge>
               </div>
             )}
             {movement?.toLocation && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">إلى</p>
+                <p className="text-xs text-muted-foreground mb-0.5">إلى</p>
                 <Badge variant="secondary">{movement.toLocation}</Badge>
               </div>
             )}
             {movement?.reference && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">المرجع (PO/SO)</p>
-                <span className="text-gray-800 font-mono text-xs">{movement.reference}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">المرجع (PO/SO)</p>
+                <span className="text-status-neutral-foreground font-mono text-xs">{movement.reference}</span>
               </div>
             )}
             {movement?.reason && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">السبب</p>
-                <span className="text-gray-800">{movement.reason}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">السبب</p>
+                <span className="text-status-neutral-foreground">{movement.reason}</span>
               </div>
             )}
             {(movement?.date || movement?.createdAt) && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">التاريخ</p>
-                <span className="text-gray-800">{formatDateAr(movement.date || movement.createdAt)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">التاريخ</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(movement.date || movement.createdAt)}</span>
               </div>
             )}
             {movement?.performedByName && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">بواسطة</p>
-                <span className="text-gray-800">{movement.performedByName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">بواسطة</p>
+                <span className="text-status-neutral-foreground">{movement.performedByName}</span>
               </div>
             )}
           </div>
 
           {movement?.notes && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">ملاحظات</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{movement.notes}</p>
+              <p className="text-xs text-muted-foreground mb-1">ملاحظات</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{movement.notes}</p>
             </div>
           )}
         </CardContent>
@@ -217,15 +217,15 @@ export default function WarehouseMovementDetail() {
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-xs text-gray-500">الكمية</span>
+              <span className="text-xs text-muted-foreground">الكمية</span>
               <span>{quantity}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-xs text-gray-500">سعر الوحدة</span>
+              <span className="text-xs text-muted-foreground">سعر الوحدة</span>
               <span>{formatCurrency(unitCost)}</span>
             </div>
             <div className="flex justify-between border-t pt-2">
-              <span className="text-xs text-gray-500">الإجمالي</span>
+              <span className="text-xs text-muted-foreground">الإجمالي</span>
               <span className="font-semibold text-gray-900">{formatCurrency(totalValue)}</span>
             </div>
           </CardContent>

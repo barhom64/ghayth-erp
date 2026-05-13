@@ -27,18 +27,18 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  available: "border-green-300 text-green-700 bg-green-50",
-  rented: "border-blue-300 text-blue-700 bg-blue-50",
-  maintenance: "border-yellow-300 text-yellow-700 bg-yellow-50",
+  available: "border-status-success-surface text-status-success-foreground bg-status-success-surface",
+  rented: "border-status-info-surface text-status-info-foreground bg-status-info-surface",
+  maintenance: "border-yellow-300 text-status-warning-foreground bg-status-warning-surface",
   reserved: "border-purple-300 text-purple-700 bg-purple-50",
   under_maintenance: "border-orange-300 text-orange-700 bg-orange-50",
-  out_of_service: "border-red-300 text-red-700 bg-red-50",
+  out_of_service: "border-status-error-surface text-status-error-foreground bg-status-error-surface",
 };
 
 const SEVERITY_COLORS: Record<string, string> = {
-  info: "border-blue-200 bg-blue-50",
-  warning: "border-yellow-200 bg-yellow-50",
-  danger: "border-red-200 bg-red-50",
+  info: "border-status-info-surface bg-status-info-surface",
+  warning: "border-status-warning-surface bg-status-warning-surface",
+  danger: "border-status-error-surface bg-status-error-surface",
 };
 
 const SEVERITY_ICON: Record<string, any> = {
@@ -98,8 +98,8 @@ export default function UnitStatusChangePage() {
     }
   };
 
-  if (isLoading) return <div className="text-center py-20 text-gray-400">جاري التحميل...</div>;
-  if (!unit) return <div className="text-center py-20 text-gray-400">الوحدة غير موجودة</div>;
+  if (isLoading) return <div className="text-center py-20 text-muted-foreground">جاري التحميل...</div>;
+  if (!unit) return <div className="text-center py-20 text-muted-foreground">الوحدة غير موجودة</div>;
 
   return (
     <CreatePageLayout
@@ -108,16 +108,16 @@ export default function UnitStatusChangePage() {
       backPath={`/properties/${id}`}
     >
       {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="space-y-5">
         <h3 className="flex items-center gap-2 text-lg font-semibold">
-          <Pencil className="h-5 w-5 text-blue-500" /> تغيير الحالة
+          <Pencil className="h-5 w-5 text-status-info" /> تغيير الحالة
         </h3>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-muted-foreground">
             الحالة الحالية: <Badge className={cn("border", STATUS_COLORS[unit.status])}>{STATUS_LABELS[unit.status] || unit.status}</Badge>
           </p>
 
@@ -130,7 +130,7 @@ export default function UnitStatusChangePage() {
                   onClick={() => loadImpactPreview(opt.value)}
                   className={cn(
                     "p-4 rounded-lg border-2 text-sm font-medium transition-all text-start",
-                    selectedNewStatus === opt.value ? "border-primary bg-primary/5" : "border-gray-200 hover:border-gray-300"
+                    selectedNewStatus === opt.value ? "border-primary bg-primary/5" : "border-border hover:border-border"
                   )}
                 >
                   {opt.label}
@@ -148,14 +148,14 @@ export default function UnitStatusChangePage() {
 
           {impactData && !impactLoading && (
             <div className="space-y-3">
-              <p className="text-sm font-semibold text-gray-700">التأثيرات المتوقعة:</p>
+              <p className="text-sm font-semibold text-status-neutral-foreground">التأثيرات المتوقعة:</p>
               {impactData.blockers?.length > 0 && (
-                <div className="rounded-lg border-2 border-red-300 bg-red-50 p-3 space-y-1">
-                  <p className="text-sm font-semibold text-red-700 flex items-center gap-1">
+                <div className="rounded-lg border-2 border-status-error-surface bg-status-error-surface p-3 space-y-1">
+                  <p className="text-sm font-semibold text-status-error-foreground flex items-center gap-1">
                     <XCircle className="h-4 w-4" /> موانع التنفيذ
                   </p>
                   {impactData.blockers.map((b: string, i: number) => (
-                    <p key={i} className="text-sm text-red-600">• {b}</p>
+                    <p key={i} className="text-sm text-status-error-foreground">• {b}</p>
                   ))}
                 </div>
               )}

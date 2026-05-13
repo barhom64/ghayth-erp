@@ -35,37 +35,37 @@ const SEGMENT_LABELS: Record<string, string> = {
 
 const SEGMENT_COLORS: Record<string, string> = {
   vip: "bg-purple-100 text-purple-800",
-  loyal: "bg-blue-100 text-blue-800",
-  regular: "bg-green-100 text-green-800",
+  loyal: "bg-status-info-surface text-status-info-foreground",
+  regular: "bg-status-success-surface text-status-success-foreground",
   at_risk: "bg-orange-100 text-orange-800",
-  inactive: "bg-red-100 text-red-800",
+  inactive: "bg-status-error-surface text-status-error-foreground",
   new: "bg-teal-100 text-teal-800",
 };
 
 const CHURN_COLORS: Record<string, string> = {
-  low: "text-green-600",
-  medium: "text-amber-600",
-  high: "text-red-600",
+  low: "text-status-success-foreground",
+  medium: "text-status-warning-foreground",
+  high: "text-status-error-foreground",
 };
 
 const PRIORITY_COLORS: Record<string, string> = {
-  urgent: "bg-red-100 border-red-200 text-red-800",
+  urgent: "bg-status-error-surface border-status-error-surface text-status-error-foreground",
   high: "bg-orange-100 border-orange-200 text-orange-800",
-  normal: "bg-blue-100 border-blue-200 text-blue-800",
-  low: "bg-gray-100 border-gray-200 text-gray-700",
+  normal: "bg-status-info-surface border-status-info-surface text-status-info-foreground",
+  low: "bg-surface-subtle border-border text-status-neutral-foreground",
 };
 
 function KPIGauge({ label, value, suffix = "%", color = "blue" }: { label: string; value: number; suffix?: string; color?: string }) {
   const colorMap: Record<string, string> = {
-    blue: "text-blue-600",
-    green: "text-green-600",
-    amber: "text-amber-600",
-    red: "text-red-600",
+    blue: "text-status-info-foreground",
+    green: "text-status-success-foreground",
+    amber: "text-status-warning-foreground",
+    red: "text-status-error-foreground",
     purple: "text-purple-600",
   };
   return (
-    <div className="text-center p-4 rounded-lg bg-gray-50 border">
-      <div className={`text-3xl font-bold ${colorMap[color] ?? "text-blue-600"}`}>{value}{suffix}</div>
+    <div className="text-center p-4 rounded-lg bg-surface-subtle border">
+      <div className={`text-3xl font-bold ${colorMap[color] ?? "text-status-info-foreground"}`}>{value}{suffix}</div>
       <div className="text-xs text-muted-foreground mt-1">{label}</div>
     </div>
   );
@@ -248,7 +248,7 @@ export default function Insights() {
               <CardContent>
                 <div className="space-y-3">
                   {(usageStats.topUsers ?? []).map((u: any, idx: number) => (
-                    <div key={u.userId} className="flex items-center justify-between p-2 rounded bg-gray-50">
+                    <div key={u.userId} className="flex items-center justify-between p-2 rounded bg-surface-subtle">
                       <div className="flex items-center gap-2">
                         <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">{idx + 1}</div>
                         <span className="text-sm font-medium">{u.name ?? `مستخدم ${u.userId}`}</span>
@@ -286,7 +286,7 @@ export default function Insights() {
                     </ResponsiveContainer>
                     <div className="flex flex-wrap gap-2 mt-2 justify-center">
                       {segmentData.map((s, i) => (
-                        <span key={s.key} className={`text-xs px-2 py-1 rounded-full ${SEGMENT_COLORS[s.key] ?? "bg-gray-100 text-gray-700"}`}>
+                        <span key={s.key} className={`text-xs px-2 py-1 rounded-full ${SEGMENT_COLORS[s.key] ?? "bg-surface-subtle text-status-neutral-foreground"}`}>
                           {s.name}: {s.value}
                         </span>
                       ))}
@@ -324,15 +324,15 @@ export default function Insights() {
 
           {(clientAnalytics.topClients ?? []).length > 0 && (
             <Card>
-              <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Star className="h-4 w-4 text-amber-500" /> أفضل العملاء (بناءً على الحداثة والتكرار والقيمة)</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Star className="h-4 w-4 text-status-warning" /> أفضل العملاء (بناءً على الحداثة والتكرار والقيمة)</CardTitle></CardHeader>
               <CardContent>
                 <div className="space-y-2">
                   {(clientAnalytics.topClients ?? []).slice(0, 8).map((c: any, idx: number) => (
-                    <div key={c.clientId} className="flex items-center justify-between p-2 rounded bg-gray-50 border">
+                    <div key={c.clientId} className="flex items-center justify-between p-2 rounded bg-surface-subtle border">
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground w-5">{idx + 1}</span>
                         <span className="text-sm font-medium">{c.clientName}</span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${SEGMENT_COLORS[c.segment] ?? "bg-gray-100 text-gray-700"}`}>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${SEGMENT_COLORS[c.segment] ?? "bg-surface-subtle text-status-neutral-foreground"}`}>
                           {SEGMENT_LABELS[c.segment] ?? c.segment}
                         </span>
                       </div>
@@ -349,16 +349,16 @@ export default function Insights() {
           )}
 
           {(clientAnalytics.atRiskClients ?? []).length > 0 && (
-            <Card className="border-red-200 bg-red-50">
-              <CardHeader><CardTitle className="text-sm flex items-center gap-2 text-red-700"><AlertTriangle className="h-4 w-4" /> عملاء معرضون للفقدان</CardTitle></CardHeader>
+            <Card className="border-status-error-surface bg-status-error-surface">
+              <CardHeader><CardTitle className="text-sm flex items-center gap-2 text-status-error-foreground"><AlertTriangle className="h-4 w-4" /> عملاء معرضون للفقدان</CardTitle></CardHeader>
               <CardContent>
                 <div className="space-y-2">
                   {(clientAnalytics.atRiskClients ?? []).map((c: any) => (
-                    <div key={c.clientId} className="flex items-center justify-between p-2 rounded bg-white border border-red-200">
+                    <div key={c.clientId} className="flex items-center justify-between p-2 rounded bg-white border border-status-error-surface">
                       <span className="text-sm font-medium">{c.clientName}</span>
                       <div className="text-xs flex gap-3">
                         <span className="text-muted-foreground">{c.recencyDays} يوم بدون تعامل</span>
-                        <span className="text-red-600 font-bold">خطر {Math.round(c.churnScore)}%</span>
+                        <span className="text-status-error-foreground font-bold">خطر {Math.round(c.churnScore)}%</span>
                       </div>
                     </div>
                   ))}
@@ -434,10 +434,10 @@ export default function Insights() {
               <CardContent>
                 <div className="space-y-4">
                   {[
-                    { label: "معدل إتمام المهام", value: companyKpis.taskCompletionRate ?? 0, icon: <Zap className="h-4 w-4 text-blue-500" /> },
-                    { label: "معدل استجابة الدعم الفني", value: companyKpis.supportResponseRate ?? 0, icon: <Activity className="h-4 w-4 text-green-500" /> },
+                    { label: "معدل إتمام المهام", value: companyKpis.taskCompletionRate ?? 0, icon: <Zap className="h-4 w-4 text-status-info" /> },
+                    { label: "معدل استجابة الدعم الفني", value: companyKpis.supportResponseRate ?? 0, icon: <Activity className="h-4 w-4 text-status-success" /> },
                     { label: "معدل تحصيل الفواتير", value: companyKpis.invoiceCollectionRate ?? 0, icon: <DollarSign className="h-4 w-4 text-purple-500" /> },
-                    { label: "كفاءة سلسلة الموافقات", value: companyKpis.approvalEfficiency ?? 0, icon: <UserCheck className="h-4 w-4 text-amber-500" /> },
+                    { label: "كفاءة سلسلة الموافقات", value: companyKpis.approvalEfficiency ?? 0, icon: <UserCheck className="h-4 w-4 text-status-warning" /> },
                   ].map((kpi, i) => (
                     <div key={i} className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-sm">{kpi.icon} {kpi.label}</div>
@@ -475,12 +475,12 @@ export default function Insights() {
           ) : (
             <div className="space-y-3">
               {recs.map((rec: any) => (
-                <Card key={rec.id} className={`border ${PRIORITY_COLORS[rec.priority] ?? "border-gray-200"}`}>
+                <Card key={rec.id} className={`border ${PRIORITY_COLORS[rec.priority] ?? "border-border"}`}>
                   <CardContent className="pt-4 pb-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <Lightbulb className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                          <Lightbulb className="h-4 w-4 text-status-warning flex-shrink-0" />
                           <span className="font-medium text-sm">{rec.title}</span>
                           <Badge variant="outline" className="text-xs">
                             {rec.priority === "urgent" ? "عاجل" : rec.priority === "high" ? "مهم" : rec.priority === "low" ? "اختياري" : "عادي"}

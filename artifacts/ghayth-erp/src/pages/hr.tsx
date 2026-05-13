@@ -29,7 +29,7 @@ interface KPICardProps {
 function KPICard({ title, value, subtitle, icon: Icon, iconColor, trend, onClick }: KPICardProps) {
   return (
     <Card
-      className={onClick ? "cursor-pointer hover:shadow-md transition-shadow hover:border-blue-200" : ""}
+      className={onClick ? "cursor-pointer hover:shadow-md transition-shadow hover:border-status-info-surface" : ""}
       onClick={onClick}
     >
       <CardContent className="pt-5 pb-4">
@@ -67,7 +67,7 @@ function QuickLink({ label, icon: Icon, iconColor, path, description }: QuickLin
   return (
     <button
       onClick={() => navigate(path)}
-      className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-blue-200 hover:bg-blue-50/30 transition-all text-right w-full"
+      className="flex items-center gap-3 p-3 rounded-xl border border-border hover:border-status-info-surface hover:bg-status-info-surface transition-all text-right w-full"
     >
       <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${iconColor}`}>
         <Icon className="h-4 w-4" />
@@ -127,7 +127,7 @@ export default function HR() {
           title="إجمالي الموظفين"
           value={totalEmployees}
           icon={Users}
-          iconColor="text-blue-600 bg-blue-50"
+          iconColor="text-status-info-foreground bg-status-info-surface"
           onClick={() => navigate("/employees")}
         />
         <KPICard
@@ -142,7 +142,7 @@ export default function HR() {
           value={pendingLeaves}
           subtitle="بانتظار الاعتماد"
           icon={Calendar}
-          iconColor="text-amber-600 bg-amber-50"
+          iconColor="text-status-warning-foreground bg-status-warning-surface"
           onClick={() => navigate("/hr/leaves?tab=pending")}
         />
         <KPICard
@@ -182,29 +182,29 @@ export default function HR() {
           value={violationsThisMonth}
           subtitle="مخالفات مسجلة"
           icon={Scale}
-          iconColor="text-red-600 bg-red-50"
+          iconColor="text-status-error-foreground bg-status-error-surface"
           onClick={() => navigate("/hr/violations")}
         />
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <div className="space-y-3">
-          <h2 className="text-base font-semibold text-gray-700 flex items-center gap-2">
-            <Users className="h-4 w-4 text-blue-500" />
+          <h2 className="text-base font-semibold text-status-neutral-foreground flex items-center gap-2">
+            <Users className="h-4 w-4 text-status-info" />
             إدارة الموظفين
           </h2>
           <div className="space-y-2">
-            <QuickLink label="الموظفين" icon={Users} iconColor="text-blue-600 bg-blue-50" path="/employees" description="قائمة جميع الموظفين وبياناتهم" />
+            <QuickLink label="الموظفين" icon={Users} iconColor="text-status-info-foreground bg-status-info-surface" path="/employees" description="قائمة جميع الموظفين وبياناتهم" />
             <QuickLink label="تفعيل الموظفين" icon={UserPlus} iconColor="text-indigo-600 bg-indigo-50" path="/hr/employee-activation" description="تفعيل حسابات الموظفين الجدد" />
             <QuickLink label="مراجعة التعيين" icon={ClipboardCheck} iconColor="text-violet-600 bg-violet-50" path="/hr/onboarding-review" description="متابعة إجراءات التعيين" />
             <QuickLink label="الهيكل التنظيمي" icon={Network} iconColor="text-sky-600 bg-sky-50" path="/hr/organization" description="عرض وإدارة الهيكل التنظيمي" />
-            <QuickLink label="الوثائق المنتهية" icon={FileText} iconColor="text-red-600 bg-red-50" path="/hr/expiring-documents" description="متابعة الإقامات والتصاريح" />
-            <QuickLink label="الخطابات الرسمية" icon={FileText} iconColor="text-gray-600 bg-gray-50" path="/hr/official-letters" description="خطابات التعريف والشهادات" />
+            <QuickLink label="الوثائق المنتهية" icon={FileText} iconColor="text-status-error-foreground bg-status-error-surface" path="/hr/expiring-documents" description="متابعة الإقامات والتصاريح" />
+            <QuickLink label="الخطابات الرسمية" icon={FileText} iconColor="text-muted-foreground bg-surface-subtle" path="/hr/official-letters" description="خطابات التعريف والشهادات" />
           </div>
         </div>
 
         <div className="space-y-3">
-          <h2 className="text-base font-semibold text-gray-700 flex items-center gap-2">
+          <h2 className="text-base font-semibold text-status-neutral-foreground flex items-center gap-2">
             <Clock className="h-4 w-4 text-purple-500" />
             الحضور والإجازات
           </h2>
@@ -213,12 +213,12 @@ export default function HR() {
             <QuickLink label="تقارير الحضور" icon={CheckCircle2} iconColor="text-purple-500 bg-purple-50" path="/hr/attendance/reports" description="تقارير وإحصاءات الحضور" />
             <QuickLink label="الإجازات وإدارتها" icon={Calendar} iconColor="text-emerald-600 bg-emerald-50" path="/hr/leaves" description="طلبات الإجازة وإدارتها" />
             <QuickLink label="الورديات" icon={CalendarClock} iconColor="text-teal-600 bg-teal-50" path="/hr/shifts" description="جداول وإدارة الورديات" />
-            <QuickLink label="العطل الرسمية" icon={CalendarOff} iconColor="text-green-600 bg-green-50" path="/hr/public-holidays" description="إدارة العطل والمناسبات" />
+            <QuickLink label="العطل الرسمية" icon={CalendarOff} iconColor="text-status-success-foreground bg-status-success-surface" path="/hr/public-holidays" description="إدارة العطل والمناسبات" />
           </div>
         </div>
 
         <div className="space-y-3">
-          <h2 className="text-base font-semibold text-gray-700 flex items-center gap-2">
+          <h2 className="text-base font-semibold text-status-neutral-foreground flex items-center gap-2">
             <DollarSign className="h-4 w-4 text-emerald-500" />
             الرواتب والأداء
           </h2>
@@ -227,87 +227,87 @@ export default function HR() {
             <QuickLink label="سلف الموظفين" icon={Wallet} iconColor="text-orange-600 bg-orange-50" path="/hr/loans" description="إدارة سلف وقروض الموظفين" />
             <QuickLink label="الوقت الإضافي" icon={Timer} iconColor="text-cyan-600 bg-cyan-50" path="/hr/overtime" description="طلبات ساعات العمل الإضافية" />
             <QuickLink label="تقييم الأداء" icon={Target} iconColor="text-orange-600 bg-orange-50" path="/hr/performance" description="تقييمات الأداء الدورية" />
-            <QuickLink label="تقييم 360°" icon={Star} iconColor="text-amber-600 bg-amber-50" path="/hr/evaluation-360" description="تقييم شامل متعدد الأطراف" />
+            <QuickLink label="تقييم 360°" icon={Star} iconColor="text-status-warning-foreground bg-status-warning-surface" path="/hr/evaluation-360" description="تقييم شامل متعدد الأطراف" />
             <QuickLink label="التدريب" icon={GraduationCap} iconColor="text-cyan-600 bg-cyan-50" path="/hr/training" description="البرامج التدريبية للموظفين" />
-            <QuickLink label="مكافأة نهاية الخدمة" icon={Award} iconColor="text-green-600 bg-green-50" path="/hr/gratuity" description="حساب وتقدير المكافآت" />
+            <QuickLink label="مكافأة نهاية الخدمة" icon={Award} iconColor="text-status-success-foreground bg-status-success-surface" path="/hr/gratuity" description="حساب وتقدير المكافآت" />
             <QuickLink label="خطط التطوير" icon={BookOpen} iconColor="text-indigo-600 bg-indigo-50" path="/hr/idp" description="خطط التطوير الفردي للموظفين" />
             <QuickLink label="تقرير الدوران" icon={BarChart3} iconColor="text-rose-600 bg-rose-50" path="/hr/turnover-report" description="تحليل معدل الدوران والتكاليف" />
           </div>
         </div>
 
         <div className="space-y-3">
-          <h2 className="text-base font-semibold text-gray-700 flex items-center gap-2">
+          <h2 className="text-base font-semibold text-status-neutral-foreground flex items-center gap-2">
             <Briefcase className="h-4 w-4 text-rose-500" />
             التوظيف والمخالفات
           </h2>
           <div className="space-y-2">
             <QuickLink label="التوظيف" icon={Briefcase} iconColor="text-rose-600 bg-rose-50" path="/hr/recruitment" description="الوظائف الشاغرة والمتقدمين" />
             <QuickLink label="المتقدمين" icon={Users} iconColor="text-pink-600 bg-pink-50" path="/hr/recruitment/applications" description="طلبات التقديم المستلمة" />
-            <QuickLink label="المخالفات والجزاءات" icon={Scale} iconColor="text-red-600 bg-red-50" path="/hr/violations" description="سجل المخالفات والجزاءات" />
-            <QuickLink label="نهاية الخدمة" icon={LogOut} iconColor="text-gray-600 bg-gray-50" path="/hr/exit" description="طلبات إنهاء الخدمة والتسوية" />
-            <QuickLink label="نقل الموظفين" icon={ArrowRightLeft} iconColor="text-blue-600 bg-blue-50" path="/hr/transfers" description="طلبات النقل بين الفروع" />
+            <QuickLink label="المخالفات والجزاءات" icon={Scale} iconColor="text-status-error-foreground bg-status-error-surface" path="/hr/violations" description="سجل المخالفات والجزاءات" />
+            <QuickLink label="نهاية الخدمة" icon={LogOut} iconColor="text-muted-foreground bg-surface-subtle" path="/hr/exit" description="طلبات إنهاء الخدمة والتسوية" />
+            <QuickLink label="نقل الموظفين" icon={ArrowRightLeft} iconColor="text-status-info-foreground bg-status-info-surface" path="/hr/transfers" description="طلبات النقل بين الفروع" />
           </div>
         </div>
 
         <div className="md:col-span-2 lg:col-span-2 space-y-3">
-          <h2 className="text-base font-semibold text-gray-700 flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-amber-500" />
+          <h2 className="text-base font-semibold text-status-neutral-foreground flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-status-warning" />
             إجراءات سريعة
           </h2>
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => navigate("/hr/leaves/create")}
-              className="flex items-center gap-2 p-3 rounded-xl border border-gray-100 hover:border-emerald-200 hover:bg-emerald-50/30 transition-all text-right"
+              className="flex items-center gap-2 p-3 rounded-xl border border-border hover:border-emerald-200 hover:bg-emerald-50/30 transition-all text-right"
             >
               <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-emerald-600 bg-emerald-50">
                 <Calendar className="h-4 w-4" />
               </div>
-              <span className="text-sm font-medium text-gray-800">طلب إجازة</span>
+              <span className="text-sm font-medium text-status-neutral-foreground">طلب إجازة</span>
             </button>
             <button
               onClick={() => navigate("/hr/leaves?tab=pending")}
-              className="flex items-center gap-2 p-3 rounded-xl border border-gray-100 hover:border-blue-200 hover:bg-blue-50/30 transition-all text-right"
+              className="flex items-center gap-2 p-3 rounded-xl border border-border hover:border-status-info-surface hover:bg-status-info-surface transition-all text-right"
             >
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-blue-600 bg-blue-50">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-status-info-foreground bg-status-info-surface">
                 <ClipboardCheck className="h-4 w-4" />
               </div>
-              <span className="text-sm font-medium text-gray-800">اعتماد الإجازات</span>
+              <span className="text-sm font-medium text-status-neutral-foreground">اعتماد الإجازات</span>
             </button>
             <button
               onClick={() => navigate("/hr/attendance/qr-scanner")}
-              className="flex items-center gap-2 p-3 rounded-xl border border-gray-100 hover:border-purple-200 hover:bg-purple-50/30 transition-all text-right"
+              className="flex items-center gap-2 p-3 rounded-xl border border-border hover:border-purple-200 hover:bg-purple-50/30 transition-all text-right"
             >
               <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-purple-600 bg-purple-50">
                 <Clock className="h-4 w-4" />
               </div>
-              <span className="text-sm font-medium text-gray-800">تسجيل الحضور</span>
+              <span className="text-sm font-medium text-status-neutral-foreground">تسجيل الحضور</span>
             </button>
             <button
               onClick={() => navigate("/employees/create")}
-              className="flex items-center gap-2 p-3 rounded-xl border border-gray-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all text-right"
+              className="flex items-center gap-2 p-3 rounded-xl border border-border hover:border-indigo-200 hover:bg-indigo-50/30 transition-all text-right"
             >
               <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-indigo-600 bg-indigo-50">
                 <UserPlus className="h-4 w-4" />
               </div>
-              <span className="text-sm font-medium text-gray-800">إضافة موظف</span>
+              <span className="text-sm font-medium text-status-neutral-foreground">إضافة موظف</span>
             </button>
             <button
               onClick={() => navigate("/hr/loans/create")}
-              className="flex items-center gap-2 p-3 rounded-xl border border-gray-100 hover:border-orange-200 hover:bg-orange-50/30 transition-all text-right"
+              className="flex items-center gap-2 p-3 rounded-xl border border-border hover:border-orange-200 hover:bg-orange-50/30 transition-all text-right"
             >
               <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-orange-600 bg-orange-50">
                 <Wallet className="h-4 w-4" />
               </div>
-              <span className="text-sm font-medium text-gray-800">طلب سلفة</span>
+              <span className="text-sm font-medium text-status-neutral-foreground">طلب سلفة</span>
             </button>
             <button
               onClick={() => navigate("/hr/overtime/create")}
-              className="flex items-center gap-2 p-3 rounded-xl border border-gray-100 hover:border-cyan-200 hover:bg-cyan-50/30 transition-all text-right"
+              className="flex items-center gap-2 p-3 rounded-xl border border-border hover:border-cyan-200 hover:bg-cyan-50/30 transition-all text-right"
             >
               <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-cyan-600 bg-cyan-50">
                 <Timer className="h-4 w-4" />
               </div>
-              <span className="text-sm font-medium text-gray-800">تسجيل وقت إضافي</span>
+              <span className="text-sm font-medium text-status-neutral-foreground">تسجيل وقت إضافي</span>
             </button>
           </div>
         </div>

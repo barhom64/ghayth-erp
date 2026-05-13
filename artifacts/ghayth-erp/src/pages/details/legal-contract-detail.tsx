@@ -136,7 +136,7 @@ export default function LegalContractDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <FileText className="h-4 w-4 text-gray-500" />
+            <FileText className="h-4 w-4 text-muted-foreground" />
             بيانات العقد
           </CardTitle>
         </CardHeader>
@@ -147,20 +147,20 @@ export default function LegalContractDetail() {
               <span className="text-3xl font-bold text-gray-900">
                 {formatCurrency(contract.value)}
               </span>
-              <span className="text-xs text-gray-500">ر.س</span>
+              <span className="text-xs text-muted-foreground">ر.س</span>
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-3">
             {contract?.ref && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">رقم العقد</p>
-                <span className="text-gray-800 font-mono text-xs">{contract.ref}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">رقم العقد</p>
+                <span className="text-status-neutral-foreground font-mono text-xs">{contract.ref}</span>
               </div>
             )}
             {contract?.contractType && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">نوع العقد</p>
+                <p className="text-xs text-muted-foreground mb-0.5">نوع العقد</p>
                 <Badge variant="outline">
                   {CONTRACT_TYPE_LABELS[contract.contractType] || contract.contractType}
                 </Badge>
@@ -168,47 +168,47 @@ export default function LegalContractDetail() {
             )}
             {contract?.partyName && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الطرف الأول</p>
-                <span className="text-gray-800">{contract.partyA}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">الطرف الأول</p>
+                <span className="text-status-neutral-foreground">{contract.partyA}</span>
               </div>
             )}
             {contract?.partyContact && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الطرف الثاني</p>
-                <span className="text-gray-800">{contract.partyB}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">الطرف الثاني</p>
+                <span className="text-status-neutral-foreground">{contract.partyB}</span>
               </div>
             )}
             {contract?.startDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ البداية</p>
-                <span className="text-gray-800">{formatDateAr(contract.startDate)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ البداية</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(contract.startDate)}</span>
               </div>
             )}
             {contract?.endDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ النهاية</p>
-                <span className="text-gray-800">{formatDateAr(contract.endDate)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ النهاية</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(contract.endDate)}</span>
               </div>
             )}
             {contract?.paymentTerms && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">شروط الدفع</p>
-                <span className="text-gray-800">{contract.paymentTerms}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">شروط الدفع</p>
+                <span className="text-status-neutral-foreground">{contract.paymentTerms}</span>
               </div>
             )}
           </div>
 
           {(contract?.scope || contract?.description) && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">نطاق العقد / الوصف</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{contract.scope || contract.description}</p>
+              <p className="text-xs text-muted-foreground mb-1">نطاق العقد / الوصف</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{contract.scope || contract.description}</p>
             </div>
           )}
 
           {contract?.specialClauses && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">بنود خاصة</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{contract.specialClauses}</p>
+              <p className="text-xs text-muted-foreground mb-1">بنود خاصة</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{contract.specialClauses}</p>
             </div>
           )}
         </CardContent>
@@ -254,14 +254,14 @@ export default function LegalContractDetail() {
           <CardContent className="space-y-2 text-sm">
             {contract?.createdAt && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ الإنشاء</p>
-                <span className="text-gray-800">{formatDateAr(contract.createdAt)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ الإنشاء</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(contract.createdAt)}</span>
               </div>
             )}
             {contract?.createdByName && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">أنشئ بواسطة</p>
-                <span className="text-gray-800">{contract.createdByName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">أنشئ بواسطة</p>
+                <span className="text-status-neutral-foreground">{contract.createdByName}</span>
               </div>
             )}
           </CardContent>

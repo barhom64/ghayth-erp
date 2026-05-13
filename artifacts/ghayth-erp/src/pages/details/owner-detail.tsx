@@ -156,7 +156,7 @@ export default function OwnerDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <User className="h-4 w-4 text-gray-500" />
+            <User className="h-4 w-4 text-muted-foreground" />
             بيانات المالك
           </CardTitle>
         </CardHeader>
@@ -165,7 +165,7 @@ export default function OwnerDetail() {
           <div className="border-b pb-3">
             <p className="text-2xl font-bold text-gray-900">{owner?.name || "-"}</p>
             {owner?.nationalId && (
-              <p className="text-xs text-gray-500 mt-0.5 font-mono">
+              <p className="text-xs text-muted-foreground mt-0.5 font-mono">
                 رقم الهوية: {owner.nationalId}
               </p>
             )}
@@ -174,44 +174,44 @@ export default function OwnerDetail() {
           <div className="grid grid-cols-2 gap-3">
             {owner?.phone && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+                <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
                   <Phone className="h-3 w-3" /> الهاتف
                 </p>
-                <span className="text-gray-800" dir="ltr">{owner.phone}</span>
+                <span className="text-status-neutral-foreground" dir="ltr">{owner.phone}</span>
               </div>
             )}
             {owner?.email && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+                <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
                   <Mail className="h-3 w-3" /> البريد الإلكتروني
                 </p>
-                <span className="text-gray-800">{owner.email}</span>
+                <span className="text-status-neutral-foreground">{owner.email}</span>
               </div>
             )}
             {owner?.address && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+                <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
                   <MapPin className="h-3 w-3" /> العنوان
                 </p>
-                <span className="text-gray-800">{owner.address}</span>
+                <span className="text-status-neutral-foreground">{owner.address}</span>
               </div>
             )}
             {owner?.bankAccount && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+                <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
                   <Banknote className="h-3 w-3" /> الحساب البنكي للتحويلات
                 </p>
-                <span className="text-gray-800 font-mono text-xs">{owner.bankAccount}</span>
+                <span className="text-status-neutral-foreground font-mono text-xs">{owner.bankAccount}</span>
               </div>
             )}
           </div>
 
           {owner?.notes && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1 flex items-center gap-1">
+              <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
                 <FileText className="h-3 w-3" /> ملاحظات
               </p>
-              <p className="text-gray-800 whitespace-pre-wrap">{owner.notes}</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{owner.notes}</p>
             </div>
           )}
         </CardContent>
@@ -222,25 +222,25 @@ export default function OwnerDetail() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-gray-500" />
+              <Building2 className="h-4 w-4 text-muted-foreground" />
               المحفظة العقارية
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">إجمالي العقارات المملوكة</p>
+              <p className="text-xs text-muted-foreground mb-0.5">إجمالي العقارات المملوكة</p>
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl font-bold text-gray-900">{totalProperties}</span>
-                <span className="text-xs text-gray-500">مبنى</span>
+                <span className="text-xs text-muted-foreground">مبنى</span>
               </div>
             </div>
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-0.5">إجمالي دخل الإيجارات</p>
+              <p className="text-xs text-muted-foreground mb-0.5">إجمالي دخل الإيجارات</p>
               <div className="flex items-baseline gap-2">
                 <span className="text-xl font-bold text-emerald-600">
                   {formatCurrency(totalRentalIncome)}
                 </span>
-                <span className="text-xs text-gray-500">ر.س</span>
+                <span className="text-xs text-muted-foreground">ر.س</span>
               </div>
             </div>
           </CardContent>

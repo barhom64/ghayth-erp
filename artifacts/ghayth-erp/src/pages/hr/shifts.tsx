@@ -40,14 +40,14 @@ export default function ShiftsPage() {
     },
     { key: "employeeName", header: "الموظف", sortable: true, render: (a) => <span className="font-medium">{a.employeeName || "-"}</span> },
     { key: "shiftName", header: "الوردية", sortable: true, render: (a) => a.shiftName || "-" },
-    { key: "startDate", header: "من", sortable: true, className: "text-gray-500", render: (a) => a.startDate || "-" },
-    { key: "endDate", header: "إلى", sortable: true, className: "text-gray-500", render: (a) => a.endDate || "مستمر" },
+    { key: "startDate", header: "من", sortable: true, className: "text-muted-foreground", render: (a) => a.startDate || "-" },
+    { key: "endDate", header: "إلى", sortable: true, className: "text-muted-foreground", render: (a) => a.endDate || "مستمر" },
     { key: "startTime", header: "الوقت", sortable: true, className: "font-mono text-sm", render: (a) => `${a.startTime} - ${a.endTime}` },
   ];
 
   const kpis = [
-    { label: "إجمالي الورديات", value: items.length, icon: CalendarClock, color: "text-blue-600 bg-blue-50" },
-    { label: "ورديات نشطة", value: items.filter((s: any) => s.status === "active" || s.isActive !== false).length, icon: Clock, color: "text-green-600 bg-green-50" },
+    { label: "إجمالي الورديات", value: items.length, icon: CalendarClock, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "ورديات نشطة", value: items.filter((s: any) => s.status === "active" || s.isActive !== false).length, icon: Clock, color: "text-status-success-foreground bg-status-success-surface" },
     { label: "تعيينات الورديات", value: assignments.length, icon: Users, color: "text-purple-600 bg-purple-50" },
     { label: "الوردية الافتراضية", value: items.filter((s: any) => s.isDefault).length, icon: Sun, color: "text-orange-600 bg-orange-50" },
   ];
@@ -115,11 +115,11 @@ export default function ShiftsPage() {
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
-                        {isNight ? <Moon className="w-5 h-5 text-indigo-500" /> : <Sun className="w-5 h-5 text-yellow-500" />}
+                        {isNight ? <Moon className="w-5 h-5 text-indigo-500" /> : <Sun className="w-5 h-5 text-status-warning" />}
                         <span className="font-semibold">{s.name}</span>
                       </div>
                       <div className="flex gap-1 items-center">
-                        {s.isDefault && <Badge className="bg-blue-100 text-blue-700 text-xs">افتراضية</Badge>}
+                        {s.isDefault && <Badge className="bg-status-info-surface text-status-info-foreground text-xs">افتراضية</Badge>}
                         <PageStatusBadge status={s.status || (s.isActive !== false ? "active" : "inactive")} />
                         <RowActions
                           onEdit={() => startEdit(s.id, { name: s.name, startTime: s.startTime || "", endTime: s.endTime || "", breakMinutes: s.breakMinutes || s.breakDuration || 0 })}
@@ -129,23 +129,23 @@ export default function ShiftsPage() {
                       </div>
                     </div>
                     <div className="space-y-2 text-sm">
-                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                        <span className="text-gray-500">وقت البدء</span>
-                        <span className="font-mono font-medium text-green-600">{s.startTime}</span>
+                      <div className="flex items-center justify-between p-2 bg-surface-subtle rounded-lg">
+                        <span className="text-muted-foreground">وقت البدء</span>
+                        <span className="font-mono font-medium text-status-success-foreground">{s.startTime}</span>
                       </div>
-                      <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                        <span className="text-gray-500">وقت الانتهاء</span>
-                        <span className="font-mono font-medium text-red-600">{s.endTime}</span>
+                      <div className="flex items-center justify-between p-2 bg-surface-subtle rounded-lg">
+                        <span className="text-muted-foreground">وقت الانتهاء</span>
+                        <span className="font-mono font-medium text-status-error-foreground">{s.endTime}</span>
                       </div>
                       {(s.breakDuration || s.breakMinutes) && (
-                        <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                          <span className="text-gray-500">الاستراحة</span>
+                        <div className="flex items-center justify-between p-2 bg-surface-subtle rounded-lg">
+                          <span className="text-muted-foreground">الاستراحة</span>
                           <span>{s.breakDuration || s.breakMinutes} دقيقة</span>
                         </div>
                       )}
                       {s.days && (
-                        <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                          <span className="text-gray-500">أيام العمل</span>
+                        <div className="flex items-center justify-between p-2 bg-surface-subtle rounded-lg">
+                          <span className="text-muted-foreground">أيام العمل</span>
                           <span className="text-xs">{s.days || s.workDays}</span>
                         </div>
                       )}
@@ -164,7 +164,7 @@ export default function ShiftsPage() {
                 </Card>
               );
             })}
-            {items.length === 0 && <p className="text-gray-400 col-span-3 text-center py-8">لا توجد ورديات</p>}
+            {items.length === 0 && <p className="text-muted-foreground col-span-3 text-center py-8">لا توجد ورديات</p>}
           </div>
         </TabsContent>
         <TabsContent value="assignments">

@@ -24,13 +24,13 @@ export default function AdminPage() {
     <PageShell title="لوحة الإدارة" breadcrumbs={[{ label: "الإدارة" }]}>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4">
         {[
-          { label: "المستخدمين", icon: Users, color: "text-blue-600 bg-blue-50" },
+          { label: "المستخدمين", icon: Users, color: "text-status-info-foreground bg-status-info-surface" },
           { label: "إسناد الأدوار", icon: UserCog, color: "text-orange-600 bg-orange-50" },
           { label: "الأدوار المتاحة", icon: KeyRound, color: "text-purple-600 bg-purple-50" },
-          { label: "سجلات النظام", icon: ScrollText, color: "text-gray-600 bg-gray-50" },
+          { label: "سجلات النظام", icon: ScrollText, color: "text-muted-foreground bg-surface-subtle" },
           { label: "الصلاحيات", icon: Lock, color: "text-emerald-600 bg-emerald-50" },
-          { label: "سجل الأمن", icon: ShieldAlert, color: "text-red-600 bg-red-50" },
-          { label: "سجل المراجعة", icon: FileSearch, color: "text-amber-600 bg-amber-50" },
+          { label: "سجل الأمن", icon: ShieldAlert, color: "text-status-error-foreground bg-status-error-surface" },
+          { label: "سجل المراجعة", icon: FileSearch, color: "text-status-warning-foreground bg-status-warning-surface" },
         ].map((c) => (
           <Card key={c.label} className="border-0 shadow-sm">
             <CardContent className="p-4 flex items-center gap-3">
@@ -44,14 +44,14 @@ export default function AdminPage() {
       </div>
 
       <div className="mt-6 mb-4">
-        <h3 className="text-sm font-semibold text-gray-600 mb-3">محركات النظام والحوكمة</h3>
+        <h3 className="text-sm font-semibold text-muted-foreground mb-3">محركات النظام والحوكمة</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3">
           {[
             { label: "حاكم النظام", icon: Shield, color: "text-emerald-600 bg-emerald-50", path: "/admin/system-governor" },
-            { label: "محرك السياسات", icon: Cog, color: "text-blue-600 bg-blue-50", path: "/admin/policy-engine" },
+            { label: "محرك السياسات", icon: Cog, color: "text-status-info-foreground bg-status-info-surface", path: "/admin/policy-engine" },
             { label: "سجل النطاقات", icon: Layers, color: "text-purple-600 bg-purple-50", path: "/admin/domain-registry" },
-            { label: "كتالوج الأحداث", icon: Zap, color: "text-amber-600 bg-amber-50", path: "/admin/event-monitor" },
-            { label: "فشل القيود المالية", icon: AlertTriangle, color: "text-red-600 bg-red-50", path: "/admin/posting-failures" },
+            { label: "كتالوج الأحداث", icon: Zap, color: "text-status-warning-foreground bg-status-warning-surface", path: "/admin/event-monitor" },
+            { label: "فشل القيود المالية", icon: AlertTriangle, color: "text-status-error-foreground bg-status-error-surface", path: "/admin/posting-failures" },
             { label: "دورة الحياة", icon: GitBranch, color: "text-cyan-600 bg-cyan-50", path: "/admin/lifecycle-monitor" },
             { label: "مصفوفة الصلاحيات", icon: Lock, color: "text-indigo-600 bg-indigo-50", path: "/admin/rbac-matrix" },
             { label: "مطابقة الأستاذ", icon: Scale, color: "text-teal-600 bg-teal-50", path: "/admin/gl-reconciliation" },

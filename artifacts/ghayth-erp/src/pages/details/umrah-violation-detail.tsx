@@ -45,18 +45,18 @@ export default function UmrahViolationDetail() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-gray-500" />
+            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
             بيانات المخالفة
           </CardTitle>
         </CardHeader>
         <CardContent className="text-sm space-y-2">
           <div className="grid grid-cols-2 gap-3">
-            <div><span className="text-gray-500">النوع:</span> {violation?.violationType || "—"}</div>
-            <div><span className="text-gray-500">الغرامة:</span> {violation?.fineAmount ?? "—"}</div>
-            <div><span className="text-gray-500">التاريخ:</span> {violation?.createdAt ? formatDateAr(violation.createdAt) : "—"}</div>
-            <div><span className="text-gray-500">الحالة:</span> {violation?.status || "—"}</div>
+            <div><span className="text-muted-foreground">النوع:</span> {violation?.violationType || "—"}</div>
+            <div><span className="text-muted-foreground">الغرامة:</span> {violation?.fineAmount ?? "—"}</div>
+            <div><span className="text-muted-foreground">التاريخ:</span> {violation?.createdAt ? formatDateAr(violation.createdAt) : "—"}</div>
+            <div><span className="text-muted-foreground">الحالة:</span> {violation?.status || "—"}</div>
           </div>
-          {violation?.description && <div className="pt-2 border-t"><span className="text-gray-500">الوصف:</span> {violation.description}</div>}
+          {violation?.description && <div className="pt-2 border-t"><span className="text-muted-foreground">الوصف:</span> {violation.description}</div>}
         </CardContent>
       </Card>
     </div>

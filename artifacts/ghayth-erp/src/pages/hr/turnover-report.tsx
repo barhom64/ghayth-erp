@@ -67,25 +67,25 @@ export default function TurnoverReportPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-4">
-            <div className="flex items-center gap-2 text-red-500 mb-1"><Users className="w-4 h-4" /><span className="text-xs text-gray-500">المغادرون</span></div>
+            <div className="flex items-center gap-2 text-status-error mb-1"><Users className="w-4 h-4" /><span className="text-xs text-muted-foreground">المغادرون</span></div>
             <div className="text-2xl font-bold">{data?.totalTerminated || 0}</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4">
-            <div className="flex items-center gap-2 text-green-500 mb-1"><Users className="w-4 h-4" /><span className="text-xs text-gray-500">الموظفون الحاليون</span></div>
+            <div className="flex items-center gap-2 text-status-success mb-1"><Users className="w-4 h-4" /><span className="text-xs text-muted-foreground">الموظفون الحاليون</span></div>
             <div className="text-2xl font-bold">{data?.totalActive || 0}</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4">
-            <div className="flex items-center gap-2 text-primary mb-1"><BarChart3 className="w-4 h-4" /><span className="text-xs text-gray-500">معدل الدوران</span></div>
+            <div className="flex items-center gap-2 text-primary mb-1"><BarChart3 className="w-4 h-4" /><span className="text-xs text-muted-foreground">معدل الدوران</span></div>
             <div className="text-2xl font-bold">{data?.turnoverRate || 0}%</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4">
-            <div className="flex items-center gap-2 text-orange-500 mb-1"><DollarSign className="w-4 h-4" /><span className="text-xs text-gray-500">التكلفة التقديرية</span></div>
+            <div className="flex items-center gap-2 text-orange-500 mb-1"><DollarSign className="w-4 h-4" /><span className="text-xs text-muted-foreground">التكلفة التقديرية</span></div>
             <div className="text-lg font-bold">{formatCurrency(data?.totalEstimatedCost || 0)}</div>
           </CardContent>
         </Card>
@@ -130,7 +130,7 @@ export default function TurnoverReportPage() {
                   ))}
                 </div>
               </div>
-            ) : <div className="text-center py-6 text-gray-400 text-sm">لا توجد بيانات</div>}
+            ) : <div className="text-center py-6 text-muted-foreground text-sm">لا توجد بيانات</div>}
           </CardContent>
         </Card>
       </div>
@@ -145,8 +145,8 @@ export default function TurnoverReportPage() {
                 const pct = Math.round((d.count / max) * 100);
                 return (
                   <div key={i} className="flex items-center gap-3">
-                    <div className="w-24 text-xs text-gray-600 truncate text-start">{d.dept}</div>
-                    <div className="flex-1 bg-gray-100 rounded-full h-2">
+                    <div className="w-24 text-xs text-muted-foreground truncate text-start">{d.dept}</div>
+                    <div className="flex-1 bg-surface-subtle rounded-full h-2">
                       <div className="bg-primary rounded-full h-2 transition-all" style={{ width: `${pct}%` }} />
                     </div>
                     <span className="text-xs font-medium w-6 text-end">{d.count}</span>
@@ -179,7 +179,7 @@ export default function TurnoverReportPage() {
                   key: "deptName",
                   header: "القسم",
                   sortable: true,
-                  render: (v: any) => <span className="text-sm text-gray-500">{v.deptName || "—"}</span>,
+                  render: (v: any) => <span className="text-sm text-muted-foreground">{v.deptName || "—"}</span>,
                 },
                 {
                   key: "terminationType",
@@ -188,9 +188,9 @@ export default function TurnoverReportPage() {
                   render: (v: any) => (
                     <Badge variant="outline" className={cn(
                       "text-xs",
-                      v.terminationType === "termination" ? "border-red-300 text-red-700 bg-red-50" :
-                      v.terminationType === "resignation" ? "border-amber-300 text-amber-700 bg-amber-50" :
-                      "border-gray-200",
+                      v.terminationType === "termination" ? "border-status-error-surface text-status-error-foreground bg-status-error-surface" :
+                      v.terminationType === "resignation" ? "border-amber-300 text-status-warning-foreground bg-status-warning-surface" :
+                      "border-border",
                     )}>
                       {REASON_LABELS[v.terminationType] || v.terminationType}
                     </Badge>
@@ -201,7 +201,7 @@ export default function TurnoverReportPage() {
                   header: "تاريخ المغادرة",
                   sortable: true,
                   render: (v: any) => (
-                    <span className="text-sm text-gray-500">
+                    <span className="text-sm text-muted-foreground">
                       {formatDateAr(v.terminationDate)}
                     </span>
                   ),

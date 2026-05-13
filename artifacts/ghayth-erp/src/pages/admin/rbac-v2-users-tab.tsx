@@ -128,13 +128,13 @@ export function UserRoleAssignmentTab() {
 
   return (
     <div className="space-y-4">
-      <Card className="border-amber-200 bg-amber-50">
+      <Card className="border-status-warning-surface bg-status-warning-surface">
         <CardContent className="p-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-sm">
-            <Sparkles className="h-4 w-4 text-amber-600" />
+            <Sparkles className="h-4 w-4 text-status-warning-foreground" />
             <div>
               <p className="font-semibold text-amber-900">للاختبار: امنح حسابك كل الأدوار</p>
-              <p className="text-xs text-amber-700">
+              <p className="text-xs text-status-warning-foreground">
                 يفعّل قائمة التنقّل بين الأدوار في الـheader حتى تجرّب كل دور بنفسك بدون تسجيل خروج
               </p>
             </div>
@@ -166,8 +166,8 @@ export function UserRoleAssignmentTab() {
               <button
                 key={u.userId}
                 onClick={() => setSelectedUserId(u.userId)}
-                className={`w-full text-start p-3 border-b hover:bg-gray-50 transition ${
-                  selectedUserId === u.userId ? "bg-blue-50 border-r-4 border-r-blue-500" : ""
+                className={`w-full text-start p-3 border-b hover:bg-surface-subtle transition ${
+                  selectedUserId === u.userId ? "bg-status-info-surface border-r-4 border-r-blue-500" : ""
                 }`}
               >
                 <div className="flex items-center justify-between">
@@ -176,15 +176,15 @@ export function UserRoleAssignmentTab() {
                     {u.v2_role_count} دور
                   </Badge>
                 </div>
-                <div className="text-xs text-gray-500 mt-0.5">
+                <div className="text-xs text-muted-foreground mt-0.5">
                   {u.jobTitle || u.legacy_role} · {u.branchName || "—"}
                   {u.departmentName && ` · ${u.departmentName}`}
                 </div>
-                <div className="text-[10px] text-gray-400 mt-0.5">{u.email}</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">{u.email}</div>
               </button>
             ))}
             {!usersLoading && users.length === 0 && (
-              <p className="p-6 text-center text-gray-400 text-sm">لا يوجد مستخدمون</p>
+              <p className="p-6 text-center text-muted-foreground text-sm">لا يوجد مستخدمون</p>
             )}
           </CardContent>
         </Card>
@@ -193,7 +193,7 @@ export function UserRoleAssignmentTab() {
       <div className="lg:col-span-7 overflow-x-auto">
         {!selectedUser ? (
           <Card>
-            <CardContent className="p-12 text-center text-gray-400">
+            <CardContent className="p-12 text-center text-muted-foreground">
               <UserPlus className="h-12 w-12 mx-auto mb-3 opacity-50" />
               <p>اختر مستخدماً لإدارة أدواره</p>
             </CardContent>
@@ -205,28 +205,28 @@ export function UserRoleAssignmentTab() {
                 <UserPlus className="h-5 w-5" />
                 {selectedUser.userName}
               </CardTitle>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted-foreground">
                 {selectedUser.email} · {selectedUser.jobTitle || selectedUser.legacy_role}
               </p>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <p className="text-xs font-semibold text-gray-600 mb-2">الأدوار الحالية ({bindings.length})</p>
+                <p className="text-xs font-semibold text-muted-foreground mb-2">الأدوار الحالية ({bindings.length})</p>
                 {bindings.length === 0 ? (
-                  <p className="text-sm text-gray-400 py-4 text-center bg-gray-50 rounded">
+                  <p className="text-sm text-muted-foreground py-4 text-center bg-surface-subtle rounded">
                     لم يُسنَد له أي دور v2 — يستخدم الدور القديم: <Badge variant="outline">{selectedUser.legacy_role}</Badge>
                   </p>
                 ) : (
                   <div className="space-y-2">
                     {bindings.map((b) => (
-                      <div key={b.id} className="flex items-center justify-between p-2 bg-gray-50 rounded border">
+                      <div key={b.id} className="flex items-center justify-between p-2 bg-surface-subtle rounded border">
                         <div className="flex items-center gap-2">
                           <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: b.color }} />
                           <span className="font-medium text-sm">{b.label_ar}</span>
                           {b.is_primary && <Badge className="text-xs bg-blue-600">رئيسي</Badge>}
                           <Badge variant="outline" className="text-xs">المستوى {b.level}</Badge>
                           {b.expires_at && (
-                            <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700">
+                            <Badge variant="outline" className="text-xs bg-status-warning-surface text-status-warning-foreground">
                               <Calendar className="h-3 w-3 me-1" />
                               ينتهي {new Date(b.expires_at).toLocaleDateString("ar")}
                             </Badge>
@@ -242,7 +242,7 @@ export function UserRoleAssignmentTab() {
               </div>
 
               <div className="border-t pt-3">
-                <p className="text-xs font-semibold text-gray-600 mb-2">إسناد دور جديد</p>
+                <p className="text-xs font-semibold text-muted-foreground mb-2">إسناد دور جديد</p>
                 <div className="grid grid-cols-3 gap-2">
                   <Select value={pickRole} onValueChange={setPickRole}>
                     <SelectTrigger className="h-9 text-sm col-span-2">

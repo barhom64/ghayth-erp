@@ -36,7 +36,7 @@ export default function CommitmentsPage() {
       key: "ref",
       header: "المرجع",
       sortable: true,
-      render: (c) => <span className="font-mono text-blue-600 text-sm">{c.ref || `#${c.id}`}</span>,
+      render: (c) => <span className="font-mono text-status-info-foreground text-sm">{c.ref || `#${c.id}`}</span>,
     },
     {
       key: "vendorName",
@@ -54,7 +54,7 @@ export default function CommitmentsPage() {
       key: "dueDate",
       header: "تاريخ الاستحقاق",
       sortable: true,
-      render: (c) => <span className="text-gray-500">{c.dueDate ? formatDateAr(c.dueDate) : "-"}</span>,
+      render: (c) => <span className="text-muted-foreground">{c.dueDate ? formatDateAr(c.dueDate) : "-"}</span>,
     },
     {
       key: "status",
@@ -76,12 +76,12 @@ export default function CommitmentsPage() {
           <div><p className="text-xs opacity-80">إجمالي الالتزامات</p><p className="text-xl font-bold">{formatCurrency(Number(summary.totalCommitments || 0))}</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-blue-100 rounded-lg"><FileSignature className="h-5 w-5 text-blue-600" /></div>
-          <div><p className="text-xs text-gray-500">عدد الالتزامات</p><p className="text-xl font-bold">{summary.count || 0}</p></div>
+          <div className="p-2 bg-status-info-surface rounded-lg"><FileSignature className="h-5 w-5 text-status-info-foreground" /></div>
+          <div><p className="text-xs text-muted-foreground">عدد الالتزامات</p><p className="text-xl font-bold">{summary.count || 0}</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-yellow-100 rounded-lg"><AlertTriangle className="h-5 w-5 text-yellow-600" /></div>
-          <div><p className="text-xs text-gray-500">خلال 30 يوم</p><p className="text-xl font-bold text-yellow-600">{upcomingCount}</p></div>
+          <div className="p-2 bg-status-warning-surface rounded-lg"><AlertTriangle className="h-5 w-5 text-status-warning-foreground" /></div>
+          <div><p className="text-xs text-muted-foreground">خلال 30 يوم</p><p className="text-xl font-bold text-status-warning-foreground">{upcomingCount}</p></div>
         </CardContent></Card>
       </div>
 

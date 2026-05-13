@@ -47,7 +47,7 @@ function OperationalStatusBar({ employeeId }: { employeeId: string }) {
     if (!employeeId) return;
     apiFetch<OperationalStatus>(`/hr/employee-status/${employeeId}`)
       .then(setOpStatus)
-      .catch(() => setOpStatus({ status: "working", label: "على رأس العمل", color: "bg-green-100 text-green-700", reason: "" }))
+      .catch(() => setOpStatus({ status: "working", label: "على رأس العمل", color: "bg-status-success-surface text-status-success-foreground", reason: "" }))
       .finally(() => setLoading(false));
   }, [employeeId]);
 
@@ -77,21 +77,21 @@ function OperationalStatusBar({ employeeId }: { employeeId: string }) {
 function QuickSummaryCard({ employee, serviceDays }: { employee: any; serviceDays: number }) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-      <div className="bg-blue-50 rounded-xl p-4 text-center">
-        <p className="text-2xl font-bold text-blue-700">{serviceDays}</p>
-        <p className="text-xs text-gray-500 mt-1">أيام الخدمة</p>
+      <div className="bg-status-info-surface rounded-xl p-4 text-center">
+        <p className="text-2xl font-bold text-status-info-foreground">{serviceDays}</p>
+        <p className="text-xs text-muted-foreground mt-1">أيام الخدمة</p>
       </div>
-      <div className="bg-green-50 rounded-xl p-4 text-center">
-        <p className="text-2xl font-bold text-green-700">{formatCurrency(Number(employee.salary) || 0)}</p>
-        <p className="text-xs text-gray-500 mt-1">الراتب الأساسي</p>
+      <div className="bg-status-success-surface rounded-xl p-4 text-center">
+        <p className="text-2xl font-bold text-status-success-foreground">{formatCurrency(Number(employee.salary) || 0)}</p>
+        <p className="text-xs text-muted-foreground mt-1">الراتب الأساسي</p>
       </div>
       <div className="bg-purple-50 rounded-xl p-4 text-center">
         <p className="text-2xl font-bold text-purple-700">{employee.departmentName || "—"}</p>
-        <p className="text-xs text-gray-500 mt-1">القسم</p>
+        <p className="text-xs text-muted-foreground mt-1">القسم</p>
       </div>
       <div className="bg-orange-50 rounded-xl p-4 text-center">
         <p className="text-2xl font-bold text-orange-700">{employee.jobTitle || "—"}</p>
-        <p className="text-xs text-gray-500 mt-1">المسمى الوظيفي</p>
+        <p className="text-xs text-muted-foreground mt-1">المسمى الوظيفي</p>
       </div>
     </div>
   );
@@ -105,21 +105,21 @@ function AttendanceSummary({ attendance }: { attendance: any[] }) {
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-      <div className="text-center p-3 bg-green-50 rounded-lg">
-        <p className="text-xl font-bold text-green-600">{presentDays}</p>
-        <p className="text-xs text-gray-500">أيام حضور</p>
+      <div className="text-center p-3 bg-status-success-surface rounded-lg">
+        <p className="text-xl font-bold text-status-success-foreground">{presentDays}</p>
+        <p className="text-xs text-muted-foreground">أيام حضور</p>
       </div>
-      <div className="text-center p-3 bg-yellow-50 rounded-lg">
-        <p className="text-xl font-bold text-yellow-600">{lateDays}</p>
-        <p className="text-xs text-gray-500">أيام تأخر</p>
+      <div className="text-center p-3 bg-status-warning-surface rounded-lg">
+        <p className="text-xl font-bold text-status-warning-foreground">{lateDays}</p>
+        <p className="text-xs text-muted-foreground">أيام تأخر</p>
       </div>
-      <div className="text-center p-3 bg-red-50 rounded-lg">
-        <p className="text-xl font-bold text-red-600">{absentDays}</p>
-        <p className="text-xs text-gray-500">أيام غياب</p>
+      <div className="text-center p-3 bg-status-error-surface rounded-lg">
+        <p className="text-xl font-bold text-status-error-foreground">{absentDays}</p>
+        <p className="text-xs text-muted-foreground">أيام غياب</p>
       </div>
       <div className="text-center p-3 bg-orange-50 rounded-lg">
         <p className="text-xl font-bold text-orange-600">{totalLateMin}</p>
-        <p className="text-xs text-gray-500">دقائق تأخر</p>
+        <p className="text-xs text-muted-foreground">دقائق تأخر</p>
       </div>
     </div>
   );
@@ -134,11 +134,11 @@ function LeaveBalanceSummary({ employeeId }: { employeeId: string }) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
       {balances.slice(0, 6).map((b: any) => (
-        <div key={b.leaveTypeId} className="border rounded-lg p-3 bg-gray-50">
-          <p className="text-xs text-gray-500">{b.name || b.leaveTypeName}</p>
+        <div key={b.leaveTypeId} className="border rounded-lg p-3 bg-surface-subtle">
+          <p className="text-xs text-muted-foreground">{b.name || b.leaveTypeName}</p>
           <div className="flex items-center gap-2 mt-1">
-            <span className="text-lg font-bold text-green-600">{b.remaining ?? 0}</span>
-            <span className="text-xs text-gray-400">/ {b.maxDays || b.entitled || 0} يوم</span>
+            <span className="text-lg font-bold text-status-success-foreground">{b.remaining ?? 0}</span>
+            <span className="text-xs text-muted-foreground">/ {b.maxDays || b.entitled || 0} يوم</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
             <div
@@ -168,15 +168,15 @@ function ViolationTimeline({ violations }: { violations: any[] }) {
               <div key={lvl} className="flex items-center gap-0">
                 <div className={cn(
                   "w-4 h-4 rounded-full border-2",
-                  lvl <= escalationLevel ? "border-orange-500 bg-orange-400" : "border-gray-300 bg-white"
+                  lvl <= escalationLevel ? "border-orange-500 bg-orange-400" : "border-border bg-white"
                 )} />
                 {lvl < 5 && <div className={cn("w-6 h-0.5", lvl < escalationLevel ? "bg-orange-300" : "bg-gray-200")} />}
               </div>
             ))}
-            <span className="text-xs text-gray-500 ms-2">المستوى {escalationLevel}/5</span>
+            <span className="text-xs text-muted-foreground ms-2">المستوى {escalationLevel}/5</span>
           </div>
           {escalationLevel >= 3 && (
-            <p className="text-xs text-red-600 mt-1 font-medium">تحذير: الموظف غير مؤهل للترقية حالياً بسبب المخالفات</p>
+            <p className="text-xs text-status-error-foreground mt-1 font-medium">تحذير: الموظف غير مؤهل للترقية حالياً بسبب المخالفات</p>
           )}
         </div>
       )}
@@ -184,7 +184,7 @@ function ViolationTimeline({ violations }: { violations: any[] }) {
         {violations.map((v: any) => (
           <div key={v.id} className="border rounded-lg overflow-hidden">
             <div
-              className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50"
+              className="flex items-center justify-between p-3 cursor-pointer hover:bg-surface-subtle"
               onClick={() => setExpanded(expanded === v.id ? null : v.id)}
             >
               <div className="flex-1 min-w-0">
@@ -198,15 +198,15 @@ function ViolationTimeline({ violations }: { violations: any[] }) {
               <div className="flex items-center gap-2 ms-2">
                 <SeverityBadge severity={v.severity} />
                 {Number(v.deduction) > 0 && (
-                  <span className="text-sm font-bold text-red-600">-{formatCurrency(Number(v.deduction))}</span>
+                  <span className="text-sm font-bold text-status-error-foreground">-{formatCurrency(Number(v.deduction))}</span>
                 )}
-                {expanded === v.id ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
+                {expanded === v.id ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
               </div>
             </div>
             {expanded === v.id && (
-              <div className="px-3 pb-3 text-xs text-gray-500 bg-gray-50 border-t">
+              <div className="px-3 pb-3 text-xs text-muted-foreground bg-surface-subtle border-t">
                 <p>الشدة: {severityLabel(v.severity)} | النوع: {violationTypeLabel(v.type)} | الفترة: {v.period}</p>
-                {v.deduction > 0 && <p className="text-red-600 font-medium">الخصم: {formatCurrency(Number(v.deduction))}</p>}
+                {v.deduction > 0 && <p className="text-status-error-foreground font-medium">الخصم: {formatCurrency(Number(v.deduction))}</p>}
               </div>
             )}
           </div>
@@ -366,21 +366,21 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                 <p className="text-xs text-muted-foreground mb-3 font-medium">المهام والأداء</p>
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">إجمالي المهام</span>
+                    <span className="text-muted-foreground">إجمالي المهام</span>
                     <span className="font-bold">{tasks.length}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">المهام المعلقة</span>
+                    <span className="text-muted-foreground">المهام المعلقة</span>
                     <span className="font-bold text-orange-600">{pendingTasks}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">المخالفات</span>
-                    <span className={cn("font-bold", violations.length > 0 ? "text-red-600" : "text-green-600")}>
+                    <span className="text-muted-foreground">المخالفات</span>
+                    <span className={cn("font-bold", violations.length > 0 ? "text-status-error-foreground" : "text-status-success-foreground")}>
                       {violations.length}
                     </span>
                   </div>
                   {violations.length >= 3 && (
-                    <div className="text-xs text-red-600 bg-red-50 rounded p-2 mt-2">
+                    <div className="text-xs text-status-error-foreground bg-status-error-surface rounded p-2 mt-2">
                       تحذير: الموظف غير مؤهل للترقية بسبب مخالفات متراكمة
                     </div>
                   )}
@@ -401,20 +401,20 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                   return (
                     <div className="flex items-center gap-6 flex-wrap">
                       <div>
-                        <p className="text-xs text-gray-400">الفترة</p>
+                        <p className="text-xs text-muted-foreground">الفترة</p>
                         <p className="font-mono font-bold">{latest.period}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-gray-400">الأساسي</p>
+                        <p className="text-xs text-muted-foreground">الأساسي</p>
                         <p className="font-bold">{formatCurrency(Number(latest.basic || 0))}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-gray-400">الإجمالي</p>
+                        <p className="text-xs text-muted-foreground">الإجمالي</p>
                         <p className="font-bold">{formatCurrency(Number(latest.grossSalary || 0))}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-gray-400">الصافي</p>
-                        <p className="font-bold text-green-700">{formatCurrency(Number(latest.netSalary || 0))}</p>
+                        <p className="text-xs text-muted-foreground">الصافي</p>
+                        <p className="font-bold text-status-success-foreground">{formatCurrency(Number(latest.netSalary || 0))}</p>
                       </div>
                       <PageStatusBadge status={latest.status} />
                     </div>
@@ -468,7 +468,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
           <Card className="md:col-span-2">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-lg flex items-center gap-2">
-                <FileText className="h-5 w-5 text-blue-500" />
+                <FileText className="h-5 w-5 text-status-info" />
                 بيانات الإقامة والتأشيرة — الربط الحكومي (مقيم)
               </CardTitle>
               {!govEditing && (
@@ -574,7 +574,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
             ) : (
               <div className="space-y-2">
                 {attendance.map((a: any) => (
-                  <div key={a.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50">
+                  <div key={a.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-surface-subtle">
                     <div className="flex items-center gap-3">
                       <span className="font-mono text-sm">{formatDateAr(a.date)}</span>
                       <PageStatusBadge status={a.status} domain="attendance" />
@@ -614,7 +614,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
               ) : (
                 <div className="space-y-3">
                   {leaves.map((l: any) => (
-                    <div key={l.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50">
+                    <div key={l.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-surface-subtle">
                       <div>
                         <p className="font-medium">{l.leaveTypeName}</p>
                         <p className="text-xs text-muted-foreground">
@@ -650,8 +650,8 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                   { key: "basic", header: "الأساسي", render: (p) => formatCurrency(Number(p.basic || 0)) },
                   { key: "grossSalary", header: "الإجمالي", render: (p) => formatCurrency(Number(p.grossSalary || 0)) },
                   { key: "gosi", header: "التأمينات", render: (p) => <span className="text-orange-600">{formatCurrency(Number(p.gosi || 0))}</span> },
-                  { key: "lateDeduction", header: "خصم التأخر", render: (p) => <span className="text-red-600">{formatCurrency(Number(p.lateDeduction || 0))}</span> },
-                  { key: "netSalary", header: "الصافي", render: (p) => <span className="font-bold text-green-700">{formatCurrency(Number(p.netSalary || 0))}</span> },
+                  { key: "lateDeduction", header: "خصم التأخر", render: (p) => <span className="text-status-error-foreground">{formatCurrency(Number(p.lateDeduction || 0))}</span> },
+                  { key: "netSalary", header: "الصافي", render: (p) => <span className="font-bold text-status-success-foreground">{formatCurrency(Number(p.netSalary || 0))}</span> },
                   { key: "status", header: "الحالة", render: (p) => <PageStatusBadge status={p.status} /> },
                 ]}
                 data={payroll}
@@ -698,7 +698,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
             ) : (
               <div className="space-y-3">
                 {tasks.map((t: any) => (
-                  <div key={t.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50">
+                  <div key={t.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-surface-subtle">
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate">{t.title}</p>
                       {t.projectName && <p className="text-xs text-muted-foreground">{t.projectName}</p>}
@@ -731,7 +731,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
             ) : (
               <div className="space-y-3">
                 {trainings.map((t: any) => (
-                  <div key={t.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50">
+                  <div key={t.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-surface-subtle">
                     <div>
                       <p className="font-medium">{t.courseTitle}</p>
                       <p className="text-xs text-muted-foreground">{t.courseType || "-"}</p>
@@ -766,13 +766,13 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
               <CardContent className="p-0">
                 <DataTable
                   columns={[
-                    { key: "loanNumber", header: "رقم السلفة", render: (ln) => <span className="font-mono text-xs text-blue-700">{ln.loanNumber}</span> },
+                    { key: "loanNumber", header: "رقم السلفة", render: (ln) => <span className="font-mono text-xs text-status-info-foreground">{ln.loanNumber}</span> },
                     { key: "loanType", header: "النوع", render: (ln) => {
                       const loanTypes: Record<string, string> = { salary_advance: "سلفة راتب", personal: "شخصية", emergency: "طارئة" };
                       return loanTypes[ln.loanType] || ln.loanType;
                     }},
                     { key: "amount", header: "المبلغ", render: (ln) => <span className="font-semibold">{formatCurrency(Number(ln.amount))}</span> },
-                    { key: "remainingAmount", header: "المتبقي", render: (ln) => <span className="text-red-600">{formatCurrency(Number(ln.remainingAmount || 0))}</span> },
+                    { key: "remainingAmount", header: "المتبقي", render: (ln) => <span className="text-status-error-foreground">{formatCurrency(Number(ln.remainingAmount || 0))}</span> },
                     { key: "status", header: "الحالة", render: (ln) => <PageStatusBadge status={ln.status} /> },
                   ]}
                   data={loans}
@@ -797,9 +797,9 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                 <DataTable
                   columns={[
                     { key: "requestNumber", header: "رقم الطلب", render: (ot) => <span className="font-mono text-xs text-purple-700">{ot.requestNumber}</span> },
-                    { key: "overtimeDate", header: "التاريخ", render: (ot) => <span className="text-gray-600">{formatDateAr(ot.overtimeDate)}</span> },
+                    { key: "overtimeDate", header: "التاريخ", render: (ot) => <span className="text-muted-foreground">{formatDateAr(ot.overtimeDate)}</span> },
                     { key: "hours", header: "الساعات", render: (ot) => `${Number(ot.hours).toFixed(1)} ساعة` },
-                    { key: "totalAmount", header: "المبلغ", render: (ot) => <span className="font-semibold text-green-700">{formatCurrency(Number(ot.totalAmount || 0))}</span> },
+                    { key: "totalAmount", header: "المبلغ", render: (ot) => <span className="font-semibold text-status-success-foreground">{formatCurrency(Number(ot.totalAmount || 0))}</span> },
                     { key: "status", header: "الحالة", render: (ot) => <PageStatusBadge status={ot.status} /> },
                   ]}
                   data={overtime}
@@ -815,7 +815,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
-                <BookOpen className="h-5 w-5 text-blue-600" />
+                <BookOpen className="h-5 w-5 text-status-info-foreground" />
                 الملف المالي للموظف
               </CardTitle>
             </CardHeader>
@@ -860,15 +860,15 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                   <div className="fixed inset-0 z-40" onClick={() => setShowPrintMenu(false)} />
                   <div className="absolute start-0 top-full mt-1 z-50 bg-white border rounded-lg shadow-lg min-w-[200px] py-1">
                     {hrTemplates.length === 0 ? (
-                      <p className="px-3 py-2 text-xs text-gray-400">لا توجد قوالب</p>
+                      <p className="px-3 py-2 text-xs text-muted-foreground">لا توجد قوالب</p>
                     ) : (
                       hrTemplates.map((t: any) => (
                         <button
                           key={t.id}
-                          className="w-full text-right px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
+                          className="w-full text-right px-3 py-2 text-sm hover:bg-surface-subtle flex items-center gap-2"
                           onClick={() => handlePrintTemplate(t)}
                         >
-                          <FileText className="h-3.5 w-3.5 text-gray-400" />
+                          <FileText className="h-3.5 w-3.5 text-muted-foreground" />
                           {t.name}
                         </button>
                       ))
@@ -909,10 +909,10 @@ function InfoRow({ label, value, mono, dir, bold, last }: {
 
 function PriorityBadge({ priority }: { priority: string }) {
   const colors: Record<string, string> = {
-    critical: "bg-red-100 text-red-800",
+    critical: "bg-status-error-surface text-status-error-foreground",
     high: "bg-orange-100 text-orange-800",
-    medium: "bg-yellow-100 text-yellow-800",
-    low: "bg-green-100 text-green-800",
+    medium: "bg-status-warning-surface text-yellow-800",
+    low: "bg-status-success-surface text-status-success-foreground",
   };
   const labels: Record<string, string> = {
     critical: "حرج",
@@ -921,7 +921,7 @@ function PriorityBadge({ priority }: { priority: string }) {
     low: "منخفض",
   };
   return (
-    <Badge className={cn("text-[10px]", colors[priority] || "bg-gray-100 text-gray-800")}>
+    <Badge className={cn("text-[10px]", colors[priority] || "bg-surface-subtle text-status-neutral-foreground")}>
       {labels[priority] || priority}
     </Badge>
   );
@@ -929,13 +929,13 @@ function PriorityBadge({ priority }: { priority: string }) {
 
 function SeverityBadge({ severity }: { severity: string }) {
   const colors: Record<string, string> = {
-    critical: "bg-red-100 text-red-800",
+    critical: "bg-status-error-surface text-status-error-foreground",
     high: "bg-orange-100 text-orange-800",
-    medium: "bg-yellow-100 text-yellow-800",
-    low: "bg-blue-100 text-blue-800",
+    medium: "bg-status-warning-surface text-yellow-800",
+    low: "bg-status-info-surface text-status-info-foreground",
   };
   return (
-    <Badge className={cn("text-[10px]", colors[severity] || "bg-gray-100 text-gray-800")}>
+    <Badge className={cn("text-[10px]", colors[severity] || "bg-surface-subtle text-status-neutral-foreground")}>
       {severityLabel(severity)}
     </Badge>
   );

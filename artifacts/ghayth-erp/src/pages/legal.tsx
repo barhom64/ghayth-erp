@@ -30,9 +30,9 @@ export default function Legal() {
     >
       <LegalTabsNav />
       <KpiGrid items={[
-        { label: "إجمالي القضايا", value: (s.openCases || 0) + (s.closedCases || 0), icon: Scale, color: "text-blue-600 bg-blue-50" },
+        { label: "إجمالي القضايا", value: (s.openCases || 0) + (s.closedCases || 0), icon: Scale, color: "text-status-info-foreground bg-status-info-surface" },
         { label: "نشطة", value: s.activeContracts || 0, icon: CheckCircle, color: "text-emerald-600 bg-emerald-50" },
-        { label: "منتهية", value: s.expiringContracts || 0, icon: Gavel, color: "text-amber-600 bg-amber-50" },
+        { label: "منتهية", value: s.expiringContracts || 0, icon: Gavel, color: "text-status-warning-foreground bg-status-warning-surface" },
         { label: "قيمة المطالبات", value: formatCurrency(s.contingentLiabilities || 0), icon: DollarSign, color: "text-purple-600 bg-purple-50" },
       ]} />
 
@@ -119,7 +119,7 @@ function ContractsTab() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm">إجمالي العقود</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats?.totalContracts || 0}</div></CardContent></Card>
         <Card className="bg-emerald-600 text-white"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">عقود سارية</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats?.activeContracts || 0}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-amber-600">تنتهي خلال 30 يوم</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-amber-600">{stats?.expiringContracts || 0}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-status-warning-foreground">تنتهي خلال 30 يوم</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-status-warning-foreground">{stats?.expiringContracts || 0}</div></CardContent></Card>
       </div>
 
       <div className="flex items-center gap-4">
@@ -215,7 +215,7 @@ function CasesTab() {
     {
       key: "title", header: "العنوان", sortable: true,
       render: (c) => (
-        <button onClick={() => setLocation(`/legal/cases/${c.id}`)} className="hover:underline text-blue-700 flex items-center gap-1 font-medium">
+        <button onClick={() => setLocation(`/legal/cases/${c.id}`)} className="hover:underline text-status-info-foreground flex items-center gap-1 font-medium">
           {c.title} <ExternalLink className="h-3 w-3 opacity-50" />
         </button>
       ),
@@ -303,10 +303,10 @@ function FinancialLegalTab() {
   const report = reportResp || {};
 
   const RISK_COLORS: Record<string, string> = {
-    critical: "text-red-700 bg-red-50 border-red-200",
+    critical: "text-status-error-foreground bg-status-error-surface border-status-error-surface",
     high: "text-orange-700 bg-orange-50 border-orange-200",
-    medium: "text-amber-700 bg-amber-50 border-amber-200",
-    low: "text-green-700 bg-green-50 border-green-200",
+    medium: "text-status-warning-foreground bg-status-warning-surface border-status-warning-surface",
+    low: "text-status-success-foreground bg-status-success-surface border-status-success-surface",
   };
   const RISK_LABELS: Record<string, string> = {
     critical: "حرجة", high: "عالية", medium: "متوسطة", low: "منخفضة",
@@ -317,26 +317,26 @@ function FinancialLegalTab() {
   return (
     <div className="space-y-5">
       {isLoading ? (
-        <div className="h-32 bg-gray-100 rounded animate-pulse" />
+        <div className="h-32 bg-surface-subtle rounded animate-pulse" />
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <Card className="border-0 shadow-sm">
               <CardContent className="p-4">
-                <p className="text-xl font-bold text-red-600">{formatCurrency(report.totalContingentLiabilities || 0)}</p>
-                <p className="text-xs text-gray-500">الالتزامات المحتملة</p>
+                <p className="text-xl font-bold text-status-error-foreground">{formatCurrency(report.totalContingentLiabilities || 0)}</p>
+                <p className="text-xs text-muted-foreground">الالتزامات المحتملة</p>
               </CardContent>
             </Card>
             <Card className="border-0 shadow-sm">
               <CardContent className="p-4">
-                <p className="text-xl font-bold text-amber-600">{formatCurrency(report.highRiskAmount || 0)}</p>
-                <p className="text-xs text-gray-500">مخاطر عالية/حرجة</p>
+                <p className="text-xl font-bold text-status-warning-foreground">{formatCurrency(report.highRiskAmount || 0)}</p>
+                <p className="text-xs text-muted-foreground">مخاطر عالية/حرجة</p>
               </CardContent>
             </Card>
             <Card className="border-0 shadow-sm">
               <CardContent className="p-4">
                 <p className="text-xl font-bold text-purple-600">{formatCurrency(report.totalJudgmentAmount || 0)}</p>
-                <p className="text-xs text-gray-500">مبالغ الأحكام</p>
+                <p className="text-xs text-muted-foreground">مبالغ الأحكام</p>
               </CardContent>
             </Card>
           </div>
@@ -347,7 +347,7 @@ function FinancialLegalTab() {
               <CardContent>
                 <div className="space-y-3">
                   {(report.casesByRisk || []).map((c: any) => (
-                    <div key={c.id} className={`flex items-center justify-between p-3 rounded-lg border ${RISK_COLORS[c.riskLevel] || "bg-gray-50 border-gray-200"}`}>
+                    <div key={c.id} className={`flex items-center justify-between p-3 rounded-lg border ${RISK_COLORS[c.riskLevel] || "bg-surface-subtle border-border"}`}>
                       <div>
                         <p className="font-medium text-sm">{c.title}</p>
                         <p className="text-xs mt-0.5 opacity-75">{c.court || "-"} — {c.opposingParty || "-"}</p>
@@ -379,7 +379,7 @@ function FinancialLegalTab() {
                       key: "verdict",
                       header: "النتيجة",
                       render: (j: any) => (
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${j.verdict === 'win' ? 'bg-green-100 text-green-700' : j.verdict === 'loss' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${j.verdict === 'win' ? 'bg-status-success-surface text-status-success-foreground' : j.verdict === 'loss' ? 'bg-status-error-surface text-status-error-foreground' : 'bg-surface-subtle text-status-neutral-foreground'}`}>
                           {j.verdict === 'win' ? 'ربح' : j.verdict === 'loss' ? 'خسارة' : j.verdict || "-"}
                         </span>
                       ),

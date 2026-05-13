@@ -13,8 +13,8 @@ export default function FleetReports() {
   const s = stats || {};
 
   const statCards = [
-    { label: "إجمالي المركبات", value: s.totalVehicles ?? 0, icon: Car, color: "text-blue-600 bg-blue-50" },
-    { label: "سجلات الوقود", value: s.totalFuelLogs ?? 0, icon: Fuel, color: "text-green-600 bg-green-50" },
+    { label: "إجمالي المركبات", value: s.totalVehicles ?? 0, icon: Car, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "سجلات الوقود", value: s.totalFuelLogs ?? 0, icon: Fuel, color: "text-status-success-foreground bg-status-success-surface" },
     { label: "طلبات الصيانة", value: s.totalMaintenance ?? 0, icon: Wrench, color: "text-orange-600 bg-orange-50" },
     { label: "المركبات النشطة", value: s.activeVehicles ?? 0, icon: TrendingUp, color: "text-purple-600 bg-purple-50" },
   ];
@@ -43,7 +43,7 @@ export default function FleetReports() {
               <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", c.color.split(" ")[1])}>
                 <c.icon className={cn("w-5 h-5", c.color.split(" ")[0])} />
               </div>
-              <div><p className="text-xl font-bold">{c.value}</p><p className="text-xs text-gray-500">{c.label}</p></div>
+              <div><p className="text-xl font-bold">{c.value}</p><p className="text-xs text-muted-foreground">{c.label}</p></div>
             </CardContent>
           </Card>
         ))}
@@ -53,25 +53,25 @@ export default function FleetReports() {
         <CardHeader><CardTitle className="flex items-center gap-2"><BarChart3 className="w-5 h-5" /> ملخص الأسطول</CardTitle></CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 bg-blue-50 rounded-lg">
-              <p className="text-sm text-gray-600">إجمالي الرحلات</p>
-              <p className="text-2xl font-bold text-blue-700">{s.totalTrips ?? 0}</p>
+            <div className="p-4 bg-status-info-surface rounded-lg">
+              <p className="text-sm text-muted-foreground">إجمالي الرحلات</p>
+              <p className="text-2xl font-bold text-status-info-foreground">{s.totalTrips ?? 0}</p>
             </div>
-            <div className="p-4 bg-green-50 rounded-lg">
-              <p className="text-sm text-gray-600">السائقين</p>
-              <p className="text-2xl font-bold text-green-700">{s.totalDrivers ?? 0}</p>
+            <div className="p-4 bg-status-success-surface rounded-lg">
+              <p className="text-sm text-muted-foreground">السائقين</p>
+              <p className="text-2xl font-bold text-status-success-foreground">{s.totalDrivers ?? 0}</p>
             </div>
             <div className="p-4 bg-orange-50 rounded-lg">
-              <p className="text-sm text-gray-600">تنبيهات نشطة</p>
+              <p className="text-sm text-muted-foreground">تنبيهات نشطة</p>
               <p className="text-2xl font-bold text-orange-700">{s.activeAlerts ?? 0}</p>
             </div>
             <div className="p-4 bg-purple-50 rounded-lg">
-              <p className="text-sm text-gray-600">وثائق التأمين</p>
+              <p className="text-sm text-muted-foreground">وثائق التأمين</p>
               <p className="text-2xl font-bold text-purple-700">{s.totalInsurance ?? 0}</p>
             </div>
           </div>
           {Object.keys(s).length === 0 && (
-            <p className="text-center text-gray-400 py-8">لا توجد بيانات كافية لإنشاء التقارير</p>
+            <p className="text-center text-muted-foreground py-8">لا توجد بيانات كافية لإنشاء التقارير</p>
           )}
         </CardContent>
       </Card>

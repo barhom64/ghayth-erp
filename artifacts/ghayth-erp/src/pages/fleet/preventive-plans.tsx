@@ -153,20 +153,20 @@ export default function PreventivePlansPage() {
         const status = getDueStatus(row.nextServiceDate);
         if (status === "overdue") return (
           <div className="flex items-center gap-1">
-            <AlertCircle className="w-4 h-4 text-red-500" />
-            <Badge className="bg-red-100 text-red-700">متأخر {Math.abs(dueDays!)} يوم</Badge>
+            <AlertCircle className="w-4 h-4 text-status-error" />
+            <Badge className="bg-status-error-surface text-status-error-foreground">متأخر {Math.abs(dueDays!)} يوم</Badge>
           </div>
         );
         if (status === "due_soon") return (
           <div className="flex items-center gap-1">
-            <Clock className="w-4 h-4 text-yellow-500" />
-            <Badge className="bg-yellow-100 text-yellow-700">خلال {dueDays} يوم</Badge>
+            <Clock className="w-4 h-4 text-status-warning" />
+            <Badge className="bg-status-warning-surface text-status-warning-foreground">خلال {dueDays} يوم</Badge>
           </div>
         );
         if (status === "ok") return (
-          <Badge className="bg-green-100 text-green-700">{dueDays} يوم</Badge>
+          <Badge className="bg-status-success-surface text-status-success-foreground">{dueDays} يوم</Badge>
         );
-        return <span className="text-gray-400">-</span>;
+        return <span className="text-muted-foreground">-</span>;
       },
     },
     {
@@ -185,8 +185,8 @@ export default function PreventivePlansPage() {
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "خطط الصيانة الوقائية" }]}
       actions={
         <>
-          {overdueCount > 0 && <Badge className="bg-red-100 text-red-700">{overdueCount} متأخر</Badge>}
-          {dueSoonCount > 0 && <Badge className="bg-yellow-100 text-yellow-700">{dueSoonCount} قريب</Badge>}
+          {overdueCount > 0 && <Badge className="bg-status-error-surface text-status-error-foreground">{overdueCount} متأخر</Badge>}
+          {dueSoonCount > 0 && <Badge className="bg-status-warning-surface text-status-warning-foreground">{dueSoonCount} قريب</Badge>}
           <GuardedButton perm="fleet:create" onClick={() => setShowForm(!showForm)} size="sm">
             <Plus className="w-4 h-4 me-1" /> إضافة خطة
           </GuardedButton>
@@ -277,8 +277,8 @@ export default function PreventivePlansPage() {
         emptyIcon={<Wrench className="w-10 h-10 text-gray-300" />}
         rowClassName={(row) => {
           const status = getDueStatus(row.nextServiceDate);
-          if (status === "overdue") return "bg-red-50/40";
-          if (status === "due_soon") return "bg-yellow-50/40";
+          if (status === "overdue") return "bg-status-error-surface";
+          if (status === "due_soon") return "bg-status-warning-surface/40";
           return undefined as any;
         }}
       />

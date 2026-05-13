@@ -20,11 +20,11 @@ const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
 ];
 
 function ScoreBadge({ score, label }: { score: number | null | undefined; label?: string }) {
-  if (score == null) return <span className="text-gray-400 text-xs">-</span>;
-  const color = score >= 80 ? "text-green-600" : score >= 60 ? "text-yellow-600" : "text-red-600";
+  if (score == null) return <span className="text-muted-foreground text-xs">-</span>;
+  const color = score >= 80 ? "text-status-success-foreground" : score >= 60 ? "text-status-warning-foreground" : "text-status-error-foreground";
   return (
     <div className="text-center">
-      {label && <p className="text-[10px] text-gray-400 mb-0.5">{label}</p>}
+      {label && <p className="text-[10px] text-muted-foreground mb-0.5">{label}</p>}
       <span className={cn("font-bold text-sm", color)}>{score}%</span>
     </div>
   );
@@ -61,9 +61,9 @@ export default function Evaluation360Page() {
   };
 
   const kpis = [
-    { label: "إجمالي الدورات", value: stats.total, icon: Target, color: "text-blue-600 bg-blue-50" },
-    { label: "جارٍ التقييم", value: stats.inProgress, icon: RefreshCw, color: "text-amber-600 bg-amber-50" },
-    { label: "مكتملة", value: stats.completed, icon: Award, color: "text-green-600 bg-green-50" },
+    { label: "إجمالي الدورات", value: stats.total, icon: Target, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "جارٍ التقييم", value: stats.inProgress, icon: RefreshCw, color: "text-status-warning-foreground bg-status-warning-surface" },
+    { label: "مكتملة", value: stats.completed, icon: Award, color: "text-status-success-foreground bg-status-success-surface" },
     { label: "متوسط الأداء", value: stats.avgScore ? `${stats.avgScore}%` : "-", icon: TrendingUp, color: "text-purple-600 bg-purple-50" },
   ];
 
@@ -78,7 +78,7 @@ export default function Evaluation360Page() {
           <div>
             <span className="font-medium text-sm block">{v.employeeName}</span>
             {v.empNumber && (
-              <span className="text-xs text-gray-400">#{v.empNumber}</span>
+              <span className="text-xs text-muted-foreground">#{v.empNumber}</span>
             )}
           </div>
         </div>
@@ -89,7 +89,7 @@ export default function Evaluation360Page() {
       header: "الفترة",
       sortable: true,
       render: (v) => (
-        <span className="text-sm text-gray-600">{v.period || "-"}</span>
+        <span className="text-sm text-muted-foreground">{v.period || "-"}</span>
       ),
     },
     {
@@ -115,12 +115,12 @@ export default function Evaluation360Page() {
       header: "النهائي 360°",
       sortable: true,
       render: (v) => {
-        if (v.finalScore == null) return <span className="text-gray-400">-</span>;
+        if (v.finalScore == null) return <span className="text-muted-foreground">-</span>;
         const score = Number(v.finalScore);
         const color =
-          score >= 80 ? "bg-green-100 text-green-700 border-green-300" :
-          score >= 60 ? "bg-yellow-100 text-yellow-700 border-yellow-300" :
-          "bg-red-100 text-red-700 border-red-300";
+          score >= 80 ? "bg-status-success-surface text-status-success-foreground border-status-success-surface" :
+          score >= 60 ? "bg-status-warning-surface text-status-warning-foreground border-yellow-300" :
+          "bg-status-error-surface text-status-error-foreground border-status-error-surface";
         return (
           <Badge variant="outline" className={cn("text-xs font-bold", color)}>
             {score}%

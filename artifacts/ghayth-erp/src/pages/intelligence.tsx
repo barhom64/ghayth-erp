@@ -50,7 +50,7 @@ export default function Intelligence() {
             <Card><CardHeader className="pb-2"><CardTitle className="text-xs flex items-center gap-1"><Car className="h-3 w-3" /> المركبات</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{overview?.totalVehicles || 0}</div></CardContent></Card>
             <Card><CardHeader className="pb-2"><CardTitle className="text-xs flex items-center gap-1"><Building className="h-3 w-3" /> العقارات</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{overview?.totalProperties || 0}</div></CardContent></Card>
             <Card><CardHeader className="pb-2"><CardTitle className="text-xs flex items-center gap-1"><FolderKanban className="h-3 w-3" /> مشاريع نشطة</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{overview?.activeProjects || 0}</div></CardContent></Card>
-            <Card><CardHeader className="pb-2"><CardTitle className="text-xs flex items-center gap-1"><Headphones className="h-3 w-3" /> تذاكر مفتوحة</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-amber-600">{overview?.openTickets || 0}</div></CardContent></Card>
+            <Card><CardHeader className="pb-2"><CardTitle className="text-xs flex items-center gap-1"><Headphones className="h-3 w-3" /> تذاكر مفتوحة</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-status-warning-foreground">{overview?.openTickets || 0}</div></CardContent></Card>
             <Card className="bg-primary text-primary-foreground"><CardHeader className="pb-2"><CardTitle className="text-xs flex items-center gap-1"><TrendingUp className="h-3 w-3" /> إيراد الشهر</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{formatCurrency(overview?.monthlyRevenue)}</div></CardContent></Card>
             <Card><CardHeader className="pb-2"><CardTitle className="text-xs flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> تنبيهات</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-rose-600">{overview?.unreadAlerts || 0}</div></CardContent></Card>
           </>
@@ -62,14 +62,14 @@ export default function Intelligence() {
           <CardHeader><CardTitle className="flex items-center gap-2"><Brain className="h-5 w-5" /> التنبيهات الذكية</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <div className="relative">
-              <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input className="ps-9" placeholder="بحث في التنبيهات..." value={alertSearch} onChange={(e) => setAlertSearch(e.target.value)} />
             </div>
             {loadingAlerts ? <Skeleton className="h-20 w-full" /> :
             filteredAlerts?.length === 0 ? <p className="text-muted-foreground text-center py-8">لا توجد تنبيهات</p> :
             <div className="space-y-3">
               {filteredAlerts.slice(0, 10).map((a: any) => (
-                <div key={a.id} className={`p-3 rounded-lg border ${a.severity === 'critical' ? 'bg-rose-50 border-rose-200' : a.severity === 'warning' ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-200'}`}>
+                <div key={a.id} className={`p-3 rounded-lg border ${a.severity === 'critical' ? 'bg-rose-50 border-rose-200' : a.severity === 'warning' ? 'bg-status-warning-surface border-status-warning-surface' : 'bg-status-info-surface border-status-info-surface'}`}>
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-sm">{a.title}</span>
                     <PageStatusBadge status={a.severity} />
@@ -89,7 +89,7 @@ export default function Intelligence() {
                 <div className="flex items-center gap-2 mb-2">
                   <h4 className="text-sm font-medium">المهام ({tasks.length})</h4>
                   <div className="relative flex-1">
-                    <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-400" />
+                    <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                     <Input className="ps-8 h-7 text-xs" placeholder="بحث..." value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)} />
                   </div>
                 </div>
@@ -105,7 +105,7 @@ export default function Intelligence() {
                 <div className="flex items-center gap-2 mb-2">
                   <h4 className="text-sm font-medium">الحضور اليوم ({attendance.length})</h4>
                   <div className="relative flex-1">
-                    <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-400" />
+                    <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                     <Input className="ps-8 h-7 text-xs" placeholder="بحث..." value={attendSearch} onChange={(e) => setAttendSearch(e.target.value)} />
                   </div>
                 </div>

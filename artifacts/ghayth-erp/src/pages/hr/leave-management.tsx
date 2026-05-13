@@ -27,9 +27,9 @@ function LeaveApprovalCard({ request, onDone }: { request: any; onDone: () => vo
             <div className="flex items-center gap-2 mb-1">
               <AvatarInitial name={request.employeeName} color="yellow" />
               <span className="font-semibold">{request.employeeName}</span>
-              <Badge className="bg-yellow-100 text-yellow-700">معلق</Badge>
+              <Badge className="bg-status-warning-surface text-status-warning-foreground">معلق</Badge>
             </div>
-            <div className="text-sm text-gray-500 ms-10 space-y-1">
+            <div className="text-sm text-muted-foreground ms-10 space-y-1">
               <p>النوع: {request.leaveTypeName || request.leaveType}</p>
               <p>الفترة: {formatDateAr(request.startDate)} — {formatDateAr(request.endDate)} ({request.days} أيام)</p>
               {request.reason && <p>السبب: {request.reason}</p>}
@@ -102,10 +102,10 @@ export default function LeaveManagementPage() {
   };
 
   const kpis = [
-    { label: "طلبات معلقة", value: stats.pending ?? pendingRequests.length, icon: Clock, color: "text-yellow-600 bg-yellow-50" },
-    { label: "موافق عليها", value: stats.approved ?? 0, icon: CheckCircle, color: "text-green-600 bg-green-50" },
-    { label: "مرفوضة", value: stats.rejected ?? 0, icon: XCircle, color: "text-red-600 bg-red-50" },
-    { label: "أنواع الإجازات", value: types.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
+    { label: "طلبات معلقة", value: stats.pending ?? pendingRequests.length, icon: Clock, color: "text-status-warning-foreground bg-status-warning-surface" },
+    { label: "موافق عليها", value: stats.approved ?? 0, icon: CheckCircle, color: "text-status-success-foreground bg-status-success-surface" },
+    { label: "مرفوضة", value: stats.rejected ?? 0, icon: XCircle, color: "text-status-error-foreground bg-status-error-surface" },
+    { label: "أنواع الإجازات", value: types.length, icon: FileText, color: "text-status-info-foreground bg-status-info-surface" },
   ];
 
   return (
@@ -129,7 +129,7 @@ export default function LeaveManagementPage() {
             {pendingRequests.map((r: any) => (
               <LeaveApprovalCard key={r.id} request={r} onDone={handleDone} />
             ))}
-            {pendingRequests.length === 0 && <Card><CardContent className="p-8 text-center text-gray-400">لا توجد طلبات معلقة</CardContent></Card>}
+            {pendingRequests.length === 0 && <Card><CardContent className="p-8 text-center text-muted-foreground">لا توجد طلبات معلقة</CardContent></Card>}
           </div>
         </TabsContent>
 
@@ -138,9 +138,9 @@ export default function LeaveManagementPage() {
             columns={[
               { key: "name", header: "نوع الإجازة", sortable: true, render: (v) => <span className="font-medium">{v.name || v.leaveTypeName}</span> },
               { key: "annualDays", header: "المستحق", sortable: true, render: (v) => <span>{v.annualDays || v.entitled || v.maxDays}</span> },
-              { key: "used", header: "المستخدم", sortable: true, render: (v) => <span className="text-red-600">{v.used || 0}</span> },
-              { key: "reserved", header: "المحجوز", sortable: true, render: (v) => <span className="text-yellow-600">{v.reserved || 0}</span> },
-              { key: "remaining", header: "المتبقي", sortable: true, render: (v) => <span className="font-bold text-green-600">{v.remaining ?? (Number(v.maxDays || v.annualDays || 0) - Number(v.used || 0))}</span> },
+              { key: "used", header: "المستخدم", sortable: true, render: (v) => <span className="text-status-error-foreground">{v.used || 0}</span> },
+              { key: "reserved", header: "المحجوز", sortable: true, render: (v) => <span className="text-status-warning-foreground">{v.reserved || 0}</span> },
+              { key: "remaining", header: "المتبقي", sortable: true, render: (v) => <span className="font-bold text-status-success-foreground">{v.remaining ?? (Number(v.maxDays || v.annualDays || 0) - Number(v.used || 0))}</span> },
             ] as DataTableColumn<any>[]}
             data={balances}
             noToolbar
@@ -156,17 +156,17 @@ export default function LeaveManagementPage() {
               <Card key={t.id} className="hover:shadow-md transition-shadow">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <Calendar className="w-5 h-5 text-blue-500" />
+                    <Calendar className="w-5 h-5 text-status-info" />
                     <span className="font-semibold">{t.name}</span>
                   </div>
-                  <div className="space-y-1 text-sm text-gray-500">
-                    <p>الأيام السنوية: <span className="font-medium text-gray-700">{t.maxDays || t.annualDays || 0}</span></p>
-                    <p>مدفوعة: <Badge className={t.isPaid ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"}>{t.isPaid ? "نعم" : "لا"}</Badge></p>
+                  <div className="space-y-1 text-sm text-muted-foreground">
+                    <p>الأيام السنوية: <span className="font-medium text-status-neutral-foreground">{t.maxDays || t.annualDays || 0}</span></p>
+                    <p>مدفوعة: <Badge className={t.isPaid ? "bg-status-success-surface text-status-success-foreground" : "bg-surface-subtle text-status-neutral-foreground"}>{t.isPaid ? "نعم" : "لا"}</Badge></p>
                   </div>
                 </CardContent>
               </Card>
             ))}
-            {types.length === 0 && <p className="text-center text-gray-400 col-span-3 py-8">لا توجد أنواع إجازات</p>}
+            {types.length === 0 && <p className="text-center text-muted-foreground col-span-3 py-8">لا توجد أنواع إجازات</p>}
           </div>
         </TabsContent>
       </Tabs>

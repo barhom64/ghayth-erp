@@ -83,9 +83,9 @@ export default function FieldTrackingPage() {
   if (isError) return <ErrorState />;
 
   const kpis = [
-    { label: "تسجيلات اليوم", value: items.length, icon: Navigation, color: "text-blue-600 bg-blue-50" },
-    { label: "داخل النطاق", value: items.filter((a: any) => !a.isOutOfRange).length, icon: MapPin, color: "text-green-600 bg-green-50" },
-    { label: "خارج النطاق", value: items.filter((a: any) => a.isOutOfRange).length, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
+    { label: "تسجيلات اليوم", value: items.length, icon: Navigation, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "داخل النطاق", value: items.filter((a: any) => !a.isOutOfRange).length, icon: MapPin, color: "text-status-success-foreground bg-status-success-surface" },
+    { label: "خارج النطاق", value: items.filter((a: any) => a.isOutOfRange).length, icon: AlertTriangle, color: "text-status-error-foreground bg-status-error-surface" },
     { label: "متوسط وقت الحضور", value: "-", icon: Clock, color: "text-purple-600 bg-purple-50" },
   ];
 
@@ -102,7 +102,7 @@ export default function FieldTrackingPage() {
           <h4 className="font-semibold mb-3">خريطة التتبع الميداني</h4>
           <AttendanceMap items={items} />
           {items.length === 0 && (
-            <p className="text-center text-gray-400 mt-3 text-sm">لا توجد سجلات حضور بالإحداثيات الجغرافية لعرضها على الخريطة</p>
+            <p className="text-center text-muted-foreground mt-3 text-sm">لا توجد سجلات حضور بالإحداثيات الجغرافية لعرضها على الخريطة</p>
           )}
         </CardContent>
       </Card>
@@ -110,7 +110,7 @@ export default function FieldTrackingPage() {
       <DataTable
         columns={[
           { key: "employeeName", header: "الموظف", sortable: true, render: (v) => <span className="font-medium">{v.employeeName}</span> },
-          { key: "date", header: "التاريخ", sortable: true, render: (v) => <span className="text-gray-500">{v.date ? formatDateAr(v.date) : "-"}</span> },
+          { key: "date", header: "التاريخ", sortable: true, render: (v) => <span className="text-muted-foreground">{v.date ? formatDateAr(v.date) : "-"}</span> },
           { key: "checkIn", header: "وقت التسجيل", sortable: true, render: (v) => <span className="font-mono">{formatTimeAr(v.checkIn)}</span> },
           { key: "status", header: "الحالة", sortable: true, render: (v) => <PageStatusBadge status={v.status} /> },
         ] as DataTableColumn<any>[]}

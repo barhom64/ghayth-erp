@@ -29,7 +29,7 @@ export function LeavesAndRequestsSection({ leaveBalances, openRequests }: Leaves
         </CardHeader>
         <CardContent>
           {leaveBalances.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-4">لا توجد أنواع إجازات</p>
+            <p className="text-sm text-muted-foreground text-center py-4">لا توجد أنواع إجازات</p>
           ) : (
             <div className="space-y-4">
               {leaveBalances.map((b: any) => {
@@ -40,18 +40,18 @@ export function LeavesAndRequestsSection({ leaveBalances, openRequests }: Leaves
                 return (
                   <div key={b.leaveTypeId} className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">{b.name}</span>
-                      <span className={cn("text-xs font-semibold", isOut ? "text-red-600" : isLow ? "text-amber-600" : "text-emerald-600")}>
+                      <span className="text-sm font-medium text-status-neutral-foreground">{b.name}</span>
+                      <span className={cn("text-xs font-semibold", isOut ? "text-status-error-foreground" : isLow ? "text-status-warning-foreground" : "text-emerald-600")}>
                         {b.remaining} / {total} يوم
                       </span>
                     </div>
-                    <div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden">
+                    <div className="w-full h-2 rounded-full bg-surface-subtle overflow-hidden">
                       <div
                         className={cn("h-full rounded-full transition-all duration-500", isOut ? "bg-red-500" : isLow ? "bg-amber-400" : "bg-emerald-500")}
                         style={{ width: `${usedPct}%` }}
                       />
                     </div>
-                    <div className="flex items-center justify-between text-xs text-gray-400">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
                       <span>مستخدم: {b.used || 0} يوم</span>
                       <span>{usedPct}% مستخدم</span>
                     </div>
@@ -75,17 +75,17 @@ export function LeavesAndRequestsSection({ leaveBalances, openRequests }: Leaves
           {openRequests.length === 0 ? (
             <div className="text-center py-4">
               <CheckCircle2 className="w-10 h-10 text-green-300 mx-auto mb-2" />
-              <p className="text-sm text-gray-500">لا توجد طلبات مفتوحة</p>
+              <p className="text-sm text-muted-foreground">لا توجد طلبات مفتوحة</p>
             </div>
           ) : (
             <div className="space-y-2">
               {openRequests.slice(0, 6).map((r: any) => (
-                <div key={`${r.type}-${r.id}`} className="flex items-center justify-between p-2.5 rounded-lg hover:bg-gray-50 transition-colors">
+                <div key={`${r.type}-${r.id}`} className="flex items-center justify-between p-2.5 rounded-lg hover:bg-surface-subtle transition-colors">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800 truncate">
+                    <p className="text-sm font-medium text-status-neutral-foreground truncate">
                       {requestTypeLabels[r.type] || r.type}: {r.title}
                     </p>
-                    <p className="text-xs text-gray-400">{r.createdAt ? formatTimeAgo(r.createdAt) : ""}</p>
+                    <p className="text-xs text-muted-foreground">{r.createdAt ? formatTimeAgo(r.createdAt) : ""}</p>
                   </div>
                   <PageStatusBadge status={r.status} className="text-[10px] shrink-0" />
                 </div>

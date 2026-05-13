@@ -79,19 +79,19 @@ export default function LedgerPage() {
     >
       <div className="grid gap-3 grid-cols-4">
         <Card><CardContent className="p-4 text-center">
-          <p className="text-xs text-gray-500">عدد القيود</p>
+          <p className="text-xs text-muted-foreground">عدد القيود</p>
           <p className="text-2xl font-bold">{entries.length}</p>
         </CardContent></Card>
         <Card><CardContent className="p-4 text-center">
-          <p className="text-xs text-gray-500">إجمالي المدين</p>
-          <p className="text-2xl font-bold text-green-600">{formatCurrency(Number(summary.totalDebit || 0))}</p>
+          <p className="text-xs text-muted-foreground">إجمالي المدين</p>
+          <p className="text-2xl font-bold text-status-success-foreground">{formatCurrency(Number(summary.totalDebit || 0))}</p>
         </CardContent></Card>
         <Card><CardContent className="p-4 text-center">
-          <p className="text-xs text-gray-500">إجمالي الدائن</p>
-          <p className="text-2xl font-bold text-red-600">{formatCurrency(Number(summary.totalCredit || 0))}</p>
+          <p className="text-xs text-muted-foreground">إجمالي الدائن</p>
+          <p className="text-2xl font-bold text-status-error-foreground">{formatCurrency(Number(summary.totalCredit || 0))}</p>
         </CardContent></Card>
-        <Card className={Number(balance) >= 0 ? "bg-green-50" : "bg-red-50"}><CardContent className="p-4 text-center">
-          <p className="text-xs text-gray-500">الرصيد الحالي</p>
+        <Card className={Number(balance) >= 0 ? "bg-status-success-surface" : "bg-status-error-surface"}><CardContent className="p-4 text-center">
+          <p className="text-xs text-muted-foreground">الرصيد الحالي</p>
           <p className="text-2xl font-bold" style={{ color: Number(balance) >= 0 ? "#16a34a" : "#dc2626" }}>
             {formatCurrency(Number(balance))}
           </p>
@@ -104,7 +104,7 @@ export default function LedgerPage() {
             key: "date",
             header: "التاريخ",
             sortable: true,
-            className: "text-gray-500 text-sm",
+            className: "text-muted-foreground text-sm",
             render: (e) => (e.date ? formatDateAr(e.date) : "-"),
           },
           {
@@ -112,7 +112,7 @@ export default function LedgerPage() {
             header: "المرجع",
             sortable: true,
             searchable: true,
-            className: "font-mono text-blue-600 text-sm",
+            className: "font-mono text-status-info-foreground text-sm",
             render: (e) => e.ref || "-",
           },
           {
@@ -127,14 +127,14 @@ export default function LedgerPage() {
             key: "debit",
             header: "مدين",
             sortable: true,
-            className: "text-green-600",
+            className: "text-status-success-foreground",
             render: (e) => (Number(e.debit || 0) > 0 ? formatCurrency(Number(e.debit)) : "-"),
           },
           {
             key: "credit",
             header: "دائن",
             sortable: true,
-            className: "text-red-600",
+            className: "text-status-error-foreground",
             render: (e) => (Number(e.credit || 0) > 0 ? formatCurrency(Number(e.credit)) : "-"),
           },
           {
@@ -151,7 +151,7 @@ export default function LedgerPage() {
         ] as DataTableColumn<any>[]}
         data={entries}
         rowKey={(e, i) => e.id || i}
-        rowClassName={() => "hover:bg-gray-50"}
+        rowClassName={() => "hover:bg-surface-subtle"}
         pageSize={20}
         emptyMessage="لا توجد حركات"
         emptyIcon={<BookOpen className="h-10 w-10 mx-auto mb-2 opacity-30" />}
@@ -159,10 +159,10 @@ export default function LedgerPage() {
       />
 
       {entries.length > 0 && (
-        <div className="rounded-lg border bg-gray-100 font-bold p-3 grid grid-cols-6 gap-2">
+        <div className="rounded-lg border bg-surface-subtle font-bold p-3 grid grid-cols-6 gap-2">
           <div className="col-span-3">المجموع</div>
-          <div className="text-green-700">{formatCurrency(Number(summary.totalDebit || 0))}</div>
-          <div className="text-red-700">{formatCurrency(Number(summary.totalCredit || 0))}</div>
+          <div className="text-status-success-foreground">{formatCurrency(Number(summary.totalDebit || 0))}</div>
+          <div className="text-status-error-foreground">{formatCurrency(Number(summary.totalCredit || 0))}</div>
           <div style={{ color: Number(balance) >= 0 ? "#16a34a" : "#dc2626" }}>
             {formatCurrency(Number(balance))}
           </div>

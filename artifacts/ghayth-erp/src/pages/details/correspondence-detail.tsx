@@ -168,14 +168,14 @@ export default function CorrespondenceDetail() {
   };
 
   const DirectionIcon = item?.direction === "outgoing" ? SendHorizonal : Inbox;
-  const directionTone = item?.direction === "outgoing" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-emerald-50 text-emerald-700 border-emerald-200";
+  const directionTone = item?.direction === "outgoing" ? "bg-status-info-surface text-status-info-foreground border-status-info-surface" : "bg-emerald-50 text-emerald-700 border-emerald-200";
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Mail className="h-4 w-4 text-gray-500" />
+            <Mail className="h-4 w-4 text-muted-foreground" />
             تفاصيل المراسلة
           </CardTitle>
         </CardHeader>
@@ -186,7 +186,7 @@ export default function CorrespondenceDetail() {
               <DirectionIcon className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <p className="text-xs text-gray-500 mb-0.5">الموضوع</p>
+              <p className="text-xs text-muted-foreground mb-0.5">الموضوع</p>
               <h3 className="text-base font-semibold text-gray-900 break-words">
                 {item?.subject || "-"}
               </h3>
@@ -206,22 +206,22 @@ export default function CorrespondenceDetail() {
           {/* Sender/recipient grid */}
           <div className="grid gap-3 sm:grid-cols-2 pt-2 border-t">
             <div className="space-y-1">
-              <p className="text-xs text-gray-500">المرسل</p>
+              <p className="text-xs text-muted-foreground">المرسل</p>
               <p className="font-medium text-gray-900">{item?.senderName || "-"}</p>
-              {item?.senderOrg && <p className="text-xs text-gray-500">{item.senderOrg}</p>}
+              {item?.senderOrg && <p className="text-xs text-muted-foreground">{item.senderOrg}</p>}
             </div>
             <div className="space-y-1">
-              <p className="text-xs text-gray-500">المستلم</p>
+              <p className="text-xs text-muted-foreground">المستلم</p>
               <p className="font-medium text-gray-900">{item?.recipientName || "-"}</p>
-              {item?.recipientOrg && <p className="text-xs text-gray-500">{item.recipientOrg}</p>}
+              {item?.recipientOrg && <p className="text-xs text-muted-foreground">{item.recipientOrg}</p>}
             </div>
           </div>
 
           {/* Body */}
           {item?.content && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">المحتوى</p>
-              <pre className="whitespace-pre-wrap font-sans text-sm text-gray-800 bg-gray-50 rounded-md p-3 border">
+              <p className="text-xs text-muted-foreground mb-1">المحتوى</p>
+              <pre className="whitespace-pre-wrap font-sans text-sm text-status-neutral-foreground bg-surface-subtle rounded-md p-3 border">
                 {item.content}
               </pre>
             </div>
@@ -229,15 +229,15 @@ export default function CorrespondenceDetail() {
 
           {/* Notes */}
           {item?.notes && (
-            <div className="rounded-md bg-amber-50 border border-amber-100 p-3">
-              <p className="text-xs text-amber-700 font-medium mb-1">ملاحظات داخلية</p>
+            <div className="rounded-md bg-status-warning-surface border border-status-warning-surface p-3">
+              <p className="text-xs text-status-warning-foreground font-medium mb-1">ملاحظات داخلية</p>
               <p className="text-sm text-amber-900 whitespace-pre-wrap">{item.notes}</p>
             </div>
           )}
 
           {/* Response reference */}
           {item?.responseRef && (
-            <div className="rounded-md bg-blue-50 border border-blue-100 p-3 text-sm text-blue-900">
+            <div className="rounded-md bg-status-info-surface border border-status-info-surface p-3 text-sm text-blue-900">
               تم الرد عليها — مرجع الرد: <span className="font-mono font-medium">{item.responseRef}</span>
             </div>
           )}
@@ -253,25 +253,25 @@ export default function CorrespondenceDetail() {
           <CardContent className="space-y-2 text-xs">
             {item?.createdAt && (
               <div className="flex justify-between">
-                <span className="text-gray-500">الإنشاء</span>
+                <span className="text-muted-foreground">الإنشاء</span>
                 <span className="font-medium">{formatDateAr(item.createdAt)}</span>
               </div>
             )}
             {item?.sentAt && (
               <div className="flex justify-between">
-                <span className="text-gray-500">الإرسال</span>
+                <span className="text-muted-foreground">الإرسال</span>
                 <span className="font-medium">{formatDateAr(item.sentAt)}</span>
               </div>
             )}
             {item?.receivedAt && (
               <div className="flex justify-between">
-                <span className="text-gray-500">الاستلام</span>
+                <span className="text-muted-foreground">الاستلام</span>
                 <span className="font-medium">{formatDateAr(item.receivedAt)}</span>
               </div>
             )}
             {item?.respondedAt && (
               <div className="flex justify-between">
-                <span className="text-gray-500">الرد</span>
+                <span className="text-muted-foreground">الرد</span>
                 <span className="font-medium">{formatDateAr(item.respondedAt)}</span>
               </div>
             )}
@@ -283,7 +283,7 @@ export default function CorrespondenceDetail() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                <Paperclip className="h-4 w-4 text-gray-500" />
+                <Paperclip className="h-4 w-4 text-muted-foreground" />
                 المرفقات ({attachments.length})
               </CardTitle>
             </CardHeader>
@@ -291,11 +291,11 @@ export default function CorrespondenceDetail() {
               {attachments.map((a, i) => {
                 const canPreview = !!a.id;
                 return (
-                  <div key={i} className="flex items-center justify-between gap-2 p-2 rounded border text-xs hover:bg-gray-50">
+                  <div key={i} className="flex items-center justify-between gap-2 p-2 rounded border text-xs hover:bg-surface-subtle">
                     <span className="truncate min-w-0">{a.name}</span>
                     {canPreview && (
                       <button
-                        className="text-blue-600 hover:text-blue-700 shrink-0"
+                        className="text-status-info-foreground hover:text-status-info-foreground shrink-0"
                         onClick={() => setPreviewAttachment({
                           id: a.id!,
                           title: a.name,

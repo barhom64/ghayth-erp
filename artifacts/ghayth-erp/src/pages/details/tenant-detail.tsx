@@ -70,31 +70,31 @@ export default function TenantDetail() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
-            <p className="text-xs text-gray-500 mb-1">رقم الهوية</p>
+            <p className="text-xs text-muted-foreground mb-1">رقم الهوية</p>
             <p className="font-bold font-mono">{tenant.nationalId || "—"}</p>
-            {tenant.nationality && <p className="text-xs text-gray-400">{tenant.nationality}</p>}
+            {tenant.nationality && <p className="text-xs text-muted-foreground">{tenant.nationality}</p>}
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
-            <p className="text-xs text-gray-500 mb-1">إجمالي العقود</p>
+            <p className="text-xs text-muted-foreground mb-1">إجمالي العقود</p>
             <p className="font-bold text-lg">{contracts.length}</p>
             {activeContract && <p className="text-xs text-emerald-500">عقد ساري</p>}
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
-            <p className="text-xs text-gray-500 mb-1">إجمالي المدفوعات</p>
+            <p className="text-xs text-muted-foreground mb-1">إجمالي المدفوعات</p>
             <p className="font-bold text-lg text-emerald-600">{formatCurrency(totalPaid)}</p>
           </CardContent>
         </Card>
-        <Card className={cn("border-0 shadow-sm", overduePayments.length > 0 ? "bg-red-50/50" : "")}>
+        <Card className={cn("border-0 shadow-sm", overduePayments.length > 0 ? "bg-status-error-surface" : "")}>
           <CardContent className="p-4">
-            <p className="text-xs text-gray-500 mb-1">المتأخرات</p>
-            <p className={cn("font-bold text-lg", overduePayments.length > 0 ? "text-red-600" : "text-gray-500")}>
+            <p className="text-xs text-muted-foreground mb-1">المتأخرات</p>
+            <p className={cn("font-bold text-lg", overduePayments.length > 0 ? "text-status-error-foreground" : "text-muted-foreground")}>
               {formatCurrency(overduePayments.reduce((s: number, p: any) => s + Number(p.amount || 0) - Number(p.paidAmount || 0), 0))}
             </p>
-            {overduePayments.length > 0 && <p className="text-xs text-red-500">{overduePayments.length} دفعة</p>}
+            {overduePayments.length > 0 && <p className="text-xs text-status-error">{overduePayments.length} دفعة</p>}
           </CardContent>
         </Card>
       </div>
@@ -103,11 +103,11 @@ export default function TenantDetail() {
         <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">البيانات الشخصية</CardTitle></CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-            {tenant.name && <div><p className="text-xs text-gray-500">الاسم</p><p className="font-medium">{tenant.name}</p></div>}
-            {tenant.phone && <div><p className="text-xs text-gray-500">الهاتف</p><p className="font-medium">{tenant.phone}</p></div>}
-            {tenant.email && <div><p className="text-xs text-gray-500">البريد الإلكتروني</p><p className="font-medium">{tenant.email}</p></div>}
-            {tenant.nationalId && <div><p className="text-xs text-gray-500">رقم الهوية / الإقامة</p><p className="font-medium font-mono">{tenant.nationalId}</p></div>}
-            {tenant.nationality && <div><p className="text-xs text-gray-500">الجنسية</p><p className="font-medium">{tenant.nationality}</p></div>}
+            {tenant.name && <div><p className="text-xs text-muted-foreground">الاسم</p><p className="font-medium">{tenant.name}</p></div>}
+            {tenant.phone && <div><p className="text-xs text-muted-foreground">الهاتف</p><p className="font-medium">{tenant.phone}</p></div>}
+            {tenant.email && <div><p className="text-xs text-muted-foreground">البريد الإلكتروني</p><p className="font-medium">{tenant.email}</p></div>}
+            {tenant.nationalId && <div><p className="text-xs text-muted-foreground">رقم الهوية / الإقامة</p><p className="font-medium font-mono">{tenant.nationalId}</p></div>}
+            {tenant.nationality && <div><p className="text-xs text-muted-foreground">الجنسية</p><p className="font-medium">{tenant.nationality}</p></div>}
           </div>
         </CardContent>
       </Card>
@@ -121,19 +121,19 @@ export default function TenantDetail() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-              <div><p className="text-xs text-gray-500">الوحدة</p><p className="font-medium">{activeContract.unitNumber} {activeContract.buildingName ? `- ${activeContract.buildingName}` : ""}</p></div>
-              <div><p className="text-xs text-gray-500">الإيجار</p><p className="font-medium text-emerald-600">{formatCurrency(Number(activeContract.monthlyRent || 0))}</p></div>
-              <div><p className="text-xs text-gray-500">من</p><p className="font-medium">{formatDateAr(activeContract.startDate)}</p></div>
-              <div><p className="text-xs text-gray-500">إلى</p><p className="font-medium">{formatDateAr(activeContract.endDate)}</p></div>
+              <div><p className="text-xs text-muted-foreground">الوحدة</p><p className="font-medium">{activeContract.unitNumber} {activeContract.buildingName ? `- ${activeContract.buildingName}` : ""}</p></div>
+              <div><p className="text-xs text-muted-foreground">الإيجار</p><p className="font-medium text-emerald-600">{formatCurrency(Number(activeContract.monthlyRent || 0))}</p></div>
+              <div><p className="text-xs text-muted-foreground">من</p><p className="font-medium">{formatDateAr(activeContract.startDate)}</p></div>
+              <div><p className="text-xs text-muted-foreground">إلى</p><p className="font-medium">{formatDateAr(activeContract.endDate)}</p></div>
             </div>
           </CardContent>
         </Card>
       )}
 
       {overduePayments.length > 0 && (
-        <Card className="border-red-200 bg-red-50/30">
+        <Card className="border-status-error-surface bg-status-error-surface">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-red-700">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-status-error-foreground">
               <AlertTriangle className="h-4 w-4" /> دفعات متأخرة ({overduePayments.length})
             </CardTitle>
           </CardHeader>
@@ -141,7 +141,7 @@ export default function TenantDetail() {
             <DataTable
               columns={[
                 { key: "unitNumber", header: "الوحدة", render: (p: any) => p.unitNumber || "—" },
-                { key: "dueDate", header: "الاستحقاق", render: (p: any) => <span className="text-red-600">{formatDateAr(p.dueDate)}</span> },
+                { key: "dueDate", header: "الاستحقاق", render: (p: any) => <span className="text-status-error-foreground">{formatDateAr(p.dueDate)}</span> },
                 { key: "amount", header: "المبلغ", render: (p: any) => <span className="font-bold">{formatCurrency(Number(p.amount || 0))}</span> },
               ]}
               data={overduePayments.slice(0, 5)}
@@ -168,23 +168,23 @@ export default function TenantDetail() {
           <CardHeader><CardTitle className="text-base flex items-center gap-2"><FileText className="h-4 w-4" /> تاريخ العقود ({contracts.length})</CardTitle></CardHeader>
           <CardContent className="p-0">
             {contracts.length === 0 ? (
-              <p className="text-center text-gray-400 py-8">لا توجد عقود</p>
+              <p className="text-center text-muted-foreground py-8">لا توجد عقود</p>
             ) : (
               <DataTable
                 columns={[
                   { key: "unitNumber", header: "الوحدة", render: (c: any) => (
                     <div>
                       <p className="font-medium">{c.unitNumber}</p>
-                      {c.buildingName && <p className="text-xs text-gray-400">{c.buildingName}</p>}
+                      {c.buildingName && <p className="text-xs text-muted-foreground">{c.buildingName}</p>}
                     </div>
                   ) },
-                  { key: "startDate", header: "من", render: (c: any) => <span className="text-gray-500">{formatDateAr(c.startDate)}</span> },
-                  { key: "endDate", header: "إلى", render: (c: any) => <span className="text-gray-500">{formatDateAr(c.endDate)}</span> },
+                  { key: "startDate", header: "من", render: (c: any) => <span className="text-muted-foreground">{formatDateAr(c.startDate)}</span> },
+                  { key: "endDate", header: "إلى", render: (c: any) => <span className="text-muted-foreground">{formatDateAr(c.endDate)}</span> },
                   { key: "monthlyRent", header: "الإيجار", render: (c: any) => <span className="font-bold">{formatCurrency(Number(c.monthlyRent || 0))}</span> },
                   { key: "status", header: "الحالة", render: (c: any) => <PageStatusBadge status={c.status} /> },
                 ]}
                 data={contracts}
-                rowClassName={(c: any) => cn(c.status === "active" && "bg-blue-50/30")}
+                rowClassName={(c: any) => cn(c.status === "active" && "bg-status-info-surface")}
                 noToolbar
                 pageSize={0}
                 searchPlaceholder={null}
@@ -203,18 +203,18 @@ export default function TenantDetail() {
           <CardHeader><CardTitle className="text-base flex items-center gap-2"><Banknote className="h-4 w-4" /> سجل المدفوعات ({payments.length})</CardTitle></CardHeader>
           <CardContent className="p-0">
             {payments.length === 0 ? (
-              <p className="text-center text-gray-400 py-8">لا توجد مدفوعات</p>
+              <p className="text-center text-muted-foreground py-8">لا توجد مدفوعات</p>
             ) : (
               <DataTable
                 columns={[
                   { key: "unitNumber", header: "الوحدة", render: (p: any) => p.unitNumber || "—" },
-                  { key: "dueDate", header: "الاستحقاق", render: (p: any) => <span className="text-gray-500">{formatDateAr(p.dueDate)}</span> },
+                  { key: "dueDate", header: "الاستحقاق", render: (p: any) => <span className="text-muted-foreground">{formatDateAr(p.dueDate)}</span> },
                   { key: "amount", header: "المبلغ", render: (p: any) => <span className="font-bold">{formatCurrency(Number(p.amount || 0))}</span> },
                   { key: "paidAmount", header: "المدفوع", render: (p: any) => <span className="text-emerald-600">{formatCurrency(Number(p.paidAmount || 0))}</span> },
                   { key: "status", header: "الحالة", render: (p: any) => <PageStatusBadge status={p.status} /> },
                 ]}
                 data={payments}
-                rowClassName={(p: any) => cn(p.status !== "paid" && new Date(p.dueDate) < new Date() ? "bg-red-50/30" : "")}
+                rowClassName={(p: any) => cn(p.status !== "paid" && new Date(p.dueDate) < new Date() ? "bg-status-error-surface" : "")}
                 noToolbar
                 pageSize={0}
                 searchPlaceholder={null}
@@ -233,7 +233,7 @@ export default function TenantDetail() {
           <Card className="border-0 shadow-sm">
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
-                <BookOpen className="h-4 w-4 text-blue-600" />
+                <BookOpen className="h-4 w-4 text-status-info-foreground" />
                 الملف المالي الشامل للمستأجر
               </CardTitle>
             </CardHeader>
@@ -311,7 +311,7 @@ function TenantLettersTab({ tenantId }: { tenantId: string }) {
       </CardHeader>
       <CardContent className="p-0">
         {letters.length === 0 ? (
-          <p className="text-center text-gray-400 py-8">لا توجد مراسلات</p>
+          <p className="text-center text-muted-foreground py-8">لا توجد مراسلات</p>
         ) : (
           <DataTable
             columns={columns}

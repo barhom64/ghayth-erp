@@ -136,26 +136,26 @@ export function ApprovalWorkflowsTab() {
               <div className="space-y-2">
                 {group.chains.map((chain: any, idx: number) => (
                   <div key={chain.id} className="flex items-center gap-3 py-2 border-b last:border-0">
-                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-sm font-bold">
+                    <div className="w-8 h-8 rounded-full bg-status-info-surface flex items-center justify-center text-status-info-foreground text-sm font-bold">
                       {idx + 1}
                     </div>
                     <div className="flex-1">
                       <span className="font-medium text-sm">{chain.name || `سلسلة ${idx + 1}`}</span>
                       {(chain.minAmount > 0 || chain.maxAmount) && (
-                        <span className="text-xs text-gray-500 ms-2">
+                        <span className="text-xs text-muted-foreground ms-2">
                           ({chain.minAmount ?? 0} - {chain.maxAmount ?? "∞"})
                         </span>
                       )}
                     </div>
                     {idx < group.chains.length - 1 && <span className="text-gray-300 text-xs">→</span>}
-                    <GuardedButton perm="settings:create" variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => handleDelete(chain.id)}>
+                    <GuardedButton perm="settings:create" variant="ghost" size="sm" className="text-status-error hover:text-status-error-foreground" onClick={() => handleDelete(chain.id)}>
                       <Trash2 className="h-4 w-4" />
                     </GuardedButton>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-400 text-center py-3">لا توجد مراحل موافقة محددة — سيتم الموافقة مباشرة</p>
+              <p className="text-sm text-muted-foreground text-center py-3">لا توجد مراحل موافقة محددة — سيتم الموافقة مباشرة</p>
             )}
           </CardContent>
         </Card>

@@ -56,34 +56,34 @@ function PenaltyChain({ record }: { record: any }) {
   const penalty = PENALTY_LEVELS[penaltyLevel];
 
   return (
-    <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+    <div className="bg-surface-subtle rounded-lg p-3 space-y-2">
       <div className="flex flex-wrap gap-3">
         {lateMin > 0 && (
           <div className="flex items-center gap-1.5 text-xs">
-            <Clock className="w-3.5 h-3.5 text-yellow-600" />
-            <span className="text-gray-600">تأخير:</span>
-            <span className="font-medium text-yellow-700">{lateMin} دقيقة</span>
+            <Clock className="w-3.5 h-3.5 text-status-warning-foreground" />
+            <span className="text-muted-foreground">تأخير:</span>
+            <span className="font-medium text-status-warning-foreground">{lateMin} دقيقة</span>
           </div>
         )}
         {penaltyLevel > 0 && penalty && (
           <div className="flex items-center gap-1.5 text-xs">
-            <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
-            <span className="text-gray-600">العقوبة:</span>
+            <AlertTriangle className="w-3.5 h-3.5 text-status-error" />
+            <span className="text-muted-foreground">العقوبة:</span>
             <Badge className={cn("text-[10px]", penalty.bg, penalty.color)}>{penalty.label}</Badge>
           </div>
         )}
         {deduction > 0 && (
           <div className="flex items-center gap-1.5 text-xs">
-            <DollarSign className="w-3.5 h-3.5 text-red-500" />
-            <span className="text-gray-600">خصم:</span>
-            <span className="font-medium text-red-600">{formatCurrency(deduction)}</span>
+            <DollarSign className="w-3.5 h-3.5 text-status-error" />
+            <span className="text-muted-foreground">خصم:</span>
+            <span className="font-medium text-status-error-foreground">{formatCurrency(deduction)}</span>
           </div>
         )}
         {overtimeMin > 0 && (
           <div className="flex items-center gap-1.5 text-xs">
-            <Clock className="w-3.5 h-3.5 text-green-500" />
-            <span className="text-gray-600">وقت إضافي:</span>
-            <span className="font-medium text-green-600">{overtimeMin} دقيقة</span>
+            <Clock className="w-3.5 h-3.5 text-status-success" />
+            <span className="text-muted-foreground">وقت إضافي:</span>
+            <span className="font-medium text-status-success-foreground">{overtimeMin} دقيقة</span>
           </div>
         )}
       </div>
@@ -93,12 +93,12 @@ function PenaltyChain({ record }: { record: any }) {
             <div key={lvl} className="flex items-center gap-0">
               <div className={cn(
                 "w-3 h-3 rounded-full border-2",
-                Number(lvl) <= penaltyLevel ? "border-red-400 bg-red-400" : "border-gray-300 bg-white"
+                Number(lvl) <= penaltyLevel ? "border-red-400 bg-red-400" : "border-border bg-white"
               )} title={info.label} />
               {Number(lvl) < 5 && <div className={cn("w-4 h-0.5", Number(lvl) < penaltyLevel ? "bg-red-300" : "bg-gray-200")} />}
             </div>
           ))}
-          <span className="text-[10px] text-gray-400 ms-1">مستوى {penaltyLevel}/5</span>
+          <span className="text-[10px] text-muted-foreground ms-1">مستوى {penaltyLevel}/5</span>
         </div>
       )}
     </div>
@@ -132,10 +132,10 @@ export default function AttendancePage() {
   });
 
   const kpis = [
-    { label: "الحضور", value: stats?.present ?? items.filter((i: any) => i.status === "present").length, icon: CheckCircle, color: "text-green-600 bg-green-50", trend: "+٥٪" },
-    { label: "الغياب", value: stats?.absent ?? items.filter((i: any) => i.status === "absent").length, icon: XCircle, color: "text-red-600 bg-red-50", trend: "-٢٪" },
-    { label: "المتأخرين", value: stats?.late ?? items.filter((i: any) => i.status === "late" || (i.lateMinutes && i.lateMinutes > 0)).length, icon: AlertCircle, color: "text-yellow-600 bg-yellow-50", trend: "" },
-    { label: "إجمالي الموظفين", value: stats?.totalEmployees ?? items.length, icon: Users, color: "text-blue-600 bg-blue-50", trend: "" },
+    { label: "الحضور", value: stats?.present ?? items.filter((i: any) => i.status === "present").length, icon: CheckCircle, color: "text-status-success-foreground bg-status-success-surface", trend: "+٥٪" },
+    { label: "الغياب", value: stats?.absent ?? items.filter((i: any) => i.status === "absent").length, icon: XCircle, color: "text-status-error-foreground bg-status-error-surface", trend: "-٢٪" },
+    { label: "المتأخرين", value: stats?.late ?? items.filter((i: any) => i.status === "late" || (i.lateMinutes && i.lateMinutes > 0)).length, icon: AlertCircle, color: "text-status-warning-foreground bg-status-warning-surface", trend: "" },
+    { label: "إجمالي الموظفين", value: stats?.totalEmployees ?? items.length, icon: Users, color: "text-status-info-foreground bg-status-info-surface", trend: "" },
   ];
 
   const columns: DataTableColumn<any>[] = [
@@ -164,14 +164,14 @@ export default function AttendancePage() {
       key: "date",
       header: "التاريخ",
       sortable: true,
-      render: (a) => <span className="text-gray-500">{formatDateAr(a.date)}</span>,
+      render: (a) => <span className="text-muted-foreground">{formatDateAr(a.date)}</span>,
     },
     {
       key: "checkIn",
       header: "الحضور",
       sortable: true,
       render: (a) => (
-        <span className="text-green-600 font-mono">
+        <span className="text-status-success-foreground font-mono">
           {formatTimeAr(a.checkIn)}
         </span>
       ),
@@ -181,7 +181,7 @@ export default function AttendancePage() {
       header: "الانصراف",
       sortable: true,
       render: (a) => (
-        <span className="text-red-600 font-mono">
+        <span className="text-status-error-foreground font-mono">
           {formatTimeAr(a.checkOut)}
         </span>
       ),
@@ -191,13 +191,13 @@ export default function AttendancePage() {
       header: "ساعات العمل",
       sortable: true,
       className: "font-mono",
-      render: (a) => a.workHours != null ? <span className="text-blue-600 font-medium">{Number(a.workHours).toFixed(1)} ساعة</span> : <span className="text-gray-400">-</span>,
+      render: (a) => a.workHours != null ? <span className="text-status-info-foreground font-medium">{Number(a.workHours).toFixed(1)} ساعة</span> : <span className="text-muted-foreground">-</span>,
     },
     {
       key: "lateMinutes",
       header: "التأخير (دقيقة)",
       sortable: true,
-      render: (a) => a.lateMinutes > 0 ? <span className="text-red-500 font-medium">{a.lateMinutes} دقيقة</span> : <span className="text-gray-400">-</span>,
+      render: (a) => a.lateMinutes > 0 ? <span className="text-status-error font-medium">{a.lateMinutes} دقيقة</span> : <span className="text-muted-foreground">-</span>,
     },
     {
       key: "status",
@@ -215,7 +215,7 @@ export default function AttendancePage() {
         return (
           <button
             onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === a.id ? null : a.id); }}
-            className="text-gray-400 hover:text-gray-600 p-1"
+            className="text-muted-foreground hover:text-muted-foreground p-1"
           >
             {expandedId === a.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
@@ -320,7 +320,7 @@ export default function AttendancePage() {
             emptyIcon={<Clock className="h-6 w-6 text-slate-400" />}
             noToolbar
             onRowClick={(a) => navigate(`/hr/attendance/${a.id}`)}
-            rowClassName={(a) => expandedId === a.id ? "bg-gray-50" : undefined}
+            rowClassName={(a) => expandedId === a.id ? "bg-surface-subtle" : undefined}
             renderRowExtras={(a) => {
               const hasPenalty = (a.lateMinutes > 0) || (a.penaltyLevel > 0) || (a.deductionAmount > 0) || (a.overtimeMinutes > 0);
               if (expandedId === a.id && hasPenalty) {
@@ -339,21 +339,21 @@ export default function AttendancePage() {
             <CardHeader><CardTitle className="text-base">ملخص الحضور الشهري</CardTitle></CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center p-4 bg-green-50 rounded-xl">
-                  <p className="text-3xl font-bold text-green-600">{stats?.present ?? 0}</p>
-                  <p className="text-sm text-gray-600">أيام حضور</p>
+                <div className="text-center p-4 bg-status-success-surface rounded-xl">
+                  <p className="text-3xl font-bold text-status-success-foreground">{stats?.present ?? 0}</p>
+                  <p className="text-sm text-muted-foreground">أيام حضور</p>
                 </div>
-                <div className="text-center p-4 bg-red-50 rounded-xl">
-                  <p className="text-3xl font-bold text-red-600">{stats?.absent ?? 0}</p>
-                  <p className="text-sm text-gray-600">أيام غياب</p>
+                <div className="text-center p-4 bg-status-error-surface rounded-xl">
+                  <p className="text-3xl font-bold text-status-error-foreground">{stats?.absent ?? 0}</p>
+                  <p className="text-sm text-muted-foreground">أيام غياب</p>
                 </div>
-                <div className="text-center p-4 bg-yellow-50 rounded-xl">
-                  <p className="text-3xl font-bold text-yellow-600">{stats?.late ?? 0}</p>
-                  <p className="text-sm text-gray-600">حالات تأخير</p>
+                <div className="text-center p-4 bg-status-warning-surface rounded-xl">
+                  <p className="text-3xl font-bold text-status-warning-foreground">{stats?.late ?? 0}</p>
+                  <p className="text-sm text-muted-foreground">حالات تأخير</p>
                 </div>
-                <div className="text-center p-4 bg-blue-50 rounded-xl">
-                  <p className="text-3xl font-bold text-blue-600">{stats?.totalEmployees ?? 0}</p>
-                  <p className="text-sm text-gray-600">إجمالي الموظفين</p>
+                <div className="text-center p-4 bg-status-info-surface rounded-xl">
+                  <p className="text-3xl font-bold text-status-info-foreground">{stats?.totalEmployees ?? 0}</p>
+                  <p className="text-sm text-muted-foreground">إجمالي الموظفين</p>
                 </div>
               </div>
             </CardContent>

@@ -119,10 +119,10 @@ export function UsersTab() {
         u.employeeName ? (
           <div>
             <p className="text-sm font-medium">{u.employeeName}</p>
-            <p className="text-xs text-gray-400">{u.empNumber}</p>
+            <p className="text-xs text-muted-foreground">{u.empNumber}</p>
           </div>
         ) : (
-          <span className="text-gray-400 text-xs">—</span>
+          <span className="text-muted-foreground text-xs">—</span>
         ),
     },
     {
@@ -141,7 +141,7 @@ export function UsersTab() {
       header: "آخر دخول",
       sortable: true,
       render: (u) => (
-        <span className="text-xs text-gray-400">
+        <span className="text-xs text-muted-foreground">
           {u.lastLoginAt ? formatDateAr(u.lastLoginAt) : "لم يسجل بعد"}
         </span>
       ),
@@ -159,8 +159,8 @@ export function UsersTab() {
             onClick={(e) => { e.stopPropagation(); toggleActive(u); }}
           >
             {u.isActive
-              ? <ToggleRight className="h-4 w-4 text-green-500" />
-              : <ToggleLeft className="h-4 w-4 text-gray-400" />}
+              ? <ToggleRight className="h-4 w-4 text-status-success" />
+              : <ToggleLeft className="h-4 w-4 text-muted-foreground" />}
           </GuardedButton>
           <GuardedButton
             perm="admin:create"
@@ -218,23 +218,23 @@ export function UsersTab() {
       )}
 
       {createdUser && (
-        <Card className="border-green-200 bg-green-50">
+        <Card className="border-status-success-surface bg-status-success-surface">
           <CardContent className="p-4 space-y-3">
-            <h4 className="font-semibold text-green-800 flex items-center gap-2">
+            <h4 className="font-semibold text-status-success-foreground flex items-center gap-2">
               <CheckCircle className="h-5 w-5" />
               تم إنشاء الحساب بنجاح — بيانات الدخول
             </h4>
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-white rounded-lg p-3 border">
-                <p className="text-xs text-gray-500 mb-1">البريد الإلكتروني</p>
+                <p className="text-xs text-muted-foreground mb-1">البريد الإلكتروني</p>
                 <p className="font-mono text-sm font-medium">{createdUser.email}</p>
               </div>
               <div className="bg-white rounded-lg p-3 border">
-                <p className="text-xs text-gray-500 mb-1">كلمة المرور المؤقتة</p>
-                <p className="font-mono text-sm font-bold text-blue-700">{createdUser.tempPassword}</p>
+                <p className="text-xs text-muted-foreground mb-1">كلمة المرور المؤقتة</p>
+                <p className="font-mono text-sm font-bold text-status-info-foreground">{createdUser.tempPassword}</p>
               </div>
             </div>
-            <p className="text-xs text-green-700">احفظ هذه البيانات وأرسلها للمستخدم. يُنصح بتغيير كلمة المرور بعد أول تسجيل دخول.</p>
+            <p className="text-xs text-status-success-foreground">احفظ هذه البيانات وأرسلها للمستخدم. يُنصح بتغيير كلمة المرور بعد أول تسجيل دخول.</p>
             <Button size="sm" variant="outline" onClick={() => { setCreatedUser(null); setShowForm(false); }}>إغلاق</Button>
           </CardContent>
         </Card>
@@ -257,7 +257,7 @@ export function UsersTab() {
                   placeholder="كلمة المرور الجديدة (6 أحرف على الأقل)"
                 />
                 <button className="absolute end-2 top-1/2 -translate-y-1/2" onClick={() => setShowResetPw(!showResetPw)}>
-                  {showResetPw ? <EyeOff className="h-4 w-4 text-gray-400" /> : <Eye className="h-4 w-4 text-gray-400" />}
+                  {showResetPw ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
                 </button>
               </div>
               <GuardedButton perm="admin:create" onClick={resetUserPassword} disabled={resetPassword.length < 6}>تأكيد</GuardedButton>

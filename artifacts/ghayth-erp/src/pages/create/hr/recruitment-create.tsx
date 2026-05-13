@@ -85,9 +85,9 @@ export default function RecruitmentCreate() {
   return (
     <CreatePageLayout title="إضافة وظيفة جديدة" backPath="/hr/recruitment">
       {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -96,7 +96,7 @@ export default function RecruitmentCreate() {
 
       <div className="space-y-6">
         <div>
-          <h3 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
             <Briefcase className="h-4 w-4" /> نوع التوظيف
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -107,7 +107,7 @@ export default function RecruitmentCreate() {
                 onClick={() => set("type", jt.value)}
                 className={cn(
                   "p-3 rounded-xl border-2 text-center text-sm font-medium transition-all",
-                  form.type === jt.value ? jt.color + " ring-2 ring-offset-1" : "border-gray-200 hover:border-gray-300"
+                  form.type === jt.value ? jt.color + " ring-2 ring-offset-1" : "border-border hover:border-border"
                 )}
               >
                 {jt.label}
@@ -157,16 +157,16 @@ export default function RecruitmentCreate() {
         </div>
 
         <div>
-          <h3 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
             <DollarSign className="h-4 w-4" /> نطاق الراتب
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <NumberField label={`الحد الأدنى (${getCurrencySymbol()})`} value={form.salaryMin} onChange={(v) => set("salaryMin", v)} placeholder="٠" min={0} />
             <NumberField label={`الحد الأعلى (${getCurrencySymbol()})`} value={form.salaryMax} onChange={(v) => set("salaryMax", v)} placeholder="٠" min={0} error={fieldErrors.salaryMax} />
             {salaryRange && (
-              <div className="p-3 bg-green-50 rounded-lg border border-green-200 text-center">
-                <p className="text-xs text-green-600">نطاق الراتب</p>
-                <p className="text-sm font-bold text-green-700">{salaryRange}</p>
+              <div className="p-3 bg-status-success-surface rounded-lg border border-status-success-surface text-center">
+                <p className="text-xs text-status-success-foreground">نطاق الراتب</p>
+                <p className="text-sm font-bold text-status-success-foreground">{salaryRange}</p>
               </div>
             )}
           </div>
@@ -185,8 +185,8 @@ export default function RecruitmentCreate() {
         <TextAreaField label="المزايا والحوافز" value={form.benefits} onChange={(v) => set("benefits", v)} placeholder="تأمين طبي، بدل نقل، إجازات..." />
 
         {(form.title || form.department || form.type) && (
-          <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
-            <h4 className="text-sm font-semibold text-blue-700 mb-2">ملخص الوظيفة</h4>
+          <div className="p-4 bg-status-info-surface rounded-xl border border-status-info-surface">
+            <h4 className="text-sm font-semibold text-status-info-foreground mb-2">ملخص الوظيفة</h4>
             <div className="flex flex-wrap gap-2">
               {form.title && <Badge variant="outline">{form.title}</Badge>}
               {form.department && <Badge variant="outline">{form.department}</Badge>}

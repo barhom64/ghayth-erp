@@ -24,9 +24,9 @@ export function TrainingROITab() {
           { label: "تكلفة للموظف", value: formatNumber(summary.costPerEmployee || 0) },
         ].map((s) => (
           <Card key={s.label} className="border-0 shadow-sm">
-            {isLoading ? <CardContent className="p-6"><div className="h-12 bg-gray-100 rounded animate-pulse" /></CardContent> : (
+            {isLoading ? <CardContent className="p-6"><div className="h-12 bg-surface-subtle rounded animate-pulse" /></CardContent> : (
               <CardContent className="p-4">
-                <p className="text-xs text-gray-500 mb-1">{s.label}</p>
+                <p className="text-xs text-muted-foreground mb-1">{s.label}</p>
                 <p className="text-xl font-bold">{s.value}</p>
               </CardContent>
             )}

@@ -36,7 +36,7 @@ export default function TreasuryPage() {
       key: "code",
       header: "الكود",
       sortable: true,
-      render: (a) => <span className="font-mono text-sm text-blue-600">{a.code}</span>,
+      render: (a) => <span className="font-mono text-sm text-status-info-foreground">{a.code}</span>,
     },
     {
       key: "name",
@@ -48,9 +48,9 @@ export default function TreasuryPage() {
       key: "type",
       header: "النوع",
       render: (a) => {
-        if (a.code?.startsWith("110")) return <Badge variant="outline" className="text-green-700 border-green-300">صندوق نقدي</Badge>;
-        if (a.code?.startsWith("11")) return <Badge variant="outline" className="text-blue-700 border-blue-300">حساب بنكي</Badge>;
-        return <Badge variant="outline" className="text-amber-700 border-amber-300">ذمم مدينة</Badge>;
+        if (a.code?.startsWith("110")) return <Badge variant="outline" className="text-status-success-foreground border-status-success-surface">صندوق نقدي</Badge>;
+        if (a.code?.startsWith("11")) return <Badge variant="outline" className="text-status-info-foreground border-status-info-surface">حساب بنكي</Badge>;
+        return <Badge variant="outline" className="text-status-warning-foreground border-amber-300">ذمم مدينة</Badge>;
       },
     },
     {
@@ -60,7 +60,7 @@ export default function TreasuryPage() {
       render: (a) => {
         const bal = Number(a.currentBalance ?? 0);
         return (
-          <span className={`font-bold ${bal >= 0 ? "text-green-700" : "text-red-600"}`}>
+          <span className={`font-bold ${bal >= 0 ? "text-status-success-foreground" : "text-status-error-foreground"}`}>
             {formatCurrency(bal)}
           </span>
         );
@@ -84,7 +84,7 @@ export default function TreasuryPage() {
       key: "ref",
       header: "المرجع",
       sortable: true,
-      render: (m) => <span className="font-mono text-sm text-blue-600">{m.ref}</span>,
+      render: (m) => <span className="font-mono text-sm text-status-info-foreground">{m.ref}</span>,
     },
     {
       key: "description",
@@ -103,7 +103,7 @@ export default function TreasuryPage() {
       sortable: true,
       render: (m) => {
         const v = Number(m.cashIn ?? 0);
-        return v > 0 ? <span className="text-green-700 font-semibold">{formatCurrency(v)}</span> : <span className="text-gray-300">—</span>;
+        return v > 0 ? <span className="text-status-success-foreground font-semibold">{formatCurrency(v)}</span> : <span className="text-gray-300">—</span>;
       },
     },
     {
@@ -112,14 +112,14 @@ export default function TreasuryPage() {
       sortable: true,
       render: (m) => {
         const v = Number(m.cashOut ?? 0);
-        return v > 0 ? <span className="text-red-600 font-semibold">{formatCurrency(v)}</span> : <span className="text-gray-300">—</span>;
+        return v > 0 ? <span className="text-status-error-foreground font-semibold">{formatCurrency(v)}</span> : <span className="text-gray-300">—</span>;
       },
     },
     {
       key: "createdAt",
       header: "التاريخ",
       sortable: true,
-      render: (m) => <span className="text-gray-500 text-sm">{m.createdAt ? formatDateAr(m.createdAt) : "—"}</span>,
+      render: (m) => <span className="text-muted-foreground text-sm">{m.createdAt ? formatDateAr(m.createdAt) : "—"}</span>,
     },
   ];
 
@@ -134,13 +134,13 @@ export default function TreasuryPage() {
       key: "totalIn",
       header: "إجمالي الوارد",
       sortable: true,
-      render: (d) => <span className="text-green-700 font-semibold">{formatCurrency(Number(d.totalIn ?? 0))}</span>,
+      render: (d) => <span className="text-status-success-foreground font-semibold">{formatCurrency(Number(d.totalIn ?? 0))}</span>,
     },
     {
       key: "totalOut",
       header: "إجمالي الصادر",
       sortable: true,
-      render: (d) => <span className="text-red-600 font-semibold">{formatCurrency(Number(d.totalOut ?? 0))}</span>,
+      render: (d) => <span className="text-status-error-foreground font-semibold">{formatCurrency(Number(d.totalOut ?? 0))}</span>,
     },
     {
       key: "net",
@@ -149,7 +149,7 @@ export default function TreasuryPage() {
       render: (d) => {
         const net = Number(d.totalIn ?? 0) - Number(d.totalOut ?? 0);
         return (
-          <span className={`font-bold ${net >= 0 ? "text-green-700" : "text-red-600"}`}>
+          <span className={`font-bold ${net >= 0 ? "text-status-success-foreground" : "text-status-error-foreground"}`}>
             {formatCurrency(net)}
           </span>
         );
@@ -181,12 +181,12 @@ export default function TreasuryPage() {
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-green-50 border border-green-100">
-              <Landmark className="h-5 w-5 text-green-600" />
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-status-success-surface border border-status-success-surface">
+              <Landmark className="h-5 w-5 text-status-success-foreground" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground">إجمالي السيولة</p>
-              <p className="text-lg font-bold text-green-700">{formatCurrency(summary.totalCash ?? 0)}</p>
+              <p className="text-lg font-bold text-status-success-foreground">{formatCurrency(summary.totalCash ?? 0)}</p>
             </div>
           </CardContent>
         </Card>
@@ -203,8 +203,8 @@ export default function TreasuryPage() {
         </Card>
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-blue-50 border border-blue-100">
-              <Building2 className="h-5 w-5 text-blue-600" />
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-status-info-surface border border-status-info-surface">
+              <Building2 className="h-5 w-5 text-status-info-foreground" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground">أرصدة بنكية</p>
@@ -214,8 +214,8 @@ export default function TreasuryPage() {
         </Card>
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-amber-50 border border-amber-100">
-              <Wallet className="h-5 w-5 text-amber-600" />
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-status-warning-surface border border-status-warning-surface">
+              <Wallet className="h-5 w-5 text-status-warning-foreground" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground">ذمم مدينة</p>
@@ -237,8 +237,8 @@ export default function TreasuryPage() {
         </Card>
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-gray-50 border border-gray-200">
-              <TrendingDown className="h-5 w-5 text-gray-500" />
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-surface-subtle border border-border">
+              <TrendingDown className="h-5 w-5 text-muted-foreground" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground">حسابات نقدية</p>

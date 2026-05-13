@@ -96,27 +96,27 @@ export default function TrafficViolationDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-gray-500" />
+            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
             بيانات المخالفة
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           {item?.fineAmount != null && (
             <div className="flex items-baseline gap-2 border-b pb-3">
-              <span className="text-3xl font-bold text-red-600">{formatCurrency(item.fineAmount)}</span>
-              <span className="text-xs text-gray-500">ر.س غرامة</span>
+              <span className="text-3xl font-bold text-status-error-foreground">{formatCurrency(item.fineAmount)}</span>
+              <span className="text-xs text-muted-foreground">ر.س غرامة</span>
             </div>
           )}
           <div className="grid grid-cols-2 gap-3">
             {item?.violationType && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">نوع المخالفة</p>
-                <span className="text-gray-800 font-medium">{item.violationType}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">نوع المخالفة</p>
+                <span className="text-status-neutral-foreground font-medium">{item.violationType}</span>
               </div>
             )}
             {item?.severity && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الدرجة</p>
+                <p className="text-xs text-muted-foreground mb-0.5">الدرجة</p>
                 <Badge variant={item.severity === "critical" || item.severity === "major" ? "destructive" : "outline"}>
                   {SEVERITY_LABELS[item.severity] || item.severity}
                 </Badge>
@@ -124,32 +124,32 @@ export default function TrafficViolationDetail() {
             )}
             {(item?.violationDate || item?.createdAt) && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ المخالفة</p>
-                <span className="text-gray-800">{formatDateAr(item.violationDate || item.createdAt)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ المخالفة</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(item.violationDate || item.createdAt)}</span>
               </div>
             )}
             {item?.location && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">الموقع</p>
-                <span className="text-gray-800">{item.location}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">الموقع</p>
+                <span className="text-status-neutral-foreground">{item.location}</span>
               </div>
             )}
             {item?.referenceNumber && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">رقم المخالفة</p>
-                <span className="text-gray-800 font-mono text-xs">{item.referenceNumber}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">رقم المخالفة</p>
+                <span className="text-status-neutral-foreground font-mono text-xs">{item.referenceNumber}</span>
               </div>
             )}
           </div>
           {item?.description && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">التفاصيل</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{item.description}</p>
+              <p className="text-xs text-muted-foreground mb-1">التفاصيل</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{item.description}</p>
             </div>
           )}
           {item?.notes && (
-            <div className="rounded-md bg-amber-50 border border-amber-100 p-3">
-              <p className="text-xs text-amber-700 font-medium mb-1">ملاحظات</p>
+            <div className="rounded-md bg-status-warning-surface border border-status-warning-surface p-3">
+              <p className="text-xs text-status-warning-foreground font-medium mb-1">ملاحظات</p>
               <p className="text-sm text-amber-900 whitespace-pre-wrap">{item.notes}</p>
             </div>
           )}
@@ -164,7 +164,7 @@ export default function TrafficViolationDetail() {
             </CardHeader>
             <CardContent className="text-sm space-y-1">
               <p className="font-semibold font-mono">{item.plateNumber}</p>
-              {item.driverName && <p className="text-xs text-gray-500">السائق: {item.driverName}</p>}
+              {item.driverName && <p className="text-xs text-muted-foreground">السائق: {item.driverName}</p>}
             </CardContent>
           </Card>
         )}

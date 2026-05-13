@@ -66,10 +66,10 @@ export function AccountingMappingsTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <ArrowLeftRight className="h-5 w-5 text-blue-600" />
+        <ArrowLeftRight className="h-5 w-5 text-status-info-foreground" />
         <h3 className="text-lg font-semibold">التوجيه المحاسبي</h3>
       </div>
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-muted-foreground">
         حدد الحساب المدين والدائن الافتراضيين لكل نوع عملية. يُمنع اعتماد أي عملية مالية إذا لم يكتمل توجيهها المحاسبي.
       </p>
 
@@ -86,12 +86,12 @@ export function AccountingMappingsTab() {
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       {complete ? (
-                        <CheckCircle className="h-4 w-4 text-green-500" />
+                        <CheckCircle className="h-4 w-4 text-status-success" />
                       ) : (
                         <AlertCircle className="h-4 w-4 text-orange-500" />
                       )}
                       <span className="font-medium text-sm">{mapping.operationLabel}</span>
-                      <Badge className="text-xs bg-gray-100 text-gray-600 font-mono">{mapping.operationType}</Badge>
+                      <Badge className="text-xs bg-surface-subtle text-muted-foreground font-mono">{mapping.operationType}</Badge>
                     </div>
                     {modified && (
                       <GuardedButton
@@ -108,7 +108,7 @@ export function AccountingMappingsTab() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <Label className="text-xs text-gray-500 mb-1 block">الحساب المدين</Label>
+                      <Label className="text-xs text-muted-foreground mb-1 block">الحساب المدين</Label>
                       <select
                         className="w-full border rounded-md p-2 text-sm"
                         value={getValue(mapping, "debitAccountId")}
@@ -122,11 +122,11 @@ export function AccountingMappingsTab() {
                         ))}
                       </select>
                       {mapping.debitName && !editingMap[mapping.operationType]?.debitAccountId && (
-                        <p className="text-xs text-green-600 mt-1">✓ {mapping.debitCode} — {mapping.debitName}</p>
+                        <p className="text-xs text-status-success-foreground mt-1">✓ {mapping.debitCode} — {mapping.debitName}</p>
                       )}
                     </div>
                     <div>
-                      <Label className="text-xs text-gray-500 mb-1 block">الحساب الدائن</Label>
+                      <Label className="text-xs text-muted-foreground mb-1 block">الحساب الدائن</Label>
                       <select
                         className="w-full border rounded-md p-2 text-sm"
                         value={getValue(mapping, "creditAccountId")}
@@ -140,7 +140,7 @@ export function AccountingMappingsTab() {
                         ))}
                       </select>
                       {mapping.creditName && !editingMap[mapping.operationType]?.creditAccountId && (
-                        <p className="text-xs text-green-600 mt-1">✓ {mapping.creditCode} — {mapping.creditName}</p>
+                        <p className="text-xs text-status-success-foreground mt-1">✓ {mapping.creditCode} — {mapping.creditName}</p>
                       )}
                     </div>
                   </div>
@@ -156,7 +156,7 @@ export function AccountingMappingsTab() {
             );
           })}
           {mappings.length === 0 && (
-            <Card><CardContent className="p-12 text-center text-gray-400">
+            <Card><CardContent className="p-12 text-center text-muted-foreground">
               <BookOpen className="h-12 w-12 mx-auto mb-3 opacity-30" />
               <p>لا توجد بيانات توجيه محاسبي</p>
             </CardContent></Card>
@@ -164,9 +164,9 @@ export function AccountingMappingsTab() {
         </div>
       )}
 
-      <div className="mt-4 p-4 bg-blue-50 rounded-lg text-sm text-blue-700 border border-blue-100">
+      <div className="mt-4 p-4 bg-status-info-surface rounded-lg text-sm text-status-info-foreground border border-status-info-surface">
         <p className="font-medium mb-1">ملاحظة</p>
-        <ul className="text-xs space-y-1 text-blue-600 list-disc list-inside">
+        <ul className="text-xs space-y-1 text-status-info-foreground list-disc list-inside">
           <li>يتم التحقق من اكتمال التوجيه المحاسبي قبل اعتماد أي عملية مالية</li>
           <li>يمكن إنشاء قوالب قيود مخصصة لكل نوع عملية من قسم "قوالب القيود" في المالية</li>
           <li>الحسابات التحليلية الفرعية تُنشأ تلقائياً عند إضافة موظف أو عميل جديد</li>

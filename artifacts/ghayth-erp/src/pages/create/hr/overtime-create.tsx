@@ -123,7 +123,7 @@ export default function OvertimeCreate() {
       <form onSubmit={handleSubmit} className="space-y-6">
         <CreationDateField />
         {hasDraft && (
-          <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+          <div className="flex items-center gap-2 p-3 bg-status-info-surface border border-status-info-surface rounded-lg text-sm text-status-info-foreground">
             <Info className="h-4 w-4 shrink-0" />
             <span>تم استعادة مسودة سابقة</span>
             <Button type="button" size="sm" variant="ghost" onClick={clearDraft} className="mr-auto text-xs">
@@ -202,19 +202,19 @@ export default function OvertimeCreate() {
               <div className="grid grid-cols-4 gap-4 text-center">
                 <div>
                   <p className="text-lg font-bold text-purple-700">{formatCurrency(hourlyRate)}</p>
-                  <p className="text-xs text-gray-500">سعر الساعة</p>
+                  <p className="text-xs text-muted-foreground">سعر الساعة</p>
                 </div>
                 <div>
                   <p className="text-lg font-bold text-purple-700">×{multiplier.toFixed(2)}</p>
-                  <p className="text-xs text-gray-500">المعامل</p>
+                  <p className="text-xs text-muted-foreground">المعامل</p>
                 </div>
                 <div>
                   <p className="text-lg font-bold text-purple-700">{hours}</p>
-                  <p className="text-xs text-gray-500">ساعات</p>
+                  <p className="text-xs text-muted-foreground">ساعات</p>
                 </div>
                 <div>
-                  <p className="text-lg font-bold text-green-700">{formatCurrency(totalAmount)}</p>
-                  <p className="text-xs text-gray-500">الإجمالي</p>
+                  <p className="text-lg font-bold text-status-success-foreground">{formatCurrency(totalAmount)}</p>
+                  <p className="text-xs text-muted-foreground">الإجمالي</p>
                 </div>
               </div>
             </CardContent>

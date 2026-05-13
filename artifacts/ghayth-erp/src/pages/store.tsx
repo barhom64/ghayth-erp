@@ -315,9 +315,9 @@ export default function StorePage() {
 
   const s = stats || {};
   const statCards = [
-    { label: "منتجات نشطة", value: s.activeProducts || 0, icon: Package, color: "text-blue-600 bg-blue-50" },
-    { label: "إجمالي الطلبات", value: s.totalOrders || 0, icon: ShoppingCart, color: "text-green-600 bg-green-50" },
-    { label: "طلبات معلقة", value: s.pendingOrders || 0, icon: ShoppingCart, color: "text-yellow-600 bg-yellow-50" },
+    { label: "منتجات نشطة", value: s.activeProducts || 0, icon: Package, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "إجمالي الطلبات", value: s.totalOrders || 0, icon: ShoppingCart, color: "text-status-success-foreground bg-status-success-surface" },
+    { label: "طلبات معلقة", value: s.pendingOrders || 0, icon: ShoppingCart, color: "text-status-warning-foreground bg-status-warning-surface" },
     { label: "الإيرادات", value: formatCurrency(s.totalRevenue || 0), icon: DollarSign, color: "text-purple-600 bg-purple-50" },
   ];
 
@@ -331,7 +331,7 @@ export default function StorePage() {
               <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", c.color.split(" ")[1])}>
                 <c.icon className={cn("w-5 h-5", c.color.split(" ")[0])} />
               </div>
-              <div><p className="text-xl font-bold">{c.value}</p><p className="text-xs text-gray-500">{c.label}</p></div>
+              <div><p className="text-xl font-bold">{c.value}</p><p className="text-xs text-muted-foreground">{c.label}</p></div>
             </CardContent>
           </Card>
         ))}

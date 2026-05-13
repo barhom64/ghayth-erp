@@ -6,12 +6,12 @@ export default function NotFound() {
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100" dir="rtl">
       <div className="text-center px-6 max-w-lg">
-        <div className="mx-auto mb-6 p-4 bg-blue-50 rounded-full w-fit">
+        <div className="mx-auto mb-6 p-4 bg-status-info-surface rounded-full w-fit">
           <CloudRain className="h-12 w-12 text-blue-400" />
         </div>
-        <h1 className="text-8xl font-bold text-blue-600 mb-2">٤٠٤</h1>
+        <h1 className="text-8xl font-bold text-status-info-foreground mb-2">٤٠٤</h1>
         <h2 className="text-2xl font-bold text-gray-900 mb-3">الصفحة غير موجودة</h2>
-        <p className="text-gray-500 mb-8">
+        <p className="text-muted-foreground mb-8">
           عذراً، الصفحة التي تبحث عنها غير موجودة أو تم نقلها إلى مكان آخر.
         </p>
         <div className="flex items-center justify-center gap-3">

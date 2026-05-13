@@ -14,10 +14,10 @@ export function FleetTCOTab() {
     { key: "year", header: "السنة", sortable: true, render: (r) => r.year || "-" },
     { key: "purchasePrice", header: "سعر الشراء", sortable: true, render: (r) => formatNumber(r.purchasePrice) },
     { key: "maintenanceCost", header: "تكلفة الصيانة", sortable: true, className: "text-orange-600", render: (r) => formatNumber(r.maintenanceCost) },
-    { key: "fuelCost", header: "تكلفة الوقود", sortable: true, className: "text-amber-600", render: (r) => formatNumber(r.fuelCost) },
+    { key: "fuelCost", header: "تكلفة الوقود", sortable: true, className: "text-status-warning-foreground", render: (r) => formatNumber(r.fuelCost) },
     { key: "insuranceCost", header: "التأمين", sortable: true, render: (r) => formatNumber(r.insuranceCost) },
     { key: "depreciation", header: "الإهلاك", sortable: true, render: (r) => formatNumber(r.depreciation) },
-    { key: "tco", header: "التكلفة الإجمالية", sortable: true, className: "font-bold text-blue-600", render: (r) => formatNumber(r.tco) },
+    { key: "tco", header: "التكلفة الإجمالية", sortable: true, className: "font-bold text-status-info-foreground", render: (r) => formatNumber(r.tco) },
     { key: "costPerKm", header: "تكلفة/كم", sortable: true, className: "text-sm", render: (r) => r.costPerKm > 0 ? `${r.costPerKm} ر/كم` : "-" },
   ];
 

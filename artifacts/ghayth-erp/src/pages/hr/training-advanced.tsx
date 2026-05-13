@@ -29,8 +29,8 @@ export default function TrainingAdvancedPage() {
     ? Math.round((stats.completedEnrollments / stats.totalEnrollments) * 100) : 0;
 
   const kpis = [
-    { label: "إجمالي البرامج", value: stats.totalPrograms ?? programs.length, icon: BookOpen, color: "text-blue-600 bg-blue-50" },
-    { label: "برامج نشطة", value: stats.activePrograms ?? 0, icon: GraduationCap, color: "text-green-600 bg-green-50" },
+    { label: "إجمالي البرامج", value: stats.totalPrograms ?? programs.length, icon: BookOpen, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "برامج نشطة", value: stats.activePrograms ?? 0, icon: GraduationCap, color: "text-status-success-foreground bg-status-success-surface" },
     { label: "نسبة الإكمال", value: completionRate + "%", icon: Award, color: "text-purple-600 bg-purple-50" },
     { label: "المشاركين", value: stats.totalEnrollments ?? enrollments.length, icon: Users, color: "text-orange-600 bg-orange-50" },
   ];
@@ -51,7 +51,7 @@ export default function TrainingAdvancedPage() {
             {["upcoming", "active", "completed", "cancelled"].map((s) => {
               const label = s === "upcoming" ? "قادم" : s === "active" ? "جاري" : s === "completed" ? "مكتمل" : "ملغي";
               const count = programs.filter((p: any) => p.status === s).length;
-              const color = s === "active" ? "bg-green-50 text-green-700" : s === "completed" ? "bg-blue-50 text-blue-700" : s === "cancelled" ? "bg-red-50 text-red-700" : "bg-yellow-50 text-yellow-700";
+              const color = s === "active" ? "bg-status-success-surface text-status-success-foreground" : s === "completed" ? "bg-status-info-surface text-status-info-foreground" : s === "cancelled" ? "bg-status-error-surface text-status-error-foreground" : "bg-status-warning-surface text-status-warning-foreground";
               return (
                 <div key={s} className={cn("p-4 rounded-lg text-center", color)}>
                   <p className="text-2xl font-bold">{count}</p>

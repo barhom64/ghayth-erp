@@ -30,7 +30,7 @@ export default function Notifications() {
   const getPriorityIcon = (priority?: string) => {
     switch (priority) {
       case 'high': return <AlertCircle className="h-5 w-5 text-rose-500" />;
-      case 'medium': return <BellDot className="h-5 w-5 text-amber-500" />;
+      case 'medium': return <BellDot className="h-5 w-5 text-status-warning" />;
       default: return <Bell className="h-5 w-5 text-muted-foreground" />;
     }
   };
@@ -96,7 +96,7 @@ export default function Notifications() {
                     
                     <div className="pt-2 flex gap-2">
                       {notification.type === 'leave_request' && (
-                        <Badge variant="outline" className="bg-blue-50 text-blue-700 dark:bg-blue-900/30">طلب إجازة</Badge>
+                        <Badge variant="outline" className="bg-status-info-surface text-status-info-foreground dark:bg-blue-900/30">طلب إجازة</Badge>
                       )}
                       {notification.type === 'invoice' && (
                         <Badge variant="outline" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30">فاتورة</Badge>

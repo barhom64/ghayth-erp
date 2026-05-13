@@ -31,8 +31,8 @@ const columns: DataTableColumn<Session>[] = [
   {
     key: "priority", header: "الأولوية", render: (r) => {
       const v = r.priority;
-      const colors: Record<string, string> = { high: "bg-red-100 text-red-800", medium: "bg-yellow-100 text-yellow-800", low: "bg-green-100 text-green-800" };
-      return <Badge className={colors[v || ""] || "bg-gray-100 text-gray-800"}>{v === "high" ? "عالية" : v === "medium" ? "متوسطة" : v === "low" ? "منخفضة" : v || "-"}</Badge>;
+      const colors: Record<string, string> = { high: "bg-status-error-surface text-status-error-foreground", medium: "bg-status-warning-surface text-yellow-800", low: "bg-status-success-surface text-status-success-foreground" };
+      return <Badge className={colors[v || ""] || "bg-surface-subtle text-status-neutral-foreground"}>{v === "high" ? "عالية" : v === "medium" ? "متوسطة" : v === "low" ? "منخفضة" : v || "-"}</Badge>;
     }
   },
   { key: "result", header: "النتيجة", render: (r) => <span className="line-clamp-1">{r.result || "-"}</span> },

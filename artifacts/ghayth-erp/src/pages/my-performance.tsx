@@ -22,10 +22,10 @@ function RatingStars({ rating, max = 5 }: { rating: number; max?: number }) {
 }
 
 const statusLabels: Record<string, { label: string; color: string }> = {
-  draft: { label: "مسودة", color: "text-gray-500 bg-gray-50" },
-  submitted: { label: "مقدّم", color: "text-blue-600 bg-blue-50" },
+  draft: { label: "مسودة", color: "text-muted-foreground bg-surface-subtle" },
+  submitted: { label: "مقدّم", color: "text-status-info-foreground bg-status-info-surface" },
   reviewed: { label: "مراجع", color: "text-purple-600 bg-purple-50" },
-  finalized: { label: "مُعتمد", color: "text-green-600 bg-green-50" },
+  finalized: { label: "مُعتمد", color: "text-status-success-foreground bg-status-success-surface" },
 };
 
 export default function MyPerformance() {
@@ -41,7 +41,7 @@ export default function MyPerformance() {
     <PageShell title="تقييمي" subtitle="نتائج تقييمات الأداء الخاصة بك" loading={isLoading}>
       {reviews.length === 0 ? (
         <Card>
-          <CardContent className="py-16 text-center text-gray-400">
+          <CardContent className="py-16 text-center text-muted-foreground">
             <Target size={40} className="mx-auto mb-3 opacity-40" />
             <p className="font-medium">لا توجد تقييمات بعد</p>
             <p className="text-sm mt-1">ستظهر نتائج تقييماتك هنا</p>
@@ -54,7 +54,7 @@ export default function MyPerformance() {
               <CardContent className="p-6">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-sm text-gray-500 mb-1">آخر تقييم</p>
+                    <p className="text-sm text-muted-foreground mb-1">آخر تقييم</p>
                     <p className="text-lg font-bold text-gray-900">{latestReview.periodLabel ?? latestReview.period}</p>
                     <div className="flex items-center gap-2 mt-2">
                       <RatingStars rating={Number(latestReview.overallRating ?? 0)} />
@@ -79,7 +79,7 @@ export default function MyPerformance() {
                         </div>
                         <div>
                           <p className="font-medium text-gray-900">{review.periodLabel ?? review.period}</p>
-                          <p className="text-xs text-gray-400">{formatDateAr(review.createdAt)}</p>
+                          <p className="text-xs text-muted-foreground">{formatDateAr(review.createdAt)}</p>
                         </div>
                       </div>
                       <div className="text-left flex flex-col items-end gap-1">
@@ -88,7 +88,7 @@ export default function MyPerformance() {
                       </div>
                     </div>
                     {review.notes && (
-                      <p className="text-sm text-gray-500 mt-3 pt-3 border-t border-gray-100">{review.notes}</p>
+                      <p className="text-sm text-muted-foreground mt-3 pt-3 border-t border-border">{review.notes}</p>
                     )}
                   </CardContent>
                 </Card>

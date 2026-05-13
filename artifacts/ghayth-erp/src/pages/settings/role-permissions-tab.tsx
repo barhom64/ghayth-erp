@@ -80,7 +80,7 @@ export function RolePermissionsTab() {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <Shield className="h-4 w-4 text-blue-500" />
+                    <Shield className="h-4 w-4 text-status-info" />
                     <span className="font-semibold">{role.label}</span>
                     <Badge variant="outline" className="text-xs">{role.roleKey}</Badge>
                     <Badge variant="outline" className="text-xs">مستوى {role.level}</Badge>
@@ -105,8 +105,8 @@ export function RolePermissionsTab() {
                         className={cn(
                           "px-2 py-1 rounded-md text-xs border transition-colors",
                           editModules.includes(m.key)
-                            ? "bg-blue-100 text-blue-700 border-blue-300"
-                            : "bg-gray-50 text-gray-400 border-gray-200"
+                            ? "bg-status-info-surface text-status-info-foreground border-status-info-surface"
+                            : "bg-surface-subtle text-muted-foreground border-border"
                         )}
                       >
                         {m.label}
@@ -114,7 +114,7 @@ export function RolePermissionsTab() {
                     ))
                   ) : (
                     (Array.isArray(mods) ? mods : []).map((m: string) => (
-                      <Badge key={m} variant="outline" className="text-xs bg-blue-50 text-blue-700">
+                      <Badge key={m} variant="outline" className="text-xs bg-status-info-surface text-status-info-foreground">
                         {allModules.find(am => am.key === m)?.label || m}
                       </Badge>
                     ))
@@ -125,7 +125,7 @@ export function RolePermissionsTab() {
           );
         })}
         {roles.length === 0 && (
-          <Card><CardContent className="p-8 text-center text-gray-400">لا توجد أدوار مسندة بعد. قم بإسناد أدوار للمستخدمين من صفحة المدير.</CardContent></Card>
+          <Card><CardContent className="p-8 text-center text-muted-foreground">لا توجد أدوار مسندة بعد. قم بإسناد أدوار للمستخدمين من صفحة المدير.</CardContent></Card>
         )}
       </div>
     </div>

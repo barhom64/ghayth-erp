@@ -300,9 +300,9 @@ export default function UmrahCommissionPlanEditor() {
               <Card>
                 <CardContent className="p-4 space-y-4">
                   {!planRowId && (
-                    <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded text-sm">
-                      <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                      <span className="text-amber-800">يرجى حفظ الخطة أولاً قبل التشغيل التجريبي.</span>
+                    <div className="flex items-start gap-2 p-3 bg-status-warning-surface border border-status-warning-surface rounded text-sm">
+                      <AlertCircle className="h-4 w-4 text-status-warning-foreground shrink-0 mt-0.5" />
+                      <span className="text-status-warning-foreground">يرجى حفظ الخطة أولاً قبل التشغيل التجريبي.</span>
                     </div>
                   )}
                   <FormShell
@@ -329,7 +329,7 @@ export default function UmrahCommissionPlanEditor() {
                   {simResult && (
                     <div className="rounded border bg-muted/20 p-4 space-y-3">
                       <div className="flex items-center gap-2">
-                        <Calculator className="h-5 w-5 text-blue-600" />
+                        <Calculator className="h-5 w-5 text-status-info-foreground" />
                         <h3 className="font-semibold">نتيجة المحاكاة</h3>
                       </div>
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
@@ -469,8 +469,8 @@ function ConditionsTab() {
         <FormNumberField name="minAvgPrice" label="الحد الأدنى لمتوسط السعر" />
       </FormGrid>
       {conditionType !== "none" && (
-        <div className="text-xs text-muted-foreground flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded">
-          <AlertCircle className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+        <div className="text-xs text-muted-foreground flex items-start gap-2 p-3 bg-status-info-surface border border-status-info-surface rounded">
+          <AlertCircle className="h-4 w-4 text-status-info-foreground shrink-0 mt-0.5" />
           <span>إذا لم تتحقق الشروط في نهاية الشهر، يُدفع الراتب الأساسي فقط بدون عمولة.</span>
         </div>
       )}
@@ -562,7 +562,7 @@ function TiersTab() {
                     type="button"
                     onClick={() => remove(i)}
                   >
-                    <Trash2 className="h-3.5 w-3.5 text-red-600" />
+                    <Trash2 className="h-3.5 w-3.5 text-status-error-foreground" />
                   </GuardedButton>
                 </td>
               </tr>
@@ -623,14 +623,14 @@ function ExcludedMonthsTab() {
             <label
               key={m}
               className={`flex items-center gap-2 p-2 rounded border cursor-pointer text-sm transition-colors ${
-                isExcluded ? "bg-red-50 border-red-200" : "hover:bg-muted/30"
+                isExcluded ? "bg-status-error-surface border-status-error-surface" : "hover:bg-muted/30"
               }`}
             >
               <Checkbox
                 checked={isExcluded}
                 onCheckedChange={() => toggle(m)}
               />
-              <span className={isExcluded ? "text-red-700 font-medium" : ""}>{name}</span>
+              <span className={isExcluded ? "text-status-error-foreground font-medium" : ""}>{name}</span>
             </label>
           );
         })}

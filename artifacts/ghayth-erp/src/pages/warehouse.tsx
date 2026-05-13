@@ -120,9 +120,9 @@ function ProductsTab() {
   return (
     <div className="space-y-6">
       <KpiGrid items={[
-        { label: "إجمالي المنتجات", value: stats?.totalProducts || 0, icon: Package, color: "text-blue-600 bg-blue-50" },
-        { label: "مخزون منخفض", value: stats?.lowStock || 0, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
-        { label: "قيمة المخزون", value: formatCurrency(stats?.totalValue || 0), icon: DollarSign, color: "text-green-600 bg-green-50" },
+        { label: "إجمالي المنتجات", value: stats?.totalProducts || 0, icon: Package, color: "text-status-info-foreground bg-status-info-surface" },
+        { label: "مخزون منخفض", value: stats?.lowStock || 0, icon: AlertTriangle, color: "text-status-error-foreground bg-status-error-surface" },
+        { label: "قيمة المخزون", value: formatCurrency(stats?.totalValue || 0), icon: DollarSign, color: "text-status-success-foreground bg-status-success-surface" },
         { label: "حركات اليوم", value: stats?.todayMovements || 0, icon: Activity, color: "text-purple-600 bg-purple-50" },
       ]} />
 

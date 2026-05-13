@@ -17,7 +17,7 @@ export function TasksAndNotificationsSection({ todayTasks, notifications }: Task
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-3 flex flex-row items-center justify-between">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
-            <ListTodo className="w-5 h-5 text-blue-500" />
+            <ListTodo className="w-5 h-5 text-status-info" />
             مهامي اليوم
             {todayTasks.length > 0 && <Badge className="text-xs">{todayTasks.length}</Badge>}
           </CardTitle>
@@ -31,21 +31,21 @@ export function TasksAndNotificationsSection({ todayTasks, notifications }: Task
           {todayTasks.length === 0 ? (
             <div className="text-center py-4">
               <CheckCircle2 className="w-10 h-10 text-green-300 mx-auto mb-2" />
-              <p className="text-sm text-green-600">لا توجد مهام مجدولة لليوم</p>
+              <p className="text-sm text-status-success-foreground">لا توجد مهام مجدولة لليوم</p>
             </div>
           ) : (
             <div className="space-y-2">
               {todayTasks.map((t: any) => (
                 <Link key={t.id} href="/tasks">
-                  <div className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
+                  <div className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-subtle transition-colors cursor-pointer">
                     <div className={cn(
                       "w-2 h-2 rounded-full shrink-0",
                       t.status === "completed" ? "bg-green-500" : t.status === "in_progress" ? "bg-blue-500" : "bg-yellow-500"
                     )} />
-                    <p className="text-sm font-medium text-gray-800 truncate flex-1">{t.title}</p>
+                    <p className="text-sm font-medium text-status-neutral-foreground truncate flex-1">{t.title}</p>
                     {t.priority && (
                       <Badge variant="outline" className={cn("text-[10px] shrink-0",
-                        t.priority === "high" ? "bg-red-100 text-red-700" : t.priority === "medium" ? "bg-yellow-100 text-yellow-700" : ""
+                        t.priority === "high" ? "bg-status-error-surface text-status-error-foreground" : t.priority === "medium" ? "bg-status-warning-surface text-status-warning-foreground" : ""
                       )}>
                         {priorityLabels[t.priority] || t.priority}
                       </Badge>
@@ -77,25 +77,25 @@ export function TasksAndNotificationsSection({ todayTasks, notifications }: Task
           {notifications.length === 0 ? (
             <div className="text-center py-4">
               <Bell className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-              <p className="text-sm text-gray-400">لا توجد تنبيهات</p>
+              <p className="text-sm text-muted-foreground">لا توجد تنبيهات</p>
             </div>
           ) : (
             <div className="space-y-2">
               {notifications.slice(0, 6).map((n: any) => (
                 <div key={n.id} className={cn(
                   "flex items-start gap-3 p-2.5 rounded-lg transition-colors",
-                  !n.isRead ? "bg-blue-50/50" : "hover:bg-gray-50"
+                  !n.isRead ? "bg-status-info-surface" : "hover:bg-surface-subtle"
                 )}>
                   <div className={cn(
                     "w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5",
-                    n.priority === "high" || n.priority === "urgent" ? "bg-red-50" : "bg-blue-50"
+                    n.priority === "high" || n.priority === "urgent" ? "bg-status-error-surface" : "bg-status-info-surface"
                   )}>
-                    <Bell className={cn("w-4 h-4", n.priority === "high" || n.priority === "urgent" ? "text-red-500" : "text-blue-500")} />
+                    <Bell className={cn("w-4 h-4", n.priority === "high" || n.priority === "urgent" ? "text-status-error" : "text-status-info")} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800 truncate">{n.title}</p>
-                    <p className="text-xs text-gray-500 truncate">{n.body}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{formatTimeAgo(n.createdAt)}</p>
+                    <p className="text-sm font-medium text-status-neutral-foreground truncate">{n.title}</p>
+                    <p className="text-xs text-muted-foreground truncate">{n.body}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{formatTimeAgo(n.createdAt)}</p>
                   </div>
                 </div>
               ))}

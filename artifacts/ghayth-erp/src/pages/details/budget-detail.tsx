@@ -137,7 +137,7 @@ export default function BudgetDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Wallet className="h-4 w-4 text-gray-500" />
+            <Wallet className="h-4 w-4 text-muted-foreground" />
             بيانات الميزانية
           </CardTitle>
         </CardHeader>
@@ -145,14 +145,14 @@ export default function BudgetDetail() {
           <div className="border-b pb-3">
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-bold text-gray-900">{formatCurrency(allocated)}</span>
-              <span className="text-xs text-gray-500">ر.س مخصص</span>
+              <span className="text-xs text-muted-foreground">ر.س مخصص</span>
             </div>
             <div className="flex items-center gap-3 mt-2 text-xs">
-              <span className="flex items-center gap-1 text-red-600">
+              <span className="flex items-center gap-1 text-status-error-foreground">
                 <TrendingDown className="h-3.5 w-3.5" />
                 مصروف: {formatCurrency(spent)}
               </span>
-              <span className={`flex items-center gap-1 ${remaining >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+              <span className={`flex items-center gap-1 ${remaining >= 0 ? "text-emerald-600" : "text-status-error-foreground"}`}>
                 <TrendingUp className="h-3.5 w-3.5" />
                 متبقي: {formatCurrency(Math.abs(remaining))}
                 {remaining < 0 && " (تجاوز)"}
@@ -163,12 +163,12 @@ export default function BudgetDetail() {
           {/* Utilization bar */}
           <div>
             <div className="flex justify-between text-xs mb-1">
-              <span className="text-gray-500">نسبة الاستخدام</span>
-              <span className={`font-medium ${isExceeded ? "text-red-600" : isWarning ? "text-amber-600" : "text-gray-700"}`}>
+              <span className="text-muted-foreground">نسبة الاستخدام</span>
+              <span className={`font-medium ${isExceeded ? "text-status-error-foreground" : isWarning ? "text-status-warning-foreground" : "text-status-neutral-foreground"}`}>
                 {utilizationPct.toFixed(1)}%
               </span>
             </div>
-            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-2 bg-surface-subtle rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full ${isExceeded ? "bg-red-500" : isWarning ? "bg-amber-500" : "bg-emerald-500"}`}
                 style={{ width: `${Math.min(100, utilizationPct)}%` }}
@@ -179,41 +179,41 @@ export default function BudgetDetail() {
           <div className="grid grid-cols-2 gap-3">
             {item?.category && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">التصنيف</p>
+                <p className="text-xs text-muted-foreground mb-0.5">التصنيف</p>
                 <Badge variant="outline">{item.category}</Badge>
               </div>
             )}
             {item?.period && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الفترة</p>
+                <p className="text-xs text-muted-foreground mb-0.5">الفترة</p>
                 <Badge variant="secondary">{PERIOD_LABELS[item.period] || item.period}</Badge>
               </div>
             )}
             {item?.startDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ البداية</p>
-                <span className="text-gray-800">{formatDateAr(item.startDate)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ البداية</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(item.startDate)}</span>
               </div>
             )}
             {item?.endDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ النهاية</p>
-                <span className="text-gray-800">{formatDateAr(item.endDate)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ النهاية</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(item.endDate)}</span>
               </div>
             )}
           </div>
 
           {item?.description && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">الوصف</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{item.description}</p>
+              <p className="text-xs text-muted-foreground mb-1">الوصف</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{item.description}</p>
             </div>
           )}
 
           {isExceeded && (
-            <div className="rounded-md bg-red-50 border border-red-200 p-3">
-              <p className="text-xs text-red-700 font-medium">تحذير: تم تجاوز الميزانية المخصصة</p>
-              <p className="text-xs text-red-600 mt-0.5">
+            <div className="rounded-md bg-status-error-surface border border-status-error-surface p-3">
+              <p className="text-xs text-status-error-foreground font-medium">تحذير: تم تجاوز الميزانية المخصصة</p>
+              <p className="text-xs text-status-error-foreground mt-0.5">
                 التجاوز: {formatCurrency(Math.abs(remaining))}
               </p>
             </div>
@@ -228,16 +228,16 @@ export default function BudgetDetail() {
           </CardHeader>
           <CardContent className="space-y-2 text-xs">
             <div className="flex justify-between">
-              <span className="text-gray-500">المخصص</span>
+              <span className="text-muted-foreground">المخصص</span>
               <span className="font-medium">{formatCurrency(allocated)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-500">المصروف</span>
-              <span className="font-medium text-red-600">{formatCurrency(spent)}</span>
+              <span className="text-muted-foreground">المصروف</span>
+              <span className="font-medium text-status-error-foreground">{formatCurrency(spent)}</span>
             </div>
             <div className="flex justify-between pt-2 border-t">
-              <span className="text-gray-500">المتبقي</span>
-              <span className={`font-bold ${remaining >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+              <span className="text-muted-foreground">المتبقي</span>
+              <span className={`font-bold ${remaining >= 0 ? "text-emerald-600" : "text-status-error-foreground"}`}>
                 {formatCurrency(remaining)}
               </span>
             </div>

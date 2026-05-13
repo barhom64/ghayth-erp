@@ -149,7 +149,7 @@ export default function UmrahInvoiceDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <FileText className="h-4 w-4 text-gray-500" />
+            <FileText className="h-4 w-4 text-muted-foreground" />
             بيانات الفاتورة
           </CardTitle>
         </CardHeader>
@@ -159,55 +159,55 @@ export default function UmrahInvoiceDetail() {
             <span className="text-3xl font-bold text-gray-900">
               {formatCurrency(amount)}
             </span>
-            <span className="text-xs text-gray-500">ر.س</span>
+            <span className="text-xs text-muted-foreground">ر.س</span>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">رقم الفاتورة</p>
-              <span className="text-gray-800 font-mono text-xs">
+              <p className="text-xs text-muted-foreground mb-0.5">رقم الفاتورة</p>
+              <span className="text-status-neutral-foreground font-mono text-xs">
                 {invoice?.invoiceNumber || `INV-${id}`}
               </span>
             </div>
             {invoice?.pilgrimName && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">المعتمر</p>
-                <span className="text-gray-800 font-medium">{invoice.pilgrimName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">المعتمر</p>
+                <span className="text-status-neutral-foreground font-medium">{invoice.pilgrimName}</span>
               </div>
             )}
             {invoice?.packageName && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الباقة</p>
+                <p className="text-xs text-muted-foreground mb-0.5">الباقة</p>
                 <Badge variant="outline">{invoice.packageName}</Badge>
               </div>
             )}
             {invoice?.seasonName && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الموسم</p>
+                <p className="text-xs text-muted-foreground mb-0.5">الموسم</p>
                 <Badge variant="secondary">{invoice.seasonName}</Badge>
               </div>
             )}
             {invoice?.dueDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ الاستحقاق</p>
-                <span className="text-gray-800 flex items-center gap-1">
-                  <Calendar className="h-3 w-3 text-gray-400" />
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ الاستحقاق</p>
+                <span className="text-status-neutral-foreground flex items-center gap-1">
+                  <Calendar className="h-3 w-3 text-muted-foreground" />
                   {formatDateAr(invoice.dueDate)}
                 </span>
               </div>
             )}
             {invoice?.issuedDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ الإصدار</p>
-                <span className="text-gray-800">{formatDateAr(invoice.issuedDate)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ الإصدار</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(invoice.issuedDate)}</span>
               </div>
             )}
           </div>
 
           {invoice?.notes && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">ملاحظات</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{invoice.notes}</p>
+              <p className="text-xs text-muted-foreground mb-1">ملاحظات</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{invoice.notes}</p>
             </div>
           )}
         </CardContent>
@@ -218,26 +218,26 @@ export default function UmrahInvoiceDetail() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Wallet className="h-4 w-4 text-gray-500" />
+              <Wallet className="h-4 w-4 text-muted-foreground" />
               ملخص السداد
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500">المدفوع</span>
-              <span className="text-green-700 font-semibold">
+              <span className="text-xs text-muted-foreground">المدفوع</span>
+              <span className="text-status-success-foreground font-semibold">
                 {formatCurrency(paidAmount)}
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500">المتبقي</span>
-              <span className="text-red-700 font-semibold">
+              <span className="text-xs text-muted-foreground">المتبقي</span>
+              <span className="text-status-error-foreground font-semibold">
                 {formatCurrency(remainingAmount)}
               </span>
             </div>
             <div className="flex items-center justify-between pt-2 border-t">
-              <span className="text-xs text-gray-500">عدد الدفعات</span>
-              <span className="text-gray-800 font-medium">{payments.length}</span>
+              <span className="text-xs text-muted-foreground">عدد الدفعات</span>
+              <span className="text-status-neutral-foreground font-medium">{payments.length}</span>
             </div>
           </CardContent>
         </Card>
@@ -254,7 +254,7 @@ export default function UmrahInvoiceDetail() {
                   key={p.id ?? idx}
                   className="flex items-center justify-between gap-2 p-2 rounded border text-xs"
                 >
-                  <span className="text-gray-600">
+                  <span className="text-muted-foreground">
                     {formatDateAr(p.date || p.paidAt || p.createdAt)}
                   </span>
                   <span className="text-gray-900 font-semibold">

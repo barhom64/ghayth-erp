@@ -140,7 +140,7 @@ export default function WarehouseProductDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Package className="h-4 w-4 text-gray-500" />
+            <Package className="h-4 w-4 text-muted-foreground" />
             بيانات الصنف
           </CardTitle>
         </CardHeader>
@@ -148,15 +148,15 @@ export default function WarehouseProductDetail() {
           {/* Hero: current stock */}
           <div className="flex items-baseline gap-2 border-b pb-3">
             <span className="text-3xl font-bold text-gray-900">{currentStock}</span>
-            <span className="text-xs text-gray-500">وحدة في المخزون</span>
+            <span className="text-xs text-muted-foreground">وحدة في المخزون</span>
           </div>
 
           {stockWarning && (
             <div
               className={`flex items-center gap-2 rounded border p-2 text-xs ${
                 stockWarning.tone === "red"
-                  ? "bg-red-50 border-red-200 text-red-700"
-                  : "bg-amber-50 border-amber-200 text-amber-700"
+                  ? "bg-status-error-surface border-status-error-surface text-status-error-foreground"
+                  : "bg-status-warning-surface border-status-warning-surface text-status-warning-foreground"
               }`}
             >
               <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -167,31 +167,31 @@ export default function WarehouseProductDetail() {
           <div className="grid grid-cols-2 gap-3">
             {product?.sku && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الرمز (SKU)</p>
-                <span className="text-gray-800 font-mono">{product.sku}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">الرمز (SKU)</p>
+                <span className="text-status-neutral-foreground font-mono">{product.sku}</span>
               </div>
             )}
             {product?.barcode && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الباركود</p>
-                <span className="text-gray-800 font-mono">{product.barcode}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">الباركود</p>
+                <span className="text-status-neutral-foreground font-mono">{product.barcode}</span>
               </div>
             )}
             {product?.categoryName && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">التصنيف</p>
+                <p className="text-xs text-muted-foreground mb-0.5">التصنيف</p>
                 <Badge variant="outline">{product.categoryName}</Badge>
               </div>
             )}
             {product?.supplierName && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">المورد</p>
-                <span className="text-gray-800">{product.supplierName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">المورد</p>
+                <span className="text-status-neutral-foreground">{product.supplierName}</span>
               </div>
             )}
             {product?.location && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">الموقع في المستودع</p>
+                <p className="text-xs text-muted-foreground mb-0.5">الموقع في المستودع</p>
                 <Badge variant="secondary">{product.location}</Badge>
               </div>
             )}
@@ -199,8 +199,8 @@ export default function WarehouseProductDetail() {
 
           {product?.description && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">الوصف</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{product.description}</p>
+              <p className="text-xs text-muted-foreground mb-1">الوصف</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{product.description}</p>
             </div>
           )}
         </CardContent>
@@ -214,15 +214,15 @@ export default function WarehouseProductDetail() {
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-xs text-gray-500">الحالي</span>
+              <span className="text-xs text-muted-foreground">الحالي</span>
               <span className="font-semibold">{currentStock}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-xs text-gray-500">الحد الأدنى</span>
+              <span className="text-xs text-muted-foreground">الحد الأدنى</span>
               <span>{minStock}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-xs text-gray-500">الحد الأقصى</span>
+              <span className="text-xs text-muted-foreground">الحد الأقصى</span>
               <span>{maxStock}</span>
             </div>
           </CardContent>
@@ -234,11 +234,11 @@ export default function WarehouseProductDetail() {
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-xs text-gray-500">تكلفة الوحدة</span>
+              <span className="text-xs text-muted-foreground">تكلفة الوحدة</span>
               <span>{formatCurrency(unitCost)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-xs text-gray-500">سعر البيع</span>
+              <span className="text-xs text-muted-foreground">سعر البيع</span>
               <span className="font-semibold text-gray-900">{formatCurrency(sellingPrice)}</span>
             </div>
           </CardContent>

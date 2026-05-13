@@ -113,7 +113,7 @@ export default function UmrahAttachmentsPage() {
             href={a.fileUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+            className="inline-flex items-center gap-1 text-status-info-foreground hover:underline"
           >
             <ExternalLink className="h-3.5 w-3.5" /> فتح
           </a>

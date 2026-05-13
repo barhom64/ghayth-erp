@@ -123,9 +123,9 @@ export default function OpeningBalancesCreatePage() {
   return (
     <CreatePageLayout title="أرصدة افتتاحية جديدة" backPath="/finance/opening-balances">
       {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <CreationDateField />
@@ -233,12 +233,12 @@ export default function OpeningBalancesCreatePage() {
             <div className="grid grid-cols-[2fr_1fr_1fr_40px] gap-2 pt-2 border-t font-semibold text-sm">
               <span className="flex items-center gap-2">
                 الإجمالي
-                <Badge className={isBalanced ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}>
+                <Badge className={isBalanced ? "bg-status-success-surface text-status-success-foreground" : "bg-status-error-surface text-status-error-foreground"}>
                   {isBalanced ? "متوازن" : "غير متوازن"}
                 </Badge>
               </span>
-              <span className="text-green-700">{formatCurrency(totalDebit)}</span>
-              <span className="text-red-700">{formatCurrency(totalCredit)}</span>
+              <span className="text-status-success-foreground">{formatCurrency(totalDebit)}</span>
+              <span className="text-status-error-foreground">{formatCurrency(totalCredit)}</span>
               <span></span>
             </div>
 

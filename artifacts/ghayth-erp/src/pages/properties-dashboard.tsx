@@ -49,7 +49,7 @@ export default function PropertiesDashboard() {
       label: `${buildingPerf.length} مبنى / مجمع`,
       value: totalUnits,
       icon: Home,
-      color: "text-blue-600 bg-blue-50",
+      color: "text-status-info-foreground bg-status-info-surface",
       trend: "إجمالي الوحدات",
     },
     {
@@ -59,8 +59,8 @@ export default function PropertiesDashboard() {
       color: occupancyRate >= 80
         ? "text-emerald-600 bg-emerald-50"
         : occupancyRate >= 50
-          ? "text-amber-600 bg-amber-50"
-          : "text-red-600 bg-red-50",
+          ? "text-status-warning-foreground bg-status-warning-surface"
+          : "text-status-error-foreground bg-status-error-surface",
       trend: "نسبة الإشغال",
     },
     {
@@ -75,8 +75,8 @@ export default function PropertiesDashboard() {
       value: formatCurrency(overdueAmount),
       icon: AlertTriangle,
       color: overdueAmount > 0
-        ? "text-red-600 bg-red-50"
-        : "text-gray-600 bg-gray-50",
+        ? "text-status-error-foreground bg-status-error-surface"
+        : "text-muted-foreground bg-surface-subtle",
       trend: "المتأخرات",
     },
   ];
@@ -89,9 +89,9 @@ export default function PropertiesDashboard() {
       render: (row: any, index: number) => {
         const isTop = index === 0 && buildingPerf.length > 1;
         const isBottom = index === buildingPerf.length - 1 && buildingPerf.length > 1;
-        if (isTop) return <Trophy className="h-3.5 w-3.5 text-amber-500 inline" />;
+        if (isTop) return <Trophy className="h-3.5 w-3.5 text-status-warning inline" />;
         if (isBottom) return <TrendingDown className="h-3.5 w-3.5 text-red-400 inline" />;
-        return <span className="text-gray-400 font-mono">{index + 1}</span>;
+        return <span className="text-muted-foreground font-mono">{index + 1}</span>;
       },
     },
     {
@@ -99,7 +99,7 @@ export default function PropertiesDashboard() {
       header: "المبنى",
       searchable: true,
       render: (row: any) => (
-        <Link href={`/properties/buildings/${row.id}`} className="font-medium hover:text-blue-600 hover:underline">
+        <Link href={`/properties/buildings/${row.id}`} className="font-medium hover:text-status-info-foreground hover:underline">
           {row.name}
         </Link>
       ),
@@ -114,7 +114,7 @@ export default function PropertiesDashboard() {
       key: "rentedUnits",
       header: "مؤجرة",
       sortable: true,
-      render: (row: any) => <span className="font-mono text-sm text-blue-600">{row.rentedUnits || 0}</span>,
+      render: (row: any) => <span className="font-mono text-sm text-status-info-foreground">{row.rentedUnits || 0}</span>,
     },
     {
       key: "occupancyRate",
@@ -122,7 +122,7 @@ export default function PropertiesDashboard() {
       sortable: true,
       render: (row: any) => (
         <div className="flex items-center gap-2">
-          <div className="w-14 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div className="w-14 h-1.5 bg-surface-subtle rounded-full overflow-hidden">
             <div
               className={cn(
                 "h-full rounded-full",
@@ -147,8 +147,8 @@ export default function PropertiesDashboard() {
       render: (row: any, index: number) => {
         const isTop = index === 0 && buildingPerf.length > 1;
         const isBottom = index === buildingPerf.length - 1 && buildingPerf.length > 1;
-        if (isTop) return <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-0">الأفضل</Badge>;
-        if (isBottom) return <Badge className="bg-red-100 text-red-600 hover:bg-red-100 border-0">الأدنى</Badge>;
+        if (isTop) return <Badge className="bg-status-warning-surface text-status-warning-foreground hover:bg-status-warning-surface border-0">الأفضل</Badge>;
+        if (isBottom) return <Badge className="bg-status-error-surface text-status-error-foreground hover:bg-status-error-surface border-0">الأدنى</Badge>;
         return null;
       },
     },
@@ -190,24 +190,24 @@ export default function PropertiesDashboard() {
             <div className="grid grid-cols-3 gap-3">
               <div className="text-center p-2 bg-indigo-50 rounded-lg">
                 <p className="text-lg font-bold text-indigo-700">{formatCurrency(s.annualCollected || 0)}</p>
-                <p className="text-[10px] text-gray-500">محصل</p>
+                <p className="text-[10px] text-muted-foreground">محصل</p>
               </div>
-              <div className="text-center p-2 bg-gray-50 rounded-lg">
-                <p className="text-lg font-bold text-gray-700">{formatCurrency(s.annualExpected || 0)}</p>
-                <p className="text-[10px] text-gray-500">متوقع</p>
+              <div className="text-center p-2 bg-surface-subtle rounded-lg">
+                <p className="text-lg font-bold text-status-neutral-foreground">{formatCurrency(s.annualExpected || 0)}</p>
+                <p className="text-[10px] text-muted-foreground">متوقع</p>
               </div>
-              <div className="text-center p-2 bg-red-50 rounded-lg">
-                <p className="text-lg font-bold text-red-600">{formatCurrency((s.annualExpected || 0) - (s.annualCollected || 0))}</p>
-                <p className="text-[10px] text-gray-500">متبقي</p>
+              <div className="text-center p-2 bg-status-error-surface rounded-lg">
+                <p className="text-lg font-bold text-status-error-foreground">{formatCurrency((s.annualExpected || 0) - (s.annualCollected || 0))}</p>
+                <p className="text-[10px] text-muted-foreground">متبقي</p>
               </div>
             </div>
             {(s.annualExpected || 0) > 0 && (
               <div className="mt-3">
-                <div className="flex justify-between text-xs text-gray-500 mb-1">
+                <div className="flex justify-between text-xs text-muted-foreground mb-1">
                   <span>نسبة التحصيل السنوي</span>
                   <span className="font-bold">{Math.round(((s.annualCollected || 0) / (s.annualExpected || 1)) * 100)}%</span>
                 </div>
-                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-2 bg-surface-subtle rounded-full overflow-hidden">
                   <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${Math.min(Math.round(((s.annualCollected||0)/(s.annualExpected||1))*100), 100)}%` }} />
                 </div>
               </div>
@@ -223,17 +223,17 @@ export default function PropertiesDashboard() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-3 gap-3">
-              <div className="text-center p-2 bg-red-50 rounded-lg border border-red-100">
-                <p className="text-2xl font-bold text-red-600">{s.expiring30 || 0}</p>
-                <p className="text-[10px] text-gray-500">خلال 30 يوم</p>
+              <div className="text-center p-2 bg-status-error-surface rounded-lg border border-status-error-surface">
+                <p className="text-2xl font-bold text-status-error-foreground">{s.expiring30 || 0}</p>
+                <p className="text-[10px] text-muted-foreground">خلال 30 يوم</p>
               </div>
               <div className="text-center p-2 bg-orange-50 rounded-lg border border-orange-100">
                 <p className="text-2xl font-bold text-orange-600">{s.expiring60 || 0}</p>
-                <p className="text-[10px] text-gray-500">خلال 60 يوم</p>
+                <p className="text-[10px] text-muted-foreground">خلال 60 يوم</p>
               </div>
-              <div className="text-center p-2 bg-amber-50 rounded-lg border border-amber-100">
-                <p className="text-2xl font-bold text-amber-600">{s.expiring90 || 0}</p>
-                <p className="text-[10px] text-gray-500">خلال 90 يوم</p>
+              <div className="text-center p-2 bg-status-warning-surface rounded-lg border border-status-warning-surface">
+                <p className="text-2xl font-bold text-status-warning-foreground">{s.expiring90 || 0}</p>
+                <p className="text-[10px] text-muted-foreground">خلال 90 يوم</p>
               </div>
             </div>
             <Link href="/properties/contracts">
@@ -250,18 +250,18 @@ export default function PropertiesDashboard() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-3">
               <p className="font-semibold text-sm flex items-center gap-2">
-                <Wrench className="h-4 w-4 text-amber-500" /> طلبات الصيانة
+                <Wrench className="h-4 w-4 text-status-warning" /> طلبات الصيانة
               </p>
               <Link href="/properties/maintenance">
-                <Button variant="ghost" size="sm" className="text-xs text-blue-600 h-6">عرض الكل</Button>
+                <Button variant="ghost" size="sm" className="text-xs text-status-info-foreground h-6">عرض الكل</Button>
               </Link>
             </div>
             <div className="flex items-center gap-3">
-              <div className="text-3xl font-bold text-amber-600">{openMaintenanceTickets}</div>
+              <div className="text-3xl font-bold text-status-warning-foreground">{openMaintenanceTickets}</div>
               <div>
-                <p className="text-xs text-gray-500">طلب مفتوح</p>
+                <p className="text-xs text-muted-foreground">طلب مفتوح</p>
                 {s.criticalMaintenanceTickets > 0 && (
-                  <Badge className="bg-red-100 text-red-600 hover:bg-red-100 border-0 text-xs">
+                  <Badge className="bg-status-error-surface text-status-error-foreground hover:bg-status-error-surface border-0 text-xs">
                     {s.criticalMaintenanceTickets} حرج
                   </Badge>
                 )}
@@ -283,13 +283,13 @@ export default function PropertiesDashboard() {
               </p>
             </div>
             <p className="text-2xl font-bold text-violet-700">{formatCurrency(s.totalCollected || 0)}</p>
-            <p className="text-xs text-gray-500 mt-1">من {formatCurrency(s.totalExpected || 0)} إجمالي</p>
+            <p className="text-xs text-muted-foreground mt-1">من {formatCurrency(s.totalExpected || 0)} إجمالي</p>
             <div className="mt-3">
-              <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+              <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
                 <span>نسبة التحصيل الكلية</span>
                 <span className="font-bold">{s.collectionRate || 0}%</span>
               </div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-2 bg-surface-subtle rounded-full overflow-hidden">
                 <div
                   className={cn("h-full rounded-full transition-all", (s.collectionRate || 0) >= 80 ? "bg-emerald-500" : (s.collectionRate || 0) >= 50 ? "bg-amber-500" : "bg-red-500")}
                   style={{ width: `${Math.min(s.collectionRate || 0, 100)}%` }}
@@ -303,7 +303,7 @@ export default function PropertiesDashboard() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-3">
               <p className="font-semibold text-sm flex items-center gap-2">
-                <Users2 className="h-4 w-4 text-blue-500" /> روابط سريعة
+                <Users2 className="h-4 w-4 text-status-info" /> روابط سريعة
               </p>
             </div>
             <div className="space-y-1.5">
@@ -328,10 +328,10 @@ export default function PropertiesDashboard() {
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2">
-                <Trophy className="h-4 w-4 text-amber-500" /> أداء المباني (مرتبة حسب الإيراد)
+                <Trophy className="h-4 w-4 text-status-warning" /> أداء المباني (مرتبة حسب الإيراد)
               </CardTitle>
               <Link href="/properties/buildings">
-                <Button variant="ghost" size="sm" className="text-xs text-blue-600">عرض الكل</Button>
+                <Button variant="ghost" size="sm" className="text-xs text-status-info-foreground">عرض الكل</Button>
               </Link>
             </div>
           </CardHeader>
@@ -347,8 +347,8 @@ export default function PropertiesDashboard() {
                 const isTop = idx === 0 && buildingPerf.length > 1;
                 const isBottom = idx === buildingPerf.length - 1 && buildingPerf.length > 1;
                 return cn(
-                  isTop && "bg-amber-50/30",
-                  isBottom && "bg-red-50/20"
+                  isTop && "bg-status-warning-surface/30",
+                  isBottom && "bg-status-error-surface"
                 );
               }}
             />
@@ -358,10 +358,10 @@ export default function PropertiesDashboard() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { href: "/properties/buildings", icon: Building2, label: "المباني والمجمعات", color: "text-blue-600 bg-blue-50" },
+          { href: "/properties/buildings", icon: Building2, label: "المباني والمجمعات", color: "text-status-info-foreground bg-status-info-surface" },
           { href: "/properties", icon: Home, label: "الوحدات العقارية", color: "text-emerald-600 bg-emerald-50" },
           { href: "/properties/tenants", icon: Users2, label: "المستأجرون", color: "text-violet-600 bg-violet-50" },
-          { href: "/properties/contracts", icon: FileText, label: "عقود الإيجار", color: "text-amber-600 bg-amber-50" },
+          { href: "/properties/contracts", icon: FileText, label: "عقود الإيجار", color: "text-status-warning-foreground bg-status-warning-surface" },
           { href: "/properties/payments", icon: Banknote, label: "المدفوعات", color: "text-indigo-600 bg-indigo-50" },
           { href: "/properties/maintenance", icon: Wrench, label: "طلبات الصيانة", color: "text-orange-600 bg-orange-50" },
         ].map(item => (
@@ -371,7 +371,7 @@ export default function PropertiesDashboard() {
                 <div className={cn("p-2 rounded-lg", item.color)}>
                   <item.icon className="h-5 w-5" />
                 </div>
-                <span className="text-sm font-medium group-hover:text-blue-600 transition-colors">{item.label}</span>
+                <span className="text-sm font-medium group-hover:text-status-info-foreground transition-colors">{item.label}</span>
               </CardContent>
             </Card>
           </Link>

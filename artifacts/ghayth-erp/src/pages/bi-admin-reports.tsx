@@ -25,8 +25,8 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white/95 backdrop-blur-sm p-3 rounded-xl shadow-lg border border-gray-100 text-xs" dir="rtl">
-      <p className="font-semibold mb-1.5 text-gray-700">{label}</p>
+    <div className="bg-white/95 backdrop-blur-sm p-3 rounded-xl shadow-lg border border-border text-xs" dir="rtl">
+      <p className="font-semibold mb-1.5 text-status-neutral-foreground">{label}</p>
       {payload.map((p: any, i: number) => (
         <p key={i} style={{ color: p.color }} className="flex items-center gap-1.5 py-0.5">
           <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: p.color }} />
@@ -38,9 +38,9 @@ function CustomTooltip({ active, payload, label }: any) {
 }
 
 function ChangeIndicator({ value, suffix = "" }: { value: number; suffix?: string }) {
-  if (value === 0) return <span className="text-xs text-gray-400">بدون تغيير</span>;
+  if (value === 0) return <span className="text-xs text-muted-foreground">بدون تغيير</span>;
   return (
-    <span className={cn("text-xs font-medium flex items-center gap-0.5", value > 0 ? "text-emerald-600" : "text-red-500")}>
+    <span className={cn("text-xs font-medium flex items-center gap-0.5", value > 0 ? "text-emerald-600" : "text-status-error")}>
       {value > 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
       {value > 0 ? "+" : ""}{value}{suffix}
     </span>
@@ -51,10 +51,10 @@ function StatBox({ label, value, sub, icon: Icon, color = "blue", change }: {
   label: string; value: string | number; sub?: string; icon: any; color?: string; change?: number;
 }) {
   const colorMap: Record<string, string> = {
-    blue: "bg-blue-50 text-blue-600",
+    blue: "bg-status-info-surface text-status-info-foreground",
     green: "bg-emerald-50 text-emerald-600",
-    red: "bg-red-50 text-red-600",
-    amber: "bg-amber-50 text-amber-600",
+    red: "bg-status-error-surface text-status-error-foreground",
+    amber: "bg-status-warning-surface text-status-warning-foreground",
     purple: "bg-purple-50 text-purple-600",
     indigo: "bg-indigo-50 text-indigo-600",
   };
@@ -157,7 +157,7 @@ function DailyReportTab() {
           <CardContent className="space-y-3">
             <div className="flex justify-between"><span className="text-sm text-muted-foreground">عدد الفواتير</span><span className="font-bold">{data.financial.invoiceCount}</span></div>
             <div className="flex justify-between"><span className="text-sm text-muted-foreground">إجمالي الفواتير</span><span className="font-bold">{formatCurrency(data.financial.invoicesTotal)}</span></div>
-            <div className="flex justify-between"><span className="text-sm text-muted-foreground">المحصّل</span><span className="font-bold text-green-600">{formatCurrency(data.financial.paidTotal)}</span></div>
+            <div className="flex justify-between"><span className="text-sm text-muted-foreground">المحصّل</span><span className="font-bold text-status-success-foreground">{formatCurrency(data.financial.paidTotal)}</span></div>
             <div className="flex justify-between"><span className="text-sm text-muted-foreground">طلبات الإجازة</span><span className="font-bold">{data.leaveRequests}</span></div>
           </CardContent>
         </Card>
@@ -265,8 +265,8 @@ function MonthlyReportTab() {
           <CardHeader><CardTitle className="text-sm">ملخص المهام</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <div className="flex justify-between"><span className="text-sm">إجمالي المهام</span><span className="font-bold">{current.tasks.total}</span></div>
-            <div className="flex justify-between"><span className="text-sm">المكتملة</span><span className="font-bold text-green-600">{current.tasks.completed}</span></div>
-            <div className="flex justify-between"><span className="text-sm">المتأخرة</span><span className="font-bold text-red-600">{current.tasks.overdue}</span></div>
+            <div className="flex justify-between"><span className="text-sm">المكتملة</span><span className="font-bold text-status-success-foreground">{current.tasks.completed}</span></div>
+            <div className="flex justify-between"><span className="text-sm">المتأخرة</span><span className="font-bold text-status-error-foreground">{current.tasks.overdue}</span></div>
             <div className="flex justify-between"><span className="text-sm">نسبة الإنجاز</span><Badge variant={current.tasks.completionRate >= 70 ? "default" : "destructive"}>{current.tasks.completionRate}%</Badge></div>
           </CardContent>
         </Card>
@@ -275,9 +275,9 @@ function MonthlyReportTab() {
           <CardHeader><CardTitle className="text-sm">ملخص مالي</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <div className="flex justify-between"><span className="text-sm">الإيرادات</span><span className="font-bold">{formatCurrency(current.financial.revenue)}</span></div>
-            <div className="flex justify-between"><span className="text-sm">المحصّل</span><span className="font-bold text-green-600">{formatCurrency(current.financial.collected)}</span></div>
+            <div className="flex justify-between"><span className="text-sm">المحصّل</span><span className="font-bold text-status-success-foreground">{formatCurrency(current.financial.collected)}</span></div>
             <div className="flex justify-between"><span className="text-sm">عدد الفواتير</span><span className="font-bold">{current.financial.invoiceCount}</span></div>
-            <div className="flex justify-between"><span className="text-sm">فواتير متأخرة</span><span className="font-bold text-red-600">{current.financial.overdueInvoices}</span></div>
+            <div className="flex justify-between"><span className="text-sm">فواتير متأخرة</span><span className="font-bold text-status-error-foreground">{current.financial.overdueInvoices}</span></div>
           </CardContent>
         </Card>
       </div>
@@ -287,9 +287,9 @@ function MonthlyReportTab() {
           <CardHeader><CardTitle className="text-sm">الحضور</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <div className="flex justify-between"><span className="text-sm">إجمالي التسجيلات</span><span className="font-bold">{current.attendance.total}</span></div>
-            <div className="flex justify-between"><span className="text-sm">حاضر</span><span className="font-bold text-green-600">{current.attendance.present}</span></div>
-            <div className="flex justify-between"><span className="text-sm">غائب</span><span className="font-bold text-red-600">{current.attendance.absent}</span></div>
-            <div className="flex justify-between"><span className="text-sm">متأخر</span><span className="font-bold text-amber-600">{current.attendance.late}</span></div>
+            <div className="flex justify-between"><span className="text-sm">حاضر</span><span className="font-bold text-status-success-foreground">{current.attendance.present}</span></div>
+            <div className="flex justify-between"><span className="text-sm">غائب</span><span className="font-bold text-status-error-foreground">{current.attendance.absent}</span></div>
+            <div className="flex justify-between"><span className="text-sm">متأخر</span><span className="font-bold text-status-warning-foreground">{current.attendance.late}</span></div>
           </CardContent>
         </Card>
 
@@ -298,8 +298,8 @@ function MonthlyReportTab() {
           <CardContent className="space-y-3">
             <div className="flex justify-between"><span className="text-sm">تعيينات جديدة</span><span className="font-bold">{current.hr.newEmployees}</span></div>
             <div className="flex justify-between"><span className="text-sm">طلبات الإجازة</span><span className="font-bold">{current.leaves.total}</span></div>
-            <div className="flex justify-between"><span className="text-sm">إجازات مقبولة</span><span className="font-bold text-green-600">{current.leaves.approved}</span></div>
-            <div className="flex justify-between"><span className="text-sm">إجازات مرفوضة</span><span className="font-bold text-red-600">{current.leaves.rejected}</span></div>
+            <div className="flex justify-between"><span className="text-sm">إجازات مقبولة</span><span className="font-bold text-status-success-foreground">{current.leaves.approved}</span></div>
+            <div className="flex justify-between"><span className="text-sm">إجازات مرفوضة</span><span className="font-bold text-status-error-foreground">{current.leaves.rejected}</span></div>
             <div className="flex justify-between"><span className="text-sm">أيام الإجازة</span><span className="font-bold">{current.leaves.totalDays} يوم</span></div>
           </CardContent>
         </Card>
@@ -309,11 +309,11 @@ function MonthlyReportTab() {
         <CardHeader><CardTitle className="text-sm">الدعم الفني</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-3 gap-4">
           <div className="text-center">
-            <div className="text-2xl font-bold text-blue-600">{current.tickets.opened}</div>
+            <div className="text-2xl font-bold text-status-info-foreground">{current.tickets.opened}</div>
             <p className="text-xs text-muted-foreground">تذاكر مفتوحة</p>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-green-600">{current.tickets.resolved}</div>
+            <div className="text-2xl font-bold text-status-success-foreground">{current.tickets.resolved}</div>
             <p className="text-xs text-muted-foreground">تم حلها</p>
           </div>
           <div className="text-center">

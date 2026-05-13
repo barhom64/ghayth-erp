@@ -68,9 +68,9 @@ export default function OnboardingReviewPage() {
   });
 
   const kpis = [
-    { label: "موظفين جدد (آخر 30 يوم)", value: recentHires.length, icon: UserPlus, color: "text-blue-600 bg-blue-50" },
-    { label: "مكتمل التعيين", value: Math.max(0, allActive.length - inProbation.length - pendingOnboarding.length), icon: CheckCircle, color: "text-green-600 bg-green-50" },
-    { label: "قيد المراجعة", value: pendingOnboarding.length, icon: Clock, color: "text-amber-600 bg-amber-50" },
+    { label: "موظفين جدد (آخر 30 يوم)", value: recentHires.length, icon: UserPlus, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "مكتمل التعيين", value: Math.max(0, allActive.length - inProbation.length - pendingOnboarding.length), icon: CheckCircle, color: "text-status-success-foreground bg-status-success-surface" },
+    { label: "قيد المراجعة", value: pendingOnboarding.length, icon: Clock, color: "text-status-warning-foreground bg-status-warning-surface" },
     { label: "فترة التجربة", value: inProbation.length, icon: ClipboardCheck, color: "text-purple-600 bg-purple-50" },
   ];
 
@@ -91,7 +91,7 @@ export default function OnboardingReviewPage() {
       header: "الرقم الوظيفي",
       sortable: true,
       render: (v) => (
-        <span className="text-sm font-mono text-gray-500">{v.empNumber || "-"}</span>
+        <span className="text-sm font-mono text-muted-foreground">{v.empNumber || "-"}</span>
       ),
     },
     {
@@ -99,7 +99,7 @@ export default function OnboardingReviewPage() {
       header: "المنصب",
       sortable: true,
       render: (v) => (
-        <span className="text-sm text-gray-600">{v.jobTitle || "-"}</span>
+        <span className="text-sm text-muted-foreground">{v.jobTitle || "-"}</span>
       ),
     },
     {
@@ -107,7 +107,7 @@ export default function OnboardingReviewPage() {
       header: "تاريخ التعيين",
       sortable: true,
       render: (v) => (
-        <span className="text-sm text-gray-500">
+        <span className="text-sm text-muted-foreground">
           {v.hireDate ? formatDateAr(v.hireDate) : "-"}
         </span>
       ),
@@ -117,7 +117,7 @@ export default function OnboardingReviewPage() {
       header: "الفرع",
       sortable: true,
       render: (v) => (
-        <span className="text-sm text-gray-500">{v.branchName || "-"}</span>
+        <span className="text-sm text-muted-foreground">{v.branchName || "-"}</span>
       ),
     },
     {
@@ -143,8 +143,8 @@ export default function OnboardingReviewPage() {
           <h4 className="font-semibold mb-3 text-sm">خطوات التأهيل</h4>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {steps.map((step: string, i: number) => (
-              <div key={i} className="p-3 bg-gray-50 rounded-lg text-center">
-                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center mx-auto mb-2 text-sm font-bold">{i + 1}</div>
+              <div key={i} className="p-3 bg-surface-subtle rounded-lg text-center">
+                <div className="w-8 h-8 rounded-full bg-status-info-surface text-status-info-foreground flex items-center justify-center mx-auto mb-2 text-sm font-bold">{i + 1}</div>
                 <p className="text-sm font-medium">{step}</p>
               </div>
             ))}

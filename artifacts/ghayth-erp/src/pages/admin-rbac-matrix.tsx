@@ -66,25 +66,25 @@ export default function AdminRbacMatrix() {
             <Card>
               <CardContent className="p-4 text-center">
                 <p className="text-2xl font-bold">{data?.totalPermissions ?? 0}</p>
-                <p className="text-xs text-gray-500">صلاحية</p>
+                <p className="text-xs text-muted-foreground">صلاحية</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4 text-center">
                 <p className="text-2xl font-bold">{data?.totalRoles ?? 0}</p>
-                <p className="text-xs text-gray-500">دور</p>
+                <p className="text-xs text-muted-foreground">دور</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4 text-center">
                 <p className="text-2xl font-bold">{Object.keys(permissionModules).length}</p>
-                <p className="text-xs text-gray-500">وحدة</p>
+                <p className="text-xs text-muted-foreground">وحدة</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4 text-center">
                 <p className="text-2xl font-bold">{customPermissions.length}</p>
-                <p className="text-xs text-gray-500">تخصيص</p>
+                <p className="text-xs text-muted-foreground">تخصيص</p>
               </CardContent>
             </Card>
           </div>
@@ -104,14 +104,14 @@ export default function AdminRbacMatrix() {
                     return (
                       <button
                         key={role}
-                        className={`w-full text-start p-3 border-b hover:bg-gray-50 flex items-center justify-between ${selectedRole === role ? "bg-primary/5 border-r-2 border-r-primary" : ""}`}
+                        className={`w-full text-start p-3 border-b hover:bg-surface-subtle flex items-center justify-between ${selectedRole === role ? "bg-primary/5 border-r-2 border-r-primary" : ""}`}
                         onClick={() => setSelectedRole(role)}
                       >
                         <div>
                           <p className="font-medium text-sm">{ROLE_LABELS[role] || role}</p>
-                          <p className="font-mono text-xs text-gray-500">{role}</p>
+                          <p className="font-mono text-xs text-muted-foreground">{role}</p>
                         </div>
-                        <Badge variant="outline" className={hasWild ? "text-amber-600" : ""}>
+                        <Badge variant="outline" className={hasWild ? "text-status-warning-foreground" : ""}>
                           {hasWild ? "∞" : perms.length}
                         </Badge>
                       </button>
@@ -128,7 +128,7 @@ export default function AdminRbacMatrix() {
                     <span className="flex items-center gap-2">
                       <Shield className="w-4 h-4" />
                       {ROLE_LABELS[selectedRole] || selectedRole}
-                      {isWildcard && <Badge className="bg-amber-100 text-amber-800">صلاحية كاملة (*)</Badge>}
+                      {isWildcard && <Badge className="bg-status-warning-surface text-status-warning-foreground">صلاحية كاملة (*)</Badge>}
                       {customForRole.length > 0 && <Badge className="bg-purple-100 text-purple-800">{customForRole.length} تخصيص</Badge>}
                     </span>
                   ) : "اختر دوراً لعرض صلاحياته"}
@@ -138,9 +138,9 @@ export default function AdminRbacMatrix() {
                 {selectedRole ? (
                   isWildcard ? (
                     <div className="text-center py-8">
-                      <Shield className="w-12 h-12 mx-auto mb-2 text-amber-500" />
-                      <p className="text-lg font-bold text-amber-700">صلاحية كاملة</p>
-                      <p className="text-sm text-gray-500">هذا الدور يملك wildcard (*) — وصول كامل لجميع الصلاحيات</p>
+                      <Shield className="w-12 h-12 mx-auto mb-2 text-status-warning" />
+                      <p className="text-lg font-bold text-status-warning-foreground">صلاحية كاملة</p>
+                      <p className="text-sm text-muted-foreground">هذا الدور يملك wildcard (*) — وصول كامل لجميع الصلاحيات</p>
                     </div>
                   ) : (
                     <div className="space-y-4">
@@ -157,7 +157,7 @@ export default function AdminRbacMatrix() {
                                   <Badge
                                     key={perm}
                                     variant="outline"
-                                    className={`text-[10px] ${hasIt ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-50 text-gray-400 border-gray-200"}`}
+                                    className={`text-[10px] ${hasIt ? "bg-status-success-surface text-status-success-foreground border-status-success-surface" : "bg-surface-subtle text-muted-foreground border-border"}`}
                                   >
                                     {hasIt ? <CheckCircle className="w-3 h-3 me-0.5" /> : <XCircle className="w-3 h-3 me-0.5" />}
                                     {perm.split(":").slice(1).join(":")}
@@ -171,7 +171,7 @@ export default function AdminRbacMatrix() {
                     </div>
                   )
                 ) : (
-                  <div className="text-center text-gray-400 py-12">
+                  <div className="text-center text-muted-foreground py-12">
                     <Shield className="w-12 h-12 mx-auto mb-2 opacity-30" />
                     <p>اختر دوراً من القائمة لعرض مصفوفة صلاحياته</p>
                   </div>

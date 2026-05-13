@@ -120,8 +120,8 @@ function VehiclesTab() {
           {v.registrationExpiry ? (() => {
             const daysLeft = Math.ceil((new Date(v.registrationExpiry).getTime() - Date.now()) / 86400000);
             return daysLeft <= 0 ? <Badge variant="destructive" className="text-xs gap-1"><FileCheck className="h-3 w-3" />استمارة منتهية</Badge>
-              : daysLeft <= 30 ? <Badge className="text-xs gap-1 bg-amber-100 text-amber-700 hover:bg-amber-100"><FileCheck className="h-3 w-3" />استمارة: {daysLeft} يوم</Badge>
-              : <Badge variant="outline" className="text-xs gap-1 text-green-700"><FileCheck className="h-3 w-3" />استمارة سارية</Badge>;
+              : daysLeft <= 30 ? <Badge className="text-xs gap-1 bg-status-warning-surface text-status-warning-foreground hover:bg-status-warning-surface"><FileCheck className="h-3 w-3" />استمارة: {daysLeft} يوم</Badge>
+              : <Badge variant="outline" className="text-xs gap-1 text-status-success-foreground"><FileCheck className="h-3 w-3" />استمارة سارية</Badge>;
           })() : <span className="text-xs text-muted-foreground">—</span>}
           {v.insuranceExpiry ? (() => {
             const daysLeft = Math.ceil((new Date(v.insuranceExpiry).getTime() - Date.now()) / 86400000);
@@ -156,7 +156,7 @@ function VehiclesTab() {
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm">إجمالي المركبات</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats?.vehicles?.total || 0}</div></CardContent></Card>
         <Card className="bg-emerald-600 text-white"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">متاحة</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats?.vehicles?.available || 0}</div></CardContent></Card>
         <Card className="bg-blue-600 text-white"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">قيد الاستخدام</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{stats?.vehicles?.inUse || 0}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-amber-600">في الصيانة</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-amber-600">{stats?.vehicles?.inMaintenance || 0}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm text-status-warning-foreground">في الصيانة</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-status-warning-foreground">{stats?.vehicles?.inMaintenance || 0}</div></CardContent></Card>
       </div>
 
       <div className="flex items-center gap-4">
