@@ -96,16 +96,20 @@ async function main() {
     "  the prefixes (check the migration tracking table).",
   );
 
-  // Pre-existing baseline (audit 2026-05-13): 10 identical + 9 divergent
-  // pairs in main. This script ships in informational-only mode so the
-  // tree is visible in CI logs without breaking the build. After the
-  // cleanup PR lands and the count is at zero, set ENFORCE=1 to fail on
-  // any new duplicate.
-  //
-  // Once enforced, the divergent count is the dangerous one to gate on:
-  // identical duplicates are harmless leftovers, but divergent pairs
-  // mean two migrations claim the same logical change while actually
-  // doing different things.
+  // After the 2026-05-13 cleanup the identical baseline is at 0. Any
+  // *new* identical pair must fail CI immediately — those are always a
+  // pure mistake (rename without delete) and there's no excuse to merge
+  // one. The divergent baseline is still 9 (pre-existing tech debt: see
+  // docs/KNOWN_ISSUES.md Phase 10) and is gated only when ENFORCE=1 so
+  // the cleanup PR can land incrementally.
+  if (identicalCount > 0) {
+    console.error(
+      `[check-duplicate-migrations] FAIL — ${identicalCount} identical duplicate(s). ` +
+      `Identical baseline is supposed to be 0; either you re-numbered a migration without ` +
+      `deleting the original, or you copied the contents from an earlier migration. Resolve before merging.`,
+    );
+    process.exit(1);
+  }
   const enforce = process.env.ENFORCE === "1";
   if (enforce && divergentCount > 0) {
     console.error(
@@ -114,7 +118,7 @@ async function main() {
     process.exit(1);
   }
   console.log(
-    `[check-duplicate-migrations] informational only (set ENFORCE=1 to gate CI once baseline is cleaned).`,
+    `[check-duplicate-migrations] PASS — ${divergentCount} divergent duplicate(s) remain (informational; set ENFORCE=1 to gate).`,
   );
 }
 
