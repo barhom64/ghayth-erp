@@ -98,7 +98,7 @@ export async function renderPrint(
   }
 
   if (isReprint && profile.requiresApprovalForReprint && !req.reprintApprovedBy) {
-    const approver = await userHasPermission(scope, "print:reprint_approve");
+    const approver = await userHasPermission(scope, "print:reprint:approve");
     if (!approver) {
       throw new PrintApprovalRequiredError(copyNumber);
     }
