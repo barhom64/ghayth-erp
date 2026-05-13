@@ -10,6 +10,7 @@
     "lint:patterns": "node scripts/src/lint-patterns.mjs",
     "audit:routes": "node scripts/src/audit-routes.mjs",
     "audit:runtime": "ALL=1 node scripts/src/runtime-audit.cjs",
+    "audit:runtime:guard": "node scripts/src/audit-runtime-guard.mjs",
     "audit:schema": "node scripts/src/audit-schema-drift.mjs",
     "check:schema-drift": "node scripts/src/check-schema-drift.mjs",
     "check:ghost-rows": "node scripts/src/check-ghost-rows.mjs",
