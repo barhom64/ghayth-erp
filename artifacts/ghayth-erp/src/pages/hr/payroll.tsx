@@ -30,8 +30,8 @@ function PayrollLines({ runId }: { runId: number }) {
         { key: "basic", header: "الأساسي", sortable: true, render: (v) => <span>{formatCurrency(Number(v.basic))}</span> },
         { key: "grossSalary", header: "الإجمالي", sortable: true, render: (v) => <span>{formatCurrency(Number(v.grossSalary))}</span> },
         { key: "gosi", header: "التأمينات", sortable: true, render: (v) => <span className="text-orange-600">{formatCurrency(Number(v.gosi))}</span> },
-        { key: "lateDeduction", header: "الخصومات", sortable: true, render: (v) => <span className="text-red-600">{formatCurrency(Number(v.lateDeduction))}</span> },
-        { key: "netSalary", header: "الصافي", sortable: true, render: (v) => <span className="font-bold text-green-700">{formatCurrency(Number(v.netSalary))}</span> },
+        { key: "lateDeduction", header: "الخصومات", sortable: true, render: (v) => <span className="text-status-error-foreground">{formatCurrency(Number(v.lateDeduction))}</span> },
+        { key: "netSalary", header: "الصافي", sortable: true, render: (v) => <span className="font-bold text-status-success-foreground">{formatCurrency(Number(v.netSalary))}</span> },
       ] as DataTableColumn<any>[]}
       data={lines}
       noToolbar
@@ -56,8 +56,8 @@ export default function PayrollPage() {
   const totalEmps = items.reduce((s: number, r: any) => s + Number(r.employeeCount || 0), 0);
 
   const kpis = [
-    { label: "إجمالي المسيرات", value: items.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
-    { label: "إجمالي المبالغ", value: formatCurrency(totalNet), icon: DollarSign, color: "text-green-600 bg-green-50" },
+    { label: "إجمالي المسيرات", value: items.length, icon: FileText, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "إجمالي المبالغ", value: formatCurrency(totalNet), icon: DollarSign, color: "text-status-success-foreground bg-status-success-surface" },
     { label: "إجمالي الموظفين", value: totalEmps, icon: Users, color: "text-purple-600 bg-purple-50" },
     { label: "متوسط الراتب", value: totalEmps > 0 ? formatCurrency(Math.round(totalNet / totalEmps)) : "0", icon: TrendingUp, color: "text-orange-600 bg-orange-50" },
   ];
@@ -79,7 +79,7 @@ export default function PayrollPage() {
       key: "totalAmount",
       header: "الصافي الإجمالي",
       sortable: true,
-      render: (p) => <span className="font-bold text-green-700">{formatCurrency(Number(p.totalAmount || p.totalNet || 0))}</span>,
+      render: (p) => <span className="font-bold text-status-success-foreground">{formatCurrency(Number(p.totalAmount || p.totalNet || 0))}</span>,
     },
     {
       key: "status",
@@ -91,7 +91,7 @@ export default function PayrollPage() {
       key: "createdAt",
       header: "التاريخ",
       sortable: true,
-      className: "text-gray-500",
+      className: "text-muted-foreground",
       render: (p) => p.createdAt ? formatDateAr(p.createdAt) : "-",
     },
     {
@@ -163,7 +163,7 @@ export default function PayrollPage() {
               <CardContent><PayrollLines runId={selectedRun} /></CardContent>
             </Card>
           ) : (
-            <Card><CardContent className="p-8 text-center text-gray-400">اختر مسير رواتب لعرض التفاصيل</CardContent></Card>
+            <Card><CardContent className="p-8 text-center text-muted-foreground">اختر مسير رواتب لعرض التفاصيل</CardContent></Card>
           )}
         </TabsContent>
       </Tabs>

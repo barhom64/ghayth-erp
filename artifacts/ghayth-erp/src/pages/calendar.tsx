@@ -13,15 +13,15 @@ import { formatDateAr } from "@/lib/formatters";
 
 const CATEGORY_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
   milestone: { label: "معلم", color: "bg-orange-100 text-orange-700", icon: Flag },
-  obligation: { label: "التزام", color: "bg-red-100 text-red-700", icon: Clock },
+  obligation: { label: "التزام", color: "bg-status-error-surface text-status-error-foreground", icon: Clock },
   contract_expiry: { label: "انتهاء عقد", color: "bg-purple-100 text-purple-700", icon: FileText },
-  task: { label: "مهمة", color: "bg-blue-100 text-blue-700", icon: ListTodo },
+  task: { label: "مهمة", color: "bg-status-info-surface text-status-info-foreground", icon: ListTodo },
   training: { label: "تدريب", color: "bg-cyan-100 text-cyan-700", icon: GraduationCap },
-  document_expiry: { label: "وثيقة", color: "bg-yellow-100 text-yellow-700", icon: IdCard },
+  document_expiry: { label: "وثيقة", color: "bg-status-warning-surface text-status-warning-foreground", icon: IdCard },
   vehicle_expiry: { label: "مركبة", color: "bg-slate-100 text-slate-700", icon: Car },
   vehicle_maintenance: { label: "صيانة", color: "bg-stone-100 text-stone-700", icon: Car },
   insurance_expiry: { label: "تأمين", color: "bg-emerald-100 text-emerald-700", icon: Shield },
-  leave: { label: "إجازة", color: "bg-green-100 text-green-700", icon: Calendar },
+  leave: { label: "إجازة", color: "bg-status-success-surface text-status-success-foreground", icon: Calendar },
   interview: { label: "مقابلة", color: "bg-indigo-100 text-indigo-700", icon: Users },
 };
 
@@ -153,14 +153,14 @@ export default function CalendarPage() {
     >
       <KpiGrid items={[
         { label: "معالم قادمة", value: summary.milestones || 0, icon: Flag, color: "text-orange-600 bg-orange-50" },
-        { label: "التزامات", value: summary.obligations || 0, icon: Clock, color: "text-red-600 bg-red-50" },
+        { label: "التزامات", value: summary.obligations || 0, icon: Clock, color: "text-status-error-foreground bg-status-error-surface" },
         { label: "عقود تنتهي", value: summary.contractExpirations || 0, icon: FileText, color: "text-purple-600 bg-purple-50" },
-        { label: "مهام مستحقة", value: summary.tasks || 0, icon: ListTodo, color: "text-blue-600 bg-blue-50" },
+        { label: "مهام مستحقة", value: summary.tasks || 0, icon: ListTodo, color: "text-status-info-foreground bg-status-info-surface" },
         { label: "تدريبات", value: summary.trainings || 0, icon: GraduationCap, color: "text-cyan-600 bg-cyan-50" },
-        { label: "وثائق تنتهي", value: summary.documentExpiries || 0, icon: IdCard, color: "text-yellow-600 bg-yellow-50" },
+        { label: "وثائق تنتهي", value: summary.documentExpiries || 0, icon: IdCard, color: "text-status-warning-foreground bg-status-warning-surface" },
         { label: "أحداث مركبات", value: summary.vehicleExpiries || 0, icon: Car, color: "text-slate-600 bg-slate-50" },
         { label: "تأمينات تنتهي", value: summary.insuranceExpiries || 0, icon: Shield, color: "text-emerald-600 bg-emerald-50" },
-        { label: "إجازات", value: summary.leaves || 0, icon: Calendar, color: "text-green-600 bg-green-50" },
+        { label: "إجازات", value: summary.leaves || 0, icon: Calendar, color: "text-status-success-foreground bg-status-success-surface" },
         { label: "مقابلات", value: summary.interviews || 0, icon: Users, color: "text-indigo-600 bg-indigo-50" },
       ]} />
 
@@ -214,7 +214,7 @@ export default function CalendarPage() {
                             )}
                           </div>
                           {event.priority && event.priority === "high" && (
-                            <Badge className="bg-red-100 text-red-700 text-[10px]">عاجل</Badge>
+                            <Badge className="bg-status-error-surface text-status-error-foreground text-[10px]">عاجل</Badge>
                           )}
                         </div>
                       </Link>
@@ -281,9 +281,9 @@ function MonthGrid({ year, month, events, onPrev, onNext, onToday }: MonthGridPr
             return (
               <div
                 key={idx}
-                className={`min-h-[80px] border rounded-md p-1 text-start flex flex-col gap-0.5 ${isCurrentDay ? "border-primary bg-primary/5" : "border-gray-100 hover:bg-muted/40"}`}
+                className={`min-h-[80px] border rounded-md p-1 text-start flex flex-col gap-0.5 ${isCurrentDay ? "border-primary bg-primary/5" : "border-border hover:bg-muted/40"}`}
               >
-                <div className={`text-xs font-semibold ${isCurrentDay ? "text-primary" : "text-gray-600"}`}>{dayNum}</div>
+                <div className={`text-xs font-semibold ${isCurrentDay ? "text-primary" : "text-muted-foreground"}`}>{dayNum}</div>
                 <div className="space-y-0.5 overflow-hidden">
                   {dayEvents.slice(0, 3).map((e: any) => {
                     const config = CATEGORY_CONFIG[e.category] || CATEGORY_CONFIG.task;

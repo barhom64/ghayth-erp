@@ -30,8 +30,8 @@ export default function RecruitmentAdvancedPage() {
   }));
 
   const kpis = [
-    { label: "وظائف مفتوحة", value: stats?.openPostings ?? 0, icon: Briefcase, color: "text-blue-600 bg-blue-50" },
-    { label: "إجمالي المتقدمين", value: stats?.totalApplications ?? apps.length, icon: Users, color: "text-green-600 bg-green-50" },
+    { label: "وظائف مفتوحة", value: stats?.openPostings ?? 0, icon: Briefcase, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "إجمالي المتقدمين", value: stats?.totalApplications ?? apps.length, icon: Users, color: "text-status-success-foreground bg-status-success-surface" },
     { label: "تم التوظيف", value: apps.filter((a: any) => a.status === "hired").length, icon: UserCheck, color: "text-purple-600 bg-purple-50" },
     { label: "معدل التحويل", value: apps.length > 0 ? Math.round((apps.filter((a: any) => a.status === "hired").length / apps.length) * 100) + "%" : "0%", icon: BarChart3, color: "text-orange-600 bg-orange-50" },
   ];
@@ -67,8 +67,8 @@ export default function RecruitmentAdvancedPage() {
           <DataTable
             columns={[
               { key: "applicantName", header: "الاسم", sortable: true, render: (v) => <span className="font-medium">{v.applicantName || v.name}</span> },
-              { key: "postingTitle", header: "المنصب", sortable: true, render: (v) => <span className="text-gray-500">{v.postingTitle || v.position || "-"}</span> },
-              { key: "email", header: "البريد", sortable: true, render: (v) => <span className="text-gray-500">{v.email || "-"}</span> },
+              { key: "postingTitle", header: "المنصب", sortable: true, render: (v) => <span className="text-muted-foreground">{v.postingTitle || v.position || "-"}</span> },
+              { key: "email", header: "البريد", sortable: true, render: (v) => <span className="text-muted-foreground">{v.email || "-"}</span> },
               { key: "rating", header: "التقييم", sortable: true, render: (v) => <span>{v.rating ? `${v.rating}/5` : "-"}</span> },
               { key: "status", header: "المرحلة", sortable: true, render: (v) => <Badge className={RECRUITMENT_STAGES[v.status]?.color || ""}>{RECRUITMENT_STAGES[v.status]?.label || v.status}</Badge> },
             ] as DataTableColumn<any>[]}

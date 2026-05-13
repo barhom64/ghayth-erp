@@ -194,7 +194,7 @@ export default function DriverDetail() {
           {driver?.licenseExpiry && (
             <div className="mt-4">
               {licenseExpired && (
-                <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-red-800">
+                <div className="flex items-start gap-2 rounded-md border border-status-error-surface bg-status-error-surface p-3 text-status-error-foreground">
                   <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                   <div className="text-xs">
                     <p className="font-semibold">الرخصة منتهية</p>
@@ -203,7 +203,7 @@ export default function DriverDetail() {
                 </div>
               )}
               {!licenseExpired && licenseExpiringSoon && (
-                <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-800">
+                <div className="flex items-start gap-2 rounded-md border border-status-warning-surface bg-status-warning-surface p-3 text-status-warning-foreground">
                   <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                   <div className="text-xs">
                     <p className="font-semibold">الرخصة على وشك الانتهاء</p>
@@ -212,7 +212,7 @@ export default function DriverDetail() {
                 </div>
               )}
               {!licenseExpired && !licenseExpiringSoon && licenseDaysLeft !== null && (
-                <div className="flex items-start gap-2 rounded-md border border-green-100 bg-green-50 p-3 text-green-800">
+                <div className="flex items-start gap-2 rounded-md border border-status-success-surface bg-status-success-surface p-3 text-status-success-foreground">
                   <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
                   <div className="text-xs">
                     <p className="font-semibold">الرخصة سارية</p>
@@ -229,7 +229,7 @@ export default function DriverDetail() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Car className="h-4 w-4 text-gray-500" />
+              <Car className="h-4 w-4 text-muted-foreground" />
               المركبة المسندة
             </CardTitle>
           </CardHeader>
@@ -237,7 +237,7 @@ export default function DriverDetail() {
             {assignedVehicle ? (
               <div className="space-y-1">
                 <p className="font-semibold font-mono">{assignedVehicle.plateNumber}</p>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted-foreground">
                   {[assignedVehicle.make, assignedVehicle.model, assignedVehicle.year].filter(Boolean).join(" ")}
                 </p>
                 <Badge variant="outline" className="text-[10px]">
@@ -245,7 +245,7 @@ export default function DriverDetail() {
                 </Badge>
               </div>
             ) : (
-              <p className="text-xs text-gray-500">لا توجد مركبة مسندة حالياً</p>
+              <p className="text-xs text-muted-foreground">لا توجد مركبة مسندة حالياً</p>
             )}
           </CardContent>
         </Card>
@@ -254,17 +254,17 @@ export default function DriverDetail() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                <User className="h-4 w-4 text-gray-500" />
+                <User className="h-4 w-4 text-muted-foreground" />
                 الموظف المرتبط
               </CardTitle>
             </CardHeader>
             <CardContent className="text-sm">
               <p className="font-medium">{driverWithJoin?.employeeName || "-"}</p>
               {driverWithJoin?.employeeNumber && (
-                <p className="text-xs text-gray-500 font-mono">#{driverWithJoin.employeeNumber}</p>
+                <p className="text-xs text-muted-foreground font-mono">#{driverWithJoin.employeeNumber}</p>
               )}
               {driverWithJoin?.employeeJobTitle && (
-                <p className="text-xs text-gray-500">{driverWithJoin.employeeJobTitle}</p>
+                <p className="text-xs text-muted-foreground">{driverWithJoin.employeeJobTitle}</p>
               )}
             </CardContent>
           </Card>
@@ -330,11 +330,11 @@ function InfoRow({
 }) {
   return (
     <div className="flex items-start gap-2">
-      <Icon className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
+      <Icon className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
       <div className="min-w-0">
-        <p className="text-xs text-gray-500">{label}</p>
+        <p className="text-xs text-muted-foreground">{label}</p>
         <p
-          className={`font-medium text-gray-800 truncate ${mono ? "font-mono" : ""}`}
+          className={`font-medium text-status-neutral-foreground truncate ${mono ? "font-mono" : ""}`}
           dir={ltr ? "ltr" : undefined}
         >
           {value || "-"}

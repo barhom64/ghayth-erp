@@ -58,7 +58,7 @@ export default function WarehouseCategoryDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <FolderTree className="h-4 w-4 text-gray-500" />
+            <FolderTree className="h-4 w-4 text-muted-foreground" />
             بيانات التصنيف
           </CardTitle>
         </CardHeader>
@@ -78,7 +78,7 @@ export default function WarehouseCategoryDetail() {
             <div>
               <p className="text-lg font-semibold text-gray-900">{category?.name || "-"}</p>
               {category?.parentName && (
-                <p className="text-xs text-gray-500">ضمن: {category.parentName}</p>
+                <p className="text-xs text-muted-foreground">ضمن: {category.parentName}</p>
               )}
             </div>
           </div>
@@ -86,13 +86,13 @@ export default function WarehouseCategoryDetail() {
           <div className="grid grid-cols-2 gap-3">
             {category?.parentName && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">التصنيف الأب</p>
+                <p className="text-xs text-muted-foreground mb-0.5">التصنيف الأب</p>
                 <Badge variant="outline">{category.parentName}</Badge>
               </div>
             )}
             {category?.color && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">اللون</p>
+                <p className="text-xs text-muted-foreground mb-0.5">اللون</p>
                 <div className="flex items-center gap-2">
                   <span
                     className="h-4 w-4 rounded border"
@@ -106,8 +106,8 @@ export default function WarehouseCategoryDetail() {
 
           {category?.description && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">الوصف</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{category.description}</p>
+              <p className="text-xs text-muted-foreground mb-1">الوصف</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{category.description}</p>
             </div>
           )}
         </CardContent>
@@ -120,11 +120,11 @@ export default function WarehouseCategoryDetail() {
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div className="flex justify-between">
-              <span className="text-xs text-gray-500">عدد الأصناف</span>
+              <span className="text-xs text-muted-foreground">عدد الأصناف</span>
               <span className="font-semibold">{productsCount}</span>
             </div>
             <div className="flex justify-between border-t pt-2">
-              <span className="text-xs text-gray-500">قيمة المخزون</span>
+              <span className="text-xs text-muted-foreground">قيمة المخزون</span>
               <span className="font-semibold text-gray-900">{formatCurrency(totalStockValue)}</span>
             </div>
           </CardContent>

@@ -77,25 +77,25 @@ export default function TransfersPage() {
       label: "إجمالي الطلبات",
       value: transfers.length,
       icon: FileText,
-      color: "text-blue-600 bg-blue-50",
+      color: "text-status-info-foreground bg-status-info-surface",
     },
     {
       label: "بانتظار الموافقة",
       value: pendingCount,
       icon: Clock,
-      color: "text-amber-600 bg-amber-50",
+      color: "text-status-warning-foreground bg-status-warning-surface",
     },
     {
       label: "تم اعتمادها",
       value: approvedCount,
       icon: CheckCircle,
-      color: "text-green-600 bg-green-50",
+      color: "text-status-success-foreground bg-status-success-surface",
     },
     {
       label: "مرفوضة",
       value: rejectedCount,
       icon: XCircle,
-      color: "text-red-600 bg-red-50",
+      color: "text-status-error-foreground bg-status-error-surface",
     },
   ];
 
@@ -110,7 +110,7 @@ export default function TransfersPage() {
           <div>
             <span className="font-medium text-sm block">{v.employeeName}</span>
             {v.empNumber && (
-              <span className="text-xs text-gray-400">#{v.empNumber}</span>
+              <span className="text-xs text-muted-foreground">#{v.empNumber}</span>
             )}
           </div>
         </div>
@@ -121,7 +121,7 @@ export default function TransfersPage() {
       header: "من",
       sortable: true,
       render: (v) => (
-        <span className="text-sm text-gray-600">
+        <span className="text-sm text-muted-foreground">
           {v.fromBranchName || `فرع #${v.fromBranchId}`}
         </span>
       ),
@@ -132,8 +132,8 @@ export default function TransfersPage() {
       sortable: true,
       render: (v) => (
         <div className="flex items-center gap-1.5">
-          <ArrowRightLeft className="h-3.5 w-3.5 text-blue-500" />
-          <span className="text-sm font-medium text-blue-700">
+          <ArrowRightLeft className="h-3.5 w-3.5 text-status-info" />
+          <span className="text-sm font-medium text-status-info-foreground">
             {v.toBranchName || `فرع #${v.toBranchId}`}
           </span>
         </div>
@@ -143,7 +143,7 @@ export default function TransfersPage() {
       key: "reason",
       header: "السبب",
       render: (v) => (
-        <span className="text-sm text-gray-500 truncate max-w-[200px] block">
+        <span className="text-sm text-muted-foreground truncate max-w-[200px] block">
           {v.reason || "—"}
         </span>
       ),
@@ -153,7 +153,7 @@ export default function TransfersPage() {
       header: "تاريخ التفعيل",
       sortable: true,
       render: (v) => (
-        <span className="text-sm text-gray-600">
+        <span className="text-sm text-muted-foreground">
           {v.effectiveDate ? v.effectiveDate.split("T")[0] : "—"}
         </span>
       ),
@@ -163,7 +163,7 @@ export default function TransfersPage() {
       header: "الحالة",
       sortable: true,
       render: (v) => {
-        const st = STATUS_MAP[v.status] || { label: v.status, color: "bg-gray-100 text-gray-600" };
+        const st = STATUS_MAP[v.status] || { label: v.status, color: "bg-surface-subtle text-muted-foreground" };
         return (
           <Badge variant="outline" className={cn("text-xs", st.color)}>
             {st.label}
@@ -215,7 +215,7 @@ export default function TransfersPage() {
 
       {/* Pending alert */}
       {pendingCount > 0 && (
-        <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+        <div className="flex items-center gap-2 p-3 bg-status-warning-surface border border-status-warning-surface rounded-lg text-sm text-status-warning-foreground">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span>
             يوجد <strong>{pendingCount}</strong> طلب نقل بانتظار الموافقة

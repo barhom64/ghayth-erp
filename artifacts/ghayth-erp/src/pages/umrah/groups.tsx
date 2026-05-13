@@ -193,7 +193,7 @@ export default function UmrahGroups() {
 
       <Card>
         <CardContent className="p-4 flex items-center gap-3">
-          <div className="rounded-md p-2 bg-blue-50 text-blue-600">
+          <div className="rounded-md p-2 bg-status-info-surface text-status-info-foreground">
             <Users className="h-5 w-5" />
           </div>
           <div>
@@ -284,7 +284,7 @@ export default function UmrahGroups() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-2 py-2">
-            <Label htmlFor="merge-target">مجموعة الهدف <span className="text-red-600">*</span></Label>
+            <Label htmlFor="merge-target">مجموعة الهدف <span className="text-status-error-foreground">*</span></Label>
             <Select value={mergeTarget} onValueChange={setMergeTarget}>
               <SelectTrigger id="merge-target"><SelectValue placeholder="اختر مجموعة..." /></SelectTrigger>
               <SelectContent>

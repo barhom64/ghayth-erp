@@ -19,9 +19,9 @@ import { RECRUITMENT_STAGES } from "@/lib/hr-type-maps";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const jobStatusMap: Record<string, { label: string; color: string }> = {
-  open: { label: "مفتوح", color: "bg-green-100 text-green-700" },
-  closed: { label: "مغلق", color: "bg-red-100 text-red-700" },
-  draft: { label: "مسودة", color: "bg-gray-100 text-gray-700" },
+  open: { label: "مفتوح", color: "bg-status-success-surface text-status-success-foreground" },
+  closed: { label: "مغلق", color: "bg-status-error-surface text-status-error-foreground" },
+  draft: { label: "مسودة", color: "bg-surface-subtle text-status-neutral-foreground" },
 };
 
 export default function RecruitmentPage() {
@@ -39,9 +39,9 @@ export default function RecruitmentPage() {
   const filteredApps = applyFilters(apps, filters, { searchFields: ["applicantName", "name"], statusField: "status" });
 
   const kpis = [
-    { label: "وظائف مفتوحة", value: stats?.openPostings ?? jobs.filter((j: any) => j.status === "open").length, icon: Briefcase, color: "text-blue-600 bg-blue-50" },
-    { label: "إجمالي المتقدمين", value: stats?.totalApplications ?? apps.length, icon: Users, color: "text-green-600 bg-green-50" },
-    { label: "طلبات جديدة", value: stats?.newApplications ?? apps.filter((a: any) => a.status === "new").length, icon: FileText, color: "text-yellow-600 bg-yellow-50" },
+    { label: "وظائف مفتوحة", value: stats?.openPostings ?? jobs.filter((j: any) => j.status === "open").length, icon: Briefcase, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "إجمالي المتقدمين", value: stats?.totalApplications ?? apps.length, icon: Users, color: "text-status-success-foreground bg-status-success-surface" },
+    { label: "طلبات جديدة", value: stats?.newApplications ?? apps.filter((a: any) => a.status === "new").length, icon: FileText, color: "text-status-warning-foreground bg-status-warning-surface" },
     { label: "مقابلات مجدولة", value: stats?.scheduledInterviews ?? apps.filter((a: any) => a.status === "interview").length, icon: UserCheck, color: "text-purple-600 bg-purple-50" },
   ];
 
@@ -87,9 +87,9 @@ export default function RecruitmentPage() {
       sortable: true,
       render: (j) => <span className="font-medium">{j.title}</span>,
     },
-    { key: "department", header: "القسم", sortable: true, className: "text-gray-500", render: (j) => j.department || "-" },
-    { key: "location", header: "الموقع", sortable: true, className: "text-gray-500", render: (j) => j.location || "-" },
-    { key: "type", header: "النوع", sortable: true, className: "text-gray-500", render: (j) => j.type || "-" },
+    { key: "department", header: "القسم", sortable: true, className: "text-muted-foreground", render: (j) => j.department || "-" },
+    { key: "location", header: "الموقع", sortable: true, className: "text-muted-foreground", render: (j) => j.location || "-" },
+    { key: "type", header: "النوع", sortable: true, className: "text-muted-foreground", render: (j) => j.type || "-" },
     {
       key: "applicantsCount",
       header: "المتقدمين",
@@ -130,9 +130,9 @@ export default function RecruitmentPage() {
         </div>
       ),
     },
-    { key: "postingTitle", header: "المنصب", sortable: true, className: "text-gray-500", render: (a) => a.postingTitle || a.position || "-" },
-    { key: "email", header: "البريد", sortable: true, className: "text-gray-500", render: (a) => a.email || "-" },
-    { key: "phone", header: "الهاتف", sortable: true, className: "text-gray-500", render: (a) => a.phone || "-" },
+    { key: "postingTitle", header: "المنصب", sortable: true, className: "text-muted-foreground", render: (a) => a.postingTitle || a.position || "-" },
+    { key: "email", header: "البريد", sortable: true, className: "text-muted-foreground", render: (a) => a.email || "-" },
+    { key: "phone", header: "الهاتف", sortable: true, className: "text-muted-foreground", render: (a) => a.phone || "-" },
     { key: "rating", header: "التقييم", sortable: true, render: (a) => a.rating ? `${a.rating}/5` : "-" },
     {
       key: "status",

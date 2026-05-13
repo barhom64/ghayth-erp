@@ -87,9 +87,9 @@ export default function ApplicantsCreate() {
   return (
     <CreatePageLayout title="إضافة متقدم جديد" backPath="/hr/recruitment">
       {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -110,15 +110,15 @@ export default function ApplicantsCreate() {
             </Select>
           </FormFieldWrapper>
           {selectedJob && (
-            <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-              <p className="text-sm font-medium text-blue-700">{selectedJob.title}</p>
-              <p className="text-xs text-blue-500">{selectedJob.department} • {selectedJob.location || "—"}</p>
+            <div className="p-3 bg-status-info-surface rounded-lg border border-status-info-surface">
+              <p className="text-sm font-medium text-status-info-foreground">{selectedJob.title}</p>
+              <p className="text-xs text-status-info">{selectedJob.department} • {selectedJob.location || "—"}</p>
             </div>
           )}
         </div>
 
         <div>
-          <h3 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
             <User className="h-4 w-4" /> بيانات المتقدم
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -129,7 +129,7 @@ export default function ApplicantsCreate() {
         </div>
 
         <div>
-          <h3 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
             <GraduationCap className="h-4 w-4" /> المؤهلات والخبرة
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -163,8 +163,8 @@ export default function ApplicantsCreate() {
         <TextAreaField label="ملاحظات إضافية" value={form.notes} onChange={(v) => set("notes", v)} placeholder="الخبرات، المؤهلات الإضافية، نقاط القوة..." rows={3} />
 
         {form.applicantName && (
-          <div className="p-4 bg-green-50 rounded-xl border border-green-200">
-            <h4 className="text-sm font-semibold text-green-700 mb-2">ملخص المتقدم</h4>
+          <div className="p-4 bg-status-success-surface rounded-xl border border-status-success-surface">
+            <h4 className="text-sm font-semibold text-status-success-foreground mb-2">ملخص المتقدم</h4>
             <div className="flex flex-wrap gap-2">
               <Badge variant="outline">{form.applicantName}</Badge>
               {selectedJob && <Badge variant="outline"><Briefcase className="h-3 w-3 me-1" />{selectedJob.title}</Badge>}

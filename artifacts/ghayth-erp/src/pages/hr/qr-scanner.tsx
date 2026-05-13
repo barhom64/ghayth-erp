@@ -95,13 +95,13 @@ export default function QRScannerPage() {
       <div className="max-w-lg mx-auto">
         <Card className="border-0 shadow-lg">
           <CardContent className="p-8 text-center">
-            <div className="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-6">
-              <QrCode className="w-12 h-12 text-blue-600" />
+            <div className="w-24 h-24 rounded-full bg-status-info-surface flex items-center justify-center mx-auto mb-6">
+              <QrCode className="w-12 h-12 text-status-info-foreground" />
             </div>
             <h4 className="text-xl font-bold mb-2">{user?.name || "موظف"}</h4>
-            <p className="text-gray-500 mb-6">{user?.empNumber || ""}</p>
+            <p className="text-muted-foreground mb-6">{user?.empNumber || ""}</p>
 
-            <div className="flex items-center justify-center gap-2 mb-6 text-sm text-gray-500">
+            <div className="flex items-center justify-center gap-2 mb-6 text-sm text-muted-foreground">
               <Clock className="w-4 h-4" />
               <span>{new Date().toLocaleTimeString("ar-SA")}</span>
               <span>—</span>
@@ -134,8 +134,8 @@ export default function QRScannerPage() {
               <div
                 className={`mt-6 p-4 rounded-lg ${
                   lastAction === "checkin"
-                    ? "bg-green-50 text-green-700"
-                    : "bg-blue-50 text-blue-700"
+                    ? "bg-status-success-surface text-status-success-foreground"
+                    : "bg-status-info-surface text-status-info-foreground"
                 }`}
               >
                 <CheckCircle className="w-8 h-8 mx-auto mb-2" />

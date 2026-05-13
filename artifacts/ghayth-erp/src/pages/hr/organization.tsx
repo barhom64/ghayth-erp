@@ -16,8 +16,8 @@ export default function OrganizationPage() {
   if (isError) return <ErrorState />;
 
   const kpis = [
-    { label: "الأقسام", value: items.length, icon: Building2, color: "text-blue-600 bg-blue-50" },
-    { label: "الموظفين النشطين", value: employees.length, icon: Users, color: "text-green-600 bg-green-50" },
+    { label: "الأقسام", value: items.length, icon: Building2, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "الموظفين النشطين", value: employees.length, icon: Users, color: "text-status-success-foreground bg-status-success-surface" },
     { label: "المناصب", value: [...new Set(employees.map((e: any) => e.jobTitle))].length, icon: Briefcase, color: "text-purple-600 bg-purple-50" },
     { label: "الفروع", value: [...new Set(employees.map((e: any) => e.branchName).filter(Boolean))].length || 1, icon: MapPin, color: "text-orange-600 bg-orange-50" },
   ];
@@ -41,15 +41,15 @@ export default function OrganizationPage() {
                 return (
                   <div key={d.id} className="p-4 border rounded-xl hover:shadow-md transition-shadow bg-white">
                     <div className="flex items-center gap-2 mb-3">
-                      <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                        <Building2 className="w-5 h-5 text-blue-600" />
+                      <div className="w-10 h-10 rounded-lg bg-status-info-surface flex items-center justify-center">
+                        <Building2 className="w-5 h-5 text-status-info-foreground" />
                       </div>
                       <div>
                         <span className="font-semibold block">{d.name}</span>
-                        {d.nameEn && <span className="text-xs text-gray-400">{d.nameEn}</span>}
+                        {d.nameEn && <span className="text-xs text-muted-foreground">{d.nameEn}</span>}
                       </div>
                     </div>
-                    <div className="space-y-1 text-sm text-gray-500">
+                    <div className="space-y-1 text-sm text-muted-foreground">
                       {d.manager && <div className="flex items-center gap-1"><User className="w-3.5 h-3.5" />المدير: {d.manager}</div>}
                       <div className="flex items-center gap-1"><Users className="w-3.5 h-3.5" />الموظفين: {deptEmployees.length}</div>
                     </div>
@@ -58,7 +58,7 @@ export default function OrganizationPage() {
               })}
             </div>
           ) : (
-            <p className="text-center text-gray-400 py-8">لم يتم إعداد الأقسام بعد. اذهب إلى الإعدادات لإضافة الأقسام.</p>
+            <p className="text-center text-muted-foreground py-8">لم يتم إعداد الأقسام بعد. اذهب إلى الإعدادات لإضافة الأقسام.</p>
           )}
         </CardContent>
       </Card>
@@ -75,9 +75,9 @@ export default function OrganizationPage() {
                   return acc;
                 }, {})
               ).map(([title, count]) => (
-                <div key={title} className="p-3 bg-gray-50 rounded-lg text-center">
+                <div key={title} className="p-3 bg-surface-subtle rounded-lg text-center">
                   <p className="font-bold text-lg">{count as number}</p>
-                  <p className="text-xs text-gray-500">{title}</p>
+                  <p className="text-xs text-muted-foreground">{title}</p>
                 </div>
               ))}
             </div>

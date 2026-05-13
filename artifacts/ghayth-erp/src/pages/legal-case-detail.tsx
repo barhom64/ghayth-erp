@@ -38,10 +38,10 @@ const STEP_IMPACTS: Record<string, { icon: string; title: string; description: s
 
 function ImpactBadge({ severity, label }: { severity: "info" | "warning" | "danger" | "success"; label: string }) {
   const colors = {
-    info: "bg-blue-50 text-blue-700 border-blue-200",
-    warning: "bg-amber-50 text-amber-700 border-amber-200",
-    danger: "bg-red-50 text-red-700 border-red-200",
-    success: "bg-green-50 text-green-700 border-green-200",
+    info: "bg-status-info-surface text-status-info-foreground border-status-info-surface",
+    warning: "bg-status-warning-surface text-status-warning-foreground border-status-warning-surface",
+    danger: "bg-status-error-surface text-status-error-foreground border-status-error-surface",
+    success: "bg-status-success-surface text-status-success-foreground border-status-success-surface",
   };
   return <span className={cn("text-xs px-2 py-0.5 rounded-full border font-medium", colors[severity])}>{label}</span>;
 }
@@ -54,11 +54,11 @@ function DeadlineBar({ sessions }: { sessions: any[] }) {
   if (upcoming.length === 0) return null;
 
   return (
-    <Card className="border-amber-200 bg-amber-50">
+    <Card className="border-status-warning-surface bg-status-warning-surface">
       <CardContent className="p-4">
         <div className="flex items-center gap-2 mb-3">
-          <Clock className="h-4 w-4 text-amber-600" />
-          <h3 className="font-semibold text-amber-800">المواعيد القادمة</h3>
+          <Clock className="h-4 w-4 text-status-warning-foreground" />
+          <h3 className="font-semibold text-status-warning-foreground">المواعيد القادمة</h3>
         </div>
         <div className="space-y-2">
           {upcoming.slice(0, 3).map((s: any, i: number) => {
@@ -66,10 +66,10 @@ function DeadlineBar({ sessions }: { sessions: any[] }) {
             return (
               <div key={i} className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm">
-                  <ChevronRight className="h-4 w-4 text-amber-500" />
-                  <span className="text-amber-800">{formatDateAr(s.sessionDate)} — {s.location || "محكمة"}</span>
+                  <ChevronRight className="h-4 w-4 text-status-warning" />
+                  <span className="text-status-warning-foreground">{formatDateAr(s.sessionDate)} — {s.location || "محكمة"}</span>
                 </div>
-                <Badge className={cn("text-xs", daysLeft <= 3 ? "bg-red-100 text-red-700" : daysLeft <= 7 ? "bg-orange-100 text-orange-700" : "bg-amber-100 text-amber-700")}>
+                <Badge className={cn("text-xs", daysLeft <= 3 ? "bg-status-error-surface text-status-error-foreground" : daysLeft <= 7 ? "bg-orange-100 text-orange-700" : "bg-status-warning-surface text-status-warning-foreground")}>
                   {daysLeft} أيام
                 </Badge>
               </div>
@@ -85,7 +85,7 @@ function CaseTimeline({ sessions }: { sessions: any[] }) {
   const events = [...sessions].sort((a: any, b: any) => new Date(b.sessionDate).getTime() - new Date(a.sessionDate).getTime());
   if (events.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-400">
+      <div className="text-center py-8 text-muted-foreground">
         <Activity className="h-8 w-8 mx-auto mb-2 opacity-40" />
         <p className="text-sm">لا توجد أحداث بعد</p>
       </div>
@@ -103,15 +103,15 @@ function CaseTimeline({ sessions }: { sessions: any[] }) {
                 "absolute end-2 w-5 h-5 rounded-full border-2 flex items-center justify-center",
                 isPast ? "bg-blue-500 border-blue-500" : "bg-white border-amber-400"
               )}>
-                {isPast ? <CheckCircle2 className="h-3 w-3 text-white" /> : <Clock className="h-3 w-3 text-amber-500" />}
+                {isPast ? <CheckCircle2 className="h-3 w-3 text-white" /> : <Clock className="h-3 w-3 text-status-warning" />}
               </div>
               <div className="flex-1 pb-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">{formatDateAr(e.sessionDate)}</span>
                   {e.result && <Badge variant="outline" className="text-xs">{e.result}</Badge>}
                 </div>
-                <p className="text-xs text-gray-500 mt-0.5">{e.location || "—"} {e.judge ? `• القاضي: ${e.judge}` : ""}</p>
-                {e.notes && <p className="text-xs text-gray-400 mt-1 bg-gray-50 rounded p-2">{e.notes}</p>}
+                <p className="text-xs text-muted-foreground mt-0.5">{e.location || "—"} {e.judge ? `• القاضي: ${e.judge}` : ""}</p>
+                {e.notes && <p className="text-xs text-muted-foreground mt-1 bg-surface-subtle rounded p-2">{e.notes}</p>}
               </div>
             </div>
           );
@@ -167,7 +167,7 @@ function AddSessionForm({ caseId, onSuccess }: { caseId: number; onSuccess: () =
             <FormDateField name="nextSessionDate" label="الجلسة التالية" />
             <FormTextField name="notes" label="ملاحظات" className="md:col-span-2" />
           </FormGrid>
-          <div className="mt-3 p-3 bg-blue-50 rounded-lg text-xs text-blue-700 flex items-start gap-2">
+          <div className="mt-3 p-3 bg-status-info-surface rounded-lg text-xs text-status-info-foreground flex items-start gap-2">
             <Info className="h-4 w-4 flex-shrink-0 mt-0.5" />
             <div>
               <strong>الأثر المتوقع:</strong> إضافة جلسة ستحدث حالة القضية تلقائياً (مفتوح → جاري) وستُرسل إشعار للمحامي.
@@ -201,24 +201,24 @@ function StepImpactPanel({ caseStatus }: { caseStatus: string }) {
 
   return (
     <Card>
-      <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><TrendingUp className="h-4 w-4 text-blue-500" /> أثر كل خطوة</CardTitle></CardHeader>
+      <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><TrendingUp className="h-4 w-4 text-status-info" /> أثر كل خطوة</CardTitle></CardHeader>
       <CardContent className="space-y-2">
         {impacts.map((imp, i) => (
           <div key={i} className={cn("p-3 rounded-lg text-sm flex items-start gap-2", {
-            "bg-blue-50": imp.type === "info",
-            "bg-amber-50": imp.type === "warning",
-            "bg-red-50": imp.type === "danger",
-            "bg-green-50": imp.type === "success",
+            "bg-status-info-surface": imp.type === "info",
+            "bg-status-warning-surface": imp.type === "warning",
+            "bg-status-error-surface": imp.type === "danger",
+            "bg-status-success-surface": imp.type === "success",
           })}>
             <span className="text-base">{imp.icon}</span>
             <div>
               <div className={cn("font-medium text-xs", {
-                "text-blue-700": imp.type === "info",
-                "text-amber-700": imp.type === "warning",
-                "text-red-700": imp.type === "danger",
-                "text-green-700": imp.type === "success",
+                "text-status-info-foreground": imp.type === "info",
+                "text-status-warning-foreground": imp.type === "warning",
+                "text-status-error-foreground": imp.type === "danger",
+                "text-status-success-foreground": imp.type === "success",
               })}>{imp.title}</div>
-              <div className="text-xs text-gray-500 mt-0.5">{imp.desc}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">{imp.desc}</div>
             </div>
           </div>
         ))}
@@ -285,9 +285,9 @@ export default function LegalCaseDetail() {
           variant="outline"
           onClick={() => handleTransition(t)}
           className={cn("text-xs gap-1", {
-            "border-green-300 text-green-700 hover:bg-green-50": t === "closed" || t === "won",
-            "border-red-300 text-red-700 hover:bg-red-50": t === "lost",
-            "border-blue-300 text-blue-700 hover:bg-blue-50": t === "in_progress" || t === "judgment",
+            "border-status-success-surface text-status-success-foreground hover:bg-status-success-surface": t === "closed" || t === "won",
+            "border-status-error-surface text-status-error-foreground hover:bg-status-error-surface": t === "lost",
+            "border-status-info-surface text-status-info-foreground hover:bg-status-info-surface": t === "in_progress" || t === "judgment",
           })}
         >
           {resolveStatus(t, "legal_case")?.label || t}
@@ -304,43 +304,43 @@ export default function LegalCaseDetail() {
           <CardContent className="p-5">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div>
-                <p className="text-xs text-gray-400 mb-1">الحالة</p>
+                <p className="text-xs text-muted-foreground mb-1">الحالة</p>
                 <PageStatusBadge status={caseData.status} />
               </div>
               <div>
-                <p className="text-xs text-gray-400 mb-1">الأولوية</p>
+                <p className="text-xs text-muted-foreground mb-1">الأولوية</p>
                 <PageStatusBadge status={caseData.priority} />
               </div>
               <div>
-                <p className="text-xs text-gray-400 mb-1">نوع القضية</p>
+                <p className="text-xs text-muted-foreground mb-1">نوع القضية</p>
                 <span className="text-sm font-medium">{caseData.caseType || "-"}</span>
               </div>
               <div>
-                <p className="text-xs text-gray-400 mb-1 flex items-center gap-1"><MapPin className="h-3 w-3" /> المحكمة</p>
+                <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><MapPin className="h-3 w-3" /> المحكمة</p>
                 <span className="text-sm">{caseData.court || "-"}</span>
               </div>
               <div>
-                <p className="text-xs text-gray-400 mb-1 flex items-center gap-1"><User className="h-3 w-3" /> الخصم</p>
+                <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><User className="h-3 w-3" /> الخصم</p>
                 <span className="text-sm">{caseData.opposingParty || "-"}</span>
               </div>
               <div>
-                <p className="text-xs text-gray-400 mb-1 flex items-center gap-1"><Gavel className="h-3 w-3" /> المحامي</p>
+                <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><Gavel className="h-3 w-3" /> المحامي</p>
                 <span className="text-sm font-medium">{caseData.lawyerName || "-"}</span>
               </div>
               <div>
-                <p className="text-xs text-gray-400 mb-1">تاريخ الرفع</p>
+                <p className="text-xs text-muted-foreground mb-1">تاريخ الرفع</p>
                 <span className="text-sm">{formatDateAr(caseData.filingDate) || "-"}</span>
               </div>
               <div>
-                <p className="text-xs text-gray-400 mb-1">عدد الجلسات</p>
+                <p className="text-xs text-muted-foreground mb-1">عدد الجلسات</p>
                 <span className="text-sm font-bold">{sessions.length}</span>
               </div>
             </div>
 
             {caseData.description && (
               <div className="mt-4 pt-4 border-t">
-                <p className="text-xs text-gray-400 mb-1">الوصف</p>
-                <p className="text-sm text-gray-600">{caseData.description}</p>
+                <p className="text-xs text-muted-foreground mb-1">الوصف</p>
+                <p className="text-sm text-muted-foreground">{caseData.description}</p>
               </div>
             )}
           </CardContent>
@@ -382,7 +382,7 @@ export default function LegalCaseDetail() {
           {showAddSession && <AddSessionForm caseId={Number(id)} onSuccess={handleSessionAdded} />}
           {sessions.length === 0 ? (
             <Card>
-              <CardContent className="p-8 text-center text-gray-400">
+              <CardContent className="p-8 text-center text-muted-foreground">
                 <Calendar className="h-8 w-8 mx-auto mb-2 opacity-40" />
                 <p className="text-sm">لا توجد جلسات مسجلة</p>
               </CardContent>
@@ -393,21 +393,21 @@ export default function LegalCaseDetail() {
                 const isPast = new Date(s.sessionDate) < new Date();
                 const daysLeft = Math.ceil((new Date(s.sessionDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
                 return (
-                  <Card key={i} className={cn("border", isPast ? "border-gray-200" : "border-amber-200 bg-amber-50/50")}>
+                  <Card key={i} className={cn("border", isPast ? "border-border" : "border-status-warning-surface bg-status-warning-surface/50")}>
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex items-start gap-3">
-                          <div className={cn("w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0", isPast ? "bg-blue-100" : "bg-amber-100")}>
-                            {isPast ? <CheckCircle2 className="h-4 w-4 text-blue-600" /> : <Clock className="h-4 w-4 text-amber-600" />}
+                          <div className={cn("w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0", isPast ? "bg-status-info-surface" : "bg-status-warning-surface")}>
+                            {isPast ? <CheckCircle2 className="h-4 w-4 text-status-info-foreground" /> : <Clock className="h-4 w-4 text-status-warning-foreground" />}
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
                               <span className="font-medium text-sm">{formatDateAr(s.sessionDate)}</span>
-                              {!isPast && <Badge className="bg-amber-100 text-amber-700 text-xs">{daysLeft} أيام</Badge>}
+                              {!isPast && <Badge className="bg-status-warning-surface text-status-warning-foreground text-xs">{daysLeft} أيام</Badge>}
                             </div>
-                            {s.location && <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5"><MapPin className="h-3 w-3" />{s.location}</p>}
-                            {s.judge && <p className="text-xs text-gray-400 mt-0.5">القاضي: {s.judge}</p>}
-                            {s.notes && <p className="text-xs text-gray-400 mt-1 bg-gray-50 rounded px-2 py-1">{s.notes}</p>}
+                            {s.location && <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5"><MapPin className="h-3 w-3" />{s.location}</p>}
+                            {s.judge && <p className="text-xs text-muted-foreground mt-0.5">القاضي: {s.judge}</p>}
+                            {s.notes && <p className="text-xs text-muted-foreground mt-1 bg-surface-subtle rounded px-2 py-1">{s.notes}</p>}
                           </div>
                         </div>
                         {s.result && (
@@ -415,7 +415,7 @@ export default function LegalCaseDetail() {
                         )}
                       </div>
                       {s.nextSessionDate && (
-                        <div className="mt-2 pt-2 border-t border-dashed flex items-center gap-1 text-xs text-amber-600">
+                        <div className="mt-2 pt-2 border-t border-dashed flex items-center gap-1 text-xs text-status-warning-foreground">
                           <Calendar className="h-3 w-3" />
                           الجلسة التالية: {formatDateAr(s.nextSessionDate)}
                         </div>
@@ -487,7 +487,7 @@ function RiskPanel({ caseData, sessions }: { caseData: any; sessions: any[] }) {
     else if (nextDays <= 7) risks.push({ level: "medium", text: `جلسة خلال ${nextDays} أيام` });
   }
 
-  const riskColors = { low: "bg-gray-50 text-gray-600 border-gray-200", medium: "bg-blue-50 text-blue-700 border-blue-200", high: "bg-orange-50 text-orange-700 border-orange-200", critical: "bg-red-50 text-red-700 border-red-200" };
+  const riskColors = { low: "bg-surface-subtle text-muted-foreground border-border", medium: "bg-status-info-surface text-status-info-foreground border-status-info-surface", high: "bg-orange-50 text-orange-700 border-orange-200", critical: "bg-status-error-surface text-status-error-foreground border-status-error-surface" };
 
   if (risks.length === 0) return null;
 
@@ -520,7 +520,7 @@ function DocumentsSection({ caseId, caseTitle }: { caseId: number; caseTitle: st
     <div className="space-y-3">
       {items.length === 0 ? (
         <Card>
-          <CardContent className="p-8 text-center text-gray-400">
+          <CardContent className="p-8 text-center text-muted-foreground">
             <FileText className="h-8 w-8 mx-auto mb-2 opacity-40" />
             <p className="text-sm">لا توجد مستندات مرتبطة بهذه القضية</p>
             <p className="text-xs mt-1">ارفع مستنداً من صفحة المستندات واربطه بهذه القضية</p>
@@ -530,10 +530,10 @@ function DocumentsSection({ caseId, caseTitle }: { caseId: number; caseTitle: st
         items.map((d: any) => (
           <Card key={d.id}>
             <CardContent className="p-3 flex items-center gap-3">
-              <FileText className="h-8 w-8 text-blue-500 flex-shrink-0" />
+              <FileText className="h-8 w-8 text-status-info flex-shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm truncate">{d.title}</p>
-                <p className="text-xs text-gray-400">{d.fileName || ""} — {formatDateAr(d.createdAt)}</p>
+                <p className="text-xs text-muted-foreground">{d.fileName || ""} — {formatDateAr(d.createdAt)}</p>
               </div>
               <PageStatusBadge status={d.status} />
             </CardContent>

@@ -119,7 +119,7 @@ export default function FixedAssetDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Box className="h-4 w-4 text-gray-500" />
+            <Box className="h-4 w-4 text-muted-foreground" />
             بيانات الأصل
           </CardTitle>
         </CardHeader>
@@ -127,19 +127,19 @@ export default function FixedAssetDetail() {
           <div className="border-b pb-3">
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-bold text-gray-900">{formatCurrency(netBook)}</span>
-              <span className="text-xs text-gray-500">ر.س قيمة دفترية</span>
+              <span className="text-xs text-muted-foreground">ر.س قيمة دفترية</span>
             </div>
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               من أصل {formatCurrency(cost)} — مُستهلك: {depreciationPct.toFixed(1)}%
             </p>
           </div>
 
           <div>
             <div className="flex justify-between text-xs mb-1">
-              <span className="text-gray-500">نسبة الاستهلاك</span>
+              <span className="text-muted-foreground">نسبة الاستهلاك</span>
               <span className="font-medium">{depreciationPct.toFixed(1)}%</span>
             </div>
-            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-2 bg-surface-subtle rounded-full overflow-hidden">
               <div className="h-full bg-amber-500 rounded-full" style={{ width: `${Math.min(100, depreciationPct)}%` }} />
             </div>
           </div>
@@ -147,52 +147,52 @@ export default function FixedAssetDetail() {
           <div className="grid grid-cols-2 gap-3">
             {item?.category && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الفئة</p>
+                <p className="text-xs text-muted-foreground mb-0.5">الفئة</p>
                 <Badge variant="outline">{item.category}</Badge>
               </div>
             )}
             {item?.assetNumber && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">رقم الأصل</p>
+                <p className="text-xs text-muted-foreground mb-0.5">رقم الأصل</p>
                 <span className="font-mono text-xs">{item.assetNumber}</span>
               </div>
             )}
             {item?.serialNumber && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الرقم التسلسلي</p>
+                <p className="text-xs text-muted-foreground mb-0.5">الرقم التسلسلي</p>
                 <span className="font-mono text-xs">{item.serialNumber}</span>
               </div>
             )}
             {item?.purchaseDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ الشراء</p>
-                <span className="text-gray-800">{formatDateAr(item.purchaseDate)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ الشراء</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(item.purchaseDate)}</span>
               </div>
             )}
             {item?.usefulLife && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">العمر الافتراضي</p>
-                <span className="text-gray-800">{item.usefulLife} سنة</span>
+                <p className="text-xs text-muted-foreground mb-0.5">العمر الافتراضي</p>
+                <span className="text-status-neutral-foreground">{item.usefulLife} سنة</span>
               </div>
             )}
             {item?.depreciationMethod && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">طريقة الاستهلاك</p>
+                <p className="text-xs text-muted-foreground mb-0.5">طريقة الاستهلاك</p>
                 <Badge variant="secondary">{DEPRECIATION_METHODS[item.depreciationMethod] || item.depreciationMethod}</Badge>
               </div>
             )}
             {item?.location && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">الموقع</p>
-                <span className="text-gray-800">{item.location}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">الموقع</p>
+                <span className="text-status-neutral-foreground">{item.location}</span>
               </div>
             )}
           </div>
 
           {item?.description && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">الوصف</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{item.description}</p>
+              <p className="text-xs text-muted-foreground mb-1">الوصف</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{item.description}</p>
             </div>
           )}
         </CardContent>
@@ -205,20 +205,20 @@ export default function FixedAssetDetail() {
           </CardHeader>
           <CardContent className="space-y-2 text-xs">
             <div className="flex justify-between">
-              <span className="text-gray-500">تكلفة الشراء</span>
+              <span className="text-muted-foreground">تكلفة الشراء</span>
               <span className="font-medium">{formatCurrency(cost)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-500">الاستهلاك المتراكم</span>
-              <span className="font-medium text-red-600">{formatCurrency(accumulated)}</span>
+              <span className="text-muted-foreground">الاستهلاك المتراكم</span>
+              <span className="font-medium text-status-error-foreground">{formatCurrency(accumulated)}</span>
             </div>
             <div className="flex justify-between pt-2 border-t">
-              <span className="text-gray-500">القيمة الدفترية</span>
+              <span className="text-muted-foreground">القيمة الدفترية</span>
               <span className="font-bold text-emerald-600">{formatCurrency(netBook)}</span>
             </div>
             {item?.salvageValue && (
               <div className="flex justify-between">
-                <span className="text-gray-500">قيمة الخردة</span>
+                <span className="text-muted-foreground">قيمة الخردة</span>
                 <span className="font-medium">{formatCurrency(item.salvageValue)}</span>
               </div>
             )}
@@ -232,7 +232,7 @@ export default function FixedAssetDetail() {
             </CardHeader>
             <CardContent className="text-sm">
               <p className="font-medium">{item.custodianName}</p>
-              {item.departmentName && <p className="text-xs text-gray-500">{item.departmentName}</p>}
+              {item.departmentName && <p className="text-xs text-muted-foreground">{item.departmentName}</p>}
             </CardContent>
           </Card>
         )}

@@ -37,7 +37,7 @@ export default function AdminEventMonitor() {
     { key: "action", header: "الحدث", searchable: true, render: (r: any) => <span className="font-mono text-xs">{r.action}</span> },
     { key: "domain", header: "النطاق", render: (r: any) => <Badge variant="outline" className="text-[10px]">{r.domain}</Badge> },
     { key: "label", header: "الوصف", searchable: true },
-    { key: "critical", header: "حرج", render: (r: any) => r.critical ? <Badge className="bg-red-100 text-red-800">حرج</Badge> : null },
+    { key: "critical", header: "حرج", render: (r: any) => r.critical ? <Badge className="bg-status-error-surface text-status-error-foreground">حرج</Badge> : null },
   ];
 
   return (
@@ -57,25 +57,25 @@ export default function AdminEventMonitor() {
             <Card>
               <CardContent className="p-4 text-center">
                 <p className="text-2xl font-bold">{total}</p>
-                <p className="text-xs text-gray-500">حدث مسجل</p>
+                <p className="text-xs text-muted-foreground">حدث مسجل</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4 text-center">
                 <p className="text-2xl font-bold">{domainKeys.length}</p>
-                <p className="text-xs text-gray-500">نطاق</p>
+                <p className="text-xs text-muted-foreground">نطاق</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4 text-center">
                 <p className="text-2xl font-bold">{catalog.filter((e: any) => e.critical).length}</p>
-                <p className="text-xs text-gray-500">حدث حرج</p>
+                <p className="text-xs text-muted-foreground">حدث حرج</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4 text-center">
                 <p className="text-2xl font-bold">{recentEvents.length}</p>
-                <p className="text-xs text-gray-500">أحداث أخيرة</p>
+                <p className="text-xs text-muted-foreground">أحداث أخيرة</p>
               </CardContent>
             </Card>
           </div>
@@ -107,7 +107,7 @@ export default function AdminEventMonitor() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-amber-500" />
+                  <Zap className="w-4 h-4 text-status-warning" />
                   آخر 20 حدث فعلي
                 </CardTitle>
               </CardHeader>
@@ -128,7 +128,7 @@ export default function AdminEventMonitor() {
                 <Filter className="w-4 h-4" />
                 كتالوج الأحداث
                 {domainFilter !== "all" && <Badge>{domainFilter}</Badge>}
-                <span className="text-gray-400 font-normal">({filteredCatalog.length})</span>
+                <span className="text-muted-foreground font-normal">({filteredCatalog.length})</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">

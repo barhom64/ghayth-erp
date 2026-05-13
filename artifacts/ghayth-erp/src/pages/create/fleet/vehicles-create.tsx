@@ -70,9 +70,9 @@ export default function VehiclesCreate() {
   return (
     <CreatePageLayout title="إضافة مركبة جديدة" backPath="/fleet">
       {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -118,7 +118,7 @@ export default function VehiclesCreate() {
           </FormFieldWrapper>
         </div>
         <div className="border-t pt-4 mt-2">
-          <h3 className="text-sm font-semibold text-blue-700 mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-status-info-foreground mb-3 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
             بيانات التسجيل والفحص — الربط الحكومي (تم)
           </h3>

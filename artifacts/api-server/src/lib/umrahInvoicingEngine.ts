@@ -18,6 +18,14 @@ interface GenerateInvoiceInput {
   subAgentId: number;
   groupIds: number[];
   seasonId: number;
+  /**
+   * Optional manual price override per group, keyed by groupId. When set,
+   * the engine uses this price instead of looking up `umrah_pricing`.
+   * Used by the sales-invoice wizard (`POST /umrah/sales-wizard/generate`)
+   * to let operators enter prices per group at invoice time, with last-used
+   * suggestions surfaced by `GET /umrah/sales-wizard/uninvoiced-groups`.
+   */
+  manualPrices?: Record<number, number>;
 }
 
 interface RegisterPaymentInput {
@@ -46,7 +54,7 @@ interface InvoiceLineItem {
 // ────────────────────────────────────────────────────────────────────────────
 
 export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceInput) {
-  const { subAgentId, groupIds, seasonId } = input;
+  const { subAgentId, groupIds, seasonId, manualPrices } = input;
 
   if (!groupIds?.length) throw new ValidationError("يجب تحديد مجموعة واحدة على الأقل");
 
@@ -94,27 +102,33 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
   for (const grp of groups) {
     const mutamerCount = Number(grp.mutamerCount || 0);
     const entryDate = grp.entryDate as string | undefined;
+    const groupId = grp.id as number;
 
-    if (!entryDate) {
-      throw new ValidationError(`المجموعة ${grp.nuskGroupNumber} لا تحتوي على تاريخ دخول — لا يمكن تحديد السعر`);
+    // Price resolution — manual override beats pricing rules. When neither
+    // is available, ask the user to set a price instead of silently failing.
+    let price: number | null = null;
+    if (manualPrices && manualPrices[groupId] != null && Number(manualPrices[groupId]) > 0) {
+      price = Number(manualPrices[groupId]);
+    } else {
+      if (!entryDate) {
+        throw new ValidationError(`المجموعة ${grp.nuskGroupNumber} لا تحتوي على تاريخ دخول — لا يمكن تحديد السعر تلقائياً، يرجى إدخال السعر يدوياً`);
+      }
+      const [pricing] = await rawQuery<Record<string, unknown>>(
+        `SELECT "pricePerMutamer" FROM umrah_pricing
+         WHERE "companyId" = $1 AND "deletedAt" IS NULL
+           AND ("subAgentId" = $2 OR ("subAgentId" IS NULL AND "agentId" = $3))
+           AND ("seasonId" = $4 OR "seasonId" IS NULL)
+           AND "validFrom" <= $5 AND "validTo" >= $5
+         ORDER BY "subAgentId" DESC NULLS LAST, "validFrom" DESC
+         LIMIT 1`,
+        [scope.companyId, subAgentId, subAgent.agentId, seasonId, entryDate]
+      );
+      if (!pricing) {
+        throw new NotFoundError(`لا يوجد سعر ساري للفترة للمجموعة ${grp.nuskGroupNumber} — يرجى إدخال السعر يدوياً أو إضافة قاعدة تسعير`);
+      }
+      price = Number(pricing.pricePerMutamer);
     }
 
-    const [pricing] = await rawQuery<Record<string, unknown>>(
-      `SELECT "pricePerMutamer" FROM umrah_pricing
-       WHERE "companyId" = $1 AND "deletedAt" IS NULL
-         AND ("subAgentId" = $2 OR ("subAgentId" IS NULL AND "agentId" = $3))
-         AND ("seasonId" = $4 OR "seasonId" IS NULL)
-         AND "validFrom" <= $5 AND "validTo" >= $5
-       ORDER BY "subAgentId" DESC NULLS LAST, "validFrom" DESC
-       LIMIT 1`,
-      [scope.companyId, subAgentId, subAgent.agentId, seasonId, entryDate]
-    );
-
-    if (!pricing) {
-      throw new NotFoundError(`لا يوجد سعر ساري للفترة للمجموعة ${grp.nuskGroupNumber}`);
-    }
-
-    const price = Number(pricing.pricePerMutamer);
     const lineTotal = mutamerCount * price;
     subtotal += lineTotal;
     totalPilgrims += mutamerCount;
@@ -171,13 +185,34 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     });
   }
 
-  // VAT: fetch company umrah VAT policy (defaults to 0 for exempt umrah services)
+  // VAT on the MARGIN (sale − cost), not on the full sale.
+  // Umrah services in KSA fall under the travel-agent margin scheme: the
+  // VAT base is the gross profit (sale price minus the NUSK purchase
+  // invoice total for the same groups), not the full sale price. Charging
+  // VAT on the full subtotal overcharges the buyer and overstates the
+  // company's VAT liability.
+  //
+  // Cost basis = sum of umrah_nusk_invoices.totalAmount for every NUSK
+  // invoice linked to the groups being billed (joined via group_id).
+  // Penalties are pure revenue (no offsetting cost), so they stay in the
+  // VAT base when the company opts in.
+  const costRows = await rawQuery<Record<string, unknown>>(
+    `SELECT COALESCE(SUM("totalAmount"), 0) AS cost_basis
+       FROM umrah_nusk_invoices
+      WHERE "companyId" = $1
+        AND "groupId" = ANY($2)
+        AND "deletedAt" IS NULL`,
+    [scope.companyId, groupIds]
+  );
+  const costBasis = roundTo2(Number(costRows[0]?.cost_basis ?? 0));
+  const marginBase = roundTo2(Math.max(0, subtotal - costBasis));
+
   const [vatSetting] = await rawQuery<Record<string, unknown>>(
     `SELECT value FROM system_settings WHERE "companyId" = $1 AND key = 'umrah_vat_rate' LIMIT 1`,
     [scope.companyId]
   );
   const vatRate = vatSetting ? Number(vatSetting.value) : 0;
-  const vatAmount = roundTo2(subtotal * (vatRate / 100));
+  const vatAmount = roundTo2(marginBase * (vatRate / 100));
   const total = subtotal + penaltiesTotal + vatAmount;
 
   const [seqRow] = await rawQuery<Record<string, unknown>>(`SELECT nextval('umrah_sales_invoice_seq') AS seq`);
@@ -191,14 +226,15 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     const invRes = await client.query(
       `INSERT INTO umrah_sales_invoices
        ("companyId","branchId","subAgentId","clientId","seasonId",ref,"invoiceDate",
-        subtotal,"penaltiesTotal","vatRate","vatAmount",total,"paidAmount",status,
-        "dueDate","nuskInvoiceRefs","groupRefs","pilgrimCount","createdBy","createdAt","updatedAt")
-       VALUES ($1,$2,$3,$4,$5,$6,CURRENT_DATE,$7,$8,$9,$10,$11,0,'draft',
-               CURRENT_DATE + INTERVAL '30 days',$12,$13,$14,$15,NOW(),NOW())
+        subtotal,"penaltiesTotal","vatRate","vatAmount","costBasis","marginBase",total,
+        "paidAmount",status,"dueDate","nuskInvoiceRefs","groupRefs","pilgrimCount",
+        "createdBy","createdAt","updatedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,CURRENT_DATE,$7,$8,$9,$10,$11,$12,$13,0,'draft',
+               CURRENT_DATE + INTERVAL '30 days',$14,$15,$16,$17,NOW(),NOW())
        RETURNING id`,
       [
         scope.companyId, scope.branchId || null, subAgentId, subAgent.clientId, seasonId,
-        ref, subtotal, penaltiesTotal, vatRate, vatAmount, total,
+        ref, subtotal, penaltiesTotal, vatRate, vatAmount, costBasis, marginBase, total,
         nuskInvoiceRefs.join(","), groupRefs.join(","), totalPilgrims, scope.userId,
       ]
     );
@@ -428,6 +464,147 @@ export async function registerPayment(scope: Scope, input: RegisterPaymentInput)
   createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_payments", entityId: paymentId, after: { ref: payRef, sarAmount } }).catch((e) => logger.error(e, "[umrahInvoicingEngine] background task failed"));
 
   return { paymentId, ref: payRef, sarAmount, currency, method, allocations, unallocated: remaining };
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// 2.5 Sales-invoice wizard — uninvoiced groups + smart price suggestions
+// ────────────────────────────────────────────────────────────────────────────
+
+export interface UninvoicedGroup {
+  id: number;
+  nuskGroupNumber: string;
+  name: string | null;
+  mutamerCount: number;
+  entryDate: string | null;
+  suggestedPrice: number | null;
+  /** Where the suggestion came from. UI can hint the operator. */
+  suggestedSource: "last_invoice" | "pricing_rule" | "default_per_mutamer" | "none";
+}
+
+export interface UninvoicedGroupsResult {
+  subAgent: { id: number; name: string; agentId: number | null; clientId: number | null; clientName: string | null; defaultPricePerMutamer: number | null };
+  groups: UninvoicedGroup[];
+}
+
+/**
+ * Lists groups that belong to a sub-agent and haven't been billed yet, with
+ * a smart price suggestion per group. The suggestion is sourced in priority:
+ *
+ *   1. Last invoice line for this sub-agent — captures the price the operator
+ *      actually charged last time, even if it disagreed with the pricing rule.
+ *   2. Matching `umrah_pricing` rule for (sub-agent OR agent, season, entry date).
+ *   3. `umrah_sub_agents.defaultPricePerMutamer` — the per-sub-agent fallback.
+ *   4. null — operator must enter a price.
+ *
+ * The wizard UI surfaces the suggested value pre-filled but editable, so
+ * routine cases (price unchanged) need zero typing while exceptional cases
+ * (one-off discount, currency move) stay one input away.
+ */
+export async function listUninvoicedGroups(scope: Scope, subAgentId: number, seasonId?: number | null): Promise<UninvoicedGroupsResult> {
+  const [subAgent] = await rawQuery<Record<string, unknown>>(
+    `SELECT sa.id, sa.name, sa."agentId", sa."clientId", sa."defaultPricePerMutamer",
+            c.name AS "clientName"
+       FROM umrah_sub_agents sa
+       LEFT JOIN clients c ON c.id = sa."clientId" AND c."deletedAt" IS NULL
+      WHERE sa.id = $1 AND sa."companyId" = $2 AND sa."deletedAt" IS NULL`,
+    [subAgentId, scope.companyId]
+  );
+  if (!subAgent) throw new NotFoundError("الوكيل الفرعي غير موجود");
+
+  // Groups belonging to this sub-agent that haven't been billed yet
+  // (no row in umrah_sales_invoice_items for a non-cancelled invoice).
+  const seasonClause = seasonId ? "AND g.\"seasonId\" = $3" : "";
+  const seasonParams = seasonId ? [subAgentId, scope.companyId, seasonId] : [subAgentId, scope.companyId];
+  const groups = await rawQuery<Record<string, unknown>>(
+    `SELECT g.id, g."nuskGroupNumber", g.name, g."mutamerCount",
+            (SELECT MIN(p."arrivalDate") FROM umrah_pilgrims p
+              WHERE p."groupId" = g.id AND p."deletedAt" IS NULL) AS "entryDate"
+       FROM umrah_groups g
+      WHERE g."subAgentId" = $1
+        AND g."companyId" = $2
+        AND g."deletedAt" IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM umrah_sales_invoice_items si
+                   JOIN umrah_sales_invoices inv ON inv.id = si."invoiceId"
+                  WHERE si."groupId" = g.id
+                    AND inv.status != 'cancelled'
+                    AND inv."deletedAt" IS NULL
+        )
+        ${seasonClause}
+      ORDER BY g."createdAt" DESC, g.id DESC`,
+    seasonParams
+  );
+
+  // Last invoice line for this sub-agent — single round-trip, picks the
+  // most recent non-cancelled invoice's average unit price.
+  const [lastPriced] = await rawQuery<Record<string, unknown>>(
+    `SELECT si."unitPrice"
+       FROM umrah_sales_invoice_items si
+       JOIN umrah_sales_invoices inv ON inv.id = si."invoiceId"
+      WHERE inv."subAgentId" = $1
+        AND inv."companyId" = $2
+        AND inv.status != 'cancelled'
+        AND inv."deletedAt" IS NULL
+        AND si."itemType" = 'group'
+      ORDER BY inv."invoiceDate" DESC, inv.id DESC, si.id DESC
+      LIMIT 1`,
+    [subAgentId, scope.companyId]
+  );
+  const lastInvoicePrice = lastPriced ? Number(lastPriced.unitPrice) : null;
+
+  const suggested: UninvoicedGroup[] = [];
+  for (const g of groups) {
+    const groupId = g.id as number;
+    const entryDate = g.entryDate as string | null;
+
+    let price: number | null = null;
+    let source: UninvoicedGroup["suggestedSource"] = "none";
+
+    if (lastInvoicePrice && lastInvoicePrice > 0) {
+      price = lastInvoicePrice;
+      source = "last_invoice";
+    } else if (entryDate) {
+      const [rule] = await rawQuery<Record<string, unknown>>(
+        `SELECT "pricePerMutamer" FROM umrah_pricing
+          WHERE "companyId" = $1 AND "deletedAt" IS NULL
+            AND ("subAgentId" = $2 OR ("subAgentId" IS NULL AND "agentId" = $3))
+            AND "validFrom" <= $4 AND "validTo" >= $4
+          ORDER BY "subAgentId" DESC NULLS LAST, "validFrom" DESC
+          LIMIT 1`,
+        [scope.companyId, subAgentId, subAgent.agentId, entryDate]
+      );
+      if (rule) {
+        price = Number(rule.pricePerMutamer);
+        source = "pricing_rule";
+      }
+    }
+    if (price == null && subAgent.defaultPricePerMutamer != null) {
+      price = Number(subAgent.defaultPricePerMutamer);
+      source = "default_per_mutamer";
+    }
+
+    suggested.push({
+      id: groupId,
+      nuskGroupNumber: g.nuskGroupNumber as string,
+      name: (g.name as string | null) ?? null,
+      mutamerCount: Number(g.mutamerCount ?? 0),
+      entryDate,
+      suggestedPrice: price,
+      suggestedSource: source,
+    });
+  }
+
+  return {
+    subAgent: {
+      id: subAgent.id as number,
+      name: subAgent.name as string,
+      agentId: (subAgent.agentId as number | null) ?? null,
+      clientId: (subAgent.clientId as number | null) ?? null,
+      clientName: (subAgent.clientName as string | null) ?? null,
+      defaultPricePerMutamer: subAgent.defaultPricePerMutamer != null ? Number(subAgent.defaultPricePerMutamer) : null,
+    },
+    groups: suggested,
+  };
 }
 
 // ────────────────────────────────────────────────────────────────────────────

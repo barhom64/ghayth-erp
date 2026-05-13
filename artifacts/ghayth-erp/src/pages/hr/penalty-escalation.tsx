@@ -32,10 +32,10 @@ export default function PenaltyEscalationPage() {
   ];
 
   const kpis = [
-    { label: "مخالفات نشطة", value: items.length, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
+    { label: "مخالفات نشطة", value: items.length, icon: AlertTriangle, color: "text-status-error-foreground bg-status-error-surface" },
     { label: "موظفين متأثرين", value: Object.keys(grouped).length, icon: Scale, color: "text-orange-600 bg-orange-50" },
     { label: "تصعيدات عالية", value: items.filter((v: any) => v.severity === "high" || v.severity === "critical").length, icon: TrendingUp, color: "text-purple-600 bg-purple-50" },
-    { label: "تم الحل", value: (data?.data || []).filter((v: any) => v.status !== "active").length, icon: Shield, color: "text-green-600 bg-green-50" },
+    { label: "تم الحل", value: (data?.data || []).filter((v: any) => v.status !== "active").length, icon: Shield, color: "text-status-success-foreground bg-status-success-surface" },
   ];
 
   return (
@@ -55,10 +55,10 @@ export default function PenaltyEscalationPage() {
           <h4 className="font-semibold mb-3">سلم التصعيد</h4>
           <div className="flex gap-3">
             {escalationRules.map((r, i) => (
-              <div key={i} className="flex-1 p-3 rounded-lg bg-gray-50 text-center">
+              <div key={i} className="flex-1 p-3 rounded-lg bg-surface-subtle text-center">
                 <Badge className={SEVERITY_LEVELS[r.severity]?.color}>{SEVERITY_LEVELS[r.severity]?.label}</Badge>
                 <p className="text-sm mt-2 font-medium">{r.action}</p>
-                <p className="text-xs text-gray-400 mt-1">{r.count}+ مخالفات</p>
+                <p className="text-xs text-muted-foreground mt-1">{r.count}+ مخالفات</p>
               </div>
             ))}
           </div>
@@ -77,16 +77,16 @@ export default function PenaltyEscalationPage() {
                     <AvatarInitial name={name} color="red" />
                     <div>
                       <p className="font-semibold">{name}</p>
-                      <p className="text-sm text-gray-500">{count} مخالفة — {rule.action}</p>
+                      <p className="text-sm text-muted-foreground">{count} مخالفة — {rule.action}</p>
                     </div>
                   </div>
                   <Badge className={SEVERITY_LEVELS[rule.severity]?.color}>{SEVERITY_LEVELS[rule.severity]?.label}</Badge>
                 </div>
                 <div className="mt-3 ms-13 space-y-1">
                   {vList.slice(0, 3).map((v: any) => (
-                    <div key={v.id} className="text-sm text-gray-500 flex items-center justify-between">
+                    <div key={v.id} className="text-sm text-muted-foreground flex items-center justify-between">
                       <span>{v.type}: {v.description?.slice(0, 50)}</span>
-                      <span className="text-red-500">{formatCurrency(Number(v.deduction || 0))}</span>
+                      <span className="text-status-error">{formatCurrency(Number(v.deduction || 0))}</span>
                     </div>
                   ))}
                 </div>
@@ -94,7 +94,7 @@ export default function PenaltyEscalationPage() {
             </Card>
           );
         })}
-        {Object.keys(grouped).length === 0 && <Card><CardContent className="p-8 text-center text-gray-400">لا توجد مخالفات نشطة</CardContent></Card>}
+        {Object.keys(grouped).length === 0 && <Card><CardContent className="p-8 text-center text-muted-foreground">لا توجد مخالفات نشطة</CardContent></Card>}
       </div>
     </PageShell>
   );

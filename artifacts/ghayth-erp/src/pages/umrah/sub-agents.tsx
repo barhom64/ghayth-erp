@@ -131,7 +131,7 @@ export default function UmrahSubAgents() {
             {s.clientName ?? `#${s.clientId}`}
           </Badge>
         ) : (
-          <Badge className="bg-red-50 text-red-700 border-red-200" variant="outline">
+          <Badge className="bg-status-error-surface text-status-error-foreground border-status-error-surface" variant="outline">
             غير مربوط
           </Badge>
         ),
@@ -201,8 +201,8 @@ export default function UmrahSubAgents() {
 
       <div className="grid gap-3 md:grid-cols-3">
         <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center">
-            <Users className="w-5 h-5 text-blue-600" />
+          <div className="w-11 h-11 rounded-xl bg-status-info-surface flex items-center justify-center">
+            <Users className="w-5 h-5 text-status-info-foreground" />
           </div>
           <div>
             <p className="text-2xl font-bold">{formatNumber(subAgents.length)}</p>
@@ -219,11 +219,11 @@ export default function UmrahSubAgents() {
           </div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-red-50 flex items-center justify-center">
-            <Link2 className="w-5 h-5 text-red-600" />
+          <div className="w-11 h-11 rounded-xl bg-status-error-surface flex items-center justify-center">
+            <Link2 className="w-5 h-5 text-status-error-foreground" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-red-700">{formatNumber(unlinkedCount)}</p>
+            <p className="text-2xl font-bold text-status-error-foreground">{formatNumber(unlinkedCount)}</p>
             <p className="text-xs text-muted-foreground">غير مربوطين</p>
           </div>
         </CardContent></Card>

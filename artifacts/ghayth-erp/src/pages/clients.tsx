@@ -68,7 +68,7 @@ export default function Clients() {
     const label = CLASSIFICATIONS[cls] || cls;
     switch (cls) {
       case "vip": return <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-400">{label}</Badge>;
-      case "premium": return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400">{label}</Badge>;
+      case "premium": return <Badge className="bg-status-info-surface text-status-info-foreground hover:bg-status-info-surface dark:bg-blue-900/30 dark:text-blue-400">{label}</Badge>;
       case "regular": return <Badge className="bg-slate-100 text-slate-800 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400">{label}</Badge>;
       case "prospect": return <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400">{label}</Badge>;
       case "churned": return <Badge className="bg-rose-100 text-rose-800 hover:bg-rose-100 dark:bg-rose-900/30 dark:text-rose-400">{label}</Badge>;
@@ -154,8 +154,8 @@ export default function Clients() {
     >
       <CrmTabsNav />
       <KpiGrid items={[
-        { label: "إجمالي العملاء", value: total || 0, icon: Building2, color: "text-blue-600 bg-blue-50" },
-        { label: "نشط", value: (clients || []).filter((c: any) => c.status === "active").length, icon: CheckCircle, color: "text-green-600 bg-green-50" },
+        { label: "إجمالي العملاء", value: total || 0, icon: Building2, color: "text-status-info-foreground bg-status-info-surface" },
+        { label: "نشط", value: (clients || []).filter((c: any) => c.status === "active").length, icon: CheckCircle, color: "text-status-success-foreground bg-status-success-surface" },
         { label: "VIP", value: (clients || []).filter((c: any) => c.classification === "vip").length, icon: Star, color: "text-purple-600 bg-purple-50" },
         { label: "جديد هذا الشهر", value: (clients || []).filter((c: any) => {
           if (!c.createdAt) return false;

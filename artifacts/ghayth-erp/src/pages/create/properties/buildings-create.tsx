@@ -72,15 +72,15 @@ export default function BuildingsCreate() {
       backPath="/properties/buildings"
     >
       {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="space-y-6">
         <CreationDateField />
         <h3 className="flex items-center gap-2 text-lg font-semibold">
-          <Building2 className="h-5 w-5 text-blue-500" /> بيانات المبنى
+          <Building2 className="h-5 w-5 text-status-info" /> بيانات المبنى
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <TextField label="اسم المبنى" required value={form.name} onChange={v => setForm({ ...form, name: v })} placeholder="برج X / مجمع Y" error={fieldErrors.name} />
@@ -100,7 +100,7 @@ export default function BuildingsCreate() {
           </div>
 
           <div className="border-t pt-4">
-            <p className="text-sm font-bold text-gray-600 mb-3">بيانات الملكية (إيجار)</p>
+            <p className="text-sm font-bold text-muted-foreground mb-3">بيانات الملكية (إيجار)</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <TextField label="رقم الصك" dir="ltr" value={form.deedNumber} onChange={v => setForm({ ...form, deedNumber: v })} />
               <FormFieldWrapper label="تاريخ الصك">
@@ -122,7 +122,7 @@ export default function BuildingsCreate() {
           </div>
 
           <div className="border-t pt-4">
-            <p className="text-sm font-bold text-gray-600 mb-3">العنوان الوطني</p>
+            <p className="text-sm font-bold text-muted-foreground mb-3">العنوان الوطني</p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               <TextField label="الحي" value={form.district} onChange={v => setForm({ ...form, district: v })} />
               <TextField label="الشارع" value={form.street} onChange={v => setForm({ ...form, street: v })} />
@@ -133,7 +133,7 @@ export default function BuildingsCreate() {
           </div>
 
           <div className="border-t pt-4">
-            <p className="text-sm font-bold text-gray-600 mb-3">الإحداثيات</p>
+            <p className="text-sm font-bold text-muted-foreground mb-3">الإحداثيات</p>
             <div className="grid grid-cols-2 gap-3">
               <NumberField label="خط العرض" value={form.latitude} onChange={v => setForm({ ...form, latitude: v })} step={0.0000001} placeholder="24.7136" />
               <NumberField label="خط الطول" value={form.longitude} onChange={v => setForm({ ...form, longitude: v })} step={0.0000001} placeholder="46.6753" />

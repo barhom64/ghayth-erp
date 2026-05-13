@@ -188,7 +188,7 @@ export default function PropertyPaymentDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Banknote className="h-4 w-4 text-gray-500" />
+            <Banknote className="h-4 w-4 text-muted-foreground" />
             بيانات الدفعة
           </CardTitle>
         </CardHeader>
@@ -198,9 +198,9 @@ export default function PropertyPaymentDetail() {
             <span className="text-3xl font-bold text-gray-900">
               {formatCurrency(amount)}
             </span>
-            <span className="text-xs text-gray-500">ر.س</span>
+            <span className="text-xs text-muted-foreground">ر.س</span>
             {payment?.status === "partially_paid" && paidAmount > 0 && (
-              <span className="ms-2 text-xs text-amber-600">
+              <span className="ms-2 text-xs text-status-warning-foreground">
                 مدفوع: {formatCurrency(paidAmount)}
               </span>
             )}
@@ -209,13 +209,13 @@ export default function PropertyPaymentDetail() {
           <div className="grid grid-cols-2 gap-3">
             {typeLabel && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">نوع الدفعة</p>
+                <p className="text-xs text-muted-foreground mb-0.5">نوع الدفعة</p>
                 <Badge variant="outline">{typeLabel}</Badge>
               </div>
             )}
             {paymentMethodLabel && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+                <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
                   <CreditCard className="h-3 w-3" /> طريقة الدفع
                 </p>
                 <Badge variant="secondary">{paymentMethodLabel}</Badge>
@@ -223,52 +223,52 @@ export default function PropertyPaymentDetail() {
             )}
             {payment?.dueDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+                <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
                   <Calendar className="h-3 w-3" /> تاريخ الاستحقاق
                 </p>
-                <span className="text-gray-800">{formatDateAr(payment.dueDate)}</span>
+                <span className="text-status-neutral-foreground">{formatDateAr(payment.dueDate)}</span>
               </div>
             )}
             {payment?.paidDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+                <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
                   <Calendar className="h-3 w-3" /> تاريخ الدفع
                 </p>
-                <span className="text-gray-800">{formatDateAr(payment.paidDate)}</span>
+                <span className="text-status-neutral-foreground">{formatDateAr(payment.paidDate)}</span>
               </div>
             )}
             {payment?.tenantName && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">المستأجر</p>
-                <span className="text-gray-800">{payment.tenantName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">المستأجر</p>
+                <span className="text-status-neutral-foreground">{payment.tenantName}</span>
               </div>
             )}
             {payment?.unitNumber && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الوحدة</p>
-                <span className="text-gray-800">{payment.unitNumber}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">الوحدة</p>
+                <span className="text-status-neutral-foreground">{payment.unitNumber}</span>
               </div>
             )}
             {payment?.reference && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+                <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
                   <Hash className="h-3 w-3" /> الرقم المرجعي
                 </p>
-                <span className="text-gray-800 font-mono text-xs">{payment.reference}</span>
+                <span className="text-status-neutral-foreground font-mono text-xs">{payment.reference}</span>
               </div>
             )}
             {periodLabel && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">الفترة المغطاة</p>
-                <span className="text-gray-800">{periodLabel}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">الفترة المغطاة</p>
+                <span className="text-status-neutral-foreground">{periodLabel}</span>
               </div>
             )}
           </div>
 
           {payment?.notes && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">ملاحظات</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{payment.notes}</p>
+              <p className="text-xs text-muted-foreground mb-1">ملاحظات</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{payment.notes}</p>
             </div>
           )}
         </CardContent>
@@ -294,7 +294,7 @@ export default function PropertyPaymentDetail() {
                 {STATUS_LABELS[payment.status] || payment.status}
               </Badge>
               {payment.status === "partially_paid" && (
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted-foreground">
                   المتبقي: {formatCurrency(Math.max(0, amount - paidAmount))}
                 </p>
               )}

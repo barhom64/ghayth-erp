@@ -97,32 +97,32 @@ export default function ProjectCostingPage() {
     >
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Card><CardContent className="p-4">
-          <div className="text-sm text-gray-500">عدد المشاريع</div>
-          <div className="text-2xl font-bold text-gray-800 mt-1">{list.length}</div>
+          <div className="text-sm text-muted-foreground">عدد المشاريع</div>
+          <div className="text-2xl font-bold text-status-neutral-foreground mt-1">{list.length}</div>
         </CardContent></Card>
         <Card><CardContent className="p-4">
-          <div className="text-sm text-gray-500">إجمالي الميزانيات</div>
-          <div className="text-2xl font-bold text-blue-700 mt-1">{formatCurrency(totals.budget)}</div>
+          <div className="text-sm text-muted-foreground">إجمالي الميزانيات</div>
+          <div className="text-2xl font-bold text-status-info-foreground mt-1">{formatCurrency(totals.budget)}</div>
         </CardContent></Card>
         <Card><CardContent className="p-4">
-          <div className="text-sm text-gray-500">إجمالي التكاليف الفعلية</div>
-          <div className="text-2xl font-bold text-gray-800 mt-1">{formatCurrency(totals.actualCost)}</div>
+          <div className="text-sm text-muted-foreground">إجمالي التكاليف الفعلية</div>
+          <div className="text-2xl font-bold text-status-neutral-foreground mt-1">{formatCurrency(totals.actualCost)}</div>
         </CardContent></Card>
         <Card><CardContent className="p-4">
-          <div className="text-sm text-gray-500">المتبقي الإجمالي</div>
-          <div className={`text-2xl font-bold mt-1 ${totals.budget - totals.actualCost >= 0 ? "text-green-700" : "text-red-600"}`}>{formatCurrency(totals.budget - totals.actualCost)}</div>
+          <div className="text-sm text-muted-foreground">المتبقي الإجمالي</div>
+          <div className={`text-2xl font-bold mt-1 ${totals.budget - totals.actualCost >= 0 ? "text-status-success-foreground" : "text-status-error-foreground"}`}>{formatCurrency(totals.budget - totals.actualCost)}</div>
         </CardContent></Card>
       </div>
 
       {isLoading ? (
-        <div className="text-center py-16 text-gray-400">جاري التحميل...</div>
+        <div className="text-center py-16 text-muted-foreground">جاري التحميل...</div>
       ) : list.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">لا توجد مشاريع مسجلة</div>
+        <div className="text-center py-16 text-muted-foreground">لا توجد مشاريع مسجلة</div>
       ) : (
         <Card>
           <div className="overflow-x-auto">
             <div className="inline-block min-w-full">
-              <div className="bg-gray-50 border-b px-4 py-3 text-xs font-semibold text-gray-500 grid grid-cols-7 gap-2">
+              <div className="bg-surface-subtle border-b px-4 py-3 text-xs font-semibold text-muted-foreground grid grid-cols-7 gap-2">
                 <div>الرقم</div>
                 <div>اسم المشروع</div>
                 <div>الحالة</div>
@@ -136,24 +136,24 @@ export default function ProjectCostingPage() {
                 return (
                   <div
                     key={row.id}
-                    className="border-b px-4 py-3 grid grid-cols-7 gap-2 items-center hover:bg-gray-50 text-sm cursor-pointer"
+                    className="border-b px-4 py-3 grid grid-cols-7 gap-2 items-center hover:bg-surface-subtle text-sm cursor-pointer"
                     onClick={() => navigate(`/finance/project-costing/${row.id}`)}
                   >
-                    <div><span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">{row.ref}</span></div>
+                    <div><span className="font-mono text-xs bg-surface-subtle px-2 py-0.5 rounded">{row.ref}</span></div>
                     <div>
-                      <span className="text-blue-600 hover:underline font-medium text-right">{row.name}</span>
+                      <span className="text-status-info-foreground hover:underline font-medium text-right">{row.name}</span>
                     </div>
                     <div><PageStatusBadge status={row.status} domain="project" /></div>
                     <div>{formatCurrency(row.budget)}</div>
                     <div>{formatCurrency(row.actualCost)}</div>
-                    <div><span className={row.budgetRemaining < 0 ? "text-red-600 font-semibold" : "text-green-700"}>{formatCurrency(row.budgetRemaining)}</span></div>
+                    <div><span className={row.budgetRemaining < 0 ? "text-status-error-foreground font-semibold" : "text-status-success-foreground"}>{formatCurrency(row.budgetRemaining)}</span></div>
                     <div>
                       <div className="w-24">
                         <div className="flex items-center gap-1.5">
-                          <div className="flex-1 bg-gray-100 rounded-full h-1.5">
+                          <div className="flex-1 bg-surface-subtle rounded-full h-1.5">
                             <div className={`h-1.5 rounded-full ${pct > 90 ? "bg-red-500" : pct > 70 ? "bg-yellow-500" : "bg-green-500"}`} style={{ width: `${pct}%` }} />
                           </div>
-                          <span className="text-xs text-gray-500">{pct}%</span>
+                          <span className="text-xs text-muted-foreground">{pct}%</span>
                         </div>
                       </div>
                     </div>

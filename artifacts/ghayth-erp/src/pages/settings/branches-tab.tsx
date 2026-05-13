@@ -73,7 +73,7 @@ export function BranchesTab() {
       render: (r: any) => (
         <div className="font-medium">
           {r.name}
-          {r.nameEn && <span className="text-gray-400 text-xs me-2 block">{r.nameEn}</span>}
+          {r.nameEn && <span className="text-muted-foreground text-xs me-2 block">{r.nameEn}</span>}
         </div>
       ),
     },
@@ -83,14 +83,14 @@ export function BranchesTab() {
           header: "الشركة",
           sortable: true,
           render: (r: any) => (
-            <span className="text-gray-500">
+            <span className="text-muted-foreground">
               {companies.find((c: any) => c.id === r.companyId)?.name || "-"}
             </span>
           ),
         }]
       : []),
-    { key: "city", header: "المدينة", sortable: true, searchable: true, render: (r: any) => <span className="text-gray-500">{r.city || "-"}</span> },
-    { key: "phone", header: "الهاتف", render: (r: any) => <span className="text-gray-500">{r.phone || "-"}</span> },
+    { key: "city", header: "المدينة", sortable: true, searchable: true, render: (r: any) => <span className="text-muted-foreground">{r.city || "-"}</span> },
+    { key: "phone", header: "الهاتف", render: (r: any) => <span className="text-muted-foreground">{r.phone || "-"}</span> },
     {
       key: "actions",
       header: "إجراءات",
@@ -103,7 +103,7 @@ export function BranchesTab() {
             onClick={() => setDeletingBranch({ id: r.id, name: r.name || "—" })}
             disabled={deleting === r.id}
             title="حذف"
-            className="text-red-500 hover:text-red-700"
+            className="text-status-error hover:text-status-error-foreground"
           >
             <Trash2 className="h-4 w-4" />
           </Button>

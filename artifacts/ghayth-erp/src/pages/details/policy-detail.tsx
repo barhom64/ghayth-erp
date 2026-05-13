@@ -110,7 +110,7 @@ export default function PolicyDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <FileText className="h-4 w-4 text-gray-500" />
+            <FileText className="h-4 w-4 text-muted-foreground" />
             بيانات السياسة
           </CardTitle>
         </CardHeader>
@@ -118,47 +118,47 @@ export default function PolicyDetail() {
           <div className="grid grid-cols-2 gap-3">
             {policy?.category && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">التصنيف</p>
+                <p className="text-xs text-muted-foreground mb-0.5">التصنيف</p>
                 <Badge variant="outline">{policy.category}</Badge>
               </div>
             )}
             {policy?.version && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الإصدار</p>
+                <p className="text-xs text-muted-foreground mb-0.5">الإصدار</p>
                 <Badge variant="secondary">{policy.version}</Badge>
               </div>
             )}
             {policy?.effectiveDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ السريان</p>
-                <span className="text-gray-800">{formatDateAr(policy.effectiveDate)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ السريان</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(policy.effectiveDate)}</span>
               </div>
             )}
             {policy?.reviewDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ المراجعة</p>
-                <span className="text-gray-800">{formatDateAr(policy.reviewDate)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ المراجعة</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(policy.reviewDate)}</span>
               </div>
             )}
             {(policy?.owner || policy?.ownerName) && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">المسؤول</p>
-                <span className="text-gray-800">{policy.owner || policy.ownerName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">المسؤول</p>
+                <span className="text-status-neutral-foreground">{policy.owner || policy.ownerName}</span>
               </div>
             )}
           </div>
 
           {policy?.summary && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">الملخص</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{policy.summary}</p>
+              <p className="text-xs text-muted-foreground mb-1">الملخص</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{policy.summary}</p>
             </div>
           )}
 
           {(policy?.content || policy?.fullContent) && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">المحتوى الكامل</p>
-              <p className="text-gray-800 whitespace-pre-wrap">
+              <p className="text-xs text-muted-foreground mb-1">المحتوى الكامل</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">
                 {policy.content || policy.fullContent}
               </p>
             </div>
@@ -166,8 +166,8 @@ export default function PolicyDetail() {
 
           {policy?.complianceRequirements && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">متطلبات الامتثال</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{policy.complianceRequirements}</p>
+              <p className="text-xs text-muted-foreground mb-1">متطلبات الامتثال</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{policy.complianceRequirements}</p>
             </div>
           )}
         </CardContent>
@@ -181,20 +181,20 @@ export default function PolicyDetail() {
           <CardContent className="space-y-2 text-sm">
             {policy?.createdAt && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ الإنشاء</p>
-                <span className="text-gray-800">{formatDateAr(policy.createdAt)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ الإنشاء</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(policy.createdAt)}</span>
               </div>
             )}
             {policy?.createdByName && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">أنشئ بواسطة</p>
-                <span className="text-gray-800">{policy.createdByName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">أنشئ بواسطة</p>
+                <span className="text-status-neutral-foreground">{policy.createdByName}</span>
               </div>
             )}
             {policy?.updatedAt && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">آخر تحديث</p>
-                <span className="text-gray-800">{formatDateAr(policy.updatedAt)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">آخر تحديث</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(policy.updatedAt)}</span>
               </div>
             )}
           </CardContent>

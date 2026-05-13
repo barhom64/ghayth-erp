@@ -26,7 +26,7 @@ export function useChartExport() {
 }
 
 export function TrendBadge({ value }: { value: number }) {
-  if (value === 0) return <Badge variant="outline" className="text-gray-500 gap-1"><Minus className="h-3 w-3" />0%</Badge>;
+  if (value === 0) return <Badge variant="outline" className="text-muted-foreground gap-1"><Minus className="h-3 w-3" />0%</Badge>;
   if (value > 0) return <Badge className="bg-emerald-100 text-emerald-700 gap-1"><ArrowUpRight className="h-3 w-3" />+{value}%</Badge>;
-  return <Badge className="bg-red-100 text-red-700 gap-1"><ArrowDownRight className="h-3 w-3" />{value}%</Badge>;
+  return <Badge className="bg-status-error-surface text-status-error-foreground gap-1"><ArrowDownRight className="h-3 w-3" />{value}%</Badge>;
 }

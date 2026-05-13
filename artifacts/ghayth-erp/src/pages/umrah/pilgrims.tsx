@@ -25,9 +25,9 @@ export default function UmrahPilgrims() {
   const total = resp?.total || 0;
 
   const kpiCards = [
-    { label: "إجمالي المعتمرين", value: total, icon: Users, color: "text-blue-600 bg-blue-50" },
-    { label: "داخل المملكة", value: (items ?? []).filter((p: any) => ["arrived", "active"].includes(p.status)).length, icon: Plane, color: "text-green-600 bg-green-50" },
-    { label: "متأخرين", value: (items ?? []).filter((p: any) => p.status === "overstayed").length, icon: AlertTriangle, color: "text-red-600 bg-red-50" },
+    { label: "إجمالي المعتمرين", value: total, icon: Users, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "داخل المملكة", value: (items ?? []).filter((p: any) => ["arrived", "active"].includes(p.status)).length, icon: Plane, color: "text-status-success-foreground bg-status-success-surface" },
+    { label: "متأخرين", value: (items ?? []).filter((p: any) => p.status === "overstayed").length, icon: AlertTriangle, color: "text-status-error-foreground bg-status-error-surface" },
     { label: "بدون وكيل", value: (items ?? []).filter((p: any) => !p.agentId).length, icon: UserPlus, color: "text-orange-600 bg-orange-50" },
   ];
 
@@ -92,7 +92,7 @@ export default function UmrahPilgrims() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{c.value}</p>
-                <p className="text-xs text-gray-500">{c.label}</p>
+                <p className="text-xs text-muted-foreground">{c.label}</p>
               </div>
             </CardContent>
           </Card>

@@ -77,7 +77,7 @@ export default function UmrahReconciliation() {
       key: "diff",
       header: "الفرق (ريال)",
       render: (r) => (
-        <span className={`font-bold ${Number(r.diff) >= 0 ? "text-red-600" : "text-emerald-700"}`}>
+        <span className={`font-bold ${Number(r.diff) >= 0 ? "text-status-error-foreground" : "text-emerald-700"}`}>
           {formatCurrency(Number(r.diff))}
         </span>
       ),
@@ -94,7 +94,7 @@ export default function UmrahReconciliation() {
       header: "الفرق",
       render: (r) => {
         const d = Number(r.fileCount) - Number(r.systemCount);
-        return <span className={`font-bold ${d === 0 ? "" : "text-red-600"}`}>{d > 0 ? `+${d}` : d}</span>;
+        return <span className={`font-bold ${d === 0 ? "" : "text-status-error-foreground"}`}>{d > 0 ? `+${d}` : d}</span>;
       },
     },
   ];
@@ -107,7 +107,7 @@ export default function UmrahReconciliation() {
     {
       key: "overstayDays",
       header: "أيام التجاوز",
-      render: (r) => <span className="font-bold text-red-600">{r.overstayDays}</span>,
+      render: (r) => <span className="font-bold text-status-error-foreground">{r.overstayDays}</span>,
     },
   ];
 
@@ -116,19 +116,19 @@ export default function UmrahReconciliation() {
       label: "فروقات المبلغ",
       value: summary.amountDiffs,
       icon: Scale,
-      color: summary.amountDiffs > 0 ? "text-red-600 bg-red-50" : "text-emerald-700 bg-emerald-50",
+      color: summary.amountDiffs > 0 ? "text-status-error-foreground bg-status-error-surface" : "text-emerald-700 bg-emerald-50",
     },
     {
       label: "فروقات العدد",
       value: summary.countDiffs,
       icon: Users,
-      color: summary.countDiffs > 0 ? "text-amber-600 bg-amber-50" : "text-emerald-700 bg-emerald-50",
+      color: summary.countDiffs > 0 ? "text-status-warning-foreground bg-status-warning-surface" : "text-emerald-700 bg-emerald-50",
     },
     {
       label: "تجاوزات بلا مخالفة",
       value: summary.overstayGaps,
       icon: AlertTriangle,
-      color: summary.overstayGaps > 0 ? "text-red-600 bg-red-50" : "text-emerald-700 bg-emerald-50",
+      color: summary.overstayGaps > 0 ? "text-status-error-foreground bg-status-error-surface" : "text-emerald-700 bg-emerald-50",
     },
   ];
 

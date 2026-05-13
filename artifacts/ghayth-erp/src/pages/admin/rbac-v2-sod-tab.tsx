@@ -117,7 +117,7 @@ export function SodRulesTab() {
             <ShieldAlert className="h-5 w-5" />
             قواعد فصل المهام (SoD) — {rules.length}
           </h3>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             تمنع اجتماع صلاحيتين متعارضتين في دور واحد (مَن يُنشئ القيد لا يَعتمده).
           </p>
         </div>
@@ -136,10 +136,10 @@ export function SodRulesTab() {
       )}
 
       {violations.length > 0 && (
-        <Card className="border-red-200 bg-red-50">
+        <Card className="border-status-error-surface bg-status-error-surface">
           <CardContent className="p-3 flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-red-600" />
-            <p className="text-sm text-red-700">
+            <AlertTriangle className="h-4 w-4 text-status-error-foreground" />
+            <p className="text-sm text-status-error-foreground">
               {violations.length} قاعدة منتهَكة حالياً —
               {violations.reduce((s, v) => s + v.offenders.length, 0)} دور متأثر
             </p>
@@ -148,7 +148,7 @@ export function SodRulesTab() {
       )}
 
       <div className="border rounded overflow-x-auto">
-        <div className="grid grid-cols-12 gap-2 items-center py-2 px-3 bg-gray-100 border-b text-xs font-semibold text-gray-600 min-w-[600px]">
+        <div className="grid grid-cols-12 gap-2 items-center py-2 px-3 bg-surface-subtle border-b text-xs font-semibold text-muted-foreground min-w-[600px]">
           <div className="col-span-3">القاعدة</div>
           <div className="col-span-5">الإجراءات المتعارضة</div>
           <div className="col-span-1">الشدة</div>
@@ -158,13 +158,13 @@ export function SodRulesTab() {
         {rules.map((r) => {
           const offenders = violationsByRuleId.get(r.id) || [];
           return (
-            <div key={r.id} className="grid grid-cols-12 gap-2 items-center py-2 px-3 border-b last:border-b-0 hover:bg-gray-50 min-w-[600px]">
+            <div key={r.id} className="grid grid-cols-12 gap-2 items-center py-2 px-3 border-b last:border-b-0 hover:bg-surface-subtle min-w-[600px]">
               <div className="col-span-3">
                 <p className="text-sm font-medium">{r.label_ar}</p>
-                <p className="text-[10px] text-gray-400 font-mono">{r.rule_key}</p>
+                <p className="text-[10px] text-muted-foreground font-mono">{r.rule_key}</p>
               </div>
-              <div className="col-span-5 text-xs font-mono text-gray-700">
-                {r.feature_a}.{r.action_a} <span className="text-red-500">↔</span> {r.feature_b}.{r.action_b}
+              <div className="col-span-5 text-xs font-mono text-status-neutral-foreground">
+                {r.feature_a}.{r.action_a} <span className="text-status-error">↔</span> {r.feature_b}.{r.action_b}
               </div>
               <div className="col-span-1">
                 <Badge className={`text-xs ${SEVERITY_COLORS[r.severity]}`}>{SEVERITY_LABELS[r.severity]}</Badge>
@@ -173,13 +173,13 @@ export function SodRulesTab() {
                 <button
                   onClick={() => toggleActive(r)}
                   className={`px-2 py-1 rounded text-xs border ${
-                    r.is_active ? "bg-green-50 border-green-300 text-green-700" : "bg-gray-100 border-gray-300 text-gray-500"
+                    r.is_active ? "bg-status-success-surface border-status-success-surface text-status-success-foreground" : "bg-surface-subtle border-border text-muted-foreground"
                   }`}
                 >
                   {r.is_active ? "مُفعَّلة" : "مُعطَّلة"}
                 </button>
                 {offenders.length > 0 && (
-                  <Badge className="ms-1 text-xs bg-red-100 text-red-700">{offenders.length} منتهك</Badge>
+                  <Badge className="ms-1 text-xs bg-status-error-surface text-status-error-foreground">{offenders.length} منتهك</Badge>
                 )}
               </div>
               <div className="col-span-1">
@@ -191,7 +191,7 @@ export function SodRulesTab() {
           );
         })}
         {rules.length === 0 && (
-          <p className="p-6 text-center text-gray-400 text-sm">لا توجد قواعد بعد</p>
+          <p className="p-6 text-center text-muted-foreground text-sm">لا توجد قواعد بعد</p>
         )}
       </div>
 
@@ -256,7 +256,7 @@ function AddSodRuleForm({ features, onCreated }: { features: Feature[]; onCreate
         />
         <ActionPicker pairKey="A" features={features} />
       </FormGrid>
-      <div className="text-center text-red-500 my-2">↔</div>
+      <div className="text-center text-status-error my-2">↔</div>
       <FormGrid cols={2}>
         <FormSelectField
           name="featureB"

@@ -105,7 +105,7 @@ export default function RecurringJournalsPage() {
       searchable: true,
       sortable: true,
       render: (r) => (
-        <span className="font-medium text-blue-700 hover:underline">{r.name}</span>
+        <span className="font-medium text-status-info-foreground hover:underline">{r.name}</span>
       ),
     },
     {
@@ -164,7 +164,7 @@ export default function RecurringJournalsPage() {
             disabled={runMut.isPending}
             onClick={() => runMut.mutate({ id: r.id })}
           >
-            <Zap className="h-4 w-4 text-amber-600" />
+            <Zap className="h-4 w-4 text-status-warning-foreground" />
           </GuardedButton>
           <GuardedButton
             perm="finance:update"

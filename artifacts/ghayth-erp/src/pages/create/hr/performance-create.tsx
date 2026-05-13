@@ -137,9 +137,9 @@ export default function PerformanceCreate() {
   return (
     <CreatePageLayout title="تقييم أداء جديد" backPath="/hr/performance">
       {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -148,7 +148,7 @@ export default function PerformanceCreate() {
 
       <div className="space-y-6">
         <div>
-          <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-status-neutral-foreground mb-3 flex items-center gap-2">
             <Target className="w-4 h-4" />
             معلومات التقييم الأساسية
           </h3>
@@ -174,9 +174,9 @@ export default function PerformanceCreate() {
                 {form.overallScore > 0 && (
                   <span className={cn(
                     "text-sm font-medium px-2 py-0.5 rounded",
-                    form.overallScore >= 4 ? "bg-green-100 text-green-700" :
-                    form.overallScore >= 3 ? "bg-yellow-100 text-yellow-700" :
-                    "bg-red-100 text-red-700"
+                    form.overallScore >= 4 ? "bg-status-success-surface text-status-success-foreground" :
+                    form.overallScore >= 3 ? "bg-status-warning-surface text-status-warning-foreground" :
+                    "bg-status-error-surface text-status-error-foreground"
                   )}>
                     {scoreLabels[form.overallScore]}
                   </span>
@@ -202,7 +202,7 @@ export default function PerformanceCreate() {
             <div className="space-y-3">
               {competencies.map((comp, idx) => (
                 <div key={comp.name} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                  <span className="text-sm text-gray-700 w-48">{comp.name}</span>
+                  <span className="text-sm text-status-neutral-foreground w-48">{comp.name}</span>
                   <div className="flex items-center gap-3">
                     <StarRating value={comp.score} onChange={(v) => updateCompetency(idx, v)} size="sm" />
                     {comp.score > 0 && <span className="text-xs text-muted-foreground w-20">{scoreLabels[comp.score]}</span>}
@@ -216,7 +216,7 @@ export default function PerformanceCreate() {
                 <div className="flex items-center gap-2">
                   <span className={cn(
                     "text-lg font-bold",
-                    avgScore >= 4 ? "text-green-600" : avgScore >= 3 ? "text-yellow-600" : "text-red-600"
+                    avgScore >= 4 ? "text-status-success-foreground" : avgScore >= 3 ? "text-status-warning-foreground" : "text-status-error-foreground"
                   )}>
                     {avgScore.toFixed(1)}/5
                   </span>
@@ -227,7 +227,7 @@ export default function PerformanceCreate() {
         </Card>
 
         <div>
-          <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-status-neutral-foreground mb-3 flex items-center gap-2">
             <BookOpen className="w-4 h-4" />
             التفاصيل والملاحظات
           </h3>

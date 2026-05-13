@@ -114,17 +114,17 @@ export default function DepositsPage() {
     >
       <PropertyTabsNav />
       <div className="grid grid-cols-3 gap-4">
-        <Card><CardContent className="pt-4 text-center"><div className="text-xl font-bold">{deposits.length}</div><div className="text-xs text-gray-500">إجمالي الودائع</div></CardContent></Card>
-        <Card className="border-blue-200 bg-blue-50/30">
+        <Card><CardContent className="pt-4 text-center"><div className="text-xl font-bold">{deposits.length}</div><div className="text-xs text-muted-foreground">إجمالي الودائع</div></CardContent></Card>
+        <Card className="border-status-info-surface bg-status-info-surface">
           <CardContent className="pt-4 text-center">
-            <div className="text-xl font-bold text-blue-600">{formatCurrency(totalHeld)}</div>
-            <div className="text-xs text-gray-500">ودائع محتجزة</div>
+            <div className="text-xl font-bold text-status-info-foreground">{formatCurrency(totalHeld)}</div>
+            <div className="text-xs text-muted-foreground">ودائع محتجزة</div>
           </CardContent>
         </Card>
-        <Card className="border-green-200 bg-green-50/30">
+        <Card className="border-status-success-surface bg-status-success-surface">
           <CardContent className="pt-4 text-center">
-            <div className="text-xl font-bold text-green-600">{formatCurrency(totalRefunded)}</div>
-            <div className="text-xs text-gray-500">مُستردة</div>
+            <div className="text-xl font-bold text-status-success-foreground">{formatCurrency(totalRefunded)}</div>
+            <div className="text-xs text-muted-foreground">مُستردة</div>
           </CardContent>
         </Card>
       </div>
@@ -176,17 +176,17 @@ export default function DepositsPage() {
 
       <div className="space-y-2">
         {deposits.length === 0 ? (
-          <Card><CardContent className="py-8 text-center text-gray-400">لا توجد ودائع مسجلة</CardContent></Card>
+          <Card><CardContent className="py-8 text-center text-muted-foreground">لا توجد ودائع مسجلة</CardContent></Card>
         ) : deposits.map((d: any) => (
           <Card key={d.id} className="hover:shadow-md">
             <CardContent className="p-4 flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{d.tenantName}</span>
-                  <span className="text-sm text-gray-500">— {d.unitNumber || `وحدة #${d.unitId}`} ({d.buildingName || ""})</span>
+                  <span className="text-sm text-muted-foreground">— {d.unitNumber || `وحدة #${d.unitId}`} ({d.buildingName || ""})</span>
                   <PageStatusBadge status={d.status} />
                 </div>
-                <div className="text-sm text-gray-500 mt-1">
+                <div className="text-sm text-muted-foreground mt-1">
                   تاريخ الاستلام: {d.receivedDate?.split("T")[0]}
                   {d.refundDate && ` · تاريخ الاسترداد: ${d.refundDate?.split("T")[0]}`}
                   {d.refundReason && ` · ${d.refundReason}`}
@@ -196,7 +196,7 @@ export default function DepositsPage() {
                 <div className="text-end">
                   <div className="font-bold text-lg">{formatCurrency(Number(d.amount))}</div>
                   {d.refundAmount && d.refundAmount !== d.amount && (
-                    <div className="text-sm text-green-600">مُسترد: {formatCurrency(Number(d.refundAmount))}</div>
+                    <div className="text-sm text-status-success-foreground">مُسترد: {formatCurrency(Number(d.refundAmount))}</div>
                   )}
                 </div>
                 {d.status === "held" && (

@@ -134,7 +134,7 @@ export default function LegalJudgmentDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Scale className="h-4 w-4 text-gray-500" />
+            <Scale className="h-4 w-4 text-muted-foreground" />
             بيانات الحكم
           </CardTitle>
         </CardHeader>
@@ -145,42 +145,42 @@ export default function LegalJudgmentDetail() {
               <span className="text-3xl font-bold text-gray-900">
                 {formatCurrency(Number(judgment.amount))}
               </span>
-              <span className="text-xs text-gray-500">ر.س</span>
+              <span className="text-xs text-muted-foreground">ر.س</span>
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-3">
             {judgment?.judgmentNumber && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">رقم الحكم</p>
-                <span className="text-gray-800 font-mono text-xs">
+                <p className="text-xs text-muted-foreground mb-0.5">رقم الحكم</p>
+                <span className="text-status-neutral-foreground font-mono text-xs">
                   {judgment.judgmentNumber}
                 </span>
               </div>
             )}
             {judgment?.caseReference && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">مرجع القضية</p>
-                <span className="text-gray-800 font-mono text-xs">
+                <p className="text-xs text-muted-foreground mb-0.5">مرجع القضية</p>
+                <span className="text-status-neutral-foreground font-mono text-xs">
                   {judgment.caseReference}
                 </span>
               </div>
             )}
             {judgment?.judgmentDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ الحكم</p>
-                <span className="text-gray-800">{formatDateAr(judgment.judgmentDate)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ الحكم</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(judgment.judgmentDate)}</span>
               </div>
             )}
             {judgment?.court && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">المحكمة</p>
-                <span className="text-gray-800">{judgment.court}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">المحكمة</p>
+                <span className="text-status-neutral-foreground">{judgment.court}</span>
               </div>
             )}
             {judgment?.outcome && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">نتيجة الحكم</p>
+                <p className="text-xs text-muted-foreground mb-0.5">نتيجة الحكم</p>
                 <Badge variant={outcomeTone(judgment.outcome) as any}>
                   {OUTCOME_LABELS[judgment.outcome] || judgment.outcome}
                 </Badge>
@@ -188,13 +188,13 @@ export default function LegalJudgmentDetail() {
             )}
             {judgment?.executionStatus && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">حالة التنفيذ</p>
+                <p className="text-xs text-muted-foreground mb-0.5">حالة التنفيذ</p>
                 <Badge variant="secondary">{judgment.executionStatus}</Badge>
               </div>
             )}
             {judgment?.appealDeadline && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">الموعد النهائي للاستئناف</p>
+                <p className="text-xs text-muted-foreground mb-0.5">الموعد النهائي للاستئناف</p>
                 <Badge variant="outline">{formatDateAr(judgment.appealDeadline)}</Badge>
               </div>
             )}
@@ -202,15 +202,15 @@ export default function LegalJudgmentDetail() {
 
           {judgment?.summary && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">ملخص الحكم</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{judgment.summary}</p>
+              <p className="text-xs text-muted-foreground mb-1">ملخص الحكم</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{judgment.summary}</p>
             </div>
           )}
 
           {judgment?.notes && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">ملاحظات</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{judgment.notes}</p>
+              <p className="text-xs text-muted-foreground mb-1">ملاحظات</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{judgment.notes}</p>
             </div>
           )}
         </CardContent>
@@ -224,14 +224,14 @@ export default function LegalJudgmentDetail() {
           <CardContent className="space-y-2 text-sm">
             {judgment?.createdAt && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ الإنشاء</p>
-                <span className="text-gray-800">{formatDateAr(judgment.createdAt)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ الإنشاء</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(judgment.createdAt)}</span>
               </div>
             )}
             {judgment?.createdByName && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">أنشئ بواسطة</p>
-                <span className="text-gray-800">{judgment.createdByName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">أنشئ بواسطة</p>
+                <span className="text-status-neutral-foreground">{judgment.createdByName}</span>
               </div>
             )}
           </CardContent>

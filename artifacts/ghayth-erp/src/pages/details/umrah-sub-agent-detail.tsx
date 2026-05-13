@@ -62,79 +62,79 @@ export default function UmrahSubAgentDetail() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="inline-flex items-center gap-2 text-sm">
-            <UserPlus className="h-4 w-4 text-gray-500" />
+            <UserPlus className="h-4 w-4 text-muted-foreground" />
             بيانات الوكيل الفرعي
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">رمز نسك</p>
-              <span className="font-mono text-xs text-gray-800">{sa?.nuskCode || "-"}</span>
+              <p className="text-xs text-muted-foreground mb-0.5">رمز نسك</p>
+              <span className="font-mono text-xs text-status-neutral-foreground">{sa?.nuskCode || "-"}</span>
             </div>
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">الاسم</p>
-              <span className="font-medium text-gray-800">{sa?.name || "-"}</span>
+              <p className="text-xs text-muted-foreground mb-0.5">الاسم</p>
+              <span className="font-medium text-status-neutral-foreground">{sa?.name || "-"}</span>
             </div>
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">الوكيل الرئيسي</p>
+              <p className="text-xs text-muted-foreground mb-0.5">الوكيل الرئيسي</p>
               {sa?.agentId ? (
                 <Link href={`/umrah/agents/${sa.agentId}`}>
-                  <a className="inline-flex items-center gap-1 text-blue-600 hover:underline">
+                  <a className="inline-flex items-center gap-1 text-status-info-foreground hover:underline">
                     {sa.agentName || `وكيل #${sa.agentId}`}
                     <ExternalLink className="h-3 w-3" />
                   </a>
                 </Link>
               ) : (
-                <span className="text-gray-400 text-xs">— غير مربوط</span>
+                <span className="text-muted-foreground text-xs">— غير مربوط</span>
               )}
             </div>
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">العميل المرتبط</p>
+              <p className="text-xs text-muted-foreground mb-0.5">العميل المرتبط</p>
               {sa?.clientId ? (
                 <Link href={`/clients/${sa.clientId}`}>
-                  <a className="inline-flex items-center gap-1 text-blue-600 hover:underline">
+                  <a className="inline-flex items-center gap-1 text-status-info-foreground hover:underline">
                     {sa.clientName || `عميل #${sa.clientId}`}
                     <ExternalLink className="h-3 w-3" />
                   </a>
                 </Link>
               ) : (
-                <span className="text-gray-400 text-xs">— غير مربوط بعميل</span>
+                <span className="text-muted-foreground text-xs">— غير مربوط بعميل</span>
               )}
             </div>
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">شروط الدفع</p>
+              <p className="text-xs text-muted-foreground mb-0.5">شروط الدفع</p>
               <Badge variant="outline">{PAYMENT_TERMS_LABEL[sa?.paymentTerms ?? ""] || "—"}</Badge>
             </div>
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">السعر الافتراضي للمعتمر</p>
-              <span className="text-gray-800">
+              <p className="text-xs text-muted-foreground mb-0.5">السعر الافتراضي للمعتمر</p>
+              <span className="text-status-neutral-foreground">
                 {sa?.defaultPricePerMutamer != null ? formatCurrency(Number(sa.defaultPricePerMutamer)) : "—"}
               </span>
             </div>
             {sa?.country && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الدولة</p>
-                <span className="inline-flex items-center gap-1 text-gray-800">
-                  <MapPin className="h-3 w-3 text-gray-400" />
+                <p className="text-xs text-muted-foreground mb-0.5">الدولة</p>
+                <span className="inline-flex items-center gap-1 text-status-neutral-foreground">
+                  <MapPin className="h-3 w-3 text-muted-foreground" />
                   {sa.country}
                 </span>
               </div>
             )}
             {sa?.phone && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الهاتف</p>
-                <span dir="ltr" className="inline-flex items-center gap-1 text-gray-800">
-                  <Phone className="h-3 w-3 text-gray-400" />
+                <p className="text-xs text-muted-foreground mb-0.5">الهاتف</p>
+                <span dir="ltr" className="inline-flex items-center gap-1 text-status-neutral-foreground">
+                  <Phone className="h-3 w-3 text-muted-foreground" />
                   {sa.phone}
                 </span>
               </div>
             )}
             {sa?.email && (
               <div className="col-span-2">
-                <p className="text-xs text-gray-500 mb-0.5">البريد الإلكتروني</p>
-                <span dir="ltr" className="inline-flex items-center gap-1 text-gray-800 text-xs">
-                  <Mail className="h-3 w-3 text-gray-400" />
+                <p className="text-xs text-muted-foreground mb-0.5">البريد الإلكتروني</p>
+                <span dir="ltr" className="inline-flex items-center gap-1 text-status-neutral-foreground text-xs">
+                  <Mail className="h-3 w-3 text-muted-foreground" />
                   {sa.email}
                 </span>
               </div>
@@ -143,8 +143,8 @@ export default function UmrahSubAgentDetail() {
 
           {sa?.notes && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">ملاحظات</p>
-              <p className="whitespace-pre-wrap text-gray-800">{sa.notes}</p>
+              <p className="text-xs text-muted-foreground mb-1">ملاحظات</p>
+              <p className="whitespace-pre-wrap text-status-neutral-foreground">{sa.notes}</p>
             </div>
           )}
 

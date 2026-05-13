@@ -130,9 +130,9 @@ export default function PropertiesCreate() {
   return (
     <CreatePageLayout title="إضافة وحدة عقارية" backPath="/properties">
       {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-sm text-amber-700">
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button type="button" variant="ghost" size="sm" className="text-amber-600 h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+          <Button type="button" variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -274,7 +274,7 @@ export default function PropertiesCreate() {
                 className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${
                   form.amenities.includes(amenity)
                     ? "bg-blue-600 text-white border-blue-600"
-                    : "bg-white text-gray-600 border-gray-200 hover:border-blue-300"
+                    : "bg-white text-muted-foreground border-border hover:border-status-info-surface"
                 }`}
               >
                 {amenity}

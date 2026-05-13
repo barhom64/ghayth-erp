@@ -68,7 +68,7 @@ export default function UmrahSeasons() {
       <div className="flex gap-3 text-sm text-muted-foreground">
         <span><span className="font-bold text-foreground">{items.length}</span> إجمالي المواسم</span>
         <span>•</span>
-        <span><span className="font-bold text-green-600">{openCount}</span> مفتوح</span>
+        <span><span className="font-bold text-status-success-foreground">{openCount}</span> مفتوح</span>
         <span>•</span>
         <span><span className="font-bold text-foreground">{items.length - openCount}</span> مغلق</span>
       </div>

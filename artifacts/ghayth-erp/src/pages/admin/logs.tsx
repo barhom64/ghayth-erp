@@ -69,8 +69,8 @@ export default function AdminLogsPage() {
       header: "",
       width: "32px",
       render: (r: any) => expandedId === r.id
-        ? <ChevronUp className="h-4 w-4 text-gray-400" />
-        : <ChevronDown className="h-4 w-4 text-gray-400" />,
+        ? <ChevronUp className="h-4 w-4 text-muted-foreground" />
+        : <ChevronDown className="h-4 w-4 text-muted-foreground" />,
     },
     { key: "userName", header: "المستخدم", sortable: true, render: (r: any) => <span className="font-medium">{r.userName || "النظام"}</span> },
     {
@@ -79,19 +79,19 @@ export default function AdminLogsPage() {
       sortable: true,
       render: (r: any) => (
         <Badge className={cn("text-[10px]",
-          r.action?.includes("create") ? "bg-green-100 text-green-700" :
-          r.action?.includes("delete") ? "bg-red-100 text-red-700" :
-          r.action?.includes("update") ? "bg-blue-100 text-blue-700" :
-          "bg-gray-100 text-gray-700"
+          r.action?.includes("create") ? "bg-status-success-surface text-status-success-foreground" :
+          r.action?.includes("delete") ? "bg-status-error-surface text-status-error-foreground" :
+          r.action?.includes("update") ? "bg-status-info-surface text-status-info-foreground" :
+          "bg-surface-subtle text-status-neutral-foreground"
         )}>
           {ACTION_LABELS[r.action] || r.action}
         </Badge>
       ),
     },
-    { key: "entity", header: "الكيان", sortable: true, render: (r: any) => <span className="text-gray-500">{ENTITY_LABELS[r.entity] || r.entity}</span> },
-    { key: "entityId", header: "المعرّف", render: (r: any) => <span className="font-mono text-xs text-gray-400">#{r.entityId}</span> },
-    { key: "reason", header: "السبب", render: (r: any) => <span className="text-xs text-gray-500 max-w-[150px] truncate block">{r.reason || "-"}</span> },
-    { key: "createdAt", header: "التاريخ", sortable: true, render: (r: any) => <span className="text-xs text-gray-400">{r.createdAt ? formatDateAr(r.createdAt) : "-"}</span> },
+    { key: "entity", header: "الكيان", sortable: true, render: (r: any) => <span className="text-muted-foreground">{ENTITY_LABELS[r.entity] || r.entity}</span> },
+    { key: "entityId", header: "المعرّف", render: (r: any) => <span className="font-mono text-xs text-muted-foreground">#{r.entityId}</span> },
+    { key: "reason", header: "السبب", render: (r: any) => <span className="text-xs text-muted-foreground max-w-[150px] truncate block">{r.reason || "-"}</span> },
+    { key: "createdAt", header: "التاريخ", sortable: true, render: (r: any) => <span className="text-xs text-muted-foreground">{r.createdAt ? formatDateAr(r.createdAt) : "-"}</span> },
   ];
 
   const renderChanges = (log: any) => {
@@ -104,15 +104,15 @@ export default function AdminLogsPage() {
         <div className="space-y-1">
           {Object.entries(changes).map(([key, val]: [string, any]) => (
             <div key={key} className="flex items-start gap-2 text-xs">
-              <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-600 flex-shrink-0">{key}</span>
+              <span className="font-mono bg-surface-subtle px-1.5 py-0.5 rounded text-muted-foreground flex-shrink-0">{key}</span>
               {val && typeof val === "object" && "from" in val ? (
                 <>
-                  <span className="text-red-500 line-through">{String(val.from ?? "-")}</span>
-                  <span className="text-gray-400">←</span>
-                  <span className="text-green-600 font-medium">{String(val.to ?? "-")}</span>
+                  <span className="text-status-error line-through">{String(val.from ?? "-")}</span>
+                  <span className="text-muted-foreground">←</span>
+                  <span className="text-status-success-foreground font-medium">{String(val.to ?? "-")}</span>
                 </>
               ) : (
-                <span className="text-gray-600">{JSON.stringify(val)}</span>
+                <span className="text-muted-foreground">{JSON.stringify(val)}</span>
               )}
             </div>
           ))}
@@ -128,14 +128,14 @@ export default function AdminLogsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {beforeData && (
           <div>
-            <Label className="text-xs text-red-500 mb-1 block">قبل التغيير</Label>
-            <pre className="text-[10px] bg-red-50 p-2 rounded border border-red-100 overflow-auto max-h-40 font-mono" dir="ltr">{safeParse(beforeData)}</pre>
+            <Label className="text-xs text-status-error mb-1 block">قبل التغيير</Label>
+            <pre className="text-[10px] bg-status-error-surface p-2 rounded border border-status-error-surface overflow-auto max-h-40 font-mono" dir="ltr">{safeParse(beforeData)}</pre>
           </div>
         )}
         {afterData && (
           <div>
-            <Label className="text-xs text-green-500 mb-1 block">بعد التغيير</Label>
-            <pre className="text-[10px] bg-green-50 p-2 rounded border border-green-100 overflow-auto max-h-40 font-mono" dir="ltr">{safeParse(afterData)}</pre>
+            <Label className="text-xs text-status-success mb-1 block">بعد التغيير</Label>
+            <pre className="text-[10px] bg-status-success-surface p-2 rounded border border-status-success-surface overflow-auto max-h-40 font-mono" dir="ltr">{safeParse(afterData)}</pre>
           </div>
         )}
       </div>
@@ -164,7 +164,7 @@ export default function AdminLogsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <ScrollText className="w-8 h-8 text-amber-600" />
+            <ScrollText className="w-8 h-8 text-status-warning-foreground" />
             سجل التدقيق
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">عرض وتصفية جميع العمليات والتغييرات في النظام</p>
@@ -179,10 +179,10 @@ export default function AdminLogsPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "إجمالي السجلات", value: total, color: "bg-gray-50 text-gray-700" },
-          { label: "إنشاء", value: logs.filter((l: any) => l.action?.includes("create")).length, color: "bg-green-50 text-green-700" },
-          { label: "تعديل", value: logs.filter((l: any) => l.action?.includes("update")).length, color: "bg-blue-50 text-blue-700" },
-          { label: "حذف", value: logs.filter((l: any) => l.action?.includes("delete")).length, color: "bg-red-50 text-red-700" },
+          { label: "إجمالي السجلات", value: total, color: "bg-surface-subtle text-status-neutral-foreground" },
+          { label: "إنشاء", value: logs.filter((l: any) => l.action?.includes("create")).length, color: "bg-status-success-surface text-status-success-foreground" },
+          { label: "تعديل", value: logs.filter((l: any) => l.action?.includes("update")).length, color: "bg-status-info-surface text-status-info-foreground" },
+          { label: "حذف", value: logs.filter((l: any) => l.action?.includes("delete")).length, color: "bg-status-error-surface text-status-error-foreground" },
         ].map(c => (
           <Card key={c.label} className="border-0 shadow-sm">
             <CardContent className={cn("p-3 rounded-lg", c.color)}>
@@ -249,11 +249,11 @@ export default function AdminLogsPage() {
           emptyMessage="لا توجد سجلات"
           emptyIcon={<ScrollText className="h-8 w-8 mx-auto mb-2 text-gray-300" />}
           onRowClick={(r: any) => setExpandedId(expandedId === r.id ? null : r.id)}
-          rowClassName={(r: any) => expandedId === r.id ? "bg-amber-50/50" : undefined}
+          rowClassName={(r: any) => expandedId === r.id ? "bg-status-warning-surface/50" : undefined}
           renderRowExtras={(r: any) => expandedId === r.id ? (
-            <div className="p-4 bg-gray-50 border-b">
+            <div className="p-4 bg-surface-subtle border-b">
               <div className="space-y-3">
-                <div className="flex flex-wrap gap-4 text-xs text-gray-500">
+                <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
                   {r.ipAddress && <span>IP: <code className="bg-white px-1 rounded">{r.ipAddress}</code></span>}
                   {r.scope && <span>النطاق: <code className="bg-white px-1 rounded">{JSON.stringify(r.scope)}</code></span>}
                 </div>

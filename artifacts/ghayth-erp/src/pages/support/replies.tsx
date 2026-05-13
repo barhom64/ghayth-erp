@@ -39,9 +39,9 @@ export default function SupportReplies() {
   const replies: Reply[] = data?.data || [];
 
   const statCards: StatCard[] = [
-    { label: "إجمالي الردود", value: data?.total || 0, icon: MessageSquare, color: "text-blue-600 bg-blue-50" },
-    { label: "تم الحل", value: data?.resolved || 0, icon: CheckCircle2, color: "text-green-600 bg-green-50" },
-    { label: "بانتظار الرد", value: data?.pending || 0, icon: Clock, color: "text-yellow-600 bg-yellow-50" },
+    { label: "إجمالي الردود", value: data?.total || 0, icon: MessageSquare, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "تم الحل", value: data?.resolved || 0, icon: CheckCircle2, color: "text-status-success-foreground bg-status-success-surface" },
+    { label: "بانتظار الرد", value: data?.pending || 0, icon: Clock, color: "text-status-warning-foreground bg-status-warning-surface" },
     { label: "وكلاء نشطون", value: data?.activeAgents || 0, icon: User, color: "text-purple-600 bg-purple-50" },
   ];
 
@@ -51,9 +51,9 @@ export default function SupportReplies() {
   const columns: DataTableColumn<any>[] = [
     { key: "ticketId", header: "رقم التذكرة", sortable: true, searchable: true, render: (r: any) => <span className="font-mono text-xs">{r.ticketId}</span> },
     { key: "ticketTitle", header: "عنوان التذكرة", sortable: true, searchable: true, render: (r: any) => <span className="font-medium">{r.ticketTitle}</span> },
-    { key: "reply", header: "الرد", searchable: true, render: (r: any) => <span className="text-gray-600 max-w-xs truncate inline-block">{r.reply}</span> },
-    { key: "agent", header: "الوكيل", sortable: true, searchable: true, render: (r: any) => <span className="text-gray-500">{r.agent}</span> },
-    { key: "date", header: "التاريخ", sortable: true, render: (r: any) => <span className="text-gray-500 whitespace-nowrap">{r.date ? formatDateAr(r.date) : "-"}</span> },
+    { key: "reply", header: "الرد", searchable: true, render: (r: any) => <span className="text-muted-foreground max-w-xs truncate inline-block">{r.reply}</span> },
+    { key: "agent", header: "الوكيل", sortable: true, searchable: true, render: (r: any) => <span className="text-muted-foreground">{r.agent}</span> },
+    { key: "date", header: "التاريخ", sortable: true, render: (r: any) => <span className="text-muted-foreground whitespace-nowrap">{r.date ? formatDateAr(r.date) : "-"}</span> },
     { key: "status", header: "الحالة", sortable: true, render: (r: any) => <PageStatusBadge status={r.status} domain="ticket" /> },
   ];
 
@@ -72,7 +72,7 @@ export default function SupportReplies() {
                 <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", c.color.split(" ")[1])}>
                   <Icon className={cn("w-6 h-6", c.color.split(" ")[0])} />
                 </div>
-                <div><p className="text-2xl font-bold">{c.value}</p><p className="text-xs text-gray-500">{c.label}</p></div>
+                <div><p className="text-2xl font-bold">{c.value}</p><p className="text-xs text-muted-foreground">{c.label}</p></div>
               </CardContent>
             </Card>
           );

@@ -122,7 +122,7 @@ export default function PropertyMaintenanceDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Wrench className="h-4 w-4 text-gray-500" />
+            <Wrench className="h-4 w-4 text-muted-foreground" />
             بيانات الصيانة
           </CardTitle>
         </CardHeader>
@@ -130,19 +130,19 @@ export default function PropertyMaintenanceDetail() {
           {item?.cost != null && (
             <div className="flex items-baseline gap-2 border-b pb-3">
               <span className="text-3xl font-bold text-gray-900">{formatCurrency(item.cost)}</span>
-              <span className="text-xs text-gray-500">ر.س</span>
+              <span className="text-xs text-muted-foreground">ر.س</span>
             </div>
           )}
           <div className="grid grid-cols-2 gap-3">
             {item?.type && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">نوع الصيانة</p>
+                <p className="text-xs text-muted-foreground mb-0.5">نوع الصيانة</p>
                 <Badge variant="outline">{TYPE_LABELS[item.type] || item.type}</Badge>
               </div>
             )}
             {item?.priority && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الأولوية</p>
+                <p className="text-xs text-muted-foreground mb-0.5">الأولوية</p>
                 <Badge variant={item.priority === "urgent" || item.priority === "high" ? "destructive" : "outline"}>
                   {PRIORITY_LABELS[item.priority] || item.priority}
                 </Badge>
@@ -150,38 +150,38 @@ export default function PropertyMaintenanceDetail() {
             )}
             {item?.assignedTo && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">المسؤول</p>
-                <span className="text-gray-800">{item.assignedTo}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">المسؤول</p>
+                <span className="text-status-neutral-foreground">{item.assignedTo}</span>
               </div>
             )}
             {item?.vendor && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">المقاول/المورد</p>
-                <span className="text-gray-800">{item.vendor}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">المقاول/المورد</p>
+                <span className="text-status-neutral-foreground">{item.vendor}</span>
               </div>
             )}
             {item?.scheduledDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">التاريخ المجدول</p>
-                <span className="text-gray-800">{formatDateAr(item.scheduledDate)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">التاريخ المجدول</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(item.scheduledDate)}</span>
               </div>
             )}
             {item?.completedAt && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ الإنجاز</p>
-                <span className="text-gray-800">{formatDateAr(item.completedAt)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ الإنجاز</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(item.completedAt)}</span>
               </div>
             )}
           </div>
           {item?.description && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">الوصف</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{item.description}</p>
+              <p className="text-xs text-muted-foreground mb-1">الوصف</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{item.description}</p>
             </div>
           )}
           {item?.notes && (
-            <div className="rounded-md bg-amber-50 border border-amber-100 p-3">
-              <p className="text-xs text-amber-700 font-medium mb-1">ملاحظات</p>
+            <div className="rounded-md bg-status-warning-surface border border-status-warning-surface p-3">
+              <p className="text-xs text-status-warning-foreground font-medium mb-1">ملاحظات</p>
               <p className="text-sm text-amber-900 whitespace-pre-wrap">{item.notes}</p>
             </div>
           )}
@@ -196,8 +196,8 @@ export default function PropertyMaintenanceDetail() {
             </CardHeader>
             <CardContent className="text-sm space-y-1">
               <p className="font-medium">{item.buildingName}</p>
-              {item.unitNumber && <p className="text-xs text-gray-500">وحدة: {item.unitNumber}</p>}
-              {item.tenantName && <p className="text-xs text-gray-500">المستأجر: {item.tenantName}</p>}
+              {item.unitNumber && <p className="text-xs text-muted-foreground">وحدة: {item.unitNumber}</p>}
+              {item.tenantName && <p className="text-xs text-muted-foreground">المستأجر: {item.tenantName}</p>}
             </CardContent>
           </Card>
         )}

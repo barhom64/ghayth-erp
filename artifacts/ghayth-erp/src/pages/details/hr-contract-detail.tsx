@@ -116,7 +116,7 @@ export default function HrContractDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <FileText className="h-4 w-4 text-gray-500" />
+            <FileText className="h-4 w-4 text-muted-foreground" />
             بيانات العقد
           </CardTitle>
         </CardHeader>
@@ -124,13 +124,13 @@ export default function HrContractDetail() {
           <div className="grid grid-cols-2 gap-3">
             {contract?.employeeName && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">اسم الموظف</p>
-                <span className="text-gray-800">{contract.employeeName}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">اسم الموظف</p>
+                <span className="text-status-neutral-foreground">{contract.employeeName}</span>
               </div>
             )}
             {contract?.contractType && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">نوع العقد</p>
+                <p className="text-xs text-muted-foreground mb-0.5">نوع العقد</p>
                 <Badge variant="outline">
                   {CONTRACT_TYPE_LABELS[contract.contractType] || contract.contractType}
                 </Badge>
@@ -138,38 +138,38 @@ export default function HrContractDetail() {
             )}
             {contract?.startDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ البداية</p>
-                <span className="text-gray-800">{formatDateAr(contract.startDate)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ البداية</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(contract.startDate)}</span>
               </div>
             )}
             {contract?.endDate && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">تاريخ النهاية</p>
-                <span className="text-gray-800">{formatDateAr(contract.endDate)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ النهاية</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(contract.endDate)}</span>
               </div>
             )}
             {contract?.salary != null && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الراتب</p>
-                <span className="text-gray-800 font-bold">{formatCurrency(contract.salary)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">الراتب</p>
+                <span className="text-status-neutral-foreground font-bold">{formatCurrency(contract.salary)}</span>
               </div>
             )}
             {contract?.allowances != null && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">البدلات</p>
-                <span className="text-gray-800">{formatCurrency(contract.allowances)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">البدلات</p>
+                <span className="text-status-neutral-foreground">{formatCurrency(contract.allowances)}</span>
               </div>
             )}
             {contract?.jobTitle && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">المسمى الوظيفي</p>
-                <span className="text-gray-800">{contract.jobTitle}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">المسمى الوظيفي</p>
+                <span className="text-status-neutral-foreground">{contract.jobTitle}</span>
               </div>
             )}
             {contract?.department && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">القسم</p>
-                <span className="text-gray-800">{contract.department}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">القسم</p>
+                <span className="text-status-neutral-foreground">{contract.department}</span>
               </div>
             )}
           </div>

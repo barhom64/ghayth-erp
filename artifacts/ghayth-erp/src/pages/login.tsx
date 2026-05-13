@@ -277,14 +277,14 @@ export default function Login() {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col min-h-screen bg-gray-50">
-        <div className="lg:hidden flex items-center gap-3 px-6 py-5 bg-white border-b border-gray-100 shadow-sm">
+      <div className="flex-1 flex flex-col min-h-screen bg-surface-subtle">
+        <div className="lg:hidden flex items-center gap-3 px-6 py-5 bg-white border-b border-border shadow-sm">
           <div className="p-2 rounded-xl shadow" style={{ background: "linear-gradient(135deg,#1565c0,#0d47a1)" }}>
             <CloudRain className="h-5 w-5 text-white" />
           </div>
           <div>
             <p className="font-bold text-gray-900 text-base leading-none">منصة غيث</p>
-            <p className="text-xs text-gray-500">نظام إدارة الموارد المؤسسية</p>
+            <p className="text-xs text-muted-foreground">نظام إدارة الموارد المؤسسية</p>
           </div>
         </div>
 
@@ -299,28 +299,28 @@ export default function Login() {
                     <User className="h-7 w-7 text-white" />
                   </div>
                   <h2 className="text-2xl font-bold text-gray-900">مرحباً بك</h2>
-                  <p className="text-gray-500 text-sm mt-1">أدخل بياناتك للدخول إلى النظام</p>
+                  <p className="text-muted-foreground text-sm mt-1">أدخل بياناتك للدخول إلى النظام</p>
                 </div>
 
                 <form onSubmit={handleLogin} className="space-y-5">
                   {loginError && (
-                    <Alert className="border-red-200 bg-red-50 text-right">
-                      <AlertCircle className="h-4 w-4 text-red-500" />
-                      <AlertDescription className="text-red-700 text-sm">{loginError}</AlertDescription>
+                    <Alert className="border-status-error-surface bg-status-error-surface text-right">
+                      <AlertCircle className="h-4 w-4 text-status-error" />
+                      <AlertDescription className="text-status-error-foreground text-sm">{loginError}</AlertDescription>
                     </Alert>
                   )}
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="email" className="text-gray-700 font-medium text-sm">البريد الإلكتروني</Label>
+                    <Label htmlFor="email" className="text-status-neutral-foreground font-medium text-sm">البريد الإلكتروني</Label>
                     <div className="relative">
-                      <User className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                      <User className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                       <Input
                         id="email"
                         type="email"
                         placeholder="example@company.com"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="ps-10 h-11 border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                        className="ps-10 h-11 border-border bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                         autoComplete="email"
                         disabled={isLoading}
                         dir="ltr"
@@ -329,16 +329,16 @@ export default function Login() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="password" className="text-gray-700 font-medium text-sm">كلمة المرور</Label>
+                    <Label htmlFor="password" className="text-status-neutral-foreground font-medium text-sm">كلمة المرور</Label>
                     <div className="relative">
-                      <Lock className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                      <Lock className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                       <Input
                         id="password"
                         type={showPassword ? "text" : "password"}
                         placeholder="••••••••"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="ps-10 pe-10 h-11 border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                        className="ps-10 pe-10 h-11 border-border bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                         autoComplete="current-password"
                         disabled={isLoading}
                         dir="ltr"
@@ -346,7 +346,7 @@ export default function Login() {
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute end-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                        className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground transition-colors"
                         aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -358,7 +358,7 @@ export default function Login() {
                     <button
                       type="button"
                       onClick={() => { setCurrentView("forgot"); setLoginError(""); setForgotSuccess(false); setForgotError(""); setForgotEmail(""); }}
-                      className="text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                      className="text-sm text-status-info-foreground hover:text-status-info-foreground hover:underline transition-colors"
                     >
                       نسيت كلمة المرور؟
                     </button>
@@ -389,11 +389,11 @@ export default function Login() {
             ) : (
               <>
                 <div className="mb-8 text-center">
-                  <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-4 shadow-lg bg-amber-50 border border-amber-100">
-                    <KeyRound className="h-7 w-7 text-amber-600" />
+                  <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-4 shadow-lg bg-status-warning-surface border border-status-warning-surface">
+                    <KeyRound className="h-7 w-7 text-status-warning-foreground" />
                   </div>
                   <h2 className="text-2xl font-bold text-gray-900">استعادة كلمة المرور</h2>
-                  <p className="text-gray-500 text-sm mt-1">أدخل بريدك الإلكتروني وسنرسل طلب الاستعادة لمدير النظام</p>
+                  <p className="text-muted-foreground text-sm mt-1">أدخل بريدك الإلكتروني وسنرسل طلب الاستعادة لمدير النظام</p>
                 </div>
 
                 {forgotSuccess ? (
@@ -408,7 +408,7 @@ export default function Login() {
                     <button
                       type="button"
                       onClick={() => { setCurrentView("login"); setForgotSuccess(false); setForgotEmail(""); }}
-                      className="w-full h-11 rounded-lg border border-gray-200 bg-white text-gray-700 font-medium text-sm hover:bg-gray-50 hover:border-gray-300 transition-all flex items-center justify-center gap-2 shadow-sm"
+                      className="w-full h-11 rounded-lg border border-border bg-white text-status-neutral-foreground font-medium text-sm hover:bg-surface-subtle hover:border-border transition-all flex items-center justify-center gap-2 shadow-sm"
                     >
                       <ArrowRight className="h-4 w-4" />
                       العودة لتسجيل الدخول
@@ -417,23 +417,23 @@ export default function Login() {
                 ) : (
                   <form onSubmit={handleForgotPassword} className="space-y-5">
                     {forgotError && (
-                      <Alert className="border-red-200 bg-red-50 text-right">
-                        <AlertCircle className="h-4 w-4 text-red-500" />
-                        <AlertDescription className="text-red-700 text-sm">{forgotError}</AlertDescription>
+                      <Alert className="border-status-error-surface bg-status-error-surface text-right">
+                        <AlertCircle className="h-4 w-4 text-status-error" />
+                        <AlertDescription className="text-status-error-foreground text-sm">{forgotError}</AlertDescription>
                       </Alert>
                     )}
 
                     <div className="space-y-1.5">
-                      <Label htmlFor="forgot-email" className="text-gray-700 font-medium text-sm">البريد الإلكتروني</Label>
+                      <Label htmlFor="forgot-email" className="text-status-neutral-foreground font-medium text-sm">البريد الإلكتروني</Label>
                       <div className="relative">
-                        <Mail className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                        <Mail className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                         <Input
                           id="forgot-email"
                           type="email"
                           placeholder="example@company.com"
                           value={forgotEmail}
                           onChange={(e) => setForgotEmail(e.target.value)}
-                          className="ps-10 h-11 border-gray-200 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                          className="ps-10 h-11 border-border bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                           autoComplete="email"
                           disabled={forgotLoading}
                           dir="ltr"
@@ -465,7 +465,7 @@ export default function Login() {
                     <button
                       type="button"
                       onClick={() => { setCurrentView("login"); setForgotError(""); setForgotEmail(""); }}
-                      className="w-full h-11 rounded-lg border border-gray-200 bg-white text-gray-700 font-medium text-sm hover:bg-gray-50 hover:border-gray-300 transition-all flex items-center justify-center gap-2 shadow-sm"
+                      className="w-full h-11 rounded-lg border border-border bg-white text-status-neutral-foreground font-medium text-sm hover:bg-surface-subtle hover:border-border transition-all flex items-center justify-center gap-2 shadow-sm"
                     >
                       <ArrowRight className="h-4 w-4" />
                       العودة لتسجيل الدخول
@@ -475,16 +475,16 @@ export default function Login() {
               </>
             )}
 
-            <p className="text-center text-xs text-gray-400 mt-8">
+            <p className="text-center text-xs text-muted-foreground mt-8">
               مجموعة الدور &copy; {new Date().getFullYear()} — جميع الحقوق محفوظة
             </p>
-            <p className="text-center text-xs text-gray-400 mt-2 leading-relaxed px-2">
+            <p className="text-center text-xs text-muted-foreground mt-2 leading-relaxed px-2">
               بتسجيل دخولك، أنت توافق على{" "}
               <a
                 href="/api/pdpl/privacy-notice"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-500 hover:underline"
+                className="text-status-info hover:underline"
               >
                 سياسة الخصوصية
               </a>{" "}

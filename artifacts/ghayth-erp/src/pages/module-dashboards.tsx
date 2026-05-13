@@ -18,13 +18,13 @@ function KpiCard({ title, value, subtitle, icon: Icon, trend, color = "blue" }: 
   icon: any; trend?: "up" | "down" | "neutral"; color?: string;
 }) {
   const colorClasses: Record<string, string> = {
-    blue: "bg-blue-50 text-blue-600",
-    green: "bg-green-50 text-green-600",
-    red: "bg-red-50 text-red-600",
+    blue: "bg-status-info-surface text-status-info-foreground",
+    green: "bg-status-success-surface text-status-success-foreground",
+    red: "bg-status-error-surface text-status-error-foreground",
     orange: "bg-orange-50 text-orange-600",
     purple: "bg-purple-50 text-purple-600",
     cyan: "bg-cyan-50 text-cyan-600",
-    yellow: "bg-yellow-50 text-yellow-600",
+    yellow: "bg-status-warning-surface text-status-warning-foreground",
   };
   return (
     <Card>
@@ -40,7 +40,7 @@ function KpiCard({ title, value, subtitle, icon: Icon, trend, color = "blue" }: 
           </div>
         </div>
         {trend && (
-          <div className={`flex items-center gap-1 text-xs mt-2 ${trend === "up" ? "text-green-600" : trend === "down" ? "text-red-600" : "text-gray-500"}`}>
+          <div className={`flex items-center gap-1 text-xs mt-2 ${trend === "up" ? "text-status-success-foreground" : trend === "down" ? "text-status-error-foreground" : "text-muted-foreground"}`}>
             {trend === "up" ? <TrendingUp className="h-3 w-3" /> : trend === "down" ? <TrendingDown className="h-3 w-3" /> : <Activity className="h-3 w-3" />}
           </div>
         )}
@@ -58,7 +58,7 @@ function MiniBar({ label, value, max, color = "blue" }: { label: string; value: 
   return (
     <div className="flex items-center gap-2 text-xs">
       <span className="w-20 text-muted-foreground truncate">{label}</span>
-      <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+      <div className="flex-1 h-2 bg-surface-subtle rounded-full overflow-hidden">
         <div className={`h-full rounded-full ${colors[color] || "bg-blue-500"}`} style={{ width: `${pct}%` }} />
       </div>
       <span className="w-10 text-start font-medium">{value}</span>
@@ -155,7 +155,7 @@ function FinanceDashboard() {
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm">ذمم مدينة متأخرة</CardTitle></CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">{formatCurrency(data.receivables?.amount ?? 0)}</div>
+            <div className="text-2xl font-bold text-status-error-foreground">{formatCurrency(data.receivables?.amount ?? 0)}</div>
             <p className="text-xs text-muted-foreground mt-1">{data.receivables?.count ?? 0} فاتورة متأخرة</p>
           </CardContent>
         </Card>
@@ -306,7 +306,7 @@ function PropertiesDashboard() {
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm">التحصيل</CardTitle></CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{data.payments?.collectionRate ?? 0}%</div>
+            <div className="text-2xl font-bold text-status-success-foreground">{data.payments?.collectionRate ?? 0}%</div>
             <p className="text-xs text-muted-foreground">نسبة التحصيل</p>
             <div className="mt-2 space-y-1 text-xs">
               <div>المستحق: {formatCurrency(Number(data.payments?.totalDue ?? 0))}</div>
@@ -370,7 +370,7 @@ function ProjectsDashboard() {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">الانحراف</span>
-                <span className={`font-medium ${(data.budget?.variance ?? 0) >= 0 ? "text-green-600" : "text-red-600"}`}>
+                <span className={`font-medium ${(data.budget?.variance ?? 0) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground"}`}>
                   {data.budget?.variance ?? 0}%
                 </span>
               </div>
@@ -395,7 +395,7 @@ function ProjectsDashboard() {
               {data.projectProgress.map((p: any) => (
                 <div key={p.id} className="flex items-center gap-3 text-sm">
                   <span className="w-32 truncate font-medium">{p.name}</span>
-                  <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="flex-1 h-2 bg-surface-subtle rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full ${Number(p.progress) >= 80 ? "bg-green-500" : Number(p.progress) >= 50 ? "bg-blue-500" : "bg-orange-500"}`}
                       style={{ width: `${p.progress ?? 0}%` }}
@@ -511,7 +511,7 @@ function SupportDashboard() {
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm">التزام SLA</CardTitle></CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-green-600">{data.sla?.compliance ?? 100}%</div>
+            <div className="text-3xl font-bold text-status-success-foreground">{data.sla?.compliance ?? 100}%</div>
             <p className="text-xs text-muted-foreground mt-1">{data.sla?.breached ?? 0} تذكرة تجاوزت SLA من {data.sla?.total ?? 0}</p>
           </CardContent>
         </Card>
@@ -631,11 +631,11 @@ function WarehouseDashboard() {
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">وارد</span>
-                <span className="font-medium text-green-600">{formatNumber(data.movements?.inQty ?? 0)} وحدة</span>
+                <span className="font-medium text-status-success-foreground">{formatNumber(data.movements?.inQty ?? 0)} وحدة</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">صادر</span>
-                <span className="font-medium text-red-600">{formatNumber(data.movements?.outQty ?? 0)} وحدة</span>
+                <span className="font-medium text-status-error-foreground">{formatNumber(data.movements?.outQty ?? 0)} وحدة</span>
               </div>
             </div>
           </CardContent>
@@ -650,7 +650,7 @@ function DashboardSkeleton() {
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[1, 2, 3, 4].map(i => (
-          <Card key={i}><CardContent className="p-4"><div className="h-16 bg-gray-100 rounded animate-pulse" /></CardContent></Card>
+          <Card key={i}><CardContent className="p-4"><div className="h-16 bg-surface-subtle rounded animate-pulse" /></CardContent></Card>
         ))}
       </div>
     </div>

@@ -135,7 +135,7 @@ export default function Evaluation360Create() {
         <div className="space-y-6">
           <CreationDateField />
           {hasDraft && (
-            <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+            <div className="flex items-center gap-2 p-3 bg-status-info-surface border border-status-info-surface rounded-lg text-sm text-status-info-foreground">
               <Info className="h-4 w-4 shrink-0" />
               <span>تم استعادة مسودة سابقة — يمكنك متابعة التعبئة أو مسحها</span>
               <ClearDraftButton onClear={clearDraftFromStorage} />
@@ -143,7 +143,7 @@ export default function Evaluation360Create() {
           )}
           <div>
             <h3 className="flex items-center gap-2 text-lg font-semibold mb-3">
-              <Star className="h-5 w-5 text-amber-500" /> بيانات التقييم
+              <Star className="h-5 w-5 text-status-warning" /> بيانات التقييم
             </h3>
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -170,7 +170,7 @@ export default function Evaluation360Create() {
 
           <div className="border-t pt-4">
             <h3 className="text-lg font-semibold">المقيِّمون (مدراء وزملاء)</h3>
-            <p className="text-xs text-gray-400 mb-3">أضف من سيُشاركون في تقييم هذا الموظف — يمكن تخطي هذه الخطوة وإضافتهم لاحقاً</p>
+            <p className="text-xs text-muted-foreground mb-3">أضف من سيُشاركون في تقييم هذا الموظف — يمكن تخطي هذه الخطوة وإضافتهم لاحقاً</p>
             <div className="space-y-4">
               <div className="flex gap-2">
                 <ParticipantPicker
@@ -192,7 +192,7 @@ export default function Evaluation360Create() {
               {participants.length > 0 && (
                 <div className="space-y-1">
                   {participants.map(p => (
-                    <div key={p.evaluatorId} className="flex items-center justify-between bg-gray-50 rounded px-3 py-2 text-sm">
+                    <div key={p.evaluatorId} className="flex items-center justify-between bg-surface-subtle rounded px-3 py-2 text-sm">
                       <span>{p.name}</span>
                       <div className="flex items-center gap-2">
                         <Badge variant="outline" className="text-xs">
@@ -206,7 +206,7 @@ export default function Evaluation360Create() {
                   ))}
                 </div>
               )}
-              <div className="bg-blue-50 rounded-lg p-3 text-sm text-blue-700">
+              <div className="bg-status-info-surface rounded-lg p-3 text-sm text-status-info-foreground">
                 عند بدء الدورة سيتولد تلقائياً <strong>تقرير أداء آلي</strong> يشمل: الحضور، إنجاز المهام، الالتزام بالمواعيد، رضا العملاء وجودة التوثيق.
               </div>
             </div>

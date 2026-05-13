@@ -103,7 +103,7 @@ export default function TrafficViolationsPage() {
       render: (v) => (
         <div>
           <div className="font-medium">{v.plateNumber}</div>
-          {v.driverName && <div className="text-xs text-gray-500">{v.driverName}</div>}
+          {v.driverName && <div className="text-xs text-muted-foreground">{v.driverName}</div>}
         </div>
       ),
     },
@@ -142,7 +142,7 @@ export default function TrafficViolationsPage() {
       sortable: true,
       align: "end",
       render: (v) => (
-        <span className="font-bold text-red-600">{Number(v.fineAmount || 0).toFixed(0)} ر.س</span>
+        <span className="font-bold text-status-error-foreground">{Number(v.fineAmount || 0).toFixed(0)} ر.س</span>
       ),
     },
     {
@@ -160,7 +160,7 @@ export default function TrafficViolationsPage() {
           <DollarSign className="w-3.5 h-3.5 me-1" /> دفع
         </GuardedButton>
       ) : (
-        <CheckCircle className="w-4 h-4 text-green-500 mx-auto" />
+        <CheckCircle className="w-4 h-4 text-status-success mx-auto" />
       ),
     },
   ];
@@ -177,17 +177,17 @@ export default function TrafficViolationsPage() {
       }
     >
       <div className="grid grid-cols-3 gap-4">
-        <Card><CardContent className="pt-4 text-center"><div className="text-xl font-bold">{violations.length}</div><div className="text-xs text-gray-500">إجمالي المخالفات</div></CardContent></Card>
-        <Card className="border-red-200 bg-red-50/30">
+        <Card><CardContent className="pt-4 text-center"><div className="text-xl font-bold">{violations.length}</div><div className="text-xs text-muted-foreground">إجمالي المخالفات</div></CardContent></Card>
+        <Card className="border-status-error-surface bg-status-error-surface">
           <CardContent className="pt-4 text-center">
-            <div className="text-xl font-bold text-red-600">{pendingFines.toFixed(0)} ر.س</div>
-            <div className="text-xs text-gray-500">غرامات غير مدفوعة</div>
+            <div className="text-xl font-bold text-status-error-foreground">{pendingFines.toFixed(0)} ر.س</div>
+            <div className="text-xs text-muted-foreground">غرامات غير مدفوعة</div>
           </CardContent>
         </Card>
-        <Card className="border-green-200 bg-green-50/30">
+        <Card className="border-status-success-surface bg-status-success-surface">
           <CardContent className="pt-4 text-center">
-            <div className="text-xl font-bold text-green-600">{paidFines.toFixed(0)} ر.س</div>
-            <div className="text-xs text-gray-500">غرامات مدفوعة</div>
+            <div className="text-xl font-bold text-status-success-foreground">{paidFines.toFixed(0)} ر.س</div>
+            <div className="text-xs text-muted-foreground">غرامات مدفوعة</div>
           </CardContent>
         </Card>
       </div>

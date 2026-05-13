@@ -72,13 +72,13 @@ export default function OvertimePage() {
       label: "إجمالي الطلبات",
       value: stats.total ?? items.length,
       icon: FileText,
-      color: "text-blue-600 bg-blue-50",
+      color: "text-status-info-foreground bg-status-info-surface",
     },
     {
       label: "بانتظار الموافقة",
       value: stats.pending ?? 0,
       icon: Clock,
-      color: "text-amber-600 bg-amber-50",
+      color: "text-status-warning-foreground bg-status-warning-surface",
     },
     {
       label: "إجمالي الساعات",
@@ -90,7 +90,7 @@ export default function OvertimePage() {
       label: "إجمالي المبالغ",
       value: formatCurrency(Number(stats.totalAmount ?? 0)),
       icon: DollarSign,
-      color: "text-green-600 bg-green-50",
+      color: "text-status-success-foreground bg-status-success-surface",
     },
   ];
 
@@ -125,7 +125,7 @@ export default function OvertimePage() {
           <div>
             <span className="font-medium text-sm block">{v.employeeName}</span>
             {v.empNumber && (
-              <span className="text-xs text-gray-400">#{v.empNumber}</span>
+              <span className="text-xs text-muted-foreground">#{v.empNumber}</span>
             )}
           </div>
         </div>
@@ -136,7 +136,7 @@ export default function OvertimePage() {
       header: "التاريخ",
       sortable: true,
       render: (v) => (
-        <span className="text-sm text-gray-600">
+        <span className="text-sm text-muted-foreground">
           {formatDateAr(v.overtimeDate)}
         </span>
       ),
@@ -145,7 +145,7 @@ export default function OvertimePage() {
       key: "startTime",
       header: "الوقت",
       render: (v) => (
-        <span className="text-sm text-gray-600 font-mono">
+        <span className="text-sm text-muted-foreground font-mono">
           {v.startTime?.slice(0, 5)} — {v.endTime?.slice(0, 5)}
         </span>
       ),
@@ -165,7 +165,7 @@ export default function OvertimePage() {
       header: "المعامل",
       sortable: true,
       render: (v) => (
-        <span className="text-sm text-gray-600">×{Number(v.multiplier || 1.5).toFixed(2)}</span>
+        <span className="text-sm text-muted-foreground">×{Number(v.multiplier || 1.5).toFixed(2)}</span>
       ),
     },
     {
@@ -173,7 +173,7 @@ export default function OvertimePage() {
       header: "المبلغ",
       sortable: true,
       render: (v) => (
-        <span className="text-sm font-semibold text-green-700">
+        <span className="text-sm font-semibold text-status-success-foreground">
           {formatCurrency(Number(v.totalAmount || 0))}
         </span>
       ),
@@ -183,7 +183,7 @@ export default function OvertimePage() {
       header: "الحالة",
       sortable: true,
       render: (v) => {
-        const st = STATUS_MAP[v.status] || { label: v.status, color: "bg-gray-100 text-gray-600" };
+        const st = STATUS_MAP[v.status] || { label: v.status, color: "bg-surface-subtle text-muted-foreground" };
         return (
           <Badge variant="outline" className={cn("text-xs", st.color)}>
             {st.label}
@@ -202,7 +202,7 @@ export default function OvertimePage() {
               perm="hr:approve"
               size="sm"
               variant="ghost"
-              className="h-7 px-2 text-green-700 hover:bg-green-50"
+              className="h-7 px-2 text-status-success-foreground hover:bg-status-success-surface"
               onClick={() => handleApprove(v.id)}
               disabled={approveMut.isPending}
             >
@@ -213,7 +213,7 @@ export default function OvertimePage() {
               perm="hr:approve"
               size="sm"
               variant="ghost"
-              className="h-7 px-2 text-red-700 hover:bg-red-50"
+              className="h-7 px-2 text-status-error-foreground hover:bg-status-error-surface"
               onClick={() => handleReject(v.id)}
               disabled={rejectMut.isPending}
             >
@@ -246,7 +246,7 @@ export default function OvertimePage() {
       <KpiGrid items={kpis} />
 
       {Number(stats.pending) > 0 && (
-        <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+        <div className="flex items-center gap-2 p-3 bg-status-warning-surface border border-status-warning-surface rounded-lg text-sm text-status-warning-foreground">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span>
             يوجد <strong>{stats.pending}</strong> طلب وقت إضافي بانتظار الموافقة

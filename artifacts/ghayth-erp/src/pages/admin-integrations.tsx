@@ -164,29 +164,29 @@ function IntegrationsList() {
         {integrations.map((intg: any) => {
           const Icon = CHANNEL_ICONS[intg.type] || Plug;
           return (
-            <Card key={intg.id} className={cn("border", intg.status === "active" ? "border-green-200" : intg.status === "error" ? "border-red-200" : "border-gray-200")}>
+            <Card key={intg.id} className={cn("border", intg.status === "active" ? "border-status-success-surface" : intg.status === "error" ? "border-status-error-surface" : "border-border")}>
               <CardContent className="p-4">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
                     <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center",
-                      intg.status === "active" ? "bg-green-50" : intg.status === "error" ? "bg-red-50" : "bg-gray-50"
+                      intg.status === "active" ? "bg-status-success-surface" : intg.status === "error" ? "bg-status-error-surface" : "bg-surface-subtle"
                     )}>
                       <Icon className={cn("w-5 h-5",
-                        intg.status === "active" ? "text-green-600" : intg.status === "error" ? "text-red-600" : "text-gray-400"
+                        intg.status === "active" ? "text-status-success-foreground" : intg.status === "error" ? "text-status-error-foreground" : "text-muted-foreground"
                       )} />
                     </div>
                     <div>
                       <h4 className="font-semibold">{intg.name}</h4>
-                      <p className="text-xs text-gray-500">{CHANNEL_LABELS[intg.type] || intg.type}</p>
+                      <p className="text-xs text-muted-foreground">{CHANNEL_LABELS[intg.type] || intg.type}</p>
                     </div>
                   </div>
                   <PageStatusBadge status={intg.status} />
                 </div>
 
-                <div className="text-xs text-gray-500 space-y-1 mb-3">
-                  {intg.lastSuccessAt && <p className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-green-500" />آخر نجاح: {formatDateAr(intg.lastSuccessAt)}</p>}
-                  {intg.lastFailureAt && <p className="flex items-center gap-1"><AlertCircle className="w-3 h-3 text-red-500" />آخر فشل: {formatDateAr(intg.lastFailureAt)}</p>}
-                  {intg.lastError && <p className="text-red-500 truncate">{intg.lastError}</p>}
+                <div className="text-xs text-muted-foreground space-y-1 mb-3">
+                  {intg.lastSuccessAt && <p className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-status-success" />آخر نجاح: {formatDateAr(intg.lastSuccessAt)}</p>}
+                  {intg.lastFailureAt && <p className="flex items-center gap-1"><AlertCircle className="w-3 h-3 text-status-error" />آخر فشل: {formatDateAr(intg.lastFailureAt)}</p>}
+                  {intg.lastError && <p className="text-status-error truncate">{intg.lastError}</p>}
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
@@ -196,14 +196,14 @@ function IntegrationsList() {
                   <GuardedButton perm="admin:create" variant="outline" size="sm" onClick={() => handleTest(intg.id)}>
                     <Play className="h-3 w-3 me-1" />اختبار
                   </GuardedButton>
-                  <GuardedButton perm="admin:create" variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => handleDelete(intg.id)}>حذف</GuardedButton>
+                  <GuardedButton perm="admin:create" variant="ghost" size="sm" className="text-status-error hover:text-status-error-foreground" onClick={() => handleDelete(intg.id)}>حذف</GuardedButton>
                 </div>
               </CardContent>
             </Card>
           );
         })}
         {integrations.length === 0 && !isLoading && (
-          <div className="col-span-2 text-center py-12 text-gray-400">
+          <div className="col-span-2 text-center py-12 text-muted-foreground">
             <Plug className="w-12 h-12 mx-auto mb-3 text-gray-300" />
             <p>لا توجد تكاملات مُعدّة</p>
             <GuardedButton perm="admin:create" variant="outline" size="sm" className="mt-3" onClick={() => setShowForm(true)}>
@@ -236,10 +236,10 @@ function IntegrationLogs() {
 
   const statusIcon = (status: string) => {
     switch (status) {
-      case "sent": case "delivered": return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case "failed": return <AlertCircle className="w-4 h-4 text-red-500" />;
-      case "retrying": return <RefreshCw className="w-4 h-4 text-amber-500 animate-spin" />;
-      default: return <Clock className="w-4 h-4 text-gray-400" />;
+      case "sent": case "delivered": return <CheckCircle className="w-4 h-4 text-status-success" />;
+      case "failed": return <AlertCircle className="w-4 h-4 text-status-error" />;
+      case "retrying": return <RefreshCw className="w-4 h-4 text-status-warning animate-spin" />;
+      default: return <Clock className="w-4 h-4 text-muted-foreground" />;
     }
   };
 
@@ -255,7 +255,7 @@ function IntegrationLogs() {
             {statusIcon(log.status)}
             <PageStatusBadge status={log.status} />
           </div>
-          {log.errorMessage && <p className="text-xs text-red-500 mt-1 truncate max-w-[200px]">{log.errorMessage}</p>}
+          {log.errorMessage && <p className="text-xs text-status-error mt-1 truncate max-w-[200px]">{log.errorMessage}</p>}
         </div>
       ),
     },

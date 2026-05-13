@@ -34,32 +34,32 @@ export default function IntercompanyConsolidationCreatePage() {
           {consolidation ? (
             <div className="space-y-6">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <div className="rounded-xl border bg-blue-50 p-4 text-center">
-                  <div className="text-sm text-gray-500">إجمالي الأصول الموحد</div>
-                  <div className="text-xl font-bold text-blue-700 mt-1">{formatCurrency(consolidation.consolidatedBalance?.totalAssets ?? 0)}</div>
+                <div className="rounded-xl border bg-status-info-surface p-4 text-center">
+                  <div className="text-sm text-muted-foreground">إجمالي الأصول الموحد</div>
+                  <div className="text-xl font-bold text-status-info-foreground mt-1">{formatCurrency(consolidation.consolidatedBalance?.totalAssets ?? 0)}</div>
                 </div>
-                <div className="rounded-xl border bg-red-50 p-4 text-center">
-                  <div className="text-sm text-gray-500">إجمالي الالتزامات الموحد</div>
-                  <div className="text-xl font-bold text-red-700 mt-1">{formatCurrency(consolidation.consolidatedBalance?.totalLiabilities ?? 0)}</div>
+                <div className="rounded-xl border bg-status-error-surface p-4 text-center">
+                  <div className="text-sm text-muted-foreground">إجمالي الالتزامات الموحد</div>
+                  <div className="text-xl font-bold text-status-error-foreground mt-1">{formatCurrency(consolidation.consolidatedBalance?.totalLiabilities ?? 0)}</div>
                 </div>
-                <div className="rounded-xl border bg-green-50 p-4 text-center">
-                  <div className="text-sm text-gray-500">حقوق الملكية الموحدة</div>
-                  <div className="text-xl font-bold text-green-700 mt-1">{formatCurrency(consolidation.consolidatedBalance?.totalEquity ?? 0)}</div>
+                <div className="rounded-xl border bg-status-success-surface p-4 text-center">
+                  <div className="text-sm text-muted-foreground">حقوق الملكية الموحدة</div>
+                  <div className="text-xl font-bold text-status-success-foreground mt-1">{formatCurrency(consolidation.consolidatedBalance?.totalEquity ?? 0)}</div>
                 </div>
               </div>
 
-              <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-sm">
+              <div className="rounded-xl border border-status-warning-surface bg-status-warning-surface p-3 text-sm">
                 <span className="font-semibold">مطلوب حذفه من التوحيد: </span>
                 <span className="font-mono font-bold text-yellow-800">{formatCurrency(consolidation.intercompanyElimination ?? 0)}</span>
-                <span className="text-yellow-700 mr-2">— مجموع المعاملات البينية التي تُحذف عند التوحيد</span>
+                <span className="text-status-warning-foreground mr-2">— مجموع المعاملات البينية التي تُحذف عند التوحيد</span>
               </div>
 
               {consolidation.byCompany?.length > 0 && (
                 <div>
-                  <div className="text-sm font-semibold mb-2 text-gray-700">الأداء حسب الشركة</div>
+                  <div className="text-sm font-semibold mb-2 text-status-neutral-foreground">الأداء حسب الشركة</div>
                   <div className="rounded-xl border overflow-hidden">
                     <table className="w-full text-sm">
-                      <thead className="bg-gray-50">
+                      <thead className="bg-surface-subtle">
                         <tr>
                           <th className="px-3 py-2 text-right">الشركة</th>
                           <th className="px-3 py-2 text-right">الإيرادات</th>
@@ -71,9 +71,9 @@ export default function IntercompanyConsolidationCreatePage() {
                         {consolidation.byCompany.map((c: any) => (
                           <tr key={c.companyId} className="border-t">
                             <td className="px-3 py-2 font-medium">{c.companyName}</td>
-                            <td className="px-3 py-2 text-green-700">{formatCurrency(c.revenue)}</td>
-                            <td className="px-3 py-2 text-red-600">{formatCurrency(c.expenses)}</td>
-                            <td className={`px-3 py-2 font-semibold ${roundMoney(c.revenue) - roundMoney(c.expenses) >= 0 ? "text-green-700" : "text-red-600"}`}>{formatCurrency(roundMoney(roundMoney(c.revenue) - roundMoney(c.expenses)))}</td>
+                            <td className="px-3 py-2 text-status-success-foreground">{formatCurrency(c.revenue)}</td>
+                            <td className="px-3 py-2 text-status-error-foreground">{formatCurrency(c.expenses)}</td>
+                            <td className={`px-3 py-2 font-semibold ${roundMoney(c.revenue) - roundMoney(c.expenses) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground"}`}>{formatCurrency(roundMoney(roundMoney(c.revenue) - roundMoney(c.expenses)))}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -83,7 +83,7 @@ export default function IntercompanyConsolidationCreatePage() {
               )}
             </div>
           ) : (
-            <div className="text-center py-8 text-gray-400">لا توجد بيانات توحيد متاحة</div>
+            <div className="text-center py-8 text-muted-foreground">لا توجد بيانات توحيد متاحة</div>
           )}
         </div>
       </div>

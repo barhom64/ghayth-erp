@@ -52,7 +52,7 @@ export default function InventoryCostingPage() {
       render: (p: any) => (
         <div>
           <p className="font-medium text-sm">{p.name}</p>
-          <p className="text-xs text-gray-400">{p.sku}</p>
+          <p className="text-xs text-muted-foreground">{p.sku}</p>
         </div>
       ),
     },
@@ -91,7 +91,7 @@ export default function InventoryCostingPage() {
       header: "الكمية",
       className: "text-xs",
       render: (m: any) => (
-        <span className={m.quantity > 0 ? "text-green-600" : "text-red-600"}>
+        <span className={m.quantity > 0 ? "text-status-success-foreground" : "text-status-error-foreground"}>
           {m.quantity > 0 ? "+" : ""}{Number(m.quantity).toFixed(2)}
         </span>
       ),
@@ -118,15 +118,15 @@ export default function InventoryCostingPage() {
     >
       <div className="grid gap-3 grid-cols-3">
         <Card><CardContent className="p-4 text-center">
-          <p className="text-xs text-gray-500">عدد المنتجات</p>
+          <p className="text-xs text-muted-foreground">عدد المنتجات</p>
           <p className="text-xl font-bold">{summary.totalProducts || 0}</p>
         </CardContent></Card>
         <Card><CardContent className="p-4 text-center">
-          <p className="text-xs text-gray-500">إجمالي قيمة المخزون</p>
+          <p className="text-xs text-muted-foreground">إجمالي قيمة المخزون</p>
           <p className="text-xl font-bold text-teal-600">{formatCurrency(Number(summary.totalValue || 0))}</p>
         </CardContent></Card>
         <Card><CardContent className="p-4 text-center">
-          <p className="text-xs text-gray-500">إجمالي الوحدات</p>
+          <p className="text-xs text-muted-foreground">إجمالي الوحدات</p>
           <p className="text-xl font-bold">{Number(summary.totalItems || 0).toFixed(0)}</p>
         </CardContent></Card>
       </div>
@@ -167,12 +167,12 @@ export default function InventoryCostingPage() {
               <CardContent>
                 <div className="grid grid-cols-2 gap-3 mb-3">
                   <div className="bg-teal-50 p-3 rounded">
-                    <p className="text-xs text-gray-500">متوسط التكلفة الحالي</p>
+                    <p className="text-xs text-muted-foreground">متوسط التكلفة الحالي</p>
                     <p className="text-lg font-bold text-teal-600">{formatCurrency(Number(productDetail?.currentWaCost || 0))}</p>
                   </div>
-                  <div className="bg-blue-50 p-3 rounded">
-                    <p className="text-xs text-gray-500">قيمة المخزون الحالية</p>
-                    <p className="text-lg font-bold text-blue-600">{formatCurrency(Number(productDetail?.currentStockValue || 0))}</p>
+                  <div className="bg-status-info-surface p-3 rounded">
+                    <p className="text-xs text-muted-foreground">قيمة المخزون الحالية</p>
+                    <p className="text-lg font-bold text-status-info-foreground">{formatCurrency(Number(productDetail?.currentStockValue || 0))}</p>
                   </div>
                 </div>
                 <DataTable
@@ -180,7 +180,7 @@ export default function InventoryCostingPage() {
                   data={productDetail?.movements || []}
                   isLoading={loadingDetail}
                   rowKey={(_m: any, i: number) => i}
-                  rowClassName={(m: any) => (m.quantity > 0 ? "bg-green-50/20" : "bg-red-50/20")}
+                  rowClassName={(m: any) => (m.quantity > 0 ? "bg-status-success-surface/20" : "bg-status-error-surface")}
                   noToolbar
                   pageSize={0}
                   emptyMessage="لا توجد حركات"
@@ -189,7 +189,7 @@ export default function InventoryCostingPage() {
             </Card>
           ) : (
             <Card>
-              <CardContent className="p-8 text-center text-gray-400">
+              <CardContent className="p-8 text-center text-muted-foreground">
                 <Package className="h-10 w-10 mx-auto mb-2 opacity-30" />
                 <p>اختر منتجاً لعرض حركات المتوسط المرجح</p>
               </CardContent>
@@ -205,16 +205,16 @@ export default function InventoryCostingPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {roundingAccount?.account ? (
-                <div className="bg-green-50 p-3 rounded border border-green-200">
-                  <p className="text-sm font-semibold text-green-700 flex items-center gap-1">
+                <div className="bg-status-success-surface p-3 rounded border border-status-success-surface">
+                  <p className="text-sm font-semibold text-status-success-foreground flex items-center gap-1">
                     <CheckCircle className="h-4 w-4" />
                     الحساب مُعرَّف: {roundingAccount.account.code} — {roundingAccount.account.name}
                   </p>
-                  <p className="text-xs text-gray-500 mt-1">يُستخدم تلقائياً لمعالجة الفروقات أقل من 0.05 ﷼</p>
+                  <p className="text-xs text-muted-foreground mt-1">يُستخدم تلقائياً لمعالجة الفروقات أقل من 0.05 ﷼</p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <p className="text-sm text-gray-600">لم يتم إنشاء حساب فروقات التقريب بعد.</p>
+                  <p className="text-sm text-muted-foreground">لم يتم إنشاء حساب فروقات التقريب بعد.</p>
                   <GuardedButton
                     perm="finance:create"
                     onClick={handleSetupRounding}
@@ -226,7 +226,7 @@ export default function InventoryCostingPage() {
                 </div>
               )}
               {setupResult && (
-                <p className="text-sm text-green-600">{setupResult.message}</p>
+                <p className="text-sm text-status-success-foreground">{setupResult.message}</p>
               )}
             </CardContent>
           </Card>

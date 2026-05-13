@@ -35,7 +35,7 @@ export default function ReceivablesPage() {
       key: "ref",
       header: "رقم الفاتورة",
       sortable: true,
-      render: (r) => <span className="font-mono text-blue-600">{r.ref}</span>,
+      render: (r) => <span className="font-mono text-status-info-foreground">{r.ref}</span>,
     },
     {
       key: "clientName",
@@ -53,19 +53,19 @@ export default function ReceivablesPage() {
       key: "paidAmount",
       header: "المدفوع",
       sortable: true,
-      render: (r) => <span className="text-green-600">{formatCurrency(Number(r.paidAmount || 0))}</span>,
+      render: (r) => <span className="text-status-success-foreground">{formatCurrency(Number(r.paidAmount || 0))}</span>,
     },
     {
       key: "remainingAmount",
       header: "المتبقي",
       sortable: true,
-      render: (r) => <span className="font-bold text-red-600">{formatCurrency(Number(r.remainingAmount || 0))}</span>,
+      render: (r) => <span className="font-bold text-status-error-foreground">{formatCurrency(Number(r.remainingAmount || 0))}</span>,
     },
     {
       key: "dueDate",
       header: "الاستحقاق",
       sortable: true,
-      render: (r) => <span className="text-gray-500">{r.dueDate ? formatDateAr(r.dueDate) : "-"}</span>,
+      render: (r) => <span className="text-muted-foreground">{r.dueDate ? formatDateAr(r.dueDate) : "-"}</span>,
     },
     {
       key: "status",
@@ -97,16 +97,16 @@ export default function ReceivablesPage() {
           <div><p className="text-xs opacity-80">إجمالي المستحقات</p><p className="text-xl font-bold">{formatCurrency(Number(summary.totalReceivable || 0))}</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-red-100 rounded-lg"><AlertTriangle className="h-5 w-5 text-red-600" /></div>
-          <div><p className="text-xs text-gray-500">المتأخرة</p><p className="text-xl font-bold text-red-600">{formatCurrency(Number(summary.overdueAmount || 0))}</p></div>
+          <div className="p-2 bg-status-error-surface rounded-lg"><AlertTriangle className="h-5 w-5 text-status-error-foreground" /></div>
+          <div><p className="text-xs text-muted-foreground">المتأخرة</p><p className="text-xl font-bold text-status-error-foreground">{formatCurrency(Number(summary.overdueAmount || 0))}</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-blue-100 rounded-lg"><Clock className="h-5 w-5 text-blue-600" /></div>
-          <div><p className="text-xs text-gray-500">عدد الفواتير</p><p className="text-xl font-bold">{summary.count || 0}</p></div>
+          <div className="p-2 bg-status-info-surface rounded-lg"><Clock className="h-5 w-5 text-status-info-foreground" /></div>
+          <div><p className="text-xs text-muted-foreground">عدد الفواتير</p><p className="text-xl font-bold">{summary.count || 0}</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-green-100 rounded-lg"><ArrowDownCircle className="h-5 w-5 text-green-600" /></div>
-          <div><p className="text-xs text-gray-500">متوسط المبلغ</p><p className="text-xl font-bold">{summary.count > 0 ? formatCurrency(Math.round(Number(summary.totalReceivable) / summary.count)) : "0"}</p></div>
+          <div className="p-2 bg-status-success-surface rounded-lg"><ArrowDownCircle className="h-5 w-5 text-status-success-foreground" /></div>
+          <div><p className="text-xs text-muted-foreground">متوسط المبلغ</p><p className="text-xl font-bold">{summary.count > 0 ? formatCurrency(Math.round(Number(summary.totalReceivable) / summary.count)) : "0"}</p></div>
         </CardContent></Card>
       </div>
 

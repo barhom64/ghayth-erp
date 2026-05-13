@@ -22,9 +22,9 @@ import {
 import { GuardedButton } from "@/components/shared/permission-gate";
 
 const CHANNEL_LABELS: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
-  in_app: { label: "داخلي", icon: <Bell className="h-4 w-4" />, color: "bg-blue-100 text-blue-700" },
-  email: { label: "بريد إلكتروني", icon: <Mail className="h-4 w-4" />, color: "bg-green-100 text-green-700" },
-  sms: { label: "رسالة نصية", icon: <Smartphone className="h-4 w-4" />, color: "bg-yellow-100 text-yellow-700" },
+  in_app: { label: "داخلي", icon: <Bell className="h-4 w-4" />, color: "bg-status-info-surface text-status-info-foreground" },
+  email: { label: "بريد إلكتروني", icon: <Mail className="h-4 w-4" />, color: "bg-status-success-surface text-status-success-foreground" },
+  sms: { label: "رسالة نصية", icon: <Smartphone className="h-4 w-4" />, color: "bg-status-warning-surface text-status-warning-foreground" },
   whatsapp: { label: "واتساب", icon: <MessageSquare className="h-4 w-4" />, color: "bg-emerald-100 text-emerald-700" },
   push: { label: "إشعار فوري", icon: <Zap className="h-4 w-4" />, color: "bg-purple-100 text-purple-700" },
   webhook: { label: "ويب هوك", icon: <Globe className="h-4 w-4" />, color: "bg-orange-100 text-orange-700" },
@@ -313,7 +313,7 @@ function TemplatesTab() {
                             setEditTitle((t.titleTemplate as string) ?? "");
                           }}>تعديل</GuardedButton>
                           {!isDefault && (
-                            <GuardedButton perm="settings:create" size="sm" variant="ghost" className="text-red-500" onClick={() => deleteTemplate(tId)}>
+                            <GuardedButton perm="settings:create" size="sm" variant="ghost" className="text-status-error" onClick={() => deleteTemplate(tId)}>
                               <Trash2 className="h-3 w-3" />
                             </GuardedButton>
                           )}
@@ -446,7 +446,7 @@ function FallbackChainsTab() {
                   <span className="text-xs text-muted-foreground">دقيقة</span>
                 </div>
                 {idx > 0 && (
-                  <Button size="sm" variant="ghost" className="text-red-500" onClick={() => removeStep(idx)}>
+                  <Button size="sm" variant="ghost" className="text-status-error" onClick={() => removeStep(idx)}>
                     <Trash2 className="h-3 w-3" />
                   </Button>
                 )}
@@ -480,7 +480,7 @@ function FallbackChainsTab() {
                   {!!chain.description && <p className="text-xs text-muted-foreground">{String(chain.description)}</p>}
                 </div>
                 {!isGlobal && (
-                  <GuardedButton perm="settings:create" size="sm" variant="ghost" className="text-red-500" onClick={() => deleteChain(chain.id as number)}>
+                  <GuardedButton perm="settings:create" size="sm" variant="ghost" className="text-status-error" onClick={() => deleteChain(chain.id as number)}>
                     <Trash2 className="h-3 w-3" />
                   </GuardedButton>
                 )}
@@ -625,12 +625,12 @@ function WebhooksTab() {
                     </Badge>
                   )}
                   {!!wh.lastSuccessAt && !wh.lastError && (
-                    <Badge variant="outline" className="text-xs text-green-600">
+                    <Badge variant="outline" className="text-xs text-status-success-foreground">
                       <CheckCircle className="h-3 w-3 ml-1" />يعمل
                     </Badge>
                   )}
                   <Switch checked={wh.isActive as boolean} onCheckedChange={() => toggleWebhook(wh.id as number, wh.isActive as boolean)} />
-                  <GuardedButton perm="settings:create" size="sm" variant="ghost" className="text-red-500" onClick={() => deleteWebhook(wh.id as number)}>
+                  <GuardedButton perm="settings:create" size="sm" variant="ghost" className="text-status-error" onClick={() => deleteWebhook(wh.id as number)}>
                     <Trash2 className="h-3 w-3" />
                   </GuardedButton>
                 </div>
@@ -730,13 +730,13 @@ function DeliveryStatsTab() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-4 text-center">
-            <div className="text-3xl font-bold text-blue-600">{stats?.totalSent ?? 0}</div>
+            <div className="text-3xl font-bold text-status-info-foreground">{stats?.totalSent ?? 0}</div>
             <div className="text-sm text-muted-foreground">إجمالي الإشعارات</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <div className="text-3xl font-bold text-green-600">{stats?.deliveryRate ?? 0}%</div>
+            <div className="text-3xl font-bold text-status-success-foreground">{stats?.deliveryRate ?? 0}%</div>
             <div className="text-sm text-muted-foreground">نسبة التوصيل</div>
           </CardContent>
         </Card>
@@ -759,14 +759,14 @@ function DeliveryStatsTab() {
                   <div key={ch.channel} className="flex items-center gap-3">
                     <ChannelBadge channel={ch.channel} />
                     <div className="flex-1">
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-2 bg-surface-subtle rounded-full overflow-hidden">
                         <div className="h-full bg-green-500 rounded-full" style={{ width: `${rate}%` }} />
                       </div>
                     </div>
                     <div className="flex items-center gap-3 text-sm">
-                      <span className="text-green-600">{ch.delivered} وصل</span>
-                      <span className="text-red-500">{ch.failed} فشل</span>
-                      <span className="text-yellow-600">{ch.pending} انتظار</span>
+                      <span className="text-status-success-foreground">{ch.delivered} وصل</span>
+                      <span className="text-status-error">{ch.failed} فشل</span>
+                      <span className="text-status-warning-foreground">{ch.pending} انتظار</span>
                       <span className="text-muted-foreground font-medium">{rate}%</span>
                     </div>
                   </div>
@@ -950,13 +950,13 @@ export default function NotificationEnginePage() {
         <TabsContent value="stats"><DeliveryStatsTab /></TabsContent>
       </Tabs>
 
-      <Card className="border-blue-200 bg-blue-50/50">
+      <Card className="border-status-info-surface bg-status-info-surface">
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
-            <Bell className="h-5 w-5 text-blue-600 mt-0.5" />
+            <Bell className="h-5 w-5 text-status-info-foreground mt-0.5" />
             <div>
-              <h4 className="font-medium text-blue-800">تفضيلات الإشعارات الشخصية</h4>
-              <p className="text-sm text-blue-600">يمكن لكل مستخدم تحديد القنوات المفضلة لاستقبال الإشعارات من الإعدادات الشخصية.</p>
+              <h4 className="font-medium text-status-info-foreground">تفضيلات الإشعارات الشخصية</h4>
+              <p className="text-sm text-status-info-foreground">يمكن لكل مستخدم تحديد القنوات المفضلة لاستقبال الإشعارات من الإعدادات الشخصية.</p>
             </div>
           </div>
           <div className="mt-3">

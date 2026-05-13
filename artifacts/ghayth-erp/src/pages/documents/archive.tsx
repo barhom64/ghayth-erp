@@ -16,7 +16,7 @@ const columns: DataTableColumn<any>[] = [
     className: "font-medium",
     render: (d) => (
       <span className="flex items-center gap-2">
-        <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
+        <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
         {d.title || d.name || "-"}
       </span>
     ),
@@ -32,7 +32,7 @@ const columns: DataTableColumn<any>[] = [
     key: "createdAt",
     header: "التاريخ",
     sortable: true,
-    className: "text-gray-500",
+    className: "text-muted-foreground",
     render: (d) => (d.createdAt ? formatDateAr(d.createdAt) : "-"),
   },
   {
@@ -47,8 +47,8 @@ export default function DocumentsArchive() {
   const docs = asList<any>(docsResp);
 
   const statCards = [
-    { label: "مستندات مؤرشفة", value: docs.length, icon: FolderArchive, color: "text-blue-600 bg-blue-50" },
-    { label: "عقود", value: docs.filter((d: any) => d.type === "contract").length, icon: FileText, color: "text-green-600 bg-green-50" },
+    { label: "مستندات مؤرشفة", value: docs.length, icon: FolderArchive, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "عقود", value: docs.filter((d: any) => d.type === "contract").length, icon: FileText, color: "text-status-success-foreground bg-status-success-surface" },
     { label: "تقارير", value: docs.filter((d: any) => d.type === "report").length, icon: Archive, color: "text-purple-600 bg-purple-50" },
     { label: "إجمالي", value: docs.length, icon: Calendar, color: "text-orange-600 bg-orange-50" },
   ];
@@ -64,7 +64,7 @@ export default function DocumentsArchive() {
               <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", c.color.split(" ")[1])}>
                 <c.icon className={cn("w-5 h-5", c.color.split(" ")[0])} />
               </div>
-              <div><p className="text-xl font-bold">{c.value}</p><p className="text-xs text-gray-500">{c.label}</p></div>
+              <div><p className="text-xl font-bold">{c.value}</p><p className="text-xs text-muted-foreground">{c.label}</p></div>
             </CardContent>
           </Card>
         ))}

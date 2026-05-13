@@ -34,9 +34,9 @@ export function AIInsightsTab() {
   };
 
   const severityConfig: Record<string, { label: string; color: string; bg: string }> = {
-    critical: { label: "عاجل", color: "text-red-700", bg: "bg-red-50 border-red-200" },
-    warning: { label: "مهم", color: "text-amber-700", bg: "bg-amber-50 border-amber-200" },
-    info: { label: "معلوماتي", color: "text-blue-700", bg: "bg-blue-50 border-blue-200" },
+    critical: { label: "عاجل", color: "text-status-error-foreground", bg: "bg-status-error-surface border-status-error-surface" },
+    warning: { label: "مهم", color: "text-status-warning-foreground", bg: "bg-status-warning-surface border-status-warning-surface" },
+    info: { label: "معلوماتي", color: "text-status-info-foreground", bg: "bg-status-info-surface border-status-info-surface" },
   };
 
   if (isLoading) return <LoadingSpinner />;
@@ -51,25 +51,25 @@ export function AIInsightsTab() {
 
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: "عاجل", count: counts.critical || 0, color: "text-red-600", bg: "bg-red-50" },
-          { label: "مهم", count: counts.warning || 0, color: "text-amber-600", bg: "bg-amber-50" },
-          { label: "معلوماتي", count: counts.info || 0, color: "text-blue-600", bg: "bg-blue-50" },
+          { label: "عاجل", count: counts.critical || 0, color: "text-status-error-foreground", bg: "bg-status-error-surface" },
+          { label: "مهم", count: counts.warning || 0, color: "text-status-warning-foreground", bg: "bg-status-warning-surface" },
+          { label: "معلوماتي", count: counts.info || 0, color: "text-status-info-foreground", bg: "bg-status-info-surface" },
         ].map((s) => (
           <Card key={s.label} className={cn("border-0 shadow-sm", s.bg)}>
             <CardContent className="p-4 text-center">
               <p className={cn("text-2xl font-bold", s.color)}>{s.count}</p>
-              <p className="text-xs text-gray-500">{s.label}</p>
+              <p className="text-xs text-muted-foreground">{s.label}</p>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {isLoading && <div className="space-y-2">{[...Array(3)].map((_, i) => <Card key={i}><CardContent className="p-4"><div className="h-12 bg-gray-100 rounded animate-pulse" /></CardContent></Card>)}</div>}
+      {isLoading && <div className="space-y-2">{[...Array(3)].map((_, i) => <Card key={i}><CardContent className="p-4"><div className="h-12 bg-surface-subtle rounded animate-pulse" /></CardContent></Card>)}</div>}
 
       {!isLoading && alerts.length === 0 && (
         <Card><CardContent className="p-8 text-center">
           <CheckCircle2 className="h-8 w-8 text-emerald-400 mx-auto mb-2" />
-          <p className="text-gray-500">لا توجد تنبيهات نشطة</p>
+          <p className="text-muted-foreground">لا توجد تنبيهات نشطة</p>
         </CardContent></Card>
       )}
 
@@ -85,12 +85,12 @@ export function AIInsightsTab() {
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <Badge className={cn("text-xs", cfg.color, cfg.bg)}>{cfg.label}</Badge>
-                        <span className="text-xs text-gray-400">{formatDateAr(alert.createdAt)}</span>
+                        <span className="text-xs text-muted-foreground">{formatDateAr(alert.createdAt)}</span>
                       </div>
-                      <p className="font-medium text-gray-800">{alert.title}</p>
-                      <p className="text-sm text-gray-600 mt-1">{alert.message}</p>
+                      <p className="font-medium text-status-neutral-foreground">{alert.title}</p>
+                      <p className="text-sm text-muted-foreground mt-1">{alert.message}</p>
                       {alert.suggestedAction && (
-                        <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+                        <p className="text-xs text-status-info-foreground mt-1 flex items-center gap-1">
                           <ArrowUpRight className="h-3 w-3" />الإجراء المقترح: {alert.suggestedAction}
                         </p>
                       )}
@@ -114,7 +114,7 @@ export function AIInsightsTab() {
 
       {proactive.length > 0 && (
         <div className="space-y-2">
-          <h3 className="font-semibold text-gray-700 flex items-center gap-2"><ShieldAlert className="h-4 w-4 text-purple-500" />إجراءات الأتمتة الأخيرة</h3>
+          <h3 className="font-semibold text-status-neutral-foreground flex items-center gap-2"><ShieldAlert className="h-4 w-4 text-purple-500" />إجراءات الأتمتة الأخيرة</h3>
           <DataTable
             data={proactive.slice(0, 10)}
             rowKey={(p) => p.id}
@@ -122,10 +122,10 @@ export function AIInsightsTab() {
             emptyMessage="لا توجد إجراءات"
             columns={[
               { key: "automationType", header: "النوع", sortable: true, searchable: true, className: "text-xs font-medium", render: (p) => p.automationType },
-              { key: "triggerReason", header: "السبب", searchable: true, className: "text-xs text-gray-600", render: (p) => p.triggerReason },
+              { key: "triggerReason", header: "السبب", searchable: true, className: "text-xs text-muted-foreground", render: (p) => p.triggerReason },
               { key: "actionTaken", header: "الإجراء المتخذ", className: "text-xs", render: (p) => p.actionTaken },
               { key: "status", header: "الحالة", sortable: true, render: (p) => <Badge variant={p.status === "success" ? "default" : "destructive"} className="text-xs">{p.status === "success" ? "نجاح" : "فشل"}</Badge> },
-              { key: "createdAt", header: "التاريخ", sortable: true, className: "text-xs text-gray-400", render: (p) => formatDateAr(p.createdAt) },
+              { key: "createdAt", header: "التاريخ", sortable: true, className: "text-xs text-muted-foreground", render: (p) => formatDateAr(p.createdAt) },
             ]}
           />
         </div>

@@ -111,7 +111,7 @@ export default function AttendanceDetail() {
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Clock className="h-4 w-4 text-gray-500" />
+            <Clock className="h-4 w-4 text-muted-foreground" />
             بيانات الحضور
           </CardTitle>
         </CardHeader>
@@ -122,24 +122,24 @@ export default function AttendanceDetail() {
               {record?.employeeName || "-"}
             </span>
             {isWarningStatus && (
-              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              <AlertTriangle className="h-4 w-4 text-status-warning" />
             )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             {record?.date && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">التاريخ</p>
-                <span className="text-gray-800">{formatDateAr(record.date)}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">التاريخ</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(record.date)}</span>
               </div>
             )}
             {record?.status && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الحالة</p>
+                <p className="text-xs text-muted-foreground mb-0.5">الحالة</p>
                 <Badge
                   variant="outline"
                   className={cn(
-                    isWarningStatus && "border-amber-400 bg-amber-50 text-amber-700"
+                    isWarningStatus && "border-amber-400 bg-status-warning-surface text-status-warning-foreground"
                   )}
                 >
                   {STATUS_LABELS[record.status] || record.status}
@@ -148,43 +148,43 @@ export default function AttendanceDetail() {
             )}
             {record?.checkIn && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">وقت الحضور</p>
-                <span className="text-gray-800 font-mono">{record.checkIn}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">وقت الحضور</p>
+                <span className="text-status-neutral-foreground font-mono">{record.checkIn}</span>
               </div>
             )}
             {record?.checkOut && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">وقت الانصراف</p>
-                <span className="text-gray-800 font-mono">{record.checkOut}</span>
+                <p className="text-xs text-muted-foreground mb-0.5">وقت الانصراف</p>
+                <span className="text-status-neutral-foreground font-mono">{record.checkOut}</span>
               </div>
             )}
             {record?.totalHours != null && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">إجمالي الساعات</p>
-                <span className="text-gray-800">{record.totalHours} ساعة</span>
+                <p className="text-xs text-muted-foreground mb-0.5">إجمالي الساعات</p>
+                <span className="text-status-neutral-foreground">{record.totalHours} ساعة</span>
               </div>
             )}
             {record?.overtimeHours != null && Number(record.overtimeHours) > 0 && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">ساعات إضافية</p>
-                <span className="text-green-700 font-medium">{record.overtimeHours} ساعة</span>
+                <p className="text-xs text-muted-foreground mb-0.5">ساعات إضافية</p>
+                <span className="text-status-success-foreground font-medium">{record.overtimeHours} ساعة</span>
               </div>
             )}
             {record?.lateMinutes != null && Number(record.lateMinutes) > 0 && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">دقائق التأخير</p>
-                <span className="text-amber-600 font-medium">{record.lateMinutes} دقيقة</span>
+                <p className="text-xs text-muted-foreground mb-0.5">دقائق التأخير</p>
+                <span className="text-status-warning-foreground font-medium">{record.lateMinutes} دقيقة</span>
               </div>
             )}
             {record?.earlyMinutes != null && Number(record.earlyMinutes) > 0 && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">دقائق الانصراف المبكر</p>
-                <span className="text-amber-600 font-medium">{record.earlyMinutes} دقيقة</span>
+                <p className="text-xs text-muted-foreground mb-0.5">دقائق الانصراف المبكر</p>
+                <span className="text-status-warning-foreground font-medium">{record.earlyMinutes} دقيقة</span>
               </div>
             )}
             {record?.method && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">طريقة التسجيل</p>
+                <p className="text-xs text-muted-foreground mb-0.5">طريقة التسجيل</p>
                 <Badge variant="secondary">
                   {METHOD_LABELS[record.method] || record.method}
                 </Badge>
@@ -192,8 +192,8 @@ export default function AttendanceDetail() {
             )}
             {record?.location && (
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">الموقع</p>
-                <span className="text-gray-800 flex items-center gap-1">
+                <p className="text-xs text-muted-foreground mb-0.5">الموقع</p>
+                <span className="text-status-neutral-foreground flex items-center gap-1">
                   <MapPin className="h-3 w-3" />
                   {record.location}
                 </span>
@@ -203,8 +203,8 @@ export default function AttendanceDetail() {
 
           {record?.notes && (
             <div className="pt-2 border-t">
-              <p className="text-xs text-gray-500 mb-1">ملاحظات</p>
-              <p className="text-gray-800 whitespace-pre-wrap">{record.notes}</p>
+              <p className="text-xs text-muted-foreground mb-1">ملاحظات</p>
+              <p className="text-status-neutral-foreground whitespace-pre-wrap">{record.notes}</p>
             </div>
           )}
         </CardContent>
@@ -218,16 +218,16 @@ export default function AttendanceDetail() {
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-500">الحضور</span>
+              <span className="text-muted-foreground">الحضور</span>
               <span className="font-mono">{record?.checkIn || "-"}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-500">الانصراف</span>
+              <span className="text-muted-foreground">الانصراف</span>
               <span className="font-mono">{record?.checkOut || "-"}</span>
             </div>
-            <hr className="border-gray-200" />
+            <hr className="border-border" />
             <div className="flex justify-between font-medium">
-              <span className="text-gray-600">الإجمالي</span>
+              <span className="text-muted-foreground">الإجمالي</span>
               <span>{record?.totalHours ? `${record.totalHours} ساعة` : "-"}</span>
             </div>
           </CardContent>

@@ -32,7 +32,7 @@ export default function FinancialRequestsPage() {
       key: "ref",
       header: "المرجع",
       sortable: true,
-      render: (r) => <span className="font-mono text-blue-600 text-sm">{r.ref || `#${r.id}`}</span>,
+      render: (r) => <span className="font-mono text-status-info-foreground text-sm">{r.ref || `#${r.id}`}</span>,
     },
     {
       key: "requestedByName",
@@ -44,7 +44,7 @@ export default function FinancialRequestsPage() {
       key: "supplierName",
       header: "المورد",
       sortable: true,
-      render: (r) => <span className="text-gray-500">{r.supplierName || "-"}</span>,
+      render: (r) => <span className="text-muted-foreground">{r.supplierName || "-"}</span>,
     },
     {
       key: "amount",
@@ -56,7 +56,7 @@ export default function FinancialRequestsPage() {
       key: "createdAt",
       header: "التاريخ",
       sortable: true,
-      render: (r) => <span className="text-gray-500 text-sm">{r.createdAt ? formatDateAr(r.createdAt) : "-"}</span>,
+      render: (r) => <span className="text-muted-foreground text-sm">{r.createdAt ? formatDateAr(r.createdAt) : "-"}</span>,
     },
     {
       key: "status",
@@ -74,20 +74,20 @@ export default function FinancialRequestsPage() {
     >
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
         <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-blue-100 rounded-lg"><ClipboardCheck className="h-5 w-5 text-blue-600" /></div>
-          <div><p className="text-xs text-gray-500">إجمالي الطلبات</p><p className="text-xl font-bold">{summary.total || 0}</p></div>
+          <div className="p-2 bg-status-info-surface rounded-lg"><ClipboardCheck className="h-5 w-5 text-status-info-foreground" /></div>
+          <div><p className="text-xs text-muted-foreground">إجمالي الطلبات</p><p className="text-xl font-bold">{summary.total || 0}</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-yellow-100 rounded-lg"><Clock className="h-5 w-5 text-yellow-600" /></div>
-          <div><p className="text-xs text-gray-500">قيد الانتظار</p><p className="text-xl font-bold text-yellow-600">{summary.pending || 0}</p></div>
+          <div className="p-2 bg-status-warning-surface rounded-lg"><Clock className="h-5 w-5 text-status-warning-foreground" /></div>
+          <div><p className="text-xs text-muted-foreground">قيد الانتظار</p><p className="text-xl font-bold text-status-warning-foreground">{summary.pending || 0}</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 bg-green-100 rounded-lg"><CheckCircle className="h-5 w-5 text-green-600" /></div>
-          <div><p className="text-xs text-gray-500">موافق عليها</p><p className="text-xl font-bold text-green-600">{summary.approved || 0}</p></div>
+          <div className="p-2 bg-status-success-surface rounded-lg"><CheckCircle className="h-5 w-5 text-status-success-foreground" /></div>
+          <div><p className="text-xs text-muted-foreground">موافق عليها</p><p className="text-xl font-bold text-status-success-foreground">{summary.approved || 0}</p></div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
           <div className="p-2 bg-purple-100 rounded-lg"><DollarSign className="h-5 w-5 text-purple-600" /></div>
-          <div><p className="text-xs text-gray-500">إجمالي المبالغ</p><p className="text-xl font-bold">{formatCurrency(totalAmount)}</p></div>
+          <div><p className="text-xs text-muted-foreground">إجمالي المبالغ</p><p className="text-xl font-bold">{formatCurrency(totalAmount)}</p></div>
         </CardContent></Card>
       </div>
 

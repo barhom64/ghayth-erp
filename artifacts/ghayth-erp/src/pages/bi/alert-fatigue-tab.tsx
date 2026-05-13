@@ -41,27 +41,27 @@ export function AlertFatigueTab() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-bold flex items-center gap-2"><BellOff className="h-6 w-6 text-gray-600" />إدارة التنبيهات — منع الإرهاق</h2>
+      <h2 className="text-xl font-bold flex items-center gap-2"><BellOff className="h-6 w-6 text-muted-foreground" />إدارة التنبيهات — منع الإرهاق</h2>
 
       <div className="grid grid-cols-3 gap-4">
-        <Card className={cn("border-0 shadow-sm", dc.isOverLimit ? "bg-red-50" : "bg-emerald-50")}>
+        <Card className={cn("border-0 shadow-sm", dc.isOverLimit ? "bg-status-error-surface" : "bg-emerald-50")}>
           <CardContent className="p-4 text-center">
-            <p className={cn("text-2xl font-bold", dc.isOverLimit ? "text-red-600" : "text-emerald-600")}>{dc.todayCount || 0}</p>
-            <p className="text-xs text-gray-500">تنبيهات اليوم</p>
+            <p className={cn("text-2xl font-bold", dc.isOverLimit ? "text-status-error-foreground" : "text-emerald-600")}>{dc.todayCount || 0}</p>
+            <p className="text-xs text-muted-foreground">تنبيهات اليوم</p>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-gray-700">{dc.dailyLimit || 50}</p>
-            <p className="text-xs text-gray-500">الحد اليومي</p>
+            <p className="text-2xl font-bold text-status-neutral-foreground">{dc.dailyLimit || 50}</p>
+            <p className="text-xs text-muted-foreground">الحد اليومي</p>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4 text-center">
-            <p className={cn("text-2xl font-bold", dc.isOverLimit ? "text-red-600" : "text-emerald-600")}>
+            <p className={cn("text-2xl font-bold", dc.isOverLimit ? "text-status-error-foreground" : "text-emerald-600")}>
               {dc.isOverLimit ? "تجاوز الحد" : "ضمن الحد"}
             </p>
-            <p className="text-xs text-gray-500">الحالة</p>
+            <p className="text-xs text-muted-foreground">الحالة</p>
           </CardContent>
         </Card>
       </div>
@@ -96,7 +96,7 @@ export function AlertFatigueTab() {
 
       {settings.length > 0 && (
         <div className="space-y-2">
-          <h3 className="font-semibold text-gray-700">قواعد الكتم النشطة</h3>
+          <h3 className="font-semibold text-status-neutral-foreground">قواعد الكتم النشطة</h3>
           <DataTable
             data={settings}
             rowKey={(s, i) => s.alertType ?? i}
@@ -105,16 +105,16 @@ export function AlertFatigueTab() {
             columns={[
               { key: "alertType", header: "نوع التنبيه", sortable: true, searchable: true, className: "font-mono text-sm", render: (s) => s.alertType },
               { key: "muteUntil", header: "مكتوم حتى", sortable: true, className: "text-sm", render: (s) => s.muteUntil ? formatDateAr(s.muteUntil) : "دائم" },
-              { key: "reason", header: "السبب", searchable: true, className: "text-sm text-gray-500", render: (s) => s.reason || "-" },
+              { key: "reason", header: "السبب", searchable: true, className: "text-sm text-muted-foreground", render: (s) => s.reason || "-" },
             ]}
           />
         </div>
       )}
 
-      <Card className="bg-blue-50 border-blue-100">
+      <Card className="bg-status-info-surface border-status-info-surface">
         <CardContent className="p-4">
-          <h3 className="font-semibold text-blue-800 mb-2">كيف يعمل نظام منع إرهاق التنبيهات؟</h3>
-          <ul className="text-sm text-blue-700 space-y-1 list-disc list-inside">
+          <h3 className="font-semibold text-status-info-foreground mb-2">كيف يعمل نظام منع إرهاق التنبيهات؟</h3>
+          <ul className="text-sm text-status-info-foreground space-y-1 list-disc list-inside">
             <li>تجميع التنبيهات المتكررة من نفس النوع في تنبيه واحد</li>
             <li>الحد الأقصى للتنبيهات اليومية: {dc.dailyLimit || 50} تنبيه</li>
             <li>إمكانية كتم نوع معين من التنبيهات مؤقتاً</li>

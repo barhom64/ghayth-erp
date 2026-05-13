@@ -226,8 +226,8 @@ export default function ActionCenter() {
               <Briefcase className="w-4 h-4 text-violet-600" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-800 truncate">{item.title}</p>
-              <p className="text-xs text-gray-500">
+              <p className="text-sm font-medium text-status-neutral-foreground truncate">{item.title}</p>
+              <p className="text-xs text-muted-foreground">
                 {item.submittedByName ?? "موظف"} — خطوة {item.currentStepOrder}
                 {item.slaStatus && item.slaStatus !== "on_track" ? ` ⚠ ${item.slaStatus === "warning" ? "تحذير مستوى الخدمة" : "تجاوز مستوى الخدمة"}` : ""}
               </p>
@@ -241,20 +241,20 @@ export default function ActionCenter() {
               <User className="w-4 h-4 text-teal-600" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-800 truncate">{item.employeeName}</p>
-              <p className="text-xs text-gray-500">{item.leaveType} — {item.days} يوم ({formatDateAr(item.startDate)} → {formatDateAr(item.endDate)})</p>
+              <p className="text-sm font-medium text-status-neutral-foreground truncate">{item.employeeName}</p>
+              <p className="text-xs text-muted-foreground">{item.leaveType} — {item.days} يوم ({formatDateAr(item.startDate)} → {formatDateAr(item.endDate)})</p>
             </div>
           </div>
         );
       case "advances":
         return (
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center shrink-0">
-              <DollarSign className="w-4 h-4 text-green-600" />
+            <div className="w-8 h-8 rounded-full bg-status-success-surface flex items-center justify-center shrink-0">
+              <DollarSign className="w-4 h-4 text-status-success-foreground" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-800 truncate">{item.employeeName}</p>
-              <p className="text-xs text-gray-500">{formatCurrency(Number(item.amount))} — {item.reason || "سلفة راتب"}</p>
+              <p className="text-sm font-medium text-status-neutral-foreground truncate">{item.employeeName}</p>
+              <p className="text-xs text-muted-foreground">{formatCurrency(Number(item.amount))} — {item.reason || "سلفة راتب"}</p>
             </div>
           </div>
         );
@@ -265,8 +265,8 @@ export default function ActionCenter() {
               <KeyRound className="w-4 h-4 text-indigo-600" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-800 truncate">{item.employeeName}</p>
-              <p className="text-xs text-gray-500">{item.description} — {formatCurrency(Number(item.amount))}</p>
+              <p className="text-sm font-medium text-status-neutral-foreground truncate">{item.employeeName}</p>
+              <p className="text-xs text-muted-foreground">{item.description} — {formatCurrency(Number(item.amount))}</p>
             </div>
           </div>
         );
@@ -277,32 +277,32 @@ export default function ActionCenter() {
               <FileSignature className="w-4 h-4 text-purple-600" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-800 truncate">{item.employeeName}</p>
-              <p className="text-xs text-gray-500">{item.letterType}</p>
+              <p className="text-sm font-medium text-status-neutral-foreground truncate">{item.employeeName}</p>
+              <p className="text-xs text-muted-foreground">{item.letterType}</p>
             </div>
           </div>
         );
       case "purchases":
         return (
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
-              <ShoppingCart className="w-4 h-4 text-blue-600" />
+            <div className="w-8 h-8 rounded-full bg-status-info-surface flex items-center justify-center shrink-0">
+              <ShoppingCart className="w-4 h-4 text-status-info-foreground" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-800 truncate">{item.title || `طلب شراء #${item.id}`}</p>
-              <p className="text-xs text-gray-400">{item.createdAt ? formatTimeAgo(item.createdAt) : ""}</p>
+              <p className="text-sm font-medium text-status-neutral-foreground truncate">{item.title || `طلب شراء #${item.id}`}</p>
+              <p className="text-xs text-muted-foreground">{item.createdAt ? formatTimeAgo(item.createdAt) : ""}</p>
             </div>
           </div>
         );
       case "expenses":
         return (
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center shrink-0">
-              <Wallet className="w-4 h-4 text-amber-600" />
+            <div className="w-8 h-8 rounded-full bg-status-warning-surface flex items-center justify-center shrink-0">
+              <Wallet className="w-4 h-4 text-status-warning-foreground" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-800 truncate">{item.description || item.ref || `مصروف #${item.id}`}</p>
-              <p className="text-xs text-gray-400">{item.createdAt ? formatTimeAgo(item.createdAt) : ""}</p>
+              <p className="text-sm font-medium text-status-neutral-foreground truncate">{item.description || item.ref || `مصروف #${item.id}`}</p>
+              <p className="text-xs text-muted-foreground">{item.createdAt ? formatTimeAgo(item.createdAt) : ""}</p>
             </div>
           </div>
         );
@@ -314,8 +314,8 @@ export default function ActionCenter() {
               <Banknote className="w-4 h-4 text-emerald-600" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-800 truncate">{item.employeeName}</p>
-              <p className="text-xs text-gray-500">{loanTypeLabels[item.loanType] || item.loanType} — {formatCurrency(Number(item.amount))}</p>
+              <p className="text-sm font-medium text-status-neutral-foreground truncate">{item.employeeName}</p>
+              <p className="text-xs text-muted-foreground">{loanTypeLabels[item.loanType] || item.loanType} — {formatCurrency(Number(item.amount))}</p>
             </div>
           </div>
         );
@@ -327,8 +327,8 @@ export default function ActionCenter() {
               <Timer className="w-4 h-4 text-cyan-600" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-800 truncate">{item.employeeName}</p>
-              <p className="text-xs text-gray-500">{Number(item.hours).toFixed(1)} ساعة — {formatCurrency(Number(item.totalAmount))}</p>
+              <p className="text-sm font-medium text-status-neutral-foreground truncate">{item.employeeName}</p>
+              <p className="text-xs text-muted-foreground">{Number(item.hours).toFixed(1)} ساعة — {formatCurrency(Number(item.totalAmount))}</p>
             </div>
           </div>
         );
@@ -336,12 +336,12 @@ export default function ActionCenter() {
         const exitTypeLabels: Record<string, string> = { resignation: "استقالة", termination: "فصل", retirement: "تقاعد", contract_end: "انتهاء عقد", mutual: "اتفاق متبادل" };
         return (
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center shrink-0">
-              <LogOut className="w-4 h-4 text-red-600" />
+            <div className="w-8 h-8 rounded-full bg-status-error-surface flex items-center justify-center shrink-0">
+              <LogOut className="w-4 h-4 text-status-error-foreground" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-800 truncate">{item.employeeName}</p>
-              <p className="text-xs text-gray-500">{exitTypeLabels[item.exitType] || item.exitType}</p>
+              <p className="text-sm font-medium text-status-neutral-foreground truncate">{item.employeeName}</p>
+              <p className="text-xs text-muted-foreground">{exitTypeLabels[item.exitType] || item.exitType}</p>
             </div>
           </div>
         );
@@ -369,31 +369,31 @@ export default function ActionCenter() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className={cn(
           "rounded-xl p-4 border-2 text-center",
-          summary.totalPending > 0 ? "border-orange-200 bg-orange-50" : "border-gray-100 bg-white"
+          summary.totalPending > 0 ? "border-orange-200 bg-orange-50" : "border-border bg-white"
         )}>
           <p className="text-3xl font-black text-gray-900">{summary.totalPending || 0}</p>
-          <p className="text-sm text-gray-500 mt-1">معاملة معلقة</p>
+          <p className="text-sm text-muted-foreground mt-1">معاملة معلقة</p>
         </div>
         <div className={cn(
           "rounded-xl p-4 border-2 text-center",
-          summary.slaBreachedCount > 0 ? "border-red-200 bg-red-50" : "border-gray-100 bg-white"
+          summary.slaBreachedCount > 0 ? "border-status-error-surface bg-status-error-surface" : "border-border bg-white"
         )}>
           <p className="text-3xl font-black text-gray-900">{summary.slaBreachedCount || 0}</p>
-          <p className="text-sm text-gray-500 mt-1">تجاوز مستوى الخدمة</p>
+          <p className="text-sm text-muted-foreground mt-1">تجاوز مستوى الخدمة</p>
         </div>
         <div className={cn(
           "rounded-xl p-4 border-2 text-center",
-          summary.escalationsCount > 0 ? "border-yellow-200 bg-yellow-50" : "border-gray-100 bg-white"
+          summary.escalationsCount > 0 ? "border-status-warning-surface bg-status-warning-surface" : "border-border bg-white"
         )}>
           <p className="text-3xl font-black text-gray-900">{summary.escalationsCount || 0}</p>
-          <p className="text-sm text-gray-500 mt-1">تصعيدات</p>
+          <p className="text-sm text-muted-foreground mt-1">تصعيدات</p>
         </div>
         <div className={cn(
           "rounded-xl p-4 border-2 text-center",
-          summary.criticalAlertsCount > 0 ? "border-purple-200 bg-purple-50" : "border-gray-100 bg-white"
+          summary.criticalAlertsCount > 0 ? "border-purple-200 bg-purple-50" : "border-border bg-white"
         )}>
           <p className="text-3xl font-black text-gray-900">{summary.criticalAlertsCount || 0}</p>
-          <p className="text-sm text-gray-500 mt-1">تنبيهات حرجة</p>
+          <p className="text-sm text-muted-foreground mt-1">تنبيهات حرجة</p>
         </div>
       </div>
 
@@ -434,7 +434,7 @@ export default function ActionCenter() {
           {currentData.length === 0 ? (
             <div className="text-center py-8">
               <CheckCircle2 className="w-12 h-12 text-green-300 mx-auto mb-3" />
-              <p className="text-sm text-green-600 font-medium">لا توجد معاملات معلقة</p>
+              <p className="text-sm text-status-success-foreground font-medium">لا توجد معاملات معلقة</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -442,21 +442,21 @@ export default function ActionCenter() {
                 const itemKey = `${activeTab}-${item.id}`;
                 const isProcessing = processingIds.has(itemKey);
                 return (
-                  <div key={item.id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:bg-gray-50/50 transition-colors">
+                  <div key={item.id} className="flex items-center gap-3 p-3 rounded-xl border border-border hover:bg-surface-subtle/50 transition-colors">
                     {renderItem(item)}
-                    <span className="text-xs text-gray-400 shrink-0">
+                    <span className="text-xs text-muted-foreground shrink-0">
                       {item.createdAt ? formatTimeAgo(item.createdAt) : ""}
                     </span>
                     <div className="flex items-center gap-1 shrink-0">
                       {isProcessing ? (
-                        <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                       ) : activeTab === "workflows" ? (
                         <>
                           <GuardedButton
                             perm="workflow:approve"
                             size="sm"
                             variant="ghost"
-                            className="h-8 w-8 p-0 text-green-600 hover:bg-green-50 hover:text-green-700"
+                            className="h-8 w-8 p-0 text-status-success-foreground hover:bg-status-success-surface hover:text-status-success-foreground"
                             title="اعتماد"
                             onClick={(e) => { e.preventDefault(); handleWorkflowDecision(item.id, "approve"); }}
                           >
@@ -466,7 +466,7 @@ export default function ActionCenter() {
                             perm="workflow:approve"
                             size="sm"
                             variant="ghost"
-                            className="h-8 w-8 p-0 text-amber-600 hover:bg-amber-50 hover:text-amber-700"
+                            className="h-8 w-8 p-0 text-status-warning-foreground hover:bg-status-warning-surface hover:text-status-warning-foreground"
                             title="إرجاع للتعديل"
                             onClick={(e) => { e.preventDefault(); handleWorkflowDecision(item.id, "return"); }}
                           >
@@ -476,7 +476,7 @@ export default function ActionCenter() {
                             perm="workflow:reject"
                             size="sm"
                             variant="ghost"
-                            className="h-8 w-8 p-0 text-red-600 hover:bg-red-50 hover:text-red-700"
+                            className="h-8 w-8 p-0 text-status-error-foreground hover:bg-status-error-surface hover:text-status-error-foreground"
                             title="رفض"
                             onClick={(e) => { e.preventDefault(); handleWorkflowDecision(item.id, "reject"); }}
                           >
@@ -489,7 +489,7 @@ export default function ActionCenter() {
                             perm="approval:approve"
                             size="sm"
                             variant="ghost"
-                            className="h-8 w-8 p-0 text-green-600 hover:bg-green-50 hover:text-green-700"
+                            className="h-8 w-8 p-0 text-status-success-foreground hover:bg-status-success-surface hover:text-status-success-foreground"
                             title="اعتماد"
                             onClick={(e) => { e.preventDefault(); handleApproval(activeTab, item.id, true); }}
                           >
@@ -499,7 +499,7 @@ export default function ActionCenter() {
                             perm="approval:reject"
                             size="sm"
                             variant="ghost"
-                            className="h-8 w-8 p-0 text-red-600 hover:bg-red-50 hover:text-red-700"
+                            className="h-8 w-8 p-0 text-status-error-foreground hover:bg-status-error-surface hover:text-status-error-foreground"
                             title="رفض"
                             onClick={(e) => { e.preventDefault(); handleApproval(activeTab, item.id, false); }}
                           >
@@ -531,7 +531,7 @@ export default function ActionCenter() {
           <Card className="border-0 shadow-sm border-s-4 border-s-red-400">
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <Timer className="w-5 h-5 text-red-500" />
+                <Timer className="w-5 h-5 text-status-error" />
                 معاملات متأخرة عن مستوى الخدمة
                 <Badge variant="destructive" className="text-xs">{slaBreached.length}</Badge>
               </CardTitle>
@@ -540,10 +540,10 @@ export default function ActionCenter() {
               <div className="space-y-2">
                 {slaBreached.map((s: any) => (
                   <Link key={s.id} href={`/support/${s.id}`}>
-                    <div className="flex items-center justify-between p-2.5 rounded-lg hover:bg-red-50/50 transition-colors cursor-pointer">
+                    <div className="flex items-center justify-between p-2.5 rounded-lg hover:bg-status-error-surface transition-colors cursor-pointer">
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-800 truncate">{s.title || `تذكرة #${s.id}`}</p>
-                        <p className="text-xs text-red-500">
+                        <p className="text-sm font-medium text-status-neutral-foreground truncate">{s.title || `تذكرة #${s.id}`}</p>
+                        <p className="text-xs text-status-error">
                           الموعد النهائي: {s.slaDeadline ? formatDateAr(s.slaDeadline) : "—"}
                         </p>
                       </div>
@@ -560,20 +560,20 @@ export default function ActionCenter() {
           <Card className="border-0 shadow-sm border-s-4 border-s-yellow-400">
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-yellow-500" />
+                <AlertTriangle className="w-5 h-5 text-status-warning" />
                 تصعيدات
-                <Badge className="text-xs bg-yellow-100 text-yellow-700">{escalations.length}</Badge>
+                <Badge className="text-xs bg-status-warning-surface text-status-warning-foreground">{escalations.length}</Badge>
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
                 {escalations.map((e: any) => (
-                  <div key={e.id} className="flex items-start gap-3 p-2.5 rounded-lg bg-yellow-50/50">
-                    <Bell className="w-4 h-4 text-yellow-500 shrink-0 mt-0.5" />
+                  <div key={e.id} className="flex items-start gap-3 p-2.5 rounded-lg bg-status-warning-surface/50">
+                    <Bell className="w-4 h-4 text-status-warning shrink-0 mt-0.5" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{e.title}</p>
-                      <p className="text-xs text-gray-500 truncate">{e.body}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{e.createdAt ? formatTimeAgo(e.createdAt) : ""}</p>
+                      <p className="text-sm font-medium text-status-neutral-foreground truncate">{e.title}</p>
+                      <p className="text-xs text-muted-foreground truncate">{e.body}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{e.createdAt ? formatTimeAgo(e.createdAt) : ""}</p>
                     </div>
                   </div>
                 ))}
@@ -587,7 +587,7 @@ export default function ActionCenter() {
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
-              <ListTodo className="w-5 h-5 text-blue-500" />
+              <ListTodo className="w-5 h-5 text-status-info" />
               مهام اليوم
               {todayTasks.length > 0 && <Badge className="text-xs">{todayTasks.length}</Badge>}
             </CardTitle>
@@ -601,24 +601,24 @@ export default function ActionCenter() {
             {todayTasks.length === 0 ? (
               <div className="text-center py-4">
                 <CheckCircle2 className="w-10 h-10 text-green-300 mx-auto mb-2" />
-                <p className="text-sm text-green-600">لا توجد مهام مجدولة لليوم</p>
+                <p className="text-sm text-status-success-foreground">لا توجد مهام مجدولة لليوم</p>
               </div>
             ) : (
               <div className="space-y-2">
                 {todayTasks.map((t: any) => (
                   <Link key={t.id} href={`/tasks/${t.id}`}>
-                    <div className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
+                    <div className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-subtle transition-colors cursor-pointer">
                       <div className={cn(
                         "w-2 h-2 rounded-full shrink-0",
                         t.status === "completed" ? "bg-green-500" : t.status === "in_progress" ? "bg-blue-500" : "bg-yellow-500"
                       )} />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-800 truncate">{t.title}</p>
-                        {t.assigneeName && <p className="text-xs text-gray-400">{t.assigneeName}</p>}
+                        <p className="text-sm font-medium text-status-neutral-foreground truncate">{t.title}</p>
+                        {t.assigneeName && <p className="text-xs text-muted-foreground">{t.assigneeName}</p>}
                       </div>
                       {t.priority && (
                         <Badge variant="outline" className={cn("text-[10px] shrink-0",
-                          t.priority === "high" ? "bg-red-100 text-red-700" : t.priority === "medium" ? "bg-yellow-100 text-yellow-700" : ""
+                          t.priority === "high" ? "bg-status-error-surface text-status-error-foreground" : t.priority === "medium" ? "bg-status-warning-surface text-status-warning-foreground" : ""
                         )}>
                           {priorityLabels[t.priority] || t.priority}
                         </Badge>
@@ -649,13 +649,13 @@ export default function ActionCenter() {
               <div className="space-y-2">
                 {criticalAlerts.map((a: any) => (
                   <div key={a.id} className="flex items-start gap-3 p-2.5 rounded-lg bg-purple-50/30">
-                    <div className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center shrink-0 mt-0.5">
-                      <Bell className="w-4 h-4 text-red-500" />
+                    <div className="w-8 h-8 rounded-full bg-status-error-surface flex items-center justify-center shrink-0 mt-0.5">
+                      <Bell className="w-4 h-4 text-status-error" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{a.title}</p>
-                      <p className="text-xs text-gray-500 truncate">{a.body}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{a.createdAt ? formatTimeAgo(a.createdAt) : ""}</p>
+                      <p className="text-sm font-medium text-status-neutral-foreground truncate">{a.title}</p>
+                      <p className="text-xs text-muted-foreground truncate">{a.body}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{a.createdAt ? formatTimeAgo(a.createdAt) : ""}</p>
                     </div>
                   </div>
                 ))}

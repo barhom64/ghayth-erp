@@ -31,10 +31,10 @@ export default function ApplicationListPage() {
   if (isError) return <ErrorState />;
 
   const kpis = [
-    { label: "إجمالي المتقدمين", value: apps.length, icon: Users, color: "text-blue-600 bg-blue-50" },
-    { label: "جدد", value: apps.filter((a: any) => (a.status || a.stage) === "new").length, icon: Clock, color: "text-amber-600 bg-amber-50" },
-    { label: "تم توظيفهم", value: apps.filter((a: any) => (a.status || a.stage) === "hired").length, icon: UserCheck, color: "text-green-600 bg-green-50" },
-    { label: "مرفوض", value: apps.filter((a: any) => (a.status || a.stage) === "rejected").length, icon: XCircle, color: "text-red-600 bg-red-50" },
+    { label: "إجمالي المتقدمين", value: apps.length, icon: Users, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "جدد", value: apps.filter((a: any) => (a.status || a.stage) === "new").length, icon: Clock, color: "text-status-warning-foreground bg-status-warning-surface" },
+    { label: "تم توظيفهم", value: apps.filter((a: any) => (a.status || a.stage) === "hired").length, icon: UserCheck, color: "text-status-success-foreground bg-status-success-surface" },
+    { label: "مرفوض", value: apps.filter((a: any) => (a.status || a.stage) === "rejected").length, icon: XCircle, color: "text-status-error-foreground bg-status-error-surface" },
   ];
 
   const columns: DataTableColumn<any>[] = [
@@ -54,21 +54,21 @@ export default function ApplicationListPage() {
       header: "المنصب",
       sortable: true,
       render: (v) => (
-        <span className="text-sm text-gray-600">{v.postingTitle || v.position || "-"}</span>
+        <span className="text-sm text-muted-foreground">{v.postingTitle || v.position || "-"}</span>
       ),
     },
     {
       key: "email",
       header: "البريد",
       render: (v) => (
-        <span className="text-sm text-gray-500">{v.email || "-"}</span>
+        <span className="text-sm text-muted-foreground">{v.email || "-"}</span>
       ),
     },
     {
       key: "phone",
       header: "الهاتف",
       render: (v) => (
-        <span className="text-sm text-gray-500 font-mono">{v.phone || "-"}</span>
+        <span className="text-sm text-muted-foreground font-mono">{v.phone || "-"}</span>
       ),
     },
     {
@@ -76,16 +76,16 @@ export default function ApplicationListPage() {
       header: "التقييم",
       sortable: true,
       render: (v) => {
-        if (!v.rating) return <span className="text-gray-400">-</span>;
+        if (!v.rating) return <span className="text-muted-foreground">-</span>;
         const r = Number(v.rating);
         return (
           <Badge
             variant="outline"
             className={cn(
               "text-xs",
-              r >= 4 ? "border-green-300 text-green-700 bg-green-50" :
-              r >= 3 ? "border-amber-300 text-amber-700 bg-amber-50" :
-              "border-red-300 text-red-700 bg-red-50",
+              r >= 4 ? "border-status-success-surface text-status-success-foreground bg-status-success-surface" :
+              r >= 3 ? "border-amber-300 text-status-warning-foreground bg-status-warning-surface" :
+              "border-status-error-surface text-status-error-foreground bg-status-error-surface",
             )}
           >
             {r}/5
