@@ -222,6 +222,20 @@ export interface ImportDiff {
   skippedCount: number;
   errorRows: { rowIndex: number; error: string }[];
   unlinkedSubAgents: { nuskCode: string; name: string; rowCount: number }[];
+  /**
+   * Primary agents that will be **auto-created** on confirm because the
+   * file references an agent (by nuskAgentNumber or name) that doesn't
+   * exist in `umrah_agents`. We surface this before the user confirms so
+   * they can review or rename rather than silently growing the directory.
+   */
+  newAgentsToCreate: { nuskAgentNumber: string | null; agentName: string; rowCount: number }[];
+  /**
+   * Rows that name no agent at all (neither nuskAgentNumber nor
+   * agentName populated). On confirm these save with `agentId = NULL`,
+   * meaning they won't appear on any agent statement. The wizard shows
+   * a banner so the operator notices.
+   */
+  rowsWithoutAgent: number;
   totalRows: number;
   financialImpactCount: number;
 }
@@ -241,6 +255,8 @@ async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "m
     skippedCount: 0,
     errorRows: [],
     unlinkedSubAgents: [],
+    newAgentsToCreate: [],
+    rowsWithoutAgent: 0,
     totalRows: rows.length,
     financialImpactCount: 0,
   };
@@ -269,7 +285,35 @@ async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "m
       : [];
     const linkedSet = new Set(linkedSubs.map((s: any) => s.nuskCode));
 
+    // Mirror resolveAgent's matching logic so the preview can flag rows
+    // that will trigger auto-creation. Match either by NUSK agent number
+    // (umrah_agents.contractRef) or by name. The set is keyed by the
+    // string we'd look up, so the preview and the confirm phase agree.
+    const agentNuskNumbers = new Set<string>();
+    const agentNames = new Set<string>();
+    for (const r of rows) {
+      if (r.nuskAgentNumber) agentNuskNumbers.add(String(r.nuskAgentNumber));
+      if (r.agentName) agentNames.add(String(r.agentName));
+    }
+    const knownByNuskNumber = new Set<string>();
+    const knownByName = new Set<string>();
+    if (agentNuskNumbers.size > 0) {
+      const found = await rawQuery<Record<string, unknown>>(
+        `SELECT "contractRef" FROM umrah_agents WHERE "companyId" = $1 AND "contractRef" = ANY($2) AND "deletedAt" IS NULL`,
+        [scope.companyId, [...agentNuskNumbers]]
+      );
+      for (const r of found) knownByNuskNumber.add(String(r.contractRef));
+    }
+    if (agentNames.size > 0) {
+      const found = await rawQuery<Record<string, unknown>>(
+        `SELECT name FROM umrah_agents WHERE "companyId" = $1 AND name = ANY($2) AND "deletedAt" IS NULL`,
+        [scope.companyId, [...agentNames]]
+      );
+      for (const r of found) knownByName.add(String(r.name));
+    }
+
     const unlinkedMap = new Map<string, { name: string; count: number }>();
+    const newAgentsMap = new Map<string, { nuskAgentNumber: string | null; agentName: string; count: number }>();
 
     const COMPARE_FIELDS = ["fullName", "nationality", "status", "passportNumber", "entryPort", "exitPort", "overstayDays", "actualStayDays", "entryDate", "exitDate"];
 
@@ -305,10 +349,39 @@ async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "m
         if (entry) entry.count++;
         else unlinkedMap.set(code, { name: String(row.subAgentName ?? row.nuskCode), count: 1 });
       }
+
+      // Agent tracking — mirrors resolveAgent's match priority. Any row
+      // that names an agent (number or name) which DOESN'T match an
+      // existing umrah_agents row will trigger auto-creation on confirm.
+      // Rows with no agent info at all save with agentId=null and won't
+      // appear on any agent statement.
+      const nuskNum = row.nuskAgentNumber ? String(row.nuskAgentNumber) : null;
+      const aName = row.agentName ? String(row.agentName) : null;
+      if (!nuskNum && !aName) {
+        diff.rowsWithoutAgent++;
+      } else {
+        const matchesByNuskNumber = nuskNum != null && knownByNuskNumber.has(nuskNum);
+        const matchesByName = aName != null && knownByName.has(aName);
+        if (!matchesByNuskNumber && !matchesByName) {
+          // The synthetic key matches the upsert key resolveAgent uses
+          // when no match exists, so re-imports of the same file aggregate
+          // into one entry instead of duplicating.
+          const finalName = aName ?? `وكيل ${nuskNum}`;
+          const key = `${nuskNum ?? ""}::${finalName}`;
+          const entry = newAgentsMap.get(key);
+          if (entry) entry.count++;
+          else newAgentsMap.set(key, { nuskAgentNumber: nuskNum, agentName: finalName, count: 1 });
+        }
+      }
     }
 
     diff.unlinkedSubAgents = [...unlinkedMap.entries()].map(([nuskCode, { name, count }]) => ({
       nuskCode, name, rowCount: count,
+    }));
+    diff.newAgentsToCreate = [...newAgentsMap.values()].map((v) => ({
+      nuskAgentNumber: v.nuskAgentNumber,
+      agentName: v.agentName,
+      rowCount: v.count,
     }));
   } else {
     const invoiceNumbers = rows.map((r) => r.nuskInvoiceNumber).filter(Boolean) as string[];
