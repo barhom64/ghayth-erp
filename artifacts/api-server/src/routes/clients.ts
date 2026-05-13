@@ -507,7 +507,7 @@ router.get("/:id/portal-account", authorize({ feature: "crm.clients", action: "l
        WHERE "clientId" = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
-    res.json({ account: account || null });
+    res.json(maskFields(req, { account: account || null }));
   } catch (err) {
     handleRouteError(err, res, "Get portal account error:");
   }

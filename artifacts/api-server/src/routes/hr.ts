@@ -1078,7 +1078,7 @@ router.get("/attendance", authorize({ feature: "hr.attendance", action: "list" }
       params
     );
 
-    res.json({ data: records, total: records.length, page: 1, pageSize: records.length });
+    res.json(maskFields(req, { data: records, total: records.length, page: 1, pageSize: records.length }));
   } catch (err) {
     handleRouteError(err, res, "Get attendance error:");
   }
@@ -1103,7 +1103,7 @@ router.get("/attendance/today-summary", authorize({ feature: "hr.attendance", ac
       ...r,
       status: r.status || (r.checkIn ? "present" : "absent"),
     }));
-    res.json({ data, total: data.length });
+    res.json(maskFields(req, { data, total: data.length }));
   } catch (err) { handleRouteError(err, res, "Today summary error:"); }
 });
 
@@ -1124,7 +1124,7 @@ router.get("/attendance/:id", authorize({ feature: "hr.attendance", action: "vie
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("سجل الحضور غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Get attendance detail error:"); }
 });
 
@@ -1140,7 +1140,7 @@ router.get("/leave-types", authorize({ feature: "hr.leaves", action: "list" }), 
        FROM hr_leave_types WHERE "companyId" = $1 ORDER BY name`,
       [scope.companyId]
     );
-    res.json({ data: types, total: types.length, page: 1, pageSize: types.length });
+    res.json(maskFields(req, { data: types, total: types.length, page: 1, pageSize: types.length }));
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
   }
@@ -1166,7 +1166,7 @@ router.get("/leave-balance", authorize({ feature: "hr.leaves", action: "list" })
         maxDays: b.entitled, used: Number(b.used), reserved: Number(b.reserved),
         remaining: Number(b.remaining),
       }));
-      res.json({ data, total: data.length, page: 1, pageSize: data.length });
+      res.json(maskFields(req, { data, total: data.length, page: 1, pageSize: data.length }));
       return;
     }
 
@@ -1187,7 +1187,7 @@ router.get("/leave-balance", authorize({ feature: "hr.leaves", action: "list" })
       ...b, maxDays: Number(b.annualDays ?? 21), used: Number(b.used),
       remaining: Number(b.annualDays ?? 21) - Number(b.used),
     }));
-    res.json({ data, total: data.length, page: 1, pageSize: data.length });
+    res.json(maskFields(req, { data, total: data.length, page: 1, pageSize: data.length }));
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
   }
@@ -1242,7 +1242,7 @@ router.get("/leave-requests", authorize({ feature: "hr.leaves", action: "list" }
       countParams
     );
 
-    res.json({ data: requests, total: Number(countRow?.total ?? 0), page: pageNum, pageSize });
+    res.json(maskFields(req, { data: requests, total: Number(countRow?.total ?? 0), page: pageNum, pageSize }));
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
   }
@@ -2181,7 +2181,7 @@ router.get("/leave-requests/:id/stages", authorize({ feature: "hr.leaves", actio
       ];
     }
 
-    res.json({ stages, chainSteps, totalSteps: chainSteps.length });
+    res.json(maskFields(req, { stages, chainSteps, totalSteps: chainSteps.length }));
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
   }
@@ -2301,7 +2301,7 @@ router.get("/payroll", authorize({ feature: "hr.payroll.runs", action: "view" })
       ...r, month: r.period, totalAmount: Number(r.totalNet),
       employeeCount: Number(r.employeeCount),
     }));
-    res.json({ data, total: data.length, page: 1, pageSize: data.length });
+    res.json(maskFields(req, { data, total: data.length, page: 1, pageSize: data.length }));
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
   }
@@ -2373,7 +2373,7 @@ router.get("/payroll/:id/lines", authorize({ feature: "hr.payroll.runs", action:
       ...l, basic: Number(l.basic), grossSalary: Number(l.grossSalary),
       gosi: Number(l.gosi), lateDeduction: Number(l.lateDeduction), netSalary: Number(l.netSalary),
     }));
-    res.json({ data, total: data.length, page: 1, pageSize: data.length });
+    res.json(maskFields(req, { data, total: data.length, page: 1, pageSize: data.length }));
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
   }
@@ -2840,7 +2840,7 @@ router.get("/violations", authorize({ feature: "hr.violations", action: "list" }
        WHERE ev."companyId" = $1 AND ev."deletedAt" IS NULL ORDER BY ev."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { logger.error(err, "Get violations error:"); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
 });
 
@@ -2870,7 +2870,7 @@ router.get("/violations/:id", authorize({ feature: "hr.violations", action: "vie
       [item.id, scope.companyId]
     ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
 
-    res.json({ ...item, memos });
+    res.json(maskFields(req, { ...item, memos }));
   } catch (err) { handleRouteError(err, res, "Get violation detail error"); }
 });
 
@@ -3006,7 +3006,7 @@ router.get("/shifts", authorize({ feature: "hr.attendance", action: "list" }), a
   try {
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM shifts WHERE "companyId" = $1 AND "deletedAt" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { logger.error(err, "Get shifts error:"); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
 });
 
@@ -3076,7 +3076,7 @@ router.get("/performance", authorize({ feature: "hr.performance", action: "list"
        WHERE pr."companyId" = $1 AND pr."deletedAt" IS NULL ORDER BY pr."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { logger.error(err, "Get performance error:"); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
 });
 
@@ -3095,7 +3095,7 @@ router.get("/performance/:id", authorize({ feature: "hr.performance", action: "v
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("تقييم الأداء غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Get performance detail error:"); }
 });
 
@@ -3198,13 +3198,13 @@ router.get("/attendance-stats", authorize({ feature: "hr.attendance", action: "l
         [scope.companyId]
       ),
     ]);
-    res.json({
+    res.json(maskFields(req, {
       present: Number(present?.count ?? 0),
       absent: Number(absent?.count ?? 0),
       late: Number(late?.count ?? 0),
       totalEmployees: Number(totalEmp?.count ?? 0),
       month,
-    });
+    }));
   } catch (_e) { logger.error(_e, "attendance-stats query failed"); res.json({ present: 0, absent: 0, late: 0, totalEmployees: 0 }); }
 });
 
@@ -3217,12 +3217,12 @@ router.get("/leave-stats", authorize({ feature: "hr.leaves", action: "list" }), 
       rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND status='rejected' AND "deletedAt" IS NULL`, [scope.companyId]),
       rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS count FROM hr_leave_requests WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]),
     ]);
-    res.json({
+    res.json(maskFields(req, {
       pending: Number(pending?.count ?? 0),
       approved: Number(approved?.count ?? 0),
       rejected: Number(rejected?.count ?? 0),
       total: Number(total?.count ?? 0),
-    });
+    }));
   } catch (_e) { logger.error(_e, "leave-stats query failed"); res.json({ pending: 0, approved: 0, rejected: 0, total: 0 }); }
 });
 
@@ -3232,7 +3232,7 @@ router.get("/salary-components", authorize({ feature: "hr.payroll.runs", action:
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM salary_components WHERE "companyId"=$1 ORDER BY name LIMIT 500`, [scope.companyId]
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (_e) { logger.error(_e, "salary-components query failed"); res.json({ data: [], total: 0 }); }
 });
 
@@ -3274,7 +3274,7 @@ router.get("/approval-chains", authorize({ feature: "hr.employees", action: "lis
        ORDER BY las."createdAt" DESC LIMIT 50`,
       [scope.companyId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (_e) { logger.error(_e, "approval-chains query failed"); res.json({ data: [], total: 0 }); }
 });
 
@@ -3295,7 +3295,7 @@ router.get("/approval-chain-definitions", authorize({ feature: "hr.employees", a
        ORDER BY ac."chainType", ac."minAmount" LIMIT 500`,
       [scope.companyId]
     );
-    res.json({ data: chains, total: chains.length });
+    res.json(maskFields(req, { data: chains, total: chains.length }));
   } catch (_e) { logger.error(_e, "approval-chain-definitions query failed"); res.json({ data: [], total: 0 }); }
 });
 
@@ -3374,7 +3374,7 @@ router.get("/approval-requests", authorize({ feature: "hr.organization", action:
        ORDER BY ar."createdAt" DESC LIMIT 500`,
       [scope.companyId, statusFilter]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (_e) { logger.error(_e, "approval-requests query failed"); res.json({ data: [], total: 0 }); }
 });
 
@@ -3517,13 +3517,13 @@ router.get("/attendance-policy", authorize({ feature: "hr.attendance", action: "
       `SELECT * FROM attendance_policies WHERE "companyId" = $1`,
       [scope.companyId]
     );
-    res.json(policy ?? {
+    res.json(maskFields(req, policy ?? {
       lateThresholdMinutes: 15, gpsRadiusMeters: 500,
       penaltyLevel1: 0, penaltyLevel2: 50, penaltyLevel3: 100, penaltyLevel4: 200, penaltyLevel5: 500,
       penaltyLevel1Label: "إنذار شفهي", penaltyLevel2Label: "إنذار كتابي",
       penaltyLevel3Label: "خصم يوم", penaltyLevel4Label: "خصم يومين",
       penaltyLevel5Label: "خصم ثلاثة أيام + إنذار نهائي",
-    });
+    }));
   } catch (e) { logger.error(e, "attendance-policy GET error"); res.json({}); }
 });
 
@@ -3613,7 +3613,7 @@ router.get("/payroll-summary", authorize({ feature: "hr.payroll.runs", action: "
     }
 
     const data = Array.from(empMap.values());
-    res.json({ data, total: data.length, period: targetPeriod });
+    res.json(maskFields(req, { data, total: data.length, period: targetPeriod }));
   } catch (err) { logger.error(err, "payslip-preview query failed"); res.json({ data: [], total: 0 }); }
 });
 
@@ -3626,11 +3626,11 @@ router.get("/violations-stats", authorize({ feature: "hr.violations", action: "l
       rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS count FROM employee_violations WHERE "companyId"=$1 AND "deletedAt" IS NULL AND period = $2`, [scope.companyId, currentMonth]),
       rawQuery<Record<string, unknown>>(`SELECT COALESCE(SUM(deduction),0) AS total FROM employee_violations WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [scope.companyId]),
     ]);
-    res.json({
+    res.json(maskFields(req, {
       total: Number(total?.count ?? 0),
       thisMonth: Number(thisMonthRow?.count ?? 0),
       totalDeductions: Number(totalDeductions?.total ?? 0),
-    });
+    }));
   } catch (_e) { logger.error(_e, "violations-stats query failed"); res.json({ total: 0, thisMonth: 0, totalDeductions: 0 }); }
 });
 
@@ -3784,7 +3784,7 @@ router.get("/shift-assignments", authorize({ feature: "hr.attendance", action: "
        ORDER BY esa."startDate" DESC LIMIT 200`,
       [scope.companyId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (_e) { logger.error(_e, "shift-assignments query failed"); res.json({ data: [], total: 0 }); }
 });
 
@@ -3857,7 +3857,7 @@ router.get("/official-letters", authorize({ feature: "hr.organization", action: 
        ORDER BY ol."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (_e) { logger.error(_e, "official-letters query failed"); res.json({ data: [], total: 0 }); }
 });
 
@@ -3962,7 +3962,7 @@ router.get("/monthly-attendance", authorize({ feature: "hr.attendance", action: 
        ORDER BY e.name LIMIT 500`,
       [scope.companyId, month]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (_e) { logger.error(_e, "monthly-attendance query failed"); res.json({ data: [], total: 0 }); }
 });
 
@@ -4484,7 +4484,7 @@ router.get("/official-letters/:id", authorize({ feature: "hr.organization", acti
       [id, scope.companyId]
     );
     if (!letter) throw new NotFoundError("الخطاب غير موجود");
-    res.json(letter);
+    res.json(maskFields(req, letter));
   } catch (err) { handleRouteError(err, res, "خطأ في جلب الخطاب"); }
 });
 
@@ -4695,14 +4695,14 @@ router.get("/stats", authorize({ feature: "hr.employees", action: "list" }), asy
         [scope.companyId]
       ),
     ]);
-    res.json({
+    res.json(maskFields(req, {
       employees: Number(empCount?.count ?? 0),
       leaveRequests: Number(leaveCount?.total ?? 0),
       pendingLeaves: Number(leaveCount?.pending ?? 0),
       approvedLeaves: Number(leaveCount?.approved ?? 0),
       violations: Number(violationCount?.total ?? 0),
       payrollRuns: Number(payrollCount?.total ?? 0),
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
@@ -4719,7 +4719,7 @@ router.get("/deductions", authorize({ feature: "hr.payroll.runs", action: "list"
        ORDER BY ad."createdAt" DESC LIMIT 500`,
       [scope.companyId, month]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (_e) { logger.error(_e, "deductions query failed"); res.json({ data: [], total: 0 }); }
 });
 
@@ -4732,9 +4732,9 @@ router.get("/onboarding-steps", authorize({ feature: "hr.employees", action: "li
     );
     if (row) {
       const val = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
-      res.json({ data: val }); return;
+      res.json(maskFields(req, { data: val })); return;
     }
-    res.json({ data: ["تسليم أجهزة IT", "توقيع عقد العمل", "تعريف المدير المباشر", "دورة التعريف بالشركة", "فتح حساب بنكي", "تسجيل التأمينات"] });
+    res.json(maskFields(req, { data: ["تسليم أجهزة IT", "توقيع عقد العمل", "تعريف المدير المباشر", "دورة التعريف بالشركة", "فتح حساب بنكي", "تسجيل التأمينات"] }));
   } catch (e) { logger.error(e, "failed to load onboarding steps"); res.json({ data: [] }); }
 });
 
@@ -4853,7 +4853,7 @@ router.get("/employee-status/:employeeId", authorize({ feature: "hr.employees", 
 
     const { computeEmployeeOperationalStatus } = await import("../lib/impactPreview.js");
     const status = await computeEmployeeOperationalStatus(scope.companyId, Number(employeeId), assignment.id as number);
-    res.json(status);
+    res.json(maskFields(req, status));
   } catch (err) { handleRouteError(err, res, "خطأ في حساب حالة الموظف"); }
 });
 
@@ -4882,7 +4882,7 @@ router.get("/employees-status", authorize({ feature: "hr.employees", action: "li
       })
     );
 
-    res.json({ data: statuses });
+    res.json(maskFields(req, { data: statuses }));
   } catch (err) { handleRouteError(err, res, "خطأ في حساب حالات الموظفين"); }
 });
 
@@ -5086,7 +5086,7 @@ router.get("/evaluation-cycles", authorize({ feature: "hr.performance", action: 
       );
     }
 
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "خطأ في جلب دورات التقييم"); }
 });
 
@@ -5257,7 +5257,7 @@ router.get("/evaluation-cycles/:id", authorize({ feature: "hr.performance", acti
     const upCount = Number(upwardCount?.count ?? 0);
     const upwardThresholdMet = upCount >= 3;
 
-    res.json({
+    res.json(maskFields(req, {
       cycle,
       systemEval: sysEval ?? null,
       peerEvals,
@@ -5270,7 +5270,7 @@ router.get("/evaluation-cycles/:id", authorize({ feature: "hr.performance", acti
           ? { count: upCount, avgScore: Math.round(Number(upwardCount?.avg ?? 0)), locked: false }
           : { locked: true }),
       },
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "خطأ في جلب تفاصيل دورة التقييم"); }
 });
 
@@ -5338,7 +5338,7 @@ router.get("/evaluation-cycles/:id/system-report", authorize({ feature: "hr.perf
       sysEval = { ...evalData, cycleId, companyId: cycle.companyId, employeeId: cycle.employeeId };
     }
 
-    res.json(sysEval);
+    res.json(maskFields(req, sysEval));
   } catch (err) { handleRouteError(err, res, "خطأ في جلب التقرير الآلي"); }
 });
 
@@ -5599,7 +5599,7 @@ router.get("/evaluation-cycles/:id/summary", authorize({ feature: "hr.performanc
     const upwardCount = Number(upwardRow?.count ?? 0);
     const upwardThresholdMet = upwardCount >= 3;
 
-    res.json({
+    res.json(maskFields(req, {
       cycle,
       systemEval: sysEval ?? null,
       peerEvals,
@@ -5607,7 +5607,7 @@ router.get("/evaluation-cycles/:id/summary", authorize({ feature: "hr.performanc
         ? { count: upwardCount, avgScore: Number(upwardRow?.avg ?? 0), locked: false }
         : { locked: true },
       summary: summary ?? null,
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "خطأ في جلب ملخص التقييم 360°"); }
 });
 
@@ -5660,10 +5660,10 @@ router.get("/employees/:id/evaluation-history", authorize({ feature: "hr.employe
       [scope.companyId, employeeId]
     );
 
-    res.json({
+    res.json(maskFields(req, {
       employee: { name: empAssign.name, empNumber: empAssign.empNumber, jobTitle: empAssign.jobTitle },
       history: cycles,
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "خطأ في جلب تاريخ التقييمات"); }
 });
 
@@ -5694,16 +5694,16 @@ router.get("/upward-reviews/manager/:managerId", authorize({ feature: "hr.perfor
 
     if (count < 3) {
       // Do NOT expose count below threshold — prevents inference in small cohorts
-      res.json({
+      res.json(maskFields(req, {
         managerId,
         locked: true,
         message: "يتطلب عدد كافٍ من التقييمات لعرض النتائج",
         avgScore: null,
-      });
+      }));
       return;
     }
 
-    res.json({
+    res.json(maskFields(req, {
       managerId,
       count,
       locked: false,
@@ -5712,7 +5712,7 @@ router.get("/upward-reviews/manager/:managerId", authorize({ feature: "hr.perfor
       communicationAvg: row?.communicationAvg ? Number(row.communicationAvg) : null,
       fairnessAvg: row?.fairnessAvg ? Number(row.fairnessAvg) : null,
       supportAvg: row?.supportAvg ? Number(row.supportAvg) : null,
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "خطأ في جلب التقييمات العكسية"); }
 });
 
@@ -5730,7 +5730,7 @@ router.get("/delegations", authorize({ feature: "hr.organization", action: "list
        LIMIT 50`,
       [scope.companyId]
     ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { logger.error(err, "delegations query failed"); res.json({ data: [], total: 0 }); }
 });
 
@@ -5805,7 +5805,7 @@ router.get("/public-holidays", authorize({ feature: "hr.organization", action: "
       `SELECT * FROM public_holidays WHERE ${conditions.join(" AND ")} ORDER BY "startDate" LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "Public holidays error:"); }
 });
 
@@ -5880,7 +5880,7 @@ router.get("/public-holidays/check", authorize({ feature: "hr.organization", act
       `SELECT * FROM public_holidays WHERE "companyId"=$1 AND $2::date BETWEEN "startDate"::date AND "endDate"::date`,
       [scope.companyId, date]
     );
-    res.json({ isHoliday: !!holiday, holiday: holiday || null });
+    res.json(maskFields(req, { isHoliday: !!holiday, holiday: holiday || null }));
   } catch (err) { handleRouteError(err, res, "Check holiday error:"); }
 });
 
@@ -5929,7 +5929,7 @@ router.get("/transfers", authorize({ feature: "hr.exit", action: "list" }), asyn
        ORDER BY t."createdAt" DESC LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "Transfers error:"); }
 });
 
@@ -5954,7 +5954,7 @@ router.get("/transfers/:id", authorize({ feature: "hr.exit", action: "view" }), 
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("طلب النقل غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Transfer detail error:"); }
 });
 
@@ -6289,7 +6289,7 @@ router.get("/idp", authorize({ feature: "hr.exit", action: "list" }), async (req
        ORDER BY idp."createdAt" DESC LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "IDP list error:"); }
 });
 
@@ -6419,7 +6419,7 @@ router.get("/gratuity/:employeeId", authorize({ feature: "hr.exit", action: "vie
 
     const finalGratuity = roundTo2(gratuity * reductionFactor);
 
-    res.json({
+    res.json(maskFields(req, {
       employeeName: assignment.employeeName,
       jobTitle: assignment.jobTitle,
       monthlySalary,
@@ -6434,7 +6434,7 @@ router.get("/gratuity/:employeeId", authorize({ feature: "hr.exit", action: "vie
         first5Years: Math.min(yearsOfService, 5) > 0 ? roundTo2((monthlySalary / 2) * Math.min(yearsOfService, 5)) : 0,
         above5Years: yearsOfService > 5 ? roundTo2(monthlySalary * (yearsOfService - 5)) : 0,
       },
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Gratuity calculation error:"); }
 });
 
@@ -6629,7 +6629,7 @@ router.get("/accruals/preview", authorize({ feature: "hr.payroll", action: "list
       };
     });
 
-    res.json({
+    res.json(maskFields(req, {
       period,
       alreadyPosted: !!existing,
       existingJournalId: existing?.id ?? null,
@@ -6638,7 +6638,7 @@ router.get("/accruals/preview", authorize({ feature: "hr.payroll", action: "list
       totalEosAccrual: roundTo2(totalEosAccrual),
       total: roundTo2(totalLeaveAccrual + totalEosAccrual),
       rows,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "HR accruals preview error:");
   }
@@ -6719,7 +6719,7 @@ router.get("/turnover-report", authorize({ feature: "hr.employees", action: "lis
     const estimatedCostPerDeparture = Number(avgSalary?.avg || 0) * 3;
     const totalEstimatedCost = estimatedCostPerDeparture * totalTerminated;
 
-    res.json({
+    res.json(maskFields(req, {
       year: targetYear,
       totalTerminated,
       totalActive: totalActiveCount,
@@ -6731,7 +6731,7 @@ router.get("/turnover-report", authorize({ feature: "hr.employees", action: "lis
       estimatedCostPerDeparture: Math.round(estimatedCostPerDeparture),
       totalEstimatedCost: Math.round(totalEstimatedCost),
       recentTerminations: terminated.slice(0, 20),
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Turnover report error:"); }
 });
 
@@ -6889,7 +6889,7 @@ router.get("/expiring-documents", authorize({ feature: "hr.employees", action: "
       ...companyDocs,
     ].sort((a: any, b: any) => Number(a.daysLeft) - Number(b.daysLeft));
 
-    res.json({ data: all, total: all.length, criticalCount: all.filter((d: any) => Number(d.daysLeft) <= 14).length });
+    res.json(maskFields(req, { data: all, total: all.length, criticalCount: all.filter((d: any) => Number(d.daysLeft) <= 14).length }));
   } catch (err) { handleRouteError(err, res, "Expiring documents error:"); }
 });
 
@@ -6913,7 +6913,7 @@ router.get("/company-documents", authorize({ feature: "hr.organization", action:
       `SELECT * FROM company_documents WHERE "companyId"=$1 AND status != 'deleted' ORDER BY "expiryDate" ASC NULLS LAST LIMIT $2 OFFSET $3`,
       [scope.companyId, perPage, offset]
     ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
-    res.json({ data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage });
+    res.json(maskFields(req, { data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage }));
   } catch (err) { handleRouteError(err, res, "Company documents error:"); }
 });
 
@@ -6984,7 +6984,7 @@ router.get("/employee-documents", authorize({ feature: "hr.employees", action: "
        LIMIT $${limitParam} OFFSET $${offsetParam}`,
       params
     ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
-    res.json({ data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage });
+    res.json(maskFields(req, { data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage }));
   } catch (err) { handleRouteError(err, res, "Employee documents error:"); }
 });
 
@@ -7038,7 +7038,7 @@ router.get("/excuse-requests", authorize({ feature: "hr.attendance", action: "li
       params
     );
     const pending = rows.filter((r: Record<string, unknown>) => r.status === "pending").length;
-    res.json({ data: rows, total: rows.length, pending });
+    res.json(maskFields(req, { data: rows, total: rows.length, pending }));
   } catch (err) { handleRouteError(err, res, "List excuse requests error:"); }
 });
 
@@ -7056,7 +7056,7 @@ router.get("/excuse-requests/:id", authorize({ feature: "hr.attendance", action:
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("طلب الاستئذان غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Get excuse request detail error:"); }
 });
 

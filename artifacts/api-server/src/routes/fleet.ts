@@ -293,7 +293,7 @@ router.get("/vehicles", authorize({ feature: "fleet.vehicles", action: "list" })
     let paramIdx = nextParamIndex;
     if (status) { where += ` AND v.status = $${paramIdx}`; params.push(status); paramIdx++; }
     const rows = await rawQuery<Record<string, unknown>>(`SELECT v.*, d.name AS "driverName", (SELECT COUNT(*) FROM gov_integration_links gl WHERE gl."entityType" = 'vehicle' AND gl."entityId" = v.id AND gl."companyId" = v."companyId")::int AS "govLinkCount", (SELECT MAX(fi."endDate") FROM fleet_insurance fi WHERE fi."vehicleId" = v.id AND fi."companyId" = v."companyId" AND fi."deletedAt" IS NULL) AS "insuranceExpiry" FROM fleet_vehicles v LEFT JOIN fleet_drivers d ON d.id = v."assignedDriverId" AND d."deletedAt" IS NULL WHERE ${where} AND v."deletedAt" IS NULL ORDER BY v.id DESC LIMIT 500`, params);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Fleet vehicles error:"); }
 });
 
@@ -406,7 +406,7 @@ router.get("/drivers", authorize({ feature: "fleet.vehicles", action: "list" }),
        ORDER BY d.name LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Fleet drivers error:"); }
 });
 
@@ -506,7 +506,7 @@ router.get("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "view
         [vehicleId, scope.companyId]
       ),
     ]);
-    res.json({ ...row, trips, maintenance, fuelLogs, insurance });
+    res.json(maskFields(req, { ...row, trips, maintenance, fuelLogs, insurance }));
   } catch (err) { handleRouteError(err, res, "Get vehicle error:"); }
 });
 
@@ -519,7 +519,7 @@ router.get("/vehicles/:id/impact-preview", authorize({ feature: "fleet.vehicles"
       throw new ValidationError("الحالة المطلوبة", { field: "status", fix: "أرسل معامل status في الرابط" });
     }
     const preview = await getVehicleStatusImpact(id, scope.companyId, status);
-    res.json(preview);
+    res.json(maskFields(req, preview));
   } catch (err) { handleRouteError(err, res, "Vehicle impact preview error:"); }
 });
 
@@ -720,7 +720,7 @@ router.get("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "view"
     const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("السائق غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Get driver error:"); }
 });
 
@@ -876,7 +876,7 @@ router.get("/trips", authorize({ feature: "fleet.trips", action: "list" }), asyn
        FROM fleet_trips t LEFT JOIN fleet_vehicles v ON v.id=t."vehicleId" AND v."deletedAt" IS NULL LEFT JOIN fleet_drivers d ON d.id=t."driverId" AND d."deletedAt" IS NULL WHERE ${where} AND t."deletedAt" IS NULL ORDER BY t.id DESC LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Fleet trips error:"); }
 });
 
@@ -896,7 +896,7 @@ router.get("/trips/:id", authorize({ feature: "fleet.trips", action: "view", res
       [tripId, scope.companyId]
     );
     if (!row) throw new NotFoundError("الرحلة غير موجودة");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Get trip error:"); }
 });
 
@@ -1338,7 +1338,7 @@ router.get("/maintenance", authorize({ feature: "fleet.maintenance", action: "li
        FROM fleet_maintenance m LEFT JOIN fleet_vehicles v ON v.id=m."vehicleId" AND v."deletedAt" IS NULL WHERE ${where} AND m."deletedAt" IS NULL ORDER BY m.id DESC LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Fleet maintenance error:"); }
 });
 
@@ -1360,7 +1360,7 @@ router.get("/maintenance/:id", authorize({ feature: "fleet.maintenance", action:
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("سجل الصيانة غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Fleet maintenance detail error:"); }
 });
 
@@ -1734,7 +1734,7 @@ router.get("/alerts", authorize({ feature: "fleet.vehicles", action: "list" }), 
     }
     oilDue.forEach((r: Record<string, unknown>) => alerts.push({ type: 'oil_change_due', severity: 'medium', vehicle: r.plateNumber, message: `تغيير زيت المركبة ${r.plateNumber} مستحق (الكيلومتراج: ${r.currentMileage})` }));
 
-    res.json({ data: alerts, total: alerts.length, page: 1, pageSize: alerts.length });
+    res.json(maskFields(req, { data: alerts, total: alerts.length, page: 1, pageSize: alerts.length }));
   } catch (err) { handleRouteError(err, res, "Fleet alerts error:"); }
 });
 
@@ -1753,7 +1753,7 @@ router.get("/fuel-logs", authorize({ feature: "fleet.trips", action: "list" }), 
       `SELECT f.*, f.liters AS quantity, f."totalCost" AS cost, f."mileageAtFuel" AS mileage, f."stationName" AS station, f."fuelDate" AS date, v."plateNumber", v."plateNumber" AS "vehiclePlate" FROM fleet_fuel_logs f LEFT JOIN fleet_vehicles v ON v.id=f."vehicleId" AND v."deletedAt" IS NULL WHERE ${where} AND f."deletedAt" IS NULL ORDER BY f.id DESC LIMIT 1000`,
       params
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Fleet fuel error:"); }
 });
 
@@ -1773,7 +1773,7 @@ router.get("/fuel-logs/:id", authorize({ feature: "fleet.trips", action: "view" 
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("سجل الوقود غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Fleet fuel detail error:"); }
 });
 
@@ -1887,7 +1887,7 @@ router.get("/insurance", authorize({ feature: "fleet.vehicles", action: "list" }
       `SELECT i.*, v."plateNumber" FROM fleet_insurance i LEFT JOIN fleet_vehicles v ON v.id=i."vehicleId" AND v."deletedAt" IS NULL WHERE ${where} AND i."deletedAt" IS NULL ORDER BY i."endDate" ASC LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Fleet insurance error:"); }
 });
 
@@ -1903,7 +1903,7 @@ router.get("/insurance/:id", authorize({ feature: "fleet.vehicles", action: "vie
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("سجل التأمين غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Fleet insurance detail error:"); }
 });
 
@@ -2504,7 +2504,7 @@ router.get("/stats", authorize({ feature: "fleet.vehicles", action: "list" }), a
       rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as total FROM fleet_drivers WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
       rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as total FROM fleet_maintenance WHERE "companyId"=$1 AND status='in_progress' AND "deletedAt" IS NULL`, [cid]),
     ]);
-    res.json({
+    res.json(maskFields(req, {
       totalVehicles: Number(vehicles.total), availableVehicles: Number(vehicles.available),
       inUseVehicles: Number(vehicles.inUse), inMaintenanceVehicles: Number(vehicles.inMaintenance),
       totalTrips: Number(trips.total), completedTrips: Number(trips.completed),
@@ -2512,7 +2512,7 @@ router.get("/stats", authorize({ feature: "fleet.vehicles", action: "list" }), a
       totalMaintenance: Number(maintenance.total), activeAlerts: Number(alerts.total),
       totalDrivers: Number(drivers.total),
       vehicles, trips,
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Fleet stats error:"); }
 });
 
@@ -2535,7 +2535,7 @@ router.get("/preventive-plans", authorize({ feature: "fleet.maintenance", action
        ORDER BY p."nextServiceDate" ASC LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "Preventive plans error:"); }
 });
 
@@ -2707,7 +2707,7 @@ router.get("/traffic-violations", authorize({ feature: "fleet.vehicles", action:
        ORDER BY tv."violationDate" DESC LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "Traffic violations error:"); }
 });
 
@@ -2724,7 +2724,7 @@ router.get("/traffic-violations/:id", authorize({ feature: "fleet.vehicles", act
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("المخالفة المرورية غير موجودة");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Traffic violation detail error:"); }
 });
 
@@ -2990,7 +2990,7 @@ router.get("/vehicles/:id/tco", authorize({ feature: "fleet.vehicles", action: "
     const totalKm = Number(tripRevenue.totalKm) || Number(vehicle.currentMileage) || 1;
     const costPerKm = totalKm > 0 ? roundTo2(totalCost / totalKm) : 0;
 
-    res.json({
+    res.json(maskFields(req, {
       vehicleId, plateNumber: vehicle.plateNumber, make: vehicle.make, model: vehicle.model, year: vehicle.year,
       purchasePrice, totalDepreciation,
       fuelCost: fuelTotal, maintenanceCost: maintenanceTotal,
@@ -3007,7 +3007,7 @@ router.get("/vehicles/:id/tco", authorize({ feature: "fleet.vehicles", action: "
         insurance: insuranceTotal,
         fines: finesTotal,
       },
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "TCO analysis error:"); }
 });
 

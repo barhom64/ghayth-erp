@@ -403,7 +403,7 @@ router.post("/ai/categorize", authorize({ feature: "admin", action: "update" }),
       entityId: 0,
       details: JSON.stringify({ message: message?.substring(0, 100) }),
     }).catch((e) => logger.error(e, "intelligence background task failed"));
-    res.json(result);
+    res.json(maskFields(req, result));
   } catch (err) { handleRouteError(err, res, "AI categorize error:"); }
 });
 
@@ -483,7 +483,7 @@ router.post("/ai/evaluate-rules", authorize({ feature: "admin", action: "update"
       entityId: 0,
       details: JSON.stringify({ context }),
     }).catch((e) => logger.error(e, "intelligence background task failed"));
-    res.json(result);
+    res.json(maskFields(req, result));
   } catch (err) { handleRouteError(err, res, "AI rules engine error:"); }
 });
 
@@ -503,7 +503,7 @@ router.post("/ai/forecast", authorize({ feature: "admin", action: "update" }), a
       entityId: 0,
       details: JSON.stringify({ metricName }),
     }).catch((e) => logger.error(e, "intelligence background task failed"));
-    res.json(result);
+    res.json(maskFields(req, result));
   } catch (err) { handleRouteError(err, res, "AI forecast error:"); }
 });
 
@@ -682,7 +682,7 @@ router.post("/smart-assign", requireRole("branch_manager", "general_manager", "o
       entityId: result.assignmentId,
       details: JSON.stringify({ employeeId: result.employeeId, taskType: taskType ?? "general", taskTitle }),
     }).catch((e) => logger.error(e, "intelligence background task failed"));
-    res.json({
+    res.json(maskFields(req, {
       recommended: {
         employeeId: result.employeeId,
         assignmentId: result.assignmentId,
@@ -691,7 +691,7 @@ router.post("/smart-assign", requireRole("branch_manager", "general_manager", "o
         score: result.score,
       },
       reasoning: `الموظف ${emp?.name} هو الأنسب بناءً على: عبء العمل الحالي (${emp?.currentTasks ?? 0} مهمة)${requiredSpecialty ? `، التخصص المطلوب (${requiredSpecialty})` : ""}`,
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Smart assign error:"); }
 });
 
