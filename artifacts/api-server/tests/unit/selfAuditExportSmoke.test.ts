@@ -146,7 +146,7 @@ describe("pdfExport — security", () => {
 
 describe("excelExport — exported functions", () => {
   it("exports workbookToBuffer", () => {
-    expect(EXCEL).toContain("export function workbookToBuffer");
+    expect(EXCEL).toContain("export async function workbookToBuffer");
   });
 
   it("exports exportTrialBalanceExcel", () => {
