@@ -28,6 +28,7 @@ import {
 } from "../lib/businessHelpers.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { registerObligation } from "../lib/obligationsEngine.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { z } from "zod";
@@ -543,6 +544,12 @@ purchaseRouter.post("/purchase-orders", authorize({ feature: "finance.purchase",
     if (!totalAmount || Number(totalAmount) <= 0) { throw new ValidationError("المبلغ الإجمالي مطلوب"); return; }
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies?.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
     const effectiveBranchId = branchId ?? scope.branchId;
+
+    if (branchId != null &&
+        !scope.isOwner && !OWNER_GM_ROLES.includes(scope.role) &&
+        scope.allowedBranches.length > 0 && !scope.allowedBranches.includes(Number(branchId))) {
+      throw new ForbiddenError("لا تملك صلاحية إنشاء أوامر شراء في هذا الفرع", { field: "branchId" });
+    }
 
     if (supplierId) {
       const [sup] = await rawQuery<{ id: number }>(`SELECT id FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`, [supplierId, effectiveCompanyId]);
