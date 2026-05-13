@@ -173,7 +173,7 @@ router.get("/opportunities", authorize({ feature: "crm.opportunities", action: "
       `SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=o."assignedTo" AND e."deletedAt" IS NULL WHERE ${where} AND o."deletedAt" IS NULL ORDER BY o.id DESC LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "CRM opportunities error:"); }
 });
 
@@ -815,11 +815,11 @@ router.get("/opportunities/:id", authorize({ feature: "crm.opportunities", actio
     );
     const overdueActivities = activities.filter((a) => !a.completedAt && a.scheduledAt && new Date(a.scheduledAt) < new Date());
 
-    res.json({
+    res.json(maskFields(req, {
       ...row, activities, overdueActivities,
       stageConfig: STAGE_AUTO_ACTIONS[row.stage],
       nextStages: CRM_TRANSITIONS[row.stage] ?? [],
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Get opportunity error:"); }
 });
 
@@ -969,7 +969,7 @@ router.get("/opportunities/:id/related", authorize({ feature: "crm.opportunities
         LIMIT 50`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "Related opportunities error:"); }
 });
 
@@ -995,7 +995,7 @@ router.get("/opportunities/:id/activities", authorize({ feature: "crm.opportunit
     );
     if (!opp) throw new NotFoundError("الفرصة غير موجودة");
     const rows = await rawQuery<CrmActivityRow>(`SELECT * FROM crm_activities WHERE "opportunityId"=$1 ORDER BY "createdAt" DESC LIMIT 500`, [oppId]);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "CRM activities error:"); }
 });
 
@@ -1042,7 +1042,7 @@ router.get("/pipeline", authorize({ feature: "crm.leads", action: "list" }), asy
       const row = stageMap.get(stage);
       return { stage, count: Number(row?.count ?? 0), value: Number(row?.value ?? 0), autoAction: STAGE_AUTO_ACTIONS[stage]?.description };
     });
-    res.json({ data: result, total: result.length, page: 1, pageSize: result.length });
+    res.json(maskFields(req, { data: result, total: result.length, page: 1, pageSize: result.length }));
   } catch (err) { handleRouteError(err, res, "CRM pipeline error:"); }
 });
 
@@ -1158,14 +1158,14 @@ router.get("/analytics", authorize({ feature: "crm.clients", action: "list" }), 
       ),
     ]);
 
-    res.json({
+    res.json(maskFields(req, {
       conversionRates,
       avgDealDays: Number(avgDeal?.avgDays || 0).toFixed(1),
       wonRevenue: Number(revenue?.wonRevenue ?? 0),
       forecastRevenue: Number(revenue?.forecast ?? 0),
       lostCount: Number(lostAnalysis?.lostCount ?? 0),
       lostValue: Number(lostAnalysis?.lostValue ?? 0),
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
@@ -1186,11 +1186,11 @@ router.get("/stats", authorize({ feature: "crm.clients", action: "list" }), asyn
         [cid]
       ),
     ]);
-    res.json({
+    res.json(maskFields(req, {
       totalOpportunities: Number(opp.total), openOpportunities: Number(opp.open),
       wonValue: Number(opp.wonValue), pipelineValue: Number(opp.pipelineValue),
       overdueFollowUps: Number(overdue.count),
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "CRM stats error:"); }
 });
 
