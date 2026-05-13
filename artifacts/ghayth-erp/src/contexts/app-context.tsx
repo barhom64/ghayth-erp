@@ -454,3 +454,12 @@ export function useAppContext() {
   if (!context) throw new Error("useAppContext must be used within AppProvider");
   return context;
 }
+
+/**
+ * Returns the AppContext value when mounted under `<AppProvider>`, otherwise
+ * `null`. Used by `useApiQuery` to auto-inject the scope query string without
+ * throwing on pages that render outside the provider (login, password reset).
+ */
+export function useAppContextOptional(): AppContextType | null {
+  return useContext(AppContext);
+}
