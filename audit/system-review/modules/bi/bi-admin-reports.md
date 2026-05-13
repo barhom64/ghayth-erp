@@ -24,13 +24,44 @@ _لم تُلتقط أزرار._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/bi.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+Admin Reports — تقارير إدارية شهرية/فصلية/سنوية للـ exec leadership.
+
+| نوع التقرير | الفترة | المحتوى |
+|------------|--------|---------|
+| Monthly Executive | شهري | finance + ops + hr + sales summary |
+| Quarterly Board | فصلي | P&L + balance sheet + KPIs + initiatives |
+| Annual Report | سنوي | comprehensive — للـ stakeholders |
+| Department Performance | شهري | per department KPIs |
+| Branch Performance | شهري | per branch P&L + ops |
+| Audit Summary | فصلي | findings من governance/audits |
+| Compliance Report | حسب الـ standard | راجع `governance-compliance.md` |
+| Strategic Initiatives | فصلي | per initiative status |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| List admin reports | GET `/bi/admin-reports` | `bi_admin_reports` | ✅ |
+| Monthly report | GET `/bi/admin-reports/monthly` | aggregations لشهر معيّن | ✅ |
+| Quarterly report | GET `/bi/admin-reports/quarterly` | ✅ |
+| Annual report | GET `/bi/admin-reports/annual` | ✅ |
+| Generate (async) | POST `/bi/admin-reports/generate` | job queue | ⚠ |
+| Status check | GET `/bi/admin-reports/jobs/:id` | للـ progress | ⚠ |
+| Download (PDF/Excel) | GET `/bi/admin-reports/:id/download` | with audit log | ✅ |
+| Email distribute | POST `/bi/admin-reports/:id/distribute` | لقائمة exec | ⚠ |
+| Schedule recurring | POST `/bi/admin-reports/schedule` | راجع `reports-scheduled.md` | ✅ |
+| Version history | كل تقرير له نسخ | `report_versions` | ✅ |
+| تكامل مع `bi-reports.md` (engine) | ✅ |
+| تكامل مع `documents-archive.md` (للحفظ) | retention 7 سنوات للسنوي | ✅ critical |
+| تكامل مع `governance-compliance.md` (regulatory) | ✅ |
+| **PDPL** — أسماء employees مخفية في الـ board reports (إن أُصدرت للخارج) | masking | ⚠ |
+| Audit log إجباري | كل generate + download + distribute | `audit_logs` | ✅ critical |
+| RBAC | exec/board فقط | level≥80 | ✅ critical |
+
+تحقق يدوي:
+- [ ] هل التقارير المُصدرة للخارج (board) تمر بـ approval قبل التوزيع؟
+- [ ] هل version history يحفظ snapshot أم يعيد إنشاء؟
+- [ ] هل scheduled reports تخفق بأمان (retry + alert) لو فشلت؟
+- [ ] هل download كبير (annual) لا يبطئ النظام (async + queue)؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `admin-reports` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

@@ -23,13 +23,36 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/communications.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+تفاصيل مراسلة واحدة — view + actions + audit trail.
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| View details | GET `/correspondence/:id` | `correspondences` | ✅ |
+| View thread (replies) | GET `/correspondence/:id/replies` | `correspondence_replies` | ⚠ |
+| Reply | POST `/correspondence/:id/reply` | يولّد correspondence جديد مع `parentId` | ✅ |
+| Forward | POST `/correspondence/:id/forward` | للـ recipient ثانٍ | ✅ |
+| Acknowledge | PATCH `/correspondence/:id/ack` | timestamp + user | ✅ |
+| Mark as completed | PATCH `/correspondence/:id/complete` | with outcome | ✅ |
+| Cancel | PATCH `/correspondence/:id/cancel` | with reason — soft cancel فقط | ⚠ |
+| Update confidentiality (re-classify) | PATCH | requires manager + audit | ⚠ critical |
+| Add attachment | POST `/correspondence/:id/attachments` | راجع `documents.md` | ✅ |
+| Remove attachment | guard | requires audit | ✅ |
+| Workflow status | راجع `governance/workflows.md` | ✅ |
+| Audit trail (full history) | GET `/correspondence/:id/audit` | `audit_logs` WHERE entity=correspondence | ✅ |
+| Print | POST `/correspondence/:id/print` | راجع `print-templates` | ✅ |
+| تكامل مع `legal.md` (لو قانوني) | linkage | ✅ |
+| تكامل مع `documents-archive.md` (retention) | حسب نوع المراسلة | ✅ |
+| **PDPL** — masking للـ confidential parts عند export | ✅ |
+| RBAC | حسب confidentiality | راجع `admin-rbac-matrix.md` | ✅ critical |
+| Notify على إجراءات | event=`correspondence_acknowledged/replied/completed` | راجع `notifications.md` | ✅ |
+| Immutability بعد completed | guard | لا تعديل (إلا reopen by admin) | ✅ critical |
+
+تحقق يدوي:
+- [ ] هل reply يحافظ على الـ thread chain (parent linkage)؟
+- [ ] هل الـ confidentiality re-classification audited بشكل صارم؟
+- [ ] هل cancelled correspondence مرئية مع علامة واضحة (لا اختفاء)؟
+- [ ] هل acknowledge بدون قراءة فعلية ممكن؟ (yes/no by design)
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `:id` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
