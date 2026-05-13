@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Car, Wrench, Fuel, Shield, Gauge, MapPin, Pencil, Trash2, X, Check, BookOpen, AlertTriangle, XCircle, Info, Banknote, FileText } from "lucide-react";
-import { formatDateAr, formatCurrency } from "@/lib/formatters";
+import { formatDateAr, formatCurrency, formatNumber } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
 import { EntityObligations } from "@/components/shared/entity-obligations";
@@ -255,7 +255,7 @@ export default function VehicleDetail() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border-0 shadow-sm"><CardContent className="p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-blue-50"><Gauge className="w-5 h-5 text-blue-600" /></div>
-          <div><p className="text-xl font-bold">{Number(vehicle.currentMileage || 0).toLocaleString()}</p><p className="text-xs text-gray-500">كم</p></div>
+          <div><p className="text-xl font-bold">{formatNumber(Number(vehicle.currentMileage || 0))}</p><p className="text-xs text-gray-500">كم</p></div>
         </CardContent></Card>
         <Card className="border-0 shadow-sm"><CardContent className="p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-green-50"><Fuel className="w-5 h-5 text-green-600" /></div>
@@ -286,7 +286,7 @@ export default function VehicleDetail() {
               </p>
               <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                 <div className="text-center p-2 bg-white rounded-lg border">
-                  <p className="text-lg font-bold text-blue-600">{totalDistance.toLocaleString()} كم</p>
+                  <p className="text-lg font-bold text-blue-600">{formatNumber(totalDistance)} كم</p>
                   <p className="text-[10px] text-gray-500">إجمالي المسافة</p>
                 </div>
                 <div className="text-center p-2 bg-white rounded-lg border">
@@ -344,7 +344,7 @@ export default function VehicleDetail() {
             <Card className="border-0 shadow-sm bg-blue-50/50">
               <CardContent className="p-4 text-center">
                 <p className="text-xs text-blue-600 mb-1">المسافة المقطوعة</p>
-                <p className="text-xl font-bold text-blue-700">{Number(vehicle.currentMileage || 0).toLocaleString()} كم</p>
+                <p className="text-xl font-bold text-blue-700">{formatNumber(Number(vehicle.currentMileage || 0))} كم</p>
               </CardContent>
             </Card>
             <Card className="border-0 shadow-sm bg-green-50/50">
@@ -629,7 +629,7 @@ export default function VehicleDetail() {
                   { key: "description", header: "الوصف", render: (m) => <span className="text-gray-500">{m.description || "-"}</span> },
                   { key: "serviceDate", header: "التاريخ", render: (m) => <span className="text-gray-500">{m.serviceDate ? formatDateAr(m.serviceDate) : "-"}</span> },
                   { key: "cost", header: "التكلفة", render: (m) => Number(m.cost) > 0 ? formatCurrency(Number(m.cost)) : "-" },
-                  { key: "mileageAtService", header: "العداد", ltr: true, render: (m) => <span className="font-mono">{m.mileageAtService ? `${Number(m.mileageAtService).toLocaleString()} km` : "-"}</span> },
+                  { key: "mileageAtService", header: "العداد", ltr: true, render: (m) => <span className="font-mono">{m.mileageAtService ? `${formatNumber(Number(m.mileageAtService))} km` : "-"}</span> },
                   { key: "status", header: "الحالة", render: (m) => <PageStatusBadge status={m.status} /> },
                 ]}
                 data={maintenance}
@@ -654,7 +654,7 @@ export default function VehicleDetail() {
                   { key: "fuelDate", header: "التاريخ", render: (f) => <span className="text-gray-500">{f.fuelDate ? formatDateAr(f.fuelDate) : "-"}</span> },
                   { key: "liters", header: "الكمية", render: (f) => `${Number(f.liters || 0).toFixed(1)} لتر` },
                   { key: "totalCost", header: "التكلفة", render: (f) => formatCurrency(Number(f.totalCost || 0)) },
-                  { key: "mileageAtFuel", header: "العداد", ltr: true, render: (f) => <span className="font-mono">{f.mileageAtFuel ? `${Number(f.mileageAtFuel).toLocaleString()} km` : "-"}</span> },
+                  { key: "mileageAtFuel", header: "العداد", ltr: true, render: (f) => <span className="font-mono">{f.mileageAtFuel ? `${formatNumber(Number(f.mileageAtFuel))} km` : "-"}</span> },
                   { key: "stationName", header: "المحطة", render: (f) => <span className="text-gray-500">{f.stationName || "-"}</span> },
                 ]}
                 data={fuelLogs}

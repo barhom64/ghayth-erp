@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import { formatNumber } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { PageStatusBadge } from "@/components/page-status-badge";
@@ -63,7 +64,7 @@ export default function TripsPage() {
         { label: "إجمالي الرحلات", value: items.length, icon: Route, color: "text-blue-600 bg-blue-50" },
         { label: "جارية", value: items.filter((t: any) => t.status === "in_progress").length, icon: Navigation, color: "text-amber-600 bg-amber-50" },
         { label: "مكتملة", value: items.filter((t: any) => t.status === "completed").length, icon: CheckCircle, color: "text-green-600 bg-green-50" },
-        { label: "إجمالي المسافة", value: `${items.reduce((s: number, t: any) => s + (Number(t.distance) || 0), 0).toLocaleString()} كم`, icon: MapPin, color: "text-purple-600 bg-purple-50" },
+        { label: "إجمالي المسافة", value: `${formatNumber(items.reduce((s: number, t: any) => s + (Number(t.distance) || 0), 0))} كم`, icon: MapPin, color: "text-purple-600 bg-purple-50" },
       ]} />
 
       <AdvancedFilters

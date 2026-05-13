@@ -1,6 +1,6 @@
 import React from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
-import { formatDateAr } from "@/lib/formatters";
+import { formatDateAr, formatNumber } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -124,7 +124,7 @@ export default function UmrahDashboard() {
           <CardHeader><CardTitle className="text-base">الغرامات</CardTitle></CardHeader>
           <CardContent>
             <div className="flex justify-between items-center">
-              <div><span className="text-2xl font-bold text-red-600">{Number(pen.totalAmount || 0).toLocaleString()}</span> <span className="text-sm">ريال</span></div>
+              <div><span className="text-2xl font-bold text-red-600">{formatNumber(Number(pen.totalAmount || 0))}</span> <span className="text-sm">ريال</span></div>
               <Badge variant="outline">{pen.pending || 0} معلقة</Badge>
             </div>
           </CardContent>
