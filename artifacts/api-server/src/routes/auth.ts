@@ -481,12 +481,24 @@ router.post("/switch-assignment", authMiddleware, authedUserLimiter, async (req,
     if (!scope.allowedAssignments.includes(Number(assignmentId))) {
       throw new ForbiddenError("غير مسموح بالتبديل إلى هذا التعيين");
     }
+    // Join `branches` so we refuse to switch into an assignment whose
+    // branch has been soft-disabled (status='inactive'). Without this,
+    // a user with a stale assignment on a disabled branch could keep
+    // operating against it indefinitely — the dropdown hides the row
+    // (after PR #513), but a direct API call to switch-assignment
+    // would still succeed and stamp `scope.branchId` onto new records.
     const [assignment] = await rawQuery<AssignmentSwitchRow>(
-      `SELECT ea.id, ea."companyId", ea."branchId", ea.role FROM employee_assignments ea WHERE ea.id = $1 AND ea."companyId" = ANY($2::int[]) AND ea.status = 'active'`,
+      `SELECT ea.id, ea."companyId", ea."branchId", ea.role
+         FROM employee_assignments ea
+         LEFT JOIN branches b ON b.id = ea."branchId"
+        WHERE ea.id = $1
+          AND ea."companyId" = ANY($2::int[])
+          AND ea.status = 'active'
+          AND (b.id IS NULL OR COALESCE(b.status, 'active') = 'active')`,
       [assignmentId, scope.allowedCompanies]
     );
     if (!assignment) {
-      throw new NotFoundError("التعيين غير موجود أو غير نشط");
+      throw new NotFoundError("التعيين غير موجود أو الفرع غير نشط");
     }
 
     const token = signToken({ userId: scope.userId, assignmentId: Number(assignmentId), role: assignment.role });
