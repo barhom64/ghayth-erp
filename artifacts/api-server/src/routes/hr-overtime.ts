@@ -191,7 +191,7 @@ router.get("/overtime/my", authorize({ feature: "hr.overtime.my", action: "list"
        ORDER BY o."overtimeDate" DESC LIMIT 500`,
       [scope.activeAssignmentId, scope.companyId]
     );
-    res.json({ data });
+    res.json(maskFields(req, { data }));
   } catch (err) {
     handleRouteError(err, res, "خطأ في قراءة طلباتك");
   }
@@ -226,7 +226,7 @@ router.get("/overtime/summary", authorize({ feature: "hr.overtime", action: "lis
       [scope.companyId, period]
     );
 
-    res.json({ data, totals: totals ?? { hours: 0, amount: 0 }, period });
+    res.json(maskFields(req, { data, totals: totals ?? { hours: 0, amount: 0 }, period }));
   } catch (err) {
     handleRouteError(err, res, "خطأ في قراءة ملخص الوقت الإضافي");
   }

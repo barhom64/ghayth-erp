@@ -725,7 +725,7 @@ router.get("/onboarding-tasks", authorize({ feature: "hr.employees", action: "li
        ORDER BY ot."createdAt" DESC LIMIT 200`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { logger.error(err, "Onboarding tasks error:"); res.json({ data: [], total: 0 }); }
 });
 
@@ -777,7 +777,7 @@ router.get("/job-titles", authorize({ feature: "hr.employees", action: "list" })
       `SELECT * FROM job_titles WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY name LIMIT 500`,
       [scope.companyId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { logger.error(err, "job-titles query failed"); res.json({ data: [], total: 0 }); }
 });
 
