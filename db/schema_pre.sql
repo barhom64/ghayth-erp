@@ -13897,6 +13897,7 @@ CREATE TABLE public.umrah_nusk_invoices (
     "purchaseInvoiceId" integer,
     "journalEntryId" integer,
     "programDuration" integer,
+    "treasuryId" integer,
     "createdBy" integer,
     "updatedBy" integer,
     "createdAt" timestamp with time zone DEFAULT now(),
