@@ -143,9 +143,9 @@ export function GovIntegrationsTab() {
                             "bg-status-error-surface text-status-error-foreground"
                           }`}>
                             <span className={`w-1.5 h-1.5 rounded-full ${
-                              item.lastCheckStatus === "connected" ? "bg-green-500" :
-                              item.lastCheckStatus === "auth_error" ? "bg-yellow-500" :
-                              "bg-red-500"
+                              item.lastCheckStatus === "connected" ? "bg-status-success-surface0" :
+                              item.lastCheckStatus === "auth_error" ? "bg-status-warning-surface0" :
+                              "bg-status-error-surface0"
                             }`} />
                             {item.lastCheckStatus === "connected" ? "متصل" :
                              item.lastCheckStatus === "auth_error" ? "خطأ مصادقة" : "غير متصل"}

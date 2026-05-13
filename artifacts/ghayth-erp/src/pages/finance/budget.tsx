@@ -80,7 +80,7 @@ export default function BudgetPage() {
         const alloc = Number(b.amount || 0);
         const used = Number(b.used || 0);
         const pct = alloc > 0 ? Math.round((used / alloc) * 100) : 0;
-        const barColor = pct > 100 ? "bg-red-500" : pct > 80 ? "bg-orange-500" : "bg-green-500";
+        const barColor = pct > 100 ? "bg-status-error-surface0" : pct > 80 ? "bg-orange-500" : "bg-status-success-surface0";
         return (
           <div className="flex items-center gap-2">
             <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">

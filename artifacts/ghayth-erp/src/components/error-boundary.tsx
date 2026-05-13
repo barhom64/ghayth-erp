@@ -33,11 +33,11 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-8" dir="rtl">
+        <div className="flex flex-col items-center justify-center min-h-screen bg-surface-subtle p-8" dir="rtl">
           <div className="bg-white rounded-2xl shadow-lg p-10 max-w-md w-full text-center">
             <div className="text-5xl mb-4">⚠️</div>
             <h1 className="text-xl font-bold text-gray-800 mb-2">حدث خطأ غير متوقع</h1>
-            <p className="text-gray-500 mb-6">
+            <p className="text-muted-foreground mb-6">
               {this.state.error?.message || "يرجى إعادة تحميل الصفحة والمحاولة مجدداً"}
             </p>
             <button

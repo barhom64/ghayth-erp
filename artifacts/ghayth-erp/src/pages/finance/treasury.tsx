@@ -50,7 +50,7 @@ export default function TreasuryPage() {
       render: (a) => {
         if (a.code?.startsWith("110")) return <Badge variant="outline" className="text-status-success-foreground border-status-success-surface">صندوق نقدي</Badge>;
         if (a.code?.startsWith("11")) return <Badge variant="outline" className="text-status-info-foreground border-status-info-surface">حساب بنكي</Badge>;
-        return <Badge variant="outline" className="text-status-warning-foreground border-amber-300">ذمم مدينة</Badge>;
+        return <Badge variant="outline" className="text-status-warning-foreground border-status-warning-surface">ذمم مدينة</Badge>;
       },
     },
     {

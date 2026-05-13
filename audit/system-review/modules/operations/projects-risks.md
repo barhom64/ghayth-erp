@@ -23,13 +23,46 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/operations.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+سجل مخاطر المشروع — Risk Register (PMI/PRINCE2-aligned).
+
+| الفئة | المثال |
+|------|--------|
+| Schedule risk | delay in delivery |
+| Cost risk | budget overrun |
+| Resource risk | key person leaves |
+| Technical risk | tech does not work |
+| External risk | regulatory change |
+| Operational risk | process failure |
+| Financial risk | currency, payment delays |
+| Reputational | brand damage |
+| Compliance | regulatory breach |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| List risks | GET `/projects/:id/risks` | `project_risks` | ✅ |
+| Add risk | POST | with category + impact + probability | ✅ |
+| Risk score | calculated | impact × probability | ✅ |
+| Status: identified → assessed → mitigated → closed | lifecycle | ✅ |
+| Owner assigned | accountability | ✅ |
+| Mitigation plan | actions | required for high-risk | ✅ |
+| Contingency plan | fallback | required for critical | ⚠ |
+| Provisions in budget (لو high) | reserved | راجع `finance-budget.md` | ⚠ |
+| Linked tasks (mitigation actions) | راجع `projects-tasks.md` | ✅ |
+| Escalation (لو risk realized) | event=`risk_realized` | راجع `notifications.md` | ✅ critical |
+| Risk realized → issue tracking | راجع `support.md` لو applicable | ⚠ |
+| Compliance impact | راجع `governance-compliance.md` لو applicable | ⚠ |
+| Provision in financials (IFRS) | راجع `finance-provisions.md` لو probable+measurable | ✅ critical |
+| Audit log إجباري | كل تعديل risk score | `audit_logs` | ✅ |
+| RBAC | project manager + risk officer | ✅ |
+| Periodic review | scheduled | راجع `automation.md` | ⚠ |
+
+تحقق يدوي:
+- [ ] هل risk scoring matrix consistent across projects (5×5 typical)؟
+- [ ] هل high-risk requires escalation للـ steering committee؟
+- [ ] هل provisions في الـ financials linked to assessed risks؟
+- [ ] هل risk register reviewed بشكل دوري (weekly/biweekly)؟
+- [ ] هل mitigation actions tracked كـ tasks بـ deadlines؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `risks` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

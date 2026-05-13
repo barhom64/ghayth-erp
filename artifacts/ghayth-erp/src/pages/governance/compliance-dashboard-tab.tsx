@@ -36,7 +36,7 @@ export function ComplianceDashboardTab() {
                       render: (m: any) => (
                         <div className="flex items-center gap-2">
                           <div className="flex-1 h-2 bg-surface-subtle rounded-full">
-                            <div className="h-2 bg-green-500 rounded-full" style={{ width: `${m.rate || 0}%` }} />
+                            <div className="h-2 bg-status-success-surface0 rounded-full" style={{ width: `${m.rate || 0}%` }} />
                           </div>
                           <span className="text-xs text-muted-foreground w-8">{m.rate}%</span>
                         </div>

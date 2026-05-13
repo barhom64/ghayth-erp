@@ -70,10 +70,10 @@ function severityTone(sev?: string | null) {
 
 function severityCellColor(score: number): string {
   // 1-4 -> green/yellow, 5-10 -> orange, 12+ -> red
-  if (score >= 12) return "bg-red-500 text-white";
+  if (score >= 12) return "bg-status-error-surface0 text-white";
   if (score >= 8) return "bg-orange-500 text-white";
   if (score >= 4) return "bg-yellow-400 text-gray-900";
-  return "bg-green-500 text-white";
+  return "bg-status-success-surface0 text-white";
 }
 
 export default function RiskDetail() {

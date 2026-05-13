@@ -155,7 +155,7 @@ export default function UmrahPricing() {
       <UmrahTabsNav />
 
       {hasAnyGap && activeSeason && (
-        <Card className="border-amber-300 bg-status-warning-surface">
+        <Card className="border-status-warning-surface bg-status-warning-surface">
           <CardContent className="p-4 flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-status-warning-foreground shrink-0 mt-0.5" />
             <div className="text-sm">

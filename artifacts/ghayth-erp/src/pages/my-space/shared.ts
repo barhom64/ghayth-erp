@@ -31,7 +31,7 @@ export const requestTypeLabels: Record<string, string> = {
 export const severityColors: Record<string, string> = {
   low: "bg-yellow-100 text-yellow-700",
   medium: "bg-orange-100 text-orange-700",
-  high: "bg-red-100 text-red-700",
+  high: "bg-red-100 text-status-error-foreground",
 };
 
 export const priorityLabels: Record<string, string> = {

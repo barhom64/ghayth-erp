@@ -246,7 +246,7 @@ export default function InvoiceDetailPage() {
           </div>
           <div className="mt-3">
             <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-              <div className="h-full bg-green-500 rounded-full" style={{ width: `${Math.min(100, (Number(invoice.paidAmount || 0) / Number(invoice.total)) * 100)}%` }} />
+              <div className="h-full bg-status-success-surface0 rounded-full" style={{ width: `${Math.min(100, (Number(invoice.paidAmount || 0) / Number(invoice.total)) * 100)}%` }} />
             </div>
             <p className="text-xs text-muted-foreground mt-1 text-start">{Math.round((Number(invoice.paidAmount || 0) / Number(invoice.total)) * 100)}% مدفوع</p>
           </div>

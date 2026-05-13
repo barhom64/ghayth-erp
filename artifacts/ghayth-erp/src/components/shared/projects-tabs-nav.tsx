@@ -26,7 +26,7 @@ export function ProjectsTabsNav() {
                   "inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
                   isActive
                     ? "border-primary text-primary"
-                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-gray-300"
+                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
                 )}
               >
                 <Icon className="h-4 w-4" />

@@ -95,7 +95,7 @@ function AccessDenied() {
     <div className="flex flex-col items-center justify-center min-h-[40vh] text-center" dir="rtl">
       <div className="text-6xl mb-4">🔒</div>
       <h2 className="text-xl font-bold text-gray-800 mb-2">غير مصرح بالوصول</h2>
-      <p className="text-gray-500">ليس لديك صلاحية الوصول لهذا القسم بالدور الحالي</p>
+      <p className="text-muted-foreground">ليس لديك صلاحية الوصول لهذا القسم بالدور الحالي</p>
     </div>
   );
 }

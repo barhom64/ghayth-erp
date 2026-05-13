@@ -19,9 +19,9 @@ interface ImpactCardProps {
 }
 
 const TYPE_STYLES = {
-  financial: { color: "text-red-700", bg: "bg-red-50", border: "border-red-200", Icon: DollarSign },
-  administrative: { color: "text-blue-700", bg: "bg-blue-50", border: "border-blue-200", Icon: ClipboardList },
-  reporting: { color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200", Icon: BarChart3 },
+  financial: { color: "text-status-error-foreground", bg: "bg-status-error-surface", border: "border-status-error-surface", Icon: DollarSign },
+  administrative: { color: "text-status-info-foreground", bg: "bg-status-info-surface", border: "border-status-info-surface", Icon: ClipboardList },
+  reporting: { color: "text-status-warning-foreground", bg: "bg-status-warning-surface", border: "border-status-warning-surface", Icon: BarChart3 },
 };
 
 export function ImpactCard({ entityType, entityId, action }: ImpactCardProps) {
@@ -46,7 +46,7 @@ export function ImpactCard({ entityType, entityId, action }: ImpactCardProps) {
 
   if (loading) {
     return (
-      <Card className="border-amber-200 bg-amber-50/30">
+      <Card className="border-status-warning-surface bg-status-warning-surface/30">
         <CardContent className="p-3 space-y-2">
           <Skeleton className="h-4 w-32" />
           <Skeleton className="h-3 w-full" />
@@ -63,17 +63,17 @@ export function ImpactCard({ entityType, entityId, action }: ImpactCardProps) {
   const reportImpacts = impacts.filter((i) => i.type === "reporting");
 
   return (
-    <Card className="border-amber-200 bg-gradient-to-br from-amber-50/50 to-orange-50/30">
+    <Card className="border-status-warning-surface bg-gradient-to-br from-amber-50/50 to-orange-50/30">
       <CardHeader className="p-3 pb-0">
         <button
           className="flex items-center justify-between w-full"
           onClick={() => setExpanded(!expanded)}
         >
-          <CardTitle className="text-sm font-semibold flex items-center gap-2 text-amber-800">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2 text-status-warning-foreground">
             <AlertTriangle className="h-4 w-4" />
             ملخص الأثر المتوقع
           </CardTitle>
-          {expanded ? <ChevronUp className="h-4 w-4 text-amber-600" /> : <ChevronDown className="h-4 w-4 text-amber-600" />}
+          {expanded ? <ChevronUp className="h-4 w-4 text-status-warning-foreground" /> : <ChevronDown className="h-4 w-4 text-status-warning-foreground" />}
         </button>
       </CardHeader>
       {expanded && (
@@ -105,7 +105,7 @@ export function ImpactCard({ entityType, entityId, action }: ImpactCardProps) {
                 </div>
               );
             })}
-          <div className="text-[10px] text-gray-400 text-center pt-1">
+          <div className="text-[10px] text-muted-foreground text-center pt-1">
             هذا تقدير للأثر المتوقع — سيتم التنفيذ الفعلي عند التأكيد
           </div>
         </CardContent>

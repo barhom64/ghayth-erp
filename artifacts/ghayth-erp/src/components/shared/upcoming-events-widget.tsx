@@ -20,9 +20,9 @@ const CATEGORY_ICON: Record<string, any> = {
 
 const CATEGORY_COLOR: Record<string, string> = {
   milestone: "text-orange-600",
-  obligation: "text-red-600",
+  obligation: "text-status-error-foreground",
   contract_expiry: "text-purple-600",
-  task: "text-blue-600",
+  task: "text-status-info-foreground",
   training: "text-cyan-600",
   document_expiry: "text-yellow-600",
   vehicle_expiry: "text-slate-600",

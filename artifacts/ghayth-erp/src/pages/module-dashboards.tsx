@@ -52,14 +52,14 @@ function KpiCard({ title, value, subtitle, icon: Icon, trend, color = "blue" }: 
 function MiniBar({ label, value, max, color = "blue" }: { label: string; value: number; max: number; color?: string }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
   const colors: Record<string, string> = {
-    blue: "bg-blue-500", green: "bg-green-500", red: "bg-red-500",
+    blue: "bg-status-info-surface0", green: "bg-status-success-surface0", red: "bg-status-error-surface0",
     orange: "bg-orange-500", purple: "bg-purple-500",
   };
   return (
     <div className="flex items-center gap-2 text-xs">
       <span className="w-20 text-muted-foreground truncate">{label}</span>
       <div className="flex-1 h-2 bg-surface-subtle rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${colors[color] || "bg-blue-500"}`} style={{ width: `${pct}%` }} />
+        <div className={`h-full rounded-full ${colors[color] || "bg-status-info-surface0"}`} style={{ width: `${pct}%` }} />
       </div>
       <span className="w-10 text-start font-medium">{value}</span>
     </div>
@@ -397,7 +397,7 @@ function ProjectsDashboard() {
                   <span className="w-32 truncate font-medium">{p.name}</span>
                   <div className="flex-1 h-2 bg-surface-subtle rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full ${Number(p.progress) >= 80 ? "bg-green-500" : Number(p.progress) >= 50 ? "bg-blue-500" : "bg-orange-500"}`}
+                      className={`h-full rounded-full ${Number(p.progress) >= 80 ? "bg-status-success-surface0" : Number(p.progress) >= 50 ? "bg-status-info-surface0" : "bg-orange-500"}`}
                       style={{ width: `${p.progress ?? 0}%` }}
                     />
                   </div>

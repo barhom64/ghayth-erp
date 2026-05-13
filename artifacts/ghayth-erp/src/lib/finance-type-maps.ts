@@ -79,7 +79,7 @@ export const GUARANTEE_TYPES: Record<string, string> = {
 
 // ── حالات الفترة المالية ─────────────────────────────────────────────
 export const FISCAL_PERIOD_STATUS: Record<string, { label: string; color: string }> = {
-  open:   { label: "مفتوحة",    color: "bg-green-100 text-green-700 border-green-300" },
-  closed: { label: "مُغلقة",    color: "bg-gray-100 text-gray-600 border-gray-300" },
-  future: { label: "مستقبلية",  color: "bg-blue-100 text-blue-700 border-blue-300" },
+  open:   { label: "مفتوحة",    color: "bg-green-100 text-status-success-foreground border-status-success-surface" },
+  closed: { label: "مُغلقة",    color: "bg-gray-100 text-muted-foreground border-border" },
+  future: { label: "مستقبلية",  color: "bg-blue-100 text-status-info-foreground border-status-info-surface" },
 };

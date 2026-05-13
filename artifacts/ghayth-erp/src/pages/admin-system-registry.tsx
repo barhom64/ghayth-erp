@@ -17,7 +17,7 @@ import {
 
 function FeatureDot({ active, title }: { active: boolean; title: string }) {
   return (
-    <span title={title} className={`inline-block w-2 h-2 rounded-full ${active ? "bg-green-500" : "bg-gray-300"}`} />
+    <span title={title} className={`inline-block w-2 h-2 rounded-full ${active ? "bg-status-success-surface0" : "bg-gray-300"}`} />
   );
 }
 

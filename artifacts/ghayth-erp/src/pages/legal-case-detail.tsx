@@ -101,7 +101,7 @@ function CaseTimeline({ sessions }: { sessions: any[] }) {
             <div key={i} className="relative flex items-start gap-4 pr-10">
               <div className={cn(
                 "absolute end-2 w-5 h-5 rounded-full border-2 flex items-center justify-center",
-                isPast ? "bg-blue-500 border-blue-500" : "bg-white border-amber-400"
+                isPast ? "bg-status-info-surface0 border-blue-500" : "bg-white border-amber-400"
               )}>
                 {isPast ? <CheckCircle2 className="h-3 w-3 text-white" /> : <Clock className="h-3 w-3 text-status-warning" />}
               </div>

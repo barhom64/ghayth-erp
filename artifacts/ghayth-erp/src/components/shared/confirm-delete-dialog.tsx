@@ -201,7 +201,7 @@ export function ConfirmDeleteDialog({
       <AlertDialogContent dir="rtl" className="max-w-lg">
         <AlertDialogHeader className="text-right">
           <AlertDialogTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-red-600" />
+            <AlertTriangle className="h-5 w-5 text-status-error-foreground" />
             تأكيد حذف &ldquo;{entity.name}&rdquo;
           </AlertDialogTitle>
           <AlertDialogDescription asChild>
@@ -238,14 +238,14 @@ export function ConfirmDeleteDialog({
               )}
 
               {blockers && blockers.length > 0 && (
-                <div className="rounded-md border border-red-200 bg-red-50 p-3">
-                  <p className="text-xs font-semibold text-red-800">
+                <div className="rounded-md border border-status-error-surface bg-status-error-surface p-3">
+                  <p className="text-xs font-semibold text-status-error-foreground">
                     لا يمكن إتمام الحذف — يجب معالجة ما يلي أولاً:
                   </p>
-                  <ul className="mt-1.5 space-y-1 text-xs text-red-700">
+                  <ul className="mt-1.5 space-y-1 text-xs text-status-error-foreground">
                     {blockers.map((b, i) => (
                       <li key={i} className="flex items-start gap-1.5">
-                        <span className="mt-0.5 h-1 w-1 shrink-0 rounded-full bg-red-500" />
+                        <span className="mt-0.5 h-1 w-1 shrink-0 rounded-full bg-status-error-surface0" />
                         <span>{b}</span>
                       </li>
                     ))}

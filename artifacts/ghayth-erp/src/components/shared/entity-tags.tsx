@@ -14,13 +14,13 @@ const PRESET_TAGS = [
 ];
 
 const COLOR_MAP: Record<string, { bg: string; text: string; border: string }> = {
-  red: { bg: "bg-red-100", text: "text-red-700", border: "border-red-200" },
+  red: { bg: "bg-red-100", text: "text-status-error-foreground", border: "border-status-error-surface" },
   orange: { bg: "bg-orange-100", text: "text-orange-700", border: "border-orange-200" },
   yellow: { bg: "bg-yellow-100", text: "text-yellow-700", border: "border-yellow-200" },
   purple: { bg: "bg-purple-100", text: "text-purple-700", border: "border-purple-200" },
-  gray: { bg: "bg-gray-100", text: "text-gray-700", border: "border-gray-200" },
-  blue: { bg: "bg-blue-100", text: "text-blue-700", border: "border-blue-200" },
-  green: { bg: "bg-green-100", text: "text-green-700", border: "border-green-200" },
+  gray: { bg: "bg-gray-100", text: "text-gray-700", border: "border-border" },
+  blue: { bg: "bg-blue-100", text: "text-status-info-foreground", border: "border-status-info-surface" },
+  green: { bg: "bg-green-100", text: "text-status-success-foreground", border: "border-status-success-surface" },
 };
 
 interface EntityTagsProps {
@@ -90,7 +90,7 @@ export function EntityTags({ entityType, entityId, className, inline }: EntityTa
           return (
             <span key={t.id} className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border group", c.bg, c.text, c.border)}>
               {t.tag}
-              <button onClick={() => removeTag(t.id)} className="opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-600">
+              <button onClick={() => removeTag(t.id)} className="opacity-0 group-hover:opacity-100 transition-opacity hover:text-status-error-foreground">
                 <X className="h-3 w-3" />
               </button>
             </span>
@@ -99,7 +99,7 @@ export function EntityTags({ entityType, entityId, className, inline }: EntityTa
 
         <button
           onClick={() => setShowPresets(!showPresets)}
-          className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs text-gray-500 border border-dashed border-gray-300 hover:border-blue-400 hover:text-blue-600 transition-colors"
+          className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs text-muted-foreground border border-dashed border-border hover:border-blue-400 hover:text-status-info-foreground transition-colors"
         >
           <Plus className="h-3 w-3" />
           وسم
@@ -107,7 +107,7 @@ export function EntityTags({ entityType, entityId, className, inline }: EntityTa
       </div>
 
       {showPresets && availablePresets.length > 0 && (
-        <div className="flex items-center gap-1.5 flex-wrap p-2 bg-gray-50 rounded-lg">
+        <div className="flex items-center gap-1.5 flex-wrap p-2 bg-surface-subtle rounded-lg">
           {availablePresets.map((p) => {
             const c = COLOR_MAP[p.color] || COLOR_MAP.blue;
             return (
@@ -159,7 +159,7 @@ export function TagFilterSelect({
   if (!tagsList || tagsList.length === 0) return null;
   return (
     <div className="flex items-center gap-2">
-      <Tag className="h-3.5 w-3.5 text-gray-400" />
+      <Tag className="h-3.5 w-3.5 text-muted-foreground" />
       <select
         className="border rounded-md px-2 py-1 text-xs bg-white min-w-[120px]"
         value={selectedTag}
@@ -173,7 +173,7 @@ export function TagFilterSelect({
         ))}
       </select>
       {selectedTag && (
-        <button onClick={() => onSelect("")} className="text-gray-400 hover:text-gray-600">
+        <button onClick={() => onSelect("")} className="text-muted-foreground hover:text-muted-foreground">
           <X className="h-3.5 w-3.5" />
         </button>
       )}

@@ -47,7 +47,7 @@ export function LeavesAndRequestsSection({ leaveBalances, openRequests }: Leaves
                     </div>
                     <div className="w-full h-2 rounded-full bg-surface-subtle overflow-hidden">
                       <div
-                        className={cn("h-full rounded-full transition-all duration-500", isOut ? "bg-red-500" : isLow ? "bg-amber-400" : "bg-emerald-500")}
+                        className={cn("h-full rounded-full transition-all duration-500", isOut ? "bg-status-error-surface0" : isLow ? "bg-amber-400" : "bg-emerald-500")}
                         style={{ width: `${usedPct}%` }}
                       />
                     </div>

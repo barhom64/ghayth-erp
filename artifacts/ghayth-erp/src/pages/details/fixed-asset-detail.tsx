@@ -140,7 +140,7 @@ export default function FixedAssetDetail() {
               <span className="font-medium">{depreciationPct.toFixed(1)}%</span>
             </div>
             <div className="h-2 bg-surface-subtle rounded-full overflow-hidden">
-              <div className="h-full bg-amber-500 rounded-full" style={{ width: `${Math.min(100, depreciationPct)}%` }} />
+              <div className="h-full bg-status-warning-surface0 rounded-full" style={{ width: `${Math.min(100, depreciationPct)}%` }} />
             </div>
           </div>
 

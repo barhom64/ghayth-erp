@@ -318,7 +318,7 @@ export function DataTable<T>({
                   <div
                     role="status"
                     aria-live="polite"
-                    className="mt-1 text-[11px] text-amber-600"
+                    className="mt-1 text-[11px] text-status-warning-foreground"
                   >
                     {cooldown.label}
                   </div>
@@ -375,11 +375,11 @@ export function DataTable<T>({
       )}
 
       {selectable && selectedIds.size > 0 && (
-        <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3 animate-in fade-in slide-in-from-top-1">
+        <div className="flex items-center gap-3 rounded-lg border border-status-info-surface bg-status-info-surface p-3 animate-in fade-in slide-in-from-top-1">
           <Badge className="bg-blue-600 text-white hover:bg-blue-600">
             {selectedIds.size}
           </Badge>
-          <span className="text-sm font-medium text-blue-700">
+          <span className="text-sm font-medium text-status-info-foreground">
             سجل محدد
           </span>
           <div className="ms-auto flex items-center gap-1.5">

@@ -32,9 +32,9 @@ const SECTION_COLORS: Record<string, string> = {
 };
 
 const SEVERITY_STYLES: Record<string, { bg: string; border: string; text: string; dot: string }> = {
-  ok: { bg: "bg-status-success-surface", border: "border-status-success-surface", text: "text-status-success-foreground", dot: "bg-green-500" },
-  warning: { bg: "bg-status-warning-surface", border: "border-status-warning-surface", text: "text-status-warning-foreground", dot: "bg-yellow-500" },
-  critical: { bg: "bg-status-error-surface", border: "border-status-error-surface", text: "text-status-error-foreground", dot: "bg-red-500" },
+  ok: { bg: "bg-status-success-surface", border: "border-status-success-surface", text: "text-status-success-foreground", dot: "bg-status-success-surface0" },
+  warning: { bg: "bg-status-warning-surface", border: "border-status-warning-surface", text: "text-status-warning-foreground", dot: "bg-status-warning-surface0" },
+  critical: { bg: "bg-status-error-surface", border: "border-status-error-surface", text: "text-status-error-foreground", dot: "bg-status-error-surface0" },
 };
 
 const ACTION_LABELS: Record<string, string> = {
