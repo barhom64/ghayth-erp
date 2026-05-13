@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { handleRouteError, ValidationError, NotFoundError,
   parseId,
   zodParse,
@@ -92,7 +92,7 @@ router.get("/campaigns", authorize({ feature: "marketing", action: "list" }), as
   try {
     const scope = req.scope!;
     const rows = await rawQuery<MarketingCampaignRow>(`SELECT * FROM marketing_campaigns WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "marketing"); }
 });
 
@@ -142,7 +142,7 @@ router.get("/campaigns/:id", authorize({ feature: "marketing", action: "view" })
     const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<MarketingCampaignRow>(`SELECT * FROM marketing_campaigns WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("الحملة غير موجودة");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "marketing"); }
 });
 
@@ -207,7 +207,7 @@ router.get("/stats", authorize({ feature: "marketing", action: "list" }), async 
       `SELECT source, COUNT(*) AS count FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND source IS NOT NULL GROUP BY source ORDER BY count DESC`,
       [cid]
     ).catch((e) => { logger.error(e, "marketing query failed"); return [] as SourceCountRow[]; });
-    res.json({
+    res.json(maskFields(req, {
       totalCampaigns: Number(total.count),
       activeCampaigns: Number(active.count),
       totalBudget: Number(budget.total),
@@ -215,7 +215,7 @@ router.get("/stats", authorize({ feature: "marketing", action: "list" }), async 
       totalRevenue: totalRevenue,
       roas,
       sourceCounts,
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "marketing"); }
 });
 
@@ -232,14 +232,14 @@ router.get("/campaigns/:id/roas", authorize({ feature: "marketing", action: "lis
       `SELECT COUNT(*) AS count FROM crm_opportunities WHERE "companyId"=$1 AND "deletedAt" IS NULL AND source=$2`,
       [scope.companyId, campaign.name]
     ).catch((e) => { logger.error(e, "marketing query failed"); return [{ count: 0 }] as CountRow[]; });
-    res.json({
+    res.json(maskFields(req, {
       campaignId: id,
       campaignName: campaign.name,
       spent,
       revenue,
       roas: roas ? Number(roas).toFixed(2) : null,
       leadsGenerated: Number(leads?.[0]?.count || 0),
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "marketing"); }
 });
 
@@ -270,7 +270,7 @@ router.get("/funnel", authorize({ feature: "marketing", action: "list" }), async
         conversionFromPrev: prev && prev.count > 0 ? ((s.count / prev.count) * 100).toFixed(1) : null,
       };
     });
-    res.json({ stages: conversionRates, sourceFunnel });
+    res.json(maskFields(req, { stages: conversionRates, sourceFunnel }));
   } catch (err) { handleRouteError(err, res, "marketing"); }
 });
 
@@ -296,7 +296,7 @@ router.get("/templates", authorize({ feature: "marketing", action: "list" }), as
       `SELECT * FROM document_templates WHERE "companyId" = $1 AND category = 'marketing' AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`,
       [scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (e) {
     logger.error(e, "failed to list marketing templates");
     res.json({ data: [] });

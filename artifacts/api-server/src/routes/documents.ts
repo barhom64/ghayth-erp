@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { Readable } from "stream";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
@@ -204,7 +204,7 @@ router.get("/", authorize({ feature: "documents", action: "list" }), async (req:
          ORDER BY d."createdAt" DESC LIMIT 500`,
         [entity, Number(entityId), scope.companyId]
       );
-      res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+      res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
       return;
     }
 
@@ -221,7 +221,7 @@ router.get("/", authorize({ feature: "documents", action: "list" }), async (req:
     }
 
     const rows = await rawQuery(`SELECT * FROM documents ${where} ORDER BY "createdAt" DESC LIMIT 500`, params);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
@@ -466,7 +466,7 @@ router.get("/:id/versions", authorize({ feature: "documents", action: "list" }),
       `SELECT * FROM document_versions WHERE "documentId"=$1 ORDER BY "versionNumber" DESC LIMIT 500`,
       [docId]
     );
-    res.json({ data: versions });
+    res.json(maskFields(req, { data: versions }));
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
@@ -571,7 +571,7 @@ router.get("/:id/entity-links", authorize({ feature: "documents", action: "list"
       `SELECT * FROM document_entity_links WHERE "documentId"=$1 LIMIT 500`,
       [docId]
     );
-    res.json({ data: links });
+    res.json(maskFields(req, { data: links }));
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
@@ -579,7 +579,7 @@ router.get("/folders", authorize({ feature: "documents", action: "list" }), asyn
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM document_folders WHERE "companyId"=$1 OR "companyId" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
@@ -635,7 +635,7 @@ router.get("/templates", authorize({ feature: "documents", action: "list" }), as
       `SELECT * FROM document_templates WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL ORDER BY "createdAt" DESC LIMIT 500`,
       [scope.companyId]
     );
-    res.json(rows);
+    res.json(maskFields(req, rows));
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
@@ -645,7 +645,7 @@ router.get("/templates/:id", authorize({ feature: "documents", action: "view" })
     const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<DocumentTemplateRow>(`SELECT * FROM document_templates WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("القالب غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
@@ -972,7 +972,7 @@ router.get("/templates/:id/variables", authorize({ feature: "documents", action:
     if (!template) throw new NotFoundError("القالب غير موجود");
     let variables = [];
     try { variables = typeof template.variables === "string" ? JSON.parse(template.variables) : (template.variables || []); } catch (e) { logger.warn(e, "failed to parse template variables JSON"); variables = []; }
-    res.json({ variables });
+    res.json(maskFields(req, { variables }));
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
@@ -987,13 +987,13 @@ router.get("/stats", authorize({ feature: "documents", action: "list" }), async 
       rawQuery(`SELECT COUNT(*) as count FROM documents WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL AND status='draft'`, [cid]),
       rawQuery(`SELECT COUNT(*) as count FROM documents WHERE ("companyId"=$1 OR "companyId" IS NULL) AND "deletedAt" IS NULL AND status='approved'`, [cid]),
     ]);
-    res.json({
+    res.json(maskFields(req, {
       totalDocuments: Number(docs.count),
       totalFolders: Number(folders.count),
       totalTemplates: Number(templates.count),
       draftDocuments: Number(drafts.count),
       approvedDocuments: Number(approved.count),
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 
@@ -1003,7 +1003,7 @@ router.get("/:id", authorize({ feature: "documents", action: "view", resource: {
     const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<DocumentRow>(`SELECT * FROM documents WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المستند غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
 

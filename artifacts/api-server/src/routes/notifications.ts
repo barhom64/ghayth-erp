@@ -1,7 +1,7 @@
 import { handleRouteError, NotFoundError, parseId, zodParse } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
@@ -91,7 +91,7 @@ router.get("/", authorize({ feature: "notifications", action: "list" }), async (
       const nextCursor = hasMore && last
         ? encodeCursor({ t: String(last.createdAt), i: last.id })
         : null;
-      res.json({ data, pageSize, cursor: nextCursor, hasMore });
+      res.json(maskFields(req, { data, pageSize, cursor: nextCursor, hasMore }));
       return;
     }
 
@@ -111,7 +111,7 @@ router.get("/", authorize({ feature: "notifications", action: "list" }), async (
       ),
     ]);
 
-    res.json({ data: notifications, total: Number(countRow?.count ?? 0), page, pageSize });
+    res.json(maskFields(req, { data: notifications, total: Number(countRow?.count ?? 0), page, pageSize }));
   } catch (err) {
     handleRouteError(err, res, "List notifications error:");
   }
@@ -153,7 +153,7 @@ router.get("/unread-count", authorize({ feature: "notifications", action: "list"
        WHERE "assignmentId" = $1 AND "companyId" = $2 AND "isRead" = false`,
       [scope.activeAssignmentId, scope.companyId]
     );
-    res.json({ count: Number(row?.count ?? 0) });
+    res.json(maskFields(req, { count: Number(row?.count ?? 0) }));
   } catch (err) {
     handleRouteError(err, res, "خطأ في جلب عدد الإشعارات غير المقروءة");
   }
@@ -166,7 +166,7 @@ router.get("/preferences", authorize({ feature: "notifications", action: "list" 
       `SELECT * FROM notification_preferences WHERE "userId" = $1 AND "companyId" = $2 ORDER BY category`,
       [scope.userId, scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) {
     handleRouteError(err, res, "Get notification preferences error:");
   }

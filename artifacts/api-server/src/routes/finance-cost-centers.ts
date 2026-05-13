@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
   zodParse,
@@ -72,7 +72,7 @@ router.get("/cost-centers", authorize({ feature: "finance.cost_centers", action:
        LIMIT 1000`,
       [scope.companyId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "List cost centers error"); }
 });
 
@@ -85,7 +85,7 @@ router.get("/cost-centers/:id", authorize({ feature: "finance.cost_centers", act
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("مركز التكلفة غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Get cost center error"); }
 });
 

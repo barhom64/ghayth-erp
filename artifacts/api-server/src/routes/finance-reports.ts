@@ -8,7 +8,7 @@ import {
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { currentPeriod, currentYear, toDateISO, todayISO, roundTo2 } from "../lib/businessHelpers.js";
 
@@ -27,7 +27,7 @@ reportsRouter.get("/reports/entities/:entityType", authorize({ feature: "finance
     } else if (entityType === "employee") {
       rows = await rawQuery<Record<string, unknown>>(`SELECT e.id, e.name, e.phone, e.email FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 WHERE e."deletedAt" IS NULL ORDER BY e.name LIMIT 500`, [scope.companyId]);
     }
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) {
     handleRouteError(err, res, "Entity list error:");
   }
@@ -71,7 +71,7 @@ reportsRouter.get("/reports/trial-balance", authorize({ feature: "finance.report
       byType[t].totalCredit += Number(r.totalCredit);
       byType[t].balance += Number(r.balance);
     }
-    res.json({ data: rows, summary: { totalDebit, totalCredit, isBalanced: Math.abs(totalDebit - totalCredit) < 0.01 }, byType });
+    res.json(maskFields(req, { data: rows, summary: { totalDebit, totalCredit, isBalanced: Math.abs(totalDebit - totalCredit) < 0.01 }, byType }));
   } catch (err) {
     handleRouteError(err, res, "Trial balance error:");
   }
@@ -89,7 +89,7 @@ reportsRouter.get("/reports/income-statement", authorize({ feature: "finance.rep
     const expenses = await rawQuery<Record<string, unknown>>(`SELECT coa.code, coa.name, COALESCE(SUM(fl.debit) - SUM(fl.credit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}) fl ON fl."accountCode" = coa.code WHERE coa."companyId" = $1 AND coa.type = 'expense' AND coa."deletedAt" IS NULL GROUP BY coa.code, coa.name ORDER BY coa.code LIMIT 500`, params);
     const totalRevenue = revenues.reduce((s: number, r: Record<string, unknown>) => s + Number(r.amount), 0);
     const totalExpenses = expenses.reduce((s: number, r: Record<string, unknown>) => s + Number(r.amount), 0);
-    res.json({ revenues, expenses, summary: { totalRevenue, totalExpenses, netIncome: totalRevenue - totalExpenses } });
+    res.json(maskFields(req, { revenues, expenses, summary: { totalRevenue, totalExpenses, netIncome: totalRevenue - totalExpenses } }));
   } catch (err) {
     handleRouteError(err, res, "Income statement error:");
   }
@@ -122,7 +122,7 @@ reportsRouter.get("/reports/balance-sheet", authorize({ feature: "finance.report
     const totalAssets = assets.reduce((s: number, r: Record<string, unknown>) => s + Number(r.balance), 0);
     const totalLiabilities = liabilities.reduce((s: number, r: Record<string, unknown>) => s + Number(r.balance), 0);
     const totalEquity = equity.reduce((s: number, r: Record<string, unknown>) => s + Number(r.balance), 0);
-    res.json({ assets, liabilities, equity, summary: { totalAssets, totalLiabilities, totalEquity, isBalanced: Math.abs(totalAssets - totalLiabilities - totalEquity) < 0.01 } });
+    res.json(maskFields(req, { assets, liabilities, equity, summary: { totalAssets, totalLiabilities, totalEquity, isBalanced: Math.abs(totalAssets - totalLiabilities - totalEquity) < 0.01 } }));
   } catch (err) {
     handleRouteError(err, res, "Balance sheet error:");
   }
@@ -263,7 +263,7 @@ reportsRouter.get("/reports/cash-flow", authorize({ feature: "finance.reports", 
     const netChange = operating + investing + financing;
     const closingCash = openingCash + netChange;
 
-    res.json({
+    res.json(maskFields(req, {
       period: { from, to },
       openingCash: roundTo2(openingCash),
       closingCash: roundTo2(closingCash),
@@ -293,7 +293,7 @@ reportsRouter.get("/reports/cash-flow", authorize({ feature: "finance.reports", 
         totalOutflow: roundTo2(sections.operating.outflows + sections.investing.outflows + sections.financing.outflows),
         netCashFlow: roundTo2(netChange),
       },
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Cash flow error:");
   }
@@ -403,12 +403,12 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", authorize({ featur
     const totalDebit = movements.reduce((s: number, m: any) => s + Number(m.debit), 0);
     const totalCredit = movements.reduce((s: number, m: any) => s + Number(m.credit), 0);
 
-    res.json({
+    res.json(maskFields(req, {
       entityType, entityId: id,
       movements,
       summary: { totalDebit, totalCredit, netBalance: totalDebit - totalCredit, transactionCount: movements.length },
       sections,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Subsidiary ledger error:");
   }
@@ -507,7 +507,7 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
     const totalCredit = movements.reduce((s, m) => s + Number(m.credit), 0);
     const endingBalance = roundTo2(openingBalance + totalDebit - totalCredit);
 
-    res.json({
+    res.json(maskFields(req, {
       client,
       period: { from, to: asOf },
       openingBalance: roundTo2(openingBalance),
@@ -527,7 +527,7 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
         total: roundTo2(
           (buckets.current + buckets.d30 + buckets.d60 + buckets.d90 + buckets.d90plus)),
       },
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Customer statement error:");
   }
@@ -613,7 +613,7 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
     const totalCredit = movements.reduce((s, m) => s + Number(m.credit), 0);
     const endingBalance = roundTo2(openingBalance + totalDebit - totalCredit);
 
-    res.json({
+    res.json(maskFields(req, {
       supplier,
       period: { from, to: asOf },
       openingBalance: roundTo2(openingBalance),
@@ -633,7 +633,7 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
         total: roundTo2(
           (buckets.current + buckets.d30 + buckets.d60 + buckets.d90 + buckets.d90plus)),
       },
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Vendor statement error:");
   }
@@ -712,7 +712,7 @@ reportsRouter.get("/reports/entity-statement", authorize({ feature: "finance.rep
     const totalDebit = rows.reduce((s: number, r: Record<string, unknown>) => s + Number(r.debit || 0), 0);
     const totalCredit = rows.reduce((s: number, r: Record<string, unknown>) => s + Number(r.credit || 0), 0);
 
-    res.json({ entityName, entityType, rows, summary: { totalDebit, totalCredit, balance: totalDebit - totalCredit, count: rows.length } });
+    res.json(maskFields(req, { entityName, entityType, rows, summary: { totalDebit, totalCredit, balance: totalDebit - totalCredit, count: rows.length } }));
   } catch (err) {
     handleRouteError(err, res, "Entity statement error:");
   }
@@ -764,14 +764,14 @@ reportsRouter.get("/reports/custody-advances", authorize({ feature: "finance.rep
     const totalCustodies = custodies.reduce((s: number, r: Record<string, unknown>) => s + Number(r.amount), 0);
     const totalAdvances = advances.reduce((s: number, r: Record<string, unknown>) => s + Number(r.amount), 0);
 
-    res.json({
+    res.json(maskFields(req, {
       custodies, advances,
       summary: {
         totalCustodies, custodyCount: custodies.length,
         totalAdvances, advanceCount: advances.length,
         total: totalCustodies + totalAdvances,
       }
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Custody advances report error:");
   }
@@ -817,7 +817,7 @@ reportsRouter.get("/reports/expenses-analysis", authorize({ feature: "finance.re
     );
 
     const total = rows.reduce((s: number, r: Record<string, unknown>) => s + Number(r.amount), 0);
-    res.json({ data: rows, summary: { total, count: rows.length, groupBy } });
+    res.json(maskFields(req, { data: rows, summary: { total, count: rows.length, groupBy } }));
   } catch (err) {
     handleRouteError(err, res, "Expenses analysis error:");
   }
@@ -862,7 +862,7 @@ reportsRouter.get("/reports/revenue-analysis", authorize({ feature: "finance.rep
     );
 
     const totalRevenue = byAccount.reduce((s: number, r: Record<string, unknown>) => s + Number(r.amount), 0);
-    res.json({ byAccount, byMonth, summary: { totalRevenue, accountCount: byAccount.length } });
+    res.json(maskFields(req, { byAccount, byMonth, summary: { totalRevenue, accountCount: byAccount.length } }));
   } catch (err) {
     handleRouteError(err, res, "Revenue analysis error:");
   }
@@ -896,7 +896,7 @@ reportsRouter.get("/reports/budget-variance", authorize({ feature: "finance.repo
     const totalActual = rows.reduce((s: number, r: Record<string, unknown>) => s + Number(r.actual || 0), 0);
     const totalVariance = totalBudget - totalActual;
 
-    res.json({ data: rows, summary: { totalBudget, totalActual, totalVariance, period: targetPeriod } });
+    res.json(maskFields(req, { data: rows, summary: { totalBudget, totalActual, totalVariance, period: targetPeriod } }));
   } catch (err) {
     handleRouteError(err, res, "Budget variance error:");
   }
@@ -940,11 +940,11 @@ reportsRouter.get("/reports/cash-bank-statement", authorize({ feature: "finance.
     const totalDebit = entries.reduce((s: number, e: any) => s + Number(e.debit), 0);
     const totalCredit = entries.reduce((s: number, e: any) => s + Number(e.credit), 0);
 
-    res.json({
+    res.json(maskFields(req, {
       account: accountInfo,
       entries: enriched,
       summary: { totalDebit, totalCredit, closingBalance: runningBalance, count: entries.length }
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Cash bank statement error:");
   }

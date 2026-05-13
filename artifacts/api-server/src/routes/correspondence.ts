@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import {
   handleRouteError,
   ValidationError,
@@ -143,7 +143,7 @@ correspondenceRouter.get("/", authorize({ feature: "communications", action: "li
        LIMIT 200`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "خطأ في جلب المراسلات");
   }
@@ -163,7 +163,7 @@ correspondenceRouter.get("/:id", authorize({ feature: "communications", action: 
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("المراسلة غير موجودة");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) {
     handleRouteError(err, res, "خطأ في جلب المراسلة");
   }
@@ -352,7 +352,7 @@ correspondenceRouter.get("/stats/summary", authorize({ feature: "communications"
        FROM correspondence WHERE "companyId" = $1`,
       [scope.companyId]
     );
-    res.json(stats || {});
+    res.json(maskFields(req, stats || {}));
   } catch (err) {
     handleRouteError(err, res, "خطأ في جلب إحصائيات المراسلات");
   }

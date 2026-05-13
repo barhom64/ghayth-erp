@@ -11,7 +11,7 @@ import {
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { criticalPathLength } from "../lib/algorithms.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import {
@@ -339,7 +339,7 @@ router.get("/", authorize({ feature: "projects.list", action: "list" }), async (
       `SELECT p.*, cl.name AS "clientName", e.name AS "managerName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=p."managerId" AND e."deletedAt" IS NULL WHERE ${where} AND p."deletedAt" IS NULL ORDER BY p.id DESC LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Projects error:"); }
 });
 
@@ -567,7 +567,7 @@ router.get("/:id", authorize({ feature: "projects.list", action: "view", resourc
       delayFinancialImpact = dailyBudget * delayDays;
     }
 
-    res.json({
+    res.json(maskFields(req, {
       ...project,
       phases,
       tasks,
@@ -579,7 +579,7 @@ router.get("/:id", authorize({ feature: "projects.list", action: "view", resourc
       budgetWarning,
       isSlipping: !!isSlipping,
       delayFinancialImpact,
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Get project error:"); }
 });
 
@@ -1221,11 +1221,11 @@ router.get("/stats/summary", authorize({ feature: "projects.list", action: "list
       rawQuery<Record<string, unknown>>(`SELECT COALESCE(SUM(budget),0) as "totalBudget", COALESCE(SUM("spentAmount"),0) as "totalSpent" FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
       rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as count FROM projects WHERE "companyId"=$1 AND "deletedAt" IS NULL AND status='active' AND "endDate" < CURRENT_DATE`, [cid]),
     ]);
-    res.json({
+    res.json(maskFields(req, {
       totalProjects: Number(projects.total), activeProjects: Number(projects.active),
       completedProjects: Number(projects.completed), totalBudget: Number(budget.totalBudget),
       totalSpent: Number(budget.totalSpent), slippingProjects: Number(slipping.count),
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Projects stats error:"); }
 });
 
@@ -1309,7 +1309,7 @@ router.get("/stats/overview", authorize({ feature: "projects.list", action: "lis
       ),
     ]);
 
-    res.json({
+    res.json(maskFields(req, {
       counts: {
         total: Number(counts.total), active: Number(counts.active),
         completed: Number(counts.completed), planning: Number(counts.planning),
@@ -1326,7 +1326,7 @@ router.get("/stats/overview", authorize({ feature: "projects.list", action: "lis
       recentProjects,
       upcomingMilestones,
       openRisks,
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Projects overview error:"); }
 });
 
@@ -1367,7 +1367,7 @@ router.get("/manager/:employeeId/workload", authorize({ feature: "projects.list"
       ),
     ]);
 
-    res.json({
+    res.json(maskFields(req, {
       projects: {
         active: Number(counts.active), onHold: Number(counts.on_hold),
         slipping: Number(counts.slipping),
@@ -1375,7 +1375,7 @@ router.get("/manager/:employeeId/workload", authorize({ feature: "projects.list"
       },
       tasks: { total: Number(taskCounts.total), open: Number(taskCounts.open), overdue: Number(taskCounts.overdue) },
       recent,
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Manager workload error:"); }
 });
 
@@ -1392,7 +1392,7 @@ router.get("/:id/milestones", authorize({ feature: "projects.tasks", action: "li
       `SELECT * FROM project_milestones WHERE "projectId"=$1 AND "companyId"=$2 ORDER BY "targetDate"`,
       [projectId, scope.companyId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "Milestones error:"); }
 });
 
@@ -1559,7 +1559,7 @@ router.get("/:id/risks", authorize({ feature: "projects.tasks", action: "list" }
       `SELECT * FROM project_risks WHERE "projectId"=$1 AND "companyId"=$2 ORDER BY (probability * impact) DESC LIMIT 500`,
       [projectId, scope.companyId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "Project risks error:"); }
 });
 
@@ -1720,7 +1720,7 @@ router.get("/:id/resources", authorize({ feature: "projects.list", action: "list
        ORDER BY pr.id`,
       [projectId, scope.companyId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "Project resources error:"); }
 });
 
@@ -1796,12 +1796,12 @@ router.get("/:id/costs", authorize({ feature: "projects.list", action: "list" })
         [projectId, scope.companyId]
       ),
     ]);
-    res.json({
+    res.json(maskFields(req, {
       data: rows, total: rows.length,
       totalActual: Number(totals?.totalActual || 0),
       budget: Number(project?.budget || 0),
       variance: Number(project?.budget || 0) - Number(totals?.totalActual || 0),
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Project costs error:"); }
 });
 
@@ -2109,10 +2109,10 @@ router.get("/:id/gantt", authorize({ feature: "projects.list", action: "list" })
       })),
     ];
 
-    res.json({
+    res.json(maskFields(req, {
       project: { id: project.id, name: project.name, startDate: project.startDate, endDate: project.endDate, status: project.status },
       rows: ganttRows,
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Gantt data error:"); }
 });
 
@@ -2137,7 +2137,7 @@ router.get("/:id/letters", authorize({ feature: "projects.list", action: "list" 
        LIMIT 50`,
       [scope.companyId, projectId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "Project letters error:"); }
 });
 
