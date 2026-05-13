@@ -8,7 +8,7 @@ import { Router } from "express";
 import { HR_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 
 // Local row shapes for hr_exit_requests + hr_exit_clearance.
 
@@ -207,7 +207,7 @@ router.get("/exit", authorize({ feature: "hr.exit", action: "list" }), async (re
       [scope.companyId]
     );
 
-    res.json({ data, stats: stats ?? {}, total: data.length });
+    res.json(maskFields(req, { data, stats: stats ?? {}, total: data.length }));
   } catch (err) {
     handleRouteError(err, res, "خطأ في قراءة طلبات نهاية الخدمة");
   }
@@ -240,7 +240,7 @@ router.get("/exit/:id", authorize({ feature: "hr.exit", action: "view" }), async
       [item.id, scope.companyId]
     );
 
-    res.json({ ...item, clearance });
+    res.json(maskFields(req, { ...item, clearance }));
   } catch (err) {
     handleRouteError(err, res, "خطأ في قراءة تفاصيل الطلب");
   }

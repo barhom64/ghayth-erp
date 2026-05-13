@@ -6,7 +6,7 @@ import { Router } from "express";
 import { logger } from "../lib/logger.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { sendNotification } from "../lib/notificationService.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { aiEngine } from "../lib/aiEngine.js";
@@ -434,7 +434,7 @@ router.get("/log", authorize({ feature: "communications", action: "list" }), asy
     const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM communications_log WHERE ${where}`, params);
     params.push(pageLimit, pageOffset);
     const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM communications_log WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
-    res.json({ data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset });
+    res.json(maskFields(req, { data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset }));
   } catch (err) { handleRouteError(err, res, "Communications log error:"); }
 });
 
@@ -489,7 +489,7 @@ router.get("/whatsapp", authorize({ feature: "communications", action: "list" })
     const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM whatsapp_queue WHERE ${where}`, params);
     params.push(pageLimit, pageOffset);
     const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM whatsapp_queue WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
-    res.json({ data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset });
+    res.json(maskFields(req, { data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset }));
   } catch (err) { handleRouteError(err, res, "WhatsApp queue error:"); }
 });
 
@@ -506,7 +506,7 @@ router.get("/sms", authorize({ feature: "communications", action: "list" }), asy
     const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM sms_queue WHERE ${where}`, params);
     params.push(pageLimit, pageOffset);
     const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM sms_queue WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
-    res.json({ data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset });
+    res.json(maskFields(req, { data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset }));
   } catch (err) { handleRouteError(err, res, "SMS queue error:"); }
 });
 
@@ -518,7 +518,7 @@ router.get("/pbx", authorize({ feature: "communications", action: "list" }), asy
     const pageOffset = Number(off) || 0;
     const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM pbx_calls WHERE "companyId"=$1`, [scope.companyId]);
     const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM pbx_calls WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT $2 OFFSET $3`, [scope.companyId, pageLimit, pageOffset]);
-    res.json({ data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset });
+    res.json(maskFields(req, { data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset }));
   } catch (err) { handleRouteError(err, res, "PBX calls error:"); }
 });
 
@@ -661,7 +661,7 @@ router.get("/stats", authorize({ feature: "communications", action: "list" }), a
       rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as pending FROM whatsapp_queue WHERE "companyId"=$1 AND status='pending'`, [cid]),
       rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as pending FROM sms_queue WHERE "companyId"=$1 AND status='pending'`, [cid]),
     ]);
-    res.json({
+    res.json(maskFields(req, {
       total: Number(comm.total),
       whatsapp: Number(comm.whatsapp),
       sms: Number(comm.sms),
@@ -669,7 +669,7 @@ router.get("/stats", authorize({ feature: "communications", action: "list" }), a
       pbx: Number(comm.pbx),
       pendingWhatsApp: Number(wa.pending),
       pendingSms: Number(sms.pending),
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Communications stats error:"); }
 });
 
@@ -731,14 +731,14 @@ router.get("/queue-stats", authorize({ feature: "communications", action: "list"
       return m;
     };
 
-    res.json({
+    res.json(maskFields(req, {
       sms: toMap(smsStats),
       whatsapp: toMap(waStats),
       email: toMap(emailStats),
       pushSubscribers: Number(pushCount[0]?.count ?? 0),
       recentSms,
       recentWhatsapp: recentWa,
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Queue stats error:"); }
 });
 

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { handleRouteError, ValidationError, ConflictError,
   parseId,
   zodParse,
@@ -48,7 +48,7 @@ router.get("/dashboards", authorize({ feature: "bi", action: "list" }), async (r
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM bi_dashboards WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
@@ -75,7 +75,7 @@ router.get("/kpis", authorize({ feature: "bi", action: "list" }), async (req, re
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM bi_kpis WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY module, name LIMIT 500`, [scope.companyId]);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
@@ -102,7 +102,7 @@ router.get("/reports", authorize({ feature: "bi", action: "list" }), async (req,
   try {
     const scope = req.scope!;
     const rows = await rawQuery(`SELECT * FROM bi_reports WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY "createdAt" DESC LIMIT 500`, [scope.companyId]);
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
@@ -140,7 +140,7 @@ router.get("/overview", authorize({ feature: "bi", action: "list" }), async (req
          (SELECT COALESCE(SUM("paidAmount"), 0) FROM invoices WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "paidAmount" > 0) AS "totalRevenue"`,
       [cid]
     );
-    res.json({
+    res.json(maskFields(req, {
       employees: Number(row?.employees ?? 0),
       clients: Number(row?.clients ?? 0),
       invoices: Number(row?.invoices ?? 0),
@@ -148,7 +148,7 @@ router.get("/overview", authorize({ feature: "bi", action: "list" }), async (req
       vehicles: Number(row?.vehicles ?? 0),
       openTickets: Number(row?.openTickets ?? 0),
       totalRevenue: Number(row?.totalRevenue ?? 0),
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
@@ -181,7 +181,7 @@ router.get("/operations/sla-delays", authorize({ feature: "bi", action: "list" }
        ORDER BY delayed DESC`,
       params
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "SLA delays"); }
 });
 
@@ -207,7 +207,7 @@ router.get("/operations/rejection-rate", authorize({ feature: "bi", action: "lis
        ORDER BY rejected DESC`,
       params
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "Rejection rate"); }
 });
 
@@ -265,7 +265,7 @@ router.get("/operations/bottleneck", authorize({ feature: "bi", action: "list" }
       approvalParams
     ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
-    res.json({ departmentDelay, approvalBottleneck });
+    res.json(maskFields(req, { departmentDelay, approvalBottleneck }));
   } catch (err) { handleRouteError(err, res, "Bottleneck analysis"); }
 });
 
@@ -314,7 +314,7 @@ router.get("/operations/employee-productivity", authorize({ feature: "bi", actio
        LIMIT 20`,
       params
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "Employee productivity"); }
 });
 
@@ -347,7 +347,7 @@ router.get("/operations/approval-timeliness", authorize({ feature: "bi", action:
        WHERE ${conditions.join(" AND ")}`,
       params
     );
-    res.json(stats || { total: 0, approved: 0, pending: 0, rejected: 0, avgApprovalHours: 0 });
+    res.json(maskFields(req, stats || { total: 0, approved: 0, pending: 0, rejected: 0, avgApprovalHours: 0 }));
   } catch (err) { handleRouteError(err, res, "Approval timeliness"); }
 });
 
@@ -378,7 +378,7 @@ router.get("/operations/avg-completion-time", authorize({ feature: "bi", action:
        ORDER BY "avgHours" DESC`,
       params
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "Avg completion time"); }
 });
 
@@ -410,7 +410,7 @@ router.get("/operations/trend", authorize({ feature: "bi", action: "list" }), as
        ORDER BY week`,
       params
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "Operations trend"); }
 });
 
@@ -466,7 +466,7 @@ router.get("/admin-reports/daily", authorize({ feature: "bi", action: "list" }),
       [cid, date]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{ opened: 0, resolved: 0 }]; });
 
-    res.json({
+    res.json(maskFields(req, {
       date,
       attendance: {
         total: Number(attendance?.total ?? 0),
@@ -489,7 +489,7 @@ router.get("/admin-reports/daily", authorize({ feature: "bi", action: "list" }),
         opened: Number(tickets?.opened ?? 0),
         resolved: Number(tickets?.resolved ?? 0),
       },
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Daily report"); }
 });
 

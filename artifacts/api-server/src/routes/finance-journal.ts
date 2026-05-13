@@ -12,7 +12,7 @@ import { FINANCE_ROLES, OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import {
   emitEvent,
   createAuditLog,
@@ -249,7 +249,7 @@ journalRouter.get("/expenses", authorize({ feature: "finance.journal", action: "
        ORDER BY je."createdAt" DESC LIMIT 100`,
       params
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) {
     logger.error(err, "Get expenses error:");
     res.json({ data: [], total: 0, page: 1, pageSize: 0 });
@@ -656,7 +656,7 @@ journalRouter.get("/vouchers", authorize({ feature: "finance.journal", action: "
        ORDER BY je."createdAt" DESC LIMIT 100`,
       params
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) {
     logger.error(err, "Get vouchers error:");
     res.json({ data: [], total: 0, page: 1, pageSize: 0 });
@@ -681,7 +681,7 @@ journalRouter.get("/vouchers/:id", authorize({ feature: "finance.journal", actio
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("السند غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Get voucher detail error:"); }
 });
 
@@ -831,7 +831,7 @@ journalRouter.get("/salary-advances", authorize({ feature: "finance.journal", ac
   try {
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, je.description, COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt" AS date, 'active' AS status FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'SALARY-ADV%' GROUP BY je.id, je.ref, je.description, je."createdAt" ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId]);
-    res.json({ data: rows, summary: { total: rows.length, totalAmount: rows.reduce((s: number, r) => s + Number(r.amount), 0) } });
+    res.json(maskFields(req, { data: rows, summary: { total: rows.length, totalAmount: rows.reduce((s: number, r) => s + Number(r.amount), 0) } }));
   } catch (err) {
     res.json({ data: [], summary: { total: 0, totalAmount: 0 } });
   }
@@ -853,7 +853,7 @@ journalRouter.get("/salary-advances/:id", authorize({ feature: "finance.journal"
       [id, scope.companyId]
     );
     if (!item) throw new NotFoundError("السلفة غير موجودة");
-    res.json(item);
+    res.json(maskFields(req, item));
   } catch (err) { handleRouteError(err, res, "Get salary advance detail error:"); }
 });
 
@@ -972,7 +972,7 @@ journalRouter.get("/journal", authorize({ feature: "finance.journal", action: "l
        ORDER BY je."createdAt" DESC LIMIT 200`,
       params
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "List journal entries error:"); }
 });
 
@@ -1046,7 +1046,7 @@ journalRouter.get("/journal/:id", authorize({ feature: "finance.journal", action
        ORDER BY jl.id ASC`,
       [id, je.companyId]
     );
-    res.json({
+    res.json(maskFields(req, {
       ...je,
       lines,
       reversalOf: je.reversalOfId
@@ -1055,7 +1055,7 @@ journalRouter.get("/journal/:id", authorize({ feature: "finance.journal", action
       reversedBy: je.reversedById
         ? { id: je.reversedById, ref: je.reversedByRef, description: je.reversedByDescription }
         : null,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Get journal error:");
   }
@@ -1430,7 +1430,7 @@ journalRouter.get("/opening-balances", authorize({ feature: "finance.accounts", 
        ORDER BY je."createdAt" DESC`,
       params
     );
-    res.json({ data: entries, total: entries.length });
+    res.json(maskFields(req, { data: entries, total: entries.length }));
   } catch (err) {
     handleRouteError(err, res, "Get opening balances error:");
   }
