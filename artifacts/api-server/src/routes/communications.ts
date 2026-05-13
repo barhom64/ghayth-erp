@@ -5,7 +5,7 @@ import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, Integ
 import { Router } from "express";
 import { logger } from "../lib/logger.js";
 import { z } from "zod";
-import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { sendNotification } from "../lib/notificationService.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
@@ -219,6 +219,7 @@ router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
            VALUES ($1,$2,$3,'open',$4,NOW())`,
           [companyId, `WhatsApp: ${msgText.substring(0, 100)}`, `${msgText}\n\nمن: ${sender.name} (${from})`, categorized.priority]
         );
+        assertInsert(insertId, "support_tickets");
         relatedType = "support_ticket";
         relatedId = insertId;
       } else if (sender.type === "unknown" && categorized.category === "crm") {
@@ -227,6 +228,7 @@ router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
            VALUES ($1,$2,'lead','active',NOW())`,
           [companyId, `WhatsApp Lead: ${sender.name}`]
         );
+        assertInsert(insertId, "crm_opportunities");
         relatedType = "crm_opportunity";
         relatedId = insertId;
       }
@@ -461,6 +463,7 @@ router.post("/send", authorize({ feature: "communications", action: "create" }),
       `INSERT INTO communications_log ("companyId",channel,direction,"fromNumber","toNumber",subject,body,status,"relatedType","relatedId") VALUES ($1,$2,'outbound',$3,$4,$5,$6,'queued',$7,$8)`,
       [scope.companyId, b.channel.toLowerCase(), b.fromNumber ?? null, b.toNumber ?? b.toEmail, b.subject ?? null, b.body.trim(), b.relatedType ?? null, b.relatedId ?? null]
     );
+    assertInsert(insertId, "communications_log");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM communications_log WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     if (!row) throw new NotFoundError("فشل في استرجاع السجل");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "communications_log", entityId: insertId, after: { channel: b.channel.toLowerCase(), toNumber: b.toNumber ?? b.toEmail } }).catch((e) => logger.error(e, "communications background task failed"));

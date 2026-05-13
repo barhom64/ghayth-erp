@@ -9,7 +9,7 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
@@ -588,6 +588,7 @@ router.post("/units", authorize({ feature: "properties.units", action: "create" 
        b.ownerId || null, b.parkingSpaces || 0, b.acType || null,
        b.hasKitchen || false, b.yearlyRent || null, b.insurancePolicy || null, b.insuranceExpiry || null]
     );
+    assertInsert(insertId, "property_units");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM property_units WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     // The GET /units/:id handler renders a timeline straight from audit_logs
@@ -2233,6 +2234,7 @@ router.post("/maintenance-requests", authorize({ feature: "properties.maintenanc
       `INSERT INTO maintenance_requests ("companyId","unitId","contractId","tenantName",category,description,priority,status,"assignedTo","estimatedCost") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [scope.companyId, b.unitId, b.contractId || null, b.tenantName || null, b.category || null, b.description, autoPriority, assignedTechnicianId ? 'assigned' : 'pending', assignedTechnicianId, b.estimatedCost || 0]
     );
+    assertInsert(insertId, "maintenance_requests");
 
     if (assignedTechnicianId) {
       try {
@@ -2602,6 +2604,7 @@ router.post("/tenants", authorize({ feature: "properties.tenants", action: "crea
        b.emergencyContact || null, b.emergencyName || null, b.maritalStatus || null, b.occupation || null,
        b.monthlyIncome || null, b.previousAddress || null, b.previousLandlord || null, b.previousLandlordPhone || null]
     );
+    assertInsert(insertId, "tenants");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM tenants WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -2763,6 +2766,7 @@ router.post("/buildings", authorize({ feature: "properties.buildings", action: "
        b.deedNumber || null, b.deedDate || null, b.buildingPermitNumber || null, nationalAddress, b.latitude || null, b.longitude || null,
        b.totalUnits || 0, b.totalArea || null, b.yearBuilt || null, b.ownerId || null, b.managerId || null, b.description || b.notes || null]
     );
+    assertInsert(insertId, "property_buildings");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM property_buildings WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -2971,6 +2975,7 @@ router.post("/maintenance", authorize({ feature: "properties.maintenance", actio
       `INSERT INTO maintenance_requests ("companyId","unitId","tenantName",category,description,priority,status) VALUES ($1,$2,$3,$4,$5,$6,'open')`,
       [scope.companyId, b.unitId, b.tenantName, b.category || 'general', b.description, b.priority || 'medium']
     );
+    assertInsert(insertId, "maintenance_requests");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
@@ -3341,6 +3346,7 @@ router.post("/owners", authorize({ feature: "properties.owners", action: "create
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
       [scope.companyId, b.ownerType || 'individual', b.name, b.nationalId || null, b.crNumber || null, b.phone || null, b.email || null, b.iban || null, b.bankName || null, b.address || null, b.city || null, b.authorizationNumber || null, b.authorizationDate || null, b.authorizationExpiry || null, b.notes || null]
     );
+    assertInsert(insertId, "property_owners");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM property_owners WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -3589,6 +3595,7 @@ router.post("/inspections", authorize({ feature: "properties.maintenance", actio
        b.findings ? JSON.stringify(b.findings) : null,
        b.conditionRating || null]
     );
+    assertInsert(insertId, "property_inspections");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM property_inspections WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
@@ -3763,6 +3770,7 @@ router.post("/deposits", authorize({ feature: "properties.payments", action: "cr
        b.receivedDate || todayISO(),
        b.notes || null, b.refundAmount || null, b.refundDate || null, b.refundReason || null]
     );
+    assertInsert(insertId, "property_security_deposits");
 
     // Post the GL entry. If it fails, undo the deposit row — we must never
     // have a 'held' deposit without a corresponding cash/liability posting,

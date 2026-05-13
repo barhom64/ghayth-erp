@@ -8,7 +8,7 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { slaDeadlineForPriority, haversineKm, loadBalanceAssign } from "../lib/algorithms.js";
@@ -284,6 +284,7 @@ router.post("/tickets", authorize({ feature: "support.tickets", action: "create"
       `INSERT INTO support_tickets ("companyId",ref,title,description,category,priority,status,"clientId","assigneeId","slaDeadline") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [scope.companyId, ref, title, b.description, b.category, priority, 'open', b.clientId ?? null, assigneeId, slaResolutionDeadline]
     );
+    assertInsert(insertId, "support_tickets");
     const [row] = await rawQuery<SupportTicketRow>(`SELECT * FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     if (assigneeId) {
@@ -847,6 +848,7 @@ router.post("/kb", authorize({ feature: "support.tickets", action: "create" }), 
       `INSERT INTO kb_articles (title, content, category, tags, status, views, helpful, "notHelpful", "companyId", "createdBy") VALUES ($1,$2,$3,$4,'published',0,0,0,$5,$6)`,
       [title, content || '', category || 'general', tags || null, scope.companyId, scope.userId]
     );
+    assertInsert(insertId, "kb_articles");
     const [row] = await rawQuery<KbArticleRow>(`SELECT * FROM kb_articles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.kb.created", entity: "kb_articles", entityId: insertId, details: JSON.stringify({ title, category: category || 'general' }) }).catch((e) => logger.error(e, "support background task failed"));
     createAuditLog({

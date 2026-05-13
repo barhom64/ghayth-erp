@@ -27,7 +27,7 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { bumpCacheVersion, checkAccess } from "../lib/rbac/authzEngine.js";
@@ -969,6 +969,7 @@ router.post("/jit/request", async (req, res) => {
        RETURNING id`,
       [scope.userId, scope.companyId, body.featureKey, body.action, body.scope, body.justification, body.requestedMinutes]
     );
+    assertInsert(insertId, "rbac_jit_requests");
     res.status(201).json({ id: insertId, status: "pending" });
   } catch (err) {
     handleRouteError(err, res, "create JIT request");

@@ -7,7 +7,7 @@
 import { Router } from "express";
 import { HR_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 
 // Local row shapes — hr_overtime_requests not in @workspace/db schema.
@@ -308,6 +308,7 @@ router.post("/overtime", authorize({ feature: "hr.overtime", action: "create" })
         b.reason || null, period,
       ]
     );
+    assertInsert(insertId, "hr_overtime_requests");
 
     // ── سلسلة الموافقات ──
     const approvalResult = await initiateApprovalChain({

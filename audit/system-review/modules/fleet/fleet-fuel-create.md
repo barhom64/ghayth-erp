@@ -27,13 +27,49 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/fleet.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+تسجيل تعبئة وقود — fuel log entry.
+
+| الحقل | المتطلب |
+|------|--------|
+| Vehicle | FK | إجباري |
+| Driver | FK | إجباري |
+| Date | timestamp | إجباري |
+| Odometer reading | km | إجباري + تحقق increasing |
+| Liters | quantity | إجباري |
+| Price per liter | currency | إجباري |
+| Total amount | calculated or manual | إجباري |
+| Station | name + location | optional |
+| Receipt photo | proof | إجباري لـ > X SAR |
+| Payment method | cash/card/account | enum |
+| Fuel card (لو موجود) | linked | راجع `fleet-fuel-cards.md` |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| Record fuel | POST `/fleet/fuel` | `fuel_logs` | ✅ |
+| Validate odometer | server-side | new reading > previous | ✅ critical |
+| Validate consumption sanity | flag if too low/high | manager review | ⚠ |
+| Validate driver assigned to vehicle | per `fleet-drivers.md` | ✅ |
+| Auto-calculate consumption (km/L) | from prev fuel record | KPI | ✅ |
+| Detect anomalies (sudden drop in efficiency) | event=`fuel_anomaly` | راجع `notifications.md` | ⚠ |
+| GL entry — fuel expense | Dr Fuel Expense / Cr Cash/AP | راجع `finance-expenses.md` | ✅ critical |
+| Allocate to project (لو vehicle مشغل على project) | راجع `projects.md` | ⚠ |
+| Allocate to department | per `cost_centers` | ✅ |
+| Charge to client (لو rental vehicle) | invoicing | راجع `finance-invoices.md` | ⚠ |
+| Fuel card reconciliation | matching | راجع `fleet-fuel-cards.md` | ⚠ |
+| Photo storage | راجع `documents.md` | ✅ |
+| تكامل مع `finance-expenses.md` | direct expense | ✅ critical |
+| تكامل مع `bi-kpis.md` (km/L, cost/km) | ✅ |
+| تكامل مع `fleet-byid.md` (history) | ✅ |
+| Audit log إجباري | كل entry | `audit_logs` | ✅ |
+| RBAC | driver self-report + fleet manager review | ⚠ |
+
+تحقق يدوي:
+- [ ] هل odometer reading mandatory + validated (لا decrease)?
+- [ ] هل consumption anomaly detection شغّال (لكشف fraud)?
+- [ ] هل receipt photo mandatory لمنع false claims?
+- [ ] هل fuel card transactions reconciled monthly مع بنك الـ statement?
+- [ ] هل allocation للـ project/department تلقائي حسب trip log?
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `create` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

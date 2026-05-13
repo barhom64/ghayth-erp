@@ -7,7 +7,7 @@
 import { Router } from "express";
 import { LOAN_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
-import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 
 // Local row shapes — hr_employee_loans / hr_loan_installments not in
@@ -344,6 +344,7 @@ router.post("/loans", authorize({ feature: "hr.loans", action: "create" }), asyn
         b.reason || null, startPeriod,
       ]
     );
+    assertInsert(insertId, "hr_employee_loans");
 
     // ── سلسلة الموافقات ──
     const approvalResult = await initiateApprovalChain({
