@@ -30,6 +30,7 @@ import { submitWorkflow } from "../lib/workflowEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation } from "../lib/obligationsEngine.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { markIdempotencyReplay } from "../lib/requestIdempotency.js";
 import { z } from "zod";
 
 export const purchaseRouter = Router();
@@ -776,6 +777,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
       guardId: grnId,
     });
     journalId = grnJournalResult.journalId;
+    markIdempotencyReplay(req, res, grnJournalResult.alreadyExists);
     if (journalId) {
       await rawExecute(`UPDATE goods_receipts SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [journalId, grnId, scope.companyId]);
     }
@@ -1119,6 +1121,7 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
       guardId: runId ?? 0,
     });
     journalId = paymentRunJournalResult.journalId;
+    markIdempotencyReplay(req, res, paymentRunJournalResult.alreadyExists);
     if (journalId && runId) {
       await rawExecute(`UPDATE payment_runs SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, runId, scope.companyId]);
     }
@@ -1499,7 +1502,7 @@ purchaseRouter.post("/purchase-orders/:id/schedule-payment", authorize({ feature
     const { financialEngine } = await import("../lib/engines/index.js");
     const schedApCode = await financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2100");
     const schedCashCode = await financialEngine.resolveAccountCode(scope.companyId, "payroll_bank_payout", "credit", "1100");
-    await financialEngine.postJournalEntry({
+    const schedResult = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
       createdBy: scope.activeAssignmentId,
@@ -1513,6 +1516,7 @@ purchaseRouter.post("/purchase-orders/:id/schedule-payment", authorize({ feature
         { accountCode: schedCashCode, debit: 0, credit: Number(amount), vendorId: po.supplierId as number | undefined },
       ],
     });
+    markIdempotencyReplay(req, res, schedResult.alreadyExists);
 
     const schedNote = ` | دفعة مجدولة ${paymentDate}: ${amount} (${method})`;
     await applyTransition({

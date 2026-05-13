@@ -17,7 +17,7 @@ import {
   emitEvent,
   todayISO,
 } from "../lib/businessHelpers.js";
-import { requestIdempotencyToken } from "../lib/requestIdempotency.js";
+import { requestIdempotencyToken, markIdempotencyReplay } from "../lib/requestIdempotency.js";
 
 import { pushToDLQ } from "../lib/eventBus.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -327,7 +327,7 @@ financeHardeningRouter.post("/journal-manual", authorize({ feature: "finance.har
     const idempotencyToken = requestIdempotencyToken(req);
     const ref = `MJE-${idempotencyToken}`;
     const { financialEngine } = await import("../lib/engines/index.js");
-    const { journalId } = await financialEngine.postJournalEntry({
+    const { journalId, alreadyExists } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
       createdBy: scope.activeAssignmentId,
@@ -343,6 +343,7 @@ financeHardeningRouter.post("/journal-manual", authorize({ feature: "finance.har
         costCenter: costCenter ?? null,
       },
     });
+    markIdempotencyReplay(req, res, alreadyExists);
 
     emitEvent({
       companyId: scope.companyId,
@@ -969,14 +970,15 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
       });
     }
 
-    const ref = `IC-${Date.now()}`;
+    const idempotencyToken = requestIdempotencyToken(req);
+    const ref = `IC-${idempotencyToken}`;
     const txDate = transactionDate ?? todayISO();
 
     const { financialEngine } = await import("../lib/engines/index.js");
 
     // postJournalEntry manages its own transaction internally, so we use a
     // compensating-reversal pattern: if the second post fails we soft-delete the first.
-    const fromTimestamp = Date.now();
+    // The idempotency token anchors both legs so a retry collapses onto the same pair.
     const fromResult = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -986,14 +988,15 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
       type: "intercompany",
       sourceType: "intercompany",
       sourceId: 0,
-      sourceKey: `finance:intercompany:from:${fromTimestamp}`,
+      sourceKey: `finance:intercompany:from:${idempotencyToken}`,
       lines: [
         { accountCode: arAccountCode, debit: Number(amount), credit: 0, description: "ذمم مدينة شركة شقيقة" },
         { accountCode: revenueAccountCode, debit: 0, credit: Number(amount), description: "إيراد شركة شقيقة" },
       ],
     });
+    markIdempotencyReplay(req, res, fromResult.alreadyExists);
 
-    let toResult: { journalId: number };
+    let toResult: { journalId: number; alreadyExists: boolean };
     try {
       toResult = await financialEngine.postJournalEntry({
         companyId: Number(toCompanyId),
@@ -1004,7 +1007,7 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
         type: "intercompany",
         sourceType: "intercompany",
         sourceId: 0,
-        sourceKey: `finance:intercompany:to:${fromTimestamp}`,
+        sourceKey: `finance:intercompany:to:${idempotencyToken}`,
         lines: [
           { accountCode: expenseAccountCode, debit: Number(amount), credit: 0, description: "مصروف شركة شقيقة" },
           { accountCode: apAccountCode, debit: 0, credit: Number(amount), description: "ذمم دائنة شركة شقيقة" },
