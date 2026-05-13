@@ -150,7 +150,7 @@ export default function PropertiesBuildings() {
               <div
                 className={cn(
                   "h-full rounded-full transition-all",
-                  occupancy >= 80 ? "bg-emerald-500" : occupancy >= 50 ? "bg-amber-500" : "bg-red-400"
+                  occupancy >= 80 ? "bg-emerald-500" : occupancy >= 50 ? "bg-status-warning-surface0" : "bg-red-400"
                 )}
                 style={{ width: `${occupancy}%` }}
               />

@@ -132,8 +132,8 @@ export function MultiExportButton({ exports: exportItems, label = "تصدير" }
         {exportItems.map((item, i) => (
           <DropdownMenuItem key={i} onClick={() => handleExport(item)} className="gap-2">
             {item.type === "excel"
-              ? <FileSpreadsheet className="h-4 w-4 text-green-600" />
-              : <FileText className="h-4 w-4 text-red-600" />}
+              ? <FileSpreadsheet className="h-4 w-4 text-status-success-foreground" />
+              : <FileText className="h-4 w-4 text-status-error-foreground" />}
             {item.label}
           </DropdownMenuItem>
         ))}

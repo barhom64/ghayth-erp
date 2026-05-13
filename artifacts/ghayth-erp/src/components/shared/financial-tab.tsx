@@ -70,7 +70,7 @@ export function FinancialTab({ entityType, entityId, sections }: FinancialTabPro
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h4 className="text-base font-semibold flex items-center gap-2">
-          <BookOpen className="h-4 w-4 text-blue-600" />
+          <BookOpen className="h-4 w-4 text-status-info-foreground" />
           دفتر الأستاذ المساعد
         </h4>
         <div className="flex gap-2 items-center flex-wrap">
@@ -85,23 +85,23 @@ export function FinancialTab({ entityType, entityId, sections }: FinancialTabPro
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {summary.totalDebit !== undefined && (
           <Card><CardContent className="p-3 text-center">
-            <TrendingUp className="h-4 w-4 text-green-600 mx-auto mb-1" />
-            <p className="text-xs text-gray-500">إجمالي المدين</p>
-            <p className="text-lg font-bold text-green-600">{formatCurrency(Number(summary.totalDebit || 0))}</p>
+            <TrendingUp className="h-4 w-4 text-status-success-foreground mx-auto mb-1" />
+            <p className="text-xs text-muted-foreground">إجمالي المدين</p>
+            <p className="text-lg font-bold text-status-success-foreground">{formatCurrency(Number(summary.totalDebit || 0))}</p>
           </CardContent></Card>
         )}
         {summary.totalCredit !== undefined && (
           <Card><CardContent className="p-3 text-center">
-            <TrendingDown className="h-4 w-4 text-red-600 mx-auto mb-1" />
-            <p className="text-xs text-gray-500">إجمالي الدائن</p>
-            <p className="text-lg font-bold text-red-600">{formatCurrency(Number(summary.totalCredit || 0))}</p>
+            <TrendingDown className="h-4 w-4 text-status-error-foreground mx-auto mb-1" />
+            <p className="text-xs text-muted-foreground">إجمالي الدائن</p>
+            <p className="text-lg font-bold text-status-error-foreground">{formatCurrency(Number(summary.totalCredit || 0))}</p>
           </CardContent></Card>
         )}
         {summary.netBalance !== undefined && (
-          <Card className={Number(summary.netBalance) >= 0 ? "bg-green-50" : "bg-red-50"}>
+          <Card className={Number(summary.netBalance) >= 0 ? "bg-status-success-surface" : "bg-status-error-surface"}>
             <CardContent className="p-3 text-center">
               <DollarSign className="h-4 w-4 mx-auto mb-1" style={{ color: Number(summary.netBalance) >= 0 ? "#16a34a" : "#dc2626" }} />
-              <p className="text-xs text-gray-500">صافي الرصيد</p>
+              <p className="text-xs text-muted-foreground">صافي الرصيد</p>
               <p className="text-lg font-bold" style={{ color: Number(summary.netBalance) >= 0 ? "#16a34a" : "#dc2626" }}>
                 {formatCurrency(Number(summary.netBalance))}
               </p>
@@ -109,8 +109,8 @@ export function FinancialTab({ entityType, entityId, sections }: FinancialTabPro
           </Card>
         )}
         <Card><CardContent className="p-3 text-center">
-          <BookOpen className="h-4 w-4 text-blue-600 mx-auto mb-1" />
-          <p className="text-xs text-gray-500">عدد الحركات</p>
+          <BookOpen className="h-4 w-4 text-status-info-foreground mx-auto mb-1" />
+          <p className="text-xs text-muted-foreground">عدد الحركات</p>
           <p className="text-lg font-bold">{movements.length}</p>
         </CardContent></Card>
       </div>
@@ -119,9 +119,9 @@ export function FinancialTab({ entityType, entityId, sections }: FinancialTabPro
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
           {Object.entries(sectionData).map(([key, val]: [string, any]) => (
             <Card key={key}><CardContent className="p-3">
-              <p className="text-xs text-gray-500 mb-1">{val.label}</p>
+              <p className="text-xs text-muted-foreground mb-1">{val.label}</p>
               <p className="text-base font-bold">{formatCurrency(Number(val.amount || 0))}</p>
-              {val.count !== undefined && <p className="text-xs text-gray-400">{val.count} سجل</p>}
+              {val.count !== undefined && <p className="text-xs text-muted-foreground">{val.count} سجل</p>}
             </CardContent></Card>
           ))}
         </div>
@@ -135,7 +135,7 @@ export function FinancialTab({ entityType, entityId, sections }: FinancialTabPro
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b bg-gray-50">
+                <tr className="border-b bg-surface-subtle">
                   <th className="p-3 text-start">التاريخ</th>
                   <th className="p-3 text-start">المرجع</th>
                   <th className="p-3 text-start">الوصف</th>
@@ -148,26 +148,26 @@ export function FinancialTab({ entityType, entityId, sections }: FinancialTabPro
               <tbody>
                 {movements.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-12 text-center text-gray-400">
+                    <td colSpan={7} className="p-12 text-center text-muted-foreground">
                       <BookOpen className="h-10 w-10 mx-auto mb-2 opacity-30" />
                       <p>لا توجد حركات مالية مرتبطة بهذا الكيان</p>
                     </td>
                   </tr>
                 ) : (
                   movements.map((m: any, i: number) => (
-                    <tr key={m.id || i} className="border-b hover:bg-gray-50">
-                      <td className="p-3 text-gray-500 text-xs whitespace-nowrap">{m.date ? formatDateAr(m.date) : "-"}</td>
-                      <td className="p-3 font-mono text-blue-600 text-xs">{m.ref || "-"}</td>
+                    <tr key={m.id || i} className="border-b hover:bg-surface-subtle">
+                      <td className="p-3 text-muted-foreground text-xs whitespace-nowrap">{m.date ? formatDateAr(m.date) : "-"}</td>
+                      <td className="p-3 font-mono text-status-info-foreground text-xs">{m.ref || "-"}</td>
                       <td className="p-3 text-sm">{m.description || "-"}</td>
                       <td className="p-3">
                         {m.movementType && (
                           <Badge variant="outline" className="text-[10px]">{m.movementType}</Badge>
                         )}
                       </td>
-                      <td className="p-3 text-green-600 font-medium">
+                      <td className="p-3 text-status-success-foreground font-medium">
                         {Number(m.debit || 0) > 0 ? formatCurrency(Number(m.debit)) : "-"}
                       </td>
-                      <td className="p-3 text-red-600 font-medium">
+                      <td className="p-3 text-status-error-foreground font-medium">
                         {Number(m.credit || 0) > 0 ? formatCurrency(Number(m.credit)) : "-"}
                       </td>
                       <td className="p-3 font-bold text-xs" style={{ color: Number(m.runningBalance) >= 0 ? "#16a34a" : "#dc2626" }}>

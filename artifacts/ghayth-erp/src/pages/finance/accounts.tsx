@@ -80,7 +80,7 @@ function AccountNode({ node, level = 0, highlightIds, onEdit, onDelete }: { node
           <button onClick={() => onEdit(node)} className="p-1 rounded hover:bg-status-info-surface text-muted-foreground hover:text-status-info-foreground" title="تعديل">
             <Edit2 className="h-3.5 w-3.5" />
           </button>
-          <button onClick={() => onDelete(node)} className="p-1 rounded hover:bg-red-100 text-muted-foreground hover:text-red-600" title="حذف">
+          <button onClick={() => onDelete(node)} className="p-1 rounded hover:bg-red-100 text-muted-foreground hover:text-status-error-foreground" title="حذف">
             <Trash2 className="h-3.5 w-3.5" />
           </button>
         </div>

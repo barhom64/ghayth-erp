@@ -384,11 +384,11 @@ export const STATUS_MAP = {
 export type StatusDomain = keyof typeof STATUS_MAP;
 
 const TONE_CLASS: Record<StatusTone, string> = {
-  neutral:  "bg-gray-100 text-gray-700 border-gray-200",
-  info:     "bg-blue-50 text-blue-700 border-blue-200",
+  neutral:  "bg-gray-100 text-gray-700 border-border",
+  info:     "bg-status-info-surface text-status-info-foreground border-status-info-surface",
   success:  "bg-emerald-50 text-emerald-700 border-emerald-200",
-  warning:  "bg-amber-50 text-amber-800 border-amber-200",
-  danger:   "bg-red-50 text-red-700 border-red-200",
+  warning:  "bg-status-warning-surface text-status-warning-foreground border-status-warning-surface",
+  danger:   "bg-status-error-surface text-status-error-foreground border-status-error-surface",
   progress: "bg-indigo-50 text-indigo-700 border-indigo-200",
   muted:    "bg-slate-50 text-slate-600 border-slate-200",
 };

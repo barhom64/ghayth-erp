@@ -105,7 +105,7 @@ export function Autocomplete({
           }
         }}
       >
-        <Search className="h-4 w-4 text-gray-400 flex-shrink-0" />
+        <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" />
         {isOpen ? (
           <input
             ref={inputRef}
@@ -120,13 +120,13 @@ export function Autocomplete({
             {selectedOption ? selectedOption.label : placeholder}
           </span>
         )}
-        {loading && <Loader2 className="h-4 w-4 text-gray-400 animate-spin" />}
+        {loading && <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" />}
         {value && !loading && (
-          <button type="button" onClick={handleClear} className="text-gray-400 hover:text-gray-600">
+          <button type="button" onClick={handleClear} className="text-muted-foreground hover:text-muted-foreground">
             <X className="h-3.5 w-3.5" />
           </button>
         )}
-        {!value && !loading && <ChevronDown className="h-3.5 w-3.5 text-gray-400" />}
+        {!value && !loading && <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
       </div>
 
       {isOpen && (
@@ -139,7 +139,7 @@ export function Autocomplete({
                 key={option.value}
                 type="button"
                 className={cn(
-                  "w-full text-start px-3 py-2 text-sm hover:bg-gray-50 transition-colors",
+                  "w-full text-start px-3 py-2 text-sm hover:bg-surface-subtle transition-colors",
                   String(option.value) === String(value) && "bg-primary/5 text-primary"
                 )}
                 onClick={() => handleSelect(option)}

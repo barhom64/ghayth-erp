@@ -304,7 +304,7 @@ export default function UnitDetail() {
                     <span className="font-bold">{collectionRate}%</span>
                   </div>
                   <div className="h-2 bg-surface-subtle rounded-full overflow-hidden">
-                    <div className={cn("h-full rounded-full transition-all", collectionRate >= 80 ? "bg-emerald-500" : collectionRate >= 50 ? "bg-amber-500" : "bg-red-500")} style={{ width: `${Math.min(collectionRate, 100)}%` }} />
+                    <div className={cn("h-full rounded-full transition-all", collectionRate >= 80 ? "bg-emerald-500" : collectionRate >= 50 ? "bg-status-warning-surface0" : "bg-status-error-surface0")} style={{ width: `${Math.min(collectionRate, 100)}%` }} />
                   </div>
                 </div>
               )}
@@ -440,7 +440,7 @@ export default function UnitDetail() {
                     return (
                       <div key={p.id || idx} className={cn("flex items-center justify-between p-2 rounded-lg border text-sm", paid ? "border-status-success-surface bg-status-success-surface" : "border-border")}>
                         <div className="flex items-center gap-2">
-                          <div className={cn("w-2 h-2 rounded-full", paid ? "bg-green-500" : "bg-gray-400")} />
+                          <div className={cn("w-2 h-2 rounded-full", paid ? "bg-status-success-surface0" : "bg-gray-400")} />
                           <div>
                             <p className="text-xs">{p.tenantName || "مستأجر"}</p>
                             <p className="text-[10px] text-muted-foreground">{formatDateAr(p.dueDate)}</p>
@@ -469,7 +469,7 @@ export default function UnitDetail() {
                 <div className="relative pr-4">
                   {contracts.slice(0, 5).map((c: any, idx: number) => (
                     <div key={c.id || idx} className="relative flex gap-3 pb-4 last:pb-0">
-                      <div className="absolute right-0 top-1 w-2 h-2 rounded-full bg-blue-500" />
+                      <div className="absolute right-0 top-1 w-2 h-2 rounded-full bg-status-info-surface0" />
                       {idx < Math.min(contracts.length, 5) - 1 && <div className="absolute right-[3px] top-3 w-0.5 h-full bg-blue-200" />}
                       <div className="mr-4 flex-1 flex items-center justify-between">
                         <div>

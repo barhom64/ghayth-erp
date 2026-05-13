@@ -65,11 +65,11 @@ export type EntityDetailPageProps = {
 };
 
 const STATUS_VARIANT_CLS: Record<string, string> = {
-  default: "bg-gray-100 text-gray-700 border-gray-200",
-  success: "bg-green-100 text-green-700 border-green-200",
+  default: "bg-gray-100 text-gray-700 border-border",
+  success: "bg-green-100 text-status-success-foreground border-status-success-surface",
   warning: "bg-yellow-100 text-yellow-700 border-yellow-200",
-  destructive: "bg-red-100 text-red-700 border-red-200",
-  info: "bg-blue-100 text-blue-700 border-blue-200",
+  destructive: "bg-red-100 text-status-error-foreground border-status-error-surface",
+  info: "bg-blue-100 text-status-info-foreground border-status-info-surface",
 };
 
 function HeaderSkeleton() {
@@ -125,11 +125,11 @@ export function EntityDetailPage(props: EntityDetailPageProps) {
             {backLabel}
           </Button>
         </Link>
-        <Card className="border-red-200">
+        <Card className="border-status-error-surface">
           <CardContent className="p-10 flex flex-col items-center text-center gap-3">
             <AlertCircle className="h-10 w-10 text-red-500" />
-            <p className="text-lg font-semibold text-red-700">حدث خطأ</p>
-            <p className="text-sm text-gray-500">{errorMessage || "تعذر تحميل البيانات"}</p>
+            <p className="text-lg font-semibold text-status-error-foreground">حدث خطأ</p>
+            <p className="text-sm text-muted-foreground">{errorMessage || "تعذر تحميل البيانات"}</p>
             {onRetry && (
               <Button variant="outline" size="sm" onClick={onRetry} className="gap-1">
                 <RotateCcw className="h-4 w-4" />
@@ -192,7 +192,7 @@ export function EntityDetailPage(props: EntityDetailPageProps) {
                     )}
                     {badges}
                   </div>
-                  {subtitle && <p className="text-sm text-gray-500 mt-1">{subtitle}</p>}
+                  {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}
                   {metaItems && metaItems.length > 0 && (
                     <div className="flex flex-wrap items-center gap-2 mt-3">
                       {metaItems.map((m, i) => {
@@ -200,9 +200,9 @@ export function EntityDetailPage(props: EntityDetailPageProps) {
                         return (
                           <div
                             key={i}
-                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-50 border border-gray-100 text-xs text-gray-600"
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-subtle border border-border text-xs text-muted-foreground"
                           >
-                            <Icon className="h-3.5 w-3.5 text-gray-400" />
+                            <Icon className="h-3.5 w-3.5 text-muted-foreground" />
                             <span>{m.label}</span>
                           </div>
                         );
@@ -251,13 +251,13 @@ export function EntityDetailPage(props: EntityDetailPageProps) {
                 <Card key={i} className="border-0 shadow-sm">
                   <CardContent className="p-4 flex items-center gap-3">
                     {Icon && (
-                      <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center", k.color || "text-blue-600 bg-blue-50")}>
+                      <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center", k.color || "text-status-info-foreground bg-status-info-surface")}>
                         <Icon className="h-5 w-5" />
                       </div>
                     )}
                     <div className="min-w-0">
                       <p className="text-xl font-bold truncate">{k.value}</p>
-                      <p className="text-xs text-gray-500 truncate">{k.label}</p>
+                      <p className="text-xs text-muted-foreground truncate">{k.label}</p>
                     </div>
                   </CardContent>
                 </Card>

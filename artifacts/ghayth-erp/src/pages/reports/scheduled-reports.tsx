@@ -192,7 +192,7 @@ export default function ScheduledReportsPage() {
                   <p className="p-6 text-center text-muted-foreground">لا يوجد سجل إرسال</p>
                 ) : history.map((h: any) => (
                   <div key={h.id} className="p-3 flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${h.status === "sent" ? "bg-green-500" : "bg-red-500"}`} />
+                    <div className={`w-2 h-2 rounded-full ${h.status === "sent" ? "bg-status-success-surface0" : "bg-status-error-surface0"}`} />
                     <div className="flex-1">
                       <p className="text-sm font-medium">{h.reportTitle}</p>
                       <p className="text-xs text-muted-foreground">{h.sentAt ? formatDateAr(h.sentAt) : "-"}</p>

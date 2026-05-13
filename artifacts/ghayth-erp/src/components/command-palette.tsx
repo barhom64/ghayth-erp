@@ -104,11 +104,11 @@ const ENTITY_ICON_MAP: Record<string, any> = {
   "تذاكر دعم": Headphones,
 };
 const ENTITY_COLOR_MAP: Record<string, string> = {
-  "موظفين": "text-blue-600 bg-blue-50",
-  "عملاء": "text-green-600 bg-green-50",
+  "موظفين": "text-status-info-foreground bg-status-info-surface",
+  "عملاء": "text-status-success-foreground bg-status-success-surface",
   "مركبات": "text-purple-600 bg-purple-50",
   "وحدات عقارية": "text-emerald-600 bg-emerald-50",
-  "تذاكر دعم": "text-red-600 bg-red-50",
+  "تذاكر دعم": "text-status-error-foreground bg-status-error-surface",
 };
 
 export function CommandPalette({ open, onClose, initialFilter }: CommandPaletteProps) {
@@ -129,7 +129,7 @@ export function CommandPalette({ open, onClose, initialFilter }: CommandPaletteP
       id: "add-employee",
       label: "إضافة موظف جديد",
       icon: UserPlus,
-      iconColor: "text-blue-600 bg-blue-50",
+      iconColor: "text-status-info-foreground bg-status-info-surface",
       category: "إجراءات سريعة",
       action: () => { navigate("/employees/create"); onClose(); },
       keywords: ["موظف", "تعيين", "جديد", "إضافة"],
@@ -183,7 +183,7 @@ export function CommandPalette({ open, onClose, initialFilter }: CommandPaletteP
       id: "approve-leaves",
       label: "اعتماد طلبات الإجازة",
       icon: ClipboardCheck,
-      iconColor: "text-green-600 bg-green-50",
+      iconColor: "text-status-success-foreground bg-status-success-surface",
       category: "إجراءات سريعة",
       action: () => { navigate("/hr/leaves?tab=pending"); onClose(); },
       keywords: ["اعتماد", "موافقة", "إجازات"],
@@ -191,11 +191,11 @@ export function CommandPalette({ open, onClose, initialFilter }: CommandPaletteP
   ], [navigate]);
 
   const shortcuts: CommandItem[] = useMemo(() => [
-    { id: "sh-employees", label: "الموظفين", subtitle: "Alt+E", icon: Users, iconColor: "text-blue-500 bg-blue-50", category: "اختصارات لوحة المفاتيح", action: () => { navigate("/employees"); onClose(); }, keywords: ["اختصار", "موظفين"] },
+    { id: "sh-employees", label: "الموظفين", subtitle: "Alt+E", icon: Users, iconColor: "text-blue-500 bg-status-info-surface", category: "اختصارات لوحة المفاتيح", action: () => { navigate("/employees"); onClose(); }, keywords: ["اختصار", "موظفين"] },
     { id: "sh-attendance", label: "الحضور والانصراف", subtitle: "Alt+A", icon: Clock, iconColor: "text-purple-500 bg-purple-50", category: "اختصارات لوحة المفاتيح", action: () => { navigate("/hr/attendance"); onClose(); }, keywords: ["اختصار", "حضور"] },
     { id: "sh-leaves", label: "الإجازات", subtitle: "Alt+L", icon: Calendar, iconColor: "text-emerald-500 bg-emerald-50", category: "اختصارات لوحة المفاتيح", action: () => { navigate("/hr/leaves"); onClose(); }, keywords: ["اختصار", "إجازات"] },
     { id: "sh-payroll", label: "الرواتب", subtitle: "Alt+P", icon: DollarSign, iconColor: "text-orange-500 bg-orange-50", category: "اختصارات لوحة المفاتيح", action: () => { navigate("/hr/payroll"); onClose(); }, keywords: ["اختصار", "رواتب"] },
-    { id: "sh-help", label: "لوحة الأوامر", subtitle: "Ctrl+K", icon: Keyboard, iconColor: "text-gray-500 bg-gray-50", category: "اختصارات لوحة المفاتيح", action: () => {}, keywords: ["اختصار", "مساعدة"] },
+    { id: "sh-help", label: "لوحة الأوامر", subtitle: "Ctrl+K", icon: Keyboard, iconColor: "text-muted-foreground bg-surface-subtle", category: "اختصارات لوحة المفاتيح", action: () => {}, keywords: ["اختصار", "مساعدة"] },
   ], [navigate]);
 
   const pageItems: CommandItem[] = useMemo(() => {
@@ -270,7 +270,7 @@ export function CommandPalette({ open, onClose, initialFilter }: CommandPaletteP
         const data = await apiFetch<{ results: any[] }>(`/search?q=${encodeURIComponent(query)}`);
         const items: CommandItem[] = (data.results || []).slice(0, 12).map((r: any, i: number) => {
           const Icon = ENTITY_ICON_MAP[r.category] || Users;
-          const color = ENTITY_COLOR_MAP[r.category] || "text-gray-600 bg-gray-50";
+          const color = ENTITY_COLOR_MAP[r.category] || "text-muted-foreground bg-surface-subtle";
           return {
             id: `api-${i}-${r.category}`,
             label: r.name || r.title || r.ref || "—",
@@ -338,37 +338,37 @@ export function CommandPalette({ open, onClose, initialFilter }: CommandPaletteP
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[10vh]" dir="rtl">
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-xl mx-4 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[70vh]">
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100">
-          <Search className="h-4 w-4 text-gray-400 shrink-0" />
+      <div className="relative w-full max-w-xl mx-4 bg-white rounded-2xl shadow-2xl border border-border overflow-hidden flex flex-col max-h-[70vh]">
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+          <Search className="h-4 w-4 text-muted-foreground shrink-0" />
           <input
             ref={inputRef}
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="ابحث في الصفحات، الموظفين، والإجراءات..."
-            className="flex-1 text-sm bg-transparent outline-none text-gray-900 placeholder:text-gray-400"
+            className="flex-1 text-sm bg-transparent outline-none text-gray-900 placeholder:text-muted-foreground"
           />
-          {isLoadingApi && <Loader2 className="h-4 w-4 text-gray-400 animate-spin shrink-0" />}
+          {isLoadingApi && <Loader2 className="h-4 w-4 text-muted-foreground animate-spin shrink-0" />}
           {query && !isLoadingApi && (
             <button onClick={() => { setQuery(""); setApiResults([]); }} className="shrink-0">
-              <X className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+              <X className="h-4 w-4 text-muted-foreground hover:text-muted-foreground" />
             </button>
           )}
-          <kbd className="hidden sm:flex items-center gap-1 shrink-0 px-1.5 py-0.5 text-[10px] text-gray-400 bg-gray-100 rounded border border-gray-200">إغلاق</kbd>
+          <kbd className="hidden sm:flex items-center gap-1 shrink-0 px-1.5 py-0.5 text-[10px] text-muted-foreground bg-gray-100 rounded border border-border">إغلاق</kbd>
         </div>
 
         <div ref={listRef} className="overflow-y-auto flex-1 py-1">
           {allFiltered.length === 0 ? (
             query ? (
-              <div className="py-10 text-center text-sm text-gray-400">
+              <div className="py-10 text-center text-sm text-muted-foreground">
                 لا توجد نتائج لـ "{query}"
               </div>
             ) : null
           ) : (
             Object.entries(grouped).map(([category, items]) => (
               <div key={category}>
-                <div className="px-3 py-1.5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider sticky top-0 bg-white/95 backdrop-blur-sm">
+                <div className="px-3 py-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider sticky top-0 bg-white/95 backdrop-blur-sm">
                   {category}
                 </div>
                 {items.map(item => {
@@ -381,7 +381,7 @@ export function CommandPalette({ open, onClose, initialFilter }: CommandPaletteP
                       onMouseEnter={() => setSelectedIndex(idx)}
                       className={cn(
                         "w-full flex items-center gap-3 px-3 py-2.5 text-right transition-colors",
-                        isSelected ? "bg-blue-50" : "hover:bg-gray-50"
+                        isSelected ? "bg-status-info-surface" : "hover:bg-surface-subtle"
                       )}
                     >
                       <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0", item.iconColor)}>
@@ -390,7 +390,7 @@ export function CommandPalette({ open, onClose, initialFilter }: CommandPaletteP
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-900 truncate">{item.label}</p>
                         {item.subtitle && (
-                          <p className="text-xs text-gray-400 truncate">{item.subtitle}</p>
+                          <p className="text-xs text-muted-foreground truncate">{item.subtitle}</p>
                         )}
                       </div>
                       {isSelected && <ArrowRight className="h-3.5 w-3.5 text-blue-400 shrink-0" />}
@@ -402,16 +402,16 @@ export function CommandPalette({ open, onClose, initialFilter }: CommandPaletteP
           )}
         </div>
 
-        <div className="border-t border-gray-100 px-4 py-2 flex items-center gap-4 text-[11px] text-gray-400">
+        <div className="border-t border-border px-4 py-2 flex items-center gap-4 text-[11px] text-muted-foreground">
           <span className="flex items-center gap-1">
-            <kbd className="px-1 py-0.5 bg-gray-100 rounded border border-gray-200">↑↓</kbd> للتنقل
+            <kbd className="px-1 py-0.5 bg-gray-100 rounded border border-border">↑↓</kbd> للتنقل
           </span>
           <span className="flex items-center gap-1">
-            <kbd className="px-1 py-0.5 bg-gray-100 rounded border border-gray-200">إدخال</kbd> للفتح
+            <kbd className="px-1 py-0.5 bg-gray-100 rounded border border-border">إدخال</kbd> للفتح
           </span>
           <span className="flex items-center gap-1">
             <Command className="h-3 w-3" />
-            <kbd className="px-1 py-0.5 bg-gray-100 rounded border border-gray-200">ك</kbd> لوحة الأوامر
+            <kbd className="px-1 py-0.5 bg-gray-100 rounded border border-border">ك</kbd> لوحة الأوامر
           </span>
         </div>
       </div>

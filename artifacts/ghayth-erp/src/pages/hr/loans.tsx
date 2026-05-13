@@ -180,7 +180,7 @@ export default function LoansPage() {
             {v.status === "active" && (
               <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
                 <div
-                  className="bg-green-500 h-1.5 rounded-full transition-all"
+                  className="bg-status-success-surface0 h-1.5 rounded-full transition-all"
                   style={{ width: `${pct}%` }}
                 />
               </div>

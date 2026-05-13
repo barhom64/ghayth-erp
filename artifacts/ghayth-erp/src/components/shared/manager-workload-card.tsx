@@ -31,7 +31,7 @@ export function ManagerWorkloadCard({ employeeId, compact = false }: Props) {
   const overloaded = p.slipping > 0 || t.overdue > 3 || p.active > 5;
 
   return (
-    <Card className={cn("border-2", overloaded ? "border-orange-200 bg-orange-50/30" : "border-blue-100 bg-blue-50/30")}>
+    <Card className={cn("border-2", overloaded ? "border-orange-200 bg-orange-50/30" : "border-status-info-surface bg-status-info-surface/30")}>
       <CardContent className={cn("p-3", compact && "p-2")}>
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-semibold text-muted-foreground">عبء المدير الحالي</span>
@@ -39,13 +39,13 @@ export function ManagerWorkloadCard({ employeeId, compact = false }: Props) {
         </div>
         <div className="grid grid-cols-4 gap-2 text-center text-xs">
           <div>
-            <div className="flex items-center justify-center gap-1 text-blue-600">
+            <div className="flex items-center justify-center gap-1 text-status-info-foreground">
               <Activity className="w-3 h-3" /> <span className="font-bold text-base">{p.active}</span>
             </div>
             <p className="text-muted-foreground">نشط</p>
           </div>
           <div>
-            <div className="flex items-center justify-center gap-1 text-red-600">
+            <div className="flex items-center justify-center gap-1 text-status-error-foreground">
               <AlertTriangle className="w-3 h-3" /> <span className="font-bold text-base">{p.slipping}</span>
             </div>
             <p className="text-muted-foreground">متأخر</p>

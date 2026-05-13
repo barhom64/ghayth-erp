@@ -760,7 +760,7 @@ function DeliveryStatsTab() {
                     <ChannelBadge channel={ch.channel} />
                     <div className="flex-1">
                       <div className="h-2 bg-surface-subtle rounded-full overflow-hidden">
-                        <div className="h-full bg-green-500 rounded-full" style={{ width: `${rate}%` }} />
+                        <div className="h-full bg-status-success-surface0 rounded-full" style={{ width: `${rate}%` }} />
                       </div>
                     </div>
                     <div className="flex items-center gap-3 text-sm">
