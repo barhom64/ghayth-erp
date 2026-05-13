@@ -8,7 +8,7 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import type pg from "pg";
 import type { Request as ExpressRequest } from "express";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
@@ -284,6 +284,7 @@ router.post("/opportunities", authorize({ feature: "crm.opportunities", action: 
       `INSERT INTO crm_opportunities ("companyId",title,"clientId","contactName","contactPhone","contactEmail",source,stage,value,probability,"expectedCloseDate","assignedTo",notes,"nextFollowUp") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
       [scope.companyId, title, b.clientId ?? null, b.contactName ?? null, b.contactPhone ?? null, b.contactEmail ?? null, b.source ?? null, stage, value, probability, b.expectedCloseDate ?? null, b.assignedTo ?? null, b.notes ?? null, b.nextFollowUp ?? null]
     );
+    assertInsert(insertId, "crm_opportunities");
 
     const stageConfig = STAGE_AUTO_ACTIONS[stage];
     if (stageConfig && stageConfig.followUpDays > 0) {
@@ -1014,6 +1015,7 @@ router.post("/opportunities/:id/activities", authorize({ feature: "crm.opportuni
       `INSERT INTO crm_activities ("opportunityId",type,description,"scheduledAt","createdBy") VALUES ($1,$2,$3,$4,$5)`,
       [oppId, b.type, b.description, b.scheduledAt, scope.userId]
     );
+    assertInsert(insertId, "crm_activities");
     const [row] = await rawQuery<CrmActivityRow>(`SELECT ca.* FROM crm_activities ca JOIN crm_opportunities co ON co.id = ca."opportunityId" WHERE ca.id=$1 AND co."companyId"=$2 AND co."deletedAt" IS NULL`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,

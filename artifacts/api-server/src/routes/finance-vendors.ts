@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
 import {
   handleRouteError,
   ValidationError,
@@ -107,6 +107,7 @@ vendorsRouter.post("/vendors", authorize({ feature: "finance.vendors", action: "
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
       [scope.companyId, name, contactPerson || null, phone || null, email || null, taxNumber || null, address || null, paymentTerms || null, category || null]
     );
+    assertInsert(insertId, "suppliers");
 
     emitEvent({
       companyId: scope.companyId,
