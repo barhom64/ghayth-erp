@@ -1322,6 +1322,15 @@ router.post("/governance/event-dlq/:id/replay", authorize({ feature: "admin", ac
       `UPDATE event_dlq SET "retryCount"="retryCount"+1, "resolvedAt"=NOW() WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
       [id, scope.companyId]
     );
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "replay",
+      entity: "event_dlq",
+      entityId: id,
+      after: { eventName: entry.eventName, retryCount: Number(entry.retryCount ?? 0) + 1 },
+    }).catch((e) => logger.error(e, "DLQ replay audit failed"));
     res.json({ replayed: true, eventName: entry.eventName });
   } catch (err) { handleRouteError(err, res, "DLQ replay error:"); }
 });
@@ -1332,6 +1341,14 @@ router.delete("/governance/event-dlq/:id", authorize({ feature: "admin", action:
     const id = parseId(req.params.id, "id");
     const { affectedRows } = await rawExecute(`UPDATE event_dlq SET "resolvedAt"=NOW() WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
     if (!affectedRows) throw new NotFoundError("السجل غير موجود");
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "resolve",
+      entity: "event_dlq",
+      entityId: id,
+    }).catch((e) => logger.error(e, "DLQ resolve audit failed"));
     res.json({ resolved: true });
   } catch (err) { handleRouteError(err, res, "DLQ resolve error:"); }
 });
