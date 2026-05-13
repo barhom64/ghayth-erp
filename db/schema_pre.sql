@@ -14265,6 +14265,8 @@ CREATE TABLE public.umrah_sales_invoices (
     "penaltiesTotal" numeric(12,2) DEFAULT 0,
     "vatRate" numeric(5,2) DEFAULT 15,
     "vatAmount" numeric(12,2) DEFAULT 0,
+    "costBasis" numeric(12,2) DEFAULT 0,
+    "marginBase" numeric(12,2) DEFAULT 0,
     total numeric(12,2) DEFAULT 0,
     "paidAmount" numeric(12,2) DEFAULT 0,
     status character varying(20) DEFAULT 'draft'::character varying,
