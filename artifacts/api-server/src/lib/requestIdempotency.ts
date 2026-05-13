@@ -30,3 +30,32 @@ export function markIdempotencyReplay(req: Request, res: Response, replayed: boo
   }
 }
 
+// Convenience wrapper for routes that want both the response header AND
+// a `idempotentReplay` field in the JSON body. Spread the return value
+// into `res.json({...})` so clients with no header access (e.g. browser
+// fetch with `mode: 'no-cors'`) can still observe the replay.
+export function idempotencyResponseMeta(
+  req: Request,
+  res: Response,
+  replayed: boolean
+): { idempotentReplay: boolean } {
+  markIdempotencyReplay(req, res, replayed);
+  return { idempotentReplay: replayed };
+}
+
+// Read a dry-run flag from the request (query `?dryRun=true` or body
+// `dryRun: true`). Used by booking endpoints that want to return the
+// computed journal lines without actually posting — useful for UI
+// "review before post" panels on expense / voucher / manual journal.
+export function isDryRun(req: Request): boolean {
+  const fromQuery = String(
+    typeof req.query?.dryRun === "string" ? req.query.dryRun : ""
+  ).toLowerCase();
+  if (fromQuery === "true" || fromQuery === "1") return true;
+  const body = req.body as Record<string, unknown> | undefined;
+  if (body && (body.dryRun === true || body.dryRun === "true" || body.dryRun === 1)) {
+    return true;
+  }
+  return false;
+}
+

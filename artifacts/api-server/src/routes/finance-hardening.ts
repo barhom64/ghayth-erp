@@ -17,7 +17,7 @@ import {
   emitEvent,
   todayISO,
 } from "../lib/businessHelpers.js";
-import { requestIdempotencyToken, markIdempotencyReplay } from "../lib/requestIdempotency.js";
+import { requestIdempotencyToken, markIdempotencyReplay, isDryRun } from "../lib/requestIdempotency.js";
 
 import { pushToDLQ } from "../lib/eventBus.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -326,6 +326,21 @@ financeHardeningRouter.post("/journal-manual", authorize({ feature: "finance.har
 
     const idempotencyToken = requestIdempotencyToken(req);
     const ref = `MJE-${idempotencyToken}`;
+
+    if (isDryRun(req)) {
+      res.json({
+        dryRun: true,
+        ref,
+        description: description ?? "قيد يدوي",
+        approvalStatus: "draft",
+        isManual: true,
+        costCenter: costCenter ?? null,
+        lines,
+        totals: { totalDebit, totalCredit },
+      });
+      return;
+    }
+
     const { financialEngine } = await import("../lib/engines/index.js");
     const { journalId, alreadyExists } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
@@ -371,7 +386,7 @@ financeHardeningRouter.post("/journal-manual", authorize({ feature: "finance.har
        GROUP BY je.id`,
       [journalId, scope.companyId]
     );
-    res.status(201).json({ ...(createdManualJournal || { id: journalId }), message: "تم إنشاء القيد اليدوي بحالة مسودة — يحتاج مراجعة واعتماد قبل الترحيل" });
+    res.status(201).json({ ...(createdManualJournal || { id: journalId }), message: "تم إنشاء القيد اليدوي بحالة مسودة — يحتاج مراجعة واعتماد قبل الترحيل", idempotentReplay: alreadyExists });
   } catch (err) {
     handleRouteError(err, res, "Create manual journal error:");
   }
@@ -974,6 +989,27 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
     const ref = `IC-${idempotencyToken}`;
     const txDate = transactionDate ?? todayISO();
 
+    const fromLines = [
+      { accountCode: arAccountCode, debit: Number(amount), credit: 0, description: "ذمم مدينة شركة شقيقة" },
+      { accountCode: revenueAccountCode, debit: 0, credit: Number(amount), description: "إيراد شركة شقيقة" },
+    ];
+    const toLines = [
+      { accountCode: expenseAccountCode, debit: Number(amount), credit: 0, description: "مصروف شركة شقيقة" },
+      { accountCode: apAccountCode, debit: 0, credit: Number(amount), description: "ذمم دائنة شركة شقيقة" },
+    ];
+
+    if (isDryRun(req)) {
+      res.json({
+        dryRun: true,
+        ref,
+        transactionDate: txDate,
+        from: { companyId: scope.companyId, lines: fromLines },
+        to: { companyId: Number(toCompanyId), lines: toLines },
+        amount: Number(amount),
+      });
+      return;
+    }
+
     const { financialEngine } = await import("../lib/engines/index.js");
 
     // postJournalEntry manages its own transaction internally, so we use a
@@ -989,10 +1025,7 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
       sourceType: "intercompany",
       sourceId: 0,
       sourceKey: `finance:intercompany:from:${idempotencyToken}`,
-      lines: [
-        { accountCode: arAccountCode, debit: Number(amount), credit: 0, description: "ذمم مدينة شركة شقيقة" },
-        { accountCode: revenueAccountCode, debit: 0, credit: Number(amount), description: "إيراد شركة شقيقة" },
-      ],
+      lines: fromLines,
     });
     markIdempotencyReplay(req, res, fromResult.alreadyExists);
 
@@ -1008,10 +1041,7 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
         sourceType: "intercompany",
         sourceId: 0,
         sourceKey: `finance:intercompany:to:${idempotencyToken}`,
-        lines: [
-          { accountCode: expenseAccountCode, debit: Number(amount), credit: 0, description: "مصروف شركة شقيقة" },
-          { accountCode: apAccountCode, debit: 0, credit: Number(amount), description: "ذمم دائنة شركة شقيقة" },
-        ],
+        lines: toLines,
       });
     } catch (err) {
       // Compensating reversal outside any transaction so it actually persists
@@ -1058,7 +1088,7 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
        LIMIT 1`,
       [ref, scope.companyId]
     );
-    res.status(201).json({ ...(createdIntercompany || { ref, fromJournalId, toJournalId, amount: Number(amount) }), message: `تم تسجيل المعاملة البينية ${ref} وإنشاء قيدين محاسبيين` });
+    res.status(201).json({ ...(createdIntercompany || { ref, fromJournalId, toJournalId, amount: Number(amount) }), message: `تم تسجيل المعاملة البينية ${ref} وإنشاء قيدين محاسبيين`, idempotentReplay: fromResult.alreadyExists && toResult.alreadyExists });
   } catch (err) {
     handleRouteError(err, res, "Create intercompany transaction error:");
   }

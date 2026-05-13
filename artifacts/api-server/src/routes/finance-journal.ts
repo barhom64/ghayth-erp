@@ -25,7 +25,12 @@ import {
   toDateISO,
   roundTo2,
 } from "../lib/businessHelpers.js";
-import { requestIdempotencyToken, markIdempotencyReplay } from "../lib/requestIdempotency.js";
+import {
+  requestIdempotencyToken,
+  markIdempotencyReplay,
+  idempotencyResponseMeta,
+  isDryRun,
+} from "../lib/requestIdempotency.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -526,7 +531,7 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
        GROUP BY je.id`,
       [journalId, effectiveCompanyId]
     );
-    res.status(201).json(createdExpense || { id: journalId });
+    res.status(201).json({ ...(createdExpense || { id: journalId }), idempotentReplay: alreadyExists });
   } catch (err) {
     handleRouteError(err, res, "Create expense error:");
   }
@@ -782,6 +787,24 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
           { accountCode: cashAcct, debit: 0, credit: totalWithVat },
         ];
 
+    if (isDryRun(req)) {
+      res.json({
+        dryRun: true,
+        ref,
+        type,
+        description: finalDescription,
+        lines: journalLines,
+        totals: {
+          totalDebit: roundTo2(journalLines.reduce((s, l) => s + l.debit, 0)),
+          totalCredit: roundTo2(journalLines.reduce((s, l) => s + l.credit, 0)),
+          baseAmount,
+          vatAmount: computedVat,
+          totalWithVat,
+        },
+      });
+      return;
+    }
+
     const { journalId, alreadyExists } = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, sourceType: "voucher", sourceId: 0, sourceKey: `finance:voucher:${idempotencyToken}`, lines: journalLines });
     markIdempotencyReplay(req, res, alreadyExists);
 
@@ -800,7 +823,7 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
        GROUP BY je.id`,
       [journalId, scope.companyId]
     );
-    res.status(201).json(createdVoucher || { id: journalId });
+    res.status(201).json({ ...(createdVoucher || { id: journalId }), idempotentReplay: alreadyExists });
   } catch (err) {
     handleRouteError(err, res, "Create voucher error:");
   }
@@ -883,7 +906,28 @@ journalRouter.post("/salary-advances", authorize({ feature: "finance.journal", a
       if (subAcc) advanceAccountCode = subAcc.code as string;
     }
 
-    const { journalId, alreadyExists } = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId, ref, description: description ?? `سلفة راتب ${employeeName} – خصم على ${deductMonths} شهر`, type: "salary_advance", sourceType: "salary_advance", sourceId: 0, sourceKey: `finance:salary_advance:${idempotencyToken}`, lines: [{ accountCode: advanceAccountCode, debit: Number(amount), credit: 0, employeeId: employeeId ? Number(employeeId) : undefined }, { accountCode: sourceAcct, debit: 0, credit: Number(amount) }] });
+    const advanceLines = [
+      { accountCode: advanceAccountCode, debit: Number(amount), credit: 0, employeeId: employeeId ? Number(employeeId) : undefined },
+      { accountCode: sourceAcct, debit: 0, credit: Number(amount) },
+    ];
+    const advanceDescription = description ?? `سلفة راتب ${employeeName} – خصم على ${deductMonths} شهر`;
+
+    if (isDryRun(req)) {
+      res.json({
+        dryRun: true,
+        ref,
+        description: advanceDescription,
+        lines: advanceLines,
+        totals: {
+          totalDebit: roundTo2(advanceLines.reduce((s, l) => s + l.debit, 0)),
+          totalCredit: roundTo2(advanceLines.reduce((s, l) => s + l.credit, 0)),
+          amount: Number(amount),
+        },
+      });
+      return;
+    }
+
+    const { journalId, alreadyExists } = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId, ref, description: advanceDescription, type: "salary_advance", sourceType: "salary_advance", sourceId: 0, sourceKey: `finance:salary_advance:${idempotencyToken}`, lines: advanceLines });
     markIdempotencyReplay(req, res, alreadyExists);
     const approvalResult = await initiateApprovalChain({ companyId: scope.companyId, branchId: scope.branchId, chainType: "advances", refType: "salary_advance", refId: journalId, amount: Number(amount) });
     if (approvalResult.requiresApproval) { const { affectedRows } = await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft' AND "deletedAt" IS NULL`, [journalId, scope.companyId]); if (!affectedRows) throw new NotFoundError("القيد غير موجود"); }
@@ -895,7 +939,7 @@ journalRouter.post("/salary-advances", authorize({ feature: "finance.journal", a
        GROUP BY je.id`,
       [journalId, scope.companyId]
     );
-    res.status(201).json(createdAdvance || { id: journalId });
+    res.status(201).json({ ...(createdAdvance || { id: journalId }), idempotentReplay: alreadyExists });
   } catch (err) {
     handleRouteError(err, res, "Finance journal error:");
   }
@@ -995,6 +1039,27 @@ journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "
     if (Math.abs(totalDebit - totalCredit) > 0.01) throw new ValidationError(`القيد غير متوازن: مدين ${totalDebit.toFixed(2)} ≠ دائن ${totalCredit.toFixed(2)}`, { field: "lines", fix: "تأكد من تساوي المدين والدائن" });
 
     const postingDate = date ? toDateISO(date) : toDateISO(new Date());
+    const engineLines = lines.map((l) => ({
+      accountCode: l.accountCode,
+      debit: l.debit,
+      credit: l.credit,
+      description: l.description,
+      costCenter: l.costCenter,
+      departmentId: l.departmentId != null ? Number(l.departmentId) : undefined,
+      projectId: l.projectId != null ? Number(l.projectId) : undefined,
+      employeeId: l.employeeId != null ? Number(l.employeeId) : undefined,
+    }));
+
+    if (isDryRun(req)) {
+      res.json({
+        dryRun: true,
+        description,
+        postingDate,
+        lines: engineLines,
+        totals: { totalDebit, totalCredit },
+      });
+      return;
+    }
 
     const [seqRow] = await rawQuery<{ seq: string | number }>(`SELECT nextval('journal_number_seq') AS seq`).catch((e) => { logger.error(e, "finance journal query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
     const ref = generateRef("JE", seqRow.seq, 5);
@@ -1011,16 +1076,7 @@ journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "
       sourceType: "manual_journal",
       sourceId: 0,
       sourceKey: `finance:manual_je:${ref}:${idempotencyToken}`,
-      lines: lines.map((l) => ({
-        accountCode: l.accountCode,
-        debit: l.debit,
-        credit: l.credit,
-        description: l.description,
-        costCenter: l.costCenter,
-        departmentId: l.departmentId != null ? Number(l.departmentId) : undefined,
-        projectId: l.projectId != null ? Number(l.projectId) : undefined,
-        employeeId: l.employeeId != null ? Number(l.employeeId) : undefined,
-      })),
+      lines: engineLines,
       status: "posted",
       postingDate,
     });
@@ -1036,7 +1092,7 @@ journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "
        GROUP BY je.id`,
       [insertId, scope.companyId]
     );
-    res.status(201).json(createdJournal || { id: insertId });
+    res.status(201).json({ ...(createdJournal || { id: insertId }), idempotentReplay: alreadyExists });
   } catch (err) { handleRouteError(err, res, "Create journal entry error:"); }
 });
 
