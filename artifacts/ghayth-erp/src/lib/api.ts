@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import { notifyRateLimited } from "./rate-limit-toast";
+import { useAppContextOptional } from "@/contexts/app-context";
 
 /**
  * ApiError — P1.3 of the unification plan (docs/UNIFICATION_PLAN.md).
@@ -210,24 +211,56 @@ export function asList<T = any>(resp: { data?: T[] } | T[] | unknown): T[] {
   return [];
 }
 
+/**
+ * Auto-inject the user's current scope (companyIds + branchIds from the
+ * branch picker) into every `useApiQuery` path. Without this, pages that
+ * never spliced `scopeQueryString` into their fetch URL kept showing data
+ * from every branch even when the user picked a specific one in the header
+ * — surfacing as "الفروع تظهر فيها أشياء ما تخص فروع ثانية" (issue #86).
+ *
+ * Behaviour:
+ *   - Paths that already declare `companyIds=` or `branchIds=` are left
+ *     untouched so callers that pass an explicit value win.
+ *   - Absolute URLs (`http://…`) are left untouched — they target an
+ *     external host.
+ *   - Callers can disable injection via `{ skipScope: true }` (for
+ *     admin / cross-tenant views).
+ *
+ * The query key is widened with the scope string so React Query treats
+ * `["invoices"]` viewed under branch 3 as a different cache entry from
+ * `["invoices"]` under branch 5.
+ */
+function injectScope(path: string, scopeQs: string): string {
+  if (!scopeQs) return path;
+  if (/^https?:/i.test(path)) return path;
+  if (/[?&](companyIds|branchIds)=/.test(path)) return path;
+  return path.includes("?") ? `${path}&${scopeQs}` : `${path}?${scopeQs}`;
+}
+
 export function useApiQuery<T = any>(
   key: string[],
   path: string | null,
-  options?: boolean | { enabled?: boolean }
+  options?: boolean | { enabled?: boolean; skipScope?: boolean },
 ) {
   let isEnabled: boolean;
+  let skipScope = false;
   if (typeof options === "boolean") {
     isEnabled = options;
   } else if (options && typeof options === "object") {
     isEnabled = options.enabled !== false;
+    skipScope = options.skipScope === true;
   } else {
     isEnabled = true;
   }
   if (!path) isEnabled = false;
 
+  const app = useAppContextOptional();
+  const scopeQs = !skipScope && app ? app.scopeQueryString : "";
+  const finalPath = path && !skipScope ? injectScope(path, scopeQs) : path;
+
   return useQuery<T>({
-    queryKey: key,
-    queryFn: () => apiFetch<T>(path!),
+    queryKey: scopeQs ? [...key, scopeQs] : key,
+    queryFn: () => apiFetch<T>(finalPath!),
     enabled: isEnabled,
     // Don't retry rate-limited responses — retrying immediately would
     // just trigger the limiter again and spam the user with toasts.
