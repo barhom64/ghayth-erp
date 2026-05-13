@@ -19,11 +19,11 @@ describe("umrahImportEngine — exports", () => {
   });
 
   it("exports parseMutamersWorkbook", () => {
-    expect(IMPORT).toContain("export function parseMutamersWorkbook");
+    expect(IMPORT).toContain("export async function parseMutamersWorkbook");
   });
 
   it("exports parseVouchersWorkbook", () => {
-    expect(IMPORT).toContain("export function parseVouchersWorkbook");
+    expect(IMPORT).toContain("export async function parseVouchersWorkbook");
   });
 
   it("exports ImportScope interface", () => {
