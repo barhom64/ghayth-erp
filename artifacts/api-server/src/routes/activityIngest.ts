@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { logPageView } from "../lib/activityTracker.js";
 import { handleRouteError, zodParse } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
@@ -23,7 +24,7 @@ const logActivitySchema = z.object({
   sessionId: z.string().optional(),
 });
 
-router.post("/intelligence/activity", authMiddleware, activityLimiter, async (req, res): Promise<void> => {
+router.post("/intelligence/activity", authMiddleware, authorize({ feature: "intelligence", action: "create" }), activityLimiter, async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const { page, sessionId } = zodParse(logActivitySchema.safeParse(req.body));

@@ -6,7 +6,7 @@ import { handleRouteError, NotFoundError,
   zodParse,
 } from "../lib/errorHandler.js";
 import { rawQuery } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { emitEvent } from "../lib/businessHelpers.js";
 import {
   ensureObligationsTable,
@@ -84,7 +84,7 @@ obligationsRouter.get("/", authorize({ feature: "projects", action: "list" }), a
       dueAfter,
       limit: limit ? Number(limit) : undefined,
     });
-    res.json({ data: rows, count: rows.length });
+    res.json(maskFields(req, { data: rows, count: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "List obligations error:");
   }
@@ -94,7 +94,7 @@ obligationsRouter.get("/summary", authorize({ feature: "projects", action: "list
   try {
     const scope = req.scope!;
     const summary = await obligationSummary(scope.companyId);
-    res.json(summary);
+    res.json(maskFields(req, summary));
   } catch (err) {
     handleRouteError(err, res, "Obligation summary error:");
   }

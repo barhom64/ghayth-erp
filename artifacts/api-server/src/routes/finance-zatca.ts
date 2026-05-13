@@ -12,7 +12,7 @@ import { z } from "zod";
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent, toDateISO } from "../lib/businessHelpers.js";
 import crypto from "node:crypto";
 import QRCode from "qrcode";
@@ -360,7 +360,7 @@ zatcaRouter.get("/zatca/settings", authorize({ feature: "finance.zatca", action:
        FROM zatca_settings WHERE "companyId" = $1`,
       [scope.companyId]
     );
-    res.json({ data: settings || null });
+    res.json(maskFields(req, { data: settings || null }));
   } catch (err) {
     handleRouteError(err, res, "ZATCA settings GET error:");
   }
@@ -843,7 +843,7 @@ zatcaRouter.get("/zatca/submissions", authorize({ feature: "finance.zatca", acti
       [scope.companyId]
     );
 
-    res.json({
+    res.json(maskFields(req, {
       data: logs,
       total: Number(countRow?.total ?? 0),
       page: Number(page),
@@ -854,7 +854,7 @@ zatcaRouter.get("/zatca/submissions", authorize({ feature: "finance.zatca", acti
         pending: Number(stats?.pending ?? 0),
         total: Number(stats?.total ?? 0),
       },
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "ZATCA submissions list error:");
   }

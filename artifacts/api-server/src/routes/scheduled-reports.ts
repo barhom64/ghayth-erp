@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { handleRouteError, ValidationError, NotFoundError,
   parseId,
   zodParse,
@@ -73,7 +73,7 @@ scheduledReportsRouter.get("/", authorize({ feature: "reports", action: "list" }
        ORDER BY sr."createdAt" DESC LIMIT 200`,
       [scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) {
     handleRouteError(err, res, "Scheduled reports list error:");
   }
@@ -145,7 +145,7 @@ scheduledReportsRouter.get("/history", authorize({ feature: "reports", action: "
        LIMIT 50`,
       [scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) {
     handleRouteError(err, res, "Scheduled report history error:");
   }
