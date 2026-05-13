@@ -27,6 +27,10 @@ interface PreviewSummary {
   errorCount?: number;
   errors?: { row: number; message: string }[];
   unlinkedSubAgents?: { nuskCode: string; name: string; rowCount: number }[];
+  /** Primary agents the confirm step will auto-create (no existing match). */
+  newAgentsToCreate?: { nuskAgentNumber: string | null; agentName: string; rowCount: number }[];
+  /** Rows that name no agent at all (agentId saved as NULL). */
+  rowsWithoutAgent?: number;
   violationsDetected?: number;
   rows?: any[];
 }
@@ -363,6 +367,55 @@ export default function UmrahImportWizard() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* New agents to auto-create */}
+          {preview.newAgentsToCreate && preview.newAgentsToCreate.length > 0 && (
+            <Card className="border-status-warning-surface">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="h-4 w-4 text-status-warning-foreground" />
+                  <h3 className="font-semibold text-status-warning-foreground">وكلاء سيتم إنشاؤهم تلقائياً ({formatNumber(preview.newAgentsToCreate.length)})</h3>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  الوكلاء التاليون مذكورون في الملف ولا يوجد لهم سجل في النظام. سيُنشأون تلقائياً عند التأكيد. راجع الأسماء قبل المتابعة لتجنّب إنشاء سجلات مكررة بفروق إملائية.
+                </p>
+                <div className="rounded border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/40">
+                      <tr>
+                        <th className="p-2 text-start font-medium">رقم الوكيل</th>
+                        <th className="p-2 text-start font-medium">الاسم</th>
+                        <th className="p-2 text-start font-medium">عدد الصفوف</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.newAgentsToCreate.map((a, idx) => (
+                        <tr key={`${a.nuskAgentNumber ?? "name"}-${idx}`} className="border-t">
+                          <td className="p-2 font-mono text-xs" dir="ltr">{a.nuskAgentNumber ?? "—"}</td>
+                          <td className="p-2">{a.agentName}</td>
+                          <td className="p-2">{formatNumber(a.rowCount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Rows with no agent — silent data loss prevention */}
+          {preview.rowsWithoutAgent && preview.rowsWithoutAgent > 0 && (
+            <Card className="border-status-warning-surface">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-status-warning-foreground" />
+                  <p className="text-sm text-status-warning-foreground">
+                    <strong>{formatNumber(preview.rowsWithoutAgent)}</strong> صفًا لا يحوي رقم وكيل ولا اسم وكيل — ستُحفظ بدون ربط بأي وكيل (لن تظهر في كشوف الوكلاء).
+                  </p>
                 </div>
               </CardContent>
             </Card>

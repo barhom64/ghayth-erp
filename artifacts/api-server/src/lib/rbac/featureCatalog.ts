@@ -174,6 +174,10 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
     sensitiveFields: ["bankAccount", "taxNumber"], displayOrder: 225 },
 
+  { key: "finance.contracts", parentKey: "finance", moduleKey: "finance", labelAr: "عقود الموردين",
+    availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
+    sensitiveFields: ["contractValue"], displayOrder: 226 },
+
   { key: "finance.journal", parentKey: "finance", moduleKey: "finance", labelAr: "القيود المحاسبية",
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
     approvableActions: ["approve"], systemCritical: true, displayOrder: 230 },

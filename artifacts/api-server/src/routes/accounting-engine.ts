@@ -4,7 +4,7 @@ import { handleRouteError, NotFoundError, ForbiddenError,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { logger } from "../lib/logger.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
@@ -519,6 +519,7 @@ router.post("/subsidiary-accounts", authorize({ feature: "finance.accounting_eng
        RETURNING id`,
       [scope.companyId, entityType, Number(entityId), accountType, Number(accountId)]
     );
+    assertInsert(insertId, "subsidiary_accounts");
 
     const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT sa.*, ca.code AS "accountCode", ca.name AS "accountName"

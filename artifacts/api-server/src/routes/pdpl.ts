@@ -3,7 +3,7 @@ import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
   zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
 import { userHasPermission } from "../middlewares/permissionMiddleware.js";
@@ -206,6 +206,7 @@ router.post("/data-request", authMiddleware, pdplUserLimiter, authorize({ featur
         toDateISO(dueDate)
       ]
     );
+    assertInsert(insertId, "data_access_requests");
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "create_data_request",

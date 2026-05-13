@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
 import { handleRouteError, ValidationError, NotFoundError,
   parseId,
   zodParse,
@@ -158,6 +158,7 @@ router.post("/", authorize({ feature: "admin", action: "update" }), async (req, 
         b.module || null, b.priority || 0, b.isActive !== false, scope.userId,
       ]
     );
+    assertInsert(insertId, "business_rules");
 
     const [rule] = await rawQuery<BusinessRuleRow>(`SELECT * FROM business_rules WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 

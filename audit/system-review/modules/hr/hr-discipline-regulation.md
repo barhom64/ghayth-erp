@@ -24,13 +24,42 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/hr.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+لائحة الجزاءات والتأديب — Saudi Labor Law-compliant discipline regulation. مرجع لكل violations.
+
+| المكوّن | المتطلب |
+|---------|--------|
+| Approved by MoL | mandatory per Saudi Labor Law Article 12 | إجباري — registered with Ministry |
+| Display location | mandatory display in workplace | إجباري |
+| Translation | Arabic + applicable languages | للموظفين |
+| Date approved | tracking | إجباري |
+| Date effective | post-approval | إجباري |
+| Categories of violations | per type | enum list |
+| Penalty matrix | per offense + repetition | structured |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| View regulation | GET `/hr/discipline-regulation` | `discipline_regulations` | ✅ |
+| Upload approved version (from MoL) | POST | with signature + date | ✅ critical |
+| Update penalty matrix | PATCH | requires re-approval from MoL | ✅ critical |
+| Version history | snapshots | إجباري | ✅ critical |
+| Acknowledgment by employees | per employee | راجع `hr-policy-acknowledgments.md` | ⚠ |
+| Linked violations | aggregate | راجع `hr-violations.md` | ✅ |
+| Compliance audit | annual | راجع `governance-audits.md` | ✅ |
+| Print/Display version | راجع `print-templates` | for office posting | ✅ |
+| MoL submission tracking | external | راجع `admin-integrations.md` | ⚠ |
+| تكامل مع `hr-violations.md` (rule reference) | ✅ critical |
+| تكامل مع `governance-compliance.md` (Saudi Labor Law) | ✅ critical |
+| تكامل مع `documents.md` (approved PDF storage) | ✅ critical |
+| Audit log إجباري | كل تعديل | `audit_logs` | ✅ critical |
+| RBAC | hr-manager + legal review للتعديلات | ✅ critical |
+
+تحقق يدوي:
+- [ ] هل regulation has valid MoL approval (not expired)?
+- [ ] هل employees acknowledged the current version?
+- [ ] هل penalty matrix يطبَّق تلقائياً عند إنشاء violation?
+- [ ] هل version history accessible للـ audit وللاستفسارات القانونية?
+- [ ] هل update يتطلب MoL re-approval قبل publish?
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `regulation` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

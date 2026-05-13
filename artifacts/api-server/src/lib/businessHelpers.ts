@@ -35,6 +35,74 @@ export function generateTimeRef(prefix: string): string {
   return `${prefix}-${Date.now().toString(36).toUpperCase()}`;
 }
 
+/**
+ * Resolves the numbering prefix for a (company, branch, kind) triplet by
+ * reading `system_settings` with a branch-first / company-fallback lookup.
+ * ZATCA Phase 2 expects each VAT-registered branch to issue its own
+ * invoice series (e.g. INV-MK-001 vs INV-HB-001) — this helper lets
+ * callers swap their hardcoded `generateTimeRef("INV")` for one that
+ * picks up whatever the operator configured per branch.
+ *
+ * Lookup order:
+ *   1. (companyId, branchId, key)   ← per-branch override
+ *   2. (companyId, NULL, key)        ← company default
+ *   3. fallback parameter            ← code default (e.g. "INV")
+ *
+ * The `system_settings_companyId_branchId_key_key` unique constraint
+ * already supports the (companyId, branchId, key) triple, so no schema
+ * migration is needed. Callers opt-in by switching from
+ * `generateTimeRef("INV")` to `resolveBranchPrefix(...)` then
+ * `generateTimeRef(prefix)` or directly via `generateBranchRef`.
+ */
+export async function resolveBranchPrefix(
+  companyId: number,
+  branchId: number | null,
+  key:
+    | "invoice_prefix"
+    | "purchase_prefix"
+    | "voucher_prefix"
+    | "receipt_voucher_prefix"
+    | "payment_voucher_prefix"
+    | "journal_entry_prefix"
+    | "expense_claim_prefix"
+    | "credit_note_prefix"
+    | "debit_note_prefix",
+  fallback: string,
+): Promise<string> {
+  if (branchId !== null && branchId !== undefined) {
+    const [branchRow] = await rawQuery<{ value: string | null }>(
+      `SELECT value FROM system_settings
+        WHERE "companyId" = $1 AND "branchId" = $2 AND key = $3
+        LIMIT 1`,
+      [companyId, branchId, key],
+    );
+    if (branchRow?.value) return branchRow.value;
+  }
+  const [companyRow] = await rawQuery<{ value: string | null }>(
+    `SELECT value FROM system_settings
+      WHERE "companyId" = $1 AND "branchId" IS NULL AND key = $2
+      LIMIT 1`,
+    [companyId, key],
+  );
+  if (companyRow?.value) return companyRow.value;
+  return fallback;
+}
+
+/**
+ * Branch-aware variant of `generateTimeRef`. Combines `resolveBranchPrefix`
+ * with the time-based suffix so callers can swap a one-line drop-in:
+ *
+ *   const ref = await generateBranchRef(scope, "invoice_prefix", "INV");
+ */
+export async function generateBranchRef(
+  scope: { companyId: number; branchId: number | null },
+  key: Parameters<typeof resolveBranchPrefix>[2],
+  fallback: string,
+): Promise<string> {
+  const prefix = await resolveBranchPrefix(scope.companyId, scope.branchId, key, fallback);
+  return generateTimeRef(prefix);
+}
+
 export function roundTo2(value: number): number {
   return Math.round(value * 100) / 100;
 }

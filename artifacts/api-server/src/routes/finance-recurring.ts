@@ -8,7 +8,7 @@ import {
 } from "../lib/errorHandler.js";
 import { z } from "zod";
 import { Router } from "express";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { emitEvent, createAuditLog, todayISO } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -218,6 +218,7 @@ recurringRouter.post("/recurring-journals", authorize({ feature: "finance.recurr
         scope.activeAssignmentId,
       ]
     );
+    assertInsert(insertId, "recurring_journals");
 
     emitEvent({
       companyId: scope.companyId,

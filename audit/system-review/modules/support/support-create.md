@@ -27,13 +27,60 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/support.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+إنشاء تذكرة دعم — Support ticket (internal أو client-facing).
+
+| نوع التذكرة | المثال |
+|------------|--------|
+| Technical | IT issue | internal |
+| Customer service | client complaint | external |
+| Billing | invoice query | external |
+| Feature request | enhancement | internal/external |
+| Bug report | system issue | internal |
+| HR | employee query | internal |
+
+| الحقل | المتطلب |
+|------|--------|
+| Subject | إجباري |
+| Description | rich text + attachments |
+| Category | enum |
+| Priority | low/normal/high/urgent/critical | with SLA |
+| Reporter | client أو employee | FK |
+| Assignee | initial routing | optional |
+| Linked entity | optional (order, invoice, asset, etc.) | polymorphic |
+| Channel | web/email/phone/whatsapp | enum |
+| Attachments | screenshots, files | راجع `documents.md` |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| Create ticket | POST `/support` | `support_tickets` (status=open) | ✅ |
+| Auto-assign (based on rules) | routing engine | راجع `comms-notification-engine.md` for routing | ⚠ |
+| Calculate SLA deadline | per priority | راجع `support-sla.md` | ✅ critical |
+| Send acknowledgment to reporter | event=`ticket_created` | راجع `notifications.md` | ✅ |
+| Add to assignee's queue | راجع `my-space/tasks.md` | ✅ |
+| Linked to client (لو external) | راجع `crm/clients.md` | ✅ |
+| Linked to KB article (auto-suggest) | راجع `support-kb.md` | ⚠ |
+| Reply (راجع `support-replies.md`) | thread | ✅ |
+| Status transitions: open → in-progress → waiting → resolved → closed | lifecycle | راجع `lifecycle/support.ts` | ✅ |
+| Escalation (لو SLA breach) | event=`ticket_sla_breach` | راجع `notifications.md` | ✅ critical |
+| Reassign | with reason + audit | ✅ |
+| Merge duplicate tickets | with audit | ⚠ |
+| Customer satisfaction survey (post-resolve) | راجع `crm-csat.md` | ⚠ |
+| Convert to bug/feature (لو dev) | راجع `projects.md` | ⚠ |
+| تكامل مع `crm/clients.md` (history) | ✅ |
+| تكامل مع `documents.md` (attachments) | ✅ |
+| تكامل مع `notifications.md` (multi-channel updates) | ✅ |
+| تكامل مع `bi-kpis.md` (CSAT, MTTR, ticket volume) | ✅ |
+| Audit log إجباري | كل خطوة | `audit_logs` | ✅ |
+| **PDPL** — مراسلات حساسة محصورة | per ticket confidentiality | ✅ |
+| RBAC | support staff + manager | external client يرى الخاص به فقط | ✅ critical |
+
+تحقق يدوي:
+- [ ] هل SLA deadlines accurate per priority + business hours؟
+- [ ] هل auto-routing يأخذ assignee availability/load بعين الاعتبار؟
+- [ ] هل client يستطيع رؤية تذاكر غير his?
+- [ ] هل CSAT survey timing مناسب (بعد resolve مباشرة أم بعد X أيام)?
+- [ ] هل ticket escalation chain واضحة قبل breaching SLA?
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `create` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
