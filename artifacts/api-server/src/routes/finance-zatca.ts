@@ -14,6 +14,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent, toDateISO } from "../lib/businessHelpers.js";
+import { resolveZatcaSettings } from "../lib/zatca/settingsResolver.js";
 import crypto from "node:crypto";
 import QRCode from "qrcode";
 import { logger } from "../lib/logger.js";
@@ -468,10 +469,12 @@ zatcaRouter.post("/zatca/test-connection", authorize({ feature: "finance.zatca",
     const scope = req.scope!;
 
 
-    const [settings] = await rawQuery<ZatcaSettingsRow>(
-      `SELECT * FROM zatca_settings WHERE "companyId" = $1`,
-      [scope.companyId]
-    );
+    // Per-branch ZATCA credentials (PR #534): a tenant with multiple
+    // VAT-registered branches (Al-Diyaa: Hotels / Transport-Makkah /
+    // Transport-Hafar) onboards each one separately. resolveZatcaSettings
+    // picks the per-branch row first and falls back to the company-wide
+    // default so single-VAT tenants keep working unchanged.
+    const settings = (await resolveZatcaSettings(scope.companyId, scope.branchId)) as ZatcaSettingsRow | null;
 
     if (!settings) {
       throw new ValidationError("لم يتم تهيئة إعدادات ZATCA بعد");
