@@ -571,7 +571,7 @@ router.get("/admin-reports/weekly", authorize({ feature: "bi", action: "list" })
       buildWeekStats(fmt(lastWeekStart), fmt(lastWeekEnd)),
     ]);
 
-    res.json(maskFields(req, {
+    res.json({
       period: { from: fmt(thisWeekStart), to: fmt(thisWeekEnd) },
       previousPeriod: { from: fmt(lastWeekStart), to: fmt(lastWeekEnd) },
       current: thisWeek,
@@ -582,7 +582,7 @@ router.get("/admin-reports/weekly", authorize({ feature: "bi", action: "list" })
         revenueChange: lastWeek.revenue > 0 ? Math.round(((thisWeek.revenue - lastWeek.revenue) / lastWeek.revenue) * 100) : 0,
         ticketsResolved: thisWeek.tickets.resolved - lastWeek.tickets.resolved,
       },
-    }));
+    });
   } catch (err) { handleRouteError(err, res, "Weekly report"); }
 });
 
@@ -700,7 +700,7 @@ router.get("/admin-reports/monthly", authorize({ feature: "bi", action: "list" }
       buildMonthStats(fmt(lastMonthStart), fmt(lastMonthEnd)),
     ]);
 
-    res.json(maskFields(req, {
+    res.json({
       period: { from: fmt(thisMonthStart), to: fmt(now) },
       previousPeriod: { from: fmt(lastMonthStart), to: fmt(lastMonthEnd) },
       current,
@@ -712,7 +712,7 @@ router.get("/admin-reports/monthly", authorize({ feature: "bi", action: "list" }
         revenueChange: previous.financial.revenue > 0 ? Math.round(((current.financial.revenue - previous.financial.revenue) / previous.financial.revenue) * 100) : 0,
         ticketsResolved: current.tickets.resolved - previous.tickets.resolved,
       },
-    }));
+    });
   } catch (err) { handleRouteError(err, res, "Monthly report"); }
 });
 
@@ -805,7 +805,7 @@ router.get("/ceo-dashboard", authorize({ feature: "bi", action: "list" }), async
     const netProfitThisMonth = revenueThisMonth - expensesThisMonth;
     const netProfitLastMonth = revenueLastMonth - expensesLastMonth;
 
-    res.json(maskFields(req, {
+    res.json({
       financial: {
         revenueThisMonth,
         revenueLastMonth,
@@ -839,7 +839,7 @@ router.get("/ceo-dashboard", authorize({ feature: "bi", action: "list" }), async
         expiringDocs: Number(docs?.expiringDocs ?? 0),
         overdueInvoices: Number(financial?.overdueInvoices ?? 0),
       },
-    }));
+    });
   } catch (err) { handleRouteError(err, res, "CEO dashboard"); }
 });
 
@@ -928,7 +928,7 @@ router.get("/reports/branch-performance", authorize({ feature: "bi", action: "li
     result.sort((a: any, b: any) => b.revenue - a.revenue);
     result.forEach((r: any, i: number) => { r.rank = i + 1; });
 
-    res.json(maskFields(req, { data: result, period: { from: dateFrom, to: dateTo } }));
+    res.json({ data: result, period: { from: dateFrom, to: dateTo } });
   } catch (err) { handleRouteError(err, res, "Branch performance report"); }
 });
 
@@ -978,7 +978,7 @@ router.get("/reports/vendor-performance", authorize({ feature: "bi", action: "li
       };
     });
 
-    res.json(maskFields(req, { data, period: { from: dateFrom, to: dateTo } }));
+    res.json({ data, period: { from: dateFrom, to: dateTo } });
   } catch (err) { handleRouteError(err, res, "Vendor performance report"); }
 });
 
@@ -1046,7 +1046,7 @@ router.get("/reports/fleet-tco", authorize({ feature: "bi", action: "list" }), a
       };
     });
 
-    res.json(maskFields(req, { data }));
+    res.json({ data });
   } catch (err) { handleRouteError(err, res, "Fleet TCO report"); }
 });
 
@@ -1100,7 +1100,7 @@ router.get("/reports/department-leave-balance", authorize({ feature: "bi", actio
       };
     });
 
-    res.json(maskFields(req, { data, year }));
+    res.json({ data, year });
   } catch (err) { handleRouteError(err, res, "Department leave balance"); }
 });
 
@@ -1146,7 +1146,7 @@ router.get("/reports/property-occupancy", authorize({ feature: "bi", action: "li
       };
     });
 
-    res.json(maskFields(req, { data }));
+    res.json({ data });
   } catch (err) { handleRouteError(err, res, "Property occupancy report"); }
 });
 
@@ -1190,7 +1190,7 @@ router.get("/reports/training-roi", authorize({ feature: "bi", action: "list" })
       [cid, dateFrom, dateTo]
     ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
-    res.json(maskFields(req, {
+    res.json({
       summary: {
         trainedEmployees: Number(summary?.trainedEmployees ?? 0),
         totalSessions: Number(summary?.totalSessions ?? 0),
@@ -1202,7 +1202,7 @@ router.get("/reports/training-roi", authorize({ feature: "bi", action: "list" })
       },
       byProgram,
       period: { from: dateFrom, to: dateTo },
-    }));
+    });
   } catch (err) { handleRouteError(err, res, "Training ROI report"); }
 });
 
@@ -1254,7 +1254,7 @@ router.get("/ai-insights", authorize({ feature: "bi", action: "list" }), async (
       [cid]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{} as Record<string, unknown>]; });
 
-    res.json(maskFields(req, {
+    res.json({
       alerts,
       proactiveActions: proactive,
       counts: {
@@ -1263,7 +1263,7 @@ router.get("/ai-insights", authorize({ feature: "bi", action: "list" }), async (
         info: Number(counts?.info ?? 0),
         total: Number(counts?.total ?? 0),
       },
-    }));
+    });
   } catch (err) { handleRouteError(err, res, "AI insights"); }
 });
 
@@ -1302,7 +1302,7 @@ router.get("/alert-fatigue/settings", authorize({ feature: "bi", action: "list" 
       `SELECT * FROM alert_fatigue_settings WHERE "assignmentId" = $1`,
       [scope.activeAssignmentId]
     ).catch((e) => { logger.error(e, "bi query failed"); return []; });
-    res.json(maskFields(req, { data: rows }));
+    res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "Alert fatigue settings"); }
 });
 
@@ -1349,7 +1349,7 @@ router.get("/alert-fatigue/daily-count", authorize({ feature: "bi", action: "lis
     ).catch((e) => { logger.error(e, "bi query failed"); return [{ today_count: 0 }]; });
     const limit = 50;
     const count = Number(row?.today_count ?? 0);
-    res.json(maskFields(req, { todayCount: count, dailyLimit: limit, isOverLimit: count >= limit }));
+    res.json({ todayCount: count, dailyLimit: limit, isOverLimit: count >= limit });
   } catch (err) { handleRouteError(err, res, "Alert fatigue daily count"); }
 });
 
@@ -1371,7 +1371,7 @@ router.get("/reports/umrah-season-summary", authorize({ feature: "bi", action: "
     // task #212). We sort by startDate desc instead and omit those fields
     // from the response. If/when those columns are added by migration,
     // restore them here and to the response mapping below.
-    const seasons = await rawQuery<Record<string, unknown>>(
+    const seasons = await rawQuery<any>(
       `SELECT id, title, "startDate", "endDate", status
          FROM umrah_seasons
         WHERE "companyId" = $1 AND "deletedAt" IS NULL
@@ -1387,7 +1387,7 @@ router.get("/reports/umrah-season-summary", authorize({ feature: "bi", action: "
     }
 
     const [pilgrimStats, salesStats, penaltyStats, groupStats] = await Promise.all([
-      rawQuery<Record<string, unknown>>(
+      rawQuery<any>(
         `SELECT "seasonId",
                 COUNT(*)::int                                                  AS total,
                 COUNT(*) FILTER (WHERE status IN ('arrived','active'))::int    AS active,
@@ -1399,7 +1399,7 @@ router.get("/reports/umrah-season-summary", authorize({ feature: "bi", action: "
           GROUP BY "seasonId"`,
         [cid, seasonIds]
       ).catch((e) => { logger.error(e, "bi umrah pilgrims query failed"); return []; }),
-      rawQuery<Record<string, unknown>>(
+      rawQuery<any>(
         `SELECT "seasonId",
                 COALESCE(SUM(total), 0)::numeric(12,2)        AS "invoiced",
                 COALESCE(SUM("paidAmount"), 0)::numeric(12,2) AS "paid",
@@ -1410,7 +1410,7 @@ router.get("/reports/umrah-season-summary", authorize({ feature: "bi", action: "
           GROUP BY "seasonId"`,
         [cid, seasonIds]
       ).catch((e) => { logger.error(e, "bi umrah invoices query failed"); return []; }),
-      rawQuery<Record<string, unknown>>(
+      rawQuery<any>(
         `SELECT "seasonId",
                 COUNT(*)::int                                                   AS total,
                 COUNT(*) FILTER (WHERE status IN ('pending','invoiced'))::int   AS open,
@@ -1420,7 +1420,7 @@ router.get("/reports/umrah-season-summary", authorize({ feature: "bi", action: "
           GROUP BY "seasonId"`,
         [cid, seasonIds]
       ).catch((e) => { logger.error(e, "bi umrah penalties query failed"); return []; }),
-      rawQuery<Record<string, unknown>>(
+      rawQuery<any>(
         `SELECT "seasonId",
                 COUNT(*)::int                                                AS total,
                 COUNT(*) FILTER (WHERE "salesInvoiceId" IS NOT NULL)::int    AS invoiced
@@ -1463,7 +1463,7 @@ router.get("/reports/umrah-season-summary", authorize({ feature: "bi", action: "
       totalOverstay: data.reduce((s: number, r: any) => s + r.pilgrims.overstay, 0),
     };
 
-    res.json(maskFields(req, { data, summary }));
+    res.json({ data, summary });
   } catch (err) { handleRouteError(err, res, "BI umrah season summary"); }
 });
 
