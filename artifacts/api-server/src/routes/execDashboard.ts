@@ -15,7 +15,7 @@ import { handleRouteError, ForbiddenError } from "../lib/errorHandler.js";
 import { obligationSummary } from "../lib/obligationsEngine.js";
 import { EXEC_ROLES } from "../lib/rbacCatalog.js";
 import { logger } from "../lib/logger.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 
 export const execDashboardRouter = Router();
 execDashboardRouter.use(authMiddleware);
@@ -281,7 +281,7 @@ execDashboardRouter.get("/overview", authorize({ feature: "dashboard.executive",
     const riskScore = Math.min(100, rawScore);
     const riskLevel = riskScore >= 70 ? "critical" : riskScore >= 40 ? "high" : riskScore >= 15 ? "medium" : "low";
 
-    res.json({
+    res.json(maskFields(req, {
       generatedAt: new Date().toISOString(),
       companyId,
       riskScore,
@@ -299,7 +299,7 @@ execDashboardRouter.get("/overview", authorize({ feature: "dashboard.executive",
       expiringContracts,
       fleetMaintenance,
       hrDocExpiries,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Exec dashboard error:");
   }
@@ -327,7 +327,7 @@ execDashboardRouter.get("/overdue-invoices", authorize({ feature: "dashboard.exe
        LIMIT 50`,
       [scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) {
     handleRouteError(err, res, "Overdue invoices error:");
   }
@@ -347,7 +347,7 @@ execDashboardRouter.get("/critical-obligations", authorize({ feature: "dashboard
        LIMIT 50`,
       [scope.companyId]
     ).catch((e) => { logger.error(e, "exec dashboard query failed"); return []; });
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) {
     handleRouteError(err, res, "Critical obligations error:");
   }

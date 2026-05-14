@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { handleRouteError } from "../lib/errorHandler.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
@@ -166,7 +166,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
       ).catch((e) => { logger.error(e, "search query failed"); return []; }) : Promise.resolve([]),
     ]);
 
-    res.json({
+    res.json(maskFields(req, {
       results: [
         ...employees.map((e) => ({ ...e, category: "موظفين", link: `/employees/${e.id}` })),
         ...clients.map((c) => ({ ...c, category: "عملاء", link: `/clients/${c.id}` })),
@@ -180,7 +180,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
         ...buildings.map((b) => ({ ...b, category: "مباني عقارية", link: `/properties/buildings/${b.id}` })),
         ...tenants.map((t) => ({ ...t, category: "مستأجرون", link: `/properties/tenants/${t.id}` })),
       ],
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Search error:");
   }

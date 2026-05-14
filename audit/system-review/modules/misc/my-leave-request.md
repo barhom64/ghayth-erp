@@ -23,13 +23,54 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/misc.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+طلب إجازة (Self-service) — Employee submits leave request.
+
+| نوع الإجازة | المدة السنوية (Saudi Labor Law) |
+|------------|-------------------------------|
+| Annual (سنوية) | 21 days (< 5 years), 30 days (≥ 5 years) |
+| Sick (مرضية) | 30 days full + 60 days partial + 30 unpaid |
+| Maternity (أمومة) | 10 weeks paid |
+| Paternity | 3 days |
+| Hajj (حج) | 10-15 days, once per service |
+| Marriage | 5 days |
+| Death of family | 5 days (close) / 3 days (extended) |
+| Educational | per policy |
+| Unpaid | extended without pay |
+| Compensatory | for overtime/holidays worked |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| Check leave balance | GET `/my-space/leave-balance` | راجع `hr-leave-balances.md` | ✅ |
+| Create request | POST `/my-space/leave-request` | `leave_requests` (status=pending) | ✅ |
+| Validate balance available | server-side | ✅ critical |
+| Validate notice period | per type (e.g., annual = 30 day notice) | ⚠ |
+| Validate overlapping requests | guard | ✅ |
+| Validate dates (no past dates) | server-side | ✅ |
+| Attach medical certificate (لو sick > 3 days) | راجع `documents.md` | ✅ |
+| Submit for approval | راجع `governance/approvals.md` | ✅ |
+| Approve (manager) | راجع `hr-leaves.md` | ✅ |
+| Auto-update attendance | راجع `hr-attendance.md` | flag the days | ✅ critical |
+| Deduct from balance | راجع `hr-leave-balances.md` | ✅ critical |
+| Coverage planning (assign cover) | optional | راجع `hr-coverage.md` | ⚠ |
+| Notification chain | event=`leave_request_pending/approved/rejected` | راجع `notifications.md` | ✅ |
+| Cancel request (before approval) | by employee | ✅ |
+| Cancel approved (with reason) | by employee with approval | ⚠ |
+| Out-of-office auto-reply (email) | راجع `comms-notification-engine.md` | ⚠ |
+| تكامل مع `hr-leaves.md` (HR side) | ✅ |
+| تكامل مع `hr-attendance.md` (no checks-in during leave) | ✅ critical |
+| تكامل مع `hr-payroll.md` (paid vs unpaid impact) | ✅ critical |
+| تكامل مع `calendar.md` (visibility for team) | ✅ |
+| تكامل مع `governance-compliance.md` (Saudi Labor Law) | ✅ critical |
+| Audit log إجباري | كل خطوة | `audit_logs` | ✅ |
+| RBAC | employee for own + manager for team approval | ✅ |
+
+تحقق يدوي:
+- [ ] هل Saudi Labor Law leave entitlements مطبّقة بدقة (21/30 يوم annual)?
+- [ ] هل medical certificate enforced for sick leave > 3 days?
+- [ ] هل overlapping requests blocked?
+- [ ] هل coverage planning mandatory for key roles?
+- [ ] هل payroll impact accurate (paid vs unpaid)?
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `my-leave-request` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

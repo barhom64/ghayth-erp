@@ -557,7 +557,7 @@ router.post("/roles/:id/clone", authorize({ feature: "admin.roles", action: "cre
   }
 });
 
-router.get("/templates", async (req, res) => {
+router.get("/templates", authorize({ feature: "admin.roles", action: "list" }), async (req, res) => {
   try {
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT id, role_key, label_ar, label_en, description, level, color,

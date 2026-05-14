@@ -2,7 +2,7 @@ import { Router } from "express";
 import { APPROVAL_AUDIT_ROLES } from "../lib/rbacCatalog.js";
 import { rawQuery } from "../lib/rawdb.js";
 import { handleRouteError, ForbiddenError, parseId } from "../lib/errorHandler.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 
 // Local row shapes — neither table has a Drizzle definition yet, so the
 // types live next to the route file. Move to dbTypes.ts when ≥3 routes
@@ -69,7 +69,7 @@ router.get("/overrides/report", authorize({ feature: "admin.approvals", action: 
        LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "approvalActions");
   }
@@ -88,7 +88,7 @@ router.get("/:entityType/:entityId", authorize({ feature: "admin.approvals", act
        ORDER BY aa."createdAt" DESC LIMIT 200`,
       [entityType, entityId, scope.companyId]
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "approvalActions");
   }

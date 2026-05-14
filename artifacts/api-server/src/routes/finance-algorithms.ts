@@ -1153,40 +1153,31 @@ financeAlgorithmsRouter.post("/rounding-differences/apply", authorize({ feature:
     assertFinanceRole(scope);
 
     const { journalEntryId, roundingAmount, description } = zodParse(roundingDiffSchema.safeParse(req.body ?? {}));
-    if (Math.abs(roundingAmount) === 0) {
-      throw new ValidationError("فرق التقريب يجب أن يكون مختلفاً عن الصفر");
-    }
     const diff = roundTo2(roundingAmount);
-    if (Math.abs(diff) > 0.05) {
-      throw new ValidationError("فرق التقريب يتجاوز الحد المسموح (0.05 ﷼)");
+
+    // All journal_lines mutations route through the financial engine — see
+    // financialEngine.appendRoundingAdjustment for the validation rules
+    // (non-zero, |diff| ≤ 0.05, rounding account 9999 must exist, JE must
+    // belong to the scoped company).
+    const { financialEngine } = await import("../lib/engines/index.js");
+    try {
+      const { applied } = await financialEngine.appendRoundingAdjustment({
+        companyId: scope.companyId,
+        journalEntryId,
+        amount: diff,
+        description,
+      });
+
+      await updateAccountBalances(scope.companyId, [
+        { accountCode: "9999", debit: applied > 0 ? applied : 0, credit: applied < 0 ? Math.abs(applied) : 0 },
+      ]);
+
+      res.json({ message: `تم تسجيل فرق التقريب (${applied.toFixed(2)} ﷼) في حساب 9999` });
+    } catch (engineErr) {
+      const msg = engineErr instanceof Error ? engineErr.message : String(engineErr);
+      if (msg.includes("القيد اليومي غير موجود")) throw new NotFoundError(msg);
+      throw new ValidationError(msg);
     }
-
-    const [roundingAcc] = await rawQuery<Record<string, unknown>>(
-      `SELECT code FROM chart_of_accounts WHERE "companyId"=$1 AND code='9999' AND "deletedAt" IS NULL LIMIT 1`,
-      [scope.companyId]
-    );
-    if (!roundingAcc) {
-      throw new ValidationError("يجب إنشاء حساب فروقات التقريب أولاً");
-    }
-
-    const [je] = await rawQuery<Record<string, unknown>>(
-      `SELECT id FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
-      [journalEntryId, scope.companyId]
-    );
-    if (!je) throw new NotFoundError("القيد اليومي غير موجود أو لا يتبع هذه الشركة");
-
-    await rawExecute(
-      `INSERT INTO journal_lines ("journalId","accountCode",debit,credit,description)
-       VALUES ($1,'9999',$2,$3,$4)`,
-      [journalEntryId, diff > 0 ? diff : 0, diff < 0 ? Math.abs(diff) : 0,
-       description ?? "فرق تقريب تلقائي"]
-    );
-
-    await updateAccountBalances(scope.companyId, [
-      { accountCode: "9999", debit: diff > 0 ? diff : 0, credit: diff < 0 ? Math.abs(diff) : 0 },
-    ]);
-
-    res.json({ message: `تم تسجيل فرق التقريب (${diff.toFixed(2)} ﷼) في حساب 9999` });
   } catch (err) {
     handleRouteError(err, res, "Apply rounding difference error:");
   }

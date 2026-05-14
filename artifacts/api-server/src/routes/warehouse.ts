@@ -666,7 +666,7 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
       insertId = movRes.rows[0]?.id ?? 0;
 
       const newStock = Number(product.currentStock) + sign * Math.abs(Number(b.quantity));
-      await client.query(`UPDATE warehouse_products SET "currentStock" = "currentStock" + $1, "updatedAt" = NOW() WHERE id = $2 AND "deletedAt" IS NULL`, [sign * Math.abs(b.quantity), b.productId]);
+      await client.query(`UPDATE warehouse_products SET "currentStock" = "currentStock" + $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [sign * Math.abs(b.quantity), b.productId, scope.companyId]);
 
       if (b.type === 'in' || b.type === 'return' || b.type === 'transfer_in') {
         const incomingQty = Math.abs(Number(b.quantity));
@@ -677,13 +677,13 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
         const newTotalQty = prevStock + incomingQty;
         const newWaCost = newTotalQty > 0 ? roundTo4(newTotalValue / newTotalQty) : incomingCost;
         await client.query(
-          `UPDATE warehouse_products SET "costPrice"=$1, "lastWaCost"=$1, "updatedAt"=NOW() WHERE id=$2 AND "deletedAt" IS NULL`,
-          [newWaCost, b.productId]
+          `UPDATE warehouse_products SET "costPrice"=$1, "lastWaCost"=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+          [newWaCost, b.productId, scope.companyId]
         );
       } else if ((b.type === 'out' || b.type === 'transfer_out') && newStock <= 0) {
         await client.query(
-          `UPDATE warehouse_products SET "lastWaCost"="costPrice", "updatedAt"=NOW() WHERE id=$1 AND "deletedAt" IS NULL`,
-          [b.productId]
+          `UPDATE warehouse_products SET "lastWaCost"="costPrice", "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+          [b.productId, scope.companyId]
         );
       }
 
@@ -1366,8 +1366,8 @@ router.post("/inventory-counts/:id/items", authorize({ feature: "warehouse.inven
 
     // Upsert count item
     const [existing] = await rawQuery<Record<string, unknown>>(
-      `SELECT id FROM inventory_count_items WHERE "countId"=$1 AND "productId"=$2`,
-      [countId, b.productId]
+      `SELECT ici.id FROM inventory_count_items ici JOIN inventory_counts ic ON ic.id=ici."countId" WHERE ici."countId"=$1 AND ici."productId"=$2 AND ic."companyId"=$3`,
+      [countId, b.productId, scope.companyId]
     );
     if (existing) {
       await rawExecute(

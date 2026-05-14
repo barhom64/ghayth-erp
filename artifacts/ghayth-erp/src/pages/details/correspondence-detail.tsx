@@ -353,6 +353,9 @@ export default function CorrespondenceDetail() {
                 ref={item.ref || `CORR-${id}`}
                 date={formatDateAr(item.createdAt)}
                 sections={printSections}
+                entityType="official_letter"
+                entityId={item.id ?? id}
+                formats={["a4"]}
               />
             )}
             <GuardedButton
