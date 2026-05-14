@@ -316,6 +316,9 @@ export default function UmrahInvoiceDetail() {
               ref={invoice.invoiceNumber || `INV-${id}`}
               date={formatDateAr(invoice.createdAt)}
               sections={printSections}
+              entityType="umrah_invoice"
+              entityId={invoice.id ?? id}
+              formats={["a4"]}
             />
           )}
           <GuardedButton

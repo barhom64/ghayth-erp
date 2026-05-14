@@ -294,6 +294,9 @@ export default function MaintenanceDetail() {
               ref={`MNT-${id}`}
               date={formatDateAr(maintenance.scheduledDate || maintenance.date || maintenance.createdAt)}
               sections={printSections}
+              entityType="maintenance_request"
+              entityId={maintenance.id ?? id}
+              formats={["a4"]}
             />
           )}
           <DetailActionButtons hook={editDelete} editPerm="fleet:update" deletePerm="fleet:delete" />

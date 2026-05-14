@@ -31,13 +31,42 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/requests.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+سير عمل الطلبات — Workflow templates + routing rules + escalation.
+
+| المكوّن | الوصف |
+|---------|------|
+| Workflow template | per request type | reusable definition |
+| Steps | sequential or parallel | with approvers |
+| Conditions | branching (e.g., cost > threshold) | rule-based |
+| Escalation rules | لو لم يرد خلال X | auto-escalate |
+| SLA per step | hours/days | راجع `support-sla.md` |
+| Notification rules | per step | راجع `notifications.md` |
+| Auto-actions on approval | e.g., create payment, create ticket | راجع `automation.md` |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| List workflows | GET `/requests/workflows` | `request_workflows` | ✅ |
+| Create workflow template | POST | with steps + conditions | ✅ |
+| Edit workflow | PATCH | with version | ✅ critical |
+| Test workflow (dry-run) | POST `/workflows/:id/test` | لا side effects | ⚠ |
+| Assign default per request type | راجع `requests-create.md` | ✅ critical |
+| Execute (per request) | راجع `governance/approvals.md` | ✅ |
+| Escalation triggers (cron) | راجع `automation.md` | for overdue | ✅ critical |
+| Version history | snapshots | ✅ |
+| Audit log on workflow change | إجباري | `audit_logs` | ✅ critical |
+| تكامل مع `governance/approvals.md` (engine) | ✅ critical |
+| تكامل مع `requests-create.md` (template lookup) | ✅ |
+| تكامل مع `notifications.md` (per step) | ✅ |
+| تكامل مع `automation.md` (auto-actions on approve) | ✅ |
+| RBAC | admin + workflow-designer | ✅ critical |
+
+تحقق يدوي:
+- [ ] هل workflow changes versioned (rollback possible)?
+- [ ] هل dry-run truly bypasses side effects?
+- [ ] هل escalation chains avoid infinite loops?
+- [ ] هل conditions DSL secure (no code injection)?
+- [ ] هل approver substitution allowed in case of absence?
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `workflows` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

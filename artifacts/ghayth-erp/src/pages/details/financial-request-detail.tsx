@@ -254,6 +254,9 @@ export default function FinancialRequestDetail() {
             ref={item?.ref || `FR-${id}`}
             date={formatDateAr(item?.createdAt)}
             sections={printSections}
+            entityType="purchase_request"
+            entityId={item?.id ?? id}
+            formats={["a4"]}
           />
           <GuardedButton
             perm="finance:update"

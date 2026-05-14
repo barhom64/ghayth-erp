@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, boolean, timestamp, numeric, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, boolean, timestamp, numeric, index, uniqueIndex, jsonb, uuid } from "drizzle-orm/pg-core";
 
 export const companies = pgTable("companies", {
   id: serial("id").primaryKey(),
@@ -391,4 +391,106 @@ export const eventDlq = pgTable("event_dlq", {
 }, (t) => ({
   typeIdx: index("dlq_type_idx").on(t.type),
   resolvedIdx: index("dlq_resolved_idx").on(t.resolved),
+}));
+
+// ─── Print Engine v2 ────────────────────────────────────────────────────────
+// See migrations 080_print_engine_foundations.sql and 081_print_engine_seed.sql
+
+export const documentTemplates = pgTable("document_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name"),
+  description: text("description"),
+  content: text("content"),
+  category: text("category"),
+  companyId: integer("companyId").references(() => companies.id),
+  branchId: integer("branchId").references(() => branches.id),
+  type: text("type").default("letter"),
+  variables: jsonb("variables").default("[]"),
+  signatureUrl: text("signatureUrl"),
+  htmlContent: text("htmlContent"),
+  isDefault: boolean("isDefault").default(false),
+  isActive: boolean("isActive").default(true),
+  entityType: text("entityType"),
+  paperSize: text("paperSize").default("A4"),
+  mode: text("mode").default("preset"),
+  presetKey: text("presetKey"),
+  layoutJson: jsonb("layoutJson"),
+  cssOverrides: text("cssOverrides"),
+  headerOverride: jsonb("headerOverride"),
+  footerOverride: jsonb("footerOverride"),
+  version: integer("version").default(1),
+  isThermal: boolean("isThermal").default(false),
+  createdBy: integer("createdBy"),
+  createdAt: timestamp("createdAt").defaultNow(),
+  updatedAt: timestamp("updatedAt").defaultNow(),
+}, (t) => ({
+  entityIdx: index("document_templates_entity_idx").on(t.entityType),
+  branchEntityIdx: index("document_templates_branch_entity_idx").on(t.branchId, t.entityType),
+  companyEntityIdx: index("document_templates_company_entity_idx").on(t.companyId, t.entityType),
+}));
+
+export const printTemplateAssignments = pgTable("print_template_assignments", {
+  id: serial("id").primaryKey(),
+  companyId: integer("companyId").notNull().references(() => companies.id),
+  branchId: integer("branchId").references(() => branches.id),
+  entityType: text("entityType").notNull(),
+  templateId: integer("templateId").notNull().references(() => documentTemplates.id),
+  isDefault: boolean("isDefault").notNull().default(true),
+  createdAt: timestamp("createdAt").defaultNow(),
+  updatedAt: timestamp("updatedAt").defaultNow(),
+  createdBy: integer("createdBy"),
+}, (t) => ({
+  lookupIdx: index("pta_lookup_idx").on(t.companyId, t.branchId, t.entityType),
+}));
+
+export const printJobs = pgTable("print_jobs", {
+  id: serial("id").primaryKey(),
+  jobId: uuid("jobId").notNull(),
+  companyId: integer("companyId").notNull().references(() => companies.id),
+  branchId: integer("branchId").references(() => branches.id),
+  userId: integer("userId"),
+  entityType: text("entityType").notNull(),
+  entityId: text("entityId").notNull(),
+  templateId: integer("templateId").references(() => documentTemplates.id),
+  format: text("format").notNull(),
+  paperSize: text("paperSize"),
+  copyNumber: integer("copyNumber").notNull().default(1),
+  isReprint: boolean("isReprint").notNull().default(false),
+  watermark: text("watermark"),
+  pdfStorageKey: text("pdfStorageKey"),
+  pdfBytes: integer("pdfBytes"),
+  status: text("status").notNull().default("rendering"),
+  approvedBy: integer("approvedBy"),
+  approvedAt: timestamp("approvedAt"),
+  errorMessage: text("errorMessage"),
+  ipAddress: text("ipAddress"),
+  userAgent: text("userAgent"),
+  createdAt: timestamp("createdAt").defaultNow(),
+}, (t) => ({
+  entityIdx: index("print_jobs_entity_idx").on(t.companyId, t.entityType, t.entityId),
+  branchCreatedIdx: index("print_jobs_branch_created_idx").on(t.branchId, t.createdAt),
+  userCreatedIdx: index("print_jobs_user_created_idx").on(t.userId, t.createdAt),
+  companyCreatedIdx: index("print_jobs_company_created_idx").on(t.companyId, t.createdAt),
+  statusIdx: index("print_jobs_status_idx").on(t.companyId, t.status),
+  jobIdIdx: uniqueIndex("print_jobs_jobid_uq").on(t.jobId),
+}));
+
+export const printReprintRequests = pgTable("print_reprint_requests", {
+  id: serial("id").primaryKey(),
+  companyId: integer("companyId").notNull().references(() => companies.id),
+  branchId: integer("branchId").references(() => branches.id),
+  entityType: text("entityType").notNull(),
+  entityId: text("entityId").notNull(),
+  requestedBy: integer("requestedBy"),
+  reason: text("reason"),
+  status: text("status").notNull().default("pending"),
+  approvedBy: integer("approvedBy"),
+  approvedAt: timestamp("approvedAt"),
+  rejectedReason: text("rejectedReason"),
+  resultJobId: uuid("resultJobId"),
+  createdAt: timestamp("createdAt").defaultNow(),
+  updatedAt: timestamp("updatedAt").defaultNow(),
+}, (t) => ({
+  statusIdx: index("print_reprint_status_idx").on(t.companyId, t.status, t.createdAt),
+  entityIdx: index("print_reprint_entity_idx").on(t.companyId, t.entityType, t.entityId),
 }));
