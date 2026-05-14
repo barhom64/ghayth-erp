@@ -6,7 +6,7 @@ export interface KpiCardProps {
   label: string;
   value: string | number;
   icon: LucideIcon;
-  /** Format: "text-blue-600 bg-blue-50" — first token for icon, second for container */
+  /** Format: "text-status-info-foreground bg-status-info-surface" — first token for icon, second for container */
   color: string;
   /** "default" for list pages, "sm" for detail pages */
   size?: "default" | "sm";
@@ -30,7 +30,7 @@ export function KpiCard({ label, value, icon: Icon, color, size = "default", tre
         </div>
         <div>
           <p className={cn("font-bold", isSmall ? "text-lg" : "text-2xl")}>{value}</p>
-          <p className="text-xs text-gray-500">{label}</p>
+          <p className="text-xs text-muted-foreground">{label}</p>
           {trend && <p className="text-xs text-green-500">{trend}</p>}
         </div>
       </CardContent>

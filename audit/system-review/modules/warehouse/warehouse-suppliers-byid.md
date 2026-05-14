@@ -23,13 +23,45 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/warehouse.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+تفاصيل مورد واحد — Supplier 360° view.
+
+| القسم | الوصف |
+|------|------|
+| Contact info | + multiple contacts (sales, finance) |
+| Bank accounts | for payments | راجع `finance-payments.md` |
+| Linked POs | open/closed | راجع `finance-purchase-orders.md` |
+| Linked invoices | راجع `finance-vendor-bills.md` |
+| Payments history | راجع `finance-payments.md` |
+| Outstanding AP | aggregate | راجع `finance-ap-aging.md` |
+| Items supplied | catalog | راجع `store-products.md` |
+| Performance rating | quality, on-time, price | KPI |
+| Contracts | راجع `legal-contracts-byid.md` |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| View supplier | GET `/warehouse/suppliers/:id` | `suppliers` | ✅ |
+| Update info | PATCH | with audit | ✅ |
+| Update bank info | encrypted | with extra approval | ✅ critical |
+| AP statement (account statement) | aggregate | راجع `finance-reports.md` | ✅ |
+| Performance review | manual entry | per period | ⚠ |
+| Blacklist (with reason) | flag | guards new POs | ✅ critical |
+| Whitelist after fix | with audit | ✅ |
+| Merge duplicates | bulk move | with audit | ⚠ |
+| Set preferred supplier (per category) | راجع `warehouse-categories-byid.md` | ⚠ |
+| تكامل مع `finance-vendor-bills.md` (linked invoices) | ✅ |
+| تكامل مع `finance-payments.md` (linked payments) | ✅ |
+| تكامل مع `finance-purchase-orders-byid.md` (linked POs) | ✅ |
+| تكامل مع `legal-contracts-byid.md` (contracts) | ✅ |
+| تكامل مع `documents-archive.md` (retention) | ✅ |
+| Audit log إجباري | كل تعديل | `audit_logs` | ✅ critical |
+| RBAC | procurement + finance + scope per supplier | ✅ |
+
+تحقق يدوي:
+- [ ] هل bank info update requires dual approval (audit critical)?
+- [ ] هل blacklist effectively blocks new POs?
+- [ ] هل performance rating periodically updated؟
+- [ ] هل preferred supplier per category enforced في procurement?
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `:id` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

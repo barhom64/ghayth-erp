@@ -93,7 +93,7 @@ export function SummaryCards({ attendance, monthlyStats, currentShift, lastPaysl
                       </div>
                       <div className="w-full h-1.5 rounded-full bg-surface-subtle overflow-hidden">
                         <div
-                          className={cn("h-full rounded-full transition-all duration-500", attendPct >= 90 ? "bg-emerald-500" : attendPct >= 75 ? "bg-amber-400" : "bg-red-500")}
+                          className={cn("h-full rounded-full transition-all duration-500", attendPct >= 90 ? "bg-emerald-500" : attendPct >= 75 ? "bg-amber-400" : "bg-status-error-surface0")}
                           style={{ width: `${attendPct}%` }}
                         />
                       </div>

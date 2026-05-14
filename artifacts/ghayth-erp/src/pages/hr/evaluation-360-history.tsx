@@ -11,7 +11,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 function ScoreDot({ score }: { score: number | null | undefined }) {
   if (score == null) return <span className="text-muted-foreground">-</span>;
-  const color = score >= 80 ? "bg-green-500" : score >= 60 ? "bg-yellow-500" : "bg-red-500";
+  const color = score >= 80 ? "bg-status-success-surface0" : score >= 60 ? "bg-status-warning-surface0" : "bg-status-error-surface0";
   return (
     <div className="flex items-center gap-2">
       <div className={cn("w-3 h-3 rounded-full", color)} />
@@ -68,8 +68,8 @@ export default function Evaluation360HistoryPage() {
             <div className="flex items-end gap-4 h-40">
               {chartData.map((h: any, i: number) => {
                 const pct = (Number(h.finalScore) / maxScore) * 100;
-                const color = Number(h.finalScore) >= 80 ? "bg-green-500" :
-                  Number(h.finalScore) >= 60 ? "bg-yellow-500" : "bg-red-500";
+                const color = Number(h.finalScore) >= 80 ? "bg-status-success-surface0" :
+                  Number(h.finalScore) >= 60 ? "bg-status-warning-surface0" : "bg-status-error-surface0";
                 return (
                   <div key={h.id} className="flex flex-col items-center gap-1 flex-1">
                     <span className={cn("text-xs font-bold", Number(h.finalScore) >= 80 ? "text-status-success-foreground" : Number(h.finalScore) >= 60 ? "text-status-warning-foreground" : "text-status-error-foreground")}>

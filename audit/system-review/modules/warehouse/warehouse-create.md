@@ -27,13 +27,39 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/warehouse.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+إنشاء مستودع جديد — Add new warehouse.
+
+| الحقل | المتطلب |
+|------|--------|
+| Name (ar/en) | إجباري — unique per tenant |
+| Code | إجباري — unique |
+| Branch | FK | إجباري |
+| Address | location | إجباري |
+| GPS coordinates | optional | for geofencing |
+| Type | central/regional/transit/quarantine | enum |
+| Capacity | sqm or m³ | optional |
+| Manager | FK to employees | إجباري |
+| Linked GL accounts | inventory account default | راجع `finance-accounts.md` |
+| Is default for branch | flag | per branch one default |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| Create warehouse | POST `/warehouse` | `warehouses` | ✅ |
+| Validate unique code | server-side | ✅ critical |
+| Validate branch exists | FK | ✅ |
+| Assign manager | راجع `employees.md` | ✅ |
+| Link GL accounts | for inventory class | ✅ critical |
+| Initialize as empty | no stock | ✅ |
+| Set default for branch (if first) | auto | ✅ |
+| Notification | event=`warehouse_created` | راجع `notifications.md` | ✅ |
+| Audit log إجباري | `audit_logs` | ✅ critical |
+| RBAC | admin + warehouse-manager (per branch scope) | ✅ |
+
+تحقق يدوي:
+- [ ] هل code uniqueness enforced at DB level?
+- [ ] هل default per branch logic correct (only one)?
+- [ ] هل GL account linkage validates per inventory class?
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `create` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

@@ -146,7 +146,7 @@ function ConfigBasedFilters({ config, values, onChange, onExportCSV, resultCount
       <div className="flex items-center gap-2 flex-wrap">
         {(config.showSearch !== false) && (
           <div className="relative flex-1 min-w-[200px] max-w-md">
-            <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder={cooldown.isCoolingDown ? cooldown.label : (config.searchPlaceholder || "بحث...")}
               value={values.search}
@@ -163,7 +163,7 @@ function ConfigBasedFilters({ config, values, onChange, onExportCSV, resultCount
               <div
                 role="status"
                 aria-live="polite"
-                className="mt-1 text-[11px] text-amber-600"
+                className="mt-1 text-[11px] text-status-warning-foreground"
               >
                 {cooldown.label}
               </div>
@@ -199,7 +199,7 @@ function ConfigBasedFilters({ config, values, onChange, onExportCSV, resultCount
         </Button>
 
         {activeCount > 0 && (
-          <Button variant="ghost" size="sm" onClick={clearAll} className="gap-1 text-gray-500">
+          <Button variant="ghost" size="sm" onClick={clearAll} className="gap-1 text-muted-foreground">
             <X className="h-3.5 w-3.5" />مسح الفلاتر
           </Button>
         )}
@@ -212,10 +212,10 @@ function ConfigBasedFilters({ config, values, onChange, onExportCSV, resultCount
       </div>
 
       {expanded && (
-        <div className="flex items-center gap-3 flex-wrap p-3 bg-gray-50 rounded-lg border">
+        <div className="flex items-center gap-3 flex-wrap p-3 bg-surface-subtle rounded-lg border">
           {config.branches && config.branches.length > 0 && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500 whitespace-nowrap">الفرع:</span>
+              <span className="text-xs text-muted-foreground whitespace-nowrap">الفرع:</span>
               <Select value={values.branch} onValueChange={v => update("branch", v === "_all" ? "" : v)}>
                 <SelectTrigger className="w-[150px] h-8 text-xs">
                   <SelectValue placeholder="الكل" />
@@ -244,7 +244,7 @@ function ConfigBasedFilters({ config, values, onChange, onExportCSV, resultCount
 
           {config.extraFilters?.map(ef => (
             <div key={ef.key} className="flex items-center gap-2">
-              <span className="text-xs text-gray-500 whitespace-nowrap">{ef.label}:</span>
+              <span className="text-xs text-muted-foreground whitespace-nowrap">{ef.label}:</span>
               <Select value={values[ef.key] || ""} onValueChange={v => update(ef.key, v === "_all" ? "" : v)}>
                 <SelectTrigger className="w-[150px] h-8 text-xs">
                   <SelectValue placeholder="الكل" />
@@ -262,7 +262,7 @@ function ConfigBasedFilters({ config, values, onChange, onExportCSV, resultCount
       )}
 
       {resultCount !== undefined && (
-        <p className="text-xs text-gray-400">{resultCount} نتيجة</p>
+        <p className="text-xs text-muted-foreground">{resultCount} نتيجة</p>
       )}
     </div>
   );
@@ -308,7 +308,7 @@ function SimpleFilters({
           {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
         </Button>
         {hasActiveFilters && (
-          <Button variant="ghost" size="sm" onClick={onReset} className="gap-1 text-gray-500 h-7 px-2">
+          <Button variant="ghost" size="sm" onClick={onReset} className="gap-1 text-muted-foreground h-7 px-2">
             <X className="h-3 w-3" />
             مسح الفلاتر
           </Button>
@@ -316,10 +316,10 @@ function SimpleFilters({
       </div>
 
       {expanded && (
-        <div className="flex flex-wrap items-end gap-3 p-3 bg-gray-50/80 rounded-lg border">
+        <div className="flex flex-wrap items-end gap-3 p-3 bg-surface-subtle/80 rounded-lg border">
           {statusOptions && onStatusChange && (
             <div className="min-w-[140px]">
-              <label className="text-xs font-medium text-gray-500 mb-1 block">{statusLabel}</label>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">{statusLabel}</label>
               <Select value={statusValue} onValueChange={onStatusChange}>
                 <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
@@ -336,7 +336,7 @@ function SimpleFilters({
 
           {(onDateFromChange || onDateToChange) && (
             <div className="min-w-[280px] flex-1">
-              <label className="text-xs font-medium text-gray-500 mb-1 block">الفترة</label>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">الفترة</label>
               <UnifiedDateRange
                 value={{ from: dateFrom || "", to: dateTo || "" }}
                 onChange={(v) => {
@@ -352,7 +352,7 @@ function SimpleFilters({
 
           {branchOptions && onBranchChange && (
             <div className="min-w-[140px]">
-              <label className="text-xs font-medium text-gray-500 mb-1 block">الفرع</label>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">الفرع</label>
               <Select value={branchValue} onValueChange={onBranchChange}>
                 <SelectTrigger className="h-8 text-xs">
                   <SelectValue />

@@ -67,7 +67,7 @@ export function ProductContextCard({
 
   if (isLoading) {
     return (
-      <Card className={cn("border-gray-200 bg-gray-50/50 animate-pulse", className)}>
+      <Card className={cn("border-border bg-surface-subtle/50 animate-pulse", className)}>
         <CardContent className="p-4">
           <div className="h-4 w-32 bg-gray-200 rounded mb-3" />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -92,12 +92,12 @@ export function ProductContextCard({
   const issueRisk = section === "out" && lowStock;
 
   return (
-    <Card className={cn("border-amber-200 bg-amber-50/40", className)}>
+    <Card className={cn("border-status-warning-surface bg-status-warning-surface/40", className)}>
       <CardContent className="p-4 space-y-3">
         {/* Header */}
-        <div className="flex items-center justify-between pb-2 border-b border-amber-100">
+        <div className="flex items-center justify-between pb-2 border-b border-status-warning-surface">
           <div className="flex items-center gap-2">
-            <Package className="h-4 w-4 text-amber-600" />
+            <Package className="h-4 w-4 text-status-warning-foreground" />
             <span className="font-semibold text-sm">{product.name}</span>
             {product.sku && (
               <Badge variant="outline" className="text-xs font-mono">
@@ -114,8 +114,8 @@ export function ProductContextCard({
             variant="outline"
             className={cn(
               "text-xs",
-              product.status === "active" ? "bg-green-50 text-green-700 border-green-200" :
-              "bg-gray-50 text-gray-700 border-gray-200"
+              product.status === "active" ? "bg-status-success-surface text-status-success-foreground border-status-success-surface" :
+              "bg-surface-subtle text-gray-700 border-border"
             )}
           >
             {product.status === "active" ? "نشط" : product.status || "—"}
@@ -126,27 +126,27 @@ export function ProductContextCard({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           <div className={cn(
             "bg-white rounded p-2 border",
-            outOfStock ? "border-red-200" : lowStock ? "border-amber-200" : "border-gray-200"
+            outOfStock ? "border-status-error-surface" : lowStock ? "border-status-warning-surface" : "border-border"
           )}>
-            <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+            <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
               <Box className="h-3 w-3" />
               <span>الرصيد الحالي</span>
             </p>
             <p className={cn(
               "text-sm font-semibold",
-              outOfStock ? "text-red-700" : lowStock ? "text-amber-700" : "text-gray-800"
+              outOfStock ? "text-status-error-foreground" : lowStock ? "text-status-warning-foreground" : "text-gray-800"
             )}>
               {formatNumber(current)} {product.unit || ""}
             </p>
           </div>
-          <div className="bg-white rounded p-2 border border-gray-200">
-            <p className="text-xs text-gray-500 mb-0.5">الحد الأدنى</p>
+          <div className="bg-white rounded p-2 border border-border">
+            <p className="text-xs text-muted-foreground mb-0.5">الحد الأدنى</p>
             <p className="text-sm font-semibold text-gray-800">
               {formatNumber(min)} {product.unit || ""}
             </p>
           </div>
-          <div className="bg-white rounded p-2 border border-gray-200">
-            <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+          <div className="bg-white rounded p-2 border border-border">
+            <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
               <DollarSign className="h-3 w-3" />
               <span>سعر التكلفة</span>
             </p>
@@ -154,8 +154,8 @@ export function ProductContextCard({
               {product.costPrice ? formatCurrency(Number(product.costPrice)) : "—"}
             </p>
           </div>
-          <div className="bg-white rounded p-2 border border-gray-200">
-            <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+          <div className="bg-white rounded p-2 border border-border">
+            <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
               <DollarSign className="h-3 w-3" />
               <span>سعر البيع</span>
             </p>
@@ -167,19 +167,19 @@ export function ProductContextCard({
 
         {/* Warnings */}
         {inactive && (
-          <div className="flex items-center gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 rounded p-1.5">
+          <div className="flex items-center gap-1.5 text-xs text-status-error-foreground bg-status-error-surface border border-status-error-surface rounded p-1.5">
             <AlertTriangle className="h-3 w-3" />
             <span>المنتج غير نشط — يجب تفعيله أولاً قبل تسجيل حركات جديدة</span>
           </div>
         )}
         {outOfStock && section === "out" && (
-          <div className="flex items-center gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 rounded p-1.5">
+          <div className="flex items-center gap-1.5 text-xs text-status-error-foreground bg-status-error-surface border border-status-error-surface rounded p-1.5">
             <AlertTriangle className="h-3 w-3" />
             <span>المنتج نفد من المخزون — لا يمكن الصرف</span>
           </div>
         )}
         {issueRisk && !outOfStock && (
-          <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-1.5">
+          <div className="flex items-center gap-1.5 text-xs text-status-warning-foreground bg-status-warning-surface border border-status-warning-surface rounded p-1.5">
             <TrendingDown className="h-3 w-3" />
             <span>الرصيد قريب من الحد الأدنى — راجع قبل الصرف الكبير</span>
           </div>
@@ -187,15 +187,15 @@ export function ProductContextCard({
 
         {/* Recent movements */}
         {movements.length > 0 && (
-          <div className="pt-2 border-t border-amber-100 space-y-1.5">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-700">
+          <div className="pt-2 border-t border-status-warning-surface space-y-1.5">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-status-warning-foreground">
               <TrendingUp className="h-3.5 w-3.5" />
               <span>آخر الحركات</span>
             </div>
             <div className="space-y-1">
               {movements.slice(0, 3).map((m) => (
-                <div key={m.id} className="flex items-center justify-between bg-white rounded p-1.5 text-xs border border-gray-200">
-                  <span className="text-gray-600">
+                <div key={m.id} className="flex items-center justify-between bg-white rounded p-1.5 text-xs border border-border">
+                  <span className="text-muted-foreground">
                     {new Date(m.createdAt).toLocaleDateString("ar-SA")}
                   </span>
                   <div className="flex items-center gap-2">
@@ -203,7 +203,7 @@ export function ProductContextCard({
                       variant="outline"
                       className={cn(
                         "text-[10px]",
-                        m.type === "in" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700",
+                        m.type === "in" ? "bg-status-success-surface text-status-success-foreground" : "bg-status-error-surface text-status-error-foreground",
                       )}
                     >
                       {m.type === "in" ? "وارد" : "صادر"}

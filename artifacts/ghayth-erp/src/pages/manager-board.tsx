@@ -178,7 +178,7 @@ export default function ManagerBoard() {
             <GuardedButton perm="hr:approve" size="sm" disabled={isProcessing} className="h-7 bg-green-600 hover:bg-green-700 text-xs" onClick={() => doApprove(item)}>
               {isProcessing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
             </GuardedButton>
-            <GuardedButton perm="hr:approve" size="sm" variant="outline" disabled={isProcessing} className="h-7 text-xs border-status-error-surface text-red-600 hover:bg-red-50" onClick={() => doReject(item)}>
+            <GuardedButton perm="hr:approve" size="sm" variant="outline" disabled={isProcessing} className="h-7 text-xs border-status-error-surface text-status-error-foreground hover:bg-status-error-surface" onClick={() => doReject(item)}>
               <XIcon className="h-3 w-3" />
             </GuardedButton>
           </div>
@@ -294,9 +294,9 @@ export default function ManagerBoard() {
                     {team.slice(0, 10).map((member: any) => (
                       <div key={member.employeeId || member.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-surface-subtle">
                         <div className={cn("w-2 h-2 rounded-full shrink-0",
-                          member.status === "present" ? "bg-green-500" :
-                          member.status === "on_leave" ? "bg-blue-500" :
-                          member.status === "absent" ? "bg-red-500" : "bg-gray-300"
+                          member.status === "present" ? "bg-status-success-surface0" :
+                          member.status === "on_leave" ? "bg-status-info-surface0" :
+                          member.status === "absent" ? "bg-status-error-surface0" : "bg-gray-300"
                         )} />
                         <p className="text-sm flex-1 truncate">{member.employeeName || "—"}</p>
                         {member.lateMinutes > 0 && (
@@ -349,7 +349,7 @@ export default function ManagerBoard() {
                     <span className={cn("font-medium", tasksPct >= 80 ? "text-emerald-600" : tasksPct >= 50 ? "text-status-warning-foreground" : "text-status-error-foreground")}>{tasksPct}%</span>
                   </div>
                   <div className="w-full h-2 rounded-full bg-surface-subtle overflow-hidden">
-                    <div className={cn("h-full rounded-full transition-all", tasksPct >= 80 ? "bg-emerald-500" : tasksPct >= 50 ? "bg-amber-400" : "bg-red-500")}
+                    <div className={cn("h-full rounded-full transition-all", tasksPct >= 80 ? "bg-emerald-500" : tasksPct >= 50 ? "bg-amber-400" : "bg-status-error-surface0")}
                       style={{ width: `${tasksPct}%` }} />
                   </div>
                 </div>
@@ -357,7 +357,7 @@ export default function ManagerBoard() {
                   {tasks.filter((t: any) => t.status !== "completed").slice(0, 6).map((t: any) => (
                     <div key={t.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-surface-subtle">
                       <div className={cn("w-2 h-2 rounded-full shrink-0",
-                        t.status === "in_progress" ? "bg-blue-500" : "bg-yellow-500"
+                        t.status === "in_progress" ? "bg-status-info-surface0" : "bg-status-warning-surface0"
                       )} />
                       <p className="text-xs flex-1 truncate">{t.title}</p>
                       {t.assignedTo && <span className="text-[10px] text-muted-foreground">{t.assignedToName || t.assignedTo}</span>}

@@ -31,13 +31,52 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/operations.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+مهام المشروع (WBS) — Work Breakdown Structure.
+
+| الحقل | الوصف |
+|------|------|
+| Task | اسم المهمة |
+| Parent task | لـ hierarchy | self-FK |
+| Assignee | from team | راجع `employees.md` |
+| Start/End date | scheduled |
+| Duration | hours/days |
+| Dependencies | predecessor tasks | FS/SS/FF/SF |
+| Estimated effort | hours |
+| Actual effort | hours from timesheets |
+| Status | todo/in-progress/blocked/done | lifecycle |
+| Priority | low/normal/high/critical |
+| % complete | 0-100 |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| List tasks (Kanban/Gantt) | GET `/projects/:id/tasks` | `project_tasks` | ✅ |
+| Create task | POST | with optional parent | ✅ |
+| Update task | PATCH | status, dates, assignee | ✅ |
+| Add dependency | between tasks | with cycle detection | ✅ critical |
+| Drag-drop reorder | sortOrder | ⚠ |
+| Bulk update | bulk PATCH | للـ team leader | ⚠ |
+| Time log entry | POST `/projects/:id/tasks/:tid/time` | راجع `projects-time-tracking.md` | ⚠ |
+| Comments / discussion | per task | راجع `documents.md` | ⚠ |
+| Attachments | per task | راجع `documents.md` | ✅ |
+| Block warning (لو dependency not met) | guard | ⚠ |
+| Notification on assignee change | event=`task_assigned` | راجع `notifications.md` | ✅ |
+| Notification on due date approach | event=`task_due_soon` | ✅ |
+| Update project % completion (rollup) | aggregate | ✅ |
+| Generate Gantt chart | راجع `projects-gantt.md` | ✅ |
+| تكامل مع `projects.md` (parent) | ✅ |
+| تكامل مع `hr-payroll.md` (لو time-tracked for billing) | ✅ |
+| تكامل مع `bi-kpis.md` (on-time delivery KPI) | ✅ |
+| تكامل مع `tasks.md` (my-tasks view) | ✅ |
+| Audit log إجباري | كل تعديل status | `audit_logs` | ✅ |
+| RBAC | project manager + assignee | ✅ |
+
+تحقق يدوي:
+- [ ] هل dependency cycle detection شغّال (لمنع infinite loops)؟
+- [ ] هل % completion rolls up to parent task + project بدقة؟
+- [ ] هل time logs validated (لا overlap, lazy entry)؟
+- [ ] هل blocking task يطلق alert للـ project manager؟
+- [ ] هل critical path calculation مرئي للـ team؟
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `tasks` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

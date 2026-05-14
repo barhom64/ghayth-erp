@@ -167,7 +167,7 @@ export default function VehicleDetail() {
           <Button variant="outline" size="sm" onClick={() => setDeleting(false)}>إلغاء</Button>
         </div>
       ) : (
-        <Button variant="outline" size="sm" className="text-red-600" onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4 me-1" />حذف</Button>
+        <Button variant="outline" size="sm" className="text-status-error-foreground" onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4 me-1" />حذف</Button>
       )}
     </div>
   );
@@ -517,7 +517,7 @@ export default function VehicleDetail() {
                   {maintenance.slice(0, 8).map((m: any, idx: number) => (
                     <div key={m.id || idx} className="flex items-center justify-between p-2 rounded-lg border border-border text-sm">
                       <div className="flex items-center gap-2">
-                        <div className={cn("w-2 h-2 rounded-full", m.status === "completed" ? "bg-green-500" : m.status === "in_progress" ? "bg-orange-500" : "bg-gray-400")} />
+                        <div className={cn("w-2 h-2 rounded-full", m.status === "completed" ? "bg-status-success-surface0" : m.status === "in_progress" ? "bg-orange-500" : "bg-gray-400")} />
                         <div>
                           <p className="text-xs font-medium">{m.type || m.description || "صيانة"}</p>
                           <p className="text-[10px] text-muted-foreground">{formatDateAr(m.scheduledDate || m.createdAt)}</p>
@@ -733,12 +733,12 @@ export default function VehicleDetail() {
                   <div className="space-y-2">
                     <p className="text-xs font-semibold text-muted-foreground mb-2">تفصيل التكاليف</p>
                     {[
-                      { label: "سعر الشراء", value: tco.breakdown.purchase, color: "bg-blue-500" },
-                      { label: "الاستهلاك", value: tco.breakdown.depreciation, color: "bg-gray-500" },
-                      { label: "الوقود", value: tco.breakdown.fuel, color: "bg-amber-500" },
+                      { label: "سعر الشراء", value: tco.breakdown.purchase, color: "bg-status-info-surface0" },
+                      { label: "الاستهلاك", value: tco.breakdown.depreciation, color: "bg-surface-subtle0" },
+                      { label: "الوقود", value: tco.breakdown.fuel, color: "bg-status-warning-surface0" },
                       { label: "الصيانة", value: tco.breakdown.maintenance, color: "bg-orange-500" },
                       { label: "التأمين", value: tco.breakdown.insurance, color: "bg-emerald-500" },
-                      { label: "المخالفات", value: tco.breakdown.fines, color: "bg-red-500" },
+                      { label: "المخالفات", value: tco.breakdown.fines, color: "bg-status-error-surface0" },
                     ].filter(item => Number(item.value) > 0).map(item => {
                       const pct = tco.totalCost > 0 ? Math.round((Number(item.value) / tco.totalCost) * 100) : 0;
                       return (

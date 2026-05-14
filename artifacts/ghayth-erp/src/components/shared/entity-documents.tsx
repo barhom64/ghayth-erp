@@ -24,8 +24,8 @@ const CATEGORIES = [
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   draft: { label: "مسودة", color: "bg-gray-100 text-gray-700" },
-  approved: { label: "معتمد", color: "bg-green-100 text-green-700" },
-  cancelled: { label: "ملغي", color: "bg-red-100 text-red-700" },
+  approved: { label: "معتمد", color: "bg-green-100 text-status-success-foreground" },
+  cancelled: { label: "ملغي", color: "bg-red-100 text-status-error-foreground" },
 };
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -100,16 +100,16 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
               const st = STATUS_MAP[d.status] || STATUS_MAP.draft;
               const cat = CATEGORIES.find(c => c.value === d.category);
               return (
-                <div key={d.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-gray-50 transition-colors">
+                <div key={d.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-surface-subtle transition-colors">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded bg-blue-50 flex items-center justify-center flex-shrink-0">
-                      <FileText className="h-4 w-4 text-blue-600" />
+                    <div className="w-8 h-8 rounded bg-status-info-surface flex items-center justify-center flex-shrink-0">
+                      <FileText className="h-4 w-4 text-status-info-foreground" />
                     </div>
                     <div className="min-w-0">
                       <p className="font-medium text-sm truncate">{d.title}</p>
                       <div className="flex items-center gap-2 mt-0.5">
-                        {d.fileName && <span className="text-xs text-gray-400">{d.fileName}</span>}
-                        {d.fileSize && <span className="text-xs text-gray-400">({formatSize(d.fileSize)})</span>}
+                        {d.fileName && <span className="text-xs text-muted-foreground">{d.fileName}</span>}
+                        {d.fileSize && <span className="text-xs text-muted-foreground">({formatSize(d.fileSize)})</span>}
                       </div>
                     </div>
                   </div>
@@ -239,12 +239,12 @@ function UploadEntityDocDialog({ entityType, entityId, onSuccess }: { entityType
               onClick={() => inputRef.current?.click()}
               className={cn(
                 "border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-all text-sm",
-                file ? "border-green-400 bg-green-50" : "border-gray-200 hover:border-gray-300"
+                file ? "border-green-400 bg-status-success-surface" : "border-border hover:border-border"
               )}
             >
               {file ? (
                 <div className="flex items-center justify-center gap-2">
-                  <FileUp className="h-4 w-4 text-green-600" />
+                  <FileUp className="h-4 w-4 text-status-success-foreground" />
                   <span>{file.name}</span>
                   <button onClick={(e) => { e.stopPropagation(); setFile(null); }} className="text-red-400">
                     <X className="h-3.5 w-3.5" />
@@ -253,7 +253,7 @@ function UploadEntityDocDialog({ entityType, entityId, onSuccess }: { entityType
               ) : (
                 <>
                   <Upload className="h-6 w-6 mx-auto mb-1 text-gray-300" />
-                  <p className="text-gray-500">اختر الملف</p>
+                  <p className="text-muted-foreground">اختر الملف</p>
                 </>
               )}
               <input ref={inputRef} type="file" className="hidden" onChange={(e) => { if (e.target.files?.[0]) setFile(e.target.files[0]); e.target.value = ""; }} />

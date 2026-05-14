@@ -616,16 +616,16 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     if (crumbs.length <= 1) return null;
 
     return (
-      <div className="bg-gray-50 border-b border-gray-100 px-4 lg:px-8 py-2 flex-shrink-0">
+      <div className="bg-surface-subtle border-b border-border px-4 lg:px-8 py-2 flex-shrink-0">
         <nav aria-label="شريط المسار">
-          <ol className="flex items-center gap-1.5 text-sm text-gray-500">
+          <ol className="flex items-center gap-1.5 text-sm text-muted-foreground">
             {crumbs.map((crumb, i) => (
               <li key={crumb.path + i} className="flex items-center gap-1.5">
                 {i > 0 && <ChevronLeft className="h-3.5 w-3.5 text-gray-300 flex-shrink-0" />}
                 {i === crumbs.length - 1 ? (
                   <span className="text-gray-800 font-medium">{crumb.label}</span>
                 ) : (
-                  <Link href={crumb.path} className="hover:text-blue-600 transition-colors">
+                  <Link href={crumb.path} className="hover:text-status-info-foreground transition-colors">
                     {i === 0 ? (
                       <span className="flex items-center gap-1">
                         <Home className="h-3.5 w-3.5" />
@@ -656,11 +656,11 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
           <span
             className={cn(
               "flex items-center justify-center py-2.5 rounded-lg transition-colors cursor-pointer",
-              isActive ? "bg-primary/10 text-primary" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+              isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-surface-subtle hover:text-gray-900"
             )}
             title={item.label}
           >
-            <item.icon className={cn("h-5 w-5", isActive ? "text-primary" : "text-gray-400")} />
+            <item.icon className={cn("h-5 w-5", isActive ? "text-primary" : "text-muted-foreground")} />
           </span>
         </Link>
       );
@@ -675,16 +675,16 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
               "w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
               isActive
                 ? "bg-primary/10 text-primary"
-                : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                : "text-muted-foreground hover:bg-surface-subtle hover:text-gray-900"
             )}
           >
             <div className="flex items-center gap-3">
-              <item.icon className={cn("h-[18px] w-[18px]", isActive ? "text-primary" : "text-gray-400")} />
+              <item.icon className={cn("h-[18px] w-[18px]", isActive ? "text-primary" : "text-muted-foreground")} />
               {item.label}
             </div>
             <div className="flex items-center gap-1.5">
               {!isExpanded && item.children && item.children.length > 0 && (
-                <span className="text-[10px] text-gray-400 bg-gray-100 rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-none">
+                <span className="text-[10px] text-muted-foreground bg-gray-100 rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-none">
                   {item.children.length}
                 </span>
               )}
@@ -696,7 +696,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
             </div>
           </button>
           {isExpanded && (
-            <div className="ms-4 mt-0.5 space-y-0.5 border-s-2 border-gray-100 ps-2">
+            <div className="ms-4 mt-0.5 space-y-0.5 border-s-2 border-border ps-2">
               {item.children!.map((child) => renderNavItem(child, true))}
             </div>
           )}
@@ -712,10 +712,10 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
             isChild ? "py-1.5" : "py-2",
             isActive
               ? "bg-primary/10 text-primary"
-              : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+              : "text-muted-foreground hover:bg-surface-subtle hover:text-gray-900"
           )}
         >
-          <item.icon className={cn(isChild ? "h-3.5 w-3.5" : "h-[18px] w-[18px]", isActive ? "text-primary" : "text-gray-400")} />
+          <item.icon className={cn(isChild ? "h-3.5 w-3.5" : "h-[18px] w-[18px]", isActive ? "text-primary" : "text-muted-foreground")} />
           {item.label}
         </span>
       </Link>
@@ -982,21 +982,21 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="h-screen bg-gray-50 flex overflow-hidden" dir="rtl">
+    <div className="h-screen bg-surface-subtle flex overflow-hidden" dir="rtl">
       <aside
         className={cn(
-          "bg-white border-e border-gray-200 fixed inset-y-0 start-0 z-50 flex-shrink-0 transition-all duration-300 ease-in-out",
+          "bg-white border-e border-border fixed inset-y-0 start-0 z-50 flex-shrink-0 transition-all duration-300 ease-in-out",
           isSidebarCollapsed ? "w-16" : "w-64",
           isSidebarOpen ? "translate-x-0" : "translate-x-full",
           "lg:!translate-x-0"
         )}
       >
         <div className="h-full flex flex-col">
-          <div className={cn("h-14 flex items-center border-b border-gray-100", isSidebarCollapsed ? "justify-center px-2" : "justify-between px-5")}>
+          <div className={cn("h-14 flex items-center border-b border-border", isSidebarCollapsed ? "justify-center px-2" : "justify-between px-5")}>
             {isSidebarCollapsed ? (
               <button
                 onClick={() => setIsSidebarCollapsed(false)}
-                className="flex items-center justify-center h-9 w-9 rounded-lg text-primary hover:bg-gray-50 transition-colors"
+                className="flex items-center justify-center h-9 w-9 rounded-lg text-primary hover:bg-surface-subtle transition-colors"
                 title="توسيع القائمة"
               >
                 <CloudRain className="h-5 w-5" />
@@ -1011,7 +1011,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="hidden lg:flex h-8 w-8 text-gray-400 hover:text-gray-600"
+                    className="hidden lg:flex h-8 w-8 text-muted-foreground hover:text-muted-foreground"
                     onClick={() => setIsSidebarCollapsed(true)}
                     title="طي القائمة"
                   >
@@ -1034,11 +1034,11 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
             {filteredSections.map((section, sectionIdx) => (
               <div key={section.title}>
                 {sectionIdx > 0 && (
-                  <div className={cn("my-2 border-t border-gray-100", isSidebarCollapsed ? "mx-1" : "mx-2")} />
+                  <div className={cn("my-2 border-t border-border", isSidebarCollapsed ? "mx-1" : "mx-2")} />
                 )}
                 {section.title !== "الرئيسية" && !isSidebarCollapsed && (
                   <div className="px-3 pt-2 pb-1">
-                    <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                    <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                       {section.title}
                     </span>
                   </div>
@@ -1050,7 +1050,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
 
-          <div className={cn("border-t border-gray-100", isSidebarCollapsed ? "p-2" : "p-3")}>
+          <div className={cn("border-t border-border", isSidebarCollapsed ? "p-2" : "p-3")}>
             {isSidebarCollapsed ? (
               <div className="flex flex-col items-center gap-2">
                 <div
@@ -1061,7 +1061,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                   {(user?.name || "مستخدم").substring(0, 2)}
                 </div>
                 <Button variant="ghost" size="icon" onClick={logout} title="تسجيل الخروج" className="h-7 w-7">
-                  <LogOut className="h-3.5 w-3.5 text-gray-400" />
+                  <LogOut className="h-3.5 w-3.5 text-muted-foreground" />
                 </Button>
               </div>
             ) : (
@@ -1079,7 +1079,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                   </p>
                 </div>
                 <Button variant="ghost" size="icon" onClick={logout} title="تسجيل الخروج" className="h-8 w-8">
-                  <LogOut className="h-4 w-4 text-gray-400" />
+                  <LogOut className="h-4 w-4 text-muted-foreground" />
                 </Button>
               </div>
             )}
@@ -1088,7 +1088,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className={cn("flex-1 flex flex-col min-w-0 h-screen overflow-hidden transition-all duration-300", isSidebarCollapsed ? "lg:ms-16" : "lg:ms-64")}>
-        <header className="bg-white border-b border-gray-200 h-14 flex items-center justify-between px-4 lg:px-6 flex-shrink-0 z-40">
+        <header className="bg-white border-b border-border h-14 flex items-center justify-between px-4 lg:px-6 flex-shrink-0 z-40">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -1100,13 +1100,13 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
             </Button>
             {location !== "/dashboard" && location !== "/" && (
               <Link href="/dashboard">
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-blue-600" title="الرجوع للرئيسية">
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-status-info-foreground" title="الرجوع للرئيسية">
                   <Home className="h-4 w-4" />
                 </Button>
               </Link>
             )}
             <h1 className="text-base font-semibold text-gray-800 flex items-center gap-2">
-              <PageIcon className="h-[18px] w-[18px] text-blue-600" />
+              <PageIcon className="h-[18px] w-[18px] text-status-info-foreground" />
               <span className="hidden sm:inline">{pageTitle}</span>
             </h1>
             {currentQuickActions.length > 0 && (
@@ -1127,15 +1127,15 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
             <div className="hidden sm:block">
               <button
                 onClick={() => { setCommandPaletteFilter(null); setCommandPaletteOpen(true); }}
-                className="flex items-center gap-2 h-9 px-3 text-sm text-gray-400 border border-gray-200 rounded-lg bg-gray-50 hover:bg-white hover:border-blue-300 hover:text-gray-600 transition-all w-72"
+                className="flex items-center gap-2 h-9 px-3 text-sm text-muted-foreground border border-border rounded-lg bg-surface-subtle hover:bg-white hover:border-status-info-surface hover:text-muted-foreground transition-all w-72"
               >
                 <Search className="h-4 w-4 shrink-0" />
                 <span className="flex-1 text-start">بحث في الصفحات والإجراءات...</span>
-                <kbd className="hidden lg:flex items-center gap-0.5 text-[10px] text-gray-300 bg-white border border-gray-200 rounded px-1 py-0.5">Ctrl+K</kbd>
+                <kbd className="hidden lg:flex items-center gap-0.5 text-[10px] text-gray-300 bg-white border border-border rounded px-1 py-0.5">Ctrl+K</kbd>
               </button>
             </div>
 
-            <div className="flex items-center gap-1 border border-gray-200 rounded-lg px-1 py-0.5 bg-gray-50/50">
+            <div className="flex items-center gap-1 border border-border rounded-lg px-1 py-0.5 bg-surface-subtle/50">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -1151,7 +1151,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-56">
-                  <DropdownMenuLabel className="text-xs text-gray-500">تغيير الصفة الوظيفية</DropdownMenuLabel>
+                  <DropdownMenuLabel className="text-xs text-muted-foreground">تغيير الصفة الوظيفية</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   {userRoles.map((role) => {
                     const color = roleKeyColors[role.roleKey] || "#95A5A6";
@@ -1176,7 +1176,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                   })}
                   {userRoles.length === 0 && (
                     <DropdownMenuItem disabled>
-                      <span className="text-gray-400 text-xs">لا توجد أدوار مسندة</span>
+                      <span className="text-muted-foreground text-xs">لا توجد أدوار مسندة</span>
                     </DropdownMenuItem>
                   )}
                 </DropdownMenuContent>
@@ -1205,14 +1205,14 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-56">
-                      <DropdownMenuLabel className="text-xs text-gray-500">اختيار الشركات</DropdownMenuLabel>
+                      <DropdownMenuLabel className="text-xs text-muted-foreground">اختيار الشركات</DropdownMenuLabel>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         onClick={() => setSelectedCompanyIds([])}
                         className={selectedCompanyIds.length === 0 ? "bg-emerald-50 text-emerald-700 font-medium" : ""}
                       >
                         <div className="flex items-center gap-2 w-full">
-                          <div className={`h-4 w-4 rounded border flex items-center justify-center ${selectedCompanyIds.length === 0 ? "bg-emerald-600 border-emerald-600" : "border-gray-300"}`}>
+                          <div className={`h-4 w-4 rounded border flex items-center justify-center ${selectedCompanyIds.length === 0 ? "bg-emerald-600 border-emerald-600" : "border-border"}`}>
                             {selectedCompanyIds.length === 0 && <CheckCircle className="h-3 w-3 text-white" />}
                           </div>
                           <Building className="h-4 w-4 text-emerald-500" />
@@ -1241,10 +1241,10 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                             className={isSelected ? "bg-emerald-50" : ""}
                           >
                             <div className="flex items-center gap-2 w-full">
-                              <div className={`h-4 w-4 rounded border flex items-center justify-center ${isSelected ? "bg-emerald-600 border-emerald-600" : "border-gray-300"}`}>
+                              <div className={`h-4 w-4 rounded border flex items-center justify-center ${isSelected ? "bg-emerald-600 border-emerald-600" : "border-border"}`}>
                                 {isSelected && <CheckCircle className="h-3 w-3 text-white" />}
                               </div>
-                              <Building className={`h-4 w-4 ${isSelected ? "text-emerald-600" : "text-gray-400"}`} />
+                              <Building className={`h-4 w-4 ${isSelected ? "text-emerald-600" : "text-muted-foreground"}`} />
                               <span>{company.name}</span>
                             </div>
                           </DropdownMenuItem>
@@ -1259,8 +1259,8 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="gap-1.5 px-2 h-8 text-blue-700 hover:bg-white">
-                    <Building2 className="h-3.5 w-3.5 text-blue-600" />
+                  <Button variant="ghost" className="gap-1.5 px-2 h-8 text-status-info-foreground hover:bg-white">
+                    <Building2 className="h-3.5 w-3.5 text-status-info-foreground" />
                     <span className="hidden md:inline-block text-xs font-medium">
                       {selectedBranchIds.length === 0
                         ? "جميع الفروع"
@@ -1277,19 +1277,19 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel className="text-xs text-gray-500">اختيار الفروع</DropdownMenuLabel>
+                  <DropdownMenuLabel className="text-xs text-muted-foreground">اختيار الفروع</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onClick={() => setSelectedBranchIds([])}
-                    className={selectedBranchIds.length === 0 ? "bg-blue-50 text-blue-700 font-medium" : ""}
+                    className={selectedBranchIds.length === 0 ? "bg-status-info-surface text-status-info-foreground font-medium" : ""}
                   >
                     <div className="flex items-center gap-2 w-full">
-                      <div className={`h-4 w-4 rounded border flex items-center justify-center ${selectedBranchIds.length === 0 ? "bg-blue-600 border-blue-600" : "border-gray-300"}`}>
+                      <div className={`h-4 w-4 rounded border flex items-center justify-center ${selectedBranchIds.length === 0 ? "bg-blue-600 border-blue-600" : "border-border"}`}>
                         {selectedBranchIds.length === 0 && <CheckCircle className="h-3 w-3 text-white" />}
                       </div>
                       <Building2 className="h-4 w-4 text-blue-500" />
                       <span>جميع الفروع</span>
-                      <span className="ms-auto text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded">الكل</span>
+                      <span className="ms-auto text-xs bg-blue-100 text-status-info-foreground px-1.5 py-0.5 rounded">الكل</span>
                     </div>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
@@ -1306,13 +1306,13 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                             setSelectedBranchIds([...selectedBranchIds, branch.id]);
                           }
                         }}
-                        className={isSelected ? "bg-blue-50" : ""}
+                        className={isSelected ? "bg-status-info-surface" : ""}
                       >
                         <div className="flex items-center gap-2 w-full">
-                          <div className={`h-4 w-4 rounded border flex items-center justify-center ${isSelected ? "bg-blue-600 border-blue-600" : "border-gray-300"}`}>
+                          <div className={`h-4 w-4 rounded border flex items-center justify-center ${isSelected ? "bg-blue-600 border-blue-600" : "border-border"}`}>
                             {isSelected && <CheckCircle className="h-3 w-3 text-white" />}
                           </div>
-                          <Building2 className={`h-4 w-4 ${isSelected ? "text-blue-600" : "text-gray-400"}`} />
+                          <Building2 className={`h-4 w-4 ${isSelected ? "text-status-info-foreground" : "text-muted-foreground"}`} />
                           <span>{branch.name}</span>
                         </div>
                       </DropdownMenuItem>
@@ -1327,7 +1327,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
             <div className="sm:hidden">
               <button
                 onClick={() => { setCommandPaletteFilter(null); setCommandPaletteOpen(true); }}
-                className="flex items-center justify-center h-8 w-8 border border-gray-200 rounded-lg bg-gray-50 hover:bg-white text-gray-400"
+                className="flex items-center justify-center h-8 w-8 border border-border rounded-lg bg-surface-subtle hover:bg-white text-muted-foreground"
               >
                 <Search className="h-4 w-4" />
               </button>

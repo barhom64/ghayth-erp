@@ -151,7 +151,7 @@ export default function ProjectCostingPage() {
                       <div className="w-24">
                         <div className="flex items-center gap-1.5">
                           <div className="flex-1 bg-surface-subtle rounded-full h-1.5">
-                            <div className={`h-1.5 rounded-full ${pct > 90 ? "bg-red-500" : pct > 70 ? "bg-yellow-500" : "bg-green-500"}`} style={{ width: `${pct}%` }} />
+                            <div className={`h-1.5 rounded-full ${pct > 90 ? "bg-status-error-surface0" : pct > 70 ? "bg-status-warning-surface0" : "bg-status-success-surface0"}`} style={{ width: `${pct}%` }} />
                           </div>
                           <span className="text-xs text-muted-foreground">{pct}%</span>
                         </div>
