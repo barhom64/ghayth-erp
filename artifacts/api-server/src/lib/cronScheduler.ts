@@ -2150,26 +2150,44 @@ async function monthlyAutoDepreciation(): Promise<string> {
       const newBookValue = Math.max(purchaseCost - newAccumulated, salvageValue);
 
       try {
-        const pool = await import("./rawdb.js");
-        const client = await pool.pool.connect();
-        try {
-          await client.query("BEGIN");
-          const jeRes = await client.query(
-            `INSERT INTO journal_entries ("companyId","branchId","createdBy",ref,description,type)
-             VALUES ($1,$2,$3,$4,$5,'depreciation') RETURNING id`,
-            [company.id, asset.branchId ?? branchId, createdBy,
-             `DEP-AUTO-${asset.code ?? asset.id}-${period}`,
-             `إهلاك تلقائي: ${asset.name} — ${period}`]
-          );
-          const journalId = jeRes.rows[0].id;
-          await client.query(
-            `INSERT INTO journal_lines ("journalId","accountCode",debit,credit) VALUES ($1,$2,$3,0)`,
-            [journalId, asset.depreciationAccountCode ?? "6100", depAmount]
-          );
-          await client.query(
-            `INSERT INTO journal_lines ("journalId","accountCode",debit,credit) VALUES ($1,$2,0,$3)`,
-            [journalId, asset.accDepreciationAccountCode ?? "1590", depAmount]
-          );
+        const ref = `DEP-AUTO-${asset.code ?? asset.id}-${period}`;
+        const { financialEngine } = await import("./engines/index.js");
+        // GL boundary: depreciation journal goes through financialEngine so
+        // sourceKey idempotency, period checks, and account validation are
+        // applied uniformly. The asset-specific bookkeeping (depreciation_entries
+        // + fixed_assets) stays in this cron because those are domain tables.
+        const { journalId, alreadyExists } = await financialEngine.postJournalEntry({
+          companyId: Number(company.id),
+          branchId: Number(asset.branchId ?? branchId),
+          createdBy: Number(createdBy),
+          ref,
+          description: `إهلاك تلقائي: ${asset.name} — ${period}`,
+          type: "depreciation",
+          sourceType: "fixed_asset_depreciation",
+          sourceId: Number(asset.id),
+          sourceKey: `finance:depreciation:${asset.id}:${period}`,
+          lines: [
+            {
+              accountCode: (asset.depreciationAccountCode as string | undefined) ?? "6100",
+              debit: depAmount,
+              credit: 0,
+            },
+            {
+              accountCode: (asset.accDepreciationAccountCode as string | undefined) ?? "1590",
+              debit: 0,
+              credit: depAmount,
+            },
+          ],
+          status: "posted",
+        });
+
+        if (alreadyExists) {
+          // Another cron run already posted this depreciation. Skip the
+          // asset-side bookkeeping to avoid double-counting.
+          continue;
+        }
+
+        await withTransaction(async (client) => {
           await client.query(
             `INSERT INTO depreciation_entries ("assetId","companyId",period,"depreciationAmount","bookValueAfter","journalEntryId",status,"postedAt")
              VALUES ($1,$2,$3,$4,$5,$6,'posted',NOW())`,
@@ -2179,17 +2197,12 @@ async function monthlyAutoDepreciation(): Promise<string> {
             `UPDATE fixed_assets SET "accumulatedDepreciation"=$1, "currentBookValue"=$2, "updatedAt"=NOW() WHERE id=$3`,
             [newAccumulated, newBookValue, asset.id]
           );
-          await client.query("COMMIT");
-          processed++;
-          totalDepreciated += depAmount;
-        } catch (err) {
-          await client.query("ROLLBACK");
-          logger.error(err, `[CRON] Depreciation failed for asset ${asset.id}:`);
-        } finally {
-          client.release();
-        }
+        });
+
+        processed++;
+        totalDepreciated += depAmount;
       } catch (err) {
-        logger.error(err, `[CRON] Depreciation pool error for asset ${asset.id}:`);
+        logger.error(err, `[CRON] Depreciation failed for asset ${asset.id}:`);
       }
     }
   }
