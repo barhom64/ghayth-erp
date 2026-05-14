@@ -5,7 +5,7 @@ import { handleRouteError, ForbiddenError } from "../lib/errorHandler.js";
 import { todayISO } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 import { LEAVE_APPROVAL_ROLES, PAYROLL_ROLES, FINANCE_ROLES, PR_APPROVAL_ROLES, LETTER_APPROVAL_ROLES , ACTION_CENTER_ROLES} from "../lib/rbacCatalog.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 
 const router = Router();
 
@@ -340,7 +340,7 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
       pendingJournals.length + pendingInventory.length + pendingWorkflows.length +
       umrahPendingCount;
 
-    res.json({
+    res.json(maskFields(req, {
       summary: {
         totalPending,
         slaBreachedCount: slaBreached.length,
@@ -358,7 +358,7 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
       umrahOverdueInvoices, umrahReconAmountDiffs,
       slaBreached, escalations, todayTasks, criticalAlerts,
       role: scope.role,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Action-center error:");
   }

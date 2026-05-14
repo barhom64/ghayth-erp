@@ -346,6 +346,9 @@ export default function PayrollDetail() {
               ref={payroll.ref || `PAY-${id}`}
               date={formatDateAr(payroll.paymentDate || payroll.createdAt)}
               sections={printSections}
+              entityType="payroll"
+              entityId={payroll.id ?? id}
+              formats={["a4"]}
             />
           )}
           <GuardedButton

@@ -23,13 +23,51 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/hr.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+تفاصيل عقد عمل واحد — Employment contract detail.
+
+| الحالة | الوصف |
+|--------|------|
+| Draft | قيد الإعداد |
+| Pending signature | بانتظار التوقيع |
+| Active | فعّال — مسجّل GOSI |
+| Pending renewal | يقرب نهايته |
+| Renewed | تم تجديده |
+| Terminated | منهي | راجع `hr-exit.md` |
+| Expired | انتهى دون تجديد |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| View contract | GET `/hr/contracts/:id` | `employee_contracts` | ✅ |
+| E-signature collection | راجع `documents.md` | dual-party | ⚠ |
+| Activate (post-signature) | with GOSI registration | راجع `admin-integrations.md` | ✅ critical |
+| Amend (ملحق) | POST `/hr/contracts/:id/amendment` | with audit + new version | ✅ critical |
+| Renew | POST `/hr/contracts/:id/renew` | يولّد new linked contract | ✅ |
+| Terminate (early) | with reason | راجع `hr-exit.md` | ✅ critical |
+| Probation evaluation | راجع `hr-evaluations.md` | within probation period | ⚠ |
+| Linked salary changes | راجع `hr-payroll-salary-components.md` | with audit | ✅ critical |
+| Linked transfers | راجع `hr-transfers.md` | ✅ |
+| Document storage (PDF) | راجع `documents.md` | signed copy | ✅ critical |
+| Saudi Labor Law compliance check | server-side | gratuity, leaves, OT terms | ✅ critical |
+| GOSI registration sync | external | ✅ critical |
+| Qiwa registration sync | external | ✅ |
+| Mudad WPS setup (لو applicable) | external | ✅ |
+| Expiry alerts (90/60/30/7 يوم) | cron | راجع `notifications.md` | ✅ critical |
+| تكامل مع `employees.md` (linked employee) | ✅ |
+| تكامل مع `hr-payroll.md` (salary basis) | ✅ critical |
+| تكامل مع `hr-exit.md` (termination) | ✅ critical |
+| تكامل مع `documents-archive.md` (retention 5y+ post-termination) | ✅ critical |
+| تكامل مع `governance-compliance.md` (Saudi Labor Law) | ✅ critical |
+| Audit log إجباري | كل تعديل/توقيع/تجديد | `audit_logs` | ✅ critical |
+| **PDPL** — confidential | restricted | ✅ critical |
+| RBAC | hr-manager + employee (own view only) | ✅ critical |
+
+تحقق يدوي:
+- [ ] هل expiry reminders تطلق متعدد المستويات (HR + manager + employee)?
+- [ ] هل amendments preserve original version (history)?
+- [ ] هل Saudi Labor Law validation تمنع invalid clauses (e.g., probation > 90 days)?
+- [ ] هل GOSI sync real-time مع activation?
+- [ ] هل expired contract auto-blocks attendance + payroll?
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `:id` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

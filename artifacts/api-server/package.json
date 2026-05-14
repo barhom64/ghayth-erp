@@ -10,7 +10,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint:permissions": "node scripts/lintPermissions.mjs",
     "lint:sql": "node scripts/lintSql.mjs",
-    "lint": "pnpm run lint:permissions && pnpm run lint:sql",
+    "lint:gl-boundary": "node scripts/lintGlBoundary.mjs",
+    "lint": "pnpm run lint:permissions && pnpm run lint:sql && pnpm run lint:gl-boundary",
     "test": "vitest run",
     "test:watch": "vitest"
   },

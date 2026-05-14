@@ -283,6 +283,10 @@ export default function WarehouseProductDetail() {
               ref={`PROD-${id}`}
               date={formatDateAr(product.createdAt)}
               sections={printSections}
+              entityType="item_barcode_label"
+              entityId={product.id ?? id}
+              formats={["label", "a4"]}
+              label="طباعة ملصق / باركود"
             />
           )}
           <GuardedButton perm="warehouse:update" variant="outline" size="sm" onClick={handleEdit} disabled={!product}>

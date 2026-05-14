@@ -417,6 +417,12 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
   // ═══════════════════════════════════════════════════════════════
   { key: "admin.approvals", parentKey: "admin", moduleKey: "admin", labelAr: "سجل الاعتمادات", icon: "CheckCircle",
     availableActions: ["view", "list"], availableScopes: ALL_SCOPES, displayOrder: 1810 },
+
+  // ═══════════════════════════════════════════════════════════════
+  // Intelligence / Activity Tracking
+  // ═══════════════════════════════════════════════════════════════
+  { key: "intelligence", moduleKey: "admin", labelAr: "التتبع والتحليل", icon: "Activity",
+    availableActions: ["create", "list", "view"], availableScopes: ALL_SCOPES, displayOrder: 1820 },
 ];
 
 /**

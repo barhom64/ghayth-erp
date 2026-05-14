@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { handleRouteError } from "../lib/errorHandler.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { todayISO, currentPeriod } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 
@@ -40,7 +40,7 @@ router.get("/hr", authorize({ feature: "hr", action: "list" }), async (req, res)
       `SELECT date, COUNT(*) FILTER (WHERE status = 'present') AS present, COUNT(*) FILTER (WHERE status = 'absent') AS absent, COUNT(*) FILTER (WHERE status = 'late') AS late FROM attendance WHERE "companyId" = $1 AND date >= CURRENT_DATE - INTERVAL '7 days' GROUP BY date ORDER BY date`, [cid]
     );
 
-    res.json({
+    res.json(maskFields(req, {
       employees: { total: Number(employees?.total ?? 0), active: Number(employees?.active ?? 0) },
       attendance: {
         present: Number(attendance?.present ?? 0), absent: Number(attendance?.absent ?? 0),
@@ -52,7 +52,7 @@ router.get("/hr", authorize({ feature: "hr", action: "list" }), async (req, res)
       expiringContracts: Number(contracts?.expiring ?? 0),
       evaluations: Number(evaluations?.total ?? 0),
       weeklyAttendance,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "لوحة مؤشرات HR");
   }
@@ -79,7 +79,7 @@ router.get("/finance", authorize({ feature: "finance", action: "list" }), async 
       `SELECT ca.code, ca.name, COALESCE(SUM(jl.debit), 0) AS debit, COALESCE(SUM(jl.credit), 0) AS credit FROM chart_of_accounts ca LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL) jl ON jl."accountCode" = ca.code WHERE ca."companyId" = $1 AND ca.type = 'expense' GROUP BY ca.code, ca.name ORDER BY debit DESC LIMIT 10`, [cid]
     );
 
-    res.json({
+    res.json(maskFields(req, {
       revenue: { total: Number(invoices?.totalRevenue ?? 0), paid: Number(invoices?.totalPaid ?? 0), outstanding: Number(invoices?.outstanding ?? 0) },
       invoices: { count: Number(invoices?.count ?? 0), overdue: Number(invoices?.overdue ?? 0), paid: Number(invoices?.paid ?? 0) },
       expenses: { monthTotal: Number(expenses?.total ?? 0), monthCount: Number(expenses?.count ?? 0) },
@@ -87,7 +87,7 @@ router.get("/finance", authorize({ feature: "finance", action: "list" }), async 
       budgets: { total: Number(budgets?.total ?? 0), avgUsage: Math.round(Number(budgets?.avgUsage ?? 0)) },
       monthlyRevenue,
       costCenters,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "لوحة مؤشرات المالية");
   }
@@ -109,13 +109,13 @@ router.get("/fleet", authorize({ feature: "fleet", action: "list" }), async (req
       `SELECT TO_CHAR(DATE_TRUNC('month', "startTime"), 'YYYY-MM') AS month, COUNT(*) AS trips, COALESCE(SUM(distance), 0) AS distance, COALESCE(SUM(cost), 0) AS cost FROM fleet_trips WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "startTime" >= CURRENT_DATE - INTERVAL '6 months' GROUP BY month ORDER BY month`, [cid]
     );
 
-    res.json({
+    res.json(maskFields(req, {
       vehicles: { total: Number(vehicles?.total ?? 0), active: Number(vehicles?.active ?? 0), inUse: Number(vehicles?.inUse ?? 0), needsService: Number(vehicles?.needsService ?? 0), outOfService: Number(vehicles?.outOfService ?? 0) },
       trips: { total: Number(trips?.total ?? 0), active: Number(trips?.active ?? 0), completed: Number(trips?.completed ?? 0), totalDistance: Number(trips?.totalDistance ?? 0), totalCost: Number(trips?.totalCost ?? 0) },
       maintenance: { total: Number(maintenance?.total ?? 0), pending: Number(maintenance?.pending ?? 0), totalCost: Number(maintenance?.totalCost ?? 0) },
       fuel: { totalCost: Number(fuel?.totalCost ?? 0), totalLiters: Number(fuel?.totalLiters ?? 0) },
       monthlyTrips,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "لوحة مؤشرات النقليات");
   }
@@ -136,12 +136,12 @@ router.get("/legal", authorize({ feature: "legal", action: "list" }), async (req
       `SELECT status, COUNT(*) AS count FROM legal_cases WHERE "companyId" = $1 AND "deletedAt" IS NULL GROUP BY status`, [cid]
     );
 
-    res.json({
+    res.json(maskFields(req, {
       contracts: { total: Number(contracts?.total ?? 0), active: Number(contracts?.active ?? 0), expiringSoon: Number(contracts?.expiringSoon ?? 0), totalValue: Number(contracts?.totalValue ?? 0) },
       cases: { total: Number(cases?.total ?? 0), open: Number(cases?.open ?? 0), inProgress: Number(cases?.inProgress ?? 0), highPriority: Number(cases?.highPriority ?? 0) },
       upcomingSessions: Number(sessions?.upcoming ?? 0),
       casesByStatus,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "لوحة مؤشرات القانونية");
   }
@@ -162,7 +162,7 @@ router.get("/properties", authorize({ feature: "properties", action: "list" }), 
     const occupancyRate = Number(units?.total ?? 0) > 0
       ? Math.round((Number(units?.rented ?? 0) / Number(units.total)) * 100) : 0;
 
-    res.json({
+    res.json(maskFields(req, {
       units: { total: Number(units?.total ?? 0), available: Number(units?.available ?? 0), rented: Number(units?.rented ?? 0), underMaintenance: Number(units?.underMaintenance ?? 0) },
       contracts: { total: Number(rentalContracts?.total ?? 0), active: Number(rentalContracts?.active ?? 0), expiringSoon: Number(rentalContracts?.expiringSoon ?? 0), monthlyIncome: Number(rentalContracts?.monthlyIncome ?? 0) },
       payments: {
@@ -172,7 +172,7 @@ router.get("/properties", authorize({ feature: "properties", action: "list" }), 
       },
       maintenance: { total: Number(maintenanceReqs?.total ?? 0), open: Number(maintenanceReqs?.open ?? 0), critical: Number(maintenanceReqs?.critical ?? 0) },
       occupancyRate,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "لوحة مؤشرات الأملاك");
   }
@@ -196,12 +196,12 @@ router.get("/projects", authorize({ feature: "projects", action: "list" }), asyn
       `SELECT id, name, progress, budget, "spentAmount", status, "startDate", "endDate" FROM projects WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status IN ('active','in_progress') ORDER BY "endDate" ASC LIMIT 10`, [cid]
     );
 
-    res.json({
+    res.json(maskFields(req, {
       projects: { total: Number(projects?.total ?? 0), active: Number(projects?.active ?? 0), completed: Number(projects?.completed ?? 0), delayed: Number(projects?.delayed ?? 0), avgProgress: Math.round(Number(projects?.avgProgress ?? 0)) },
       budget: { totalBudget: Number(budgetInfo?.totalBudget ?? 0), totalSpent: Number(budgetInfo?.totalSpent ?? 0), overBudget: Number(budgetInfo?.overBudget ?? 0), variance: budgetVariance },
       tasks: { total: Number(tasks?.total ?? 0), done: Number(tasks?.done ?? 0), blocked: Number(tasks?.blocked ?? 0), overdue: Number(tasks?.overdue ?? 0) },
       projectProgress,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "لوحة مؤشرات المشاريع");
   }
@@ -222,12 +222,12 @@ router.get("/crm", authorize({ feature: "crm", action: "list" }), async (req, re
       `SELECT ps.name, ps."order", COUNT(o.id) AS count, COALESCE(SUM(o.value), 0) AS value FROM crm_pipeline_stages ps LEFT JOIN crm_opportunities o ON o."pipelineStageId" = ps.id AND o."companyId" = $1 AND o."deletedAt" IS NULL WHERE ps."companyId" = $1 GROUP BY ps.id, ps.name, ps."order" ORDER BY ps."order"`, [cid]
     );
 
-    res.json({
+    res.json(maskFields(req, {
       opportunities: { total: Number(opportunities?.total ?? 0), open: Number(opportunities?.open ?? 0), won: Number(opportunities?.won ?? 0), lost: Number(opportunities?.lost ?? 0), totalValue: Number(opportunities?.totalValue ?? 0), wonValue: Number(opportunities?.wonValue ?? 0) },
       contacts: { total: Number(contacts?.total ?? 0) },
       activities: { total: Number(activities?.total ?? 0), completed: Number(activities?.completed ?? 0), pending: Number(activities?.pending ?? 0) },
       pipeline,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "لوحة مؤشرات CRM");
   }
@@ -248,12 +248,12 @@ router.get("/store", authorize({ feature: "store", action: "list" }), async (req
       `SELECT TO_CHAR(DATE_TRUNC('month', "createdAt"), 'YYYY-MM') AS month, COUNT(*) AS orders, COALESCE(SUM("totalAmount"), 0) AS revenue FROM store_orders WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "createdAt" >= CURRENT_DATE - INTERVAL '6 months' GROUP BY month ORDER BY month`, [cid]
     );
 
-    res.json({
+    res.json(maskFields(req, {
       orders: { total: Number(orders?.total ?? 0), pending: Number(orders?.pending ?? 0), completed: Number(orders?.completed ?? 0), cancelled: Number(orders?.cancelled ?? 0) },
       products: { total: Number(products?.total ?? 0), active: Number(products?.active ?? 0) },
       revenue: { total: Number(revenue?.totalRevenue ?? 0), completed: Number(revenue?.completedRevenue ?? 0) },
       monthlyOrders,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "لوحة مؤشرات المتجر");
   }
@@ -277,12 +277,12 @@ router.get("/support", authorize({ feature: "support", action: "list" }), async 
       `SELECT DATE("createdAt") AS date, COUNT(*) AS created, COUNT(*) FILTER (WHERE status IN ('resolved','closed')) AS resolved FROM support_tickets WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "createdAt" >= CURRENT_DATE - INTERVAL '7 days' GROUP BY date ORDER BY date`, [cid]
     );
 
-    res.json({
+    res.json(maskFields(req, {
       tickets: { total: Number(tickets?.total ?? 0), open: Number(tickets?.open ?? 0), inProgress: Number(tickets?.inProgress ?? 0), resolved: Number(tickets?.resolved ?? 0), highPriority: Number(tickets?.highPriority ?? 0), avgResolutionHours: Math.round(Number(tickets?.avgResolutionHours ?? 0)) },
       sla: { breached: Number(sla?.breached ?? 0), total: Number(sla?.total ?? 0), compliance: Number(sla?.total ?? 0) > 0 ? Math.round(((Number(sla.total) - Number(sla.breached)) / Number(sla.total)) * 100) : 100 },
       byCategory,
       weeklyTickets,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "لوحة مؤشرات الدعم الفني");
   }
@@ -305,11 +305,11 @@ router.get("/tasks", authorize({ feature: "tasks", action: "list" }), async (req
       `SELECT DATE("completedAt") AS date, COUNT(*) AS count FROM tasks WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status IN ('done','completed') AND "completedAt" >= CURRENT_DATE - INTERVAL '7 days' GROUP BY date ORDER BY date`, [cid]
     );
 
-    res.json({
+    res.json(maskFields(req, {
       tasks: { total: Number(taskStats?.total ?? 0), pending: Number(taskStats?.pending ?? 0), inProgress: Number(taskStats?.inProgress ?? 0), completed: Number(taskStats?.completed ?? 0), overdue: Number(taskStats?.overdue ?? 0), highPriority: Number(taskStats?.highPriority ?? 0) },
       byPriority,
       weeklyCompleted,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "لوحة مؤشرات المهام");
   }
@@ -334,13 +334,13 @@ router.get("/warehouse", authorize({ feature: "warehouse", action: "list" }), as
       `SELECT DATE("createdAt") AS date, COUNT(*) FILTER (WHERE type = 'in') AS "inCount", COUNT(*) FILTER (WHERE type = 'out') AS "outCount" FROM warehouse_movements WHERE "companyId" = $1 AND "createdAt" >= CURRENT_DATE - INTERVAL '7 days' GROUP BY date ORDER BY date`, [cid]
     );
 
-    res.json({
+    res.json(maskFields(req, {
       products: { total: Number(products?.total ?? 0), active: Number(products?.active ?? 0), totalQty: Number(products?.totalQty ?? 0), totalValue: Number(products?.totalValue ?? 0) },
       movements: { total: Number(movements?.total ?? 0), inCount: Number(movements?.inCount ?? 0), outCount: Number(movements?.outCount ?? 0), inQty: Number(movements?.inQty ?? 0), outQty: Number(movements?.outQty ?? 0) },
       lowStock: Number(lowStock?.count ?? 0),
       categories,
       recentMovements,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "لوحة مؤشرات المستودعات");
   }
