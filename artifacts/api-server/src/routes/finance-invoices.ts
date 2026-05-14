@@ -33,6 +33,7 @@ import {
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { markIdempotencyReplay } from "../lib/requestIdempotency.js";
 import { z } from "zod";
 
 // ── Zod schemas for POST route validation ──────────────────────────────────
@@ -599,7 +600,7 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
       financialEngine.resolveAccountCode(scope.companyId, "invoice_revenue", "credit", "4000"),
       financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "credit", "2300"),
     ]);
-    const { journalId } = await financialEngine.postJournalEntry({
+    const { journalId, alreadyExists } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId || 0,
       createdBy: scope.activeAssignmentId,
@@ -617,6 +618,7 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
       guardTable: "invoices",
       guardId: id,
     });
+    markIdempotencyReplay(req, res, alreadyExists);
 
     // Update client totalRevenue upon approval (revenue recognition)
     if (invoice.clientId) {
@@ -756,22 +758,29 @@ invoicesRouter.post("/invoices/:id/payment", authorize({ feature: "finance.invoi
     // Create the payment journal entry via the centralized helper (handles
     // balance validation, rounding-difference auto-correction,
     // updateAccountBalances, and event bus emission).
+    //
+    // sourceKey is anchored to the invoice + cumulative paidAmount so two
+    // payments of the same magnitude on the same invoice each produce a
+    // unique-but-stable key (paid amount is strictly monotonic per payment),
+    // and a duplicated request is idempotent against the same journal.
     const paymentAmount = Number(amount);
-    const { journalId } = await financialEngine.postJournalEntry({
+    const paidScaled = Math.round(newPaid * 100);
+    const { journalId, alreadyExists } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
       createdBy: scope.activeAssignmentId,
-      ref: `PAY-${invoiceRef}-${Date.now()}`,
+      ref: `PAY-${invoiceRef}-${paidScaled}`,
       description: `سداد فاتورة ${invoiceRef}`,
       type: "payment",
       sourceType: "invoice",
       sourceId: id,
-      sourceKey: `finance:payment:${id}:${Date.now()}`,
+      sourceKey: `finance:payment:${id}:${paidScaled}`,
       lines: [
         { accountCode: cashAccountCode, debit: paymentAmount, credit: 0 },
         { accountCode: arAccountCode, debit: 0, credit: paymentAmount },
       ],
     });
+    markIdempotencyReplay(req, res, alreadyExists);
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.paid", entity: "invoices", entityId: id, details: JSON.stringify({ amount, method, newStatus }) }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
@@ -1182,8 +1191,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
       );
     });
 
-    let journalId: number | null = null;
-    ({ journalId } = await financialEngine.postJournalEntry({
+    const memoJournalResult = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: invoice.branchId,
       createdBy: scope.activeAssignmentId,
@@ -1199,7 +1207,9 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
       ],
       guardTable: "credit_memos",
       guardId: memoId ?? 0,
-    }));
+    });
+    let journalId: number | null = memoJournalResult.journalId;
+    markIdempotencyReplay(req, res, memoJournalResult.alreadyExists);
     if (journalId && memoId) {
       await rawExecute(`UPDATE credit_memos SET "journalEntryId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, memoId, scope.companyId]);
     }
@@ -1304,8 +1314,7 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
       );
     });
 
-    let journalId: number | null = null;
-    ({ journalId } = await financialEngine.postJournalEntry({
+    const debitMemoResult = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: invoice.branchId as number,
       createdBy: scope.activeAssignmentId,
@@ -1321,7 +1330,9 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
       ],
       guardTable: "debit_memos",
       guardId: memoId ?? 0,
-    }));
+    });
+    let journalId: number | null = debitMemoResult.journalId;
+    markIdempotencyReplay(req, res, debitMemoResult.alreadyExists);
     if (journalId && memoId) {
       await rawExecute(`UPDATE debit_memos SET "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [memoId, scope.companyId]);
     }
@@ -1502,7 +1513,7 @@ invoicesRouter.post("/bad-debt/post", authorize({ feature: "finance.collection",
 
     let journalId: number | null = null;
     try {
-      ({ journalId } = await financialEngine.postJournalEntry({
+      const badDebtResult = await financialEngine.postJournalEntry({
         companyId: scope.companyId,
         branchId: scope.branchId,
         createdBy: scope.activeAssignmentId,
@@ -1515,7 +1526,9 @@ invoicesRouter.post("/bad-debt/post", authorize({ feature: "finance.collection",
           { accountCode: expenseCode, debit: total, credit: 0 },
           { accountCode: allowanceCode, debit: 0, credit: total },
         ],
-      }));
+      });
+      journalId = badDebtResult.journalId;
+      markIdempotencyReplay(req, res, badDebtResult.alreadyExists);
     } catch (je) {
       logger.error(je, "Bad debt JE error:");
       throw new IntegrationError(
@@ -1617,7 +1630,7 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
 
     let journalId: number | null = null;
     try {
-      ({ journalId } = await financialEngine.postJournalEntry({
+      const advanceResult = await financialEngine.postJournalEntry({
         companyId: scope.companyId,
         branchId: scope.branchId,
         createdBy: scope.activeAssignmentId,
@@ -1632,7 +1645,9 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
         ],
         guardTable: "customer_advances",
         guardId: advanceId ?? 0,
-      }));
+      });
+      journalId = advanceResult.journalId;
+      markIdempotencyReplay(req, res, advanceResult.alreadyExists);
       if (journalId && advanceId) {
         await rawExecute(`UPDATE customer_advances SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, advanceId, scope.companyId]);
       }
@@ -1718,8 +1733,7 @@ invoicesRouter.post("/customer-advances/:id/apply", authorize({ feature: "financ
       );
     });
 
-    let journalId: number | null = null;
-    ({ journalId } = await financialEngine.postJournalEntry({
+    const applyResult = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: advance.branchId,
       createdBy: scope.activeAssignmentId,
@@ -1734,7 +1748,9 @@ invoicesRouter.post("/customer-advances/:id/apply", authorize({ feature: "financ
       ],
       guardTable: "customer_advances",
       guardId: advanceId,
-    }));
+    });
+    const journalId = applyResult.journalId;
+    markIdempotencyReplay(req, res, applyResult.alreadyExists);
 
     res.json({ advanceId, invoiceId: Number(invoiceId), amount: applyAmt, journalId });
   } catch (err) {

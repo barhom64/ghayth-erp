@@ -12185,6 +12185,100 @@ ALTER TABLE ONLY public.zatca_submission_log
 
 
 --
+-- Print Engine v2 — tables and document_templates columns added by
+-- migrations 171_print_engine_foundations.sql + 172_print_engine_seed.sql.
+-- Mirrored here so check:schema-drift sees them in information_schema
+-- without having to boot the api-server (which is the place that runs
+-- the migrations).
+--
+
+ALTER TABLE public.document_templates ADD COLUMN IF NOT EXISTS "entityType" character varying(60);
+ALTER TABLE public.document_templates ADD COLUMN IF NOT EXISTS "paperSize" character varying(20) DEFAULT 'A4';
+ALTER TABLE public.document_templates ADD COLUMN IF NOT EXISTS "mode" character varying(10) DEFAULT 'preset';
+ALTER TABLE public.document_templates ADD COLUMN IF NOT EXISTS "presetKey" character varying(40);
+ALTER TABLE public.document_templates ADD COLUMN IF NOT EXISTS "layoutJson" jsonb;
+ALTER TABLE public.document_templates ADD COLUMN IF NOT EXISTS "cssOverrides" text;
+ALTER TABLE public.document_templates ADD COLUMN IF NOT EXISTS "headerOverride" jsonb;
+ALTER TABLE public.document_templates ADD COLUMN IF NOT EXISTS "footerOverride" jsonb;
+ALTER TABLE public.document_templates ADD COLUMN IF NOT EXISTS "version" integer DEFAULT 1;
+ALTER TABLE public.document_templates ADD COLUMN IF NOT EXISTS "isThermal" boolean DEFAULT false;
+ALTER TABLE public.document_templates ADD COLUMN IF NOT EXISTS "createdBy" integer;
+
+CREATE TABLE IF NOT EXISTS public.print_template_assignments (
+    id serial PRIMARY KEY,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "entityType" character varying(60) NOT NULL,
+    "templateId" integer NOT NULL,
+    "isDefault" boolean DEFAULT true NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "createdBy" integer
+);
+
+ALTER TABLE ONLY public.print_template_assignments
+    ADD CONSTRAINT "print_template_assignments_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.print_template_assignments
+    ADD CONSTRAINT "print_template_assignments_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES public.branches(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.print_template_assignments
+    ADD CONSTRAINT "print_template_assignments_templateId_fkey" FOREIGN KEY ("templateId") REFERENCES public.document_templates(id) ON DELETE CASCADE;
+
+CREATE TABLE IF NOT EXISTS public.print_jobs (
+    id serial PRIMARY KEY,
+    "jobId" uuid DEFAULT gen_random_uuid() NOT NULL UNIQUE,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "userId" integer,
+    "entityType" character varying(60) NOT NULL,
+    "entityId" character varying(64) NOT NULL,
+    "templateId" integer,
+    "format" character varying(20) NOT NULL,
+    "paperSize" character varying(20),
+    "copyNumber" integer DEFAULT 1 NOT NULL,
+    "isReprint" boolean DEFAULT false NOT NULL,
+    "watermark" character varying(120),
+    "pdfStorageKey" text,
+    "pdfBytes" integer,
+    "status" character varying(24) DEFAULT 'rendering' NOT NULL,
+    "approvedBy" integer,
+    "approvedAt" timestamp with time zone,
+    "errorMessage" text,
+    "ipAddress" character varying(64),
+    "userAgent" text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY public.print_jobs
+    ADD CONSTRAINT "print_jobs_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.print_jobs
+    ADD CONSTRAINT "print_jobs_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES public.branches(id) ON DELETE SET NULL;
+ALTER TABLE ONLY public.print_jobs
+    ADD CONSTRAINT "print_jobs_templateId_fkey" FOREIGN KEY ("templateId") REFERENCES public.document_templates(id) ON DELETE SET NULL;
+
+CREATE TABLE IF NOT EXISTS public.print_reprint_requests (
+    id serial PRIMARY KEY,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "entityType" character varying(60) NOT NULL,
+    "entityId" character varying(64) NOT NULL,
+    "requestedBy" integer,
+    "reason" text,
+    "status" character varying(24) DEFAULT 'pending' NOT NULL,
+    "approvedBy" integer,
+    "approvedAt" timestamp with time zone,
+    "rejectedReason" text,
+    "resultJobId" uuid,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY public.print_reprint_requests
+    ADD CONSTRAINT "print_reprint_requests_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.print_reprint_requests
+    ADD CONSTRAINT "print_reprint_requests_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES public.branches(id) ON DELETE SET NULL;
+
+
+--
 -- PostgreSQL database dump complete
 --
 

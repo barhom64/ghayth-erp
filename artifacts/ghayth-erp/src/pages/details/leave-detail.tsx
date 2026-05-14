@@ -271,6 +271,9 @@ export default function LeaveDetail() {
               ref={leave.ref || `LV-${id}`}
               date={formatDateAr(leave.createdAt)}
               sections={printSections}
+              entityType="leave_request"
+              entityId={leave.id ?? id}
+              formats={["a4"]}
             />
           )}
           <GuardedButton

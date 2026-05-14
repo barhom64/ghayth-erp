@@ -11,12 +11,13 @@ import { z } from "zod";
 import { Router } from "express";
 import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import {
   createAuditLog,
   emitEvent,
   todayISO,
 } from "../lib/businessHelpers.js";
+import { requestIdempotencyToken, markIdempotencyReplay, isDryRun } from "../lib/requestIdempotency.js";
 
 import { pushToDLQ } from "../lib/eventBus.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -142,7 +143,7 @@ financeHardeningRouter.get("/fiscal-periods-v2", authorize({ feature: "finance.h
        ORDER BY fp."startDate" DESC`,
       [scope.companyId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "List fiscal periods error:");
   }
@@ -324,9 +325,25 @@ financeHardeningRouter.post("/journal-manual", authorize({ feature: "finance.har
       );
     }
 
-    const ref = `MJE-${Date.now()}`;
+    const idempotencyToken = requestIdempotencyToken(req);
+    const ref = `MJE-${idempotencyToken}`;
+
+    if (isDryRun(req)) {
+      res.json({
+        dryRun: true,
+        ref,
+        description: description ?? "قيد يدوي",
+        approvalStatus: "draft",
+        isManual: true,
+        costCenter: costCenter ?? null,
+        lines,
+        totals: { totalDebit, totalCredit },
+      });
+      return;
+    }
+
     const { financialEngine } = await import("../lib/engines/index.js");
-    const { journalId } = await financialEngine.postJournalEntry({
+    const { journalId, alreadyExists } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
       createdBy: scope.activeAssignmentId,
@@ -334,14 +351,15 @@ financeHardeningRouter.post("/journal-manual", authorize({ feature: "finance.har
       description: description ?? "قيد يدوي",
       sourceType: "manual_journal",
       sourceId: 0,
-      sourceKey: `finance:manual:${Date.now()}`,
+      sourceKey: `finance:manual:${ref}`,
       lines,
+      headerMeta: {
+        approvalStatus: "draft",
+        isManual: true,
+        costCenter: costCenter ?? null,
+      },
     });
-
-    await rawExecute(
-      `UPDATE journal_entries SET "approvalStatus"='draft', "isManual"=TRUE, "costCenter"=$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
-      [costCenter ?? null, journalId, scope.companyId]
-    );
+    markIdempotencyReplay(req, res, alreadyExists);
 
     emitEvent({
       companyId: scope.companyId,
@@ -369,7 +387,7 @@ financeHardeningRouter.post("/journal-manual", authorize({ feature: "finance.har
        GROUP BY je.id`,
       [journalId, scope.companyId]
     );
-    res.status(201).json({ ...(createdManualJournal || { id: journalId }), message: "تم إنشاء القيد اليدوي بحالة مسودة — يحتاج مراجعة واعتماد قبل الترحيل" });
+    res.status(201).json({ ...(createdManualJournal || { id: journalId }), message: "تم إنشاء القيد اليدوي بحالة مسودة — يحتاج مراجعة واعتماد قبل الترحيل", idempotentReplay: alreadyExists });
   } catch (err) {
     handleRouteError(err, res, "Create manual journal error:");
   }
@@ -401,7 +419,7 @@ financeHardeningRouter.get("/journal-manual", authorize({ feature: "finance.hard
        ORDER BY je."createdAt" DESC LIMIT 100`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "List manual journals error:");
   }
@@ -423,7 +441,7 @@ financeHardeningRouter.get("/journal-manual/:id", authorize({ feature: "finance.
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("القيد اليدوي غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) {
     handleRouteError(err, res, "Journal manual detail error:");
   }
@@ -672,7 +690,7 @@ financeHardeningRouter.get("/bank-guarantees", authorize({ feature: "finance.har
       expired: rows.filter((r) => r.alertStatus === 'expired').length,
     };
 
-    res.json({ data: rows, summary });
+    res.json(maskFields(req, { data: rows, summary }));
   } catch (err) {
     handleRouteError(err, res, "List bank guarantees error:");
   }
@@ -944,7 +962,7 @@ financeHardeningRouter.get("/intercompany", authorize({ feature: "finance.harden
        ORDER BY ic."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "List intercompany transactions error:");
   }
@@ -969,14 +987,36 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
       });
     }
 
-    const ref = `IC-${Date.now()}`;
+    const idempotencyToken = requestIdempotencyToken(req);
+    const ref = `IC-${idempotencyToken}`;
     const txDate = transactionDate ?? todayISO();
+
+    const fromLines = [
+      { accountCode: arAccountCode, debit: Number(amount), credit: 0, description: "ذمم مدينة شركة شقيقة" },
+      { accountCode: revenueAccountCode, debit: 0, credit: Number(amount), description: "إيراد شركة شقيقة" },
+    ];
+    const toLines = [
+      { accountCode: expenseAccountCode, debit: Number(amount), credit: 0, description: "مصروف شركة شقيقة" },
+      { accountCode: apAccountCode, debit: 0, credit: Number(amount), description: "ذمم دائنة شركة شقيقة" },
+    ];
+
+    if (isDryRun(req)) {
+      res.json({
+        dryRun: true,
+        ref,
+        transactionDate: txDate,
+        from: { companyId: scope.companyId, lines: fromLines },
+        to: { companyId: Number(toCompanyId), lines: toLines },
+        amount: Number(amount),
+      });
+      return;
+    }
 
     const { financialEngine } = await import("../lib/engines/index.js");
 
     // postJournalEntry manages its own transaction internally, so we use a
     // compensating-reversal pattern: if the second post fails we soft-delete the first.
-    const fromTimestamp = Date.now();
+    // The idempotency token anchors both legs so a retry collapses onto the same pair.
     const fromResult = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -986,14 +1026,12 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
       type: "intercompany",
       sourceType: "intercompany",
       sourceId: 0,
-      sourceKey: `finance:intercompany:from:${fromTimestamp}`,
-      lines: [
-        { accountCode: arAccountCode, debit: Number(amount), credit: 0, description: "ذمم مدينة شركة شقيقة" },
-        { accountCode: revenueAccountCode, debit: 0, credit: Number(amount), description: "إيراد شركة شقيقة" },
-      ],
+      sourceKey: `finance:intercompany:from:${idempotencyToken}`,
+      lines: fromLines,
     });
+    markIdempotencyReplay(req, res, fromResult.alreadyExists);
 
-    let toResult: { journalId: number };
+    let toResult: { journalId: number; alreadyExists: boolean };
     try {
       toResult = await financialEngine.postJournalEntry({
         companyId: Number(toCompanyId),
@@ -1004,11 +1042,8 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
         type: "intercompany",
         sourceType: "intercompany",
         sourceId: 0,
-        sourceKey: `finance:intercompany:to:${fromTimestamp}`,
-        lines: [
-          { accountCode: expenseAccountCode, debit: Number(amount), credit: 0, description: "مصروف شركة شقيقة" },
-          { accountCode: apAccountCode, debit: 0, credit: Number(amount), description: "ذمم دائنة شركة شقيقة" },
-        ],
+        sourceKey: `finance:intercompany:to:${idempotencyToken}`,
+        lines: toLines,
       });
     } catch (err) {
       // Compensating reversal outside any transaction so it actually persists
@@ -1055,7 +1090,7 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
        LIMIT 1`,
       [ref, scope.companyId]
     );
-    res.status(201).json({ ...(createdIntercompany || { ref, fromJournalId, toJournalId, amount: Number(amount) }), message: `تم تسجيل المعاملة البينية ${ref} وإنشاء قيدين محاسبيين` });
+    res.status(201).json({ ...(createdIntercompany || { ref, fromJournalId, toJournalId, amount: Number(amount) }), message: `تم تسجيل المعاملة البينية ${ref} وإنشاء قيدين محاسبيين`, idempotentReplay: fromResult.alreadyExists && toResult.alreadyExists });
   } catch (err) {
     handleRouteError(err, res, "Create intercompany transaction error:");
   }
@@ -1098,11 +1133,11 @@ financeHardeningRouter.get("/intercompany/consolidation", authorize({ feature: "
       ),
     ]);
 
-    res.json({
+    res.json(maskFields(req, {
       consolidatedBalance: balanceSheet,
       intercompanyElimination: Number(intercompanyTotal[0]?.total ?? 0),
       byCompany,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Consolidation report error:");
   }
@@ -1128,7 +1163,7 @@ financeHardeningRouter.get("/projects", authorize({ feature: "finance.hardening"
        LIMIT 500`,
       [scope.companyId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "List projects error:");
   }
@@ -1183,7 +1218,7 @@ financeHardeningRouter.get("/projects/:id", authorize({ feature: "finance.harden
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("المشروع غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) {
     handleRouteError(err, res, "Project detail error:");
   }
@@ -1212,11 +1247,11 @@ financeHardeningRouter.get("/projects/:id/costs", authorize({ feature: "finance.
     const budgetRemaining = Number(project.budget ?? 0) - totalCost;
     const usagePct = Number(project.budget) > 0 ? Math.round((totalCost / Number(project.budget)) * 100) : 0;
 
-    res.json({
+    res.json(maskFields(req, {
       project,
       costs,
       summary: { totalCost, budget: Number(project.budget ?? 0), budgetRemaining, usagePct },
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Project costs error:");
   }
@@ -1291,7 +1326,7 @@ financeHardeningRouter.get("/cash-flow-forecast", authorize({ feature: "finance.
     const totalInflow90 = inflow90.reduce((s: number, r) => s + Number(r.expected), 0);
     const totalOutflow30 = outflow30.reduce((s: number, r) => s + Number(r.expected), 0);
 
-    res.json({
+    res.json(maskFields(req, {
       currentBalance,
       forecast: {
         days30: { inflow: totalInflow30, outflow: totalOutflow30, net: totalInflow30 - totalOutflow30, projected: currentBalance + totalInflow30 - totalOutflow30 },
@@ -1300,7 +1335,7 @@ financeHardeningRouter.get("/cash-flow-forecast", authorize({ feature: "finance.
       },
       inflows: { next30: inflow30, next60: inflow60, next90: inflow90 },
       outflows: { next30: outflow30 },
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Cash flow forecast error:");
   }
@@ -1348,7 +1383,7 @@ financeHardeningRouter.get("/cost-center-report", authorize({ feature: "finance.
       [scope.companyId, costCenter]
     ) : [];
 
-    res.json({ data: rows, details: costCenterDetails, total: rows.length });
+    res.json(maskFields(req, { data: rows, details: costCenterDetails, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "Cost center report error:");
   }
@@ -1365,7 +1400,7 @@ financeHardeningRouter.get("/posting-failures", authorize({ feature: "finance.ha
        ORDER BY "createdAt" DESC LIMIT 100`,
       [scope.companyId, resolved]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "Posting failures error:");
   }

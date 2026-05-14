@@ -64,6 +64,7 @@ import umrahRouter from "./umrah.js";
 import umrahEntitiesRouter from "./umrah-entities.js";
 import operationsCenterRouter from "./operationsCenter.js";
 import notificationEngineRouter from "./notification-engine.js";
+import printRouter from "./print.js";
 import { requireModule, requireMinLevel } from "../middlewares/roleGuard.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { csrfMiddleware } from "../middlewares/csrfMiddleware.js";
@@ -368,5 +369,6 @@ router.use("/obligations", obligationsRouter);
 router.use("/calendar", calendarRouter);
 router.use("/hr/contracts", requireModule("hr"), contractsRouter);
 router.use("/correspondence", requireModule("comms"), correspondenceRouter);
+router.use("/print", printRouter);
 
 export default router;

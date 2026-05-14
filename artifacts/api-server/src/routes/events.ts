@@ -2,6 +2,7 @@ import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError, NotFoundError } from "../lib/errorHandler.js";
+import { maskFields } from "../lib/rbac/authorize.js";
 import {
   EVENT_CATALOG,
   countEventsByDomain,
@@ -60,12 +61,12 @@ eventsRouter.get("/catalog", (req, res) => {
     let result = EVENT_CATALOG;
     if (domain) result = listEventsByDomain(domain as EventDomain);
     if (critical === "true") result = result.filter((e) => e.critical === true);
-    res.json({
+    res.json(maskFields(req, {
       total: result.length,
       countByDomain: countEventsByDomain(),
       criticalCount: listCriticalEvents().length,
       events: result,
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Event catalog error:"); }
 });
 
@@ -73,7 +74,7 @@ eventsRouter.get("/catalog/:name", (req, res) => {
   try {
     const def = getEventDefinition(req.params.name);
     if (!def) throw new NotFoundError("الحدث غير موجود في الفهرس");
-    res.json({ data: def });
+    res.json(maskFields(req, { data: def }));
   } catch (err) { handleRouteError(err, res, "Event catalog detail error:"); }
 });
 
@@ -142,7 +143,7 @@ eventsRouter.get("/log", async (req, res) => {
         };
       });
 
-      res.json({ data: enriched, count: enriched.length, cursor: nextCursor, hasMore });
+      res.json(maskFields(req, { data: enriched, count: enriched.length, cursor: nextCursor, hasMore }));
       return;
     }
 
@@ -168,7 +169,7 @@ eventsRouter.get("/log", async (req, res) => {
       };
     });
 
-    res.json({ data: enriched, count: enriched.length });
+    res.json(maskFields(req, { data: enriched, count: enriched.length }));
   } catch (err) {
     handleRouteError(err, res, "Event log query error:");
   }
@@ -196,7 +197,7 @@ eventsRouter.get("/log/stats", async (req, res) => {
         domain: def?.domain ?? "unknown",
       };
     });
-    res.json({ windowDays: days, events: enriched });
+    res.json(maskFields(req, { windowDays: days, events: enriched }));
   } catch (err) {
     handleRouteError(err, res, "Event stats error:");
   }
