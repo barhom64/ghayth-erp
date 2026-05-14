@@ -149,8 +149,8 @@ export function AttachmentPreview({ attachment, open, onOpenChange }: Attachment
               <div className={cn(
                 "w-10 h-10 rounded flex items-center justify-center shrink-0",
                 isImage ? "bg-purple-50 text-purple-600" :
-                isPdf ? "bg-red-50 text-red-600" :
-                "bg-blue-50 text-blue-600"
+                isPdf ? "bg-status-error-surface text-status-error-foreground" :
+                "bg-status-info-surface text-status-info-foreground"
               )}>
                 {isImage ? <ImageIcon className="h-5 w-5" /> :
                  isPdf ? <FileText className="h-5 w-5" /> :
@@ -160,7 +160,7 @@ export function AttachmentPreview({ attachment, open, onOpenChange }: Attachment
                 <SheetTitle className="text-base truncate text-right">
                   {attachment.title || attachment.fileName || "معاينة مستند"}
                 </SheetTitle>
-                <div className="flex flex-wrap items-center gap-1.5 mt-1 text-xs text-gray-500">
+                <div className="flex flex-wrap items-center gap-1.5 mt-1 text-xs text-muted-foreground">
                   {attachment.fileName && attachment.fileName !== attachment.title && (
                     <span className="truncate">{attachment.fileName}</span>
                   )}
@@ -168,7 +168,7 @@ export function AttachmentPreview({ attachment, open, onOpenChange }: Attachment
                   {attachment.mimeType && <Badge variant="outline" className="text-[10px] h-4">{attachment.mimeType}</Badge>}
                 </div>
                 {(attachment.uploaderName || attachment.uploadedAt) && (
-                  <p className="text-[11px] text-gray-400 mt-0.5">
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
                     {attachment.uploaderName && <span>بواسطة {attachment.uploaderName}</span>}
                     {attachment.uploaderName && attachment.uploadedAt && <span> · </span>}
                     {attachment.uploadedAt && <span>{formatDateAr(attachment.uploadedAt)}</span>}
@@ -192,12 +192,12 @@ export function AttachmentPreview({ attachment, open, onOpenChange }: Attachment
           </div>
         </SheetHeader>
 
-        <div className="flex-1 overflow-auto bg-gray-50 relative">
+        <div className="flex-1 overflow-auto bg-surface-subtle relative">
           {loading && (
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center space-y-2">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto" />
-                <p className="text-xs text-gray-500">جاري تحميل المعاينة...</p>
+                <p className="text-xs text-muted-foreground">جاري تحميل المعاينة...</p>
               </div>
             </div>
           )}
@@ -205,12 +205,12 @@ export function AttachmentPreview({ attachment, open, onOpenChange }: Attachment
           {error && !loading && (
             <div className="absolute inset-0 flex items-center justify-center p-6">
               <div className="text-center space-y-3 max-w-sm">
-                <div className="rounded-full bg-red-50 w-12 h-12 flex items-center justify-center mx-auto">
+                <div className="rounded-full bg-status-error-surface w-12 h-12 flex items-center justify-center mx-auto">
                   <FileQuestion className="h-6 w-6 text-red-500" />
                 </div>
                 <div>
                   <p className="font-medium text-gray-900">تعذّرت المعاينة</p>
-                  <p className="text-sm text-gray-500 mt-1">{error}</p>
+                  <p className="text-sm text-muted-foreground mt-1">{error}</p>
                 </div>
                 <Button size="sm" variant="outline" onClick={handleDownload}>
                   <Download className="h-3.5 w-3.5 ms-1" />
@@ -226,8 +226,8 @@ export function AttachmentPreview({ attachment, open, onOpenChange }: Attachment
                 <object data={srcUrl} type="application/pdf" className="w-full h-full min-h-[70vh]">
                   <div className="flex items-center justify-center p-6">
                     <div className="text-center space-y-3">
-                      <FileText className="h-10 w-10 text-gray-400 mx-auto" />
-                      <p className="text-sm text-gray-500">متصفحك لا يدعم عرض PDF مباشرة</p>
+                      <FileText className="h-10 w-10 text-muted-foreground mx-auto" />
+                      <p className="text-sm text-muted-foreground">متصفحك لا يدعم عرض PDF مباشرة</p>
                       <Button size="sm" variant="outline" onClick={handleDownload}>
                         <Download className="h-3.5 w-3.5 ms-1" />
                         تنزيل
@@ -244,12 +244,12 @@ export function AttachmentPreview({ attachment, open, onOpenChange }: Attachment
               {!isPdf && !isImage && (
                 <div className="flex items-center justify-center p-6 min-h-[40vh]">
                   <div className="text-center space-y-3 max-w-sm">
-                    <div className="rounded-full bg-blue-50 w-12 h-12 flex items-center justify-center mx-auto">
+                    <div className="rounded-full bg-status-info-surface w-12 h-12 flex items-center justify-center mx-auto">
                       <FileQuestion className="h-6 w-6 text-blue-500" />
                     </div>
                     <div>
                       <p className="font-medium text-gray-900">لا يوجد عرض مباشر لهذا النوع</p>
-                      <p className="text-sm text-gray-500 mt-1">يمكنك تنزيل الملف لمشاهدته</p>
+                      <p className="text-sm text-muted-foreground mt-1">يمكنك تنزيل الملف لمشاهدته</p>
                     </div>
                     <Button size="sm" variant="default" onClick={handleDownload}>
                       <Download className="h-3.5 w-3.5 ms-1" />

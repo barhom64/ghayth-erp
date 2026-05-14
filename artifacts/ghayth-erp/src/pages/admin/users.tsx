@@ -167,7 +167,7 @@ export default function AdminUsersPage() {
           <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-orange-600" title="إعادة تعيين كلمة المرور" onClick={() => { setResetUserId(r.id); setResetPassword(""); setCreatedUser(null); setShowForm(false); setEditUser(null); setDeleteConfirmId(null); }}>
             <KeySquare className="h-3.5 w-3.5" />
           </Button>
-          <GuardedButton perm="admin:delete" variant="ghost" size="sm" className="h-7 text-xs gap-1 text-red-600" title="حذف المستخدم" onClick={() => { setDeleteConfirmId(r.id); setEditUser(null); setResetUserId(null); setShowForm(false); }}>
+          <GuardedButton perm="admin:delete" variant="ghost" size="sm" className="h-7 text-xs gap-1 text-status-error-foreground" title="حذف المستخدم" onClick={() => { setDeleteConfirmId(r.id); setEditUser(null); setResetUserId(null); setShowForm(false); }}>
             <Trash2 className="h-3.5 w-3.5" />
           </GuardedButton>
         </div>

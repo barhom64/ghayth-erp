@@ -58,11 +58,11 @@ interface SummaryResponse {
 }
 
 function escalationLabel(level: number): { label: string; color: string } {
-  if (level >= 4) return { label: "حرج — قرب الفصل", color: "bg-red-100 text-red-700 border-red-300" };
+  if (level >= 4) return { label: "حرج — قرب الفصل", color: "bg-red-100 text-status-error-foreground border-status-error-surface" };
   if (level >= 3) return { label: "مرتفع", color: "bg-orange-100 text-orange-700 border-orange-300" };
-  if (level >= 2) return { label: "متوسط", color: "bg-amber-100 text-amber-700 border-amber-300" };
-  if (level >= 1) return { label: "أوّل مرة", color: "bg-blue-100 text-blue-700 border-blue-300" };
-  return { label: "نظيف", color: "bg-green-100 text-green-700 border-green-300" };
+  if (level >= 2) return { label: "متوسط", color: "bg-amber-100 text-status-warning-foreground border-status-warning-surface" };
+  if (level >= 1) return { label: "أوّل مرة", color: "bg-blue-100 text-status-info-foreground border-status-info-surface" };
+  return { label: "نظيف", color: "bg-green-100 text-status-success-foreground border-status-success-surface" };
 }
 
 interface Props {
@@ -98,8 +98,8 @@ export function EmployeeDisciplineSummary({
 
   if (isError) {
     return (
-      <Card className="border-red-200">
-        <CardContent className="py-6 text-center text-sm text-red-600">
+      <Card className="border-status-error-surface">
+        <CardContent className="py-6 text-center text-sm text-status-error-foreground">
           تعذّر تحميل ملف الانضباط لهذا الموظف
         </CardContent>
       </Card>
@@ -107,7 +107,7 @@ export function EmployeeDisciplineSummary({
   }
 
   return (
-    <Card className={cn(compact && "border-blue-200 bg-blue-50/30")}>
+    <Card className={cn(compact && "border-status-info-surface bg-status-info-surface/30")}>
       <CardHeader className="flex-row items-center justify-between pb-2">
         <CardTitle className={cn("flex items-center gap-2", compact ? "text-sm" : "text-base")}>
           <Scale className={cn(compact ? "h-4 w-4" : "h-5 w-5", "text-purple-600")} />
@@ -132,7 +132,7 @@ export function EmployeeDisciplineSummary({
           <>
             {/* Critical alert if approaching termination */}
             {terminations > 0 && (
-              <div className="flex items-center gap-2 p-2.5 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              <div className="flex items-center gap-2 p-2.5 bg-status-error-surface border border-status-error-surface rounded-lg text-sm text-status-error-foreground">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 <span>صدر بحقّ هذا الموظف <strong>{terminations}</strong> قرار فصل سابق</span>
               </div>
@@ -141,24 +141,24 @@ export function EmployeeDisciplineSummary({
             {/* KPI strip */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
               <div className="p-2.5 rounded-lg border bg-white">
-                <p className="text-xs text-gray-500 mb-0.5">مستوى التصعيد</p>
+                <p className="text-xs text-muted-foreground mb-0.5">مستوى التصعيد</p>
                 <Badge variant="outline" className={cn("text-xs", escalation.color)}>
                   {escalation.label}
                 </Badge>
               </div>
               <div className="p-2.5 rounded-lg border bg-white">
-                <p className="text-xs text-gray-500 mb-0.5">محاضر هذا العام</p>
-                <p className="font-bold text-blue-700">{ytdCount}</p>
+                <p className="text-xs text-muted-foreground mb-0.5">محاضر هذا العام</p>
+                <p className="font-bold text-status-info-foreground">{ytdCount}</p>
               </div>
               <div className="p-2.5 rounded-lg border bg-white">
-                <p className="text-xs text-gray-500 mb-0.5">معلّقة</p>
-                <p className={cn("font-bold", pending > 0 ? "text-amber-600" : "text-gray-400")}>
+                <p className="text-xs text-muted-foreground mb-0.5">معلّقة</p>
+                <p className={cn("font-bold", pending > 0 ? "text-status-warning-foreground" : "text-muted-foreground")}>
                   {pending}
                 </p>
               </div>
               <div className="p-2.5 rounded-lg border bg-white">
-                <p className="text-xs text-gray-500 mb-0.5">خصومات السنة</p>
-                <p className={cn("font-bold text-sm", ytdDeductions > 0 ? "text-red-600" : "text-gray-400")}>
+                <p className="text-xs text-muted-foreground mb-0.5">خصومات السنة</p>
+                <p className={cn("font-bold text-sm", ytdDeductions > 0 ? "text-status-error-foreground" : "text-muted-foreground")}>
                   {ytdDeductions > 0 ? formatCurrency(ytdDeductions) : "—"}
                 </p>
               </div>
@@ -168,7 +168,7 @@ export function EmployeeDisciplineSummary({
             {recent.length > 0 && (
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <p className="text-xs font-medium text-gray-600">آخر المحاضر</p>
+                  <p className="text-xs font-medium text-muted-foreground">آخر المحاضر</p>
                   <Link href={`/hr/violations?tab=memos&employeeId=${employeeId}`}>
                     <Button variant="ghost" size="sm" className="text-xs h-6 gap-1">
                       الكل <ArrowLeft className="h-3 w-3" />
@@ -180,18 +180,18 @@ export function EmployeeDisciplineSummary({
                     const total = Number(m.appliedDeductionAmount || 0) + Number(m.appliedExtraDeduction || 0);
                     return (
                       <Link key={m.id} href={`/hr/discipline/memos/${m.id}`}>
-                        <div className="flex items-center gap-2 px-2.5 py-1.5 rounded border bg-white hover:bg-gray-50 cursor-pointer transition-colors text-sm">
-                          <span className="font-mono text-xs text-blue-700 shrink-0">
+                        <div className="flex items-center gap-2 px-2.5 py-1.5 rounded border bg-white hover:bg-surface-subtle cursor-pointer transition-colors text-sm">
+                          <span className="font-mono text-xs text-status-info-foreground shrink-0">
                             {m.memoNumber || `#${m.id}`}
                           </span>
                           <span className="text-gray-700 truncate flex-1">
                             {INCIDENT_LABELS[m.incidentType] || m.incidentType}
                             {m.occurrenceCount && m.occurrenceCount > 1 && (
-                              <span className="text-xs text-amber-600 ms-1">(المرة {m.occurrenceCount})</span>
+                              <span className="text-xs text-status-warning-foreground ms-1">(المرة {m.occurrenceCount})</span>
                             )}
                           </span>
                           {total > 0 && (
-                            <span className="text-xs font-semibold text-red-600 shrink-0">
+                            <span className="text-xs font-semibold text-status-error-foreground shrink-0">
                               {formatCurrency(total)}
                             </span>
                           )}
@@ -205,7 +205,7 @@ export function EmployeeDisciplineSummary({
             )}
 
             {recent.length === 0 && (
-              <p className="text-sm text-gray-400 text-center py-2">
+              <p className="text-sm text-muted-foreground text-center py-2">
                 لا يوجد سجل انضباطي{employeeName ? ` لـ ${employeeName}` : ""} حتى الآن
               </p>
             )}

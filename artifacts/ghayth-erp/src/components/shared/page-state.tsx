@@ -212,10 +212,10 @@ function describeError(err: unknown): ErrorDescriptor {
 }
 
 const TONE_CLS: Record<ErrorDescriptor["tone"], { bg: string; fg: string; border: string }> = {
-  destructive: { bg: "bg-red-50", fg: "text-red-600", border: "border-red-100" },
-  warning: { bg: "bg-amber-50", fg: "text-amber-600", border: "border-amber-100" },
-  info: { bg: "bg-blue-50", fg: "text-blue-600", border: "border-blue-100" },
-  muted: { bg: "bg-gray-50", fg: "text-gray-500", border: "border-gray-100" },
+  destructive: { bg: "bg-status-error-surface", fg: "text-status-error-foreground", border: "border-status-error-surface" },
+  warning: { bg: "bg-status-warning-surface", fg: "text-status-warning-foreground", border: "border-status-warning-surface" },
+  info: { bg: "bg-status-info-surface", fg: "text-status-info-foreground", border: "border-status-info-surface" },
+  muted: { bg: "bg-surface-subtle", fg: "text-muted-foreground", border: "border-border" },
 };
 
 export function PageStateWrapper({
@@ -237,7 +237,7 @@ export function PageStateWrapper({
   if (isLoading) {
     return (
       <div className={compact ? "py-6" : "py-12"} dir="rtl">
-        <div className="flex flex-col items-center justify-center gap-2 text-gray-400">
+        <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
           <p className="text-xs">{loadingText}</p>
         </div>
@@ -261,19 +261,19 @@ export function PageStateWrapper({
             <h3 className="text-base font-semibold text-gray-900">{desc.title}</h3>
             {desc.code && <Badge variant="outline" className="text-[10px] font-mono">{desc.code}</Badge>}
           </div>
-          <p className="text-sm text-gray-600 max-w-lg">{desc.description}</p>
+          <p className="text-sm text-muted-foreground max-w-lg">{desc.description}</p>
           {desc.field && (
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-muted-foreground">
               الحقل: <code className="bg-gray-100 px-1 rounded">{desc.field}</code>
             </p>
           )}
           {desc.fix && (
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-muted-foreground">
               <span className="font-medium">الإصلاح:</span> {desc.fix}
             </p>
           )}
           {blockers.length > 0 && (
-            <ul className="text-xs text-gray-600 list-disc list-inside space-y-0.5 mt-2">
+            <ul className="text-xs text-muted-foreground list-disc list-inside space-y-0.5 mt-2">
               {blockers.slice(0, 5).map((b, i) => <li key={i}>{b}</li>)}
             </ul>
           )}
@@ -316,19 +316,19 @@ export function PageStateWrapper({
   if (isEmpty) {
     const body = (
       <div className="flex flex-col items-center text-center gap-3 py-8" dir="rtl">
-        <div className="rounded-full p-3 bg-gray-50">
-          <Inbox className="h-7 w-7 text-gray-400" />
+        <div className="rounded-full p-3 bg-surface-subtle">
+          <Inbox className="h-7 w-7 text-muted-foreground" />
         </div>
         <div className="space-y-1">
           <h3 className="text-base font-medium text-gray-700">{emptyText}</h3>
-          {emptyHint && <p className="text-xs text-gray-500 max-w-md">{emptyHint}</p>}
+          {emptyHint && <p className="text-xs text-muted-foreground max-w-md">{emptyHint}</p>}
         </div>
         {emptyAction}
       </div>
     );
     if (compact) return body;
     return (
-      <Card className="border-gray-100">
+      <Card className="border-border">
         <CardContent className="py-6">{body}</CardContent>
       </Card>
     );

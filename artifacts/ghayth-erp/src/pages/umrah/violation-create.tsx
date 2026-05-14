@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/formatters";
 
 const violationTypes = [
-  { value: "overstay", label: "تأخر مغادرة", icon: Clock, cls: "border-amber-300 bg-status-warning-surface ring-amber-200", desc: "تأخر المعتمر عن موعد المغادرة المحدد" },
+  { value: "overstay", label: "تأخر مغادرة", icon: Clock, cls: "border-status-warning-surface bg-status-warning-surface ring-amber-200", desc: "تأخر المعتمر عن موعد المغادرة المحدد" },
   { value: "absconded", label: "هروب", icon: UserX, cls: "border-status-error-surface bg-status-error-surface ring-red-200", desc: "هروب المعتمر من مقر الإقامة" },
   { value: "other", label: "أخرى", icon: HelpCircle, cls: "border-slate-300 bg-slate-50 ring-slate-200", desc: "مخالفة غير مصنفة" },
 ];

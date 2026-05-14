@@ -3,6 +3,7 @@ import {
   ValidationError,
   NotFoundError,
   ConflictError,
+  ForbiddenError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
@@ -20,6 +21,7 @@ import {
 } from "../lib/businessHelpers.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { hashPassword } from "../lib/auth.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
 import { z } from "zod";
@@ -355,6 +357,11 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       }
     }
 
+    if (branchId != null &&
+        !scope.isOwner && !OWNER_GM_ROLES.includes(scope.role) &&
+        scope.allowedBranches.length > 0 && !scope.allowedBranches.includes(Number(branchId))) {
+      throw new ForbiddenError("لا تملك صلاحية إضافة موظفين في هذا الفرع", { field: "branchId" });
+    }
     const targetBranchId = branchId ?? scope.branchId;
     const effectiveHireDate = hireDate || todayISO();
 
@@ -725,7 +732,7 @@ router.get("/onboarding-tasks", authorize({ feature: "hr.employees", action: "li
        ORDER BY ot."createdAt" DESC LIMIT 200`,
       params
     );
-    res.json(maskFields(req, { data: rows, total: rows.length }));
+    res.json({ data: rows, total: rows.length });
   } catch (err) { logger.error(err, "Onboarding tasks error:"); res.json({ data: [], total: 0 }); }
 });
 
@@ -761,7 +768,7 @@ router.patch("/onboarding-tasks/:id", authorize({ feature: "hr.employees", actio
       action: "update", entity: "onboarding_tasks", entityId: id,
       after: { status },
     }).catch((e) => logger.error(e, "employees background task failed"));
-    res.json(maskFields(req, row));
+    res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
@@ -777,7 +784,7 @@ router.get("/job-titles", authorize({ feature: "hr.employees", action: "list" })
       `SELECT * FROM job_titles WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY name LIMIT 500`,
       [scope.companyId]
     );
-    res.json(maskFields(req, { data: rows, total: rows.length }));
+    res.json({ data: rows, total: rows.length });
   } catch (err) { logger.error(err, "job-titles query failed"); res.json({ data: [], total: 0 }); }
 });
 
@@ -801,7 +808,7 @@ router.get("/documents", authorize({ feature: "hr.employees", action: "list" }),
        LIMIT 100`,
       [scope.companyId]
     );
-    res.json(maskFields(req, { data: rows }));
+    res.json({ data: rows });
   } catch (err) {
     handleRouteError(err, res, "Get employee documents error:");
   }
@@ -1222,7 +1229,7 @@ router.patch("/:id", authorize({ feature: "hr.employees", action: "update", reso
       details: JSON.stringify({ changedFields }),
     }).catch((e) => logger.error(e, "employees background task failed"));
 
-    res.json(maskFields(req, after));
+    res.json(after);
   } catch (err) {
     handleRouteError(err, res, "Update employee error:");
   }

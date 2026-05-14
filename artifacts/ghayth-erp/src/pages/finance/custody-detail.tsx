@@ -178,7 +178,7 @@ export default function CustodyDetailPage() {
                     progressPercent >= 100
                       ? "bg-emerald-500"
                       : progressPercent > 0
-                        ? "bg-amber-500"
+                        ? "bg-status-warning-surface0"
                         : "bg-gray-300"
                   }`}
                   style={{ width: `${progressPercent}%` }}

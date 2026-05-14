@@ -145,12 +145,12 @@ export interface DetailPageLayoutProps {
 }
 
 const STATUS_TONE_CLS: Record<NonNullable<DetailStatus["tone"]>, string> = {
-  default: "bg-gray-100 text-gray-700 border-gray-200",
-  success: "bg-green-100 text-green-700 border-green-200",
-  warning: "bg-amber-100 text-amber-700 border-amber-200",
-  destructive: "bg-red-100 text-red-700 border-red-200",
-  info: "bg-blue-100 text-blue-700 border-blue-200",
-  muted: "bg-gray-50 text-gray-500 border-gray-200",
+  default: "bg-gray-100 text-gray-700 border-border",
+  success: "bg-green-100 text-status-success-foreground border-status-success-surface",
+  warning: "bg-amber-100 text-status-warning-foreground border-status-warning-surface",
+  destructive: "bg-red-100 text-status-error-foreground border-status-error-surface",
+  info: "bg-blue-100 text-status-info-foreground border-status-info-surface",
+  muted: "bg-surface-subtle text-muted-foreground border-border",
 };
 
 export function DetailPageLayout(props: DetailPageLayoutProps) {
@@ -288,10 +288,10 @@ export function DetailPageLayout(props: DetailPageLayoutProps) {
                   </Badge>
                 )}
               </div>
-              {subtitle && <p className="text-sm text-gray-500">{subtitle}</p>}
+              {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
 
               {/* Meta row — ref, dates, creator, assignee */}
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 pt-1 text-xs text-gray-600">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 pt-1 text-xs text-muted-foreground">
                 {refNumber && (
                   <MetaChip icon={Hash} value={refNumber} mono />
                 )}
@@ -318,7 +318,7 @@ export function DetailPageLayout(props: DetailPageLayoutProps) {
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Link2 className="h-4 w-4 text-gray-500" />
+              <Link2 className="h-4 w-4 text-muted-foreground" />
               مرتبط بـ
             </CardTitle>
           </CardHeader>
@@ -331,13 +331,13 @@ export function DetailPageLayout(props: DetailPageLayoutProps) {
                   const content = (
                     <div className={cn(
                       "flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs",
-                      e.href ? "hover:bg-gray-50 cursor-pointer" : "",
-                      "bg-white border-gray-200"
+                      e.href ? "hover:bg-surface-subtle cursor-pointer" : "",
+                      "bg-white border-border"
                     )}>
-                      {Icon && <Icon className="h-3.5 w-3.5 text-gray-400" />}
+                      {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground" />}
                       <div className="min-w-0">
                         <p className="font-medium text-gray-900 truncate">{e.label}</p>
-                        {e.sublabel && <p className="text-[10px] text-gray-500 truncate">{e.sublabel}</p>}
+                        {e.sublabel && <p className="text-[10px] text-muted-foreground truncate">{e.sublabel}</p>}
                       </div>
                     </div>
                   );
@@ -385,8 +385,8 @@ export function DetailPageLayout(props: DetailPageLayoutProps) {
 function MetaChip({ icon: Icon, label, value, mono }: { icon: ComponentType<{ className?: string }>; label?: string; value: string; mono?: boolean }) {
   return (
     <div className="flex items-center gap-1.5">
-      <Icon className="h-3.5 w-3.5 text-gray-400" />
-      {label && <span className="text-gray-500">{label}:</span>}
+      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+      {label && <span className="text-muted-foreground">{label}:</span>}
       <span className={cn("font-medium text-gray-800", mono && "font-mono")}>{value}</span>
     </div>
   );

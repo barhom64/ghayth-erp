@@ -28,6 +28,7 @@ import {
 import { applyTransition, lifecycleErrorResponse, LifecycleError } from "../lib/lifecycleEngine.js";
 import { logger } from "../lib/logger.js";
 import { encryptField, decryptPilgrimRow, blindIndex, SENSITIVE_PILGRIM_FIELDS, logSensitiveAccess } from "../lib/fieldEncryption.js";
+import { confirmVouchersImport } from "../lib/umrahImportEngine.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SEASON LOCK — rejects writes on closed/archived seasons
@@ -233,6 +234,11 @@ const importMutamersSchema = z.object({
 const importVouchersSchema = z.object({
   seasonId: z.coerce.number({ required_error: "الموسم مطلوب" }),
   rows: z.array(z.any()).min(1, "بيانات الاستيراد غير مكتملة"),
+  fileName: z.string().trim().optional(),
+  /** Cash box that will fund the NUSK supplier payment (gap #2). */
+  treasuryId: z.coerce.number().int().positive().optional().nullable(),
+  /** Override umrah_nusk_cost DR account code (gap #3). */
+  purchaseAccountCode: z.string().trim().min(1).optional().nullable(),
 });
 
 const importSchema = z.object({
@@ -880,8 +886,24 @@ router.post("/import/mutamers", authorize({ feature: "umrah", action: "create" }
 router.post("/import/vouchers", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { seasonId, rows: importRows } = zodParse(importVouchersSchema.safeParse(req.body));
-    const result = await doImport(scope, { seasonId, rows: importRows, fileType: "vouchers", fileName: "import-vouchers" });
+    const { seasonId, rows: importRows, fileName, treasuryId, purchaseAccountCode } =
+      zodParse(importVouchersSchema.safeParse(req.body));
+    await requireOpenSeason(seasonId, scope.companyId);
+    // Wire vouchers through the dedicated engine so they actually create
+    // umrah_nusk_invoices rows + post the AP journal entries. Pre-PR the
+    // route was routing voucher files through `doImport`, which only
+    // writes to umrah_pilgrims — voucher data was effectively dropped.
+    // The cash-box + account-override picks (gaps #2 + #3) flow via the
+    // enriched scope so the JE and the invoice row both reference them.
+    const importScope = {
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      seasonId,
+      treasuryId: treasuryId ?? null,
+      purchaseAccountCode: purchaseAccountCode ?? null,
+    };
+    const result = await confirmVouchersImport(importScope, importRows, fileName ?? "import-vouchers");
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Import vouchers error"); }
 });

@@ -343,7 +343,7 @@ export default function DocumentsTemplates() {
                         </button>
                         <span className="text-muted-foreground text-xs block">{v.label}</span>
                       </div>
-                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-400 hover:text-red-600" onClick={() => removeVariable(i)}>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-400 hover:text-status-error-foreground" onClick={() => removeVariable(i)}>
                         <X className="h-3 w-3" />
                       </Button>
                     </div>
@@ -481,7 +481,7 @@ export default function DocumentsTemplates() {
                     <Edit className="h-3.5 w-3.5" />
                   </GuardedButton>
                   {!t.isDefault && (
-                    <GuardedButton perm="documents:create" variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-400 hover:text-red-600" onClick={() => handleDelete(t.id)} title="حذف">
+                    <GuardedButton perm="documents:create" variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-400 hover:text-status-error-foreground" onClick={() => handleDelete(t.id)} title="حذف">
                       <Trash2 className="h-3.5 w-3.5" />
                     </GuardedButton>
                   )}

@@ -376,7 +376,7 @@ function MemosTab({ memos }: { memos: any[] }) {
               "text-xs",
               count >= 4 ? "border-status-error-surface text-status-error-foreground bg-status-error-surface" :
               count >= 3 ? "border-orange-300 text-orange-700 bg-orange-50" :
-              count >= 2 ? "border-amber-300 text-status-warning-foreground bg-status-warning-surface" :
+              count >= 2 ? "border-status-warning-surface text-status-warning-foreground bg-status-warning-surface" :
               "border-border",
             )}
           >

@@ -152,14 +152,14 @@ export function PrintSections({ sections }: { sections: PrintSection[] }) {
               <div key={i} className="signature-area">
                 {s.parties.map((p, j) => (
                   <div key={j} className="signature-box">
-                    <p className="text-xs text-gray-600">{p.label}</p>
+                    <p className="text-xs text-muted-foreground">{p.label}</p>
                     <p className="signature-line">{p.name ?? ""}</p>
                   </div>
                 ))}
               </div>
             );
           case "divider":
-            return <hr key={i} className="border-t border-gray-300 my-3" />;
+            return <hr key={i} className="border-t border-border my-3" />;
         }
       })}
     </div>

@@ -55,7 +55,7 @@ function ScoreCircle({ score, label, color = "blue" }: { score: number | null; l
 }
 
 function KpiBar({ label, score, icon: Icon }: { label: string; score: number; icon: any }) {
-  const color = score >= 80 ? "bg-green-500" : score >= 60 ? "bg-yellow-500" : "bg-red-500";
+  const color = score >= 80 ? "bg-status-success-surface0" : score >= 60 ? "bg-status-warning-surface0" : "bg-status-error-surface0";
   const textColor = score >= 80 ? "text-status-success-foreground" : score >= 60 ? "text-status-warning-foreground" : "text-status-error-foreground";
   return (
     <div className="flex items-center gap-3">
